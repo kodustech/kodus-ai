@@ -1,273 +1,191 @@
+import * as fs from "fs";
+import { join } from "path";
+
 import { http } from "../lib/http.js";
-import { login, signUp } from "../lib/onboarding.js";
+import {
+    NON_OWNER_ROLES,
+    RbacRole,
+    setupRbacOrg,
+} from "../lib/rbac-provision.js";
 import type { RunContext, Scenario, TargetContext } from "../lib/types.js";
 
 // ---------------------------------------------------------------------------
-// RBAC authorization matrix (full-stack).
+// RBAC authorization matrix (full-stack, COMPREHENSIVE — backend).
 //
-// Runs against a real, provisioned target (cloud QA or self-hosted VM),
-// exercising the COMPLETE request path: JwtAuthGuard → PolicyGuard →
-// PermissionsAbilityFactory + the global transform/exception layers. This is
-// the only place the real JWT auth + RBAC are validated together over HTTP.
+// Replays the committed RBAC manifest
+// (apps/api/src/controllers/__tests__/rbac-matrix.manifest.json) against a
+// real, provisioned target, exercising JwtAuthGuard → PolicyGuard →
+// PermissionsAbilityFactory over HTTP. The manifest is the SINGLE SOURCE OF
+// TRUTH (same extractor as authorization-matrix.spec.ts); a jest drift-guard
+// keeps it in sync, so this live test and the static grid can never disagree.
 //
-// Isolation: the scenario signs up its OWN throwaway org (the signup creator is
-// OWNER + ACTIVE even in cloud mode), so every write here — including the
-// destructive BYOK delete — is contained in a disposable org and cannot affect
-// anyone else's tenant.
+// IDEMPOTENT BY CONSTRUCTION (safe on shared QA, cannot touch other orgs):
+//   - GET endpoints are read-only — fired for every role.
+//   - Mutations (POST/PUT/PATCH/DELETE) are fired ONLY for roles the manifest
+//     marks `deny`, asserting the 403 PolicyGuard returns BEFORE the handler
+//     runs — so no mutation handler ever executes. The allow-side of mutations
+//     is proven by the static manifest, never fired live.
 //
-// Flow:
-//   1. Sign up a fresh owner (new org).
-//   2. Invite one user per non-owner role, activate it, log in.
-//   3. For each (endpoint, role): allowed role → NOT 401/403; denied role → 403.
-//
-// The provisioning endpoints below were validated live against QA on
-// 2026-05-27 (see provisionUserWithRole). The expected CASES matrix reflects
-// the FIXED backend (this branch): running it against a target on older code
-// will surface the pre-fix bugs (e.g. contributor getting 200 on TokenUsage).
+// Tier-gated endpoints (Cockpit, SSO) sit behind a SEPARATE guard that 403s
+// regardless of role when the org isn't licensed. OWNER is the canary: an owner
+// 401/403 can only be a non-RBAC guard, so those endpoints are reported and
+// skipped (never silently passed); if most are owner-blocked the run fails.
 // ---------------------------------------------------------------------------
 
-const PASSWORD = "E2eRbac!2026x";
-
-type RbacRole = "owner" | "billing_manager" | "repo_admin" | "contributor";
-
-type Case = {
-    name: string;
-    method: "get" | "post" | "delete" | "patch";
-    path: string;
-    body?: unknown;
-    allowed: RbacRole[];
+type ManifestEntry = {
+    key: string;
+    httpMethod: string;
+    urlPath: string;
+    expected: Record<RbacRole, "allow" | "deny">;
 };
 
-// Expected allow-list per endpoint, derived from ROLE_POLICIES
-// (libs/identity/domain/permissions/policies/role-policies.ts).
-const CASES: Case[] = [
-    {
-        name: "TokenUsage read",
-        method: "get",
-        path: "/usage/tokens/summary?startDate=2026-01-01&endDate=2026-01-31&byok=false",
-        allowed: ["owner", "billing_manager", "repo_admin"],
-    },
-    {
-        // Bug A: was reachable by anyone authenticated.
-        name: "BYOK delete (OrganizationSettings)",
-        method: "delete",
-        path: "/organization-parameters/delete-byok-config?configType=main",
-        allowed: ["owner"],
-    },
-    // NOTE: Cockpit analytics is intentionally NOT covered here. This scenario
-    // signs up a fresh (free-tier) org, so CockpitTierGuard 403s everyone
-    // regardless of role and would confound the allow assertions. Cockpit's
-    // RBAC is covered by authorization-matrix.spec.ts (jest).
-    {
-        name: "CLI review read",
-        method: "get",
-        path: "/cli-reviews/executions",
-        allowed: ["owner", "repo_admin", "contributor"],
-    },
-    {
-        name: "Issues read",
-        method: "get",
-        path: "/issues",
-        allowed: ["owner", "repo_admin", "contributor"],
-    },
-];
+// e2e scripts run with cwd = tests/e2e (see package.json).
+const MANIFEST_PATH = join(
+    process.cwd(),
+    "..",
+    "..",
+    "apps",
+    "api",
+    "src",
+    "controllers",
+    "__tests__",
+    "rbac-matrix.manifest.json",
+);
 
-type RoleSession = { role: RbacRole; accessToken: string };
+function loadManifest(): ManifestEntry[] {
+    return JSON.parse(fs.readFileSync(MANIFEST_PATH, "utf8")) as ManifestEntry[];
+}
 
-const jwtPayload = (jwt: string): Record<string, unknown> => {
-    try {
-        return JSON.parse(
-            Buffer.from(jwt.split(".")[1], "base64").toString("utf8"),
-        );
-    } catch {
-        return {};
-    }
-};
+// Replace `:param` segments with a throwaway value so the request reaches the
+// guards. PolicyGuard runs before validation, so a downstream 400/404 on a
+// dummy id still reflects "allowed by policy" (not 401/403).
+function concreteUrl(urlPath: string): string {
+    return urlPath.replace(/:[A-Za-z0-9_]+/g, "1");
+}
 
-/**
- * Invite a user with a specific RBAC role into the owner's team, activate the
- * invitation (sets a password), and return an authenticated session.
- *
- * Validated end-to-end against a local instance of THIS branch on 2026-05-27
- * (16/16 matrix cells green):
- *   - POST /team-members invites the user (joiners default to CONTRIBUTOR).
- *   - GET  /team-members?teamId= returns `{ data: { members: [...] } }`; match
- *     by email and use the member's `userId`.
- *   - POST /user/invite/complete-invitation { uuid: userId, name, password }
- *     activates the user (path is `/user`, singular).
- *   - PATCH /user/:userId { role } sets the actual RBAC role — REQUIRED; the
- *     `role` field on the invite does NOT stick (everyone lands as contributor
- *     without this).
- */
-async function provisionUserWithRole(
-    ctx: RunContext,
+async function hit(
     target: TargetContext,
-    ownerToken: string,
-    teamId: string,
-    role: RbacRole,
-): Promise<RoleSession> {
-    const email = `e2e-rbac-${role}-${Date.now()}@kodus.local`;
-    const name = `e2e ${role}`;
-    const authed = { Authorization: `Bearer ${ownerToken}` };
-
-    const invite = await http(`${target.apiBaseUrl}/team-members`, {
-        method: "POST",
-        headers: authed,
-        body: {
-            teamId,
-            members: [
-                {
-                    email,
-                    name,
-                    role,
-                    teamRole: "team_member",
-                    active: true,
-                    communicationId: email,
-                },
-            ],
-        },
-        timeoutMs: 30_000,
-    });
-    if (invite.status < 200 || invite.status >= 300) {
-        ctx.skip(
-            `provisioning: invite ${role} failed (HTTP ${invite.status}): ${invite.raw.slice(0, 250)}`,
-        );
-    }
-
-    const list = await http<{
-        data: { members: Array<{ email: string; userId: string }> };
-    }>(`${target.apiBaseUrl}/team-members?teamId=${teamId}`, {
-        method: "GET",
-        headers: authed,
+    entry: ManifestEntry,
+    token: string,
+): Promise<number> {
+    // SSE endpoints are GET over HTTP; the guard runs before the stream opens,
+    // so a denied role still gets a clean 403. They're classified non-GET below
+    // (deny-only), so the allow-side never streams.
+    const verb = (entry.httpMethod === "SSE" ? "GET" : entry.httpMethod) as
+        | "GET"
+        | "POST"
+        | "PUT"
+        | "PATCH"
+        | "DELETE";
+    const res = await http(`${target.apiBaseUrl}${concreteUrl(entry.urlPath)}`, {
+        method: verb,
+        headers: { Authorization: `Bearer ${token}` },
+        body: verb === "GET" ? undefined : {},
         timeoutMs: 20_000,
     });
-    const userId = list.body?.data?.members?.find((m) => m.email === email)
-        ?.userId;
-    ctx.assert(
-        userId,
-        `provisioning: no userId for ${email}. Members: ${list.raw.slice(0, 250)}`,
-    );
-
-    const complete = await http(
-        `${target.apiBaseUrl}/user/invite/complete-invitation`,
-        {
-            method: "POST",
-            body: { uuid: userId, name, password: PASSWORD },
-            timeoutMs: 20_000,
-        },
-    );
-    if (complete.status < 200 || complete.status >= 300) {
-        ctx.skip(
-            `provisioning: complete-invitation ${role} failed (HTTP ${complete.status}): ${complete.raw.slice(0, 250)}`,
-        );
-    }
-
-    // The invite lands the user as contributor; set the real RBAC role.
-    const patch = await http(`${target.apiBaseUrl}/user/${userId}`, {
-        method: "PATCH",
-        headers: authed,
-        body: { role },
-        timeoutMs: 20_000,
-    });
-    if (patch.status < 200 || patch.status >= 300) {
-        ctx.skip(
-            `provisioning: set role ${role} failed (HTTP ${patch.status}): ${patch.raw.slice(0, 250)}`,
-        );
-    }
-
-    const session = await login(target, { email, password: PASSWORD });
-    return { role, accessToken: session.accessToken };
+    return res.status;
 }
 
 export const rbacAuthorization: Scenario = {
     id: "rbac-authorization",
-    title: "RBAC: each role gets the expected 200 vs 403 across API endpoints",
+    title: "RBAC: every gated endpoint enforces the manifest verdict per role",
     priority: "P0",
     appliesTo: {
         target: ["cloud", "self-hosted"],
         provider: ["github"], // RBAC is provider-agnostic; one provider suffices
-        license: ["paid", "license-paid"],
+        license: ["trial", "paid", "license-paid"],
     },
-    timeoutSec: 300,
+    timeoutSec: 900,
     async run(ctx: RunContext) {
-        // Fresh, disposable org — the signup creator is OWNER + ACTIVE.
-        const ownerEmail = `e2e-rbac-owner-${Date.now()}@kodus.local`;
-        await signUp(ctx.target, { email: ownerEmail, password: PASSWORD });
-        const owner = await login(ctx.target, {
-            email: ownerEmail,
-            password: PASSWORD,
-        });
-
-        const teamRes = await http<{ data: Array<{ uuid: string }> }>(
-            `${ctx.target.apiBaseUrl}/team`,
-            {
-                method: "GET",
-                headers: { Authorization: `Bearer ${owner.accessToken}` },
-                timeoutMs: 20_000,
-            },
+        const manifest = loadManifest();
+        ctx.assert(
+            manifest.length > 30,
+            `manifest looks empty (${manifest.length}) — regenerate with UPDATE_RBAC_MANIFEST=1`,
         );
-        const teamId = teamRes.body?.data?.[0]?.uuid;
-        ctx.assert(teamId, `could not resolve owner teamId: ${teamRes.raw.slice(0, 200)}`);
 
-        const orgId =
-            owner.organizationId ??
-            (jwtPayload(owner.accessToken).organizationId as string);
+        const { sessions } = await setupRbacOrg(ctx);
+        const tokenOf = (role: RbacRole) =>
+            sessions.find((s) => s.role === role)!.accessToken;
 
-        const sessions: RoleSession[] = [
-            { role: "owner", accessToken: owner.accessToken },
-        ];
-        for (const role of [
-            "billing_manager",
-            "repo_admin",
-            "contributor",
-        ] as RbacRole[]) {
-            sessions.push(
-                await provisionUserWithRole(
-                    ctx,
-                    ctx.target,
-                    owner.accessToken,
-                    teamId,
-                    role,
-                ),
-            );
-        }
+        const failures: string[] = [];
+        const tierSkipped: string[] = [];
+        let asserted = 0;
+        let mutationAllowDeferred = 0;
+        let getCount = 0;
 
-        const evidence: Record<string, Record<string, number>> = {};
+        for (const entry of manifest) {
+            // Mutations: fire ONLY deny-roles and assert the pre-handler 403
+            // (zero side effect, idempotent). Allow-side is static-only.
+            if (entry.httpMethod !== "GET") {
+                for (const role of NON_OWNER_ROLES) {
+                    if (entry.expected[role] !== "deny") {
+                        mutationAllowDeferred++;
+                        continue;
+                    }
+                    const status = await hit(ctx.target, entry, tokenOf(role));
+                    if (status !== 403) {
+                        failures.push(
+                            `${role} should be DENIED on ${entry.httpMethod} ${entry.urlPath} (expected 403, got ${status})`,
+                        );
+                    }
+                    asserted++;
+                }
+                continue;
+            }
 
-        for (const testCase of CASES) {
-            const path = testCase.path.replace("__ORG__", orgId ?? "");
-            const row: Record<string, number> = {};
+            // GET (read-only). OWNER canary skips non-RBAC (tier) guards.
+            getCount++;
+            const ownerStatus = await hit(ctx.target, entry, tokenOf("owner"));
+            if (ownerStatus === 401 || ownerStatus === 403) {
+                tierSkipped.push(
+                    `${entry.httpMethod} ${entry.urlPath} (owner ${ownerStatus})`,
+                );
+                continue;
+            }
 
-            for (const s of sessions) {
-                const res = await http(`${ctx.target.apiBaseUrl}${path}`, {
-                    method: testCase.method.toUpperCase() as
-                        | "GET"
-                        | "POST"
-                        | "DELETE"
-                        | "PATCH",
-                    headers: { Authorization: `Bearer ${s.accessToken}` },
-                    body: testCase.body,
-                    timeoutMs: 20_000,
-                });
-                row[s.role] = res.status;
-
-                const shouldAllow = testCase.allowed.includes(s.role);
-                if (shouldAllow) {
-                    ctx.assert(
-                        res.status !== 401 && res.status !== 403,
-                        `${s.role} should access "${testCase.name}" but got HTTP ${res.status}: ${res.raw.slice(0, 200)}`,
+            for (const role of NON_OWNER_ROLES) {
+                const status = await hit(ctx.target, entry, tokenOf(role));
+                const expected = entry.expected[role];
+                if (expected === "deny" && status !== 403) {
+                    failures.push(
+                        `${role} should be DENIED on ${entry.httpMethod} ${entry.urlPath} (expected 403, got ${status})`,
                     );
-                } else {
-                    ctx.assert(
-                        res.status === 403,
-                        `${s.role} must be forbidden on "${testCase.name}" (expected 403) but got HTTP ${res.status}: ${res.raw.slice(0, 200)}`,
+                } else if (
+                    expected === "allow" &&
+                    (status === 401 || status === 403)
+                ) {
+                    failures.push(
+                        `${role} should be ALLOWED on ${entry.httpMethod} ${entry.urlPath} (got ${status})`,
                     );
                 }
+                asserted++;
             }
-            evidence[testCase.name] = row;
         }
 
-        return { org: orgId, matrix: evidence };
+        if (tierSkipped.length) {
+            console.log(
+                `[rbac] ${tierSkipped.length} GET endpoint(s) skipped — owner blocked by a non-RBAC guard (org not tier-unlocked?):\n  ${tierSkipped.join("\n  ")}`,
+            );
+        }
+        console.log(
+            `[rbac] live verdicts asserted: ${asserted} (all GET allow/deny + every mutation deny). Mutation allow-side (${mutationAllowDeferred}) is static-only, so the run stays idempotent.`,
+        );
+
+        ctx.assert(
+            failures.length === 0,
+            `RBAC mismatches (${failures.length}):\n  ${failures.join("\n  ")}`,
+        );
+        ctx.assert(
+            getCount > 0 && tierSkipped.length < getCount / 2,
+            `Over half the GET endpoints (${tierSkipped.length}/${getCount}) had owner blocked — the test org is not trial/licensed, so tier-gated RBAC was NOT validated. Run against a trial (fresh cloud) or licensed target.`,
+        );
+
+        return {
+            endpoints: manifest.length,
+            cellsAsserted: asserted,
+            mutationAllowDeferred,
+            tierSkipped: tierSkipped.length,
+        };
     },
 };
 

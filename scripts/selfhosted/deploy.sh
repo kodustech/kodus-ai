@@ -4,27 +4,27 @@
 # Use this to iterate on your branch without provisioning new droplets every
 # time. Flow:
 #
-#   1. yarn selfhosted:provision                  # one-time, provisions droplet
+#   1. pnpm run selfhosted:provision                  # one-time, provisions droplet
 #   2. (edit code on your laptop)
-#   3. yarn selfhosted:deploy            # builds local → pushes to your
+#   3. pnpm run selfhosted:deploy            # builds local → pushes to your
 #                                           GHCR namespace → restarts on droplet
 #   4. (repeat 2-3 as needed)
-#   5. yarn selfhosted:destroy                # when done
+#   5. pnpm run selfhosted:destroy                # when done
 #
 # Images are pushed to `ghcr.io/<your-gh-user>/kodus-ai-{api,worker,webhook,
 # web,mcp-manager}:dev-<instance-name>` so each dev has their own namespace
 # and there's no conflict with org-published images.
 #
 # Required:
-#   - An alive instance from `yarn selfhosted:provision`
+#   - An alive instance from `pnpm run selfhosted:provision`
 #   - `gh auth login` completed (we read your token + username from gh CLI)
 #   - Docker with buildx
 #
 # Usage:
-#   yarn selfhosted:deploy                       # rebuild + redeploy all 5 services
-#   yarn selfhosted:deploy --name wellington     # target a specific instance
-#   yarn selfhosted:deploy -- api worker         # only rebuild these services
-#   yarn selfhosted:deploy --no-build            # skip build, just pull + restart
+#   pnpm run selfhosted:deploy                       # rebuild + redeploy all 5 services
+#   pnpm run selfhosted:deploy --name wellington     # target a specific instance
+#   pnpm run selfhosted:deploy -- api worker         # only rebuild these services
+#   pnpm run selfhosted:deploy --no-build            # skip build, just pull + restart
 #                                                  # (useful if a teammate already pushed)
 
 set -euo pipefail
@@ -53,7 +53,7 @@ NAME=$(normalize_name "$NAME_RAW")
 
 # Self-healing: if no droplet exists for this name yet, provision one first.
 # Provision in turn will auto-run setup if no config exists. So a fresh dev
-# can run `yarn selfhosted:deploy` from scratch and end up with their code
+# can run `pnpm run selfhosted:deploy` from scratch and end up with their code
 # running on a droplet — no need to remember the order.
 if ! state_exists "$NAME"; then
     log "No instance named '$NAME' yet. Provisioning one first..."
@@ -95,8 +95,8 @@ if ! ssh -i "$SSH_KEY_PATH" \
         "root@$SERVER_IP" "true" 2>/dev/null; then
     err "Cannot SSH into '$NAME' at $SERVER_IP."
     err "  The droplet may have been destroyed manually or the network is down."
-    err "  Fix: yarn selfhosted:destroy --name $NAME    # cleans up stale state"
-    err "       yarn selfhosted:deploy --name $NAME     # provisions fresh + deploys"
+    err "  Fix: pnpm run selfhosted:destroy --name $NAME    # cleans up stale state"
+    err "       pnpm run selfhosted:deploy --name $NAME     # provisions fresh + deploys"
     exit 1
 fi
 ok "Droplet $SERVER_IP reachable"
@@ -119,7 +119,7 @@ if [ "$SKIP_BUILD" != "1" ]; then
         err "Fix:"
         err "  gh auth refresh -h github.com -s write:packages,read:packages"
         err ""
-        err "Then re-run: yarn selfhosted:deploy${NAME:+ --name $NAME}"
+        err "Then re-run: pnpm run selfhosted:deploy${NAME:+ --name $NAME}"
         exit 1
     fi
     ok "gh token has write:packages scope"
@@ -315,8 +315,8 @@ done
 
 if [ ${#HEALTH_FAILED[@]} -gt 0 ]; then
     err "Health check failed for: ${HEALTH_FAILED[*]}"
-    err "  ssh in: yarn selfhosted:ssh${NAME:+ --name $NAME}"
-    err "  logs:   yarn selfhosted:logs${NAME:+ --name $NAME}"
+    err "  ssh in: pnpm run selfhosted:ssh${NAME:+ --name $NAME}"
+    err "  logs:   pnpm run selfhosted:logs${NAME:+ --name $NAME}"
     exit 1
 fi
 
@@ -328,7 +328,7 @@ echo "  Dashboard: $DASHBOARD"
 echo "  Image tag: $DEV_TAG"
 echo "  Services:  ${SERVICES_TO_REBUILD[*]}"
 echo ""
-echo "  Iterate:   edit code → yarn selfhosted:deploy${NAME:+ --name $NAME}"
-echo "  Logs:      yarn selfhosted:logs${NAME:+ --name $NAME}"
-echo "  Destroy:   yarn selfhosted:destroy${NAME:+ --name $NAME}"
+echo "  Iterate:   edit code → pnpm run selfhosted:deploy${NAME:+ --name $NAME}"
+echo "  Logs:      pnpm run selfhosted:logs${NAME:+ --name $NAME}"
+echo "  Destroy:   pnpm run selfhosted:destroy${NAME:+ --name $NAME}"
 echo ""

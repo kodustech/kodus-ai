@@ -66,7 +66,7 @@ API_DATABASE_DISABLE_SSL=true                # ローカル DB の SSL を無効
 ```
 
 <Tip>
-  `API_PG_DB_PASSWORD` と `API_MG_DB_PASSWORD` は、空のままにすると `./scripts/install.sh`（`generate-secrets.sh` 経由）が自動生成します。インストーラーを外部データベースに向ける場合のみ、手動で設定してください。
+  バンドルされたデータベースの場合は、`API_PG_DB_PASSWORD` と `API_MG_DB_PASSWORD` を空のままにして `./scripts/generate-secrets.sh` を実行すると生成されます。あるいは自分で設定することもできます。外部データベースの場合は、既存のデータベースのパスワードを使用してください。
 </Tip>
 
 ### RabbitMQの設定
@@ -162,9 +162,7 @@ API_MCP_MANAGER_NODE_ENV=development
 API_MCP_MANAGER_DATABASE_ENV=development
 API_MCP_MANAGER_CORS_ORIGINS=*
 API_MCP_MANAGER_JWT_SECRET=
-API_MCP_MANAGER_COMPOSIO_BASE_URL=https://backend.composio.dev/api/v3
-API_MCP_MANAGER_COMPOSIO_API_KEY=
-API_MCP_MANAGER_MCP_PROVIDERS=kodusmcp,composio,custom
+API_MCP_MANAGER_MCP_PROVIDERS=kodusmcp,custom
 API_MCP_MANAGER_REDIRECT_URI=http://localhost:3000/setup/mcp/oauth
 API_MCP_MANAGER_PG_DB_SCHEMA=mcp-manager
 API_MCP_MANAGER_ENCRYPTION_SECRET=

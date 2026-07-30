@@ -41,9 +41,7 @@ export class CustomStringOutputParser extends StringOutputParser {
         if (type === 'reasoning' || type === 'thinking') {
             return '';
         }
-        return (
-            super._messageContentToString as (value: ContentBlock) => string
-        )(content);
+        return super._messageContentToString(content);
     }
 }
 
@@ -82,7 +80,7 @@ export class ZodOutputParser<
         super();
         this.structuredParser = StructuredOutputParser.fromZodSchema(
             this.config.schema,
-        ) as BaseOutputParser<Output>;
+        );
     }
 
     protected override _baseMessageContentToString(

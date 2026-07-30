@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     COMMENT_MANAGER_SERVICE_TOKEN,
     ICommentManagerService,
@@ -11,11 +11,13 @@ import {
     calculateCommentEndLine,
     calculateCommentStartLine,
 } from '@libs/common/utils/comment-builder.utils';
+import { resolveAddedLineAnchor } from '@libs/common/utils/resolve-added-line-anchor';
 import { PlatformType } from '@libs/core/domain/enums';
 import {
     ClusteringType,
     CodeReviewConfig,
     CodeSuggestion,
+    Comment,
     CommentResult,
     FileChange,
     FallbackSuggestionsBySeverity,
@@ -147,6 +149,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     context.fileMetadata,
                     context.dryRun,
                     allCommits,
+                    context.heavy,
                 );
 
                 this.logger.log({
@@ -301,6 +304,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 fallbackSuggestionsBySeverity,
                 allDiscardedSuggestions,
                 changedFiles,
+                platformType,
             );
 
         // Save pull request suggestions — comments already posted at this point
@@ -317,6 +321,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 context.fileMetadata,
                 dryRun,
                 context.prAllCommits,
+                context.heavy,
             );
         } catch (error) {
             this.logger.error({
@@ -376,6 +381,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
         allDiscardedSuggestions?: Partial<CodeSuggestion>[],
         changedFiles: FileChange[] = [],
+        platformType?: PlatformType,
     ) {
         try {
             // Children in a cluster are merged into their parent's
@@ -414,30 +420,84 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     .map((f) => f.filename),
             );
 
-            const lineComments = sortedPrioritizedSuggestions
-                .filter(
-                    (suggestion) =>
-                        suggestion.clusteringInformation?.type !==
-                            ClusteringType.RELATED &&
-                        !removedFiles.has(suggestion.relevantFile),
-                )
-                .map((suggestion) => {
-                    return {
-                        path: suggestion.relevantFile,
-                        body: {
-                            language: repository?.language,
-                            improvedCode: suggestion?.improvedCode,
-                            suggestionContent: suggestion?.suggestionContent,
-                            actionStatement:
-                                suggestion?.clusteringInformation
-                                    ?.actionStatement || '',
-                        },
-                        start_line: calculateCommentStartLine(suggestion),
-                        line: calculateCommentEndLine(suggestion),
-                        side: 'RIGHT',
-                        suggestion,
-                    };
+            const candidateSuggestions = sortedPrioritizedSuggestions.filter(
+                (suggestion) =>
+                    suggestion.clusteringInformation?.type !==
+                        ClusteringType.RELATED &&
+                    !removedFiles.has(suggestion.relevantFile),
+            );
+
+            // GitLab only: a discussion anchored on a context (unchanged) line
+            // loses its "Resolve" control once its diff version is superseded by
+            // a rebase/force-push, while an added-line anchor survives. Snap each
+            // comment onto an added line within the span it already covers; if the
+            // span has no added line, the comment is about unchanged code — discard
+            // it (as `discarded-by-code-diff`) rather than post a fragile note.
+            // Other providers are left untouched: GitHub already rejects
+            // non-added-line comments, and Bitbucket/Azure have no such reports.
+            const isGitlab = platformType === PlatformType.GITLAB;
+            const patchByFile = new Map(
+                changedFiles.map((file) => [file.filename, file.patch]),
+            );
+
+            const lineComments: Comment[] = [];
+            for (const suggestion of candidateSuggestions) {
+                let startLine = calculateCommentStartLine(suggestion);
+                let line = calculateCommentEndLine(suggestion);
+
+                if (isGitlab && typeof line === 'number') {
+                    const patch = patchByFile.get(suggestion.relevantFile);
+                    if (patch) {
+                        const anchor = resolveAddedLineAnchor(
+                            patch,
+                            suggestion.relevantFile,
+                            { startLine, line },
+                        );
+
+                        if (!anchor) {
+                            allDiscardedSuggestions?.push({
+                                ...suggestion,
+                                priorityStatus:
+                                    PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                            });
+                            // Remove it from the prioritized list too, so it isn't
+                            // persisted a second time as a phantom `failed` (it's
+                            // never posted, so verifyIfSuggestionsWereSent would
+                            // otherwise stamp it FAILED). Safe to splice: this array
+                            // is a fresh copy built in finalizeReviewProcessing; we
+                            // drop the entry, we don't mutate the frozen suggestion.
+                            const prioritizedIndex =
+                                sortedPrioritizedSuggestions.indexOf(suggestion);
+                            if (prioritizedIndex !== -1) {
+                                sortedPrioritizedSuggestions.splice(
+                                    prioritizedIndex,
+                                    1,
+                                );
+                            }
+                            continue;
+                        }
+
+                        startLine = anchor.startLine;
+                        line = anchor.line;
+                    }
+                }
+
+                lineComments.push({
+                    path: suggestion.relevantFile,
+                    body: {
+                        language: repository?.language,
+                        improvedCode: suggestion?.improvedCode,
+                        suggestionContent: suggestion?.suggestionContent,
+                        actionStatement:
+                            suggestion?.clusteringInformation?.actionStatement ||
+                            '',
+                    },
+                    start_line: startLine,
+                    line,
+                    side: 'RIGHT',
+                    suggestion,
                 });
+            }
 
             const { lastAnalyzedCommit, commentResults } =
                 await this.commentManagerService.createLineComments(
@@ -486,6 +546,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         fileMetadata?: Map<string, any>,
         dryRun?: CodeReviewPipelineContext['dryRun'],
         prCommits?: Commit[],
+        heavy?: boolean,
     ) {
         const enrichedFiles = changedFiles.map((file) => {
             const metadata = fileMetadata?.get(file.filename);
@@ -537,8 +598,18 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         // Reutilizar commits do context (buscados no ValidateNewCommitsStage)
         const pullRequestCommits = prCommits || [];
 
+        // Carry the resolved HEAVY flag on the PR object so the persisted record
+        // reflects how the LAST review actually ran (post feature-gate).
+        // `pullRequest` comes from the Immer-frozen pipeline context, so it
+        // must be copied, not mutated — a direct `pullRequest.heavy = …`
+        // threw "Cannot assign to read only property" here, which skipped
+        // aggregateAndSaveDataStructure on EVERY review (comments posted,
+        // zero suggestions ever persisted). Same failure class as the
+        // `context.heavy` write fixed in agent-review.stage (#1522).
+        const pullRequestWithHeavy = { ...pullRequest, heavy };
+
         await this.pullRequestService.aggregateAndSaveDataStructure(
-            pullRequest,
+            pullRequestWithHeavy,
             repository,
             enrichedFiles,
             allPrioritizedSuggestions,

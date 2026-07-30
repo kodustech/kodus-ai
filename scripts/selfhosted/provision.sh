@@ -3,8 +3,8 @@
 # manual testing / bug repro / demos. Stays alive until you run destroy.sh.
 #
 # Usage:
-#   yarn selfhosted:provision                     # default instance
-#   yarn selfhosted:provision --name wellington   # named instance (multi-tenant)
+#   pnpm run selfhosted:provision                     # default instance
+#   pnpm run selfhosted:provision --name wellington   # named instance (multi-tenant)
 #
 # Required env (or scripts/selfhosted/.env):
 #   DIGITALOCEAN_TOKEN     DO API token        (default provider)
@@ -58,7 +58,7 @@ if state_exists "$NAME"; then
         exit 0
     fi
     warn "Instance '$NAME' already exists (IP $EXISTING_IP)."
-    warn "Run 'yarn selfhosted:status' to inspect, 'yarn selfhosted:destroy --name $NAME' to destroy, or pass --reuse to skip when present."
+    warn "Run 'pnpm run selfhosted:status' to inspect, 'pnpm run selfhosted:destroy --name $NAME' to destroy, or pass --reuse to skip when present."
     exit 1
 fi
 
@@ -71,7 +71,7 @@ fi
 # in the prompts — they just press Enter to save them. No retyping.
 if [ ! -f "$GLOBAL_CONFIG" ]; then
     log "First-time setup: no config at $GLOBAL_CONFIG yet."
-    log "Running 'yarn selfhosted:setup' so you only type secrets once."
+    log "Running 'pnpm run selfhosted:setup' so you only type secrets once."
     echo ""
     "$SCRIPT_DIR/setup.sh"
     echo ""
@@ -266,16 +266,16 @@ rollback_on_failure() {
         warn ""
         warn "  Server:  $SERVER_ID @ $SERVER_IP"
         warn "  SSH:     ssh -i $LOCAL_SSH_KEY root@$SERVER_IP"
-        warn "  Logs:    yarn selfhosted:logs${NAME:+ --name $NAME}"
-        warn "  Status:  yarn selfhosted:status${NAME:+ --name $NAME}"
-        warn "  Destroy: yarn selfhosted:destroy${NAME:+ --name $NAME}"
+        warn "  Logs:    pnpm run selfhosted:logs${NAME:+ --name $NAME}"
+        warn "  Status:  pnpm run selfhosted:status${NAME:+ --name $NAME}"
+        warn "  Destroy: pnpm run selfhosted:destroy${NAME:+ --name $NAME}"
         warn ""
         warn "  Remember: this droplet costs ~\$1/day. Destroy it when you're done."
         exit "$exit_code"
     fi
 
     if [ -f "$STATE_FILE" ]; then
-        warn "Provision failed AFTER state file was written. Run 'yarn selfhosted:destroy --name $NAME' to clean up."
+        warn "Provision failed AFTER state file was written. Run 'pnpm run selfhosted:destroy --name $NAME' to clean up."
         exit "$exit_code"
     fi
 
@@ -335,7 +335,9 @@ case "$TEST_VM_PROVIDER" in
     *) err "Unknown TEST_VM_PROVIDER=$TEST_VM_PROVIDER"; exit 1 ;;
 esac
 
-if [ ! -d "$KODUS_INSTALLER_PATH" ]; then
+# The benchmark farm (BENCH_BASE_ONLY=1) builds the stack from kodus-ai source
+# on the droplet and never touches kodus-installer, so don't require it there.
+if [ "${BENCH_BASE_ONLY:-0}" != "1" ] && [ ! -d "$KODUS_INSTALLER_PATH" ]; then
     err "KODUS_INSTALLER_PATH=$KODUS_INSTALLER_PATH does not exist."
     err "Either clone https://github.com/kodustech/kodus-installer next to this repo,"
     err "or set KODUS_INSTALLER_PATH to your local checkout."
@@ -410,6 +412,21 @@ log "Waiting for cloud-init (~2 min)..."
 ssh_vm "cloud-init status --wait" >/dev/null
 ssh_vm "test -f /var/lib/cloud/instance/kodus-ready" || { err "cloud-init failed"; exit 1; }
 
+# ---------- base-only mode (benchmark farm) ----------
+# BENCH_BASE_ONLY=1 stops here: a bare droplet with Docker + git + rsync +
+# cloudflared (installed by cloud-init above) and nothing else. The benchmark
+# farm (scripts/benchmark/farm/) rsyncs the kodus-ai SOURCE for a given branch
+# and builds the compiled artifact ON the droplet via docker-compose.bench.yml,
+# instead of pulling kodus-installer's prebuilt GHCR images. Everything below
+# (installer transfer + install.sh + GHCR) is skipped.
+if [ "${BENCH_BASE_ONLY:-0}" = "1" ]; then
+    save_state "base-ready"
+    ok "Base droplet ready (BENCH_BASE_ONLY) — '${NAME}' at ${SERVER_IP}"
+    dim "  Docker + cloudflared installed; no Kodus stack yet."
+    dim "  Build a branch onto it: scripts/benchmark/farm/bench-sync.sh ${NAME#bench-} <branch>"
+    exit 0
+fi
+
 # ---------- transfer installer ----------
 log "Transferring kodus-installer from $KODUS_INSTALLER_PATH..."
 ssh_vm "mkdir -p /opt/kodus-installer"
@@ -422,7 +439,7 @@ ssh_vm "chmod +x /opt/kodus-installer/scripts/*.sh"
 ok "Installer transferred"
 
 # ---------- apply cached dev image override (if any) ----------
-# If the operator ran `yarn selfhosted:deploy --name <something>` at any
+# If the operator ran `pnpm run selfhosted:deploy --name <something>` at any
 # point on this Mac, it cached a docker-compose.override.yml at
 # ~/.kodus-dev/last-deploy.override.yml that pins every kodus-* service
 # to a specific dev-tag in their personal GHCR namespace. Apply it to
@@ -460,8 +477,42 @@ if [ -f "$OVERRIDE_CACHE" ]; then
 fi
 
 # ---------- cloudflared tunnel ----------
-log "Starting cloudflared quick tunnel for :3332..."
-ssh_vm "cat >/etc/systemd/system/kodus-tunnel.service <<'UNIT'
+# Named tunnel when CLOUDFLARE_API_TOKEN is available: STABLE https
+# hostname, auto-reconnect, survives restarts. The anonymous quick tunnel
+# (fallback) dies unannounced and mints a new URL on restart, silently
+# breaking every registered webhook — observed live 2026-07-08.
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/cf-tunnel.sh"
+if cf_named_tunnel_available; then
+    log "Provisioning named Cloudflare tunnel ($NAME.e2e)..."
+    CF_OUT=$(cf_tunnel_provision "$NAME") || { err "named tunnel provision failed"; exit 1; }
+    SERVER_TUNNEL_URL=$(echo "$CF_OUT" | grep '^CF_TUNNEL_URL=' | cut -d= -f2-)
+    CF_TUNNEL_TOKEN=$(echo "$CF_OUT" | grep '^CF_TUNNEL_TOKEN=' | cut -d= -f2-)
+    ssh_vm "cat >/etc/systemd/system/kodus-tunnel.service <<UNIT
+[Unit]
+Description=cloudflared named tunnel for Kodus webhooks
+After=network-online.target
+[Service]
+ExecStart=/usr/local/bin/cloudflared tunnel run --token ${CF_TUNNEL_TOKEN}
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now kodus-tunnel.service"
+    # Wait until the edge routes to the VM (404 from our ingress catchall
+    # or 200 both mean the tunnel is up; 502/530 means not yet).
+    for i in $(seq 1 30); do
+        code=$(curl -s -o /dev/null -m 8 -w '%{http_code}' "$SERVER_TUNNEL_URL/health" || true)
+        case "$code" in 200|404) break ;; esac
+        sleep 3
+    done
+    ok "Tunnel (named): $SERVER_TUNNEL_URL"
+else
+    warn "CLOUDFLARE_API_TOKEN not set — falling back to the EPHEMERAL quick tunnel (dies unannounced; webhooks break on restart)"
+    log "Starting cloudflared quick tunnel for :3332..."
+    ssh_vm "cat >/etc/systemd/system/kodus-tunnel.service <<'UNIT'
 [Unit]
 Description=cloudflared quick tunnel for Kodus webhooks
 After=network-online.target
@@ -474,13 +525,14 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now kodus-tunnel.service"
 
-for i in $(seq 1 30); do
-    URL=$(ssh_vm "grep -oE 'https://[a-zA-Z0-9-]+\\.trycloudflare\\.com' /var/log/cloudflared.log 2>/dev/null | head -n1" || true)
-    [ -n "$URL" ] && { SERVER_TUNNEL_URL="$URL"; break; }
-    sleep 3
-done
-[ -n "$SERVER_TUNNEL_URL" ] || { err "tunnel URL never appeared"; exit 1; }
-ok "Tunnel: $SERVER_TUNNEL_URL"
+    for i in $(seq 1 30); do
+        URL=$(ssh_vm "grep -oE 'https://[a-zA-Z0-9-]+\\.trycloudflare\\.com' /var/log/cloudflared.log 2>/dev/null | head -n1" || true)
+        [ -n "$URL" ] && { SERVER_TUNNEL_URL="$URL"; break; }
+        sleep 3
+    done
+    [ -n "$SERVER_TUNNEL_URL" ] || { err "tunnel URL never appeared"; exit 1; }
+    ok "Tunnel (quick): $SERVER_TUNNEL_URL"
+fi
 
 # ---------- .env on VM ----------
 log "Writing .env..."
@@ -498,7 +550,11 @@ env_set() {
     fi
 }
 env_set IMAGE_TAG "$IMAGE_TAG"
-env_set WEB_HOSTNAME_API "kodus-api"
+# "localhost" is the sentinel the web reads (helpers.ts): it makes the proxy
+# resolve the API via GLOBAL_API_CONTAINER_NAME (the actual container name,
+# now "kodus_api"). Hardcoding "kodus-api" here broke web->api DNS after the
+# kodus-api -> kodus_api container rename (EAI_AGAIN kodus-api).
+env_set WEB_HOSTNAME_API "localhost"
 env_set WEB_PORT_API "3001"
 env_set NEXTAUTH_URL "http://$SERVER_IP:3000"
 # Per-provider webhook URLs. Note the mismatched prefixes match what
@@ -569,7 +625,7 @@ fi
 
 # ---------- wait for the review pipeline (RabbitMQ workflow queue) ----------
 # The HTTP checks above only prove web/api/webhooks ANSWER. The code-review
-# pipeline runs through RabbitMQ (@kodus/flow): the webhooks service
+# pipeline runs through RabbitMQ: the webhooks service
 # publishes a job to `workflow.jobs.code_review.queue` and the worker
 # consumes it. On a cold boot the worker declares + binds that queue only
 # after its (slow) NestJS init; until then the producer hits
@@ -722,13 +778,13 @@ $(echo -e "${GREEN}✅ Self-hosted stack online in ${MINS}m${SECS}s${NC}")
   $(echo -e "${BLUE}GH wired:${NC}")  $GH_CONFIGURED
 
   $(echo -e "${GRAY}SSH:${NC}")       ssh -i $LOCAL_SSH_KEY root@$SERVER_IP
-  $(echo -e "${GRAY}Status:${NC}")    yarn selfhosted:status${NAME:+ --name $NAME}
-  $(echo -e "${GRAY}Logs:${NC}")      yarn selfhosted:logs${NAME:+ --name $NAME}
-  $(echo -e "${GRAY}Destroy:${NC}")   yarn selfhosted:destroy${NAME:+ --name $NAME}
+  $(echo -e "${GRAY}Status:${NC}")    pnpm run selfhosted:status${NAME:+ --name $NAME}
+  $(echo -e "${GRAY}Logs:${NC}")      pnpm run selfhosted:logs${NAME:+ --name $NAME}
+  $(echo -e "${GRAY}Destroy:${NC}")   pnpm run selfhosted:destroy${NAME:+ --name $NAME}
 
 $(echo -e "${YELLOW}⚠️  This is a PUBLISHED image, NOT your local code.${NC}")
 $(echo -e "${YELLOW}    To test your current branch instead:${NC}")
-$(echo -e "${YELLOW}    →  yarn selfhosted:deploy${NAME:+ --name $NAME}${NC}")
+$(echo -e "${YELLOW}    →  pnpm run selfhosted:deploy${NAME:+ --name $NAME}${NC}")
 
 $(echo -e "${YELLOW}This VM is ALIVE. Cost: ~\$1/day on DO. Destroy when done.${NC}")
 

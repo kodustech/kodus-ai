@@ -1,7 +1,7 @@
 import { promisify } from 'util';
 import * as zlib from 'zlib';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { PipelineContext } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 

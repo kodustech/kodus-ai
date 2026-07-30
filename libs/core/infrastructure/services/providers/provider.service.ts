@@ -79,6 +79,15 @@ export class ProviderService {
             requiresApiKey: true,
             requiresBaseUrl: true,
         },
+        [BYOKProvider.ANTHROPIC_COMPATIBLE]: {
+            id: BYOKProvider.ANTHROPIC_COMPATIBLE,
+            name: 'Anthropic Compatible',
+            description:
+                'Any Anthropic-compatible API endpoint (Kimi Code, Z.ai, DeepSeek, etc.)',
+            supported: true,
+            requiresApiKey: true,
+            requiresBaseUrl: true,
+        },
     };
 
     /**

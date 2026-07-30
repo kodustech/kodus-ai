@@ -125,7 +125,7 @@ export default async function DeployFrequencyAnalytics() {
                 </Tooltip>
             </DeployFrequencyAnalyticsHeader>
 
-            <CardContent className="flex items-center justify-center text-3xl font-bold">
+            <CardContent className="flex items-center justify-start text-3xl font-bold">
                 {data?.currentPeriod?.averagePerWeek}
                 <small>/week</small>
             </CardContent>

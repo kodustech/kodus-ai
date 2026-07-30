@@ -1,0 +1,34 @@
+---
+title: Webhookの作成
+icon: webhook
+---
+
+<Note>
+  Forgejoのサポートはコミュニティによって維持されています。
+</Note>
+
+Kodusは通常、Webhookを自動的に作成します。自動的に作成されなかった場合は、次の手順に従って手動で設定してください：
+
+<Note>
+  Webhook URLはWebhooksサービス（ポート3332）に到達する必要があります。リバースプロキシが`/.../webhook`パスをWebhooksサービスにルーティングする場合にのみ、APIドメインを使用できます。
+</Note>
+
+1. Forgejoリポジトリに移動します
+2. 右側のサイドバーで**Settings**をクリックします
+3. **Webhooks**を選択します
+4. **Add Webhook** → **Forgejo**をクリックします
+5. Webhookを設定します：
+
+   - **Target URL**: 通知を受け取るURLを入力します。`.env`ファイルの`GLOBAL_FORGEJO_CODE_MANAGEMENT_WEBHOOK`に設定したURLです
+   - **HTTP Method**: POST
+   - **POST Content Type**: `application/json`
+   - **Trigger On**: 以下のイベントを選択します：
+        - Push events
+        - Pull Request events
+        - Issues events
+        - Issue Comment events
+   - **Active**: チェック
+
+6. **Add Webhook**をクリックします
+
+これで、ForgejoリポジトリでコードレビューのためのWebhookが正常に設定されました。

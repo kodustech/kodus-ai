@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import {
     IIntegrationConfigService,
@@ -50,6 +50,7 @@ export class WebhookContextService {
     ): Promise<{
         organizationAndTeamData: OrganizationAndTeamData;
         teamAutomationId: string;
+        botUsername?: string;
     } | null> {
         const configs =
             await this.integrationConfigService.findIntegrationConfigWithTeams(
@@ -103,6 +104,9 @@ export class WebhookContextService {
                         teamId: config.team.uuid,
                     },
                     teamAutomationId: teamAutomations[0].uuid,
+                    botUsername:
+                        config?.integration?.authIntegration?.authDetails
+                            ?.botUsername || undefined,
                 };
             }
         }

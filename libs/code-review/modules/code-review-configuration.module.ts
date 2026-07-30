@@ -2,6 +2,7 @@ import { CodebaseModule } from '@libs/code-review/modules/codebase.module';
 import { ContextReferenceModule } from '@libs/code-review/modules/contextReference.module';
 import { PromptsModule } from '@libs/code-review/modules/prompts.module';
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
+import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
@@ -10,7 +11,6 @@ import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { Module, forwardRef } from '@nestjs/common';
 
-import { ApplyCodeReviewPresetUseCase } from '../application/use-cases/configuration/apply-code-review-preset.use-case';
 import { DeleteRepositoryCodeReviewParameterUseCase } from '../application/use-cases/configuration/delete-repository-code-review-parameter.use-case';
 import { GenerateKodusConfigFileUseCase } from '../application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCliRepositorySettingsUseCase } from '../application/use-cases/configuration/get-cli-repository-settings.use-case';
@@ -36,9 +36,9 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         forwardRef(() => PullRequestMessagesModule),
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => CentralizedConfigModule),
+        forwardRef(() => PermissionValidationModule),
     ],
     providers: [
-        ApplyCodeReviewPresetUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,
@@ -51,7 +51,6 @@ import { CentralizedConfigModule } from '@libs/centralized-config/modules/centra
         PreviewPrSummaryUseCase, // Added
     ],
     exports: [
-        ApplyCodeReviewPresetUseCase,
         DeleteRepositoryCodeReviewParameterUseCase,
         GenerateKodusConfigFileUseCase,
         GetCliRepositorySettingsUseCase,

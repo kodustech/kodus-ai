@@ -240,6 +240,97 @@
     }
 }
 
+/* Tokens ported from apps/try so its review components render with the
+   same look here (the values already match the cockpit palette; this just
+   exposes them under the names try's JSX references). */
+:root {
+    --bg: #101019;
+    --bg-2: #181825;
+    --bg-3: #202032;
+    --bg-4: #30304b;
+    --bg-input: #181825;
+    --bg-elevated: #202032;
+    --border: #30304b;
+    --border-strong: #3d3d5c;
+    --border-glow: rgba(248, 183, 109, 0.35);
+    --text: #f3f3f7;
+    --text-muted: #cdcddf;
+    --text-dim: rgba(243, 243, 247, 0.5);
+    --accent: #f8b76d;
+    --accent-hover: #ffca8a;
+    --accent-dark: #443024;
+    --accent-soft: rgba(248, 183, 109, 0.1);
+    --accent-glow: rgba(248, 183, 109, 0.22);
+    --accent-fg: #1a0f04;
+    --secondary: #c9bbf2;
+    --secondary-dark: #312b4b;
+    --tertiary: #fdbfbf;
+    --tertiary-dark: #592830;
+    --green: #42be65;
+    --red: #fa5867;
+    --yellow: #f2c631;
+    --orange: #ff8b40;
+    --info: #5190ff;
+
+    --shadow-card:
+        0 1px 0 0 rgba(255, 255, 255, 0.02) inset,
+        0 1px 2px rgba(0, 0, 0, 0.4),
+        0 8px 24px -8px rgba(0, 0, 0, 0.4);
+    --shadow-elevated:
+        0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+        0 4px 8px rgba(0, 0, 0, 0.5),
+        0 16px 40px -12px rgba(0, 0, 0, 0.55);
+}
+
+/* Ported from apps/try so the review components animate/skeleton identically. */
+@keyframes kodus-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+.fade-up {
+    animation: kodus-fade-up 0.6s cubic-bezier(0.21, 0.6, 0.35, 1) both;
+}
+@keyframes kodus-skeleton-wave {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+.kodus-skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--bg-3) 0%,
+        var(--bg-4) 50%,
+        var(--bg-3) 100%
+    );
+    background-size: 200% 100%;
+    animation: kodus-skeleton-wave 1.8s ease-in-out infinite;
+    border-radius: 6px;
+}
+
+.kodus-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.kodus-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.kodus-scroll::-webkit-scrollbar-thumb {
+    background: var(--bg-4);
+    border-radius: 4px;
+}
+.kodus-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+}
+
 @theme {
     --color-card-lv1: #181825;
     --color-card-lv2: #202032;

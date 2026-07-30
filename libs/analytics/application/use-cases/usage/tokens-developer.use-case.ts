@@ -16,6 +16,19 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { IPullRequestUserMapping } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import { CacheService } from '@libs/core/cache/cache.service';
+
+// Same immutability logic as the overview cache: a window that ends before
+// today never changes → cache long; a window that includes today still grows.
+// Both windows cached 4h (see build-usage-summary.use-case for the rationale).
+const DEV_TTL_PAST_MS = 4 * 60 * 60 * 1000;
+const DEV_TTL_CURRENT_MS = 4 * 60 * 60 * 1000;
+
+/** Epoch ms for 00:00 UTC today — the cutoff for "immutable past window". */
+function startOfTodayUtc(): number {
+    const now = new Date();
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+}
 
 @Injectable()
 export class TokensByDeveloperUseCase {
@@ -25,6 +38,8 @@ export class TokensByDeveloperUseCase {
 
         @Inject(PULL_REQUESTS_SERVICE_TOKEN)
         private readonly pullRequestsService: IPullRequestsService,
+
+        private readonly cacheService: CacheService,
     ) {}
 
     execute(
@@ -43,6 +58,28 @@ export class TokensByDeveloperUseCase {
     ): Promise<
         DailyUsageByDeveloperResultContract[] | UsageByDeveloperResultContract[]
     > {
+        // Cache the whole by-developer result: unlike the cards (served by the
+        // cached overview), this view re-runs the covered getUsageByPr scan on
+        // EVERY load — so without this it costs ~4s each time. Key + TTL mirror
+        // the overview cache (past window immutable → 6h, current → 2min).
+        const cacheKey = [
+            'usage:by-dev:v1',
+            daily ? 'daily' : 'agg',
+            query.organizationId,
+            query.byok ? 'byok' : 'sys',
+            query.start.getTime(),
+            query.end.getTime(),
+            query.timezone || 'UTC',
+            query.models || '',
+            query.prNumber ?? '',
+            query.repositoryId ?? '',
+            query.developer || '',
+        ].join('|');
+        const cached = await this.cacheService.getFromCache<
+            DailyUsageByDeveloperResultContract[] | UsageByDeveloperResultContract[]
+        >(cacheKey);
+        if (cached) return cached;
+
         const usages = daily
             ? await this.tokenUsageService.getDailyUsageByPr(query)
             : await this.tokenUsageService.getUsageByPr(query);
@@ -54,17 +91,25 @@ export class TokensByDeveloperUseCase {
 
         const mapped = this.mapUsagesWithDevelopers(usages, pullRequestsMap);
 
+        let result:
+            | DailyUsageByDeveloperResultContract[]
+            | UsageByDeveloperResultContract[];
         if (query.developer) {
-            return mapped.filter(
+            result = mapped.filter(
                 (usage) => usage.developer === query.developer,
             );
+        } else if (!daily) {
+            result = this.groupByDeveloperAndModel(mapped);
+        } else {
+            result = mapped;
         }
 
-        if (!daily) {
-            return this.groupByDeveloperAndModel(mapped);
-        }
-
-        return mapped;
+        const ttl =
+            query.end.getTime() < startOfTodayUtc()
+                ? DEV_TTL_PAST_MS
+                : DEV_TTL_CURRENT_MS;
+        await this.cacheService.addToCache(cacheKey, result, ttl);
+        return result;
     }
 
     private async getPullRequestsMap(

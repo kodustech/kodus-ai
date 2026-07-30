@@ -10,6 +10,7 @@ import { LLM_ANALYSIS_SERVICE_TOKEN } from '@/code-review/infrastructure/adapter
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@/code-review/domain/contracts/CommentManagerService.contract';
 import { CodeManagementService } from '@/platform/infrastructure/adapters/services/codeManagement.service';
+import { CacheService } from '@libs/core/cache/cache.service';
 import {
     ClusteringType,
     CodeSuggestion,
@@ -66,6 +67,13 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
                 {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
+                },
+                {
+                    provide: CacheService,
+                    useValue: {
+                        getFromCache: jest.fn(),
+                        addToCache: jest.fn(),
+                    },
                 },
             ],
         }).compile();

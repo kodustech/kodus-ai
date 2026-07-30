@@ -16,15 +16,17 @@ on:
             - main
         # Filter so unrelated kodus-ai changes don't trigger a redeploy.
         # Anything that affects the mcp-manager image must be listed here.
+        # tsconfig.migrations.json is DB-migrations-only and never reaches
+        # the mcp-manager runtime — removed to stop migration PRs from
+        # over-triggering an unnecessary redeploy.
         paths:
             - 'apps/mcp-manager/**'
             - 'docker/Dockerfile'
             - 'docker-bake.hcl'
             - 'package.json'
-            - 'yarn.lock'
+            - 'pnpm-lock.yaml'
             - 'tsconfig.json'
             - 'tsconfig.build.json'
-            - 'tsconfig.migrations.json'
             - 'nest-cli.json'
             - '.github/workflows/qa-mcp-manager-deploy.yml'
     workflow_dispatch:
@@ -123,10 +125,13 @@ jobs:
 
             - name: Notify Discord
               if: always()
-              uses: sarisia/actions-status-discord@v1.13.0
+              uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: ${{ job.status }}
-                  content: ":clap: Build successful!"
                   title: "Deploy QA: kodus-mcp-manager"
+                  description: |
+                      SHA: `${{ github.sha }}`
+                      Triggered by: @${{ github.actor }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   username: GitHub Actions

@@ -1,0 +1,30 @@
+{
+  "prId": "smoke-denial-cache-dos",
+  "goldenComments": [
+    "permDenialCache caches denials for arbitrary user-controlled resource names without a size limit, enabling memory exhaustion DoS."
+  ],
+  "findings": [
+    {
+      "relevantFile": "pkg/services/authz/rbac/service.go",
+      "relevantLinesStart": 153,
+      "relevantLinesEnd": 160,
+      "severity": "high",
+      "label": "security",
+      "oneSentenceSummary": "Unbounded denial cache on user-controlled keys",
+      "suggestionContent": "WHAT: permDenialCache stores denials for arbitrary resource names with no size bound. WHY: An attacker can spam Check with random names and OOM the process. HOW: Use an LRU with a fixed max entries.",
+      "existingCode": "s.permDenialCache.Set(key, true, ttl)",
+      "improvedCode": "s.permDenialCache.SetBounded(key, true, ttl, maxEntries)"
+    },
+    {
+      "relevantFile": "pkg/services/authz/rbac/cache.go",
+      "relevantLinesStart": 30,
+      "relevantLinesEnd": 35,
+      "severity": "medium",
+      "label": "bug",
+      "oneSentenceSummary": "Cache key concatenates name and parent with underscores",
+      "suggestionContent": "WHAT: userPermDenialCacheKey joins name and parent with underscores without escaping. WHY: name=foo_ parent=bar collides with name=foo parent=_bar. HOW: Use a delimiter that cannot appear or encode the parts.",
+      "existingCode": "return name + \"_\" + parent",
+      "improvedCode": "return url.QueryEscape(name) + \"\\x00\" + url.QueryEscape(parent)"
+    }
+  ]
+}

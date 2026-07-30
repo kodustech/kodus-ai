@@ -12,7 +12,7 @@ import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeM
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 @Injectable()
 export class CreateIntegrationUseCase implements IUseCase {

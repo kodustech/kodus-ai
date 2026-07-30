@@ -28,6 +28,16 @@ export interface CreateCheckRunParams {
     };
 }
 
+export interface FindCheckRunParams {
+    organizationAndTeamData: OrganizationAndTeamData;
+    repository: {
+        owner: string;
+        name: string;
+    };
+    headSha: string;
+    name: string;
+}
+
 export interface UpdateCheckRunParams {
     organizationAndTeamData: OrganizationAndTeamData;
     repository: {
@@ -50,4 +60,5 @@ export interface IChecksAdapter {
         params: CreateCheckRunParams,
     ): Promise<string | number | null>;
     updateCheckRun(params: UpdateCheckRunParams): Promise<boolean>;
+    findCheckRun(params: FindCheckRunParams): Promise<string | number | null>;
 }

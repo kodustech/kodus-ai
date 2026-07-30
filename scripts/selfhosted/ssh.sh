@@ -3,9 +3,9 @@
 # command if extra args are given.
 #
 # Usage:
-#   yarn selfhosted:ssh
-#   yarn selfhosted:ssh --name wellington
-#   yarn selfhosted:ssh -- 'docker compose ps'   # one-shot command
+#   pnpm run selfhosted:ssh
+#   pnpm run selfhosted:ssh --name wellington
+#   pnpm run selfhosted:ssh -- 'docker compose ps'   # one-shot command
 
 set -euo pipefail
 
@@ -25,7 +25,7 @@ while [ $# -gt 0 ]; do
             exit 0
             ;;
         *)
-            # Yarn 1 eats the first `--`, so `yarn selfhosted:ssh -- 'cmd'`
+            # Yarn 1 eats the first `--`, so `pnpm run selfhosted:ssh -- 'cmd'`
             # arrives here as `'cmd'`. Accept it as the remote command —
             # this arg and any others are the command to run on the droplet.
             REMOTE_CMD="$*"; break
@@ -33,7 +33,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 NAME=$(normalize_name "$NAME_RAW")
-state_exists "$NAME" || { err "No instance named '$NAME'. Run 'yarn selfhosted:provision' first."; exit 1; }
+state_exists "$NAME" || { err "No instance named '$NAME'. Run 'pnpm run selfhosted:provision' first."; exit 1; }
 
 IP=$(state_get "$NAME" .server_ip)
 KEY=$(state_get "$NAME" .ssh_key_path)

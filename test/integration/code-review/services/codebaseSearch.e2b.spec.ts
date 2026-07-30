@@ -8,7 +8,7 @@
 
 import { CodebaseSearchService } from '@libs/code-review/infrastructure/adapters/services/codebaseSearch.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

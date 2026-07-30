@@ -133,4 +133,45 @@ describe('fetchPullRequestDiff', () => {
             status: 'success',
         });
     });
+
+    it('extracts diff from a real single-nested MCP content envelope (regression: the off-by-one that returned an empty diff)', async () => {
+        // Real tools return { result: { content: [{ type:'text', text:'{...}' }] } }.
+        // executeDeterministicTool unwraps ONE level, so extract receives
+        // { content: [...] } directly. The old extractor looked at
+        // root.result.content (one level too deep) and got nothing — which is
+        // exactly why KODUS_GET_PULL_REQUEST_DIFF came back empty in production.
+        const callTool = jest.fn<ToolCaller['callTool']>().mockResolvedValue({
+            result: {
+                content: [
+                    {
+                        type: 'text',
+                        text: JSON.stringify({
+                            success: true,
+                            data: 'diff --git a/x b/x\n+added line',
+                        }),
+                    },
+                ],
+            },
+        });
+        const toolCaller = createToolCaller(callTool);
+
+        const result = await fetchPullRequestDiff(
+            toolCaller,
+            'KODUS_GET_PULL_REQUEST_DIFF',
+            {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                repositoryId: 'repo-1',
+                repositoryName: 'repo-name',
+                pullRequestNumber: 7,
+            },
+            executionContext,
+        );
+
+        expect(result.diff).toBe('diff --git a/x b/x\n+added line');
+        expect(result.traces[0]).toMatchObject({
+            capability: 'pr.diff.read',
+            status: 'success',
+        });
+    });
 });

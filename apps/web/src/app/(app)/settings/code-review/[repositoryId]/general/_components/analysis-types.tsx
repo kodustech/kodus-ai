@@ -1,15 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import { Button } from "@components/ui/button";
 import { Badge } from "@components/ui/badge";
+import { Button } from "@components/ui/button";
 import { Checkbox } from "@components/ui/checkbox";
 import { FormControl } from "@components/ui/form-control";
 import { Heading } from "@components/ui/heading";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { useGetCodeReviewLabels } from "@services/parameters/hooks";
 import { getMCPPlugins } from "@services/mcp-manager/fetch";
 import { MCPServiceUnavailableError } from "@services/mcp-manager/utils";
+import { useGetCodeReviewLabels } from "@services/parameters/hooks";
 import { useQuery } from "@tanstack/react-query";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
@@ -32,7 +32,10 @@ const TASK_MANAGEMENT_HINTS = [
 ];
 
 function normalizeToken(value: string): string {
-    return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "");
 }
 
 function hasTaskManagementConnection(
@@ -63,6 +66,13 @@ export const AnalysisTypes = () => {
         control: form.control,
         name: "reviewOptions",
     });
+    // The MCP lookup below only feeds the "business_logic" toggle warning, and
+    // that toggle is only visible/enabled when business_logic is on — so gate the
+    // fetch on it instead of paying ~2.5s (100 integrations) on every load.
+    const businessLogicEnabled = Boolean(
+        (reviewOptions as Record<string, { value?: boolean }> | undefined)
+            ?.business_logic?.value,
+    );
     const { data: labels = [], isLoading } = useGetCodeReviewLabels("v2");
 
     // Business-logic review used to be gated by a `businessLogic`
@@ -71,6 +81,7 @@ export const AnalysisTypes = () => {
     // every org.
     const { data: mcpPlugins, isFetched: isMCPFetched } = useQuery({
         queryKey: ["mcp-plugins-task-management"],
+        enabled: businessLogicEnabled,
         staleTime: 5 * 60 * 1000,
         retry: false,
         queryFn: async () => {
@@ -163,6 +174,15 @@ export const AnalysisTypes = () => {
                                         }
                                     });
 
+                                    // TEMP DEBUG (save-in-setup)
+                                    // eslint-disable-next-line no-console
+                                    console.log(
+                                        "[save-debug] reviewOptions onChange",
+                                        {
+                                            fieldDisabled: field.disabled,
+                                            selected: values,
+                                        },
+                                    );
                                     field.onChange(updatedOptions);
                                 }}>
                                 {reviewOptionsOptions.map((option) => {
@@ -195,7 +215,7 @@ export const AnalysisTypes = () => {
                                                                 fieldName={`reviewOptions.${option.value}`}
                                                             />
                                                             {showMcpWarning && (
-                                                                <Badge className="bg-red-500/10 text-red-500 border-red-500/20 text-[10px] whitespace-nowrap">
+                                                                <Badge className="border-red-500/20 bg-red-500/10 text-[10px] whitespace-nowrap text-red-500">
                                                                     Connect a
                                                                     task
                                                                     management

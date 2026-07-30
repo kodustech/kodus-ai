@@ -85,6 +85,23 @@ de la primera revisión automatizada:
 - **Manual**: Kody espera a que alguien ejecute `@kody start-review` antes de hacer
   otra revisión.
 
+### reviewScope
+
+Muestra qué nivel de configuración —global, repositorio o directorio— se usó para
+revisar este pull request, para que los autores sepan qué ajustes se aplicaron.
+
+### agentPrompt
+
+<Note>
+  **Solo en el mensaje de fin de revisión.** Agrupa las sugerencias de los
+  comentarios de línea de la revisión, que no existen hasta que la revisión se
+  ejecuta, por lo que no se ofrece en el mensaje de inicio.
+</Note>
+
+Agrupa todas las sugerencias de la revisión en un único bloque de prompt para
+copiar y pegar (mostrado como un desplegable **Open Agent Prompt**). Pégalo en tu
+agente de código para aplicar todas las correcciones de la revisión de una vez.
+
 <Info>
   Estas variables de contexto se completarán automáticamente con los datos reales
   de tu pull request cuando Kody envíe el mensaje.

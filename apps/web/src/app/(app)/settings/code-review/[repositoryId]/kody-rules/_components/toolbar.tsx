@@ -48,10 +48,13 @@ export const KodyRulesToolbar = ({
     isGlobalView,
 }: KodyRulesToolbarProps) => {
     const activeFilterCount =
-        listFilters.origins.size +
-        listFilters.severities.size +
-        (listFilters.withSyncErrors ? 1 : 0) +
-        (listFilters.pausedOnly ? 1 : 0);
+        entityLabel === "rules"
+            ? listFilters.origins.size +
+            listFilters.severities.size +
+            (listFilters.kodySync ? 1 : 0) +
+            (listFilters.withSyncErrors ? 1 : 0) +
+            (listFilters.pausedOnly ? 1 : 0)
+            : 0;
 
     // Global "/" shortcut focuses the search input (skips when the user is
     // already typing in another input/textarea/contenteditable).
@@ -110,8 +113,8 @@ export const KodyRulesToolbar = ({
                         aria-label={
                             activeFilterCount > 0
                                 ? "Filters (" +
-                                  activeFilterCount +
-                                  " active)"
+                                activeFilterCount +
+                                " active)"
                                 : "Filters"
                         }
                         leftIcon={<Filter aria-hidden />}>
@@ -153,11 +156,40 @@ export type VisibleScopes = {
 
 const ORIGIN_OPTIONS: InferredRuleOrigin[] = [
     "Auto-sync",
-    "Onboard",
+    "Onboarding",
     "Kody-generated",
     "Library",
+    "MCP/Agent",
+    "CLI",
     "manual",
 ];
+
+// Tiny "Select all · Clear" control rendered next to a section heading.
+const SectionToggleButtons = ({
+    onAll,
+    onNone,
+}: {
+    onAll: () => void;
+    onNone: () => void;
+}) => (
+    <div className="text-text-secondary flex items-center gap-2 text-[11px]">
+        <button
+            type="button"
+            onClick={onAll}
+            className="hover:text-text-primary focus-visible:ring-primary rounded focus:outline-none focus-visible:ring-2">
+            Select all
+        </button>
+        <span className="text-text-tertiary" aria-hidden>
+            ·
+        </span>
+        <button
+            type="button"
+            onClick={onNone}
+            className="hover:text-text-primary focus-visible:ring-primary rounded focus:outline-none focus-visible:ring-2">
+            Clear
+        </button>
+    </div>
+);
 
 type FilterPopoverContentProps = {
     visibleScopes: VisibleScopes;
@@ -196,6 +228,21 @@ export const FilterPopoverContent = ({
         onListFiltersChange({ ...listFilters, origins: next });
     };
 
+    const setAllScopes = (value: boolean) =>
+        onVisibleScopesChange({
+            self: value,
+            dir: value,
+            repo: value,
+            global: value,
+            disabled: value,
+        });
+
+    const setAllOrigins = (value: boolean) =>
+        onListFiltersChange({
+            ...listFilters,
+            origins: value ? new Set(ORIGIN_OPTIONS) : new Set(),
+        });
+
     const clearAll = () => {
         onListFiltersChange(EMPTY_LIST_FILTERS);
     };
@@ -203,6 +250,12 @@ export const FilterPopoverContent = ({
     const isDirectoryView = !isRepoView && !isGlobalView;
     const showScopeSection = !isGlobalView;
     const showOriginSection = entityLabel === "rules";
+    const isMemories = entityLabel === "memories";
+    // Capitalized entity word so the scope labels track the active tab
+    // ("Repository Memories" / "Directory Rules") instead of always saying
+    // "Rules". Memories also drop the "Disabled" toggle (no disabled state)
+    // and the "Severity" sort option (no severity) below.
+    const entityWord = isMemories ? "Memories" : "Rules";
 
     return (
         <div className="grid gap-4 p-1">
@@ -220,16 +273,28 @@ export const FilterPopoverContent = ({
                     aria-label="Sort by"
                     className="border-card-lv3 bg-card-lv2 text-text-primary focus-visible:ring-primary h-9 w-full rounded-md border px-3 text-sm focus:outline-none focus-visible:ring-2">
                     <option value="recent">Recently updated</option>
-                    <option value="severity-desc">
-                        Severity (high → low)
-                    </option>
+                    {/* Memories have no severity — only standard rules can be
+                        ordered by it. */}
+                    {!isMemories && (
+                        <option value="severity-desc">
+                            Severity (critical → low)
+                        </option>
+                    )}
                     <option value="alphabetical">A → Z</option>
                 </select>
             </section>
 
             {showScopeSection && (
                 <section className="grid gap-2">
-                    <h4 className="text-sm leading-none font-medium">View</h4>
+                    <div className="flex items-center justify-between">
+                        <h4 className="text-sm leading-none font-medium">
+                            View
+                        </h4>
+                        <SectionToggleButtons
+                            onAll={() => setAllScopes(true)}
+                            onNone={() => setAllScopes(false)}
+                        />
+                    </div>
                     <p className="text-text-secondary text-sm">
                         Show or hide {entityLabel} from different scopes.
                     </p>
@@ -244,8 +309,8 @@ export const FilterPopoverContent = ({
                             />
                             <Label htmlFor="scope-self">
                                 {isRepoView
-                                    ? "Repository Rules"
-                                    : "Directory Rules"}
+                                    ? `Repository ${entityWord}`
+                                    : `Directory ${entityWord}`}
                             </Label>
                         </div>
 
@@ -301,28 +366,40 @@ export const FilterPopoverContent = ({
                             </Label>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="scope-disabled"
-                                checked={visibleScopes.disabled}
-                                onCheckedChange={(checked) =>
-                                    handleScopeChange(
-                                        "disabled",
-                                        Boolean(checked),
-                                    )
-                                }
-                            />
-                            <Label htmlFor="scope-disabled">
-                                Disabled Rules
-                            </Label>
-                        </div>
+                        {/* Memories have no disabled state, so this toggle
+                            would be a no-op there — only render it for rules. */}
+                        {!isMemories && (
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="scope-disabled"
+                                    checked={visibleScopes.disabled}
+                                    onCheckedChange={(checked) =>
+                                        handleScopeChange(
+                                            "disabled",
+                                            Boolean(checked),
+                                        )
+                                    }
+                                />
+                                <Label htmlFor="scope-disabled">
+                                    Disabled Rules
+                                </Label>
+                            </div>
+                        )}
                     </div>
                 </section>
             )}
 
             {showOriginSection && (
                 <section className="grid gap-2">
-                    <h4 className="text-sm leading-none font-medium">Origin</h4>
+                    <div className="flex items-center justify-between">
+                        <h4 className="text-sm leading-none font-medium">
+                            Origin
+                        </h4>
+                        <SectionToggleButtons
+                            onAll={() => setAllOrigins(true)}
+                            onNone={() => setAllOrigins(false)}
+                        />
+                    </div>
                     <div className="grid gap-2">
                         {ORIGIN_OPTIONS.map((origin) => {
                             const fieldId = "origin-" + origin;
@@ -348,45 +425,59 @@ export const FilterPopoverContent = ({
                                 </div>
                             );
                         })}
+
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="origin-kody-sync"
+                                checked={listFilters.kodySync}
+                                onCheckedChange={(checked) =>
+                                    onListFiltersChange({
+                                        ...listFilters,
+                                        kodySync: Boolean(checked),
+                                    })
+                                }
+                            />
+                            <Label htmlFor="origin-kody-sync">@kody-sync</Label>
+                        </div>
                     </div>
                 </section>
             )}
 
-            <section className="grid gap-2">
-                <h4 className="text-sm leading-none font-medium">Status</h4>
-                <div className="flex items-center space-x-2">
-                    <Checkbox
-                        id="filter-sync-errors"
-                        checked={listFilters.withSyncErrors}
-                        onCheckedChange={(checked) =>
-                            onListFiltersChange({
-                                ...listFilters,
-                                withSyncErrors: Boolean(checked),
-                            })
-                        }
-                    />
-                    <Label htmlFor="filter-sync-errors">
-                        Has sync errors
-                    </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                    <Checkbox
-                        id="filter-paused-only"
-                        checked={listFilters.pausedOnly}
-                        onCheckedChange={(checked) =>
-                            onListFiltersChange({
-                                ...listFilters,
-                                pausedOnly: Boolean(checked),
-                            })
-                        }
-                    />
-                    <Label htmlFor="filter-paused-only">
-                        Paused only
-                    </Label>
-                </div>
-            </section>
+            {showOriginSection && (
+                <section className="grid gap-2">
+                    <h4 className="text-sm leading-none font-medium">Status</h4>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="filter-sync-errors"
+                            checked={listFilters.withSyncErrors}
+                            onCheckedChange={(checked) =>
+                                onListFiltersChange({
+                                    ...listFilters,
+                                    withSyncErrors: Boolean(checked),
+                                })
+                            }
+                        />
+                        <Label htmlFor="filter-sync-errors">
+                            Has sync errors
+                        </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <Checkbox
+                            id="filter-paused-only"
+                            checked={listFilters.pausedOnly}
+                            onCheckedChange={(checked) =>
+                                onListFiltersChange({
+                                    ...listFilters,
+                                    pausedOnly: Boolean(checked),
+                                })
+                            }
+                        />
+                        <Label htmlFor="filter-paused-only">Paused only</Label>
+                    </div>
+                </section>
+            )}
 
-            {hasActiveListFilters(listFilters) && (
+            {showOriginSection && hasActiveListFilters(listFilters) && (
                 <Button
                     size="xs"
                     variant="cancel"

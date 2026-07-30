@@ -29,7 +29,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { CacheService } from '@libs/core/cache/cache.service';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

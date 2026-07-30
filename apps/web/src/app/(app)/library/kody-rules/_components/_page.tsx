@@ -101,14 +101,8 @@ const mapTeamLanguageToFilterLanguage = (
 const tagsToTypeValue = (args: {
     tags?: string[];
     plug_and_play?: boolean;
-    needMCPS?: boolean;
 }) => {
     if (args.plug_and_play) return "plug-and-play";
-    if (args.needMCPS) return "mcp";
-
-    if (!args.tags || args.tags.length === 0) return undefined;
-    const normalized = new Set(args.tags.map((t) => t.trim().toLowerCase()));
-    if (normalized.has("mcp")) return "mcp";
     return undefined;
 };
 
@@ -202,7 +196,6 @@ export const KodyRulesLibrary = ({
     initialView,
     initialTags,
     initialPlugAndPlay,
-    initialNeedMCPS,
     teamLanguage,
     featuredCollections,
     initialRules,
@@ -215,7 +208,6 @@ export const KodyRulesLibrary = ({
     initialView?: ViewMode;
     initialTags?: string[];
     initialPlugAndPlay?: boolean;
-    initialNeedMCPS?: boolean;
     teamLanguage?: string;
     featuredCollections?: FeaturedCollection[];
     initialRules: LibraryRule[];
@@ -256,7 +248,6 @@ export const KodyRulesLibrary = ({
         if (isBrowseInit && initialTags && initialTags.length > 0)
             next.tags = [...initialTags];
         if (isBrowseInit && initialPlugAndPlay) next.plug_and_play = true;
-        if (isBrowseInit && initialNeedMCPS) next.needMCPS = true;
         return next;
     });
     const debouncedNameFilter = useDebounce(filters.name ?? "", 500);
@@ -271,36 +262,19 @@ export const KodyRulesLibrary = ({
     const [recommendedRules, setRecommendedRules] = useState<LibraryRule[]>([]);
     const [isRecommendedLoading, setIsRecommendedLoading] = useState(false);
 
-    const filteredResults = useMemo(() => {
-        if (!filters.requiredMcp) return results;
-
-        const normalizedFilter = filters.requiredMcp.trim().toLowerCase();
-        return results.filter((rule) => {
-            if (!rule.required_mcps || rule.required_mcps.length === 0)
-                return false;
-            return rule.required_mcps.some(
-                (mcp) => mcp.trim().toLowerCase() === normalizedFilter,
-            );
-        });
-    }, [results, filters.requiredMcp]);
-
     const hasUserFilters = useMemo(() => {
         if (debouncedNameFilter.trim()) return true;
         if (filters.severity) return true;
         if (selectedBucket) return true;
         if (filters.tags && filters.tags.length > 0) return true;
         if (filters.plug_and_play) return true;
-        if (filters.needMCPS) return true;
-        if (filters.requiredMcp) return true;
         if (filters.language && filters.language !== autoLanguage) return true;
         return false;
     }, [
         autoLanguage,
         debouncedNameFilter,
         filters.language,
-        filters.needMCPS,
         filters.plug_and_play,
-        filters.requiredMcp,
         filters.tags,
         filters.severity,
         selectedBucket,
@@ -316,17 +290,16 @@ export const KodyRulesLibrary = ({
             tagsToTypeValue({
                 tags: filters.tags,
                 plug_and_play: filters.plug_and_play,
-                needMCPS: filters.needMCPS,
             }),
-        [filters.needMCPS, filters.plug_and_play, filters.tags],
+        [filters.plug_and_play, filters.tags],
     );
 
     const initialBrowseResultsAlreadyLoadedRef = useRef(
         Boolean(initialSelectedBucket) &&
-            initialSelectedBucket === selectedBucket &&
-            !debouncedNameFilter.trim() &&
-            !filters.severity &&
-            !filters.language,
+        initialSelectedBucket === selectedBucket &&
+        !debouncedNameFilter.trim() &&
+        !filters.severity &&
+        !filters.language,
     );
 
     const fetchResultsPage = useCallback(
@@ -341,13 +314,7 @@ export const KodyRulesLibrary = ({
                     language: filters.language,
                     tags: filters.tags,
                     plug_and_play: filters.plug_and_play,
-                    needMCPS: filters.needMCPS,
                     buckets: selectedBucket ? [selectedBucket] : undefined,
-                    debugLabel: filters.needMCPS
-                        ? "client:browse:needMCPS"
-                        : filters.plug_and_play
-                          ? "client:browse:plug_and_play"
-                          : undefined,
                 });
 
                 const nextResults = response?.data || [];
@@ -371,7 +338,6 @@ export const KodyRulesLibrary = ({
         [
             debouncedNameFilter,
             filters.language,
-            filters.needMCPS,
             filters.plug_and_play,
             filters.tags,
             filters.severity,
@@ -431,9 +397,9 @@ export const KodyRulesLibrary = ({
             setFilters(
                 nextMode === "browse" && autoLanguage
                     ? {
-                          name: "",
-                          language: autoLanguage,
-                      }
+                        name: "",
+                        language: autoLanguage,
+                    }
                     : { name: "" },
             );
             setSelectedBucket(null);
@@ -478,19 +444,7 @@ export const KodyRulesLibrary = ({
                     return {
                         ...prev,
                         language: nextLanguage,
-                        needMCPS: undefined,
                         plug_and_play: true,
-                        requiredMcp: undefined,
-                        tags: undefined,
-                    };
-                }
-
-                if (typeValue === "mcp") {
-                    return {
-                        ...prev,
-                        language: nextLanguage,
-                        plug_and_play: undefined,
-                        needMCPS: true,
                         tags: undefined,
                     };
                 }
@@ -498,9 +452,7 @@ export const KodyRulesLibrary = ({
                 return {
                     ...prev,
                     language: nextLanguage,
-                    needMCPS: undefined,
                     plug_and_play: undefined,
-                    requiredMcp: undefined,
                     tags: undefined,
                 };
             });
@@ -827,19 +779,15 @@ export const KodyRulesLibrary = ({
                                             {selectedBucketMeta?.title
                                                 ? selectedBucketMeta.title
                                                 : hasUserFilters
-                                                  ? "Results"
-                                                  : autoLanguage
-                                                    ? `${ProgrammingLanguage[autoLanguage]} rules`
-                                                    : "All rules"}
+                                                    ? "Results"
+                                                    : autoLanguage
+                                                        ? `${ProgrammingLanguage[autoLanguage]} rules`
+                                                        : "All rules"}
                                         </Heading>
                                         <div className="text-text-secondary text-sm">
-                                            {filters.requiredMcp
-                                                ? filteredResults.length > 0
-                                                    ? `${filteredResults.length} rules`
-                                                    : null
-                                                : pagination.total > 0
-                                                  ? `${pagination.total} rules`
-                                                  : null}
+                                            {pagination.total > 0
+                                                ? `${pagination.total} rules`
+                                                : null}
                                         </div>
                                     </div>
                                     {selectedBucketMeta?.description && (
@@ -851,8 +799,8 @@ export const KodyRulesLibrary = ({
 
                                 <Separator className="opacity-60" />
 
-                                {filteredResults.length === 0 &&
-                                !isResultsLoading ? (
+                                {results.length === 0 &&
+                                    !isResultsLoading ? (
                                     <div className="text-text-secondary py-12 text-sm">
                                         {hasUserFilters
                                             ? "No rules found with your current filters."
@@ -861,7 +809,7 @@ export const KodyRulesLibrary = ({
                                 ) : (
                                     <>
                                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                            {filteredResults.map((rule) => (
+                                            {results.map((rule) => (
                                                 <KodyRuleLibraryItem
                                                     key={rule.uuid}
                                                     rule={rule}
@@ -875,16 +823,16 @@ export const KodyRulesLibrary = ({
 
                                         {pagination.page <
                                             pagination.totalPages && (
-                                            <div className="flex justify-center pt-2">
-                                                <Button
-                                                    size="md"
-                                                    variant="secondary"
-                                                    loading={isResultsLoading}
-                                                    onClick={loadMoreResults}>
-                                                    Load more
-                                                </Button>
-                                            </div>
-                                        )}
+                                                <div className="flex justify-center pt-2">
+                                                    <Button
+                                                        size="md"
+                                                        variant="secondary"
+                                                        loading={isResultsLoading}
+                                                        onClick={loadMoreResults}>
+                                                        Load more
+                                                    </Button>
+                                                </div>
+                                            )}
                                     </>
                                 )}
                             </section>
@@ -892,46 +840,46 @@ export const KodyRulesLibrary = ({
                             <>
                                 {(recommendedRules.length > 0 ||
                                     isRecommendedLoading) && (
-                                    <section className="border-card-lv3 bg-card-lv1 rounded-xl border p-6">
-                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                            <div className="flex items-start gap-3">
-                                                <div className="bg-card-lv3 rounded-lg p-3">
-                                                    <SparklesIcon className="text-primary-light size-5" />
+                                        <section className="border-card-lv3 bg-card-lv1 rounded-xl border p-6">
+                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="bg-card-lv3 rounded-lg p-3">
+                                                        <SparklesIcon className="text-primary-light size-5" />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1">
+                                                        <Heading variant="h2">
+                                                            Recommended for you
+                                                        </Heading>
+                                                        <p className="text-text-secondary text-sm">
+                                                            Personalized rules based
+                                                            on your preferences.
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col gap-1">
-                                                    <Heading variant="h2">
-                                                        Recommended for you
-                                                    </Heading>
-                                                    <p className="text-text-secondary text-sm">
-                                                        Personalized rules based
-                                                        on your preferences.
-                                                    </p>
-                                                </div>
+
+                                                <Button
+                                                    size="sm"
+                                                    variant="cancel"
+                                                    loading={isRecommendedLoading}
+                                                    onClick={fetchRecommended}>
+                                                    Refresh
+                                                </Button>
                                             </div>
 
-                                            <Button
-                                                size="sm"
-                                                variant="cancel"
-                                                loading={isRecommendedLoading}
-                                                onClick={fetchRecommended}>
-                                                Refresh
-                                            </Button>
-                                        </div>
-
-                                        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                                            {recommendedRules.map((rule) => (
-                                                <KodyRuleLibraryItem
-                                                    key={rule.uuid}
-                                                    rule={rule}
-                                                    showLikeButton
-                                                    showSuggestionsButton={
-                                                        showSuggestionsButton
-                                                    }
-                                                />
-                                            ))}
-                                        </div>
-                                    </section>
-                                )}
+                                            <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                                                {recommendedRules.map((rule) => (
+                                                    <KodyRuleLibraryItem
+                                                        key={rule.uuid}
+                                                        rule={rule}
+                                                        showLikeButton
+                                                        showSuggestionsButton={
+                                                            showSuggestionsButton
+                                                        }
+                                                    />
+                                                ))}
+                                            </div>
+                                        </section>
+                                    )}
 
                                 {featuredCollections?.map((collection) => (
                                     <section

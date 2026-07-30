@@ -1,0 +1,55 @@
+name: 'Discord notify'
+description: 'Post a status notification to a Discord channel with graceful no-webhook fallback'
+
+# Wraps sarisia/actions-status-discord with one shape every workflow uses,
+# so the message format stays consistent and adding a new notification is
+# one block instead of a dozen lines of YAML.
+#
+# Graceful degradation: if the webhook input resolves to empty (secret not
+# yet created), we log a warning and exit success. The calling workflow
+# never fails because of a missing Discord channel.
+
+inputs:
+    webhook:
+        description: 'Discord webhook URL. Typically the per-channel secret with a fallback to the general DISCORD_WEBHOOK so a missing per-channel secret degrades gracefully.'
+        required: true
+    status:
+        description: 'success | failure | cancelled — drives the embed color'
+        required: true
+    title:
+        description: 'Short headline for the notification (workflow name + short context)'
+        required: true
+    description:
+        description: 'Optional body — usually "<step> failed" or a link hint'
+        required: false
+        default: ''
+
+runs:
+    using: composite
+    steps:
+        - name: Check webhook is configured
+          id: check
+          shell: bash
+          env:
+              WEBHOOK: ${{ inputs.webhook }}
+          run: |
+              if [ -z "$WEBHOOK" ]; then
+                  echo "::warning::No Discord webhook configured for this notification — skipping."
+                  echo "skip=true" >> "$GITHUB_OUTPUT"
+              else
+                  echo "skip=false" >> "$GITHUB_OUTPUT"
+              fi
+
+        - name: Post to Discord
+          if: steps.check.outputs.skip == 'false'
+          uses: sarisia/actions-status-discord@v1.16.0
+          with:
+              webhook: ${{ inputs.webhook }}
+              status: ${{ inputs.status }}
+              title: ${{ inputs.title }}
+              description: ${{ inputs.description }}
+              username: 'GitHub Actions'
+              # Embed color: red on failure, green on success, grey on cancel.
+              # sarisia picks defaults if we leave color blank, but ours match
+              # the visual cues already in use elsewhere.
+              color: ${{ inputs.status == 'failure' && '0xff0000' || inputs.status == 'success' && '0x00cc66' || '0x888888' }}

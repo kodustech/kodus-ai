@@ -1,0 +1,80 @@
+name: "E2E: notify smoke test"
+
+# Manual-only utility: renders the three e2e-cloud Discord notification
+# shapes (infra-unreachable / gating failures / green-with-advisories)
+# from a FIXTURE digest and posts them to the internal channel, clearly
+# labeled [SMOKE TEST]. Use it to validate message rendering when
+# touching the notification pipeline — the real path only fires on real
+# failures, which you can't (and shouldn't) produce on demand.
+
+permissions:
+    contents: read
+
+on:
+    workflow_dispatch:
+
+jobs:
+    notify-smoke:
+        runs-on: ubuntu-latest
+        environment: QA
+        timeout-minutes: 5
+        steps:
+            - name: Build fixture digest
+              id: digest
+              run: |
+                  set -uo pipefail
+                  node - <<'__JS__'
+                  const fs = require("fs");
+                  const n = {
+                      passed: 67, total: 70, failed: 2, skipped: 1,
+                      gatingFailures: [{ cell: "code-review-basic × cloud × github × paid", error: "Assertion failed: Review pipeline ran but produced 0 findings on PR #99 within 1500s." }],
+                      advisoryFailures: [{ cell: "public-pr-demo × cloud × github × paid", error: "GET featured-reviews: HTTP 404" }],
+                      retriedCells: ["kody-rules-create-and-apply × cloud × gitlab × paid"],
+                  };
+                  const fmt = (l) => l.map((x) => `• \`${x.cell}\`\n  ${x.error}`).join("\n");
+                  const out = [];
+                  out.push(`headline=${n.passed}/${n.total} passed (failed=${n.failed}, skipped=${n.skipped})`);
+                  out.push(`advisory_count=${n.advisoryFailures.length}`);
+                  const body = [];
+                  body.push(`**P0 failures (gating):**\n${fmt(n.gatingFailures)}`);
+                  body.push(`**Advisory (non-gating):**\n${fmt(n.advisoryFailures)}`);
+                  body.push(`Recovered on retry: ${n.retriedCells.map((c) => `\`${c}\``).join(", ")}`);
+                  out.push("details<<__EOF__");
+                  out.push(body.join("\n"));
+                  out.push("__EOF__");
+                  fs.appendFileSync(process.env.GITHUB_OUTPUT, out.join("\n") + "\n");
+                  __JS__
+
+            - name: Checkout (for the composite action)
+              uses: actions/checkout@v6.0.2
+
+            - name: "[SMOKE] Case 1 — infra unreachable"
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "[SMOKE TEST] 🔌 E2E: QA unreachable — matrix did NOT run"
+                  description: |
+                      The readiness gate could not reach QA at the app level — this is an INFRA condition (deploy still rolling out, or WAF blocking the runner IP), not a test failure. No scenario was executed.
+                      (smoke test — ignore)
+
+            - name: "[SMOKE] Case 2 — gating failures"
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "[SMOKE TEST] ❌ E2E cloud matrix: ${{ steps.digest.outputs.headline }}"
+                  description: |
+                      ${{ steps.digest.outputs.details }}
+                      (smoke test — ignore)
+
+            - name: "[SMOKE] Case 3 — green with advisories"
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: cancelled
+                  title: "[SMOKE TEST] ⚠️ E2E cloud matrix GREEN with advisories: ${{ steps.digest.outputs.headline }}"
+                  description: |
+                      All P0 gates passed. Non-gating failures to keep an eye on:
+                      ${{ steps.digest.outputs.details }}
+                      (smoke test — ignore)

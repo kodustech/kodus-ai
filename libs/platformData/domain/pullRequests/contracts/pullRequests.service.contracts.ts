@@ -80,19 +80,38 @@ export interface IPullRequestsService extends IPullRequestsRepository {
         organizationId: string,
     ): Promise<IPullRequestUserMapping[]>;
 
-    getOnboardingReviewModeSignals(params: {
-        organizationAndTeamData: OrganizationAndTeamData;
-        repositoryIds: string[];
-        limit?: number;
-    }): Promise<
+    findOpenPullRequestKeysOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds?: string[],
+    ): Promise<Array<{ number: number; repositoryId: string }>>;
+    findDistinctAuthorsByRepositoryIds(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        search?: string,
+        limit?: number,
+    ): Promise<
         Array<{
-            repositoryId: string;
-            sampleSize: number;
-            metrics: Record<string, number>;
-            recommendation: {
-                mode: 'Safety' | 'Speed' | 'Coach' | 'Default';
-                reasons: string[];
-            };
+            id: string;
+            name: string;
+            username: string;
+            count: number;
         }>
     >;
+    countDeliveredPullRequests(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: {
+            severities?: string[];
+            authorEmail?: string;
+            unresolvedOnly?: boolean;
+            openOnly?: boolean;
+        },
+    ): Promise<number>;
+    /** PR numbers of one repository — see the repository contract. */
+    findNumbersByRepositoryId(
+        organizationId: string,
+        repositoryId: string,
+        until?: Date,
+    ): Promise<number[]>;
 }

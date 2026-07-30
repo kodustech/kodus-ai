@@ -28,7 +28,7 @@ import {
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

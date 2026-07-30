@@ -8,8 +8,8 @@
  * long as it's regenerated. CI enforces that via `--check`.
  *
  * Usage:
- *   yarn permissions:matrix          Regenerate the docs snippet.
- *   yarn permissions:matrix:check    Fail if the snippet is out of date.
+ *   pnpm run permissions:matrix          Regenerate the docs snippet.
+ *   pnpm run permissions:matrix:check    Fail if the snippet is out of date.
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
@@ -106,18 +106,12 @@ function cell(role: Role, resource: ResourceType): string {
     return parts.length > 0 ? parts.join(' / ') : '—';
 }
 
-// Resources that any non-owner role actually references, in label order.
+// Every labeled resource, in label order. We include owner-only resources
+// (e.g. OrganizationSettings, which the Owner reaches via the `All` wildcard
+// and no other role references) so the matrix surfaces them with "Owner: full
+// / others: —" instead of silently dropping the row.
 function resourcesInUse(): ResourceType[] {
-    const used = new Set<ResourceType>();
-    for (const role of ROLE_ORDER) {
-        for (const rule of ROLE_POLICIES[role]) {
-            if (rule.resource !== ResourceType.All) used.add(rule.resource);
-        }
-    }
-    // Keep the label-map order for stable, readable output.
-    return (Object.keys(RESOURCE_LABELS) as ResourceType[]).filter((r) =>
-        used.has(r),
-    );
+    return Object.keys(RESOURCE_LABELS) as ResourceType[];
 }
 
 function render(): string {
@@ -134,7 +128,7 @@ function render(): string {
     return [
         '{/* AUTO-GENERATED — do not edit by hand.',
         '   Source of truth: libs/identity/domain/permissions/policies/role-policies.ts',
-        '   Regenerate with: yarn permissions:matrix */}',
+        '   Regenerate with: pnpm run permissions:matrix */}',
         '',
         '<sub>',
         '**Legend** — `V` view · `E` edit (create/update) · `D` delete · `—` no access.',
@@ -160,7 +154,7 @@ function main() {
         if (current !== content) {
             console.error(
                 '✖ docs RBAC matrix is out of date with ROLE_POLICIES.\n' +
-                    '  Run `yarn permissions:matrix` and commit the result.',
+                    '  Run `pnpm run permissions:matrix` and commit the result.',
             );
             process.exit(1);
         }

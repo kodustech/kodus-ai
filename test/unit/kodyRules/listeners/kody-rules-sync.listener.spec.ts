@@ -1,6 +1,6 @@
 import { KodyRulesSyncListener } from '@libs/kodyRules/infrastructure/adapters/listeners/kody-rules-sync.listener';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -10,25 +10,53 @@ jest.mock('@kodus/flow', () => ({
 }));
 
 describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
-    const organizationAndTeamData = { organizationId: 'org-1', teamId: 'team-1' };
+    const organizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
 
     function buildListener() {
         const kodyRulesSyncService = {
             syncFromChangedFiles: jest.fn().mockResolvedValue(undefined),
-            purgeAllIdeSyncRulesForRepository: jest.fn().mockResolvedValue(undefined),
-            pauseAllIdeSyncRulesForRepository: jest.fn().mockResolvedValue(undefined),
-            resumeAllIdeSyncRulesForRepository: jest.fn().mockResolvedValue(undefined),
+            purgeAllIdeSyncRulesForRepository: jest
+                .fn()
+                .mockResolvedValue(undefined),
+            pauseAllIdeSyncRulesForRepository: jest
+                .fn()
+                .mockResolvedValue(undefined),
+            resumeAllIdeSyncRulesForRepository: jest
+                .fn()
+                .mockResolvedValue(undefined),
         };
         const parametersService = {
             findByKey: jest.fn().mockResolvedValue(null),
+        };
+        const organizationParametersService = {
+            findByKey: jest.fn().mockResolvedValue(null),
+        };
+
+        const dataSource = {
+            // CREATE TABLE / DELETE sweep return [], the INSERT claim wins
+            // by default (RETURNING one row).
+            query: jest
+                .fn()
+                .mockImplementation((sql: string) =>
+                    Promise.resolve(
+                        sql.trimStart().startsWith('INSERT')
+                            ? [{ claim_key: 'k' }]
+                            : [],
+                    ),
+                ),
         };
 
         const listener = new KodyRulesSyncListener(
             kodyRulesSyncService as any,
             parametersService as any,
+            organizationParametersService as any,
+            dataSource as any,
         );
 
-        return { listener, kodyRulesSyncService };
+        return { listener, kodyRulesSyncService, dataSource };
     }
 
     it('action=delete purges IDE-synced rules', async () => {
@@ -40,11 +68,15 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
             action: 'delete',
         });
 
-        expect(kodyRulesSyncService.purgeAllIdeSyncRulesForRepository).toHaveBeenCalledWith({
+        expect(
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+        ).toHaveBeenCalledWith({
             organizationAndTeamData,
             repositoryId: 'repo-1',
         });
-        expect(kodyRulesSyncService.pauseAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
     });
 
     it('action=pause flips IDE-synced rules to PAUSED', async () => {
@@ -56,11 +88,15 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
             action: 'pause',
         });
 
-        expect(kodyRulesSyncService.pauseAllIdeSyncRulesForRepository).toHaveBeenCalledWith({
+        expect(
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+        ).toHaveBeenCalledWith({
             organizationAndTeamData,
             repositoryId: 'repo-1',
         });
-        expect(kodyRulesSyncService.purgeAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
     });
 
     it('action=keep is a no-op (rules stay ACTIVE)', async () => {
@@ -72,9 +108,15 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
             action: 'keep',
         });
 
-        expect(kodyRulesSyncService.purgeAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
-        expect(kodyRulesSyncService.pauseAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
-        expect(kodyRulesSyncService.resumeAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.resumeAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
     });
 
     it('missing action defaults to keep (least destructive)', async () => {
@@ -89,8 +131,12 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
             repositoryId: 'repo-1',
         } as any);
 
-        expect(kodyRulesSyncService.purgeAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
-        expect(kodyRulesSyncService.pauseAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
     });
 
     it('ignores the event when repositoryId is missing', async () => {
@@ -102,7 +148,51 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
             action: 'delete',
         });
 
-        expect(kodyRulesSyncService.purgeAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
-        expect(kodyRulesSyncService.pauseAllIdeSyncRulesForRepository).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.purgeAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
+        expect(
+            kodyRulesSyncService.pauseAllIdeSyncRulesForRepository,
+        ).not.toHaveBeenCalled();
+    });
+
+    describe('cross-process sync claim', () => {
+        const mergedEvent = {
+            merged: true,
+            pullRequestNumber: 42,
+            repository: { id: 'repo-1', name: 'tiny-url' },
+            organizationAndTeamData: { organizationId: 'org-1' },
+            files: [{ filename: '.kody/rules/x.md', status: 'added' }],
+        } as any;
+
+        it('runs the sync when this process wins the claim', async () => {
+            const { listener, kodyRulesSyncService } = buildListener();
+            await listener.handlePullRequestClosedEvent(mergedEvent);
+            expect(
+                kodyRulesSyncService.syncFromChangedFiles,
+            ).toHaveBeenCalledTimes(1);
+        });
+
+        it('skips the sync when another process already claimed the merge', async () => {
+            const { listener, kodyRulesSyncService, dataSource } =
+                buildListener();
+            dataSource.query.mockImplementation((sql: string) =>
+                Promise.resolve([]),
+            );
+            await listener.handlePullRequestClosedEvent(mergedEvent);
+            expect(
+                kodyRulesSyncService.syncFromChangedFiles,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('proceeds when the claim infrastructure errors (availability over exactly-once)', async () => {
+            const { listener, kodyRulesSyncService, dataSource } =
+                buildListener();
+            dataSource.query.mockRejectedValue(new Error('pg down'));
+            await listener.handlePullRequestClosedEvent(mergedEvent);
+            expect(
+                kodyRulesSyncService.syncFromChangedFiles,
+            ).toHaveBeenCalledTimes(1);
+        });
     });
 });

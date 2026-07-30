@@ -90,7 +90,10 @@ export type CodeReviewGlobalConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive: boolean;
     kodyRulesGeneratorEnabled?: boolean;
-    llmGeneratedMemoriesRequireApproval?: boolean;
+    kodyLearningExcludedReviewers?: string[];
+    kodyKnowledgeApproval?: {
+        enabled: boolean;
+    };
     runOnDraft: boolean;
     codeReviewVersion?: "legacy" | "v2" | "v3-agent";
     ideRulesSyncEnabled: boolean;

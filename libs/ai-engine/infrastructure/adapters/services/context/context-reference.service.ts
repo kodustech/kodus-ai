@@ -2,8 +2,11 @@ import {
     ContextRevisionScope,
     ContextRequirement,
     ContextRevisionActor,
-} from '@kodus/flow';
-import { createRevisionEntry, computeRequirementsHash } from '@kodus/flow';
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import {
+    createRevisionEntry,
+    computeRequirementsHash,
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -175,6 +178,10 @@ export class ContextReferenceService implements IContextReferenceService {
         return this.repository.findById(uuid);
     }
 
+    async findByIds(uuids: string[]): Promise<ContextReferenceEntity[]> {
+        return this.repository.findByIds(uuids);
+    }
+
     async update(
         filter: Partial<IContextReference>,
         data: Partial<IContextReference>,
@@ -211,7 +218,11 @@ export class ContextReferenceService implements IContextReferenceService {
         requirements?: ContextRequirement[],
     ): 'pending' | 'processing' | 'completed' | 'failed' {
         if (!requirements || requirements.length === 0) {
-            return 'pending';
+            // An empty revision is a FINISHED state, not a queued one: it is
+            // what a clean re-detection commits to clear stale errors. As
+            // 'pending' the UI showed an eternal "Processing references…"
+            // spinner on every rule whose references were cleaned up.
+            return 'completed';
         }
 
         const hasErrors = requirements.some(

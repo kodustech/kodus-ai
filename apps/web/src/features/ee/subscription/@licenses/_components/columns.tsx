@@ -1,5 +1,6 @@
 "use client";
 
+import { Badge } from "@components/ui/badge";
 import { magicModal } from "@components/ui/magic-modal";
 import { Switch } from "@components/ui/switch";
 import { useAsyncAction } from "@hooks/use-async-action";
@@ -18,6 +19,7 @@ export type LicenseTableRow = {
     id: string | number;
     name: string;
     licenseStatus: "active" | "inactive";
+    removedFromGit?: boolean;
 };
 
 const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
@@ -48,6 +50,13 @@ const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
         },
     );
 
+    const canToggleOn =
+        !row.original.removedFromGit &&
+        (subscription.status === "active" ||
+            subscription.status === "licensed-self-hosted") &&
+        subscription.usersWithAssignedLicense.length <
+            subscription.numberOfLicenses;
+
     return (
         <Switch
             loading={isAssigningOrDeassigningLicense}
@@ -55,15 +64,25 @@ const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
             disabled={
                 !canEdit ||
                 (subscription.status !== "active" &&
-                    subscription.status !== "licensed-self-hosted")
+                    subscription.status !== "licensed-self-hosted") ||
+                (row.original.removedFromGit &&
+                    row.original.licenseStatus === "inactive")
             }
             onCheckedChange={async () => {
+                if (
+                    row.original.removedFromGit &&
+                    row.original.licenseStatus === "inactive"
+                ) {
+                    return;
+                }
+
                 if (
                     (subscription.status === "active" ||
                         subscription.status === "licensed-self-hosted") &&
                     subscription.usersWithAssignedLicense.length >=
                         subscription.numberOfLicenses &&
-                    row.original.licenseStatus === "inactive"
+                    row.original.licenseStatus === "inactive" &&
+                    canToggleOn
                 ) {
                     magicModal.show(() => (
                         <NoMoreLicensesModal teamId={teamId} />
@@ -86,6 +105,16 @@ export const columns: ColumnDef<LicenseTableRow>[] = [
         accessorKey: "name",
         header: "Username",
         size: 150,
+        cell: ({ row }) => (
+            <div className="flex items-center gap-2">
+                <span>{row.original.name}</span>
+                {row.original.removedFromGit && (
+                    <Badge variant="outline" className="text-muted-foreground shrink-0">
+                        Removed from organization
+                    </Badge>
+                )}
+            </div>
+        ),
     },
     {
         header: "License assignment",

@@ -1,0 +1,31 @@
+diff --git a/src/sync/localStore.ts b/src/sync/localStore.ts
+index 1111111..2222222 100644
+--- a/src/sync/localStore.ts
++++ b/src/sync/localStore.ts
+@@ -10,6 +10,7 @@ export interface LocalStore {
+     pendingChanges: Change[];
+     lastFetchedRemoteSha?: string;
++    lastSyncedAt?: number;
+ }
+
+@@ -48,6 +49,7 @@ export class SyncEngine {
+     async sync(): Promise<void> {
+         await this.push();
+         await this.pull();
++        this.store.lastSyncedAt = Date.now();
+     }
+ }
+diff --git a/src/sync/localStore.test.ts b/src/sync/localStore.test.ts
+index 3333333..4444444 100644
+--- a/src/sync/localStore.test.ts
++++ b/src/sync/localStore.test.ts
+@@ -20,4 +20,11 @@ describe('SyncEngine', () => {
+         expect(store.pendingChanges).toHaveLength(0);
+     });
+
++    it('updates lastSyncedAt on a successful sync', async () => {
++        const before = Date.now();
++        await engine.sync();
++        expect(store.lastSyncedAt).toBeGreaterThanOrEqual(before);
++    });
+ });

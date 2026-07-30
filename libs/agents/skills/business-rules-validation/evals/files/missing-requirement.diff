@@ -1,0 +1,17 @@
+diff --git a/src/users/user.service.ts b/src/users/user.service.ts
+index 1111111..2222222 100644
+--- a/src/users/user.service.ts
++++ b/src/users/user.service.ts
+@@ -40,6 +40,12 @@ export class UserService {
+         return this.repo.findById(id);
+     }
+
++    async softDelete(userId: string): Promise<void> {
++        // Mark the user as deleted. Sessions are intentionally NOT touched here
++        // (this diff only sets deleted_at — session revocation is missing).
++        await this.repo.update(userId, { deletedAt: new Date() });
++    }
++
+     async restore(userId: string): Promise<void> {
+         await this.repo.update(userId, { deletedAt: null });
+     }

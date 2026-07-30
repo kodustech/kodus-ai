@@ -5,7 +5,7 @@ import {
     IJobProcessorService,
     JOB_PROCESSOR_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 export interface ProcessWorkflowJobInput {

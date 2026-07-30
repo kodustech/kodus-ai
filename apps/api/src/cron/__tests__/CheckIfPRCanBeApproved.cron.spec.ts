@@ -3,7 +3,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ReviewCadenceType } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { CheckIfPRCanBeApprovedCronProvider } from '../CheckIfPRCanBeApproved.cron';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

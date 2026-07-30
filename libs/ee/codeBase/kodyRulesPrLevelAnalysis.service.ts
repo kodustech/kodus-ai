@@ -1,5 +1,4 @@
-import type { ContextDependency } from '@kodus/flow';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     BYOKConfig,
     LLMModelProvider,
@@ -11,8 +10,6 @@ import {
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
-import { FileContextAugmentationService } from '@libs/ai-engine/infrastructure/adapters/services/context/file-context-augmentation.service';
-import { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { IKodyRulesAnalysisService } from '@libs/code-review/domain/contracts/KodyRulesAnalysisService.contract';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
@@ -44,7 +41,6 @@ import {
     KodyRulesScope,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
-import { KodyRuleDependencyService } from '@libs/kodyRules/infrastructure/adapters/services/kodyRulesDependency.service';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
@@ -119,8 +115,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
         private readonly externalReferenceLoaderService: ExternalReferenceLoaderService,
-        private readonly fileContextAugmentationService: FileContextAugmentationService,
-        private readonly kodyRuleDependencyService: KodyRuleDependencyService,
     ) {}
 
     async analyzeCodeWithAI(
@@ -129,7 +123,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         fileContext: FileChangeContext | FileChange[],
         reviewModeResponse: ReviewModeResponse,
         context: AnalysisContext,
-        suggestions?: AIAnalysisResult,
+        _suggestions?: AIAnalysisResult,
     ): Promise<AIAnalysisResultPrLevel> {
         // Safety validations
         if (!context?.codeReviewConfig) {
@@ -223,11 +217,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             filteredKodyRules = kodyRulesPrLevel;
         }
 
-        const allMcpDependencies =
-            await this.kodyRuleDependencyService.getMcpDependenciesForRules(
-                filteredKodyRules,
-            );
-
         const { referencesMap: externalReferencesMap } =
             await this.externalReferenceLoaderService.loadReferencesForRules(
                 filteredKodyRules,
@@ -242,13 +231,8 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
 
             if (fullRule.uuid) {
                 const hasKnowledge = externalReferencesMap.has(fullRule.uuid);
-                const hasMcp = allMcpDependencies.some(
-                    (dep) =>
-                        dep.metadata?.contextReferenceId ===
-                        fullRule.contextReferenceId,
-                );
 
-                if (hasKnowledge || hasMcp) {
+                if (hasKnowledge) {
                     return true;
                 }
             }
@@ -291,7 +275,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                 language,
                 provider,
                 externalReferencesMap,
-                allMcpDependencies,
             );
         } catch (error) {
             this.logger.error({
@@ -559,7 +542,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                 );
 
                 const escapeMarkdownSyntax = (text: string): string =>
-                    text.replace(/([\[\]\\`*_{}()#+\-.!])/g, '\\$1');
+                    text.replace(/([[\]\\`*_{}()#+\-.!])/g, '\\$1');
                 const markdownLink = `[${escapeMarkdownSyntax(rule.title)}](${ruleLink})`;
 
                 // Verificar se o ID está entre crases simples `id`
@@ -625,7 +608,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         language: string,
         provider: LLMModelProvider,
         externalReferencesMap?: Map<string, any[]>,
-        mcpDependencies?: ContextDependency[],
     ): Promise<AIAnalysisResultPrLevel> {
         const preparedFiles = this.prepareFilesForPayload(changedFiles);
 
@@ -678,13 +660,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             },
         });
 
-        const fullFilesMap = new Map<string, FileChange>();
-        changedFiles.forEach((file) => {
-            if (file.filename) {
-                fullFilesMap.set(file.filename, file);
-            }
-        });
-
         const allViolatedRules = await this.processChunksInBatches(
             chunkingResult.chunks,
             context,
@@ -695,8 +670,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             organizationAndTeamData,
             batchConfig,
             externalReferencesMap,
-            mcpDependencies,
-            fullFilesMap,
         );
 
         this.logger.log({
@@ -754,8 +727,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         organizationAndTeamData: OrganizationAndTeamData,
         batchConfig: BatchProcessingConfig,
         externalReferencesMap?: Map<string, any[]>,
-        mcpDependencies?: ContextDependency[],
-        fullFilesMap?: Map<string, FileChange>,
     ): Promise<ExtendedKodyRule[]> {
         const allViolatedRules: ExtendedKodyRule[] = [];
         let failedChunks = 0;
@@ -793,8 +764,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                 organizationAndTeamData,
                 batchConfig,
                 externalReferencesMap,
-                mcpDependencies,
-                fullFilesMap,
             );
 
             // Consolidate batch results
@@ -841,56 +810,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         return allViolatedRules;
     }
 
-    private buildMcpResultsFromAugmentations(
-        augmentationsByFile: Record<string, ContextAugmentationsMap>,
-        rules: Array<Partial<IKodyRule>>,
-        mcpDependencies: ContextDependency[],
-    ): Map<string, Record<string, unknown>> {
-        const mcpResultsMap = new Map<string, Record<string, any>>();
-        if (
-            !mcpDependencies ||
-            mcpDependencies.length === 0 ||
-            Object.keys(augmentationsByFile).length === 0
-        ) {
-            return mcpResultsMap;
-        }
-
-        const dependenciesByRule = new Map<string, ContextDependency[]>();
-        for (const rule of rules) {
-            if (rule.uuid && rule.contextReferenceId) {
-                const ruleDependencies = mcpDependencies.filter(
-                    (dep) =>
-                        dep.metadata?.contextReferenceId ===
-                        rule.contextReferenceId,
-                );
-                if (ruleDependencies.length > 0) {
-                    dependenciesByRule.set(rule.uuid, ruleDependencies);
-                }
-            }
-        }
-
-        for (const [ruleId, dependencies] of dependenciesByRule.entries()) {
-            const allOutputs: any[] = [];
-            for (const _dep of dependencies) {
-                for (const fileName in augmentationsByFile) {
-                    const fileAugmentations = augmentationsByFile[fileName];
-                    for (const pathKey in fileAugmentations) {
-                        const augmentation = fileAugmentations[pathKey];
-                        if (augmentation && augmentation.outputs) {
-                            allOutputs.push(...augmentation.outputs);
-                        }
-                    }
-                }
-            }
-
-            if (allOutputs.length > 0) {
-                mcpResultsMap.set(ruleId, { outputs: allOutputs });
-            }
-        }
-
-        return mcpResultsMap;
-    }
-
     /**
      * Processes a batch of chunks in parallel
      */
@@ -905,8 +824,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         organizationAndTeamData: OrganizationAndTeamData,
         batchConfig: BatchProcessingConfig,
         externalReferencesMap?: Map<string, any[]>,
-        mcpDependencies?: ContextDependency[],
-        fullFilesMap?: Map<string, FileChange>,
     ): Promise<ChunkProcessingResult[]> {
         // Create promises to process chunks in parallel
         const chunkPromises = batchChunks.map(async (chunk, batchIndex) => {
@@ -923,8 +840,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                 organizationAndTeamData,
                 batchConfig,
                 externalReferencesMap,
-                mcpDependencies,
-                fullFilesMap,
             );
         });
 
@@ -946,8 +861,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         organizationAndTeamData: OrganizationAndTeamData,
         batchConfig: BatchProcessingConfig,
         externalReferencesMap?: Map<string, any[]>,
-        mcpDependencies?: ContextDependency[],
-        fullFilesMap?: Map<string, FileChange>,
     ): Promise<ChunkProcessingResult> {
         const { retryAttempts, retryDelay } = batchConfig;
 
@@ -978,8 +891,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                     prNumber,
                     organizationAndTeamData,
                     externalReferencesMap,
-                    mcpDependencies,
-                    fullFilesMap,
                 );
 
                 return {
@@ -1068,69 +979,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         prNumber: number,
         organizationAndTeamData: OrganizationAndTeamData,
         externalReferencesMap?: Map<string, any[]>,
-        mcpDependencies?: ContextDependency[],
-        fullFilesMap?: Map<string, FileChange>,
     ): Promise<ExtendedKodyRule[] | null> {
-        const augmentationsByFile: Record<string, ContextAugmentationsMap> = {};
-
-        if (mcpDependencies && mcpDependencies.length > 0) {
-            const filesForAugmentation = fullFilesMap
-                ? filesChunk.map((f) => fullFilesMap.get(f.filename) || f)
-                : filesChunk;
-
-            for (const rule of kodyRulesPrLevel) {
-                if (!rule.contextReferenceId) {
-                    continue;
-                }
-
-                const ruleDependencies = mcpDependencies.filter(
-                    (dep) =>
-                        dep.metadata?.contextReferenceId ===
-                        rule.contextReferenceId,
-                );
-
-                if (ruleDependencies.length > 0) {
-                    try {
-                        const ruleAugmentations =
-                            await this.fileContextAugmentationService.augmentFiles(
-                                filesForAugmentation,
-                                context as any,
-                                ruleDependencies,
-                                rule,
-                            );
-
-                        for (const fileName in ruleAugmentations) {
-                            if (!augmentationsByFile[fileName]) {
-                                augmentationsByFile[fileName] = {};
-                            }
-                            Object.assign(
-                                augmentationsByFile[fileName],
-                                ruleAugmentations[fileName],
-                            );
-                        }
-                    } catch (error) {
-                        this.logger.warn({
-                            message: `Failed to augment files for rule ${rule.title} in chunk ${chunkIndex}`,
-                            context: KodyRulesPrLevelAnalysisService.name,
-                            error,
-                            metadata: {
-                                ruleId: rule.uuid,
-                                chunkIndex,
-                                prNumber,
-                            },
-                        });
-                    }
-                }
-            }
-        }
-
-        const mcpResultsMap = this.buildMcpResultsFromAugmentations(
-            augmentationsByFile,
-            kodyRulesPrLevel,
-            mcpDependencies || [],
-        );
-
-        // payload do chunk
         const analyzerPayload: KodyRulesPrLevelPayload = {
             pr_title: context.pullRequest.title,
             pr_description: context.pullRequest.body || '',
@@ -1148,7 +997,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             rules: kodyRulesPrLevel,
             language,
             externalReferencesMap,
-            mcpResultsMap,
             memories: context?.codeReviewConfig?.kodyMemoryRules || [],
         };
 
@@ -1698,9 +1546,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         }
 
         const updatedSuggestions = suggestions.codeSuggestions.map(
-            (
-                suggestion: ISuggestionByPR & { brokenKodyRulesIds: string[] },
-            ) => {
+            (suggestion: ISuggestionByPR) => {
                 if (!suggestion.brokenKodyRulesIds?.length) {
                     return suggestion;
                 }

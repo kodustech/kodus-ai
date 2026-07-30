@@ -96,20 +96,20 @@ These can only be validated by triggering an actual release. See `docs-internal/
 
 ```bash
 # Cloud, GitHub, paid tenant
-yarn e2e:scenario code-review-basic --target cloud --provider github --license paid
+pnpm run e2e:scenario code-review-basic --target cloud --provider github --license paid
 
 # Self-hosted, GitLab, license-paid
-yarn e2e:scenario code-review-basic --target self-hosted --provider gitlab --license license-paid
+pnpm run e2e:scenario code-review-basic --target self-hosted --provider gitlab --license license-paid
 ```
 
 ### A full matrix
 
 ```bash
 # Run all P0 scenarios across the full matrix
-yarn e2e:matrix matrix/fast.yml
+pnpm run e2e:matrix matrix/fast.yml
 
 # Release validation (all scenarios, all cells)
-yarn e2e:matrix matrix/full.yml
+pnpm run e2e:matrix matrix/full.yml
 ```
 
 ## Environment variables
@@ -119,8 +119,10 @@ yarn e2e:matrix matrix/full.yml
 | `TARGET_BASE_URL` | URL of the API to test against | Always |
 | `TARGET_WEB_URL` | URL of the dashboard | Always |
 | `TARGET_TUNNEL_URL` | Public tunnel URL for webhooks (self-hosted only) | `target=self-hosted` |
-| `GH_TEST_TOKEN` | GitHub PAT, `repo` + `admin:repo_hook` | `provider=github` |
+| `GH_TEST_TOKEN` | GitHub PAT, `repo` + `admin:repo_hook`. Must be a token whose FIRST org is `kodus-e2e` (a fine-grained PAT with resource owner `kodus-e2e`, Repository access = All repositories) — the Kodus integration binds to `orgs[0]` (github.service.ts), so a personal token whose first org is `kodustech` binds the wrong org. | `provider=github` |
+| `GH_REPO_ADMIN_TOKEN` | Token with org Administration on `kodus-e2e` (create + delete repos). Used ONLY by `trial-managed-review` to mint/delete its throwaway repo per run; everything else stays on `GH_TEST_TOKEN`. Falls back to `GH_TEST_TOKEN` if unset (a single fully-privileged token also works). | `scenario=trial-managed-review` |
 | `GH_TEST_REPO` | GitHub test repo `owner/repo` | `provider=github` |
+| `CENTRALIZED_CONFIG_TEST_REPO` (+ `_CLOUD`) | Writable centralized-config source repo `owner/repo`, per target (self-hosted: `kodus-e2e/kodus-config-e2e`, cloud: `kodus-e2e/kodus-config-e2e-cloud`) — the scenario seeds it via the GitHub API each run | scenario `centralized-config-sync` (else it skips) |
 | `GL_TEST_TOKEN` | GitLab PAT, `api` + `write_repository` | `provider=gitlab` |
 | `GL_TEST_REPO` | GitLab project path | `provider=gitlab` |
 | `BB_TEST_USER`, `BB_TEST_APP_PASSWORD` | Bitbucket app password | `provider=bitbucket` |

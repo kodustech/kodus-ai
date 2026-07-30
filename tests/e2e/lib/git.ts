@@ -1,10 +1,10 @@
-import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
-import { logger } from "./log.js";
+import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { logger } from './log.js';
 
-const log = logger("git");
+const log = logger('git');
 
 export async function run(
     cmd: string,
@@ -16,20 +16,20 @@ export async function run(
             cwd: opts.cwd,
             env: { ...process.env, ...opts.env },
             stdio: opts.capture
-                ? ["ignore", "pipe", "pipe"]
-                : ["ignore", "inherit", "inherit"],
+                ? ['ignore', 'pipe', 'pipe']
+                : ['ignore', 'inherit', 'inherit'],
         });
-        let stdout = "";
-        let stderr = "";
+        let stdout = '';
+        let stderr = '';
         if (opts.capture) {
-            proc.stdout?.on("data", (chunk) => (stdout += chunk.toString()));
-            proc.stderr?.on("data", (chunk) => (stderr += chunk.toString()));
+            proc.stdout?.on('data', (chunk) => (stdout += chunk.toString()));
+            proc.stderr?.on('data', (chunk) => (stderr += chunk.toString()));
         }
-        proc.on("error", reject);
-        proc.on("close", (code) => {
+        proc.on('error', reject);
+        proc.on('close', (code) => {
             if (code === 0) resolve(stdout.trim());
             else {
-                const message = `${cmd} ${args.join(" ")} exited with code ${code}${stderr ? `\n${stderr}` : ""}`;
+                const message = `${cmd} ${args.join(' ')} exited with code ${code}${stderr ? `\n${stderr}` : ''}`;
                 reject(new Error(message));
             }
         });
@@ -40,6 +40,7 @@ export interface OpenPROptions {
     cloneUrl: string;
     branch: string;
     files: Record<string, string>;
+    deleteFiles?: string[];
     commitMessage: string;
     authorName?: string;
     authorEmail?: string;
@@ -53,26 +54,43 @@ export interface PreparedBranch {
     cleanup: () => void;
 }
 
-export async function prepareBranch(opts: OpenPROptions): Promise<PreparedBranch> {
-    const workDir = mkdtempSync(join(tmpdir(), "kodus-e2e-"));
+export async function prepareBranch(
+    opts: OpenPROptions,
+): Promise<PreparedBranch> {
+    const workDir = mkdtempSync(join(tmpdir(), 'kodus-e2e-'));
     log.info(`Cloning into ${workDir}`);
 
-    await run("git", [
-        "clone",
-        "--depth=1",
-        opts.cloneUrl,
-        workDir,
-    ], { capture: true });
+    await run('git', ['clone', '--depth=1', opts.cloneUrl, workDir], {
+        capture: true,
+    });
 
-    let baseBranch = opts.baseBranch ?? "";
+    let baseBranch = opts.baseBranch ?? '';
     if (!baseBranch) {
-        baseBranch = await run("git", ["symbolic-ref", "--short", "HEAD"], {
+        baseBranch = await run('git', ['symbolic-ref', '--short', 'HEAD'], {
+            cwd: workDir,
+            capture: true,
+        });
+    } else {
+        // Branch from the DECLARED base, not from the clone's default
+        // HEAD. Fixture repos deliberately set a non-main default branch
+        // (tiny-url's default is a review-bait bug branch); branching
+        // from HEAD while opening the PR against `main` drags the whole
+        // default-vs-main delta into the PR — and if such a PR is ever
+        // MERGED (rule-sync scenarios), main is polluted and every later
+        // PR conflicts (mergeable_state=dirty).
+        await run('git', ['fetch', '--depth=1', 'origin', baseBranch], {
+            cwd: workDir,
+            capture: true,
+        });
+        // -B: works whether or not the clone's default HEAD already is
+        // the base branch.
+        await run('git', ['checkout', '-B', baseBranch, 'FETCH_HEAD'], {
             cwd: workDir,
             capture: true,
         });
     }
 
-    await run("git", ["checkout", "-b", opts.branch], {
+    await run('git', ['checkout', '-b', opts.branch], {
         cwd: workDir,
         capture: true,
     });
@@ -83,26 +101,30 @@ export async function prepareBranch(opts: OpenPROptions): Promise<PreparedBranch
         writeFileSync(absPath, contents);
     }
 
-    await run("git", ["add", "."], { cwd: workDir, capture: true });
+    for (const path of opts.deleteFiles ?? []) {
+        rmSync(join(workDir, path), { force: true });
+    }
 
-    const authorName = opts.authorName ?? "Kodus E2E";
-    const authorEmail = opts.authorEmail ?? "e2e@kodus.test";
+    await run('git', ['add', '.'], { cwd: workDir, capture: true });
+
+    const authorName = opts.authorName ?? 'Kodus E2E';
+    const authorEmail = opts.authorEmail ?? 'e2e@kodus.test';
     await run(
-        "git",
+        'git',
         [
-            "-c",
+            '-c',
             `user.name=${authorName}`,
-            "-c",
+            '-c',
             `user.email=${authorEmail}`,
-            "commit",
-            "-m",
+            'commit',
+            '-m',
             opts.commitMessage,
         ],
         { cwd: workDir, capture: true },
     );
 
     log.info(`Pushing branch ${opts.branch}`);
-    await run("git", ["push", "-u", "origin", opts.branch], {
+    await run('git', ['push', '-u', 'origin', opts.branch], {
         cwd: workDir,
         capture: true,
     });

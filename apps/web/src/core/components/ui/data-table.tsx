@@ -8,17 +8,26 @@ import {
     TableHeader,
     TableRow,
 } from "@components/ui/table";
+import { useState } from "react";
 import {
     Column,
     ColumnDef,
     flexRender,
     getCoreRowModel,
     getFilteredRowModel,
+    getPaginationRowModel,
     getSortedRowModel,
     useReactTable,
     type TableOptions,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
+import {
+    ArrowDown,
+    ArrowUp,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsUpDown,
+    Search,
+} from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { Button } from "./button";
@@ -38,13 +47,48 @@ const LoadingRow = ({ columnsQuantity }: { columnsQuantity: number }) => (
 export function DataTable<TData>({
     loading,
     EmptyComponent = "No results found.",
+    onRowClick,
+    searchable,
+    searchPlaceholder = "Search…",
+    searchValue,
+    onSearchChange,
+    pageSize,
     ...tableProps
 }: Omit<TableOptions<TData>, "data" | "columns" | "getCoreRowModel"> &
     Required<Pick<TableOptions<TData>, "data" | "columns">> & {
         EmptyComponent?: React.ReactNode;
         loading?: true | "bottom" | false;
         meta?: Record<string, any>;
-    }) {
+        /** Optional: makes rows clickable (whole-row), receives the row data. */
+        onRowClick?: (row: TData) => void;
+        /** Show a global search box that filters across all columns. */
+        searchable?: boolean;
+        searchPlaceholder?: string;
+        /** Enable client-side pagination at this page size. */
+        pageSize?: number;
+    } & (
+        | { searchValue?: undefined; onSearchChange?: undefined }
+        | {
+              /**
+               * Controlled search value. When provided, the caller owns the
+               * search state (e.g. to mirror it into the URL) and the
+               * matching `onSearchChange` handler is required — the union
+               * prevents passing one without the other.
+               */
+              searchValue: string;
+              onSearchChange: (value: string) => void;
+          }
+    )) {
+    const [internalFilter, setInternalFilter] = useState("");
+    const controlledSearch = searchValue !== undefined;
+    const globalFilter = controlledSearch ? searchValue : internalFilter;
+    const setGlobalFilter = (updater: string | ((prev: string) => string)) => {
+        const next =
+            typeof updater === "function" ? updater(globalFilter) : updater;
+        (controlledSearch ? onSearchChange! : setInternalFilter)(next);
+    };
+    const enablePagination = typeof pageSize === "number";
+
     const table = useReactTable({
         globalFilterFn: "includesString",
         getCoreRowModel: getCoreRowModel(),
@@ -52,10 +96,20 @@ export function DataTable<TData>({
         getFilteredRowModel: getFilteredRowModel(),
         columnResizeMode: "onChange",
         enableColumnResizing: false,
+        ...(enablePagination && {
+            getPaginationRowModel: getPaginationRowModel(),
+            initialState: { pagination: { pageSize } },
+        }),
+        ...(searchable && {
+            state: { globalFilter },
+            onGlobalFilterChange: setGlobalFilter,
+        }),
         ...tableProps,
     });
 
-    return (
+    const filteredCount = table.getFilteredRowModel().rows.length;
+
+    const tableEl = (
         <Table>
             <TableHeader>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -109,6 +163,17 @@ export function DataTable<TData>({
                                 {table.getRowModel().rows.map((row) => (
                                     <TableRow
                                         key={row.id}
+                                        onClick={
+                                            onRowClick
+                                                ? () =>
+                                                      onRowClick(row.original)
+                                                : undefined
+                                        }
+                                        className={
+                                            onRowClick
+                                                ? "hover:bg-card-lv2 cursor-pointer"
+                                                : undefined
+                                        }
                                         data-peek={
                                             table.options.meta?.peek === row.id
                                                 ? ""
@@ -149,6 +214,62 @@ export function DataTable<TData>({
                 )}
             </TableBody>
         </Table>
+    );
+
+    if (!searchable && !enablePagination) return tableEl;
+
+    const pageIndex = table.getState().pagination.pageIndex;
+    const pageCount = table.getPageCount();
+
+    return (
+        <div className="flex flex-col gap-3">
+            {searchable && (
+                <div className="bg-card-lv2 border-card-lv3 flex items-center gap-2 rounded-md border px-3 py-2">
+                    <Search className="text-text-tertiary size-3.5 shrink-0" />
+                    <input
+                        type="search"
+                        value={globalFilter}
+                        onChange={(e) => setGlobalFilter(e.target.value)}
+                        placeholder={searchPlaceholder}
+                        className="text-text-secondary placeholder:text-text-tertiary w-full bg-transparent text-xs outline-none"
+                    />
+                    {globalFilter.trim() && (
+                        <span className="text-text-tertiary text-xs whitespace-nowrap">
+                            {filteredCount} of {tableProps.data.length}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {tableEl}
+
+            {enablePagination && pageCount > 1 && (
+                <div className="text-text-tertiary flex items-center justify-between text-xs">
+                    <span>
+                        Page {pageIndex + 1} of {pageCount} · {filteredCount}{" "}
+                        rows
+                    </span>
+                    <div className="flex gap-2">
+                        <Button
+                            size="xs"
+                            variant="helper"
+                            leftIcon={<ChevronLeft />}
+                            disabled={!table.getCanPreviousPage()}
+                            onClick={() => table.previousPage()}>
+                            Prev
+                        </Button>
+                        <Button
+                            size="xs"
+                            variant="helper"
+                            rightIcon={<ChevronRight />}
+                            disabled={!table.getCanNextPage()}
+                            onClick={() => table.nextPage()}>
+                            Next
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 

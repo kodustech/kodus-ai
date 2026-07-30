@@ -11,13 +11,18 @@ import {
 import { BitbucketCloudService } from './bitbucket/bitbucket-cloud.service';
 import { BitbucketDataCenterService } from './bitbucket/bitbucket-data-center.service';
 import { BitbucketAuthDetail } from '@libs/integrations/domain/authIntegrations/types/bitbucket-auth-detail.type';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     INTEGRATION_CONFIG_SERVICE_TOKEN,
     IIntegrationConfigService,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
 import { ReactionsInComments } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
+import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.BITBUCKET, 'codeManagement')
@@ -69,6 +74,32 @@ export class BitbucketService implements Omit<
         } catch (error) {
             return this.bitbucketCloudService;
         }
+    }
+
+    async listIssues(
+        params: ListIssuesParams,
+    ): Promise<CodeManagementIssue[]> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.listIssues(params);
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
+        const impl = await this.getImplementation(
+            params.organizationAndTeamData,
+        );
+        return impl.getIssue(params);
+    }
+
+    // Bitbucket Cloud has an issue tracker; Data Center / Server does not.
+    async supportsIssues(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const impl = await this.getImplementation(organizationAndTeamData);
+        return impl === this.bitbucketCloudService;
     }
 
     // =====================================================================

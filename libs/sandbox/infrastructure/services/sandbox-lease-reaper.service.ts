@@ -1,13 +1,55 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Sandbox } from 'e2b';
 import {
     DistributedLock,
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
+import {
+    isLocalSandboxPath,
+    deleteLocalSandbox,
+} from './local-sandbox-cleanup.service';
+
+const CLEANUP_CONCURRENCY = 5;
+
+const E2B_ALREADY_GONE_RE =
+    /not found|does not exist|404|already (been )?(deleted|killed|terminated)/i;
+
+function isE2BAlreadyGoneError(err: unknown): boolean {
+    if (!err) return false;
+    const message = err instanceof Error ? err.message : String(err);
+    return E2B_ALREADY_GONE_RE.test(message);
+}
+
+async function mapWithConcurrency<T, R>(
+    items: T[],
+    concurrency: number,
+    fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+    const results: R[] = new Array(items.length);
+    let index = 0;
+
+    async function worker() {
+        while (index < items.length) {
+            const i = index++;
+            try {
+                results[i] = await fn(items[i]);
+            } catch {
+                // Per-item error isolation: continue to next item
+            }
+        }
+    }
+
+    const workers = Array.from(
+        { length: Math.min(concurrency, items.length) },
+        () => worker(),
+    );
+    await Promise.all(workers);
+    return results;
+}
 
 @Injectable()
 export class SandboxLeaseReaperService {
@@ -33,15 +75,32 @@ export class SandboxLeaseReaperService {
 
             const apiKey = this.configService.get<string>('API_E2B_KEY');
 
-            await Promise.allSettled(
-                expired.map(async (lease) => {
+            await mapWithConcurrency(
+                expired,
+                CLEANUP_CONCURRENCY,
+                async (lease) => {
+                    if (isLocalSandboxPath(lease.sandboxId)) {
+                        await this.cleanupLocalLease(lease, false);
+                        return;
+                    }
                     if (
                         lease.sandboxId &&
                         lease.state !== 'INVALIDATED' &&
                         apiKey
                     ) {
-                        await Sandbox.kill(lease.sandboxId, { apiKey }).catch(
-                            (err) => {
+                        try {
+                            await Sandbox.kill(lease.sandboxId, { apiKey });
+                        } catch (err) {
+                            if (isE2BAlreadyGoneError(err)) {
+                                this.logger.log({
+                                    message:
+                                        '[SANDBOX-REAPER] Sandbox already gone — deleting lease',
+                                    context: SandboxLeaseReaperService.name,
+                                    metadata: {
+                                        sandboxId: lease.sandboxId,
+                                    },
+                                });
+                            } else {
                                 this.logger.warn({
                                     message:
                                         '[SANDBOX-REAPER] Failed to kill sandbox — continuing',
@@ -51,8 +110,8 @@ export class SandboxLeaseReaperService {
                                         error: String(err),
                                     },
                                 });
-                            },
-                        );
+                            }
+                        }
                     }
 
                     await this.leaseRepository.delete(lease._id);
@@ -66,7 +125,7 @@ export class SandboxLeaseReaperService {
                             state: lease.state,
                         },
                     });
-                }),
+                },
             );
         } finally {
             await this.releaseCronLock(
@@ -91,32 +150,51 @@ export class SandboxLeaseReaperService {
     async killIdleSandboxes(): Promise<void> {
         const lock = await this.acquireCronLock(
             'CRON:SANDBOX:IDLE_KILL',
-            25_000, // < 30s tick so the lock can never linger across ticks
+            25_000,
         );
         if (!lock) return;
 
         try {
-            const ready = await this.leaseRepository.findReadyToKill(new Date());
+            const ready = await this.leaseRepository.findReadyToKill(
+                new Date(),
+            );
             if (ready.length === 0) return;
 
             const apiKey = this.configService.get<string>('API_E2B_KEY');
 
-            await Promise.allSettled(
-                ready.map(async (lease) => {
+            await mapWithConcurrency(
+                ready,
+                CLEANUP_CONCURRENCY,
+                async (lease) => {
+                    if (isLocalSandboxPath(lease.sandboxId)) {
+                        await this.cleanupLocalLease(lease, true);
+                        return;
+                    }
                     if (lease.sandboxId && apiKey) {
-                        await Sandbox.kill(lease.sandboxId, { apiKey }).catch(
-                            (err) => {
+                        try {
+                            await Sandbox.kill(lease.sandboxId, { apiKey });
+                        } catch (err) {
+                            if (isE2BAlreadyGoneError(err)) {
+                                this.logger.log({
+                                    message:
+                                        '[SANDBOX-IDLE-KILL] Sandbox already gone — deleting lease',
+                                    context: SandboxLeaseReaperService.name,
+                                    metadata: {
+                                        sandboxId: lease.sandboxId,
+                                    },
+                                });
+                            } else {
                                 this.logger.warn({
                                     message:
-                                        '[SANDBOX-IDLE-KILL] Failed to kill sandbox — Mongo doc still deleted; reaper will retry if E2B still has it',
+                                        '[SANDBOX-IDLE-KILL] Failed to kill sandbox — continuing',
                                     context: SandboxLeaseReaperService.name,
                                     metadata: {
                                         sandboxId: lease.sandboxId,
                                         error: String(err),
                                     },
                                 });
-                            },
-                        );
+                            }
+                        }
                     }
 
                     await this.leaseRepository.delete(lease._id);
@@ -130,13 +208,74 @@ export class SandboxLeaseReaperService {
                             killAt: lease.killAt,
                         },
                     });
-                }),
+                },
             );
         } finally {
             await this.releaseCronLock(
                 lock,
                 'Failed to release sandbox idle-kill lock',
             );
+        }
+    }
+
+    private async cleanupLocalLease(
+        lease: {
+            _id: string;
+            sandboxId?: string;
+        },
+        requireLeaseCountZero: boolean,
+    ): Promise<void> {
+        if (!lease.sandboxId || !isLocalSandboxPath(lease.sandboxId)) return;
+
+        // Re-check: a concurrent acquire may have bumped leaseCount
+        const current = await this.leaseRepository.findByPrKey(lease._id);
+        if (
+            !current ||
+            (requireLeaseCountZero && (current.leaseCount ?? 0) > 0)
+        ) {
+            return;
+        }
+
+        const staleThreshold = new Date(Date.now() - 5 * 60 * 1000);
+        await this.leaseRepository.resetStaleCleanup(lease._id, staleThreshold);
+
+        const claimed = await this.leaseRepository.claimCleanup(
+            lease._id,
+            lease.sandboxId,
+            requireLeaseCountZero,
+        );
+        if (!claimed) return;
+
+        try {
+            await deleteLocalSandbox(lease.sandboxId);
+            await this.leaseRepository.completeCleanup(
+                lease._id,
+                lease.sandboxId,
+            );
+            this.logger.log({
+                message: '[SANDBOX-REAPER] Cleaned local sandbox',
+                context: SandboxLeaseReaperService.name,
+                metadata: {
+                    prKey: lease._id,
+                    sandboxId: lease.sandboxId,
+                },
+            });
+        } catch (err) {
+            await this.leaseRepository.failCleanup(
+                lease._id,
+                lease.sandboxId,
+                (err as Error).message,
+            );
+            this.logger.warn({
+                message:
+                    '[SANDBOX-REAPER] Local cleanup failed, retry marker set',
+                context: SandboxLeaseReaperService.name,
+                metadata: {
+                    prKey: lease._id,
+                    sandboxId: lease.sandboxId,
+                    error: String(err),
+                },
+            });
         }
     }
 

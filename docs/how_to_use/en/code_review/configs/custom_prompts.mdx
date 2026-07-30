@@ -1,9 +1,9 @@
 ---
 title: "Custom Prompts"
-description: "Customize Kody's review prompts for each category and severity level to match your team's needs"
+description: "Customize Kody's review prompts for each category and how suggestions are written to match your team's needs"
 ---
 
-Custom Prompts give you complete control over how Kody analyzes your code and communicates findings. Tailor what the AI looks for in each review category, how it classifies severity, and how it presents suggestions to match your team's standards and communication style.
+Custom Prompts give you complete control over how Kody analyzes your code and communicates findings. Tailor what the AI looks for in each review category and how it presents suggestions to match your team's standards and communication style.
 
 <Card
   title="Access Custom Prompts Settings"
@@ -32,7 +32,7 @@ Custom Prompts give you complete control over how Kody analyzes your code and co
 
 ## How Custom Prompts Work
 
-Custom Prompts operate at three levels:
+Custom Prompts operate at two levels:
 
 ### Category Prompts
 
@@ -82,65 +82,6 @@ Define what Kody looks for in each review category:
   </Tab>
 </Tabs>
 
-### Severity Prompts
-
-Define how Kody classifies issue severity:
-
-<Tabs>
-  <Tab title="Critical">
-    **Definition:** Issues requiring immediate attention
-    
-    Default examples:
-    - Application crash/downtime
-    - Data loss/corruption
-    - Security breach (unauthorized access/data exfiltration)
-    - Critical operation failure (auth/payment/authorization)
-    - Direct financial loss operations
-    - Memory leaks causing inevitable crash
-    
-    **Max length:** 2000 characters
-  </Tab>
-
-  <Tab title="High">
-    **Definition:** Significant issues needing near-term resolution
-    
-    Default examples:
-    - Important functionality broken
-    - Memory leaks causing eventual crash
-    - Performance degradation affecting UX under normal load
-    - Security issues with indirect exploitation paths
-    - Financial calculation errors affecting revenue
-    
-    **Max length:** 2000 characters
-  </Tab>
-
-  <Tab title="Medium">
-    **Definition:** Moderate improvements recommended
-    
-    Default examples:
-    - Partially broken functionality
-    - Performance issues in specific scenarios
-    - Security weaknesses requiring specific conditions
-    - Incorrect but recoverable data
-    - Non-critical business logic errors with workarounds
-    
-    **Max length:** 2000 characters
-  </Tab>
-
-  <Tab title="Low">
-    **Definition:** Minor enhancements for incremental improvement
-    
-    Default examples:
-    - Minor performance overhead
-    - Low-risk security improvements
-    - Incorrect metrics/logs
-    - Rarely affecting few users
-    - Edge-case issues
-    
-    **Max length:** 2000 characters
-  </Tab>
-</Tabs>
-
 ### Suggestion Prompts
 
 Control how Kody communicates each individual suggestion. This customizes the message format and tone that appears in PR comments, like:
@@ -158,7 +99,7 @@ You can customize the tone, level of detail, and communication style based on yo
 
 ## External References
 
-All custom prompts—Category, Severity, Suggestion, and PR Summary—support referencing real files from the codebases Kody can access. When you save an update, Kody automatically detects external references and resolves them for future reviews.
+All custom prompts—Category, Suggestion, and PR Summary—support referencing real files from the codebases Kody can access. When you save an update, Kody automatically detects external references and resolves them for future reviews.
 
 - Use `@file:path/to/file.ts` to point at files in the repository you're editing; Kody will try to locate the path locally first.
 - Include `@repo:org/project` when referencing files from another repository or when editing prompts at the global level.
@@ -191,7 +132,7 @@ All custom prompts—Category, Severity, Suggestion, and PR Summary—support re
 
 ### Avoid Redundancy Between Prompts
 
-Each category and severity should have a distinct focus. Don't repeat the same instructions across different prompts.
+Each category should have a distinct focus. Don't repeat the same instructions across different prompts.
 
 <Accordion title="Example: Proper Separation">
   **Bug Category:**
@@ -362,23 +303,6 @@ Only differentiate suggestion formats when there's a real reason:
     **Benefit:** Structured output format that Gemini handles exceptionally well, improving review quality.
   </Accordion>
 
-  <Accordion title="Severity Calibration">
-    **Scenario:** Startup moving fast, needs different severity thresholds
-    
-    **Custom Critical Prompt:**
-    ```
-    Only flag as Critical if:
-    - Production data could be deleted or corrupted
-    - Security breach allowing direct data exfiltration
-    - Payment processing failures
-    - Complete service outage for core features
-    
-    Note: Performance issues are never Critical unless causing crashes.
-    ```
-    
-    **Benefit:** Reduces alert fatigue by aligning severity with business impact.
-  </Accordion>
-
   <Accordion title="Severity-Based Communication">
     **Scenario:** Want detailed explanations for critical issues but concise feedback for minor ones
     
@@ -465,7 +389,7 @@ Only differentiate suggestion formats when there's a real reason:
     - Make prompts more specific and focused
     - Add exclusions for patterns you want to ignore
     - Raise minimum severity threshold in [Suggestion Control](/how_to_use/en/code_review/configs/suggestion_control)
-    - Check for redundancy between category and severity prompts
+    - Check for redundancy between category prompts
   </Accordion>
 
   <Accordion title="Missing Expected Issues">
@@ -531,8 +455,8 @@ Only differentiate suggestion formats when there's a real reason:
     Works seamlessly. Tailor prompts to your model's strengths. Both primary and fallback use the same custom prompts.
   </Accordion>
 
-  <Accordion title="What's the difference between Category/Severity prompts and Suggestion prompts?">
-    **Category/Severity prompts** control what Kody analyzes and how it classifies issues. **Suggestion prompts** control how Kody presents findings to your team. You can customize both independently.
+  <Accordion title="What's the difference between Category prompts and Suggestion prompts?">
+    **Category prompts** control what Kody analyzes in each review category. **Suggestion prompts** control how Kody presents findings to your team. You can customize both independently.
   </Accordion>
 
   <Accordion title="Can I use markdown in suggestion prompts?">

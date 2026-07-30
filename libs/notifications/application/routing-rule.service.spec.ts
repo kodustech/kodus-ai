@@ -38,6 +38,26 @@ describe('RoutingRuleService', () => {
             expect(routingRuleRepo.upsertBatch).not.toHaveBeenCalled();
         });
 
+        it('allows muting a channel on a CRITICAL event (lock removed)', async () => {
+            // BILLING_PAYMENT_FAILED is CRITICAL — disabling in_app used to be
+            // rejected; it now passes straight through to upsertBatch.
+            await service.upsertRules('org-1', [
+                {
+                    event: NotificationEvent.BILLING_PAYMENT_FAILED,
+                    role: Role.OWNER,
+                    channels: { email: true, in_app: false },
+                },
+            ]);
+
+            expect(routingRuleRepo.upsertBatch).toHaveBeenCalledWith([
+                expect.objectContaining({
+                    event: NotificationEvent.BILLING_PAYMENT_FAILED,
+                    role: Role.OWNER,
+                    channels: { email: true, in_app: false },
+                }),
+            ]);
+        });
+
         it('rejects a delete that targets the wildcard role', async () => {
             await expect(
                 service.upsertRules('org-1', [
@@ -144,15 +164,35 @@ describe('RoutingRuleService', () => {
             );
         });
 
-        it('seeds wildcard-role rules for each non-system event', async () => {
+        it('seeds an off "*" baseline + default-role overrides for role-fanout events', async () => {
             await service.seedDefaults('org-1');
 
-            const calls =
-                routingRuleRepo.upsertBatch.mock.calls[0][0];
-            for (const rule of calls) {
-                expect(rule.role).toBe('*');
-                expect(rule.organization).toEqual({ uuid: 'org-1' });
-            }
+            const calls = routingRuleRepo.upsertBatch.mock.calls[0][0];
+            // BILLING_PAYMENT_FAILED has defaultRoles [owner, billing_manager].
+            const billing = calls.filter(
+                (r) => r.event === NotificationEvent.BILLING_PAYMENT_FAILED,
+            );
+            const wildcard = billing.find((r) => r.role === '*');
+            expect(wildcard?.channels).toEqual({});
+            expect(
+                billing.find((r) => r.role === Role.OWNER)?.channels,
+            ).toEqual({ email: true, in_app: true });
+            expect(
+                billing.find((r) => r.role === Role.BILLING_MANAGER)?.channels,
+            ).toEqual({ email: true, in_app: true });
+        });
+
+        it('seeds a "*" row carrying catalog defaults for directed events', async () => {
+            await service.seedDefaults('org-1');
+
+            const calls = routingRuleRepo.upsertBatch.mock.calls[0][0];
+            // KODY_RULES_GENERATED has no defaultRoles (directed at users).
+            const kody = calls.filter(
+                (r) => r.event === NotificationEvent.KODY_RULES_GENERATED,
+            );
+            expect(kody).toHaveLength(1);
+            expect(kody[0].role).toBe('*');
+            expect(kody[0].channels).toEqual({ email: true, in_app: true });
         });
     });
 

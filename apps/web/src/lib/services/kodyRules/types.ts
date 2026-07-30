@@ -1,10 +1,10 @@
-import { ProgrammingLanguage } from "src/core/enums/programming-language";
-import { SeverityLevel } from "src/core/types";
+import { ProgrammingLanguage } from 'src/core/enums/programming-language';
+import { SeverityLevel } from 'src/core/types';
 
 export enum KodyRuleInheritanceOrigin {
-    GLOBAL = "global",
-    REPOSITORY = "repository",
-    DIRECTORY = "directory",
+    GLOBAL = 'global',
+    REPOSITORY = 'repository',
+    DIRECTORY = 'directory',
 }
 
 export type KodyRule = {
@@ -14,8 +14,8 @@ export type KodyRule = {
     title: string;
     rule: string;
     path: string;
-    scope: "file" | "pull-request";
-    severity: "low" | "medium" | "high" | "critical";
+    scope: 'file' | 'pull-request';
+    severity: 'low' | 'medium' | 'high' | 'critical';
     repositoryId?: string;
     directoryId?: string;
     sourcePath?: string;
@@ -27,6 +27,13 @@ export type KodyRule = {
      * Auto-sync badge can render a pin affordance.
      */
     pinnedSync?: boolean;
+    /**
+     * True when this rule is PAUSED because activating it would exceed
+     * the free plan's active-rule quota, rather than a user-initiated
+     * pause. Rendered as "Locked" with an upgrade CTA instead of a plain
+     * resume toggle.
+     */
+    lockedByPlan?: boolean;
     centralizedConfig?: {
         path: string;
         status: KodyRuleCentralizedStatus;
@@ -60,10 +67,10 @@ export type KodyRule = {
           }
     >;
     referenceProcessingStatus?:
-        | "completed"
-        | "processing"
-        | "failed"
-        | "pending";
+        | 'completed'
+        | 'processing'
+        | 'failed'
+        | 'pending';
 };
 
 export type KodyRuleWithInheritanceDetails = KodyRule & {
@@ -76,20 +83,18 @@ export type LibraryRule = {
     title: string;
     rule: string;
     why_is_this_important: string;
-    severity?: "Low" | "Medium" | "High" | "Critical";
+    severity?: 'Low' | 'Medium' | 'High' | 'Critical';
     bad_example?: string;
     good_example?: string;
     /**
      * Optional list of MCP providers (display hint for UI).
      * Examples: ["Sentry", "Datadog"], ["Linear", "Jira"].
      */
-    required_mcps?: string[];
     examples: KodyRulesExample[];
     tags: string[];
     language: keyof typeof ProgrammingLanguage;
     buckets?: string[];
     plug_and_play?: boolean;
-    needMCPS?: boolean;
     scope?: string;
     positiveCount?: number;
     negativeCount?: number;
@@ -105,13 +110,11 @@ type KodyRulesExample = {
 
 export type FindLibraryKodyRulesFilters = {
     name?: string;
-    severity?: KodyRule["severity"];
+    severity?: KodyRule['severity'];
     tags?: string[];
     language?: keyof typeof ProgrammingLanguage;
     buckets?: string[];
     plug_and_play?: boolean;
-    needMCPS?: boolean;
-    requiredMcp?: string;
     uuid?: string;
     page?: number;
     limit?: number;
@@ -136,42 +139,47 @@ export type KodyRuleBucket = {
     rulesCount: number;
 };
 
+// Mirrors the backend `KodyRulesOrigin`.
 export enum KodyRulesOrigin {
-    USER = "user",
-    LIBRARY = "library",
-    GENERATED = "generated",
+    MANUAL = 'manual',
+    LIBRARY = 'library',
+    PAST_REVIEWS = 'past_reviews',
+    REPO_FILE_SYNC = 'repo_file_sync',
+    ONBOARDING_REPO_ANALYSIS = 'onboarding_repo_analysis',
+    MCP_AGENT = 'mcp_agent',
+    CLI = 'cli',
 }
 
 export enum KodyRulesStatus {
-    ACTIVE = "active",
-    REJECTED = "rejected",
-    PENDING = "pending",
-    APPLIED = "applied",
-    DELETED = "deleted",
+    ACTIVE = 'active',
+    REJECTED = 'rejected',
+    PENDING = 'pending',
+    APPLIED = 'applied',
+    DELETED = 'deleted',
     /** Soft-disable. Visible in the user's list but not enforced by review.
      *  Mirror of the backend `KodyRulesStatus.PAUSED`. Reversible. */
-    PAUSED = "paused",
+    PAUSED = 'paused',
 }
 
 export enum KodyRuleCentralizedStatus {
-    SYNCED = "synced",
-    PENDING_ADD = "pending_add",
-    PENDING_EDIT = "pending_edit",
-    PENDING_DELETE = "pending_delete",
+    SYNCED = 'synced',
+    PENDING_ADD = 'pending_add',
+    PENDING_EDIT = 'pending_edit',
+    PENDING_DELETE = 'pending_delete',
 }
 
 export enum KodyRulesType {
-    STANDARD = "standard",
-    MEMORY = "memory",
+    STANDARD = 'standard',
+    MEMORY = 'memory',
 }
 
 export enum KodyRuleRequestType {
-    MEMORY_CREATE = "memory_create",
-    MEMORY_UPDATE = "memory_update",
+    CREATE = 'create',
+    UPDATE = 'update',
 }
 
 export type KodyRulesCentralizedPrMetadata = {
-    mode: "direct" | "centralized-pr";
+    mode: 'direct' | 'centralized-pr';
     prUrl?: string;
     prNumber?: number;
     reused?: boolean;

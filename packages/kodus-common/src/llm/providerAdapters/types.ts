@@ -11,6 +11,8 @@ export interface AdapterBuildParams {
     model: string;
     apiKey: string;
     baseURL?: string;
+    /** Google Vertex region (BYOK). Falls back to env, then us-central1. */
+    vertexLocation?: string;
     options?: {
         temperature?: number;
         maxTokens?: number;

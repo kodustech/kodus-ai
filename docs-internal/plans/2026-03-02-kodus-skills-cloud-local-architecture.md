@@ -221,7 +221,7 @@ In `libs/agents/skills`:
 - capability traces
 - provider-aware runtime behavior
 
-In `libs/agents/infrastructure/services/kodus-flow/business-rules-validation`:
+In `libs/agents/infrastructure/services/agents/business-rules-validation`:
 
 - a real pipeline with steps
 - PR/task fetching flow
@@ -401,7 +401,7 @@ libs/agents/skills/
   learning/
   telemetry/
 
-libs/agents/infrastructure/services/kodus-flow/
+libs/agents/infrastructure/services/agents/
   business-rules-validation/
     pipeline/
     prompts/
@@ -455,7 +455,7 @@ Focus:
 
 ### Keep as pipeline
 
-- `libs/agents/infrastructure/services/kodus-flow/business-rules-validation`
+- `libs/agents/infrastructure/services/agents/business-rules-validation`
 
 ### Keep extracting as reusable capabilities
 

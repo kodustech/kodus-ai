@@ -2,7 +2,7 @@ import { BYOKProvider } from '@kodus/kodus-common/llm';
 
 // Keep the env-LLM branch deterministic: these tests exercise the BYOK
 // detection logic, so env is always "not configured" here.
-jest.mock('@libs/code-review/infrastructure/agents/llm/env-llm-config', () => ({
+jest.mock('@libs/llm/env-llm-config', () => ({
     describeEnvLLMConfig: jest.fn(() => ({ configured: false })),
 }));
 

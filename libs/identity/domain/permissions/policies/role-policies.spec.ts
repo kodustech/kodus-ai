@@ -26,11 +26,19 @@ describe('ROLE_POLICIES', () => {
                 Object.entries(rule).every(([k, v]) => (r as any)[k] === v),
             );
 
-        // Repo Admin: read PRs on assigned repos only (reverted from org-wide).
+        // Repo Admin: reads are org-wide (sees everything); only writes are
+        // gated by repo assignment.
         expect(
             has(Role.REPO_ADMIN, {
                 action: Action.Read,
                 resource: ResourceType.PullRequests,
+                scope: 'org',
+            }),
+        ).toBe(true);
+        expect(
+            has(Role.REPO_ADMIN, {
+                action: Action.Update,
+                resource: ResourceType.CodeReviewSettings,
                 scope: 'repo',
             }),
         ).toBe(true);

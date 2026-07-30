@@ -3,15 +3,15 @@
  * one to telemetry.kodus.io without waiting for the daily cron.
  *
  * Usage:
- *   yarn telemetry:preview              # build + print payload, do NOT send
- *   yarn telemetry:send                 # build + POST to telemetry.kodus.io
+ *   pnpm run telemetry:preview              # build + print payload, do NOT send
+ *   pnpm run telemetry:send                 # build + POST to telemetry.kodus.io
  *
  * Both commands read .env from the repo root. They boot a minimal Nest
  * context (Postgres + Mongo + TelemetryModule) — no RabbitMQ, no HTTP
  * server, no cron registration.
  *
  * `send` exercises the same code path the cron will run in production,
- * including the `last_sent_day` dedupe (so a second `yarn telemetry:send`
+ * including the `last_sent_day` dedupe (so a second `pnpm run telemetry:send`
  * the same UTC day will short-circuit without sending). Use the
  * `KODUS_TELEMETRY_FORCE` env var (or pass `--force`) to bypass the
  * dedupe for testing.

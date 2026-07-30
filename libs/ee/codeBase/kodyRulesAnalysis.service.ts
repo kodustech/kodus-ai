@@ -1,8 +1,5 @@
-import {
-    createLogger,
-    type ContextDependency,
-    type ContextPack,
-} from '@kodus/flow';
+import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { createLogger } from '@libs/core/log/logger';
 import {
     BYOKConfig,
     LLMModelProvider,
@@ -17,7 +14,6 @@ import {
     getAugmentationsFromPack,
     getOverridesFromPack,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context.utils';
-import { FileContextAugmentationService } from '@libs/ai-engine/infrastructure/adapters/services/context/file-context-augmentation.service';
 import type { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
@@ -63,7 +59,6 @@ import {
     KodyRulesScope,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
-import { KodyRuleDependencyService } from '@libs/kodyRules/infrastructure/adapters/services/kodyRulesDependency.service';
 import { KodyRulesValidationService } from '../kodyRules/service/kody-rules-validation.service';
 import { KodyRulesService } from '../kodyRules/service/kodyRules.service';
 
@@ -110,8 +105,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         private readonly kodyRulesValidationService: KodyRulesValidationService,
         private readonly observabilityService: ObservabilityService,
         private readonly externalReferenceLoaderService: ExternalReferenceLoaderService,
-        private readonly fileContextAugmentationService: FileContextAugmentationService,
-        private readonly kodyRuleDependencyService: KodyRuleDependencyService,
     ) {}
 
     private async buildKodyRuleLinkAndRepalceIds(
@@ -399,57 +392,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         return [];
     }
 
-    private buildMcpResultsFromAugmentations(
-        augmentationsByFile: Record<string, ContextAugmentationsMap>,
-        rules: Array<Partial<IKodyRule>>,
-        mcpDependencies: ContextDependency[],
-    ): Map<string, Record<string, unknown>> {
-        const mcpResultsMap = new Map<string, Record<string, unknown>>();
-        if (
-            !mcpDependencies ||
-            mcpDependencies.length === 0 ||
-            Object.keys(augmentationsByFile).length === 0
-        ) {
-            return mcpResultsMap;
-        }
-
-        const dependenciesByRule = new Map<string, ContextDependency[]>();
-        for (const rule of rules) {
-            if (rule.uuid && rule.contextReferenceId) {
-                const ruleDependencies = mcpDependencies.filter(
-                    (dep) =>
-                        dep.metadata?.contextReferenceId ===
-                        rule.contextReferenceId,
-                );
-                if (ruleDependencies.length > 0) {
-                    dependenciesByRule.set(rule.uuid, ruleDependencies);
-                }
-            }
-        }
-
-        for (const [ruleId, dependencies] of dependenciesByRule.entries()) {
-            const ruleAugmentations: Record<string, unknown> = {};
-            for (const _dep of dependencies) {
-                for (const fileName in augmentationsByFile) {
-                    const fileAugmentations = augmentationsByFile[fileName];
-                    for (const pathKey in fileAugmentations) {
-                        if (!ruleAugmentations[pathKey]) {
-                            ruleAugmentations[pathKey] = { outputs: [] };
-                        }
-                        (ruleAugmentations[pathKey] as any).outputs.push(
-                            ...fileAugmentations[pathKey].outputs,
-                        );
-                    }
-                }
-            }
-            if (Object.keys(ruleAugmentations).length > 0) {
-                mcpResultsMap.set(ruleId, ruleAugmentations);
-            }
-        }
-
-        return mcpResultsMap;
-    }
-
     async analyzeCodeWithAI(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
@@ -463,7 +405,11 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
             !!suggestions?.codeSuggestions &&
             suggestions?.codeSuggestions?.length > 0;
         const provider = LLMModelProvider.GEMINI_2_5_PRO;
-        const fallbackProvider = LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
+        // Fallback to a Vertex (SA-auth) Gemini model. The legacy v2 engine
+        // builds Vertex models via `ChatVertexAI` (Gemini protocol only), so
+        // `VERTEX_CLAUDE_3_5_SONNET` was silently broken as a fallback here.
+        // Claude on Vertex is supported via BYOK (v5) only.
+        const fallbackProvider = LLMModelProvider.VERTEX_GEMINI_2_5_PRO;
 
         const baseContext = await this.prepareAnalysisContext(
             fileContext,
@@ -485,49 +431,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
             return { codeSuggestions: [] };
         }
 
-        const augmentationsByFile: Record<string, ContextAugmentationsMap> = {};
-        for (const rule of baseContext.kodyRules) {
-            if (!rule.contextReferenceId) {
-                continue;
-            }
-
-            const ruleDependencies =
-                await this.kodyRuleDependencyService.getMcpDependenciesForRules(
-                    [rule],
-                );
-
-            if (ruleDependencies.length > 0) {
-                const ruleAugmentations =
-                    await this.fileContextAugmentationService.augmentFiles(
-                        [fileContext.file],
-                        context as any,
-                        ruleDependencies,
-                        rule,
-                    );
-
-                for (const fileName in ruleAugmentations) {
-                    if (!augmentationsByFile[fileName]) {
-                        augmentationsByFile[fileName] = {};
-                    }
-                    Object.assign(
-                        augmentationsByFile[fileName],
-                        ruleAugmentations[fileName],
-                    );
-                }
-            }
-        }
-
-        const allMcpDependencies =
-            await this.kodyRuleDependencyService.getMcpDependenciesForRules(
-                baseContext.kodyRules,
-            );
-
-        const mcpResultsMap = this.buildMcpResultsFromAugmentations(
-            augmentationsByFile,
-            baseContext.kodyRules,
-            allMcpDependencies,
-        );
-
         const { referencesMap: externalReferencesMap } =
             await this.externalReferenceLoaderService.loadReferencesForRules(
                 baseContext.kodyRules,
@@ -545,9 +448,8 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                     const hasKnowledge = externalReferencesMap.has(
                         fullRule.uuid,
                     );
-                    const hasMcp = mcpResultsMap.has(fullRule.uuid);
 
-                    if (hasKnowledge || hasMcp) {
+                    if (hasKnowledge) {
                         return true;
                     }
                 }
@@ -588,7 +490,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
             updatedSuggestions: undefined,
             filteredKodyRules: undefined,
             externalReferencesMap,
-            mcpResultsMap,
         };
 
         const runName = 'kodyRulesAnalyzeCodeWithAI';
@@ -1025,6 +926,27 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 examples: rule?.examples ?? [],
                 contextReferenceId: rule?.contextReferenceId,
             }));
+
+        // Grep-able evaluation trace ("[kody-rules-eval]"): the single
+        // authoritative record of WHICH rules entered the prompt for this
+        // file. Self-hosted operators debugging "why didn't my rule fire"
+        // previously had no way to tell a rule dropped by path/scope
+        // filtering from a rule the model simply ignored.
+        this.logger.log({
+            message: `[kody-rules-eval] ${kodyRulesFiltered?.length ?? 0} rule(s) selected for file ${fileContext?.file?.filename}`,
+            context: KodyRulesAnalysisService.name,
+            metadata: {
+                organizationAndTeamData: context?.organizationAndTeamData,
+                prNumber: context?.pullRequest?.number,
+                filename: fileContext?.file?.filename,
+                totalActiveRules:
+                    context?.codeReviewConfig?.kodyRules?.length ?? 0,
+                selectedRules: (kodyRulesFiltered ?? []).map((r) => ({
+                    uuid: r.uuid,
+                    title: r.title,
+                })),
+            },
+        });
 
         const baseContext = {
             pullRequest: context?.pullRequest,

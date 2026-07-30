@@ -17,37 +17,36 @@ ENV API_DEVELOPMENT_MODE=false
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
 
-# Yarn1's default HTTP timeout is 30s, too tight for slow paths to
-# registry.npmjs.org from the GitHub Actions runners — a single laggy
-# tarball (e.g. date-fns) blows the whole `yarn install` after 4 retries
-# and aborts the bake. Yarn1 honours `network-timeout` from `.yarnrc`
-# (NOT the env var; YARN_HTTP_TIMEOUT does nothing on yarn1), so set it
-# globally here. Inherited by `deps` and `prod-deps` since they FROM base.
-RUN echo 'network-timeout 600000' > /root/.yarnrc
+# pnpm's default fetch timeout (60s) can be tight for slow paths to
+# registry.npmjs.org from the GitHub Actions runners; raise it globally.
+# Inherited by `deps` and `prod-deps` since they FROM base.
+ENV npm_config_fetch_timeout=600000
 
 # apt cache mounts persist /var/cache/apt and /var/lib/apt across builds so
 # repeated apt-get runs don't re-download the same .deb packages. The
 # `docker-clean` apt hook (ships in debian-slim) would delete the cache
 # after each install, defeating the mount — remove it first.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
+    --mount=type=cache,target=/var/lib/apt,sharing=private \
     rm -f /etc/apt/apt.conf.d/docker-clean \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates git python3 make g++ procps
 
 RUN corepack disable \
-  && npm i -g yarn@1.22.22
+  && npm i -g pnpm@10.34.1
 
 FROM base AS deps
-COPY package.json yarn.lock .npmrc ./
+# pnpm-workspace.yaml carries overrides/catalog/nodeLinker since the pnpm 11
+# migration moved them out of package.json/.npmrc. Without it here, the frozen
+# install sees empty overrides and aborts (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/kodus-common ./packages/kodus-common
-COPY packages/kodus-flow ./packages/kodus-flow
 
-# `YARN_CACHE_FOLDER` points yarn at a BuildKit cache mount so downloaded
-# tarballs survive across builds. `sharing=locked` serializes concurrent
-# access to the cache directory to avoid corruption (yarn v1 is not safe
-# under concurrent writes to its cache).
+# `--store-dir` points pnpm at a BuildKit cache mount so the
+# content-addressable store survives across builds. pnpm's store is safe
+# under concurrent access (atomic writes), so `sharing=shared` lets the
+# parallel bake targets reuse it without lock waits.
 #
 # The `npmrc` BuildKit secret (optional) lets CI inject auth for the
 # @kodus registry without the token ever landing in an image layer.
@@ -56,22 +55,22 @@ COPY packages/kodus-flow ./packages/kodus-flow
 # copied above stays in effect — today that file only holds registry
 # URLs, no tokens, so builds still work unauthenticated.
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/yarn-cache,sharing=locked \
+    --mount=type=cache,target=/pnpm-store,sharing=shared \
     cd packages/kodus-common \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn prepack
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/yarn-cache,sharing=locked \
-    cd packages/kodus-flow \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn build
+  && pnpm install --store-dir /pnpm-store \
+  && pnpm run prepack
 
-# Install dependencies and link local packages
+# Install dependencies and link local packages.
+# github_token (optional) authenticates @vscode/ripgrep's postinstall
+# download against the GitHub releases API — anonymous calls from shared
+# CI runner IPs are rate-limited (403) and abort the whole install. Empty
+# or absent secret → unauthenticated, same as a local build.
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/yarn-cache,sharing=locked \
-    YARN_CACHE_FOLDER=/yarn-cache yarn install --frozen-lockfile
+    --mount=type=secret,id=github_token,required=false \
+    --mount=type=cache,target=/pnpm-store,sharing=shared \
+    if [ -s /run/secrets/github_token ]; then export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; fi \
+ && pnpm install --frozen-lockfile --store-dir /pnpm-store
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
-RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 
 FROM deps AS build
 ARG API_CLOUD_MODE=false
@@ -89,42 +88,49 @@ RUN sed -e "s/__CLOUD_MODE__/${API_CLOUD_MODE}/g" \
         -e "/declare const/d" \
         libs/ee/configs/environment/environment.template.ts > libs/ee/configs/environment/environment.ts
 
-RUN yarn build:apps && yarn build:migrations
+# Persist webpack's incremental filesystem cache (node_modules/.cache/webpack,
+# the default when cache.type='filesystem' with no cacheDirectory — see
+# webpack.config.js) across builds via a BuildKit cache mount. Without this the
+# `COPY . .` above invalidates the layer on every source change and webpack
+# recompiles all 6 apps from scratch (~3min). With it, only the changed modules
+# rebuild → seconds. sharing=private because build:apps runs the 6 nest builds in
+# parallel against one shared cache dir.
+RUN --mount=type=cache,target=/usr/src/app/node_modules/.cache,sharing=locked \
+    pnpm run build:apps && pnpm run build:migrations
 
 # Install production dependencies only
 FROM base AS prod-deps
-COPY package.json yarn.lock .npmrc ./
+# See deps stage: pnpm-workspace.yaml must be present for overrides/catalog to
+# resolve under --frozen-lockfile.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/kodus-common ./packages/kodus-common
-COPY packages/kodus-flow ./packages/kodus-flow
 
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/yarn-cache,sharing=locked \
+    --mount=type=cache,target=/pnpm-store,sharing=shared \
     cd packages/kodus-common \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn prepack
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/yarn-cache,sharing=locked \
-    cd packages/kodus-flow \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn build
+  && pnpm install --store-dir /pnpm-store \
+  && pnpm run prepack
 
-# --production=true skips devDependencies (TypeScript, Nest CLI, Jest,
-# ESLint, etc.) since the `build` stage already produced the compiled
-# output in ../build/usr/src/app/dist. --prefer-offline + the shared yarn
-# cache means we reuse the tarballs already downloaded by `deps`.
+# --prod skips devDependencies (TypeScript, Nest CLI, Jest, ESLint, etc.)
+# since the `build` stage already produced the compiled output in
+# ../build/usr/src/app/dist. The shared pnpm store means packages already
+# downloaded by `deps` are hardlinked, not re-fetched.
+# github_token: same ripgrep-postinstall rate-limit story as `deps` —
+# this stage re-runs postinstall scripts on its own node_modules.
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/yarn-cache,sharing=locked \
-    YARN_CACHE_FOLDER=/yarn-cache yarn install --frozen-lockfile --prefer-offline --production=true
+    --mount=type=secret,id=github_token,required=false \
+    --mount=type=cache,target=/pnpm-store,sharing=shared \
+    if [ -s /run/secrets/github_token ]; then export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; fi \
+ && pnpm install --frozen-lockfile --prod --store-dir /pnpm-store
 
 # Link local packages. Drop the nested node_modules/src/test that were
-# needed for `yarn prepack` but not at runtime — keeping them would
+# needed for `pnpm run prepack` but not at runtime — keeping them would
 # duplicate ~450MB inside the final image for no benefit. `dist/` and
 # `package.json` are what Node actually resolves.
-RUN rm -rf packages/kodus-common/node_modules packages/kodus-flow/node_modules \
-           packages/kodus-common/src packages/kodus-flow/src \
-           packages/kodus-common/test packages/kodus-flow/test
+RUN rm -rf packages/kodus-common/node_modules \
+           packages/kodus-common/src \
+           packages/kodus-common/test
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
-RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 
 # Dedicated stage for the bun binary. Using the official oven/bun image
 # instead of `curl bun.sh/install | bash` because:
@@ -143,23 +149,24 @@ ENV NODE_ENV=production
 # Redeclare ARGs to make them available in this stage
 ARG API_CLOUD_MODE=false
 ARG RELEASE_VERSION=local
+ARG KODUS_GRAPH_VERSION=0.3.0
 
 # Set ENVs for runtime
 ENV API_CLOUD_MODE=${API_CLOUD_MODE}
 ENV API_DEVELOPMENT_MODE=false
 ENV RELEASE_VERSION=${RELEASE_VERSION}
 ENV SENTRY_RELEASE=${RELEASE_VERSION}
+ENV PATH="/home/node/.bun/bin:${PATH}"
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
+    --mount=type=cache,target=/var/lib/apt,sharing=private \
     rm -f /etc/apt/apt.conf.d/docker-clean \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
     ca-certificates procps git ripgrep
 
-# Copy the bun binary from the official image and install kodus-graph with it.
+# Copy the bun binary from the official image.
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
-RUN bun install -g @kodus/kodus-graph
 
 COPY --chown=1000:1000 --from=prod-deps /usr/src/app/node_modules ./node_modules
 COPY --chown=1000:1000 --from=build /usr/src/app/dist ./dist
@@ -180,6 +187,14 @@ COPY --chmod=0755 docker/prod-entrypoint-mcp-manager.sh /usr/local/bin/prod-entr
 # ownership fix for the non-root USER 1000 below — not a write path.
 RUN chown 1000:1000 /usr/src/app
 
+USER 1000
+
+# Install kodus-graph for the runtime user so self-hosted worker images can
+# find it through $HOME/.bun/bin after dropping root privileges.
+RUN bun install -g @kodus/kodus-graph@${KODUS_GRAPH_VERSION}
+USER root
+RUN printf '%s\n' '#!/bin/sh' 'exec /home/node/.bun/bin/kodus-graph "$@"' > /usr/local/bin/kodus-graph \
+  && chmod 0755 /usr/local/bin/kodus-graph
 USER 1000
 
 ENTRYPOINT ["/usr/local/bin/prod-entrypoint"]

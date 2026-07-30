@@ -27,7 +27,7 @@ export class HealthController {
     @ApiOkResponse({ type: HealthResponseDto })
     @ApiInternalServerErrorResponse({ type: ErrorResponseDto })
     async getHealth() {
-        let databaseStatus = 'error';
+        let databaseStatus: string;
 
         try {
             databaseStatus = this.dataSource.isInitialized

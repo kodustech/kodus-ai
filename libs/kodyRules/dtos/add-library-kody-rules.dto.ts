@@ -90,11 +90,6 @@ export class AddLibraryKodyRulesDto {
     examples: KodyRulesExampleDto[];
 
     @IsOptional()
-    @IsEnum(KodyRulesOrigin)
-    @ApiPropertyOptional({ enum: KodyRulesOrigin, enumName: 'KodyRulesOrigin' })
-    origin?: KodyRulesOrigin;
-
-    @IsOptional()
     @IsEnum(KodyRulesStatus)
     @ApiPropertyOptional({ enum: KodyRulesStatus, enumName: 'KodyRulesStatus' })
     status?: KodyRulesStatus;
@@ -103,4 +98,9 @@ export class AddLibraryKodyRulesDto {
     @IsString()
     @ApiPropertyOptional({ example: 'file' })
     scope?: string;
+
+    @IsOptional()
+    @IsEnum(KodyRulesOrigin)
+    @ApiPropertyOptional({ enum: KodyRulesOrigin, enumName: 'KodyRulesOrigin' })
+    origin?: KodyRulesOrigin;
 }

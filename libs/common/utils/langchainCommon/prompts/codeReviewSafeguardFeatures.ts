@@ -94,7 +94,7 @@ Output JSON:
 - If a suggestion mentions a real pattern (e.g., "resource leak") but the resource IS properly closed in the visible code, set the structural feature to false.
 - Be honest: if unsure, prefer false for structural features and true for speculation features.
 - If a suggestion argues "what if caller X doesn't provide Y" or "what if this function fails" WITHOUT showing that X actually fails to provide Y in the visible code, set \`requires_assumed_input\` to true.
-- If a suggestion criticizes a deliberate refactoring choice (removing code, changing a schema, replacing one approach with another), set \`is_quality_opinion\` to true — the safeguard should not second-guess intentional design decisions.
+- A deliberate refactoring choice (removing code, changing a schema, replacing one approach) is \`is_quality_opinion\` ONLY when it has no concrete runtime consequence. If the change drops or overrides behavior callers still rely on — a second definition silently replacing the first, a removed guard, a narrowed return, an unhandled case — that is a structural defect, NOT an opinion. Do not use \`is_quality_opinion\` to excuse a behavior change that breaks correctness.
 
 Respond in ${languageResultPrompt} for any explanations, but keep feature names in English.
 

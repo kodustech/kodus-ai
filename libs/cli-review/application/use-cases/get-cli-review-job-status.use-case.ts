@@ -9,6 +9,7 @@ import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { WorkflowType } from '@libs/core/workflow/domain/enums/workflow-type.enum';
 
 import { CliReviewResponse } from '@libs/cli-review/domain/types/cli-review.types';
+import { CliReviewJobPublicPrMetadata } from '@libs/cli-review/workflow/cli-review-job.types';
 
 export interface GetCliReviewJobStatusInput {
     jobId: string;
@@ -18,6 +19,13 @@ export interface GetCliReviewJobStatusInput {
      * the existence of jobs from other organizations.
      */
     organizationId: string;
+    /**
+     * When true, omit the heavy public-demo payload fields (`publicPr`
+     * and `publicDiff`). The frontend caches both in sessionStorage
+     * after the first poll, so subsequent polls only need status +
+     * `result` and can skip ~15 KB of redundant transfer per tick.
+     */
+    omitPayload?: boolean;
 }
 
 export interface CliReviewJobStatusResponse {
@@ -28,6 +36,14 @@ export interface CliReviewJobStatusResponse {
     createdAt: Date;
     startedAt?: Date | null;
     completedAt?: Date | null;
+    /**
+     * Public-demo only: original PR metadata + raw diff fetched at
+     * enqueue time. Lets the demo UI re-render the file/diff tree from
+     * any browser session (shared link, refresh, new tab), not only the
+     * one that submitted the review.
+     */
+    publicPr?: CliReviewJobPublicPrMetadata;
+    publicDiff?: string;
 }
 
 /**
@@ -47,7 +63,7 @@ export class GetCliReviewJobStatusUseCase
     async execute(
         input: GetCliReviewJobStatusInput,
     ): Promise<CliReviewJobStatusResponse> {
-        const { jobId, organizationId } = input;
+        const { jobId, organizationId, omitPayload = false } = input;
 
         const job = await this.jobQueueService.getStatus(jobId);
         if (!job) {
@@ -73,6 +89,10 @@ export class GetCliReviewJobStatusUseCase
                       | undefined)
                 : undefined;
 
+        const payload = (job as any).payload as
+            | { publicPr?: CliReviewJobPublicPrMetadata; publicDiff?: string }
+            | undefined;
+
         return {
             jobId,
             status: job.status,
@@ -83,6 +103,12 @@ export class GetCliReviewJobStatusUseCase
             createdAt: job.createdAt,
             startedAt: job.startedAt,
             completedAt: job.completedAt,
+            ...(!omitPayload && payload?.publicPr
+                ? { publicPr: payload.publicPr }
+                : {}),
+            ...(!omitPayload && payload?.publicDiff
+                ? { publicDiff: payload.publicDiff }
+                : {}),
         };
     }
 }

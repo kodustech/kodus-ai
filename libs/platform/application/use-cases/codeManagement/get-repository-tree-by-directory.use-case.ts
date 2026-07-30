@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
     CONTEXT_RESOLUTION_SERVICE_TOKEN,

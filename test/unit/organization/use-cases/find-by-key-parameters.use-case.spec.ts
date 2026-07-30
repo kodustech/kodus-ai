@@ -10,6 +10,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import { FindByKeyParametersUseCase } from '@libs/organization/application/use-cases/parameters/find-by-key-use-case';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { ParametersKey } from '@libs/core/domain/enums';
@@ -31,8 +32,7 @@ const mockConfigService = {
     get: jest.fn().mockReturnValue(60000), // Default TTL
 };
 
-// Mock @kodus/flow createLogger
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => mockLogger,
 }));
 
@@ -42,6 +42,10 @@ const createMockParametersService = () => ({
     save: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
+});
+
+const createMockCentralizedConfigPrService = () => ({
+    getCentralizedConfigWithValidatedPullRequest: jest.fn(),
 });
 
 // ============================================================================
@@ -82,6 +86,8 @@ describe('FindByKeyParametersUseCase', () => {
 
     beforeEach(async () => {
         mockParametersService = createMockParametersService();
+        const mockCentralizedConfigPrService =
+            createMockCentralizedConfigPrService();
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -93,6 +99,10 @@ describe('FindByKeyParametersUseCase', () => {
                 {
                     provide: ConfigService,
                     useValue: mockConfigService,
+                },
+                {
+                    provide: CentralizedConfigPrService,
+                    useValue: mockCentralizedConfigPrService,
                 },
             ],
         }).compile();
@@ -307,6 +317,99 @@ describe('FindByKeyParametersUseCase', () => {
         });
     });
 
+    describe('CENTRALIZED_CONFIG active pull request validation', () => {
+        it('should return validated config when centralized config has active pull request', async () => {
+            const mockParameter = createMockParameterEntity(
+                ParametersKey.CENTRALIZED_CONFIG,
+                {
+                    enabled: true,
+                    repository: { id: 'repo-1', name: 'centralized-repo' },
+                    activePullRequest: {
+                        prUrl: 'https://example.test/pull/123',
+                        prNumber: 123,
+                        sourceBranch: 'kodus-centralized-config-global-123',
+                        targetBranch: 'main',
+                        repository: { id: 'repo-1', name: 'centralized-repo' },
+                        createdAt: '2026-01-01T00:00:00.000Z',
+                        updatedAt: '2026-01-01T00:00:00.000Z',
+                    },
+                },
+            );
+
+            mockParametersService.findByKey.mockResolvedValue(mockParameter);
+
+            const result = await useCase.execute(
+                ParametersKey.CENTRALIZED_CONFIG,
+                MOCK_ORG_AND_TEAM_DATA,
+            );
+
+            expect(result.configKey).toBe(ParametersKey.CENTRALIZED_CONFIG);
+            expect(result.configValue.enabled).toBe(true);
+        });
+
+        it('should clear active pull request metadata when pull request is merged', async () => {
+            const mockParameter = createMockParameterEntity(
+                ParametersKey.CENTRALIZED_CONFIG,
+                {
+                    enabled: true,
+                    repository: { id: 'repo-1', name: 'centralized-repo' },
+                    activePullRequest: {
+                        prUrl: 'https://example.test/pull/123',
+                        prNumber: 123,
+                        sourceBranch: 'kodus-centralized-config-global-123',
+                        targetBranch: 'main',
+                        repository: { id: 'repo-1', name: 'centralized-repo' },
+                        createdAt: '2026-01-01T00:00:00.000Z',
+                        updatedAt: '2026-01-01T00:00:00.000Z',
+                    },
+                },
+            );
+
+            mockParametersService.findByKey.mockResolvedValue(mockParameter);
+
+            const module: TestingModule = await Test.createTestingModule({
+                providers: [
+                    FindByKeyParametersUseCase,
+                    {
+                        provide: PARAMETERS_SERVICE_TOKEN,
+                        useValue: mockParametersService,
+                    },
+                    {
+                        provide: ConfigService,
+                        useValue: mockConfigService,
+                    },
+                    {
+                        provide: CentralizedConfigPrService,
+                        useValue: {
+                            getCentralizedConfigWithValidatedPullRequest: jest
+                                .fn()
+                                .mockResolvedValue({
+                                    enabled: true,
+                                    repository: {
+                                        id: 'repo-1',
+                                        name: 'centralized-repo',
+                                    },
+                                    activePullRequest: null,
+                                }),
+                        },
+                    },
+                ],
+            }).compile();
+
+            const useCaseWithValidation =
+                module.get<FindByKeyParametersUseCase>(
+                    FindByKeyParametersUseCase,
+                );
+
+            const result = await useCaseWithValidation.execute(
+                ParametersKey.CENTRALIZED_CONFIG,
+                MOCK_ORG_AND_TEAM_DATA,
+            );
+
+            expect(result.configValue.activePullRequest).toBeNull();
+        });
+    });
+
     describe('REGRESSION: Error handling', () => {
         it('should log error and rethrow when service throws', async () => {
             const testError = new Error('Database connection failed');
@@ -356,6 +459,8 @@ describe('FindByKeyParametersUseCase - Cache Optimization Contract', () => {
 
     beforeEach(async () => {
         mockParametersService = createMockParametersService();
+        const mockCentralizedConfigPrService =
+            createMockCentralizedConfigPrService();
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -367,6 +472,10 @@ describe('FindByKeyParametersUseCase - Cache Optimization Contract', () => {
                 {
                     provide: ConfigService,
                     useValue: mockConfigService,
+                },
+                {
+                    provide: CentralizedConfigPrService,
+                    useValue: mockCentralizedConfigPrService,
                 },
             ],
         }).compile();
@@ -507,6 +616,8 @@ describe('FindByKeyParametersUseCase - Performance Baseline', () => {
 
     beforeEach(async () => {
         mockParametersService = createMockParametersService();
+        const mockCentralizedConfigPrService =
+            createMockCentralizedConfigPrService();
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -518,6 +629,10 @@ describe('FindByKeyParametersUseCase - Performance Baseline', () => {
                 {
                     provide: ConfigService,
                     useValue: mockConfigService,
+                },
+                {
+                    provide: CentralizedConfigPrService,
+                    useValue: mockCentralizedConfigPrService,
                 },
             ],
         }).compile();

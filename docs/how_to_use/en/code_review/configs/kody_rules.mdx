@@ -322,18 +322,19 @@ Each memory has a scope that determines where it applies:
 By default, AI-generated memories are automatically activated. You can require manual approval before they take effect:
 
 1. Go to **Code Review Settings** → **Repository** → **Kody Rules** → **Memories** tab
-2. Enable **LLM-generated memories approval**
+2. Enable **Kody knowledge approval**
 
 When enabled:
-- AI-generated memories enter a **pending state** and are not active until approved
-- A notification badge appears showing pending memories count
-- Click **Pending Memories** to review, approve, discard, or convert pending items
-- Both new memory creations and updates to existing memories go through the approval flow
+- AI-generated rules and memories enter a **pending state** and are not active until approved
+- A notification badge appears showing the pending count
+- Click **Pending** to review, approve, discard, or convert pending items
+- Both new creations and updates to existing rules/memories go through the approval flow
 
 You can also set this in `kodus-config.yml`:
 
 ```yaml
-llmGeneratedMemoriesRequireApproval: true
+kodyKnowledgeApproval:
+    enabled: true
 ```
 
 ### Pending Memories Review

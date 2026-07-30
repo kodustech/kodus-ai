@@ -1,5 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
-import { SimpleLogger } from '@kodus/flow/dist/observability/logger';
+import { SimpleLogger } from '@libs/core/log/logger';
 import { Response } from 'express';
 
 import { applyMcpHttpResponseHeaders } from '../utils/mcp-http.config';

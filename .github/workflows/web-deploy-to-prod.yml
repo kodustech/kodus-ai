@@ -101,11 +101,15 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
                   AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
 
-            - name: Notify Discord on Success
-              if: success()
-              uses: sarisia/actions-status-discord@v1.13.0
+            - name: Notify Discord
+              if: always()
+              uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: ${{ job.status }}
-                  content: ':tada: Deploy realizado com sucesso com a imagem `${{ env.IMAGE_TAG }}`!'
-                  title: 'Deploy Prod:'
+                  title: "Deploy Prod: kodus-web"
+                  description: |
+                      Image: `${{ env.IMAGE_TAG }}`
+                      Triggered by: @${{ github.actor }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                  username: GitHub Actions

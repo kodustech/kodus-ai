@@ -18,7 +18,7 @@ import {
     IDryRunService,
 } from '@libs/dryRun/domain/contracts/dryRun.service.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 @Injectable()
 export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipelineContext> {

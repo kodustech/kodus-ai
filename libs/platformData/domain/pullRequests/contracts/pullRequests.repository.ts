@@ -10,6 +10,7 @@ import {
     ISuggestion,
     IPullRequestWithDeliveredSuggestions,
     IPullRequestUserMapping,
+    SuggestionCountsBySeverity,
 } from '../interfaces/pullRequests.interface';
 
 export const PULL_REQUESTS_REPOSITORY_TOKEN = Symbol.for(
@@ -108,6 +109,17 @@ export interface IPullRequestsRepository {
     ): Promise<IPullRequestUserMapping[]>;
 
     /**
+     * PR numbers of one repository (optionally created up to `until`). Used
+     * by the Token Usage repository filter, which scopes usage spans by
+     * `attributes.prNumber` — spans don't carry a repository id.
+     */
+    findNumbersByRepositoryId(
+        organizationId: string,
+        repositoryId: string,
+        until?: Date,
+    ): Promise<number[]>;
+
+    /**
      * PERF: Aggregation query that returns only suggestion counts.
      * Reduces data transfer from ~180k objects to just counts per PR.
      *
@@ -119,7 +131,36 @@ export interface IPullRequestsRepository {
             repositoryId: string;
         }>,
         organizationId: string,
-    ): Promise<Map<string, { sent: number; filtered: number }>>;
+    ): Promise<Map<string, SuggestionCountsBySeverity>>;
+    findOpenPullRequestKeysOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds?: string[],
+    ): Promise<Array<{ number: number; repositoryId: string }>>;
+    // Distinct PR authors (by display name) for the Author search autocomplete.
+    findDistinctAuthorsByRepositoryIds(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        search?: string,
+        limit?: number,
+    ): Promise<
+        Array<{
+            id: string;
+            name: string;
+            username: string;
+            count: number;
+        }>
+    >;
+    countDeliveredPullRequests(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: {
+            severities?: string[];
+            authorEmail?: string;
+            unresolvedOnly?: boolean;
+            openOnly?: boolean;
+        },
+    ): Promise<number>;
     findFileWithSuggestions(
         prnumber: number,
         repositoryName: string,
@@ -194,7 +235,6 @@ export interface IPullRequestsRepository {
         totalDeleted: number;
         totalChanges: number;
     }>;
-
 
     /** Generates a stable id for file/suggestion sub-documents. */
     newSubDocumentId(): string;

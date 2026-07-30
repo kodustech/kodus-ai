@@ -11,7 +11,7 @@ import { TEAM_MEMBERS_SERVICE_TOKEN } from '@libs/organization/domain/teamMember
 
 import { DeleteTeamMembersUseCase } from './delete.use-case';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),

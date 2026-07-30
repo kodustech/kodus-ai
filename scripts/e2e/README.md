@@ -4,35 +4,35 @@ Run the same scenarios CI runs, from your laptop. Three modes, escalating in cos
 
 | Command | Time | Cost | Provisions? | When to use |
 |---|---|---|---|---|
-| `yarn e2e:dry-run` | seconds | $0 | no | After any change to scenarios/providers/runner. Validates wiring. |
-| `yarn e2e:smoke` | ~3 min | $0 (reuses your droplet) | no | Before pushing — confirm one combo actually passes end-to-end. |
-| `yarn e2e:matrix` | ~30-45 min | ~$1-2 | yes (per cell) | Before a release branch. Catches cross-provider regressions. |
+| `pnpm run e2e:dry-run` | seconds | $0 | no | After any change to scenarios/providers/runner. Validates wiring. |
+| `pnpm run e2e:smoke` | ~3 min | $0 (reuses your droplet) | no | Before pushing — confirm one combo actually passes end-to-end. |
+| `pnpm run e2e:matrix` | ~30-45 min | ~$1-2 | yes (per cell) | Before a release branch. Catches cross-provider regressions. |
 
-## `yarn e2e:dry-run`
+## `pnpm run e2e:dry-run`
 
 Loads scenarios, instantiates providers with no env vars set, walks the matrix without executing any real step. Catches: broken imports, missing scenario id, type errors. Doesn't catch: bugs that need real provider state.
 
-## `yarn e2e:smoke`
+## `pnpm run e2e:smoke`
 
-Runs **one** scenario × provider against the droplet you already have alive from `yarn selfhosted:provision` (reads `.kodus-dev/selfhosted-vm-default.json` for the target URLs + tenant creds).
+Runs **one** scenario × provider against the droplet you already have alive from `pnpm run selfhosted:provision` (reads `.kodus-dev/selfhosted-vm-default.json` for the target URLs + tenant creds).
 
 ```bash
-yarn e2e:smoke                                       # github × code-review-basic
-yarn e2e:smoke --provider gitlab                     # different provider
-yarn e2e:smoke --scenario kody-rules-create-and-apply
-yarn e2e:smoke --name junior                         # against a named instance
+pnpm run e2e:smoke                                       # github × code-review-basic
+pnpm run e2e:smoke --provider gitlab                     # different provider
+pnpm run e2e:smoke --scenario kody-rules-create-and-apply
+pnpm run e2e:smoke --name junior                         # against a named instance
 ```
 
-Fails fast if no droplet is alive — telling you to run `yarn selfhosted:provision` first.
+Fails fast if no droplet is alive — telling you to run `pnpm run selfhosted:provision` first.
 
-## `yarn e2e:matrix`
+## `pnpm run e2e:matrix`
 
 Runs the full matrix from `tests/e2e/matrix/fast.yml` (or another file you pass). Each self-hosted cell provisions a fresh droplet; each cell hits real provider APIs.
 
 ```bash
-yarn e2e:matrix                          # tests/e2e/matrix/fast.yml
-yarn e2e:matrix matrix/full.yml       # different matrix
-yarn e2e:matrix -y                       # skip the cost/duration confirmation
+pnpm run e2e:matrix                          # tests/e2e/matrix/fast.yml
+pnpm run e2e:matrix matrix/full.yml       # different matrix
+pnpm run e2e:matrix -y                       # skip the cost/duration confirmation
 ```
 
 **Skips cells with missing tokens** — if you only have GitHub + GitLab tokens, the Bitbucket and Azure DevOps cells are reported as skipped, not failed.
@@ -41,9 +41,9 @@ yarn e2e:matrix -y                       # skip the cost/duration confirmation
 
 Same priority order as `scripts/selfhosted/`:
 
-1. Inline env (`GH_TEST_TOKEN=... yarn e2e:smoke`)
+1. Inline env (`GH_TEST_TOKEN=... pnpm run e2e:smoke`)
 2. `scripts/e2e/.env` (gitignored, per-repo override)
-3. `~/.kodus-dev/config` (managed by `yarn selfhosted:setup`, shared with selfhosted scripts)
+3. `~/.kodus-dev/config` (managed by `pnpm run selfhosted:setup`, shared with selfhosted scripts)
 
 `op://Vault/Item/field` references resolve via 1Password CLI — same flow the selfhosted scripts use.
 
@@ -73,9 +73,9 @@ Same path CI uploads — local runs use the identical artifact format.
 
 ## Troubleshooting
 
-- **"No alive self-hosted instance"** (smoke): you need `yarn selfhosted:provision` first. Smoke doesn't provision.
+- **"No alive self-hosted instance"** (smoke): you need `pnpm run selfhosted:provision` first. Smoke doesn't provision.
 - **All cells skipped** (matrix): no provider tokens set. Add at least one (`GH_TEST_TOKEN` + `GH_TEST_REPO` is the simplest).
-- **Cell fails on `DIGITALOCEAN_TOKEN`** (matrix, self-hosted): matrix's own provisioning needs DO access. Already required by `yarn selfhosted:provision`, so usually already set.
+- **Cell fails on `DIGITALOCEAN_TOKEN`** (matrix, self-hosted): matrix's own provisioning needs DO access. Already required by `pnpm run selfhosted:provision`, so usually already set.
 - **`op` not authenticated**: enable Settings → Developer → "Integrate with 1Password CLI" in the 1Password app, or `eval $(op signin)`.
 
 ## How this fits
@@ -83,6 +83,6 @@ Same path CI uploads — local runs use the identical artifact format.
 | | local helper | CI workflow |
 |---|---|---|
 | 1 droplet alive for manual work | `scripts/selfhosted/` | — |
-| 1-combo smoke | `yarn e2e:smoke` | always part of full matrix run |
-| Full matrix | `yarn e2e:matrix` | `.github/workflows/e2e-self-hosted-matrix.yml` + `.github/workflows/e2e-cloud.yml` |
+| 1-combo smoke | `pnpm run e2e:smoke` | always part of full matrix run |
+| Full matrix | `pnpm run e2e:matrix` | `.github/workflows/e2e-self-hosted-matrix.yml` + `.github/workflows/e2e-cloud.yml` |
 | Release promotion gate | — | `.github/workflows/selfhosted-promote.yml` (only retags RC → final if matrix is green) |

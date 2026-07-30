@@ -9,6 +9,11 @@ export const ORGANIZATION_PARAMETERS_PATHS = {
     ),
     DELETE_BYOK: pathToApiUrl("/organization-parameters/delete-byok-config"),
     TEST_BYOK: pathToApiUrl("/organization-parameters/test-byok"),
+    TEST_BYOK_MODEL: pathToApiUrl("/organization-parameters/test-byok-model"),
+    MODEL_OVERRIDES: pathToApiUrl("/organization-parameters/model-overrides"),
+    MODEL_OVERRIDES_CLEAR: pathToApiUrl(
+        "/organization-parameters/model-overrides/clear",
+    ),
     GET_LLM_CONFIG_STATUS: pathToApiUrl(
         "/organization-parameters/llm-config/status",
     ),

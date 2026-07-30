@@ -24,7 +24,28 @@ scenarios:
     # from the command. Covers all 4 providers.
     - command-review
     - kody-rules-create-and-apply
+    # Centralized config (config-as-code) init→sync→disable. Signs up its own
+    # throwaway org (enabling centralized config makes a tenant's review config
+    # read-only, so it must not touch the shared review tenants). Pinned to
+    # github × {paid, license-paid} = one cell per target. SKIPPED unless
+    # CENTRALIZED_CONFIG_TEST_REPO points at a seeded source repo.
+    - centralized-config-sync
     - license-attribution
+    # Trial coverage (cloud × github × trial, one cell each). Both sign up a
+    # FRESH org per run so the 14-day trial window never lapses — the standing
+    # trial tenant expired every ~2 weeks and broke the old `trial` cells on
+    # the review scenarios.
+    #   * trial-entitlement-gate: API-level, fails in seconds with a precise
+    #     billing-level message (validate-org-license = valid + 'trial').
+    #   * trial-credits-consume: API-level credit accounting — consume
+    #     decrements, repeated usageKey is idempotent, exhaustion blocks. Fast,
+    #     no LLM; localizes credit/idempotency bugs in the gate↔billing path.
+    #   * trial-managed-review: the REAL thing — throwaway repo (exclusive
+    #     webhook route) + PR + managed-LLM review. The only cell exercising
+    #     Kodus-managed keys; every other review cell is BYOK.
+    - trial-entitlement-gate
+    - trial-credits-consume
+    - trial-managed-review
     # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
     # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default
     # ~/.kodus-dev/license-seats1.jwt) isn't available — see run-matrix.ts.
@@ -33,6 +54,15 @@ scenarios:
     # user per role, and asserts the expected 200/403 across API endpoints.
     # appliesTo restricts it to github × paid (one cell per target).
     - rbac-authorization
+    # RBAC frontend route guard: per role, signs in over HTTP (next-auth) and
+    # asserts the Next middleware redirects to /forbidden per the route
+    # manifest — the layer the #1229 bug lived in. HTTP-only, so fast.
+    - rbac-frontend-routes
+    # Public PR-review demo API (anonymous, cloud-only). appliesTo pins it
+    # to cloud × github × paid so it runs exactly once: featured-grid
+    # snapshots + a live enqueue→poll→completed against a small public PR.
+    # No tenant/provider — it only touches /cli/public/*.
+    - public-pr-demo
 
 cells:
     # ---------- self-hosted ----------

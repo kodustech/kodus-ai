@@ -1,9 +1,9 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { shSingleQuote } from '../shell-quote';
 
-export const KODUS_GRAPH_VERSION = '0.2.19';
+export const KODUS_GRAPH_VERSION = '0.3.0';
 
 export const KODUS_GRAPH_TIMEOUTS = {
     install: 120_000,
@@ -26,7 +26,10 @@ export class KodusGraphCli {
 
     async install(sandbox: SandboxInstance): Promise<void> {
         const check = await sandbox.run(
-            'which kodus-graph 2>/dev/null && kodus-graph --version 2>/dev/null || true',
+            [
+                BUN_PATH_PREFIX,
+                'which kodus-graph 2>/dev/null && kodus-graph --version 2>/dev/null || true',
+            ].join(' && '),
             { timeoutMs: 5_000 },
         );
 
@@ -162,7 +165,9 @@ export class KodusGraphCli {
         } = options;
         const outDir = dirname(outPath);
         const filesArg = quoteFiles(files);
-        const graphArg = graphPath ? ` --graph ${shSingleQuote(graphPath)}` : '';
+        const graphArg = graphPath
+            ? ` --graph ${shSingleQuote(graphPath)}`
+            : '';
         const diffArg = diffPath ? ` --diff ${shSingleQuote(diffPath)}` : '';
         const cmd = `kodus-graph context --files ${filesArg}${graphArg}${diffArg} --repo-dir . --format xml --out ${shSingleQuote(outPath)}`;
 

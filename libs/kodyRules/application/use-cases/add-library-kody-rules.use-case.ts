@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -70,6 +70,7 @@ export class AddLibraryKodyRulesUseCase {
                         undefined,
                         undefined,
                         libraryKodyRules.teamId,
+                        this.request.user,
                     );
 
                 if (!result) {
@@ -109,6 +110,7 @@ export class AddLibraryKodyRulesUseCase {
                             undefined,
                             undefined,
                             libraryKodyRules.teamId,
+                            this.request.user,
                         );
 
                     if (!result) {

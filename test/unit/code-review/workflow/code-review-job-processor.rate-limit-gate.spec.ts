@@ -11,7 +11,7 @@ import { CodeReviewJobProcessorService } from '@libs/code-review/workflow/code-r
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

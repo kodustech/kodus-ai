@@ -1,9 +1,9 @@
 ---
 title: "Prompts Personalizados"
-description: "Personaliza los prompts de revisión de Kody para cada categoría y nivel de severidad, adaptándolos a las necesidades de tu equipo"
+description: "Personaliza los prompts de revisión de Kody para cada categoría y la forma en que se escriben las sugerencias, adaptándolos a las necesidades de tu equipo"
 ---
 
-Los Prompts Personalizados te dan control total sobre cómo Kody analiza tu código y comunica los hallazgos. Personaliza qué busca la IA en cada categoría de revisión, cómo clasifica la severidad y cómo presenta las sugerencias para que coincidan con los estándares y el estilo de comunicación de tu equipo.
+Los Prompts Personalizados te dan control total sobre cómo Kody analiza tu código y comunica los hallazgos. Personaliza qué busca la IA en cada categoría de revisión y cómo presenta las sugerencias para que coincidan con los estándares y el estilo de comunicación de tu equipo.
 
 <Card
   title="Acceder a la Configuración de Prompts Personalizados"
@@ -32,7 +32,7 @@ Los Prompts Personalizados te dan control total sobre cómo Kody analiza tu cód
 
 ## Cómo Funcionan los Prompts Personalizados
 
-Los Prompts Personalizados operan en tres niveles:
+Los Prompts Personalizados operan en dos niveles:
 
 ### Prompts de Categoría
 
@@ -82,65 +82,6 @@ Define qué busca Kody en cada categoría de revisión:
   </Tab>
 </Tabs>
 
-### Prompts de Severidad
-
-Define cómo Kody clasifica la severidad de los problemas:
-
-<Tabs>
-  <Tab title="Crítico">
-    **Definición:** Problemas que requieren atención inmediata
-    
-    Ejemplos predeterminados:
-    - Caída/tiempo de inactividad de la aplicación
-    - Pérdida/corrupción de datos
-    - Brecha de seguridad (acceso no autorizado/exfiltración de datos)
-    - Fallo de operación crítica (autenticación/pago/autorización)
-    - Operaciones que producen pérdida financiera directa
-    - Fugas de memoria que provocan fallos inevitables
-    
-    **Longitud máxima:** 2000 caracteres
-  </Tab>
-
-  <Tab title="Alto">
-    **Definición:** Problemas significativos que requieren resolución próxima
-    
-    Ejemplos predeterminados:
-    - Funcionalidad importante rota
-    - Fugas de memoria que eventualmente provocan fallos
-    - Degradación del rendimiento que afecta la UX bajo carga normal
-    - Problemas de seguridad con rutas de explotación indirectas
-    - Errores de cálculo financiero que afectan los ingresos
-    
-    **Longitud máxima:** 2000 caracteres
-  </Tab>
-
-  <Tab title="Medio">
-    **Definición:** Mejoras moderadas recomendadas
-    
-    Ejemplos predeterminados:
-    - Funcionalidad parcialmente rota
-    - Problemas de rendimiento en escenarios específicos
-    - Debilidades de seguridad que requieren condiciones específicas
-    - Datos incorrectos pero recuperables
-    - Errores de lógica de negocio no críticos con soluciones alternativas
-    
-    **Longitud máxima:** 2000 caracteres
-  </Tab>
-
-  <Tab title="Bajo">
-    **Definición:** Mejoras menores para el incremento gradual
-    
-    Ejemplos predeterminados:
-    - Sobrecarga de rendimiento menor
-    - Mejoras de seguridad de bajo riesgo
-    - Métricas/logs incorrectos
-    - Afecta raramente a pocos usuarios
-    - Problemas en casos límite
-    
-    **Longitud máxima:** 2000 caracteres
-  </Tab>
-</Tabs>
-
 ### Prompts de Sugerencia
 
 Controla cómo Kody comunica cada sugerencia individual. Esto personaliza el formato y tono del mensaje que aparece en los comentarios del PR, como:
@@ -158,7 +99,7 @@ Puedes personalizar el tono, el nivel de detalle y el estilo de comunicación se
 
 ## Referencias Externas
 
-Todos los prompts personalizados — de Categoría, Severidad, Sugerencia y Resumen de PR — soportan referencias a archivos reales de los repositorios a los que Kody tiene acceso. Cuando guardas una actualización, Kody detecta automáticamente las referencias externas y las resuelve para revisiones futuras.
+Todos los prompts personalizados — de Categoría, Sugerencia y Resumen de PR — soportan referencias a archivos reales de los repositorios a los que Kody tiene acceso. Cuando guardas una actualización, Kody detecta automáticamente las referencias externas y las resuelve para revisiones futuras.
 
 - Usa `@file:path/to/file.ts` para apuntar a archivos en el repositorio que estás editando; Kody intentará ubicar la ruta localmente primero.
 - Incluye `@repo:org/project` cuando hagas referencia a archivos de otro repositorio o cuando edites prompts a nivel global.
@@ -191,7 +132,7 @@ Todos los prompts personalizados — de Categoría, Severidad, Sugerencia y Resu
 
 ### Evita la Redundancia Entre Prompts
 
-Cada categoría y severidad debe tener un enfoque distinto. No repitas las mismas instrucciones en diferentes prompts.
+Cada categoría debe tener un enfoque distinto. No repitas las mismas instrucciones en diferentes prompts.
 
 <Accordion title="Ejemplo: Separación Correcta">
   **Categoría de Errores:**
@@ -362,23 +303,6 @@ Solo diferencia los formatos de sugerencia cuando haya una razón real:
     **Beneficio:** Formato de salida estructurado que Gemini maneja excepcionalmente bien, mejorando la calidad de la revisión.
   </Accordion>
 
-  <Accordion title="Calibración de Severidad">
-    **Escenario:** Startup que avanza rápido y necesita diferentes umbrales de severidad
-    
-    **Prompt Crítico Personalizado:**
-    ```
-    Only flag as Critical if:
-    - Production data could be deleted or corrupted
-    - Security breach allowing direct data exfiltration
-    - Payment processing failures
-    - Complete service outage for core features
-    
-    Note: Performance issues are never Critical unless causing crashes.
-    ```
-    
-    **Beneficio:** Reduce la fatiga de alertas alineando la severidad con el impacto en el negocio.
-  </Accordion>
-
   <Accordion title="Comunicación Basada en Severidad">
     **Escenario:** Quieres explicaciones detalladas para problemas críticos pero feedback conciso para los menores
     
@@ -465,7 +389,7 @@ Solo diferencia los formatos de sugerencia cuando haya una razón real:
     - Haz los prompts más específicos y enfocados
     - Agrega exclusiones para patrones que quieras ignorar
     - Eleva el umbral mínimo de severidad en [Control de Sugerencias](/how_to_use/es/code_review/configs/suggestion_control)
-    - Verifica la redundancia entre prompts de categoría y severidad
+    - Verifica la redundancia entre los prompts de categoría
   </Accordion>
 
   <Accordion title="Problemas Esperados No Detectados">
@@ -531,8 +455,8 @@ Solo diferencia los formatos de sugerencia cuando haya una razón real:
     Funciona perfectamente. Adapta los prompts a las fortalezas de tu modelo. Tanto el primario como el fallback usan los mismos prompts personalizados.
   </Accordion>
 
-  <Accordion title="¿Cuál es la diferencia entre los prompts de Categoría/Severidad y los prompts de Sugerencia?">
-    **Los prompts de Categoría/Severidad** controlan qué analiza Kody y cómo clasifica los problemas. **Los prompts de Sugerencia** controlan cómo Kody presenta los hallazgos a tu equipo. Puedes personalizar ambos de forma independiente.
+  <Accordion title="¿Cuál es la diferencia entre los prompts de Categoría y los prompts de Sugerencia?">
+    **Los prompts de Categoría** controlan qué analiza Kody en cada categoría de revisión. **Los prompts de Sugerencia** controlan cómo Kody presenta los hallazgos a tu equipo. Puedes personalizar ambos de forma independiente.
   </Accordion>
 
   <Accordion title="¿Puedo usar markdown en los prompts de sugerencia?">

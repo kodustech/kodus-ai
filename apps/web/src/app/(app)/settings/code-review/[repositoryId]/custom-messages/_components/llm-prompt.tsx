@@ -2,6 +2,7 @@ import { Button } from "@components/ui/button";
 import { CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { Switch } from "@components/ui/switch";
+import { useShouldHideLLMPrompt } from "src/app/(app)/settings/_components/use-code-management-platform";
 
 import { OverrideIndicator } from "../../../_components/override";
 import type { IFormattedConfigProperty } from "../../../_types";
@@ -13,6 +14,10 @@ export const LLMPromptToggle = (props: {
     handleRevert: () => void;
     canEdit: boolean;
 }) => {
+    const shouldHide = useShouldHideLLMPrompt();
+
+    if (shouldHide) return null;
+
     return (
         <div className="flex flex-col gap-4">
             <Button

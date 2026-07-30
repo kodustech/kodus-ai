@@ -21,7 +21,7 @@ if ! docker network inspect kodus-backend-services >/dev/null 2>&1; then
 error: docker network "kodus-backend-services" not found.
 
 Start the dev backing services first:
-    yarn docker:start
+    pnpm run docker:start
 EOF
     exit 1
 fi

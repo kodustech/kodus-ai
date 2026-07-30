@@ -19,15 +19,25 @@ x-app-service-template: &app-service-defaults
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
     image: kodus-ai-dev:latest
     env_file:
-        - ${ENV_FILE:-.env}
+        # .env.local (per-dev overrides, gitignored) is loaded LAST so it
+        # wins over the generated .env — same cascade the app uses at
+        # runtime. Optional: absent for most devs.
+        - path: ${ENV_FILE:-.env}
+        - path: .env.local
+          required: false
     environment:
         - CHOKIDAR_USEPOLLING=false
         - API_DEVELOPMENT_MODE=${API_DEVELOPMENT_MODE:-true}
+        # pnpm 11 wants a TTY to confirm purging node_modules when manifests
+        # change (e.g. after a branch switch). The dev-entrypoint runs
+        # non-interactively, so CI=true lets pnpm skip the confirmation and
+        # sync deps instead of aborting with ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY.
+        - CI=true
     restart: unless-stopped
     volumes:
         - .:/usr/src/app:delegated
         - node_modules_cache:/usr/src/app/node_modules
-        - yarn_cache:/yarn-cache
+        - pnpm_store:/usr/src/app/.pnpm-store
         - logs_data:/usr/src/app/logs
         - yalc_store:/root/.yalc
     networks:
@@ -59,7 +69,7 @@ services:
             - '${API_PORT:-3001}:${API_PORT:-3001}'
             - '${API_DEBUG_PORT:-9229}:9229'
             - '${API_METRICS_PORT:-8000}:8000'
-        command: yarn start:dev:api
+        command: pnpm run start:dev:api
         deploy:
             resources:
                 limits:
@@ -84,6 +94,10 @@ services:
             retries: 8
             start_period: 180s
         environment:
+            # pnpm 11 aborts a non-interactive node_modules purge (branch
+            # switch → manifest drift) without CI=true. Per-service blocks
+            # override the anchor's environment list, so it must be set here.
+            - CI=true
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             - NODE_OPTIONS=--max-old-space-size=2560 --max-semi-space-size=64
             - DEBUG_PORT=9229
@@ -109,7 +123,7 @@ services:
         volumes:
             - .:/usr/src/app:delegated
             - node_modules_cache:/usr/src/app/node_modules:nocopy
-            - yarn_cache:/yarn-cache
+            - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
             - yalc_store:/root/.yalc
         ports:
@@ -117,7 +131,7 @@ services:
             # worktree coexistence.
             - '${API_WORKER_DEBUG_PORT:-9231}:9231'
             - '${API_WORKER_METRICS_PORT:-8001}:8001'
-        command: yarn start:dev:worker
+        command: pnpm run start:dev:worker
         deploy:
             resources:
                 limits:
@@ -137,6 +151,10 @@ services:
             retries: 3
             start_period: 60s
         environment:
+            # pnpm 11 aborts a non-interactive node_modules purge (branch
+            # switch → manifest drift) without CI=true. Per-service blocks
+            # override the anchor's environment list, so it must be set here.
+            - CI=true
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             # V8 heap kept below the 2G container cap (with ~500M headroom
             # for native modules, thread stacks, and Node runtime overhead).
@@ -158,10 +176,10 @@ services:
     worker-analytics:
         <<: *app-service-defaults
         container_name: kodus_analytics_worker
-        # Opt-in. Default `yarn docker:start` leaves this off — the cockpit
+        # Opt-in. Default `pnpm run docker:start` leaves this off — the cockpit
         # ingestion cron isn't useful for most dev flows and costs ~700 MiB
         # idle (Nest DI + ts-node-dev watch). Bring it up explicitly via
-        # `KODUS_DEV_EXTRAS=analytics yarn docker:start` (or `=extras` for
+        # `KODUS_DEV_EXTRAS=analytics pnpm run docker:start` (or `=extras` for
         # all opt-in services).
         profiles:
             - analytics
@@ -173,7 +191,7 @@ services:
         volumes:
             - .:/usr/src/app:delegated
             - node_modules_cache:/usr/src/app/node_modules:nocopy
-            - yarn_cache:/yarn-cache
+            - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
             - yalc_store:/root/.yalc
         ports:
@@ -184,7 +202,7 @@ services:
             # publish metrics in parallel.
             - '${API_WORKER_ANALYTICS_DEBUG_PORT:-9241}:9241'
             - '${API_WORKER_ANALYTICS_METRICS_PORT:-8011}:8001'
-        command: yarn start:dev:worker
+        command: pnpm run start:dev:worker
         deploy:
             resources:
                 limits:
@@ -207,6 +225,10 @@ services:
             retries: 3
             start_period: 60s
         environment:
+            # pnpm 11 aborts a non-interactive node_modules purge (branch
+            # switch → manifest drift) without CI=true. Per-service blocks
+            # override the anchor's environment list, so it must be set here.
+            - CI=true
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             # V8 heap kept below the 1G container cap. 1536M heap on a
             # 1G cgroup let V8 grow past the limit and triggered silent
@@ -236,7 +258,7 @@ services:
         volumes:
             - .:/usr/src/app:delegated
             - node_modules_cache:/usr/src/app/node_modules:nocopy
-            - yarn_cache:/yarn-cache
+            - pnpm_store:/usr/src/app/.pnpm-store
             - logs_data:/usr/src/app/logs
             - yalc_store:/root/.yalc
         ports:
@@ -245,7 +267,7 @@ services:
             - '${API_WEBHOOKS_PORT:-3332}:${API_WEBHOOKS_PORT:-3332}'
             - '${API_WEBHOOKS_DEBUG_PORT:-9232}:9232'
             - '${API_WEBHOOKS_METRICS_PORT:-8002}:8002'
-        command: yarn start:dev:webhooks
+        command: pnpm run start:dev:webhooks
         deploy:
             resources:
                 limits:
@@ -261,6 +283,10 @@ services:
             retries: 3
             start_period: 60s
         environment:
+            # pnpm 11 aborts a non-interactive node_modules purge (branch
+            # switch → manifest drift) without CI=true. Per-service blocks
+            # override the anchor's environment list, so it must be set here.
+            - CI=true
             - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
             # V8 heap kept below the 1G container cap. 4096M heap on a
             # 1G cgroup let V8 grow past the limit and triggered silent
@@ -275,9 +301,9 @@ services:
         <<: *app-service-defaults
         image: kodus-ai-mcp-manager:latest
         container_name: kodus-mcp-manager
-        # Opt-in. Default `yarn docker:start` leaves this off — the web UI
+        # Opt-in. Default `pnpm run docker:start` leaves this off — the web UI
         # degrades gracefully (MCP setup/plugins pages show empty state).
-        # Bring it up via `KODUS_DEV_EXTRAS=mcp yarn docker:start` (or
+        # Bring it up via `KODUS_DEV_EXTRAS=mcp pnpm run docker:start` (or
         # `=extras` for all opt-in services).
         profiles:
             - mcp
@@ -291,7 +317,7 @@ services:
         # run inline before the dev server boots (see fix(mcp-manager):
         # isolate migration ownership from API entrypoint). The api
         # service's dev-entrypoint.sh no longer touches it.
-        command: sh -c 'yarn mcp-manager:ensure-schema && yarn mcp-manager:migration:run:internal && yarn start:dev:mcp-manager'
+        command: sh -c 'pnpm run mcp-manager:ensure-schema && pnpm run mcp-manager:migration:run:internal && pnpm run start:dev:mcp-manager'
         deploy:
             resources:
                 limits:
@@ -328,10 +354,8 @@ services:
             - API_MCP_MANAGER_JWT_SECRET=${API_MCP_MANAGER_JWT_SECRET:-}
             - API_MCP_MANAGER_ENCRYPTION_SECRET=${API_MCP_MANAGER_ENCRYPTION_SECRET:-}
             - API_MCP_MANAGER_PG_DB_SCHEMA=${API_MCP_MANAGER_PG_DB_SCHEMA:-mcp-manager}
-            - API_MCP_MANAGER_MCP_PROVIDERS=${API_MCP_MANAGER_MCP_PROVIDERS:-kodusmcp,composio,custom}
+            - API_MCP_MANAGER_MCP_PROVIDERS=${API_MCP_MANAGER_MCP_PROVIDERS:-kodusmcp,custom}
             - API_MCP_MANAGER_REDIRECT_URI=${API_MCP_MANAGER_REDIRECT_URI:-http://localhost:3000/setup/mcp/oauth}
-            - API_MCP_MANAGER_COMPOSIO_BASE_URL=${API_MCP_MANAGER_COMPOSIO_BASE_URL:-https://backend.composio.dev/api/v3}
-            - API_MCP_MANAGER_COMPOSIO_API_KEY=${API_MCP_MANAGER_COMPOSIO_API_KEY:-}
 
     #----------------------------------------------------------------
     # Web Frontend
@@ -347,7 +371,10 @@ services:
         ports:
             - '${WEB_PORT:-3000}:3000'
         env_file:
-            - ${ENV_FILE:-.env}
+            # See kodus-api: .env.local is the per-dev override layer.
+            - path: ${ENV_FILE:-.env}
+            - path: .env.local
+              required: false
         volumes:
             - ./apps/web:/usr/src/app:delegated
             # Mount shared monorepo libs at the location apps/web's
@@ -384,9 +411,70 @@ services:
         deploy:
             resources:
                 limits:
-                    memory: 2G
+                    memory: 4G
                 reservations:
                     memory: 512M
+        logging: *default-logging
+
+    try:
+        # Public PR review demo (try.kodus.io). Opt-in — the default
+        # `pnpm run docker:start` skips it because most backend flows don't
+        # need the marketing-facing surface running. Bring it up with
+        # `docker compose -f docker-compose.dev.yml --profile demo up try`
+        # or include it in the `extras` umbrella for everything-at-once.
+        profiles:
+            - demo
+            - extras
+        build:
+            context: ./apps/try
+            dockerfile: ../../docker/Dockerfile.try.dev
+        container_name: kodus_try
+        depends_on:
+            kodus-api:
+                condition: service_healthy
+        ports:
+            - '${TRY_PORT:-3002}:3002'
+        env_file:
+            # See kodus-api: .env.local is the per-dev override layer.
+            - path: ${ENV_FILE:-.env}
+            - path: .env.local
+              required: false
+        volumes:
+            - ./apps/try:/usr/src/app:delegated
+            - try_node_modules_cache:/usr/src/app/node_modules
+            - try_next_cache:/usr/src/app/.next
+        restart: unless-stopped
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://localhost:3002/health').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))",
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 30s
+        networks:
+            - kodus-backend-services
+            - shared-network
+        environment:
+            - CHOKIDAR_USEPOLLING=false
+            - NODE_ENV=development
+            - NEXT_TELEMETRY_DISABLED=1
+            # Inside the compose network the API is reachable as
+            # `kodus-api`, but the browser running outside the network
+            # hits the public host port instead. NEXT_PUBLIC_* is baked
+            # into the client bundle at build time / read in the browser,
+            # so the host-side URL is the correct choice.
+            - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        deploy:
+            resources:
+                limits:
+                    memory: 1G
+                reservations:
+                    memory: 256M
         logging: *default-logging
 
     #----------------------------------------------------------------
@@ -394,9 +482,9 @@ services:
     #----------------------------------------------------------------
     pyroscope:
         # `profiling` is the historic, explicit profile (activated by
-        # `ENABLE_PROFILING=true` or `yarn docker:start:profiling`).
+        # `ENABLE_PROFILING=true` or `pnpm run docker:start:profiling`).
         # `extras` is the new umbrella alongside mcp-manager and
-        # worker-analytics — `yarn docker:start:full` brings everything
+        # worker-analytics — `pnpm run docker:start:full` brings everything
         # up in one command.
         profiles:
             - profiling
@@ -512,10 +600,12 @@ services:
 volumes:
     yalc_store:
     node_modules_cache:
-    yarn_cache:
+    pnpm_store:
     logs_data:
     web_node_modules_cache:
     web_next_cache:
+    try_node_modules_cache:
+    try_next_cache:
     pgdata:
     mongodbdata:
     pyroscope-data:

@@ -70,6 +70,26 @@ export async function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * A SETTLE is a fixed wall-clock wait for real infrastructure to converge —
+ * a worker still rolling out, a team_automation row not yet committed. Unlike
+ * a poll there is nothing to re-check: the wait itself is the mechanism.
+ *
+ * Against a mock there is no worker and nothing to settle, so the wait is pure
+ * dead time. It is not free: the hermetic suite (which drives the real runner
+ * over mock servers) spent ~4 of its 5min budget asleep in these, timing the
+ * job out — reported as "cancelled", which read as noise rather than red, and
+ * left main broken from 2026-07-14.
+ *
+ * E2E_SETTLE_OVERRIDE_SEC collapses them, mirroring the existing
+ * E2E_POLL_*_OVERRIDE_SEC knobs that pollUntil honours. Production sets
+ * nothing and keeps the real delay.
+ */
+export async function settle(ms: number): Promise<void> {
+    const override = process.env.E2E_SETTLE_OVERRIDE_SEC;
+    return sleep(override === undefined ? ms : Number(override) * 1000);
+}
+
 export interface PollOptions {
     timeoutSec: number;
     intervalSec: number;

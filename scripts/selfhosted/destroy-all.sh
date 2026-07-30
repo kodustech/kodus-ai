@@ -5,8 +5,8 @@
 # you don't leave 4 droplets billing on DigitalOcean.
 #
 # Usage:
-#   yarn selfhosted:destroy-all          # prompts once, then destroys all
-#   yarn selfhosted:destroy-all -y       # no prompt
+#   pnpm run selfhosted:destroy-all          # prompts once, then destroys all
+#   pnpm run selfhosted:destroy-all -y       # no prompt
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

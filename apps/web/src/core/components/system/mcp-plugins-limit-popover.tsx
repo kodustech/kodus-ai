@@ -1,7 +1,10 @@
-import { Button } from "@components/ui/button";
-import { Link } from "@components/ui/link";
+"use client";
+
 import { Popover, PopoverContent } from "@components/ui/popover";
-import { ArrowRightIcon } from "lucide-react";
+import { captureGateHit } from "src/core/utils/gate-hit";
+import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
+
+import { GateCtaLink } from "./gate-cta-link";
 
 export const MCPPluginsLimitPopover = ({
     children,
@@ -10,8 +13,18 @@ export const MCPPluginsLimitPopover = ({
     limit: number;
     children: React.ReactNode;
 }) => {
+    const subscription = useSubscriptionStatus();
+
     return (
-        <Popover>
+        <Popover
+            onOpenChange={(open) => {
+                if (open)
+                    captureGateHit({
+                        feature: "mcp_plugins",
+                        plan: subscription.status,
+                        metadata: { surface: "install_limit_popover", limit },
+                    });
+            }}>
             {children}
 
             <PopoverContent
@@ -20,30 +33,29 @@ export const MCPPluginsLimitPopover = ({
                 collisionPadding={32}
                 className="flex flex-col gap-3 text-sm">
                 <p>
-                    You have reached the limit of{" "}
+                    The Free plan runs{" "}
                     <span className="text-primary-light font-semibold">
-                        {limit}
+                        {limit} plugins
                     </span>{" "}
-                    MCP Plugins for your current subscription plan.
+                    at a time — this one would stay locked.
                 </p>
 
                 <p>
-                    Upgrade to{" "}
+                    Teams runs{" "}
                     <span className="text-primary-light font-semibold">
-                        unlock unlimited MCP Plugins
-                    </span>
-                    .
+                        unlimited plugins
+                    </span>{" "}
+                    across all your repos, plus unlimited Kody Rules and the
+                    Cockpit engineering metrics.
                 </p>
 
-                <Link href="/settings/subscription" className="mt-2 self-end">
-                    <Button
-                        decorative
-                        size="xs"
-                        variant="primary"
-                        rightIcon={<ArrowRightIcon />}>
-                        Upgrade plan
-                    </Button>
-                </Link>
+                <GateCtaLink
+                    feature="mcp_plugins"
+                    plan={subscription.status}
+                    metadata={{ surface: "install_limit_popover", limit }}
+                    size="xs"
+                    className="mt-2 self-end"
+                />
             </PopoverContent>
         </Popover>
     );

@@ -7,7 +7,7 @@
 #
 # Trade-off: zero credentials, but URL is random under *.trycloudflare.com
 # and changes whenever cloudflared restarts. For a stable URL on your own
-# domain (e.g. kodus.io) use `yarn selfhosted:dns-setup-named` instead —
+# domain (e.g. kodus.io) use `pnpm run selfhosted:dns-setup-named` instead —
 # that one needs a Cloudflare API token (one-time setup).
 #
 # What it does on the droplet:
@@ -17,8 +17,8 @@
 #   4. Restarts kodus-{web,api,webhooks,worker} so they pick up new envs
 #
 # Usage:
-#   yarn selfhosted:dns-setup
-#   yarn selfhosted:dns-setup --name wellington
+#   pnpm run selfhosted:dns-setup
+#   pnpm run selfhosted:dns-setup --name wellington
 
 set -euo pipefail
 
@@ -42,7 +42,7 @@ while [ $# -gt 0 ]; do
 done
 
 NAME=$(normalize_name "$NAME_RAW")
-state_exists "$NAME" || { err "No selfhosted instance named '$NAME'. Run 'yarn selfhosted:provision' first."; exit 1; }
+state_exists "$NAME" || { err "No selfhosted instance named '$NAME'. Run 'pnpm run selfhosted:provision' first."; exit 1; }
 SERVER_IP=$(state_get "$NAME" .server_ip)
 
 # ---------- 1. Install + start kodus-web-tunnel.service ----------
@@ -144,4 +144,4 @@ echo ""
 warn "URL is random and changes whenever the cloudflared service restarts."
 warn "Sessions tied to http://${SERVER_IP}:3000 are gone — relog."
 warn "If you want a stable URL under your own domain, use:"
-warn "   yarn selfhosted:dns-setup-named --token ... --account-id ... --zone-id ..."
+warn "   pnpm run selfhosted:dns-setup-named --token ... --account-id ... --zone-id ..."

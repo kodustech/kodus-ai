@@ -21,6 +21,7 @@ import {
 } from "@components/ui/select";
 import { toast } from "@components/ui/toaster/use-toast";
 import { UserRole, UserStatus } from "@enums";
+import { roleUsesRepoAssignment } from "@libs/identity/domain/permissions/policies/role-policies";
 import { useGetSelectedRepositories } from "@services/codeManagement/hooks";
 import { getAssignedRepos } from "@services/permissions/fetch";
 import { usePermission } from "@services/permissions/hooks";
@@ -216,10 +217,10 @@ export const columns: ColumnDef<MembersSetup>[] = [
                 return <span className="font-medium">{role}</span>;
             }
 
-            const shouldShowButton = [
-                UserRole.CONTRIBUTOR,
-                UserRole.REPO_ADMIN,
-            ].includes(rowRole);
+            // Only show the chip for roles where assignment actually gates
+            // something (repo-scoped grants in ROLE_POLICIES) — for the rest
+            // (e.g. read-only org-wide Contributor) it would be a no-op.
+            const shouldShowButton = roleUsesRepoAssignment(rowRole);
 
             const updateRoleAction = async (newRole: UserRole) => {
                 try {

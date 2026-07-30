@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 /**
  * @license
  * Kodus Tech. All rights reserved.

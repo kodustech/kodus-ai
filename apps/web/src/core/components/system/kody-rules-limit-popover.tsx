@@ -1,7 +1,10 @@
-import { Button } from "@components/ui/button";
-import { Link } from "@components/ui/link";
+"use client";
+
 import { Popover, PopoverContent } from "@components/ui/popover";
-import { ArrowRightIcon } from "lucide-react";
+import { captureGateHit } from "src/core/utils/gate-hit";
+import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
+
+import { GateCtaLink } from "./gate-cta-link";
 
 export const KodyRulesLimitPopover = ({
     children,
@@ -10,8 +13,18 @@ export const KodyRulesLimitPopover = ({
     limit: number;
     children: React.ReactNode;
 }) => {
+    const subscription = useSubscriptionStatus();
+
     return (
-        <Popover>
+        <Popover
+            onOpenChange={(open) => {
+                if (open)
+                    captureGateHit({
+                        feature: "kody_rules",
+                        plan: subscription.status,
+                        metadata: { surface: "limit_popover", limit },
+                    });
+            }}>
             {children}
 
             <PopoverContent
@@ -20,30 +33,29 @@ export const KodyRulesLimitPopover = ({
                 collisionPadding={32}
                 className="flex flex-col gap-3 text-sm">
                 <p>
-                    You have reached the limit of{" "}
+                    You've hit the Free plan cap of{" "}
                     <span className="text-primary-light font-semibold">
-                        {limit}
-                    </span>{" "}
-                    Kody Rules for your current subscription plan.
-                </p>
-
-                <p>
-                    Upgrade to{" "}
-                    <span className="text-primary-light font-semibold">
-                        unlock unlimited Kody Rules
+                        {limit} Kody Rules
                     </span>
                     .
                 </p>
 
-                <Link href="/settings/subscription" className="mt-2 self-end">
-                    <Button
-                        decorative
-                        size="xs"
-                        variant="primary"
-                        rightIcon={<ArrowRightIcon />}>
-                        Upgrade plan
-                    </Button>
-                </Link>
+                <p>
+                    Teams unlocks{" "}
+                    <span className="text-primary-light font-semibold">
+                        unlimited rules across all your repos
+                    </span>
+                    , plus unlimited plugins and the Cockpit engineering
+                    metrics.
+                </p>
+
+                <GateCtaLink
+                    feature="kody_rules"
+                    plan={subscription.status}
+                    metadata={{ surface: "limit_popover", limit }}
+                    size="xs"
+                    className="mt-2 self-end"
+                />
             </PopoverContent>
         </Popover>
     );

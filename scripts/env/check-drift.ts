@@ -1,6 +1,6 @@
 /**
  * CI guard: regenerate from schema and fail if any committed target file
- * has drifted. Run with `yarn env:check`.
+ * has drifted. Run with `pnpm run env:check`.
  */
 
 import { execSync } from 'node:child_process';
@@ -29,6 +29,11 @@ const targets: Target[] = [
         name: 'kodus-ai/.env.example',
         generated: join(REPO_ROOT, '.env-preview', 'kodus-ai.env.example'),
         committed: join(REPO_ROOT, '.env.example'),
+    },
+    {
+        name: 'kodus-ai/.env.template',
+        generated: join(REPO_ROOT, '.env-preview', 'kodus-ai.env.template'),
+        committed: join(REPO_ROOT, '.env.template'),
     },
     {
         name: 'docs/_snippets/env-vars-generated.mdx',
@@ -61,7 +66,7 @@ for (const t of targets) {
 
 if (drifted > 0) {
     console.error(
-        `\n${drifted} target(s) drifted from .env.schema. Run \`yarn env:apply\` and commit.`,
+        `\n${drifted} target(s) drifted from .env.schema. Run \`pnpm run env:apply\` and commit.`,
     );
     process.exit(1);
 }

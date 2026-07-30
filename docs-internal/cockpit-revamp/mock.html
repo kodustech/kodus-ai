@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cockpit — Kodus Review (mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+    :root {
+        --card-lv1: #181825;
+        --card-lv2: #202032;
+        --card-lv3: #30304b;
+        --text-primary: #ffffff;
+        --text-secondary: #cdcddf;
+        --text-tertiary: #f3f3f780;
+        --primary-light: #f8b76d;
+        --primary-dark: #443024;
+        --secondary-light: #c9bbf2;
+        --secondary-dark: #312b4b;
+        --success: #42be65;
+        --info: #5190ff;
+        --alert: #f2c631;
+        --warning: #ff8b40;
+        --danger: #fa5867;
+        --background: #101019;
+        --brand-purple: #6a57a4;
+        --radius-lg: 8px;
+        --radius-md: 6px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: "DM Sans", sans-serif; }
+    code, .mono { font-family: "Overpass Mono", monospace; }
+
+    body {
+        background: var(--background);
+        color: var(--text-primary);
+        min-height: 100vh;
+        padding: 28px 36px 80px;
+    }
+
+    .page { max-width: 1240px; margin: 0 auto; }
+
+    /* ---------- header ---------- */
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    .page-header h1 { font-size: 22px; font-weight: 700; }
+    .page-header .filters { display: flex; gap: 10px; }
+    .select-mock {
+        background: var(--card-lv2);
+        border: 1px solid var(--card-lv3);
+        border-radius: var(--radius-md);
+        color: var(--text-secondary);
+        font-size: 13px;
+        padding: 8px 14px;
+        display: flex; align-items: center; gap: 8px;
+        cursor: default;
+    }
+    .select-mock::after { content: "▾"; font-size: 10px; opacity: .6; }
+
+    /* ---------- cards ---------- */
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 26px; }
+    .card {
+        background: var(--card-lv1);
+        border: 1px solid var(--card-lv3);
+        border-radius: var(--radius-lg);
+        padding: 18px 20px;
+    }
+    .card .label { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+    .card .value { font-size: 30px; font-weight: 700; line-height: 1; display: flex; align-items: baseline; gap: 10px; }
+    .card .delta { font-size: 13px; font-weight: 600; }
+    .delta.up { color: var(--success); }
+    .delta.down { color: var(--success); } /* fewer 👎 is good */
+    .delta.bad { color: var(--danger); }
+    .card .sub { font-size: 12px; color: var(--text-tertiary); margin-top: 8px; }
+
+    .card.risk { border-color: #fa586755; background: linear-gradient(180deg, #fa58670d, transparent); cursor: pointer; transition: border-color .15s; }
+    .card.risk:hover { border-color: #fa5867aa; }
+    .card.risk .value { color: var(--danger); }
+
+    /* ---------- tabs ---------- */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--card-lv3); margin-bottom: 24px; }
+    .tab {
+        background: none; border: none; color: var(--text-tertiary);
+        font-size: 14px; font-weight: 600; padding: 10px 18px 12px;
+        cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .tab.active { color: var(--primary-light); border-bottom-color: var(--primary-light); }
+    .tab:hover:not(.active) { color: var(--text-secondary); }
+
+    /* ---------- chart sections ---------- */
+    .section {
+        background: var(--card-lv1);
+        border: 1px solid var(--card-lv3);
+        border-radius: var(--radius-lg);
+        padding: 20px 22px;
+        margin-bottom: 16px;
+    }
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .section-head h2 { font-size: 15px; font-weight: 600; }
+    .section-head .hint { font-size: 12px; color: var(--text-tertiary); margin-top: 3px; font-weight: 400; }
+
+    .pills { display: flex; background: var(--card-lv2); border-radius: 999px; padding: 3px; gap: 2px; }
+    .pill {
+        border: none; background: none; color: var(--text-tertiary);
+        font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+    }
+    .pill.active { background: var(--card-lv3); color: var(--text-primary); }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .chart-wrap { position: relative; height: 260px; }
+    .chart-wrap.tall { height: 300px; }
+
+    /* ---------- rules table ---------- */
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead th {
+        text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em;
+        color: var(--text-tertiary); font-weight: 600; padding: 10px 12px;
+        border-bottom: 1px solid var(--card-lv3); cursor: pointer; user-select: none; white-space: nowrap;
+    }
+    thead th:hover { color: var(--text-secondary); }
+    tbody td { padding: 12px; border-bottom: 1px solid #30304b66; color: var(--text-secondary); }
+    tbody tr { cursor: pointer; transition: background .1s; }
+    tbody tr:hover { background: var(--card-lv2); }
+    td.rule-name { color: var(--text-primary); font-weight: 500; max-width: 360px; }
+    td.num { font-family: "Overpass Mono", monospace; font-size: 13px; }
+
+    .implbar { display: flex; align-items: center; gap: 10px; min-width: 140px; }
+    .implbar .track { flex: 1; height: 6px; background: var(--card-lv3); border-radius: 3px; overflow: hidden; }
+    .implbar .fill { height: 100%; border-radius: 3px; }
+
+    .badge {
+        font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+    }
+    .badge.healthy { background: #42be6522; color: var(--success); }
+    .badge.noisy { background: #fa586722; color: var(--danger); }
+    .badge.ignored { background: #ff8b4022; color: var(--warning); }
+    .badge.stale { background: #cdcddf1a; color: var(--text-tertiary); }
+
+    .filter-chips { display: flex; gap: 8px; }
+    .chip {
+        font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px;
+        background: var(--card-lv2); border: 1px solid var(--card-lv3); color: var(--text-secondary); cursor: pointer;
+    }
+    .chip.active { border-color: var(--primary-light); color: var(--primary-light); background: #f8b76d14; }
+
+    .reactions { white-space: nowrap; font-size: 13px; }
+    .reactions .down { color: var(--danger); margin-left: 8px; }
+    .reactions .up { color: var(--success); }
+
+    /* ---------- drawer ---------- */
+    .drawer-overlay {
+        position: fixed; inset: 0; background: #0008; opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 40;
+    }
+    .drawer {
+        position: fixed; top: 0; right: -560px; width: 540px; height: 100vh;
+        background: var(--card-lv1); border-left: 1px solid var(--card-lv3);
+        z-index: 50; transition: right .25s ease; display: flex; flex-direction: column;
+    }
+    body.drawer-open .drawer { right: 0; }
+    body.drawer-open .drawer-overlay { opacity: 1; pointer-events: auto; }
+
+    .drawer-head { padding: 20px 24px; border-bottom: 1px solid var(--card-lv3); display: flex; justify-content: space-between; align-items: flex-start; }
+    .drawer-head h3 { font-size: 16px; font-weight: 700; }
+    .drawer-head .sub { font-size: 12.5px; color: var(--text-tertiary); margin-top: 4px; }
+    .drawer-close { background: var(--card-lv2); border: 1px solid var(--card-lv3); color: var(--text-secondary); border-radius: var(--radius-md); width: 30px; height: 30px; cursor: pointer; font-size: 14px; }
+    .drawer-body { overflow-y: auto; padding: 16px 24px; flex: 1; }
+
+    .sugg {
+        background: var(--card-lv2); border: 1px solid var(--card-lv3); border-radius: var(--radius-lg);
+        padding: 14px 16px; margin-bottom: 12px;
+    }
+    .sugg .top { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+    .sev { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; }
+    .sev.critical { background: #fa586722; color: var(--danger); }
+    .sev.high { background: #ff8b4022; color: var(--warning); }
+    .sev.medium { background: #f2c63122; color: var(--alert); }
+    .sev.low { background: #5190ff22; color: var(--info); }
+    .status { font-size: 11px; font-weight: 600; }
+    .status.impl { color: var(--success); }
+    .status.notimpl { color: var(--text-tertiary); }
+    .sugg .title { font-size: 13.5px; color: var(--text-primary); line-height: 1.45; margin-bottom: 8px; }
+    .sugg .meta { font-size: 12px; color: var(--text-tertiary); display: flex; justify-content: space-between; align-items: center; }
+    .sugg .meta a { color: var(--primary-light); text-decoration: none; font-weight: 600; }
+    .sugg .meta .file { font-family: "Overpass Mono", monospace; font-size: 11px; }
+    .sugg .react { font-size: 12px; }
+
+    /* productivity placeholder */
+    .placeholder {
+        border: 1px dashed var(--card-lv3); border-radius: var(--radius-lg);
+        padding: 60px; text-align: center; color: var(--text-tertiary); font-size: 14px;
+    }
+
+    .legend-note { font-size: 12px; color: var(--text-tertiary); margin-top: 14px; line-height: 1.6; }
+    .legend-note b { color: var(--text-secondary); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="page">
+
+    <header class="page-header">
+        <h1>Cockpit</h1>
+        <div class="filters">
+            <div class="select-mock">Last 90 days</div>
+            <div class="select-mock">All repositories</div>
+        </div>
+    </header>
+
+    <!-- ============ TABS ============ -->
+    <div class="tabs">
+        <button class="tab active" data-tab="review" onclick="switchTab('review')">Kodus Review</button>
+        <button class="tab" data-tab="productivity" onclick="switchTab('productivity')">Productivity</button>
+    </div>
+
+    <!-- ============ CARDS (per tab) ============ -->
+    <div class="cards" id="cards-review">
+        <div class="card">
+            <div class="label">Implementation rate</div>
+            <div class="value">42% <span class="delta up">▲ 5pp</span></div>
+            <div class="sub">134 of 318 suggestions implemented</div>
+        </div>
+        <div class="card">
+            <div class="label">Suggestions sent</div>
+            <div class="value">318 <span class="delta up">▲ 12%</span></div>
+            <div class="sub">across 87 reviewed pull requests</div>
+        </div>
+        <div class="card">
+            <div class="label">Negative vote rate</div>
+            <div class="value">8% <span class="delta down">▼ 2pp</span></div>
+            <div class="sub">26 👎 · 61 👍 in this period</div>
+        </div>
+        <div class="card risk" onclick="openDrawer('criticals')">
+            <div class="label">⚠️ Criticals ignored in merged PRs</div>
+            <div class="value">12</div>
+            <div class="sub">critical suggestions left unimplemented that reached main →</div>
+        </div>
+    </div>
+
+    <div class="cards" id="cards-productivity" style="display:none">
+        <div class="card">
+            <div class="label">PRs merged</div>
+            <div class="value">87 <span class="delta up">▲ 9%</span></div>
+            <div class="sub">vs. previous period</div>
+        </div>
+        <div class="card">
+            <div class="label">Lead time (p75)</div>
+            <div class="value">2.1d <span class="delta up">▼ 0.4d</span></div>
+            <div class="sub">open → merged</div>
+        </div>
+        <div class="card">
+            <div class="label">Deploy frequency</div>
+            <div class="value">14<span style="font-size:16px;color:var(--text-tertiary)">/week</span></div>
+            <div class="sub">closed PRs per week</div>
+        </div>
+        <div class="card">
+            <div class="label">Avg. PR size</div>
+            <div class="value">412 <span class="delta bad">▲ 18%</span></div>
+            <div class="sub">lines changed per PR</div>
+        </div>
+    </div>
+
+    <!-- ============ TAB: KODUS REVIEW ============ -->
+    <div id="tab-review">
+
+        <!-- weekly impl rate -->
+        <div class="section">
+            <div class="section-head">
+                <div>
+                    <h2>Implementation rate — week over week</h2>
+                    <div class="hint">% of sent suggestions the team implemented</div>
+                </div>
+                <div class="pills">
+                    <button class="pill active" data-series="overall" onclick="switchSeries('overall')">Overall</button>
+                    <button class="pill" data-series="severity" onclick="switchSeries('severity')">By severity</button>
+                </div>
+            </div>
+            <div class="chart-wrap tall"><canvas id="weeklyChart"></canvas></div>
+        </div>
+
+        <!-- category + severity -->
+        <div class="two-col">
+            <div class="section">
+                <div class="section-head">
+                    <div>
+                        <h2>Implementation rate by category</h2>
+                        <div class="hint">sent vs. implemented · click a bar to drill down</div>
+                    </div>
+                </div>
+                <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+            </div>
+            <div class="section">
+                <div class="section-head">
+                    <div>
+                        <h2>Implementation rate by severity</h2>
+                        <div class="hint">expected: descending gradient (critical &gt; low)</div>
+                    </div>
+                </div>
+                <div class="chart-wrap"><canvas id="severityChart"></canvas></div>
+                <div class="legend-note">
+                    <b>How to read:</b> if these bars look flat, severity isn't guiding the team —
+                    consider raising the review's minimum severity to cut noise.
+                </div>
+            </div>
+        </div>
+
+        <!-- negative feedback -->
+        <div class="two-col">
+            <div class="section">
+                <div class="section-head">
+                    <div>
+                        <h2>👎 by category</h2>
+                        <div class="hint">where the team disagrees with Kodus · click to drill down</div>
+                    </div>
+                </div>
+                <div class="chart-wrap"><canvas id="downvoteCatChart"></canvas></div>
+            </div>
+            <div class="section">
+                <div class="section-head">
+                    <div>
+                        <h2>👎 week over week</h2>
+                        <div class="hint">negative feedback trend</div>
+                    </div>
+                </div>
+                <div class="chart-wrap"><canvas id="downvoteTrendChart"></canvas></div>
+            </div>
+        </div>
+
+        <!-- kody rules -->
+        <div class="section">
+            <div class="section-head">
+                <div>
+                    <h2>Kody Rules — health</h2>
+                    <div class="hint">how each rule is performing · click a row to drill down</div>
+                </div>
+                <div class="filter-chips" id="ruleChips">
+                    <button class="chip active" data-state="all" onclick="filterRules('all')">All</button>
+                    <button class="chip" data-state="healthy" onclick="filterRules('healthy')">Healthy</button>
+                    <button class="chip" data-state="noisy" onclick="filterRules('noisy')">Noisy</button>
+                    <button class="chip" data-state="ignored" onclick="filterRules('ignored')">Ignored</button>
+                    <button class="chip" data-state="stale" onclick="filterRules('stale')">Stale</button>
+                </div>
+            </div>
+            <table id="rulesTable">
+                <thead>
+                    <tr>
+                        <th onclick="sortRules('name')">Rule</th>
+                        <th onclick="sortRules('triggers')">Triggers</th>
+                        <th onclick="sortRules('impl')">Impl. rate</th>
+                        <th onclick="sortRules('votes')">👍 / 👎</th>
+                        <th onclick="sortRules('state')">Status</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <div class="legend-note">
+                <b>Healthy</b> = good triggers + impl rate &nbsp;·&nbsp;
+                <b>Noisy</b> = high 👎 &nbsp;·&nbsp;
+                <b>Ignored</b> = triggers a lot but nobody implements &nbsp;·&nbsp;
+                <b>Stale</b> = no triggers in the last 8 weeks
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ============ TAB: PRODUCTIVITY ============ -->
+    <div id="tab-productivity" style="display:none">
+        <div class="placeholder">
+            Productivity tab — keeps today's charts<br />
+            (deploy frequency, lead time, PR size, PRs by developer, opened vs closed…)
+        </div>
+    </div>
+
+</div>
+
+<!-- ============ DRAWER ============ -->
+<div class="drawer-overlay" onclick="closeDrawer()"></div>
+<aside class="drawer">
+    <div class="drawer-head">
+        <div>
+            <h3 id="drawerTitle">Suggestions</h3>
+            <div class="sub" id="drawerSub"></div>
+        </div>
+        <button class="drawer-close" onclick="closeDrawer()">✕</button>
+    </div>
+    <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<script>
+/* ============================== mock data ============================== */
+const weeks = ['Mar 9','Mar 16','Mar 23','Mar 30','Apr 6','Apr 13','Apr 20','Apr 27','May 4','May 11','May 18','May 25'];
+
+const implOverall = [31, 33, 35, 32, 38, 40, 37, 41, 43, 40, 44, 42];
+const implBySeverity = {
+    critical: [52, 55, 58, 54, 61, 64, 60, 66, 68, 65, 70, 68],
+    high:     [40, 42, 45, 41, 47, 50, 46, 50, 52, 49, 53, 51],
+    medium:   [26, 28, 30, 27, 32, 34, 31, 34, 36, 33, 36, 34],
+    low:      [12, 13, 14, 12, 15, 16, 14, 16, 17, 15, 17, 15],
+};
+
+const categories = ['Security', 'Potential Issues', 'Error Handling', 'Performance', 'Maintainability', 'Refactoring', 'Code Style', 'Documentation'];
+const catSent = [48, 72, 55, 40, 38, 30, 25, 10];
+const catImpl = [31, 38, 24, 16, 11, 7, 4, 1];
+
+const severities = ['Critical', 'High', 'Medium', 'Low'];
+const sevRate = [68, 51, 34, 15];
+const sevColors = ['#fa5867', '#ff8b40', '#f2c631', '#5190ff'];
+
+const downvotesByCat = [2, 5, 4, 6, 9, 14, 19, 3];
+const downvoteTrend = [8, 10, 12, 9, 14, 11, 9, 7, 8, 6, 7, 5];
+
+const rules = [
+    { name: 'Use parameterized queries for all DB access', triggers: 42, impl: 71, up: 12, down: 1, state: 'healthy' },
+    { name: 'Require error handling in async flows', triggers: 56, impl: 52, up: 9, down: 2, state: 'healthy' },
+    { name: 'Enforce DTO validation on controllers', triggers: 31, impl: 58, up: 6, down: 0, state: 'healthy' },
+    { name: 'Migrations must be reversible (down method)', triggers: 12, impl: 83, up: 4, down: 0, state: 'healthy' },
+    { name: 'Avoid N+1 queries in repositories', triggers: 24, impl: 46, up: 5, down: 1, state: 'healthy' },
+    { name: 'Avoid `any` in TypeScript', triggers: 87, impl: 18, up: 2, down: 14, state: 'noisy' },
+    { name: 'Frontend: no inline styles', triggers: 41, impl: 12, up: 1, down: 11, state: 'noisy' },
+    { name: 'No console.log in production code', triggers: 64, impl: 22, up: 3, down: 3, state: 'ignored' },
+    { name: 'Domain services must not import infra layer', triggers: 38, impl: 19, up: 2, down: 2, state: 'ignored' },
+    { name: 'Use BEM naming for CSS classes', triggers: 0, impl: 0, up: 0, down: 0, state: 'stale' },
+    { name: 'Prefer composition over inheritance', triggers: 1, impl: 0, up: 0, down: 0, state: 'stale' },
+];
+
+const mockSuggestions = {
+    criticals: {
+        title: 'Criticals ignored in merged PRs',
+        sub: '12 critical suggestions left unimplemented · last 90 days',
+        items: [
+            { sev: 'critical', status: 'notimpl', title: 'SQL injection: `orgId` interpolated directly into the query — use a bind parameter.', file: 'libs/analytics/query-builder.ts', pr: '#1241', up: 1, down: 0 },
+            { sev: 'critical', status: 'notimpl', title: 'Webhook token logged in plain text inside the error handler.', file: 'apps/api/src/webhooks/github.controller.ts', pr: '#1238', up: 0, down: 0 },
+            { sev: 'critical', status: 'notimpl', title: 'Race condition: counter read and written without a lock — may double-charge billing.', file: 'libs/billing/usage-counter.service.ts', pr: '#1226', up: 2, down: 0 },
+            { sev: 'critical', status: 'notimpl', title: 'Missing permission check: endpoint trusts `organizationId` from the body without validating the JWT.', file: 'apps/api/src/controllers/rules.controller.ts', pr: '#1219', up: 1, down: 1 },
+        ],
+    },
+    category: {
+        title: 'Suggestions — Code Style',
+        sub: '25 sent · 4 implemented (16%) · 19 👎',
+        items: [
+            { sev: 'low', status: 'notimpl', title: 'Rename `data` to something more descriptive like `pullRequestPayload`.', file: 'libs/platformData/mappers/pr.mapper.ts', pr: '#1244', up: 0, down: 3 },
+            { sev: 'low', status: 'notimpl', title: 'Prefer early return over nested else blocks.', file: 'apps/api/src/controllers/cockpit.controller.ts', pr: '#1240', up: 0, down: 2 },
+            { sev: 'medium', status: 'impl', title: 'Extract the magic constant `86400` into `SECONDS_IN_DAY`.', file: 'libs/cockpit/services/period.helper.ts', pr: '#1233', up: 1, down: 0 },
+            { sev: 'low', status: 'notimpl', title: 'Sort imports by group (external, internal, relative).', file: 'libs/kodyRules/service.ts', pr: '#1230', up: 0, down: 4 },
+        ],
+    },
+    rule: {
+        title: 'Rule — Avoid `any` in TypeScript',
+        sub: '87 triggers · 18% impl · 14 👎 — candidate for review or deactivation',
+        items: [
+            { sev: 'medium', status: 'notimpl', title: '`as any` used to bypass the TypeORM type — declare an interface for the raw result.', file: 'libs/analytics/repositories/suggestions.repo.ts', pr: '#1242', up: 0, down: 3 },
+            { sev: 'medium', status: 'notimpl', title: 'Parameter `payload: any` — type it with the webhook DTO.', file: 'apps/api/src/webhooks/gitlab.controller.ts', pr: '#1239', up: 0, down: 2 },
+            { sev: 'medium', status: 'impl', title: 'Return type `Promise<any>` — use the already-exported `ReviewResult` type.', file: 'libs/code-review/pipeline/stages/finish.stage.ts', pr: '#1235', up: 1, down: 0 },
+            { sev: 'low', status: 'notimpl', title: '`catch (e: any)` — use `unknown` and narrow the type.', file: 'libs/billing/stripe.service.ts', pr: '#1228', up: 0, down: 1 },
+        ],
+    },
+};
+
+/* ============================== chart setup ============================== */
+Chart.defaults.font.family = '"DM Sans", sans-serif';
+Chart.defaults.color = '#cdcddf';
+Chart.defaults.borderColor = '#30304b66';
+
+const gridOpts = { color: '#30304b66' };
+const pctTicks = { callback: v => v + '%' };
+
+/* --- weekly line chart (toggle overall / severity) --- */
+const weeklyCtx = document.getElementById('weeklyChart');
+const weeklyChart = new Chart(weeklyCtx, {
+    type: 'line',
+    data: {
+        labels: weeks,
+        datasets: [{
+            label: 'Implementation rate',
+            data: implOverall,
+            borderColor: '#f8b76d',
+            backgroundColor: '#f8b76d22',
+            fill: true,
+            tension: 0.35,
+            pointRadius: 3,
+            pointBackgroundColor: '#f8b76d',
+        }],
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { min: 0, max: 80, ticks: pctTicks, grid: gridOpts },
+            x: { grid: { display: false } },
+        },
+    },
+});
+
+function switchSeries(mode) {
+    document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.dataset.series === mode));
+    if (mode === 'overall') {
+        weeklyChart.data.datasets = [{
+            label: 'Implementation rate', data: implOverall,
+            borderColor: '#f8b76d', backgroundColor: '#f8b76d22', fill: true,
+            tension: 0.35, pointRadius: 3, pointBackgroundColor: '#f8b76d',
+        }];
+        weeklyChart.options.plugins.legend.display = false;
+    } else {
+        const colors = { critical: '#fa5867', high: '#ff8b40', medium: '#f2c631', low: '#5190ff' };
+        weeklyChart.data.datasets = Object.entries(implBySeverity).map(([sev, data]) => ({
+            label: sev, data,
+            borderColor: colors[sev], backgroundColor: 'transparent',
+            tension: 0.35, pointRadius: 2, pointBackgroundColor: colors[sev],
+        }));
+        weeklyChart.options.plugins.legend = { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true } };
+    }
+    weeklyChart.update();
+}
+
+/* --- category horizontal bars --- */
+new Chart(document.getElementById('categoryChart'), {
+    type: 'bar',
+    data: {
+        labels: categories,
+        datasets: [
+            { label: 'Implemented', data: catImpl, backgroundColor: '#6a57a4', borderRadius: 3, barPercentage: 0.7 },
+            { label: 'Sent', data: catSent.map((s, i) => s - catImpl[i]), backgroundColor: '#30304b', borderRadius: 3, barPercentage: 0.7 },
+        ],
+    },
+    options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        onClick: () => openDrawer('category'),
+        plugins: {
+            legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true } },
+            tooltip: {
+                callbacks: {
+                    afterTitle: items => {
+                        const i = items[0].dataIndex;
+                        return `${Math.round(catImpl[i] / catSent[i] * 100)}% implemented`;
+                    },
+                },
+            },
+        },
+        scales: {
+            x: { stacked: true, grid: gridOpts },
+            y: { stacked: true, grid: { display: false } },
+        },
+    },
+});
+
+/* --- severity bars --- */
+new Chart(document.getElementById('severityChart'), {
+    type: 'bar',
+    data: {
+        labels: severities,
+        datasets: [{ data: sevRate, backgroundColor: sevColors.map(c => c + 'cc'), borderRadius: 4, barPercentage: 0.55 }],
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.y + '% implemented' } } },
+        scales: {
+            y: { min: 0, max: 100, ticks: pctTicks, grid: gridOpts },
+            x: { grid: { display: false } },
+        },
+    },
+});
+
+/* --- downvotes by category --- */
+new Chart(document.getElementById('downvoteCatChart'), {
+    type: 'bar',
+    data: {
+        labels: categories,
+        datasets: [{ data: downvotesByCat, backgroundColor: '#fa5867bb', borderRadius: 3, barPercentage: 0.6 }],
+    },
+    options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        onClick: () => openDrawer('category'),
+        plugins: { legend: { display: false } },
+        scales: { x: { grid: gridOpts, ticks: { precision: 0 } }, y: { grid: { display: false } } },
+    },
+});
+
+/* --- downvote trend --- */
+new Chart(document.getElementById('downvoteTrendChart'), {
+    type: 'line',
+    data: {
+        labels: weeks,
+        datasets: [{
+            data: downvoteTrend,
+            borderColor: '#fa5867', backgroundColor: '#fa586718', fill: true,
+            tension: 0.35, pointRadius: 3, pointBackgroundColor: '#fa5867',
+        }],
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            y: { min: 0, grid: gridOpts, ticks: { precision: 0 } },
+            x: { grid: { display: false } },
+        },
+    },
+});
+
+/* ============================== rules table ============================== */
+const stateMeta = {
+    healthy: { label: 'Healthy', cls: 'healthy' },
+    noisy: { label: 'Noisy', cls: 'noisy' },
+    ignored: { label: 'Ignored', cls: 'ignored' },
+    stale: { label: 'Stale', cls: 'stale' },
+};
+
+let ruleFilter = 'all';
+let ruleSort = { key: 'triggers', dir: -1 };
+
+function implColor(pct) {
+    if (pct >= 50) return '#42be65';
+    if (pct >= 30) return '#f2c631';
+    return '#fa5867';
+}
+
+function renderRules() {
+    const tbody = document.querySelector('#rulesTable tbody');
+    let list = rules.filter(r => ruleFilter === 'all' || r.state === ruleFilter);
+    list = [...list].sort((a, b) => {
+        const k = ruleSort.key;
+        const va = k === 'name' ? a.name : k === 'votes' ? a.down : k === 'state' ? a.state : a[k];
+        const vb = k === 'name' ? b.name : k === 'votes' ? b.down : k === 'state' ? b.state : b[k];
+        return (va > vb ? 1 : va < vb ? -1 : 0) * ruleSort.dir;
+    });
+    tbody.innerHTML = list.map(r => `
+        <tr onclick="openDrawer('rule')">
+            <td class="rule-name">${r.name}</td>
+            <td class="num">${r.triggers}</td>
+            <td>
+                <div class="implbar">
+                    <div class="track"><div class="fill" style="width:${r.impl}%;background:${implColor(r.impl)}"></div></div>
+                    <span class="num" style="min-width:36px">${r.impl}%</span>
+                </div>
+            </td>
+            <td class="reactions"><span class="up">▲ ${r.up}</span><span class="down">▼ ${r.down}</span></td>
+            <td><span class="badge ${stateMeta[r.state].cls}">${stateMeta[r.state].label}</span></td>
+        </tr>
+    `).join('');
+}
+
+function filterRules(state) {
+    ruleFilter = state;
+    document.querySelectorAll('#ruleChips .chip').forEach(c => c.classList.toggle('active', c.dataset.state === state));
+    renderRules();
+}
+
+function sortRules(key) {
+    if (ruleSort.key === key) ruleSort.dir *= -1;
+    else ruleSort = { key, dir: -1 };
+    renderRules();
+}
+
+renderRules();
+
+/* ============================== tabs ============================== */
+function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    document.getElementById('tab-review').style.display = tab === 'review' ? '' : 'none';
+    document.getElementById('tab-productivity').style.display = tab === 'productivity' ? '' : 'none';
+    document.getElementById('cards-review').style.display = tab === 'review' ? '' : 'none';
+    document.getElementById('cards-productivity').style.display = tab === 'productivity' ? '' : 'none';
+}
+
+/* ============================== drawer ============================== */
+function openDrawer(kind) {
+    const data = mockSuggestions[kind] || mockSuggestions.category;
+    document.getElementById('drawerTitle').textContent = data.title;
+    document.getElementById('drawerSub').textContent = data.sub;
+    document.getElementById('drawerBody').innerHTML = data.items.map(s => `
+        <div class="sugg">
+            <div class="top">
+                <span class="sev ${s.sev}">${s.sev}</span>
+                <span class="status ${s.status}">${s.status === 'impl' ? '✓ implemented' : '○ not implemented'}</span>
+            </div>
+            <div class="title">${s.title}</div>
+            <div class="meta">
+                <span class="file">${s.file}</span>
+                <span class="react"><span style="color:#42be65">▲ ${s.up}</span> <span style="color:#fa5867">▼ ${s.down}</span></span>
+            </div>
+            <div class="meta" style="margin-top:8px">
+                <a href="#" onclick="return false">View comment on PR ${s.pr} →</a>
+            </div>
+        </div>
+    `).join('');
+    document.body.classList.add('drawer-open');
+}
+
+function closeDrawer() {
+    document.body.classList.remove('drawer-open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+</script>
+</body>
+</html>

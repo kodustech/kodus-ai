@@ -7,8 +7,8 @@ import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-rules-in-organization-by-filter.use-case';
 import {
     IKodyRule,
-    KodyRulesOrigin,
     KodyRulesScope,
+    KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -257,7 +257,7 @@ export class CliKodyRulesController {
             status: body.status || KodyRulesStatus.ACTIVE,
             type: body.type || KodyRulesType.STANDARD,
             path: body.path || '*/**',
-            origin: body.origin || KodyRulesOrigin.USER,
+            origin: body.origin || KodyRulesOrigin.CLI,
             scope: body.scope || KodyRulesScope.FILE,
             severity:
                 (body.severity as KodyRuleSeverity) || KodyRuleSeverity.MEDIUM,

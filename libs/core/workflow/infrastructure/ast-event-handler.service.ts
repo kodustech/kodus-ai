@@ -6,7 +6,7 @@ import * as os from 'os';
 import { Injectable, Inject } from '@nestjs/common';
 import { ConsumeMessage } from 'amqplib';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import {

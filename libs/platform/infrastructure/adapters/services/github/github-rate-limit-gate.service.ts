@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 
 import { CacheService } from '@libs/core/cache/cache.service';
@@ -66,11 +66,12 @@ export class GitHubRateLimitGateService implements IRateLimitGateService {
 
     async check(
         organizationAndTeamData: OrganizationAndTeamData,
-        platformType: PlatformType,
+        platformType?: PlatformType,
     ): Promise<void> {
         // Only GitHub is implemented today. Other platforms (GitLab,
         // Bitbucket, Azure, Forgejo) have their own rate-limit semantics
-        // and are out of scope for this gate — they pass through.
+        // and are out of scope for this gate — they pass through, as does an
+        // unknown platform (a self-managed host the CLI could not infer).
         if (platformType !== PlatformType.GITHUB) return;
 
         const cacheKey = this.makeCacheKey(organizationAndTeamData);

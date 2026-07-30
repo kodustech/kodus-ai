@@ -1,0 +1,89 @@
+---
+title: "Direcionar uma Revisão (Foco)"
+description: "Direcione a atenção da Kody para uma área específica do pull request com uma diretiva de revisão pontual, via comentário no PR ou pela CLI"
+---
+
+Uma **diretiva de revisão** permite dizer à Kody onde concentrar a análise mais profunda em uma revisão específica. Em vez de mudar qualquer configuração, você anexa uma instrução curta ao acionar a revisão — por exemplo, "foque na lógica de auth e sessão" — e a Kody gasta a análise mais rigorosa no código alterado que corresponde a isso.
+
+<Note>
+  Uma diretiva é **efêmera**: vale apenas para aquela execução de revisão. Ela não é salva nas suas configurações e não afeta revisões futuras. Para mudar o comportamento da Kody de forma permanente, use [Custom Prompts](/how_to_use/pt-br/code_review/configs/custom_prompts) ou [Kody Rules](/how_to_use/pt-br/code_review/configs/kody_rules).
+</Note>
+
+## Quando Usar
+
+- Um PR mexe em muitos arquivos, mas você se importa mais com uma área arriscada (auth, pagamentos, uma migração).
+- Você quer que a Kody rastreie os callers e callees de uma mudança específica e a questione com mais rigor.
+- Você está reexecutando uma revisão e quer direcionar a atenção sem editar nenhuma configuração.
+
+## Prioridade, Não Filtro
+
+Este é o ponto mais importante de entender:
+
+<Warning>
+  Uma diretiva define **prioridade, não filtro**. A Kody prioriza a área de foco, mas ainda reporta qualquer bug, problema de segurança ou de performance concreto que perceba **em outros pontos** do diff. Ela nunca suprime achados fora do foco e nunca aprova o resto do PR sem olhar.
+</Warning>
+
+Use uma diretiva para dizer *"olhe aqui com mais afinco"* — não *"olhe só aqui."*
+
+## Como Acionar
+
+<Tabs>
+  <Tab title="Comentário no PR / MR">
+    Coloque o texto de foco logo após o comando de revisão em um comentário do pull request:
+
+    ```text
+    @kody review foque na lógica de auth e sessão
+    ```
+
+    Você também pode usar `start-review` e combinar com `--force`:
+
+    ```text
+    @kody start-review foque na nova migração de banco de dados
+    @kody review --force foque no tratamento de erros do parser do webhook
+    ```
+
+    <Note>
+      `--force` reexecuta a review mesmo quando Kody normalmente pularia ("nenhum commit novo desde a última review"). Use — com ou sem diretiva de foco — para obter uma nova análise depois de corrigir o que fez a execução anterior falhar, ou para aplicar configurações atualizadas a um PR já revisado.
+    </Note>
+
+    <Note>
+      Apenas a **primeira linha** após o comando é usada como diretiva. Tudo nas linhas seguintes é ignorado, então mantenha o foco em uma única linha.
+    </Note>
+
+    Funciona no GitHub, GitLab, Azure DevOps, Bitbucket e Forgejo.
+  </Tab>
+  <Tab title="CLI">
+    Passe a flag `--focus` ao rodar uma revisão:
+
+    ```bash
+    kodus review --focus "a lógica de auth e sessão"
+    ```
+
+    Veja a [referência de comandos da CLI](/how_to_use/pt-br/cli/commands) para a superfície completa de comandos.
+  </Tab>
+</Tabs>
+
+## Escrevendo uma Boa Diretiva
+
+- **Seja específico sobre a área, não sobre o veredito.** "foque em concorrência no consumidor da fila" funciona melhor que "encontre bugs".
+- **Nomeie o código, não o resultado.** Aponte para um módulo, fluxo ou preocupação ("a lógica de retry", "o SQL no serviço de relatórios").
+- **Seja breve.** Diretivas têm limite de **500 caracteres**; só a primeira linha do comentário é lida.
+
+<AccordionGroup>
+  <Accordion title="Bons exemplos">
+    - `@kody review foque no fluxo de autenticação e refresh de token`
+    - `@kody review foque no novo tratamento do webhook do Stripe`
+    - `kodus review --focus "condições de corrida no worker em background"`
+  </Accordion>
+  <Accordion title="Exemplos fracos">
+    - `@kody review por favor seja minucioso` — não há área para priorizar.
+    - `@kody review comente só no arquivo X` — uma diretiva não é filtro; use [caminhos ignorados](/how_to_use/pt-br/code_review/configs/general) para restringir arquivos.
+  </Accordion>
+</AccordionGroup>
+
+## Observações e Limites
+
+- **Tamanho:** diretivas são truncadas em 500 caracteres.
+- **Só a primeira linha:** em comentários de PR, apenas a primeira linha após o comando vira a diretiva.
+- **Não confiável por design:** como qualquer pessoa que pode comentar no PR pode fornecer uma diretiva, o texto é sanitizado antes do uso (caracteres de controle e sinais de menor/maior são removidos). Isso não altera o seu foco — apenas impede que o texto adultere o prompt interno da Kody.
+- **Não persistida:** nada é gravado nas configurações do seu repositório ou organização.

@@ -2,23 +2,56 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { allScenarios, resolveScenarios } from "../../scenarios/index.js";
 
-test("allScenarios: includes the 10 release-gate scenarios", () => {
+test("allScenarios: includes the registered release-gate scenarios", () => {
     const ids = Object.keys(allScenarios).sort();
     assert.deepEqual(ids, [
+        "centralized-config-sync",
+        "cockpit-analytics",
         "code-review-basic",
+        "code-review-vertex-byok",
         "command-review",
+        "command-review-focus",
+        "conversation-anthropic-byok",
+        "conversation-vertex-byok",
+        "finish-onboarding-slo",
+        "kody-rules-coverage",
         "kody-rules-create-and-apply",
+        "kody-rules-file-sync",
+        "kody-rules-lifecycle",
         "license-attribution",
         "onboarding-webhook-registration",
         "per-seat-license-toggle",
+        "pr-execution-sse",
+        "public-pr-demo",
+        "rbac-authorization",
+        "rbac-frontend-routes",
+        "rbac-ui-render",
+        "rule-file-detection",
         "sso-cookie-domain",
         "sso-multi-user",
         "stripe-billing",
+        "trial-credits-consume",
+        "trial-entitlement-gate",
+        "trial-managed-review",
         "upgrade-n-1-to-n",
     ]);
 });
 
-test("command-review: cloud + self-hosted × github + github-app + 3 others × paid/trial/license-paid", () => {
+test("centralized-config-sync: single cell per target — github × paid/license-paid", () => {
+    const s = allScenarios["centralized-config-sync"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+});
+
+test("centralized-config-sync: single cell per target — github × paid/license-paid", () => {
+    const s = allScenarios["centralized-config-sync"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+});
+
+test("command-review: cloud + self-hosted × github + github-app + 3 others × paid/license-paid", () => {
     const s = allScenarios["command-review"];
     assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
     assert.deepEqual(s.appliesTo.provider, [
@@ -28,7 +61,22 @@ test("command-review: cloud + self-hosted × github + github-app + 3 others × p
         "bitbucket",
         "azure-devops",
     ]);
-    assert.deepEqual(s.appliesTo.license, ["paid", "trial", "license-paid"]);
+    // `trial` moved to the dedicated trial-entitlement-gate scenario (a
+    // standing trial expires after 14 days and broke this every release).
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+});
+
+test("command-review-focus: cloud + self-hosted × github + github-app + 3 others × paid/license-paid", () => {
+    const s = allScenarios["command-review-focus"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, [
+        "github",
+        "github-app",
+        "gitlab",
+        "bitbucket",
+        "azure-devops",
+    ]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
 });
 
 test("sso-multi-user: single-cell self-hosted × github × license-paid", () => {
@@ -91,28 +139,36 @@ test("each scenario has required fields", () => {
     }
 });
 
-test("code-review-basic applies to paid/trial/license-paid but not free/license-free", () => {
+test("code-review-basic applies to paid/license-paid but not trial/free/license-free", () => {
     const s = allScenarios["code-review-basic"];
     assert.ok(s.appliesTo.license);
     assert.ok(s.appliesTo.license.includes("paid"));
-    assert.ok(s.appliesTo.license.includes("trial"));
     assert.ok(s.appliesTo.license.includes("license-paid"));
+    // `trial` moved to trial-entitlement-gate (standing trial expires).
+    assert.ok(!s.appliesTo.license.includes("trial"));
     assert.ok(!s.appliesTo.license.includes("free"));
     assert.ok(!s.appliesTo.license.includes("license-free"));
 });
 
-test("license-attribution applies to every reviewable license mode except self-hosted license-free", () => {
+test("license-attribution applies to every reviewable license mode except trial and self-hosted license-free", () => {
     const s = allScenarios["license-attribution"];
     assert.ok(s.appliesTo.license);
     for (const m of [
         "free",
-        "trial",
         "paid",
         "community-byok",
         "license-paid",
     ] as const) {
         assert.ok(s.appliesTo.license.includes(m), `missing license: ${m}`);
     }
+    // `trial` is intentionally excluded: a standing trial expires after 14
+    // days (no reset endpoint) and broke this scenario every release. The
+    // trial entitlement is proved webhook-free against a fresh org by
+    // trial-entitlement-gate instead.
+    assert.ok(
+        !s.appliesTo.license.includes("trial"),
+        "trial must NOT be in scope (covered by trial-entitlement-gate)",
+    );
     // self-hosted `license-free` is intentionally excluded: an absent or
     // invalid self-hosted license drops to Community Edition (reviews fire,
     // no notice), so the scenario's "no review + trial/BYOK notice"
@@ -122,6 +178,20 @@ test("license-attribution applies to every reviewable license mode except self-h
         !s.appliesTo.license.includes("license-free"),
         "license-free must NOT be in scope (notice unreachable on self-hosted)",
     );
+});
+
+test("trial-entitlement-gate: single-cell cloud × github × trial", () => {
+    const s = allScenarios["trial-entitlement-gate"];
+    assert.deepEqual(s.appliesTo.target, ["cloud"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["trial"]);
+});
+
+test("trial-managed-review: single-cell cloud × github × trial (the only managed-LLM review cell)", () => {
+    const s = allScenarios["trial-managed-review"];
+    assert.deepEqual(s.appliesTo.target, ["cloud"]);
+    assert.deepEqual(s.appliesTo.provider, ["github"]);
+    assert.deepEqual(s.appliesTo.license, ["trial"]);
 });
 
 test("upgrade-n-1-to-n only applies to self-hosted", () => {

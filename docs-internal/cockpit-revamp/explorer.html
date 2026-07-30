@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Suggestions Explorer — Kodus (mock)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Overpass+Mono:wght@400;600&display=swap" rel="stylesheet" />
+<style>
+    :root {
+        --card-lv1: #181825;
+        --card-lv2: #202032;
+        --card-lv3: #30304b;
+        --text-primary: #ffffff;
+        --text-secondary: #cdcddf;
+        --text-tertiary: #f3f3f780;
+        --primary-light: #f8b76d;
+        --secondary-light: #c9bbf2;
+        --success: #42be65;
+        --info: #5190ff;
+        --alert: #f2c631;
+        --warning: #ff8b40;
+        --danger: #fa5867;
+        --background: #101019;
+        --radius-lg: 8px;
+        --radius-md: 6px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: "DM Sans", sans-serif; }
+    code, .mono { font-family: "Overpass Mono", monospace; }
+
+    body { background: var(--background); color: var(--text-primary); min-height: 100vh; padding: 28px 36px 80px; }
+    .page { max-width: 1100px; margin: 0 auto; }
+
+    /* ---------- header ---------- */
+    .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .page-header .left { display: flex; align-items: center; gap: 14px; }
+    .back { color: var(--text-tertiary); text-decoration: none; font-size: 13px; font-weight: 600; }
+    .back:hover { color: var(--text-secondary); }
+    .page-header h1 { font-size: 20px; font-weight: 700; }
+    .select-mock {
+        background: var(--card-lv2); border: 1px solid var(--card-lv3); border-radius: var(--radius-md);
+        color: var(--text-secondary); font-size: 13px; padding: 8px 14px; cursor: default;
+    }
+
+    /* ---------- filter bar ---------- */
+    .filterbar {
+        background: var(--card-lv1); border: 1px solid var(--card-lv3); border-radius: var(--radius-lg);
+        padding: 14px 16px; margin-bottom: 14px;
+        display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    }
+    .filterbar select, .filterbar input[type="search"] {
+        background: var(--card-lv2); border: 1px solid var(--card-lv3); border-radius: var(--radius-md);
+        color: var(--text-secondary); font-size: 12.5px; padding: 7px 10px; outline: none; cursor: pointer;
+    }
+    .filterbar input[type="search"] { min-width: 220px; cursor: text; }
+    .filterbar input[type="search"]::placeholder { color: var(--text-tertiary); }
+
+    .active-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; min-height: 0; }
+    .achip {
+        display: inline-flex; align-items: center; gap: 8px;
+        background: #f8b76d14; border: 1px solid var(--primary-light); color: var(--primary-light);
+        font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px;
+    }
+    .achip .x { cursor: pointer; opacity: .7; font-weight: 700; }
+    .achip .x:hover { opacity: 1; }
+    .achip .k { opacity: .65; font-weight: 500; }
+
+    /* ---------- summary strip ---------- */
+    .summary { display: flex; gap: 22px; font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; padding: 0 4px; flex-wrap: wrap; }
+    .summary b { color: var(--text-primary); font-weight: 700; }
+    .summary .imp { color: var(--success); }
+    .summary .down { color: var(--danger); }
+
+    /* ---------- suggestion rows ---------- */
+    .sugg {
+        background: var(--card-lv1); border: 1px solid var(--card-lv3); border-radius: var(--radius-lg);
+        margin-bottom: 10px; overflow: hidden;
+    }
+    .sugg-row { padding: 14px 18px; cursor: pointer; transition: background .1s; }
+    .sugg-row:hover { background: var(--card-lv2); }
+    .sugg .top { display: flex; gap: 8px; align-items: center; margin-bottom: 7px; flex-wrap: wrap; }
+    .sev { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; }
+    .sev.critical { background: #fa586722; color: var(--danger); }
+    .sev.high { background: #ff8b4022; color: var(--warning); }
+    .sev.medium { background: #f2c63122; color: var(--alert); }
+    .sev.low { background: #5190ff22; color: var(--info); }
+    .cat { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--card-lv3); color: var(--text-secondary); }
+    .rulechip { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #312b4b; color: var(--secondary-light); }
+    .status { font-size: 11px; font-weight: 600; margin-left: auto; white-space: nowrap; }
+    .status.impl { color: var(--success); }
+    .status.partial { color: var(--alert); }
+    .status.notimpl { color: var(--text-tertiary); }
+    .reacts { font-size: 12px; white-space: nowrap; }
+
+    .sugg .title { font-size: 13.5px; color: var(--text-primary); line-height: 1.45; margin-bottom: 7px; }
+    .sugg .meta { font-size: 12px; color: var(--text-tertiary); display: flex; gap: 14px; flex-wrap: wrap; }
+    .sugg .meta .file { font-family: "Overpass Mono", monospace; font-size: 11px; }
+
+    /* expanded detail */
+    .sugg-detail { display: none; border-top: 1px solid var(--card-lv3); padding: 16px 18px; background: #14141f; }
+    .sugg.open .sugg-detail { display: block; }
+    .code-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+    .code-block { border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--card-lv3); }
+    .code-block .cb-head { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 6px 10px; }
+    .code-block.bad .cb-head { background: #fa586715; color: var(--danger); }
+    .code-block.good .cb-head { background: #42be6515; color: var(--success); }
+    .code-block pre { padding: 10px 12px; font-family: "Overpass Mono", monospace; font-size: 11.5px; line-height: 1.55; color: var(--text-secondary); overflow-x: auto; background: var(--card-lv1); margin: 0; }
+    .devnote {
+        margin-bottom: 12px; padding: 8px 12px; border-left: 2px solid var(--danger);
+        background: #fa58670d; border-radius: 0 6px 6px 0; font-size: 12px; color: var(--text-secondary); line-height: 1.5;
+    }
+    .devnote .who { color: var(--text-tertiary); font-size: 11px; margin-bottom: 3px; }
+    .detail-actions { display: flex; gap: 14px; align-items: center; }
+    .detail-actions a { color: var(--primary-light); text-decoration: none; font-size: 12.5px; font-weight: 600; }
+
+    /* ---------- pagination ---------- */
+    .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; font-size: 12.5px; color: var(--text-tertiary); }
+    .pagination .pages { display: flex; gap: 6px; }
+    .pagination button {
+        background: var(--card-lv2); border: 1px solid var(--card-lv3); color: var(--text-secondary);
+        border-radius: var(--radius-md); padding: 6px 11px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .pagination button.active { border-color: var(--primary-light); color: var(--primary-light); }
+
+    .empty { text-align: center; padding: 60px; color: var(--text-tertiary); font-size: 14px; border: 1px dashed var(--card-lv3); border-radius: var(--radius-lg); }
+</style>
+</head>
+<body>
+<div class="page">
+
+    <header class="page-header">
+        <div class="left">
+            <a class="back" href="mock-shadcn.html">← Cockpit</a>
+            <h1>Suggestions</h1>
+        </div>
+        <div class="select-mock">Last 90 days ▾</div>
+    </header>
+
+    <!-- ============ FILTERS ============ -->
+    <div class="filterbar">
+        <select id="f-repo" onchange="applyFilters()">
+            <option value="">Repository: all</option>
+            <option value="kodus-ai">kodus-ai</option>
+            <option value="kodus-web">kodus-web</option>
+            <option value="mobile-app">mobile-app</option>
+        </select>
+        <select id="f-category" onchange="applyFilters()">
+            <option value="">Category: all</option>
+            <option>Security</option>
+            <option>Potential Issues</option>
+            <option>Error Handling</option>
+            <option>Performance</option>
+            <option>Maintainability</option>
+            <option>Refactoring</option>
+            <option>Code Style</option>
+        </select>
+        <select id="f-severity" onchange="applyFilters()">
+            <option value="">Severity: all</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+        </select>
+        <select id="f-status" onchange="applyFilters()">
+            <option value="">Status: all</option>
+            <option value="impl">Implemented</option>
+            <option value="partial">Partially implemented</option>
+            <option value="notimpl">Not implemented</option>
+        </select>
+        <select id="f-reaction" onchange="applyFilters()">
+            <option value="">Reaction: all</option>
+            <option value="up">👍 upvoted</option>
+            <option value="down">👎 downvoted</option>
+        </select>
+        <input type="search" id="f-search" placeholder="Search suggestions, files…" oninput="applyFilters()" />
+    </div>
+
+    <div class="active-chips" id="activeChips"></div>
+
+    <div class="summary" id="summary"></div>
+
+    <!-- ============ LIST ============ -->
+    <div id="list"></div>
+
+    <div class="pagination" id="pagination">
+        <span id="pageInfo"></span>
+        <div class="pages">
+            <button class="active">1</button><button>2</button><button>3</button><button>4</button><button>5</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+/* ============================== mock data ============================== */
+const RULE_ANY = 'Avoid `any` in TypeScript';
+
+const suggestions = [
+    { sev: 'medium', cat: 'Maintainability', rule: RULE_ANY, status: 'notimpl', up: 0, down: 3,
+      title: '`as any` used to bypass the TypeORM type — declare an interface for the raw result.',
+      repo: 'kodus-ai', file: 'libs/analytics/repositories/suggestions.repo.ts', pr: '#1242', date: 'May 22',
+      existing: 'const rows = await qb.getRawMany() as any;',
+      improved: 'interface SuggestionRow { id: string; label: string; }\nconst rows: SuggestionRow[] = await qb.getRawMany();',
+      devnote: { who: 'wellington.s', text: 'TypeORM raw results are untyped, declaring interfaces for every ad-hoc query is overkill.' } },
+    { sev: 'medium', cat: 'Maintainability', rule: RULE_ANY, status: 'notimpl', up: 0, down: 2,
+      title: 'Parameter `payload: any` — type it with the webhook DTO.',
+      repo: 'kodus-ai', file: 'apps/api/src/webhooks/gitlab.controller.ts', pr: '#1239', date: 'May 20',
+      existing: 'handleWebhook(payload: any) {',
+      improved: 'handleWebhook(payload: GitlabWebhookDto) {',
+      devnote: { who: 'gabriel.m', text: 'The webhook payload shape is unknown by design — we validate downstream.' } },
+    { sev: 'medium', cat: 'Maintainability', rule: RULE_ANY, status: 'impl', up: 1, down: 0,
+      title: 'Return type `Promise<any>` — use the already-exported `ReviewResult` type.',
+      repo: 'kodus-ai', file: 'libs/code-review/pipeline/stages/finish.stage.ts', pr: '#1235', date: 'May 18',
+      existing: 'async execute(): Promise<any> {',
+      improved: 'async execute(): Promise<ReviewResult> {' },
+    { sev: 'low', cat: 'Maintainability', rule: RULE_ANY, status: 'notimpl', up: 0, down: 1,
+      title: '`catch (e: any)` — use `unknown` and narrow the type.',
+      repo: 'kodus-web', file: 'libs/billing/stripe.service.ts', pr: '#1228', date: 'May 12' },
+    { sev: 'critical', cat: 'Security', rule: null, status: 'notimpl', up: 1, down: 0,
+      title: 'SQL injection: `orgId` interpolated directly into the query — use a bind parameter.',
+      repo: 'kodus-ai', file: 'libs/analytics/query-builder.ts', pr: '#1241', date: 'May 21',
+      existing: "qb.where(`org_id = '${orgId}'`)",
+      improved: 'qb.where("org_id = :orgId", { orgId })' },
+    { sev: 'critical', cat: 'Security', rule: null, status: 'impl', up: 2, down: 0,
+      title: 'Webhook token logged in plain text inside the error handler.',
+      repo: 'kodus-ai', file: 'apps/api/src/webhooks/github.controller.ts', pr: '#1238', date: 'May 19' },
+    { sev: 'high', cat: 'Potential Issues', rule: null, status: 'partial', up: 1, down: 0,
+      title: 'Race condition: counter read and written without a lock — may double-charge billing.',
+      repo: 'kodus-ai', file: 'libs/billing/usage-counter.service.ts', pr: '#1226', date: 'May 10' },
+    { sev: 'high', cat: 'Error Handling', rule: 'Require error handling in async flows', status: 'impl', up: 3, down: 0,
+      title: 'Unhandled promise rejection: wrap the queue publish in try/catch and ack the message.',
+      repo: 'kodus-ai', file: 'libs/queue/publisher.service.ts', pr: '#1234', date: 'May 17' },
+    { sev: 'medium', cat: 'Performance', rule: 'Avoid N+1 queries in repositories', status: 'impl', up: 2, down: 0,
+      title: 'N+1: fetching rules per repository inside a loop — batch with a single IN query.',
+      repo: 'kodus-web', file: 'src/features/rules/loader.ts', pr: '#1231', date: 'May 15' },
+    { sev: 'low', cat: 'Code Style', rule: null, status: 'notimpl', up: 0, down: 4,
+      title: 'Sort imports by group (external, internal, relative).',
+      repo: 'kodus-web', file: 'src/features/cockpit/page.tsx', pr: '#1230', date: 'May 14',
+      devnote: { who: 'pedro.a', text: 'We have a lint rule for this already, Kodus doesn’t need to comment it.' } },
+    { sev: 'medium', cat: 'Refactoring', rule: null, status: 'notimpl', up: 0, down: 2,
+      title: 'Extract duplicated pagination logic into a shared hook.',
+      repo: 'mobile-app', file: 'src/screens/feed/FeedScreen.tsx', pr: '#1224', date: 'May 8' },
+    { sev: 'high', cat: 'Performance', rule: null, status: 'notimpl', up: 0, down: 1,
+      title: 'Image list re-renders the full feed on every scroll event — memoize the row component.',
+      repo: 'mobile-app', file: 'src/screens/feed/FeedList.tsx', pr: '#1222', date: 'May 6' },
+];
+
+/* ============================== filters ============================== */
+const params = new URLSearchParams(location.search);
+let ruleFilter = params.get('rule'); // pre-applied from cockpit drill-down
+
+const statusLabel = { impl: '✓ implemented', partial: '◐ partially implemented', notimpl: '○ not implemented' };
+
+function activeFilters() {
+    return {
+        rule: ruleFilter,
+        repo: document.getElementById('f-repo').value,
+        cat: document.getElementById('f-category').value,
+        sev: document.getElementById('f-severity').value,
+        status: document.getElementById('f-status').value,
+        reaction: document.getElementById('f-reaction').value,
+        q: document.getElementById('f-search').value.trim().toLowerCase(),
+    };
+}
+
+function applyFilters() {
+    const f = activeFilters();
+    const list = suggestions.filter(s =>
+        (!f.rule || s.rule === f.rule) &&
+        (!f.repo || s.repo === f.repo) &&
+        (!f.cat || s.cat === f.cat) &&
+        (!f.sev || s.sev === f.sev) &&
+        (!f.status || s.status === f.status) &&
+        (!f.reaction || (f.reaction === 'down' ? s.down > 0 : s.up > 0)) &&
+        (!f.q || (s.title + s.file + s.repo).toLowerCase().includes(f.q))
+    );
+    renderChips(f);
+    renderSummary(list);
+    renderList(list);
+}
+
+function clearRule() { ruleFilter = null; history.replaceState({}, '', location.pathname); applyFilters(); }
+
+function renderChips(f) {
+    const chips = [];
+    if (f.rule) chips.push(`<span class="achip"><span class="k">rule:</span> ${f.rule} <span class="x" onclick="clearRule()">✕</span></span>`);
+    document.getElementById('activeChips').innerHTML = chips.join('');
+}
+
+function renderSummary(list) {
+    const impl = list.filter(s => s.status === 'impl' || s.status === 'partial').length;
+    const downs = list.reduce((a, s) => a + s.down, 0);
+    const rate = list.length ? Math.round(impl / list.length * 100) : 0;
+    document.getElementById('summary').innerHTML = `
+        <span><b>${list.length}</b> suggestions</span>
+        <span class="imp"><b>${impl}</b> implemented (${rate}%)</span>
+        <span class="down"><b>${downs}</b> 👎</span>
+    `;
+    document.getElementById('pageInfo').textContent = `Showing ${list.length} of ${list.length} (mock — real page would paginate server-side)`;
+}
+
+function renderList(list) {
+    const el = document.getElementById('list');
+    if (!list.length) {
+        el.innerHTML = '<div class="empty">No suggestions match these filters.</div>';
+        return;
+    }
+    el.innerHTML = list.map((s, i) => `
+        <div class="sugg" id="sugg-${i}">
+            <div class="sugg-row" onclick="toggle(${i})">
+                <div class="top">
+                    <span class="sev ${s.sev}">${s.sev}</span>
+                    <span class="cat">${s.cat}</span>
+                    ${s.rule ? `<span class="rulechip">⚙ ${s.rule}</span>` : ''}
+                    <span class="status ${s.status}">${statusLabel[s.status]}</span>
+                    <span class="reacts"><span style="color:#42be65">▲ ${s.up}</span> <span style="color:#fa5867">▼ ${s.down}</span></span>
+                </div>
+                <div class="title">${s.title}</div>
+                <div class="meta">
+                    <span class="mono">${s.repo}</span>
+                    <span class="file">${s.file}</span>
+                    <span>PR ${s.pr} · ${s.date}</span>
+                </div>
+            </div>
+            <div class="sugg-detail">
+                ${s.devnote ? `<div class="devnote"><div class="who">${s.devnote.who} replied on the PR:</div>"${s.devnote.text}"</div>` : ''}
+                ${s.existing ? `
+                <div class="code-pair">
+                    <div class="code-block bad"><div class="cb-head">Existing code</div><pre>${esc(s.existing)}</pre></div>
+                    <div class="code-block good"><div class="cb-head">Suggested code</div><pre>${esc(s.improved)}</pre></div>
+                </div>` : ''}
+                <div class="detail-actions">
+                    <a href="#" onclick="return false">View comment on PR ${s.pr} →</a>
+                    ${s.rule ? `<a href="#" onclick="return false">View rule →</a>` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function esc(t) { return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function toggle(i) { document.getElementById('sugg-' + i).classList.toggle('open'); }
+
+applyFilters();
+</script>
+</body>
+</html>

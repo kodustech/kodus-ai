@@ -1,7 +1,6 @@
 import { REQUEST } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 
-import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { KodyRulesSyncService } from '@libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service';
@@ -10,7 +9,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { FastSyncIdeRulesUseCase } from './fast-sync-ide-rules.use-case';
 import { ValidateRuleFileReferencesUseCase } from './validate-rule-file-references.use-case';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),
@@ -107,10 +106,9 @@ describe('FastSyncIdeRulesUseCase — emits', () => {
             expect.objectContaining({
                 event: NotificationEvent.IDE_RULES_SYNC_FAILED,
                 organizationId: 'org-1',
-                recipients: expect.arrayContaining([
-                    { kind: 'role', role: Role.OWNER },
-                    { kind: 'user', userId: 'user-1' },
-                ]),
+                // Owners come from the catalog's defaultRoles; only the sync
+                // initiator is a directed recipient.
+                recipients: [{ kind: 'user', userId: 'user-1' }],
                 payload: expect.objectContaining({
                     reason: 'rate-limited',
                     correlationId: expect.any(String),
@@ -129,7 +127,7 @@ describe('FastSyncIdeRulesUseCase — emits', () => {
         expect(events).not.toContain(NotificationEvent.IDE_RULES_SYNCED);
     });
 
-    it('still emits ide.rules_sync_failed to owners even when initiator userId is missing', async () => {
+    it('still emits ide.rules_sync_failed with no directed recipient when initiator userId is missing (owners via audience)', async () => {
         await makeCase({ organization: { uuid: 'org-1' } });
         syncService.syncRepositoryMainFast.mockRejectedValueOnce(
             new Error('fail'),
@@ -142,7 +140,7 @@ describe('FastSyncIdeRulesUseCase — emits', () => {
         expect(notify.emit).toHaveBeenCalledWith(
             expect.objectContaining({
                 event: NotificationEvent.IDE_RULES_SYNC_FAILED,
-                recipients: [{ kind: 'role', role: Role.OWNER }],
+                recipients: [],
             }),
         );
     });

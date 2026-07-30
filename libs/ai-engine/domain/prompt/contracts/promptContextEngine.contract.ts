@@ -1,4 +1,4 @@
-import type { ContextRequirement } from '@kodus/flow';
+import type { ContextRequirement } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { BYOKConfig } from '@kodus/kodus-common/llm';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -23,6 +23,7 @@ export interface IPromptContextEngineService {
         context?: 'rule' | 'instruction' | 'prompt';
         detectionMode?: 'rule' | 'prompt';
         byokConfig?: BYOKConfig;
+        subscriptionStatus?: string;
     }): Promise<{
         references: IFileReference[];
         syncErrors?: IPromptReferenceSyncError[];

@@ -7,6 +7,7 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     IKodyRule,
+    KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
@@ -16,6 +17,7 @@ interface BuildKodyRuleCentralizedMutationRequestParams {
     centralizedConfigPrService: CentralizedConfigPrService;
     organizationAndTeamData: OrganizationAndTeamData;
     repositoryId?: string;
+    groupFolderName?: string;
     ruleContent: Partial<IKodyRule>;
     ruleType: KodyRulesType;
     operation: KodyRuleMutationOperation;
@@ -38,6 +40,7 @@ export function buildKodyRuleCentralizedMutationRequest(
                 repositoryFolder,
                 rulesDirectory,
                 ruleContent: params.ruleContent,
+                groupFolderName: params.groupFolderName,
             });
 
             if (params.operation === 'delete') {
@@ -69,6 +72,7 @@ export function buildKodyRuleCentralizedFilePath(params: {
     repositoryFolder: string;
     rulesDirectory: string;
     ruleContent: Partial<IKodyRule>;
+    groupFolderName?: string;
 }): string {
     const normalizedPath = normalizeCentralizedPath(
         params.ruleContent.centralizedConfig?.path,
@@ -78,7 +82,19 @@ export function buildKodyRuleCentralizedFilePath(params: {
         return normalizedPath;
     }
 
-    const fileName = `${params.centralizedConfigPrService.sanitizeFileName(params.ruleContent.title, 'rule')}.yml`;
+    const fileName = params.centralizedConfigPrService.buildRuleFileName(
+        params.ruleContent.title,
+        params.ruleContent.uuid,
+    );
+
+    if (params.groupFolderName) {
+        return params.centralizedConfigPrService.buildDirectoryGroupRulesPath(
+            params.repositoryFolder,
+            params.groupFolderName,
+            params.rulesDirectory,
+            fileName,
+        );
+    }
 
     return params.centralizedConfigPrService.buildCentralizedPath({
         repositoryFolder: params.repositoryFolder,
@@ -100,7 +116,7 @@ function normalizeCentralizedPath(path?: string): string | null {
     return normalized;
 }
 
-function formatRuleToYaml(rule: Partial<IKodyRule>): string {
+export function formatRuleToYaml(rule: Partial<IKodyRule>): string {
     const ruleForYaml = {
         title: rule.title,
         rule: rule.rule,
@@ -109,6 +125,9 @@ function formatRuleToYaml(rule: Partial<IKodyRule>): string {
         ...(rule.path ? { path: rule.path } : {}),
         ...(rule.examples ? { examples: rule.examples } : {}),
         ...(rule.inheritance ? { inheritance: rule.inheritance } : {}),
+        // Present = enforced. A paused rule stays in the config but is not
+        // enforced; absence means enabled (keeps active-rule files unchanged).
+        ...(rule.status === KodyRulesStatus.PAUSED ? { enabled: false } : {}),
     };
 
     return yaml.dump(ruleForYaml);

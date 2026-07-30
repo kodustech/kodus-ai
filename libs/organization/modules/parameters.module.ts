@@ -18,6 +18,8 @@ import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module'; // Added
 import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
 import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequestMessages.module';
+import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
+import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 
 @Module({
     imports: [
@@ -29,6 +31,8 @@ import { PullRequestMessagesModule } from '@libs/code-review/modules/pullRequest
         forwardRef(() => AIEngineModule),
         forwardRef(() => CentralizedConfigModule),
         forwardRef(() => PullRequestMessagesModule),
+        forwardRef(() => KodyRulesModule),
+        forwardRef(() => PermissionValidationModule),
         PermissionsModule,
     ],
     providers: [

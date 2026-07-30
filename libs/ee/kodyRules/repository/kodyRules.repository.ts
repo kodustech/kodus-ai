@@ -61,6 +61,19 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         return doc ? mapSimpleModelToEntity(doc, KodyRulesEntity) : null;
     }
 
+    async findOrganizationIdsWithRules(): Promise<string[]> {
+        // Projection + lean: only the organizationId of docs that have ≥1 rule.
+        // The detector sweep needs the org list, not every embedded rules array
+        // (loading all of them would grow memory unbounded on a large fleet).
+        const docs = await this.kodyRulesModel
+            .find({ 'rules.0': { $exists: true } }, { organizationId: 1 })
+            .lean()
+            .exec();
+        return docs
+            .map((d: any) => d?.organizationId)
+            .filter((id: unknown): id is string => typeof id === 'string');
+    }
+
     async find(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity[]> {
         if (!filter) {
             const docs = await this.kodyRulesModel.find().exec();
@@ -175,6 +188,53 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             .exec();
         return result?.total ?? 0;
     }
+
+    async countRulesByRepository(
+        organizationId: string,
+        statuses: KodyRulesStatus[],
+    ): Promise<
+        Array<{
+            repositoryId: string;
+            directoryId: string | null;
+            count: number;
+        }>
+    > {
+        // One aggregation returns the per-(repo, directory) counts for the
+        // whole org, instead of one full-array fetch per repository card.
+        // Unwinds the embedded array, keeps the requested statuses, then
+        // groups. directoryId is null for repository-level rules (the field
+        // is absent on those, which $group collapses to null).
+        const pipeline: PipelineStage[] = [
+            { $match: { organizationId } },
+            { $unwind: '$rules' },
+            { $match: { 'rules.status': { $in: statuses } } },
+            {
+                $group: {
+                    _id: {
+                        repositoryId: '$rules.repositoryId',
+                        directoryId: '$rules.directoryId',
+                    },
+                    count: { $sum: 1 },
+                },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    repositoryId: '$_id.repositoryId',
+                    directoryId: { $ifNull: ['$_id.directoryId', null] },
+                    count: 1,
+                },
+            },
+        ];
+
+        return this.kodyRulesModel
+            .aggregate<{
+                repositoryId: string;
+                directoryId: string | null;
+                count: number;
+            }>(pipeline)
+            .exec();
+    }
     //#endregion
 
     //#region Update
@@ -214,10 +274,35 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         ruleId: string,
         updateData: Partial<IKodyRule>,
     ): Promise<KodyRulesEntity | null> {
+        // Field-level $set (`rules.$.field`) instead of replacing the whole
+        // matched element (`rules.$`). Replacing the element means a caller
+        // that passes a Partial — which the signature explicitly allows —
+        // silently wipes every field it omitted. Per-field $set also narrows
+        // the concurrency window: two edits touching DIFFERENT fields of the
+        // same rule no longer clobber each other (only same-field edits race,
+        // last-write-wins, which is expected). `uuid` is undefined-safe.
+        const setFields: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(updateData)) {
+            if (value !== undefined) {
+                setFields[`rules.$.${key}`] = value;
+            }
+        }
+
+        // Nothing concrete to set (all-undefined patch) — avoid an empty $set,
+        // which Mongo rejects. Return the current doc unchanged.
+        if (Object.keys(setFields).length === 0) {
+            const current = await this.kodyRulesModel
+                .findOne({ '_id': uuid, 'rules.uuid': ruleId })
+                .exec();
+            return current
+                ? mapSimpleModelToEntity(current, KodyRulesEntity)
+                : null;
+        }
+
         const updated = await this.kodyRulesModel
             .findOneAndUpdate(
                 { '_id': uuid, 'rules.uuid': ruleId },
-                { $set: { 'rules.$': updateData } },
+                { $set: setFields },
                 { new: true },
             )
             .exec();
@@ -269,11 +354,7 @@ export class KodyRulesRepository implements IKodyRulesRepository {
         };
 
         if (directoryId) {
-            // Se directoryId for fornecido, atualizar apenas rules desse diretório
             filter['rules.directoryId'] = directoryId;
-        } else {
-            // Se não for fornecido, atualizar apenas rules do repositório (directoryId null)
-            filter['rules.directoryId'] = null;
         }
 
         const updated = await this.kodyRulesModel
@@ -292,8 +373,8 @@ export class KodyRulesRepository implements IKodyRulesRepository {
                             'elem.repositoryId': repositoryId,
                             ...(directoryId
                                 ? { 'elem.directoryId': directoryId }
-                                : { 'elem.directoryId': null }),
-                            'elem.status': KodyRulesStatus.ACTIVE,
+                                : {}),
+                            'elem.status': { $ne: KodyRulesStatus.DELETED },
                         },
                     ],
                 },

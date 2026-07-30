@@ -13,11 +13,11 @@ if (process.env.ANALYZE === 'true') {
 // `@libs/*` imports (which traverse to `../../libs/*`). Pinning this
 // explicitly — instead of letting Next auto-detect via lockfile — keeps
 // the protective behavior the previous `outputFileTracingRoot: __dirname`
-// gave us: auto-detect walks upward until it finds a yarn.lock /
+// gave us: auto-detect walks upward until it finds a pnpm-lock.yaml /
 // package.json and was picking up stray files above the repo (e.g. a
 // global ~/package.json with language servers), which caused standalone
 // to emit `.next/standalone/<full-absolute-path>/` instead of a clean
-// `.next/standalone/server.js`. The monorepo root has its own yarn.lock
+// `.next/standalone/server.js`. The monorepo root has its own pnpm-lock.yaml
 // so this resolves to the same place auto-detect would, but bounded.
 //
 // Inside the dev docker container, __dirname = /usr/src/app (the
@@ -54,15 +54,26 @@ const nextConfig = {
     typescript: {
         ignoreBuildErrors: true,
     },
-    eslint: {
-        ignoreDuringBuilds: true,
-    },
     // Turbopack-specific project root. Must match `outputFileTracingRoot`
     // — Next warns and falls back to the latter otherwise.
     turbopack: {
         root: projectRoot,
     },
+    // React Compiler (memoização automática). No Next 16 é opção top-level.
+    // Ainda roda via `babel-plugin-react-compiler` no 16.2.x (a porta nativa
+    // em Rust `experimental.turbopackRustReactCompiler` só existe no canary);
+    // migrar para ela quando chegar ao stable elimina o custo de babel (+13s).
+    reactCompiler: true,
     experimental: {
+        // Tree-shake barrel-heavy packages: import only the icons/helpers a
+        // module actually uses instead of pulling the whole package into the
+        // chunk. lucide-react is imported in ~223 files; date-fns in ~18;
+        // recharts ships a large runtime. Next rewrites these to per-export
+        // deep imports at build time.
+        optimizePackageImports: ["lucide-react", "date-fns", "recharts"],
+        // Cache de filesystem do Turbopack — compila mais rápido entre restarts
+        // do dev.
+        turbopackFileSystemCacheForDev: true,
         authInterrupts: true,
         staleTimes: {
             dynamic: 300,

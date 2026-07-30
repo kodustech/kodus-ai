@@ -12,11 +12,11 @@ import { randomInt, randomUUID } from 'crypto';
  * relationship is enforced on the warehouse side.
  *
  * Usage:
- *   yarn analytics:seed-test                 # 3 orgs × 50 PRs over 90 days
- *   yarn analytics:seed-test --orgs 5 --prs 200 --days 365
- *   yarn analytics:seed-test --with-edge-cases
- *   yarn analytics:seed-test --reset         # wipe seeded docs (by org tag)
- *   yarn analytics:seed-test --org-prefix qa # custom tag, default 'analytics-test'
+ *   pnpm run analytics:seed-test                 # 3 orgs × 50 PRs over 90 days
+ *   pnpm run analytics:seed-test --orgs 5 --prs 200 --days 365
+ *   pnpm run analytics:seed-test --with-edge-cases
+ *   pnpm run analytics:seed-test --reset         # wipe seeded docs (by org tag)
+ *   pnpm run analytics:seed-test --org-prefix qa # custom tag, default 'analytics-test'
  *
  * Tagging: every seeded doc carries `organizationId = "<prefix>-<n>"` so
  * `--reset` can find and delete them without touching real data.
@@ -94,7 +94,7 @@ function buildMongoUri(args: CliArgs): {
         return { uri: args.mongoUri, db: args.mongoDb ?? 'kodus_db' };
     }
     // Honors API_MG_DB_* exactly as set. Run inside the analytics
-    // worker container (`docker exec -it as_kodus_analytics_worker yarn
+    // worker container (`docker exec -it as_kodus_analytics_worker pnpm
     // analytics:seed-test ...`) so DNS resolves the in-network host.
     // From the host machine, override with --mongo-uri pointing at the
     // mapped port, e.g.
@@ -386,7 +386,7 @@ async function main() {
     console.log('  2. curl http://localhost:3001/cockpit/health/runs');
     // eslint-disable-next-line no-console
     console.log(
-        `  3. yarn analytics:parity-check --org ${orgIds[0]}`,
+        `  3. pnpm run analytics:parity-check --org ${orgIds[0]}`,
     );
 
     await client.close();

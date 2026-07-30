@@ -16,7 +16,7 @@ import { CacheService } from '@libs/core/cache/cache.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 
 // Mock external dependencies
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

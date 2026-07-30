@@ -59,7 +59,7 @@ hooks.getSeedTaskContextTools.mockResolvedValue(['search']);
 
 ### A3. Exportar traces como log estruturado
 
-**Arquivo:** `libs/agents/infrastructure/services/kodus-flow/business-rules-validation/businessRulesValidationAgent.ts`
+**Arquivo:** `libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent.ts`
 
 **Onde:** No metodo `execute()`, logo apos o `runBlueprint()` retornar (linha ~295-309), ANTES do return.
 
@@ -399,7 +399,7 @@ export type { TaskContextReadParams, TaskContextReadResult, TaskContextReadHooks
 
 ### B5. Refatorar `blueprint.tooling.ts` para usar os capability modules
 
-**Arquivo:** `libs/agents/infrastructure/services/kodus-flow/business-rules-validation/blueprint.tooling.ts`
+**Arquivo:** `libs/agents/infrastructure/services/agents/business-rules-validation/blueprint.tooling.ts`
 
 **O que fazer:**
 1. Importar dos capability modules
@@ -419,7 +419,7 @@ export type { TaskContextReadParams, TaskContextReadResult, TaskContextReadHooks
 
 ### B6. Mover `TaskContextNormalized` para types compartilhado
 
-**De:** `libs/agents/infrastructure/services/kodus-flow/business-rules-validation/types.ts`
+**De:** `libs/agents/infrastructure/services/agents/business-rules-validation/types.ts`
 **Para:** `libs/agents/skills/runtime/skill-runtime.types.ts` (ou novo arquivo `libs/agents/skills/capabilities/types.ts`)
 
 **Motivo:** O type `TaskContextNormalized` e usado pelo capability module `task-context-read.ts`. Nao pode depender de `business-rules-validation/types.ts`.
@@ -534,7 +534,7 @@ export abstract class AbstractSkillProvider<
 
 ### C2. BRV extends AbstractSkillProvider
 
-**Arquivo:** `libs/agents/infrastructure/services/kodus-flow/business-rules-validation/businessRulesValidationAgent.ts`
+**Arquivo:** `libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent.ts`
 
 **O que fazer:**
 1. `BusinessRulesValidationAgentProvider extends AbstractSkillProvider<BusinessRulesContext>`
@@ -707,7 +707,7 @@ Similar ao E1 mas com `taskQuality: "PARTIAL"` — task tem titulo e descricao m
 
 ### F1. Capturar token count do LLM response
 
-**Arquivo:** `libs/agents/infrastructure/services/kodus-flow/business-rules-validation/businessRulesValidationAgent.ts`
+**Arquivo:** `libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent.ts`
 
 **Onde:** No metodo `runAnalyzer()`, apos `analyzerAdapter.call()` retornar.
 

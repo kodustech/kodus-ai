@@ -1,6 +1,9 @@
 import * as path from 'path';
 
-import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import {
+    isFileMatchingGlob,
+    isFileMatchingGlobCaseInsensitive,
+} from '@libs/common/utils/glob-utils';
 
 export const RULE_FILE_PATTERNS = [
     // Cursor
@@ -12,6 +15,7 @@ export const RULE_FILE_PATTERNS = [
     '.github/instructions/**/*.instructions.md',
 
     // Agentic
+    'AGENTS.md',
     '.agents.md',
     '.agent.md',
 
@@ -35,10 +39,30 @@ export const RULE_FILE_PATTERNS = [
     // Generic / internal
     '.rules/**/*',
     '.kody/rules/**',
+    // Documented alongside `.kody/rules/**` on the "Repository Rules"
+    // page; `.md`-only to avoid sweeping arbitrary `rules/` code dirs.
+    'rules/**/*.md',
     'docs/coding-standards/**/*',
 ] as const;
 
 export type RuleFilePattern = (typeof RULE_FILE_PATTERNS)[number];
+
+/**
+ * Patterns used to DISCOVER rule files anywhere in a repository: every
+ * base pattern plus its `**\/`-prefixed variant, so root-level names like
+ * `CLAUDE.md` or `AGENTS.md` are also found in subdirectories (the
+ * common monorepo convention of per-directory guidance files).
+ *
+ * Discovery and recognition (`isIdeRuleSource`) intentionally share this
+ * list — a file the sync imports must always be recognised as IDE-synced
+ * afterwards. Nested sources are scoped to their subdirectory by
+ * `extractRepoSubdirFromIdeSource`, so a `services/foo/CLAUDE.md` rule
+ * applies to `services/foo/**`, not repo-wide.
+ */
+export const RULE_FILE_DISCOVERY_PATTERNS: ReadonlyArray<string> = [
+    ...RULE_FILE_PATTERNS,
+    ...RULE_FILE_PATTERNS.map((p) => `**/${p}`),
+];
 
 /**
  * Whether `sourcePath` came from an IDE rule file recognised by the auto-sync
@@ -60,11 +84,12 @@ export function isIdeRuleSource(
     sourcePath: string | null | undefined,
 ): boolean {
     if (!sourcePath) return false;
-    const patterns: string[] = [
-        ...RULE_FILE_PATTERNS,
-        ...RULE_FILE_PATTERNS.map((p) => `**/${p}`),
-    ];
-    return isFileMatchingGlob(sourcePath, patterns);
+    // Case-insensitive to stay consistent with discovery: a file the sync
+    // imports (e.g. lowercase `claude.md`) must always be recognised as an
+    // IDE-synced source afterwards (toggle-off purge, origin resolution).
+    return isFileMatchingGlobCaseInsensitive(sourcePath, [
+        ...RULE_FILE_DISCOVERY_PATTERNS,
+    ]);
 }
 
 /**
@@ -141,6 +166,68 @@ export function extractRepoSubdirFromIdeSource(
 }
 
 /**
+ * Splits a rule `path` value into its individual glob patterns.
+ *
+ * Kody Rules support OR-joined globs in a single `path` string (the
+ * importer comma-joins declared multi-glob frontmatter). Commas that are
+ * part of a single valid picomatch pattern are NOT separators: inside
+ * braces ("{app,lib}/**"), character classes ("src/[ab,cd]/**"),
+ * extglobs ("@(app,lib)/**"), or escaped ("path\\,with\\,comma/**").
+ * Delimiters inside a character class are literals ("[{]" must not
+ * bump the brace depth), hence the mutual-exclusion guards below.
+ *
+ * Single source of truth for every consumer that needs to iterate a
+ * rule path's globs (review-time matching, IDE-dir rejection, etc.) so
+ * the split semantics can't drift between call sites.
+ */
+export function splitRulePathGlobs(rulePath: string): string[] {
+    const globs: string[] = [];
+    let current = '';
+    let braceDepth = 0;
+    let bracketDepth = 0;
+    let parenDepth = 0;
+    let escaped = false;
+
+    for (const char of rulePath) {
+        if (escaped) {
+            escaped = false;
+            current += char;
+            continue;
+        }
+        if (char === '\\') {
+            escaped = true;
+            current += char;
+            continue;
+        }
+
+        if (char === '{' && bracketDepth === 0) braceDepth++;
+        else if (char === '}' && braceDepth > 0 && bracketDepth === 0) {
+            braceDepth--;
+        } else if (char === '[' && bracketDepth === 0) bracketDepth++;
+        else if (char === ']' && bracketDepth > 0) bracketDepth--;
+        else if (char === '(' && bracketDepth === 0) parenDepth++;
+        else if (char === ')' && parenDepth > 0 && bracketDepth === 0) {
+            parenDepth--;
+        }
+
+        if (
+            char === ',' &&
+            braceDepth === 0 &&
+            bracketDepth === 0 &&
+            parenDepth === 0
+        ) {
+            if (current.trim()) globs.push(current.trim());
+            current = '';
+            continue;
+        }
+        current += char;
+    }
+    if (current.trim()) globs.push(current.trim());
+
+    return globs;
+}
+
+/**
  * Whether `candidatePath` would match an IDE rule file path. Used to
  * reject LLM hallucinations that try to scope a rule against the
  * `.cursor/rules/**` (or similar) directory — i.e. lint the rule
@@ -151,16 +238,15 @@ export function pathMatchesIdeRuleDir(
 ): boolean {
     if (!candidatePath) return false;
     // Comma-separated list (KodyRules supports OR-joined globs)
-    const globs = candidatePath
-        .split(',')
-        .map((g) => g.trim())
-        .filter(Boolean);
+    const globs = splitRulePathGlobs(candidatePath);
     if (globs.length === 0) return false;
 
     return globs.some((glob) => {
         // The glob is "IDE-y" if its fixed prefix is one of the markers
         // (e.g. ".cursor/rules/**" → fixed prefix ".cursor/rules/").
-        const fixedPrefix = glob.split(/[*?[]/)[0];
+        // `{` and `(` count as wildcards here so ".cursor/rules/{a,b}/**"
+        // and ".cursor/rules/@(a,b)/**" still yield ".cursor/rules".
+        const fixedPrefix = glob.split(/[*?[{(]/)[0].replace(/[@!+]$/, '');
         const dir = fixedPrefix.endsWith('/')
             ? fixedPrefix.slice(0, -1)
             : path.posix.dirname(fixedPrefix);
@@ -274,4 +360,30 @@ export function validateAndScopeIdeRulePath(params: {
         reason: 'accepted-as-is',
         originalLlmPath: llmPath,
     };
+}
+
+/**
+ * Whether a changed file falls under a rule's `path` as PERSISTED — i.e.
+ * possibly several globs comma-joined by the repo-file importer
+ * ("src/**,lib/**"). Matching the joined string as ONE glob makes the
+ * comma literal and the rule silently never fires (the customer's
+ * "multi-glob rules are never enforced" case). Trailing-slash globs are
+ * directories to picomatch, so the directory-prefix fallback runs PER
+ * split glob.
+ *
+ * Single source of truth for every enforcement path (agent provider
+ * selection, sharded judge, mechanical detector) — the bug regressed
+ * once precisely because a mirrored copy of this logic was fixed in one
+ * site and not the other.
+ */
+export function fileMatchesRulePath(
+    filePath: string,
+    pattern: string,
+): boolean {
+    if (filePath === pattern) return true;
+    return splitRulePathGlobs(pattern).some((glob) => {
+        if (filePath === glob) return true;
+        if (glob.endsWith('/') && filePath.startsWith(glob)) return true;
+        return isFileMatchingGlob(filePath, [glob]);
+    });
 }

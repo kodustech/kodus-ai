@@ -5,7 +5,6 @@ import { IssueSeverityLevelBadge } from "@components/system/issue-severity-level
 import { Badge } from "@components/ui/badge";
 import { Card, CardContent, CardFooter, CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
-import { McpProvidersBadge } from "@components/ui/kody-rules/mcp-providers";
 import {
     resolveKodyRuleDisplaySeverity,
     type LibraryRule,
@@ -101,10 +100,6 @@ export const KodyRuleLibraryItem = ({
         directoryId,
     });
 
-    const requiredMcps = Array.isArray(rule.required_mcps)
-        ? rule.required_mcps.filter(Boolean)
-        : [];
-
     return (
         <Card
             key={rule.uuid}
@@ -155,9 +150,6 @@ export const KodyRuleLibraryItem = ({
                             <PlugIcon className="size-2" />
                             <span>Plug-and-Play</span>
                         </Badge>
-                    )}
-                    {requiredMcps.length > 0 && (
-                        <McpProvidersBadge providers={requiredMcps} />
                     )}
                 </div>
 

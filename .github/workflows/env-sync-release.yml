@@ -38,6 +38,7 @@ on:
 jobs:
     sync-installer:
         runs-on: ubuntu-latest
+        environment: ci
         steps:
             - name: Checkout kodus-ai
               uses: actions/checkout@v4
@@ -56,15 +57,20 @@ jobs:
                   path: kodus-installer
                   token: ${{ secrets.CROSS_REPO_PAT }}
 
+            - uses: pnpm/action-setup@v4
+              with:
+                  # checkout vive em kodus-ai/ — sem package.json na raiz do
+                  # workspace, o action-setup não resolve o packageManager
+                  version: 10.34.1
             - uses: actions/setup-node@v4
               with:
                   node-version: 22
-                  cache: yarn
-                  cache-dependency-path: kodus-ai/yarn.lock
+                  cache: pnpm
+                  cache-dependency-path: kodus-ai/pnpm-lock.yaml
 
             - name: Install deps
               working-directory: kodus-ai
-              run: yarn install --frozen-lockfile
+              run: pnpm install --frozen-lockfile
 
             - name: Regenerate installer artifacts from schema
               working-directory: kodus-ai

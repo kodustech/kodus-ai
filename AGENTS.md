@@ -9,7 +9,6 @@ AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps, 20 shared 
 - `apps/worker/` - RabbitMQ consumer (webhook processing, code review execution, suggestion checks, monitoring crons)
 - `apps/webhooks/` - Webhook ingestion (GitHub, GitLab, Azure Repos, Bitbucket, Forgejo). Fire-and-forget with outbox pattern
 - `libs/` - 20 NestJS domain modules (core, code-review, ai-engine, agents, integrations, platform, identity, organization, etc.)
-- `packages/kodus-flow/` - Published npm SDK for AI agent orchestration (5-layer architecture)
 - `packages/kodus-common/` - Published npm package with LLM abstraction layer (OpenAI, Anthropic, Gemini, Vertex AI, Novita)
 
 ## Stack
@@ -26,29 +25,29 @@ AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps, 20 shared 
 ## Getting Started
 
 - Node.js 22.22.0 required (`.nvmrc` at root). Run `nvm use` if you get version errors
-- `yarn setup` - First-time project setup
+- `pnpm run setup` - First-time project setup
 
 ## Commands
 
 Everything runs via Docker (`docker-compose.dev.yml`):
 
-- `yarn docker:start` - Start full dev environment (API + worker + webhooks + DBs)
-- `yarn docker:start:api` - Start only API + databases
-- `yarn docker:start:worker` - Start only worker + databases
-- `yarn docker:start:webhooks` - Start only webhooks + databases
-- `yarn docker:start:web` - Start web frontend
-- `yarn docker:start:all` - Start all services including web
-- `yarn docker:up:infra` - Start only infra (databases, RabbitMQ)
-- `yarn docker:down` - Stop all containers
-- `yarn docker:logs` - Follow logs (API, worker, webhooks)
-- `yarn docker:logs:api` / `docker:logs:worker` / `docker:logs:webhooks` - Logs per service
-- `yarn dev:restart` - Stop + rebuild + start
-- `yarn dev:clean` - Full reset (prune + restart)
-- `yarn test` - Jest test suite (API_NODE_ENV=test)
-- `yarn build:apps` - Build all apps in parallel
-- `yarn migration:generate` - Generate TypeORM migrations
-- `yarn lint` - ESLint with auto-fix
-- `yarn format` - Prettier
+- `pnpm run docker:start` - Start full dev environment (API + worker + webhooks + DBs)
+- `pnpm run docker:start:api` - Start only API + databases
+- `pnpm run docker:start:worker` - Start only worker + databases
+- `pnpm run docker:start:webhooks` - Start only webhooks + databases
+- `pnpm run docker:start:web` - Start web frontend
+- `pnpm run docker:start:all` - Start all services including web
+- `pnpm run docker:up:infra` - Start only infra (databases, RabbitMQ)
+- `pnpm run docker:down` - Stop all containers
+- `pnpm run docker:logs` - Follow logs (API, worker, webhooks)
+- `pnpm run docker:logs:api` / `docker:logs:worker` / `docker:logs:webhooks` - Logs per service
+- `pnpm run dev:restart` - Stop + rebuild + start
+- `pnpm run dev:clean` - Full reset (prune + restart)
+- `pnpm run test` - Jest test suite (API_NODE_ENV=test)
+- `pnpm run build:apps` - Build all apps in parallel
+- `pnpm run migration:generate` - Generate TypeORM migrations
+- `pnpm run lint` - ESLint with auto-fix
+- `pnpm run format` - Prettier
 
 ## Architecture Patterns
 

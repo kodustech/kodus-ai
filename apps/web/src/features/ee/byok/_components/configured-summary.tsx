@@ -7,18 +7,30 @@ import { Separator } from "@components/ui/separator";
 import {
     BrainCircuitIcon,
     CheckCircle2Icon,
+    CoinsIcon,
+    ArrowUpRightIcon,
     KeyRoundIcon,
     LinkIcon,
     PencilIcon,
     ThermometerIcon,
     TrashIcon,
 } from "lucide-react";
+import Link from "next/link";
+
+import type { ByokModelCost } from "@services/usage/byok-cost";
+import { formatUsd } from "@services/usage/format";
 
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConfig } from "../_types";
 import { maskKey } from "../_utils";
 import { PROVIDER_LABELS } from "./catalog/model-card";
+
+function formatTokens(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return n.toLocaleString();
+}
 
 const formatReasoning = (config: BYOKConfig): string | null => {
     if (!config.reasoningEffort || config.reasoningEffort === "none")
@@ -35,11 +47,23 @@ export function ConfiguredSummary({
     onChange,
     onDelete,
     isDeleting,
+    cost,
+    periodLabel,
+    costRangeQuery,
 }: {
     config: BYOKConfig;
     onChange: () => void;
     onDelete: () => void;
     isDeleting?: boolean;
+    /**
+     * Accumulated cost of this model (see resolveByokModelCost). When absent
+     * or `no-data`, the block explains why instead of showing a misleading $0.
+     */
+    cost?: ByokModelCost;
+    /** e.g. "last 14 days" — tells the user which window the cost covers. */
+    periodLabel?: string;
+    /** `start=..&end=..` so the Costs deep-link opens on the SAME window. */
+    costRangeQuery?: string;
 }) {
     const curated = (curatedCatalog.models as CuratedModel[]).find(
         (m) => m.id === config.model,
@@ -133,6 +157,47 @@ export function ConfiguredSummary({
                                 <ThermometerIcon size={12} /> Temperature
                             </dt>
                             <dd>{config.temperature}</dd>
+                        </>
+                    )}
+
+                    {cost && (
+                        <>
+                            <dt className="flex items-center gap-1.5">
+                                <CoinsIcon size={12} /> Cost
+                            </dt>
+                            <dd>
+                                {cost.status === "ok" ? (
+                                    <Link
+                                        href={`/token-usage?models=${encodeURIComponent(
+                                            cost.model,
+                                        )}${
+                                            costRangeQuery
+                                                ? `&${costRangeQuery}`
+                                                : ""
+                                        }`}
+                                        title="See the full breakdown on the Costs page"
+                                        className="group inline-flex items-center gap-1.5 rounded-sm tabular-nums focus-visible:ring-2">
+                                        <span className="text-text-primary font-semibold">
+                                            {formatUsd(cost.total)}
+                                        </span>
+                                        {periodLabel && (
+                                            <span className="text-text-tertiary text-xs">
+                                                · {periodLabel}
+                                            </span>
+                                        )}
+                                        <span className="text-primary-light inline-flex items-center gap-1 text-xs group-hover:underline">
+                                            View breakdown
+                                            <ArrowUpRightIcon size={11} />
+                                        </span>
+                                    </Link>
+                                ) : (
+                                    <span className="text-text-tertiary text-xs">
+                                        {cost.reason === "unpriced"
+                                            ? "No catalog price — set a manual price below"
+                                            : "No usage in this period"}
+                                    </span>
+                                )}
+                            </dd>
                         </>
                     )}
                 </dl>

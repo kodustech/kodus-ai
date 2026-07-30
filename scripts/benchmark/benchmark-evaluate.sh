@@ -76,6 +76,7 @@ echo "▸ Extracting suggestions from MongoDB..."
 node -e "
 const { execSync, execFileSync } = require('child_process');
 const fs = require('fs');
+const { shouldIncludeInBenchmarkEvaluation } = require('./scripts/benchmark/benchmark-lib');
 const manifest = JSON.parse(fs.readFileSync('$MANIFEST', 'utf8'));
 const benchmark = JSON.parse(fs.readFileSync('scripts/benchmark/prs-benchmark.json', 'utf8'));
 
@@ -186,6 +187,7 @@ for (const entry of manifest.prs) {
       if (!s.suggestionContent || s.suggestionContent.length < 20) continue;
       // Skip suggestions discarded by the verifier (safeguard) — these are confirmed FPs
       if (s.priorityStatus === 'discarded-by-safeguard') continue;
+      if (!shouldIncludeInBenchmarkEvaluation(s)) continue;
       const entry2 = {
         comment: (s.suggestionContent || '').substring(0, 500),
         location: (s.relevantFile || file.filename) + ':' + (s.relevantLinesStart || 'general'),

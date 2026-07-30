@@ -163,6 +163,16 @@ export const perSeatLicenseToggle: Scenario = {
             await toggleSeat(baseUrl, authHeader, userId, gitTool, "inactive");
             await assertSeatCount(baseUrl, authHeader, 0, ctx);
             const usersBeforePhase3 = await fetchSeats(baseUrl, authHeader);
+            // Regression guard for PR #1451 ("licensed inactive users now
+            // appear"): a user toggled inactive must STILL show up in
+            // /license/users — it just doesn't consume an active seat (asserted
+            // 0 above). Before #1451 the user vanished from the list entirely.
+            ctx.assert(
+                usersBeforePhase3.some(
+                    (u) => String(u.git_id) === String(userId),
+                ),
+                `#1451: inactive user ${userId} should still appear in /license/users, got: ${JSON.stringify(usersBeforePhase3)}`,
+            );
 
             const phase3 = await runReviewPhase(ctx, fixture, {
                 label: "unassigned-after",
@@ -233,15 +243,25 @@ async function assertSeatCount(
     expected: number,
     ctx: RunContext,
 ): Promise<void> {
-    const resp = await http<{ data: Array<{ git_id: string }> }>(
-        `${baseUrl}/license/users`,
-        { headers: authHeader, timeoutMs: 15_000 },
-    );
+    const resp = await http<{
+        data: Array<{ git_id: string; status?: string }>;
+    }>(`${baseUrl}/license/users`, { headers: authHeader, timeoutMs: 15_000 });
     ensureOk(resp, "per-seat:listSeats");
-    const count = resp.body.data?.length ?? 0;
+    // Count only ACTIVE seats. Since PR #1451 ("licensed inactive users now
+    // appear") the endpoint also returns users toggled to `inactive`, so
+    // `data.length` no longer equals the number of occupied seats — an inactive
+    // user shows up in the list but does NOT consume a seat. Per-seat billing
+    // cares about the active count.
+    // Treat a missing `status` as active too: before #1451 every listed user
+    // was active (the endpoint didn't emit a status field), so `undefined ===
+    // active` preserves that semantic and avoids under-counting real active
+    // users if the field is absent.
+    const count = (resp.body.data ?? []).filter(
+        (u) => u.status === "active" || u.status === undefined,
+    ).length;
     ctx.assert(
         count === expected,
-        `Expected ${expected} licensed user(s) but got ${count}: ${resp.raw.slice(0, 300)}`,
+        `Expected ${expected} active licensed user(s) but got ${count}: ${resp.raw.slice(0, 300)}`,
     );
 }
 

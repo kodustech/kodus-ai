@@ -5,7 +5,6 @@ import { ContextReferenceDetectionService } from '../infrastructure/adapters/ser
 import { ContextReferenceService } from '../infrastructure/adapters/services/context/context-reference.service';
 import { ContextReferenceRepository } from '../infrastructure/adapters/repositories/contextReference.repository';
 import { ContextReferenceModel } from '../infrastructure/adapters/repositories/schemas/contextReference.model';
-import { MCPToolArgResolverAgentService } from '../infrastructure/adapters/services/context/mcp-tool-arg-resolver-agent.service';
 import { IntegrationConfigModule } from '@libs/integrations/modules/config.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -15,7 +14,6 @@ import { PROMPT_CONTEXT_LOADER_SERVICE_TOKEN } from '../domain/prompt/contracts/
 import { forwardRef, Module } from '@nestjs/common';
 import { CodeReviewContextPackService } from '../infrastructure/adapters/services/context/code-review-context-pack.service';
 import { PromptExternalReferenceManagerService } from '../infrastructure/adapters/services/prompt/promptExternalReferenceManager.service';
-import { FileContextAugmentationService } from '../infrastructure/adapters/services/context/file-context-augmentation.service';
 import { CONTEXT_REFERENCE_SERVICE_TOKEN } from '../domain/contextReference/contracts/context-reference.service.contract';
 import { CONTEXT_REFERENCE_REPOSITORY_TOKEN } from '../domain/contextReference/contracts/context-reference.repository.contract';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
@@ -29,7 +27,7 @@ import { PermissionValidationModule } from '@libs/ee/shared/permission-validatio
         forwardRef(() => IntegrationConfigModule),
         forwardRef(() => PlatformModule),
         forwardRef(() => McpCoreModule), // For MCPToolMetadataService
-        forwardRef(() => AgentsModule), // For ContextEvidenceAgentProvider
+        forwardRef(() => AgentsModule),
         forwardRef(() => PermissionValidationModule),
     ],
     providers: [
@@ -57,8 +55,6 @@ import { PermissionValidationModule } from '@libs/ee/shared/permission-validatio
         CodeReviewContextPackService,
         ContextReferenceDetectionService,
         ContextReferenceService,
-        FileContextAugmentationService,
-        MCPToolArgResolverAgentService,
     ],
     exports: [
         ReferenceDetectorService,
@@ -69,8 +65,6 @@ import { PermissionValidationModule } from '@libs/ee/shared/permission-validatio
         CodeReviewContextPackService,
         ContextReferenceDetectionService,
         ContextReferenceService,
-        FileContextAugmentationService,
-        MCPToolArgResolverAgentService,
     ],
 })
 export class AIEngineModule {}

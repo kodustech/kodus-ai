@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository } from 'typeorm';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 import { IPermissionsRepository } from '@libs/identity/domain/permissions/contracts/permissions.repository.contract';
 import { PermissionsModel } from './schemas/permissions.model';

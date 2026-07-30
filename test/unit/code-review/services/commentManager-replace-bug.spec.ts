@@ -9,7 +9,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { BehaviourForNewCommits } from '@libs/core/domain/enums/code-review.enum';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -61,8 +61,8 @@ describe('CommentManagerService – REPLACE mode bug (tags removed by user)', ()
 
     beforeEach(async () => {
         mockObservabilityService = {
-            runLLMInSpan: jest.fn().mockImplementation(async () => {
-                return { result: LLM_SUMMARY };
+            runAiSdkLLMInSpan: jest.fn().mockImplementation(async () => {
+                return { text: LLM_SUMMARY };
             }),
         };
 

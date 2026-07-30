@@ -1,6 +1,10 @@
-import { createMCPAdapter, createOrchestration } from '@kodus/flow';
+import { createMCPAdapter } from '@libs/mcp-server/mcp-adapter';
 
 import { GenericSkillRunnerService } from '@libs/agents/skills/generic-skill-runner.service';
+import {
+    buildMcpAgentToolRegistry,
+    runMcpFetcherAgent,
+} from '@libs/agents/skills/runtime/ai-sdk-fetcher.adapter';
 import { SkillLoaderService } from '@libs/agents/skills/skill-loader.service';
 import {
     McpConnectionUnavailableError,
@@ -10,24 +14,30 @@ import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metri
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 
-jest.mock('@kodus/flow', () => ({
+// MCP stays on the flow adapter; the agent loop runs on the harness via the
+// ai-sdk-fetcher adapter — both are mocked here so the unit tests exercise the
+// engine's orchestration logic (skill meta, preflight, filtering, policies,
+// metrics) without a real MCP server or LLM call.
+jest.mock('@libs/mcp-server/mcp-adapter', () => ({
     createMCPAdapter: jest.fn(),
-    createOrchestration: jest.fn(),
-    PlannerType: { REACT: 'REACT' },
+}));
+jest.mock('@libs/agents/skills/runtime/ai-sdk-fetcher.adapter', () => ({
+    buildMcpAgentToolRegistry: jest.fn(),
+    runMcpFetcherAgent: jest.fn(),
 }));
 
 describe('GenericSkillRunnerService', () => {
-    const createOrchestrationMock = createOrchestration as jest.Mock;
     const createMCPAdapterMock = createMCPAdapter as jest.Mock;
+    const buildMcpAgentToolRegistryMock =
+        buildMcpAgentToolRegistry as jest.Mock;
+    const runMcpFetcherAgentMock = runMcpFetcherAgent as jest.Mock;
 
-    const makeOrchestrator = () => ({
-        connectMCP: jest.fn().mockResolvedValue(undefined),
-        registerMCPTools: jest.fn().mockResolvedValue(undefined),
-        createAgent: jest.fn().mockResolvedValue(undefined),
-        callTool: jest.fn().mockResolvedValue({ result: {} }),
-        callAgent: jest.fn().mockResolvedValue({ result: {} }),
-        getRegisteredTools: jest.fn().mockReturnValue([]),
-        getToolsForLLM: jest.fn().mockReturnValue([]),
+    /** A connected flow MCP adapter (connect/getTools/executeTool/disconnect). */
+    const makeMcpAdapter = () => ({
+        connect: jest.fn().mockResolvedValue(undefined),
+        disconnect: jest.fn().mockResolvedValue(undefined),
+        getTools: jest.fn().mockResolvedValue([]),
+        executeTool: jest.fn().mockResolvedValue({}),
     });
 
     const organizationAndTeamData = {
@@ -57,6 +67,8 @@ describe('GenericSkillRunnerService', () => {
         observabilityService = {
             getAgentObservabilityConfig: jest.fn().mockReturnValue({}),
             getStorageConfig: jest.fn().mockReturnValue({}),
+            // Billing wrapper — just run the wrapped exec and return its result.
+            runAiSdkLLMInSpan: jest.fn((p: any) => p.exec()),
         } as any;
 
         mcpManagerService = {
@@ -68,8 +80,16 @@ describe('GenericSkillRunnerService', () => {
             ]),
         } as any;
 
-        createOrchestrationMock.mockResolvedValue(makeOrchestrator());
-        createMCPAdapterMock.mockReturnValue({} as any);
+        createMCPAdapterMock.mockReturnValue(makeMcpAdapter());
+        buildMcpAgentToolRegistryMock.mockResolvedValue({
+            get: () => undefined,
+            list: () => [],
+        });
+        runMcpFetcherAgentMock.mockResolvedValue({
+            text: '{}',
+            state: { usage: {} },
+            usage: { totalTokens: 0 },
+        });
 
         service = new GenericSkillRunnerService(
             skillLoaderService,
@@ -103,52 +123,6 @@ describe('GenericSkillRunnerService', () => {
         expect(
             skillLoaderService.loadSkillMetaFromFilesystem,
         ).toHaveBeenCalledTimes(1);
-    });
-
-    it('caches analyzer instructions by skill name', async () => {
-        skillLoaderService.loadInstructions.mockReturnValue(
-            'analyzer instructions',
-        );
-
-        await service.createAnalyzerOrchestration(
-            'business-rules-validation',
-            {} as any,
-        );
-        await service.createAnalyzerOrchestration(
-            'business-rules-validation',
-            {} as any,
-        );
-
-        expect(skillLoaderService.loadInstructions).toHaveBeenCalledTimes(1);
-    });
-
-    it('separates analyzer instruction cache by team context', async () => {
-        skillLoaderService.loadInstructions.mockReturnValue(
-            'analyzer instructions',
-        );
-
-        await service.createAnalyzerOrchestration(
-            'business-rules-validation',
-            {} as any,
-            {
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-1',
-                } as any,
-            },
-        );
-        await service.createAnalyzerOrchestration(
-            'business-rules-validation',
-            {} as any,
-            {
-                organizationAndTeamData: {
-                    organizationId: 'org-1',
-                    teamId: 'team-2',
-                } as any,
-            },
-        );
-
-        expect(skillLoaderService.loadInstructions).toHaveBeenCalledTimes(2);
     });
 
     it('fails fast when required MCP categories are declared and no external MCP is connected', async () => {
@@ -235,6 +209,109 @@ describe('GenericSkillRunnerService', () => {
                 provider: 'custom',
                 name: 'Jira',
                 allowedTools: ['getJiraIssue'],
+            },
+        ] as any);
+
+        await expect(
+            service.createFetcherOrchestration(
+                'business-rules-validation',
+                {} as any,
+                organizationAndTeamData,
+            ),
+        ).resolves.toBeDefined();
+    });
+
+    it('accepts Atlassian Rovo when it is listed in required MCP examples', async () => {
+        skillLoaderService.loadSkillMetaFromFilesystem.mockReturnValue(
+            withSkillMeta({
+                requiredMcps: [
+                    {
+                        category: 'task-management',
+                        label: 'Task Management',
+                        examples:
+                            'Jira, Atlassian Rovo, Linear, Notion, ClickUp, Github Issues',
+                    },
+                ],
+            }),
+        );
+        mcpManagerService.getConnections.mockResolvedValue([
+            {
+                provider: 'kodusmcp',
+                name: 'Kodus MCP',
+                allowedTools: ['KODUS_GET_PULL_REQUEST'],
+            },
+            {
+                provider: 'kodusmcp',
+                name: 'Atlassian Rovo',
+                allowedTools: ['getJiraIssue'],
+            },
+        ] as any);
+
+        await expect(
+            service.createFetcherOrchestration(
+                'business-rules-validation',
+                {} as any,
+                organizationAndTeamData,
+            ),
+        ).resolves.toBeDefined();
+    });
+
+    it('accepts the Kodus built-in "Git Issues" MCP for task-management (regression)', async () => {
+        // Real-world NO_TASK_MCP: the connected MCP is Kodus\'s built-in task
+        // tracker whose appName is "Git Issues" (→ `gitissues`). The example
+        // "Github Issues" normalizes to `githubissues`, which does NOT match
+        // `gitissues` (the "hub" breaks both === and includes). The fix adds
+        // "Git Issues" to the examples so the hint matches the real connection.
+        skillLoaderService.loadSkillMetaFromFilesystem.mockReturnValue(
+            withSkillMeta({
+                requiredMcps: [
+                    {
+                        category: 'task-management',
+                        label: 'Task Management',
+                        examples:
+                            'Jira, Atlassian Rovo, Linear, Notion, ClickUp, Github Issues, Git Issues',
+                    },
+                ],
+            }),
+        );
+        mcpManagerService.getConnections.mockResolvedValue([
+            {
+                provider: 'kodusmcp',
+                name: 'Git Issues',
+                allowedTools: ['KODUS_LIST_ISSUES', 'KODUS_GET_ISSUE'],
+            },
+        ] as any);
+
+        await expect(
+            service.createFetcherOrchestration(
+                'business-rules-validation',
+                {} as any,
+                organizationAndTeamData,
+            ),
+        ).resolves.toBeDefined();
+    });
+
+    it('matches by canonical registry category regardless of display name (drift-proof, the correct fix)', async () => {
+        // The connection name matches NO example hint, but the mcp-manager
+        // stamped its registry category. Category matching is the single source
+        // of truth — it must accept the connection even when the name drifts.
+        skillLoaderService.loadSkillMetaFromFilesystem.mockReturnValue(
+            withSkillMeta({
+                requiredMcps: [
+                    {
+                        category: 'task-management',
+                        label: 'Task Management',
+                        examples: 'Jira, Linear',
+                    },
+                ],
+            }),
+        );
+        mcpManagerService.getConnections.mockResolvedValue([
+            {
+                provider: 'kodusmcp',
+                name: 'Some Renamed Tracker',
+                category: 'task-management',
+                allowedTools: ['KODUS_LIST_ISSUES'],
             },
         ] as any);
 
@@ -337,11 +414,11 @@ describe('GenericSkillRunnerService', () => {
     });
 
     it('throws typed MCP connection error when required MCP exists but all connections fail', async () => {
-        const orchestrator = makeOrchestrator();
-        orchestrator.connectMCP.mockRejectedValue(
+        const adapter = makeMcpAdapter();
+        adapter.connect.mockRejectedValue(
             new Error('Failed to connect to any MCP server'),
         );
-        createOrchestrationMock.mockResolvedValue(orchestrator);
+        createMCPAdapterMock.mockReturnValue(adapter);
 
         skillLoaderService.loadSkillMetaFromFilesystem.mockReturnValue(
             withSkillMeta({
@@ -372,11 +449,11 @@ describe('GenericSkillRunnerService', () => {
     });
 
     it('throws typed MCP connection error for optional MCP skills when MCP connection fails', async () => {
-        const orchestrator = makeOrchestrator();
-        orchestrator.connectMCP.mockRejectedValue(
+        const adapter = makeMcpAdapter();
+        adapter.connect.mockRejectedValue(
             new Error('Failed to connect to any MCP server'),
         );
-        createOrchestrationMock.mockResolvedValue(orchestrator);
+        createMCPAdapterMock.mockReturnValue(adapter);
 
         skillLoaderService.loadSkillMetaFromFilesystem.mockReturnValue(
             withSkillMeta({
@@ -398,7 +475,7 @@ describe('GenericSkillRunnerService', () => {
                 organizationAndTeamData,
             ),
         ).rejects.toBeInstanceOf(McpConnectionUnavailableError);
-        expect(orchestrator.registerMCPTools).not.toHaveBeenCalled();
+        expect(buildMcpAgentToolRegistryMock).not.toHaveBeenCalled();
     });
 
     it('throws typed MCP connection error when no MCP tools are available', async () => {
@@ -420,8 +497,6 @@ describe('GenericSkillRunnerService', () => {
     });
 
     it('allows fallback without tools when fetcher-policy enables it and defers fetcher agent creation', async () => {
-        const orchestrator = makeOrchestrator();
-        createOrchestrationMock.mockResolvedValue(orchestrator);
         createMCPAdapterMock.mockReturnValue(null);
 
         skillLoaderService.loadSkillMetaFromFilesystem.mockReturnValue(
@@ -441,15 +516,13 @@ describe('GenericSkillRunnerService', () => {
             organizationAndTeamData,
         );
 
-        expect(orchestrator.connectMCP).not.toHaveBeenCalled();
-        expect(orchestrator.registerMCPTools).not.toHaveBeenCalled();
-        expect(orchestrator.createAgent).not.toHaveBeenCalled();
+        // No MCP adapter → nothing connected, no tool registry built.
+        expect(buildMcpAgentToolRegistryMock).not.toHaveBeenCalled();
         await runtime.toolCaller.callAgent?.(
             'kodus-business-rules-validation-fetcher',
             'hello',
         );
-        expect(orchestrator.createAgent).toHaveBeenCalledTimes(1);
-        expect(orchestrator.callAgent).toHaveBeenCalledTimes(1);
+        expect(runMcpFetcherAgentMock).toHaveBeenCalledTimes(1);
     });
 
     it('returns providerType derived from external MCP connections in runtime config', async () => {

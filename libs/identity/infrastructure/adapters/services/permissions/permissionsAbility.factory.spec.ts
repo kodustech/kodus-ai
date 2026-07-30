@@ -1,3 +1,4 @@
+import { subject as caslSubject } from '@casl/ability';
 import {
     Action,
     ResourceType,
@@ -56,18 +57,99 @@ describe('PermissionsAbilityFactory', () => {
         expect(ability.can(Action.Read, ResourceType.Cockpit)).toBe(false);
     });
 
-    it('CONTRIBUTOR: read cli-review/issues/code-review, but NOT PRs, token usage, or edit', async () => {
+    it('CONTRIBUTOR: read cli-review/issues/code-review/PRs, but NOT cockpit, token usage, or edit', async () => {
         const ability = await buildFor(Role.CONTRIBUTOR);
         expect(ability.can(Action.Read, ResourceType.CliReview)).toBe(true);
         expect(ability.can(Action.Read, ResourceType.Issues)).toBe(true);
         expect(ability.can(Action.Read, ResourceType.CodeReviewSettings)).toBe(
             true,
         );
-        expect(ability.can(Action.Read, ResourceType.PullRequests)).toBe(false);
+        expect(ability.can(Action.Read, ResourceType.PullRequests)).toBe(true);
+        expect(ability.can(Action.Read, ResourceType.Cockpit)).toBe(false);
         expect(ability.can(Action.Read, ResourceType.TokenUsage)).toBe(false);
         expect(ability.can(Action.Update, ResourceType.CodeReviewSettings)).toBe(
             false,
         );
+    });
+
+    it('REPO_ADMIN reads are org-wide, but writes stay gated by repo assignment', async () => {
+        const ability = await buildFor(Role.REPO_ADMIN);
+        const unassigned = (resource: ResourceType) =>
+            caslSubject(resource, {
+                organizationId: 'org-1',
+                repoId: 'repo-unassigned',
+            });
+        // Sees everything (read) regardless of assignment.
+        expect(
+            ability.can(
+                Action.Read,
+                unassigned(ResourceType.CodeReviewSettings) as any,
+            ),
+        ).toBe(true);
+        expect(
+            ability.can(Action.Read, unassigned(ResourceType.Cockpit) as any),
+        ).toBe(true);
+        expect(
+            ability.can(
+                Action.Read,
+                unassigned(ResourceType.PullRequests) as any,
+            ),
+        ).toBe(true);
+        // Edits only on assigned repos.
+        expect(
+            ability.can(
+                Action.Update,
+                unassigned(ResourceType.CodeReviewSettings) as any,
+            ),
+        ).toBe(false);
+        expect(
+            ability.can(
+                Action.Update,
+                caslSubject(ResourceType.CodeReviewSettings, {
+                    organizationId: 'org-1',
+                    repoId: 'repo-1',
+                }) as any,
+            ),
+        ).toBe(true);
+    });
+
+    it('CONTRIBUTOR reads are org-wide: not gated by repo assignment', async () => {
+        const ability = await buildFor(Role.CONTRIBUTOR);
+        // 'repo-unassigned' is NOT in the assigned list (['repo-1']); a
+        // contributor must still see its settings/rules/PRs (read-only).
+        const inUnassignedRepo = (resource: ResourceType) =>
+            caslSubject(resource, {
+                organizationId: 'org-1',
+                repoId: 'repo-unassigned',
+            });
+        expect(
+            ability.can(
+                Action.Read,
+                inUnassignedRepo(ResourceType.CodeReviewSettings) as any,
+            ),
+        ).toBe(true);
+        expect(
+            ability.can(
+                Action.Read,
+                inUnassignedRepo(ResourceType.KodyRules) as any,
+            ),
+        ).toBe(true);
+        expect(
+            ability.can(
+                Action.Read,
+                inUnassignedRepo(ResourceType.PullRequests) as any,
+            ),
+        ).toBe(true);
+        // Writes stay forbidden even on assigned repos.
+        expect(
+            ability.can(
+                Action.Update,
+                caslSubject(ResourceType.CodeReviewSettings, {
+                    organizationId: 'org-1',
+                    repoId: 'repo-1',
+                }) as any,
+            ),
+        ).toBe(false);
     });
 
     it('a user without a role can do nothing', async () => {

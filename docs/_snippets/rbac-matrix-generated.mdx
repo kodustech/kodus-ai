@@ -1,6 +1,6 @@
 {/* AUTO-GENERATED — do not edit by hand.
    Source of truth: libs/identity/domain/permissions/policies/role-policies.ts
-   Regenerate with: yarn permissions:matrix */}
+   Regenerate with: pnpm run permissions:matrix */}
 
 <sub>
 **Legend** — `V` view · `E` edit (create/update) · `D` delete · `—` no access.
@@ -10,16 +10,17 @@ Scope: `all` = whole organization · `own` = repositories assigned to the user �
 
 | Feature | Owner | Billing Manager | Repo Admin | Contributor |
 | --- | --- | --- | --- | --- |
-| Code Review Settings | V (all) / E (all) / D (all) | V (all) | V (own+global) / E (own) | V (own+global) |
+| Code Review Settings | V (all) / E (all) / D (all) | V (all) | V (all) / E (own) | V (all) |
 | Kody Rules (Library) | V (all) / E (all) / D (all) | V (all) | V (all) / E (own) / D (own) | V (all) |
-| Pull Requests | V (all) / E (all) / D (all) | — | V (own) | — |
-| CLI Review | V (all) / E (all) / D (all) | — | V (own) | V (own) |
-| Issues | V (all) / E (all) / D (all) | — | V (all) / E (own) | V (own) |
+| Pull Requests | V (all) / E (all) / D (all) | — | V (all) | V (all) |
+| CLI Review | V (all) / E (all) / D (all) | — | V (all) | V (all) |
+| Issues | V (all) / E (all) / D (all) | — | V (all) / E (own) | V (all) |
 | Issues Settings | V (all) / E (all) / D (all) | V (all) | V (all) / E (all) | V (all) |
-| Cockpit | V (all) / E (all) / D (all) | — | V (own+global) | — |
+| Cockpit | V (all) / E (all) / D (all) | — | V (all) | — |
 | Billing / Subscription | V (all) / E (all) / D (all) | V (all) / E (all) / D (all) | — | — |
-| Git Settings | V (all) / E (all) / D (all) | V (all) | V (all) | — |
-| Plugins | V (all) / E (all) / D (all) | V (all) | V (all) | — |
-| Activity Log | V (all) / E (all) / D (all) | V (all) | V (own+global) | — |
+| Git Settings | V (all) / E (all) / D (all) | V (all) | V (all) | V (all) |
+| Plugins | V (all) / E (all) / D (all) | V (all) | V (all) | V (all) |
+| Activity Log | V (all) / E (all) / D (all) | V (all) | V (all) | V (all) |
 | Token Usage | V (all) / E (all) / D (all) | V (all) | V (all) | — |
+| Organization Settings | V (all) / E (all) / D (all) | — | — | — |
 | User / Seats | V (all) / E (all) / D (all) | V (all) | — | — |

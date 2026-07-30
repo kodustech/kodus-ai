@@ -6,21 +6,21 @@ import type {
     ProviderRepoRef,
     ReviewSignal,
     WebhookInfo,
-} from "../lib/types.js";
-import { randomUUID } from "node:crypto";
-import type { Target } from "../lib/types.js";
+} from '../lib/types.js';
+import { randomUUID } from 'node:crypto';
+import type { Target } from '../lib/types.js';
 import {
     BaseProvider,
     nowIso,
     pollUntil,
     requireEnv,
     resolveTargetRepo,
-} from "./base.js";
-import { ensureOk, http } from "../lib/http.js";
-import { prepareBranch } from "../lib/git.js";
-import { logger } from "../lib/log.js";
+} from './base.js';
+import { ensureOk, http } from '../lib/http.js';
+import { prepareBranch } from '../lib/git.js';
+import { logger } from '../lib/log.js';
 
-const log = logger("provider:github");
+const log = logger('provider:github');
 
 // Map a Kody license-block notification body to a discriminator the
 // scenario layer can assert on. Loose keyword match so we can tell
@@ -28,28 +28,37 @@ const log = logger("provider:github");
 // committing to exact copy that may change.
 function classifyLicenseNotice(
     body: string,
-): "trial-ended" | "byok-required" | "no-license" | "other" {
+): 'trial-ended' | 'byok-required' | 'no-license' | 'other' {
     const b = body.toLowerCase();
-    if (/trial.*(ended|expired|over)/.test(b)) return "trial-ended";
-    if (/byok|own (api )?key|api[ -]?key/.test(b)) return "byok-required";
+    if (/trial.*(ended|expired|over)/.test(b)) return 'trial-ended';
+    if (/byok|own (api )?key|api[ -]?key/.test(b)) return 'byok-required';
     if (/(no|invalid).*license|activate.*plan|subscribe/.test(b))
-        return "no-license";
-    return "other";
+        return 'no-license';
+    return 'other';
 }
 
 export class GitHubProvider extends BaseProvider {
-    readonly name: ProviderName = "github";
-    readonly integrationType = "GITHUB";
-    readonly webhookPath = "/github/webhook";
+    readonly name: ProviderName = 'github';
+    readonly integrationType = 'GITHUB';
+    readonly webhookPath = '/github/webhook';
 
-    protected readonly token: string;
+    // Not readonly: refreshInstallationTokenIfNeeded() swaps in a re-minted
+    // GitHub App installation token when a long poll outlives the ~1h expiry.
+    protected token: string;
     protected readonly repoFullName: string;
-    protected readonly apiBase = "https://api.github.com";
+    protected readonly apiBase = 'https://api.github.com';
     protected readonly existingPrNumber?: number;
 
-    constructor(opts?: { repoOverride?: string; target?: Target }) {
+    constructor(opts?: {
+        repoOverride?: string;
+        target?: Target;
+        tokenOverride?: string;
+    }) {
         super();
-        this.token = requireEnv("GH_TEST_TOKEN");
+        // tokenOverride is the round-robin token the matrix runner assigns
+        // from the bot-account pool (see lib/github-token-pool.ts). Falls back
+        // to the single GH_TEST_TOKEN when no pool is configured.
+        this.token = opts?.tokenOverride || requireEnv('GH_TEST_TOKEN');
         // Subclasses (notably GitHubAppProvider) need to target a
         // DIFFERENT repo than the PAT-driven default — the GitHub App
         // is installed scope-limited to that other repo, so any PR we
@@ -59,16 +68,39 @@ export class GitHubProvider extends BaseProvider {
         // listing) to the App-bound repo.
         this.repoFullName =
             opts?.repoOverride ??
-            resolveTargetRepo("GH_TEST_REPO", opts?.target ?? "self-hosted");
+            resolveTargetRepo('GH_TEST_REPO', opts?.target ?? 'self-hosted');
         const existing = process.env.GH_TEST_PR_NUMBER;
         if (existing) this.existingPrNumber = Number(existing);
     }
 
     private headers(): Record<string, string> {
         return {
-            Authorization: `Bearer ${this.token}`,
-            Accept: "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
+            'Authorization': `Bearer ${this.token}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+        };
+    }
+
+    // Headers for writes that establish AUTHORSHIP of a product-visible
+    // event (creating a PR, posting a trigger comment). When the harness
+    // runs on a GitHub App installation token (cloud cells, for quota), the
+    // author of those events becomes the App's `[bot]` account — and the
+    // product correctly skips reviews for bot authors ("User is ignored,
+    // skipping automation"), which silently zeroed the whole cloud matrix
+    // since the App secrets landed. Route authorship writes through the
+    // durable PAT (a human-typed account) and keep every read/poll on the
+    // App token's own quota. On PAT-only runs this is identical to
+    // headers().
+    private authorHeaders(): Record<string, string> {
+        const pat = process.env.GH_TEST_TOKEN;
+        const token =
+            this.token.startsWith('ghs_') && pat && !pat.startsWith('ghs_')
+                ? pat
+                : this.token;
+        return {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
         };
     }
 
@@ -77,11 +109,14 @@ export class GitHubProvider extends BaseProvider {
     }
 
     async repoRef(): Promise<ProviderRepoRef> {
-        const resp = await http<{ id: number; full_name: string; name: string }>(
-            `${this.apiBase}/repos/${this.repoFullName}`,
-            { headers: this.headers() },
-        );
-        ensureOk(resp, "github:repoRef");
+        const resp = await http<{
+            id: number;
+            full_name: string;
+            name: string;
+        }>(`${this.apiBase}/repos/${this.repoFullName}`, {
+            headers: this.headers(),
+        });
+        ensureOk(resp, 'github:repoRef');
         return {
             id: resp.body.id,
             full_name: resp.body.full_name,
@@ -93,35 +128,35 @@ export class GitHubProvider extends BaseProvider {
         const resp = await http<{ id: number }>(
             `${this.apiBase}/repos/${this.repoFullName}/hooks`,
             {
-                method: "POST",
+                method: 'POST',
                 headers: this.headers(),
                 body: {
-                    name: "web",
+                    name: 'web',
                     active: true,
                     events: [
-                        "pull_request",
-                        "push",
-                        "issue_comment",
-                        "pull_request_review",
-                        "pull_request_review_comment",
+                        'pull_request',
+                        'push',
+                        'issue_comment',
+                        'pull_request_review',
+                        'pull_request_review_comment',
                     ],
                     config: {
                         url: webhookUrl,
-                        content_type: "json",
-                        insecure_ssl: "0",
+                        content_type: 'json',
+                        insecure_ssl: '0',
                     },
                 },
             },
         );
-        ensureOk(resp, "github:createWebhook");
+        ensureOk(resp, 'github:createWebhook');
         return { id: String(resp.body.id) };
     }
 
     async deleteWebhook(id: string): Promise<void> {
-        await http(
-            `${this.apiBase}/repos/${this.repoFullName}/hooks/${id}`,
-            { method: "DELETE", headers: this.headers() },
-        );
+        await http(`${this.apiBase}/repos/${this.repoFullName}/hooks/${id}`, {
+            method: 'DELETE',
+            headers: this.headers(),
+        });
     }
 
     async listWebhooks(): Promise<WebhookInfo[]> {
@@ -135,10 +170,10 @@ export class GitHubProvider extends BaseProvider {
         >(`${this.apiBase}/repos/${this.repoFullName}/hooks?per_page=100`, {
             headers: this.headers(),
         });
-        ensureOk(resp, "github:listWebhooks");
+        ensureOk(resp, 'github:listWebhooks');
         return (resp.body ?? []).map((h) => ({
             id: String(h.id),
-            url: h.config?.url ?? "",
+            url: h.config?.url ?? '',
             active: Boolean(h.active),
             events: h.events ?? [],
         }));
@@ -149,6 +184,7 @@ export class GitHubProvider extends BaseProvider {
             cloneUrl: this.cloneUrl(),
             branch: args.branch,
             files: args.fixtureFiles,
+            deleteFiles: args.deleteFiles,
             commitMessage: args.title,
             baseBranch: args.baseBranch,
         });
@@ -156,8 +192,8 @@ export class GitHubProvider extends BaseProvider {
             const resp = await http<{ number: number; html_url: string }>(
                 `${this.apiBase}/repos/${this.repoFullName}/pulls`,
                 {
-                    method: "POST",
-                    headers: this.headers(),
+                    method: 'POST',
+                    headers: this.authorHeaders(),
                     body: {
                         title: args.title,
                         body: args.body,
@@ -166,7 +202,7 @@ export class GitHubProvider extends BaseProvider {
                     },
                 },
             );
-            ensureOk(resp, "github:openPR");
+            ensureOk(resp, 'github:openPR');
             return {
                 number: resp.body.number,
                 url: resp.body.html_url,
@@ -191,7 +227,10 @@ export class GitHubProvider extends BaseProvider {
                 return await this.openPRFromBranchesOnce(args);
             } catch (err) {
                 lastErr = err;
-                if (!/HTTP 5\d\d/.test((err as Error).message) || attempt === 3) {
+                if (
+                    !/HTTP 5\d\d/.test((err as Error).message) ||
+                    attempt === 3
+                ) {
                     throw err;
                 }
                 await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
@@ -215,20 +254,20 @@ export class GitHubProvider extends BaseProvider {
             `${this.apiBase}/repos/${this.repoFullName}/git/ref/heads/${args.head}`,
             { headers: this.headers() },
         );
-        ensureOk(tip, "github:openPRFromBranches:resolveHead");
+        ensureOk(tip, 'github:openPRFromBranches:resolveHead');
         const headSha = tip.body.object.sha;
         const commitInfo = await http<{ tree: { sha: string } }>(
             `${this.apiBase}/repos/${this.repoFullName}/git/commits/${headSha}`,
             { headers: this.headers() },
         );
-        ensureOk(commitInfo, "github:openPRFromBranches:resolveTree");
+        ensureOk(commitInfo, 'github:openPRFromBranches:resolveTree');
 
         const uid = randomUUID().slice(0, 8);
-        const throwaway = `e2e/${args.head.replace(/[^a-zA-Z0-9._-]+/g, "-")}-${uid}`;
+        const throwaway = `e2e/${args.head.replace(/[^a-zA-Z0-9._-]+/g, '-')}-${uid}`;
         const commit = await http<{ sha: string }>(
             `${this.apiBase}/repos/${this.repoFullName}/git/commits`,
             {
-                method: "POST",
+                method: 'POST',
                 headers: this.headers(),
                 body: {
                     message: `[e2e] throwaway head for ${args.head} (${uid})`,
@@ -237,11 +276,11 @@ export class GitHubProvider extends BaseProvider {
                 },
             },
         );
-        ensureOk(commit, "github:openPRFromBranches:commit");
+        ensureOk(commit, 'github:openPRFromBranches:commit');
         const ref = await http(
             `${this.apiBase}/repos/${this.repoFullName}/git/refs`,
             {
-                method: "POST",
+                method: 'POST',
                 headers: this.headers(),
                 body: {
                     ref: `refs/heads/${throwaway}`,
@@ -249,13 +288,13 @@ export class GitHubProvider extends BaseProvider {
                 },
             },
         );
-        ensureOk(ref, "github:openPRFromBranches:ref");
+        ensureOk(ref, 'github:openPRFromBranches:ref');
 
         const resp = await http<{ number: number; html_url: string }>(
             `${this.apiBase}/repos/${this.repoFullName}/pulls`,
             {
-                method: "POST",
-                headers: this.headers(),
+                method: 'POST',
+                headers: this.authorHeaders(),
                 body: {
                     title: args.title,
                     body: args.body,
@@ -264,7 +303,7 @@ export class GitHubProvider extends BaseProvider {
                 },
             },
         );
-        ensureOk(resp, "github:openPRFromBranches");
+        ensureOk(resp, 'github:openPRFromBranches');
         return {
             number: resp.body.number,
             url: resp.body.html_url,
@@ -279,7 +318,7 @@ export class GitHubProvider extends BaseProvider {
         base: string,
     ): Promise<void> {
         // GitHub's list-PRs `head` filter expects `owner:branch` form.
-        const owner = this.repoFullName.split("/")[0];
+        const owner = this.repoFullName.split('/')[0];
         const headRef = `${owner}:${head}`;
         const resp = await http<Array<{ number: number; state: string }>>(
             `${this.apiBase}/repos/${this.repoFullName}/pulls?state=open&head=${encodeURIComponent(headRef)}&base=${encodeURIComponent(base)}&per_page=10`,
@@ -289,9 +328,9 @@ export class GitHubProvider extends BaseProvider {
             await http(
                 `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}`,
                 {
-                    method: "PATCH",
+                    method: 'PATCH',
                     headers: this.headers(),
-                    body: { state: "closed" },
+                    body: { state: 'closed' },
                 },
             );
         }
@@ -303,18 +342,24 @@ export class GitHubProvider extends BaseProvider {
         // is enough in practice; the loop guards against future drift.
         let closed = 0;
         for (let page = 1; page <= 5; page += 1) {
-            const resp = await http<Array<{ number: number; title: string; head: { ref: string } }>>(
+            const resp = await http<
+                Array<{ number: number; title: string; head: { ref: string } }>
+            >(
                 `${this.apiBase}/repos/${this.repoFullName}/pulls?state=open&per_page=100&page=${page}`,
                 { headers: this.headers() },
             );
-            ensureOk(resp, "github:cleanupStale:list");
+            ensureOk(resp, 'github:cleanupStale:list');
             const batch = resp.body ?? [];
             if (batch.length === 0) break;
             for (const pr of batch) {
-                if (!(pr.title ?? "").startsWith("[e2e]")) continue;
+                if (!(pr.title ?? '').startsWith('[e2e]')) continue;
                 await http(
                     `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}`,
-                    { method: "PATCH", headers: this.headers(), body: { state: "closed" } },
+                    {
+                        method: 'PATCH',
+                        headers: this.headers(),
+                        body: { state: 'closed' },
+                    },
                 );
                 closed += 1;
             }
@@ -327,15 +372,15 @@ export class GitHubProvider extends BaseProvider {
         await http(
             `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}`,
             {
-                method: "PATCH",
+                method: 'PATCH',
                 headers: this.headers(),
-                body: { state: "closed" },
+                body: { state: 'closed' },
             },
         );
         if (pr.keepBranchOnClose) return;
         await http(
             `${this.apiBase}/repos/${this.repoFullName}/git/refs/heads/${pr.branch}`,
-            { method: "DELETE", headers: this.headers() },
+            { method: 'DELETE', headers: this.headers() },
         );
     }
 
@@ -343,20 +388,106 @@ export class GitHubProvider extends BaseProvider {
         prNumber: number,
     ): Promise<{ triggerId: string; sinceIso: string }> {
         const target = prNumber || this.existingPrNumber;
-        if (!target) throw new Error("github:triggerReview requires GH_TEST_PR_NUMBER");
+        if (!target)
+            throw new Error('github:triggerReview requires GH_TEST_PR_NUMBER');
         const resp = await http<{ id: number; created_at: string }>(
             `${this.apiBase}/repos/${this.repoFullName}/issues/${target}/comments`,
             {
-                method: "POST",
-                headers: this.headers(),
-                body: { body: "@kody review" },
+                method: 'POST',
+                headers: this.authorHeaders(),
+                body: { body: '@kody review' },
             },
         );
-        ensureOk(resp, "github:triggerReview");
+        ensureOk(resp, 'github:triggerReview');
         return {
             triggerId: String(resp.body.id),
             sinceIso: resp.body.created_at,
         };
+    }
+
+    // GitHub App installation tokens (ghs_) expire after ~1h. The runner
+    // mints one per SCENARIO, but a scenario with two 25-min polls plus a
+    // retry settle outlives it — observed on the cloud matrix as an opaque
+    // HTTP 401 mid-poll after ~50min. githubAppToken() keeps a cache with a
+    // 30-min refresh margin, so re-resolving here is free until a re-mint is
+    // actually due. PATs (ghp_/github_pat_) never take this path.
+    private async refreshInstallationTokenIfNeeded(): Promise<void> {
+        if (!this.token.startsWith('ghs_')) return;
+        try {
+            const { githubAppToken } = await import(
+                '../lib/github-app-token.js'
+            );
+            const fresh = await githubAppToken();
+            if (fresh) this.token = fresh;
+        } catch {
+            // keep the current token — if it is truly expired the next
+            // request 401s loudly, which is the pre-existing behaviour
+        }
+    }
+
+    // Conditional GET with an ETag cache. GitHub serves 304 Not Modified
+    // when the resource didn't change since the cached ETag — and 304s DO
+    // NOT count against the per-account rate limit. The poll loops below
+    // (pollForReview every 10s, waitForPipelineStart every 3s, both for
+    // many minutes) are the harness's dominant quota consumers (~200-270
+    // requests per scenario); with conditional requests only the polls
+    // where something actually changed are billed. Cache is per provider
+    // instance (one per cell), keyed by URL.
+    private etagCache = new Map<string, { etag: string; body: unknown }>();
+
+    private async conditionalGet<T>(
+        url: string,
+    ): Promise<{ status: number; body: T; raw: string }> {
+        const cached = this.etagCache.get(url);
+        const resp = await http<T>(url, {
+            headers: {
+                ...this.headers(),
+                ...(cached ? { 'If-None-Match': cached.etag } : {}),
+            },
+        });
+        if (resp.status === 304 && cached) {
+            return { status: 200, body: cached.body as T, raw: '' };
+        }
+        const etag = resp.headers.get('etag');
+        if (resp.status === 200 && etag) {
+            this.etagCache.set(url, { etag, body: resp.body });
+        }
+        return resp;
+    }
+
+    // GitHub list endpoints return a JSON *error envelope* ({message,
+    // documentation_url}) instead of an array when the request is rejected
+    // — most commonly the per-account primary/secondary rate limit (HTTP
+    // 403/429). Downstream code iterates these responses, so the raw
+    // symptom is an opaque `items is not iterable` FAIL that the runner
+    // can't classify (observed gating release run 28888685303 on
+    // license-attribution). Name the failure at the source instead: a
+    // rate-limit envelope becomes an explicit "rate limit exceeded" error
+    // (which isGithubRateLimit maps to a loud non-gating SKIP), anything
+    // else keeps the status + body for diagnosis.
+    private listOrThrow<T>(
+        resp: { status: number; body: T[]; raw: string },
+        label: string,
+    ): T[] {
+        if (Array.isArray(resp.body)) return resp.body;
+        // 2xx with an empty body (no JSON to parse) — treat as an empty
+        // list rather than an envelope.
+        if (
+            resp.status >= 200 &&
+            resp.status < 300 &&
+            (resp.raw ?? '').trim() === ''
+        ) {
+            return [];
+        }
+        const raw = (resp.raw ?? '').slice(0, 300);
+        if (/rate limit|abuse/i.test(raw)) {
+            throw new Error(
+                `${label}: GitHub API rate limit exceeded (HTTP ${resp.status}): ${raw}`,
+            );
+        }
+        throw new Error(
+            `${label}: expected an array from GitHub, got HTTP ${resp.status}: ${raw}`,
+        );
     }
 
     async pollForReview(
@@ -366,22 +497,25 @@ export class GitHubProvider extends BaseProvider {
         const since = encodeURIComponent(opts.sinceIso);
         const result = await pollUntil(
             async () => {
-                const [reviewComments, issueComments, reviews] = await Promise.all([
-                    http<{ id: number; body: string }[]>(
-                        `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/comments?since=${since}`,
-                        { headers: this.headers() },
-                    ),
-                    http<{ id: number; body: string }[]>(
-                        `${this.apiBase}/repos/${this.repoFullName}/issues/${pr.number}/comments?since=${since}`,
-                        { headers: this.headers() },
-                    ),
-                    http<
-                        { submitted_at?: string; created_at?: string; body?: string }[]
-                    >(
-                        `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/reviews`,
-                        { headers: this.headers() },
-                    ),
-                ]);
+                await this.refreshInstallationTokenIfNeeded();
+                const [reviewComments, issueComments, reviews] =
+                    await Promise.all([
+                        this.conditionalGet<{ id: number; body: string }[]>(
+                            `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/comments?since=${since}`,
+                        ),
+                        this.conditionalGet<{ id: number; body: string }[]>(
+                            `${this.apiBase}/repos/${this.repoFullName}/issues/${pr.number}/comments?since=${since}`,
+                        ),
+                        this.conditionalGet<
+                            {
+                                submitted_at?: string;
+                                created_at?: string;
+                                body?: string;
+                            }[]
+                        >(
+                            `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/reviews`,
+                        ),
+                    ]);
                 // Kody posts three distinct comment shapes that all carry
                 // the `<!-- kody-codereview -->` discriminator:
                 //
@@ -400,9 +534,10 @@ export class GitHubProvider extends BaseProvider {
                 //      docs.kodus.io footer. Keep as a review signal.
                 const classify = (
                     body: string,
-                ): "started" | "license-block" | "review" => {
-                    if (!body.includes("<!-- kody-codereview")) return "review";
-                    if (body.includes("kody-codereview-completed")) return "review";
+                ): 'started' | 'license-block' | 'review' => {
+                    if (!body.includes('<!-- kody-codereview')) return 'review';
+                    if (body.includes('kody-codereview-completed'))
+                        return 'review';
                     // Trial / BYOK / plan-activation prompts. Stable
                     // markers: the "Your trial has ended" and "activate
                     // your plan" / "BYOK" wording. Loose match so minor
@@ -412,22 +547,24 @@ export class GitHubProvider extends BaseProvider {
                             body,
                         )
                     ) {
-                        return "license-block";
+                        return 'license-block';
                     }
-                    return "started";
+                    return 'started';
                 };
-                const filterNonTrigger = <T extends { id: number; body: string }>(
+                const filterNonTrigger = <
+                    T extends { id: number; body: string },
+                >(
                     items: T[],
                 ): { reviews: T[]; licenseNotice?: T } => {
                     const reviews: T[] = [];
                     let licenseNotice: T | undefined;
                     for (const c of items) {
                         if (String(c.id) === opts.triggerId) continue;
-                        const body = c.body ?? "";
-                        if (body.toLowerCase().startsWith("@kody")) continue;
+                        const body = c.body ?? '';
+                        if (body.toLowerCase().startsWith('@kody')) continue;
                         const kind = classify(body);
-                        if (kind === "started") continue;
-                        if (kind === "license-block") {
+                        if (kind === 'started') continue;
+                        if (kind === 'license-block') {
                             licenseNotice ??= c;
                             continue;
                         }
@@ -435,14 +572,21 @@ export class GitHubProvider extends BaseProvider {
                     }
                     return { reviews, licenseNotice };
                 };
-                const rcRes = filterNonTrigger(reviewComments.body ?? []);
-                const icRes = filterNonTrigger(issueComments.body ?? []);
-                const reviewsList = (reviews.body ?? []).filter((r) => {
-                    const ts = r.submitted_at ?? r.created_at ?? "";
+                const rcRes = filterNonTrigger(
+                    this.listOrThrow(reviewComments, 'github:pollForReview:reviewComments'),
+                );
+                const icRes = filterNonTrigger(
+                    this.listOrThrow(issueComments, 'github:pollForReview:issueComments'),
+                );
+                const reviewsList = this.listOrThrow(
+                    reviews,
+                    'github:pollForReview:reviews',
+                ).filter((r) => {
+                    const ts = r.submitted_at ?? r.created_at ?? '';
                     if (ts <= opts.sinceIso) return false;
-                    const body = r.body ?? "";
-                    if (body.toLowerCase().startsWith("@kody")) return false;
-                    return classify(body) === "review";
+                    const body = r.body ?? '';
+                    if (body.toLowerCase().startsWith('@kody')) return false;
+                    return classify(body) === 'review';
                 });
                 // Surface any license-block notice we found via comments,
                 // even when no real review fired. Lets the scenario layer
@@ -461,7 +605,7 @@ export class GitHubProvider extends BaseProvider {
                         rcRes.reviews[0]?.body ??
                         icRes.reviews[0]?.body ??
                         reviewsList[0]?.body ??
-                        "";
+                        '';
                     return {
                         reviewComments: rcRes.reviews.length,
                         issueComments: icRes.reviews.length,
@@ -471,7 +615,9 @@ export class GitHubProvider extends BaseProvider {
                             ? {
                                   licenseBlockedNotice: {
                                       message: licenseNotice.slice(0, 240),
-                                      kind: classifyLicenseNotice(licenseNotice),
+                                      kind: classifyLicenseNotice(
+                                          licenseNotice,
+                                      ),
                                   },
                               }
                             : {}),
@@ -522,19 +668,20 @@ export class GitHubProvider extends BaseProvider {
         const since = encodeURIComponent(opts.sinceIso);
         const result = await pollUntil<{ startedAt: string; sample: string }>(
             async () => {
-                const resp = await http<
+                await this.refreshInstallationTokenIfNeeded();
+                const resp = await this.conditionalGet<
                     { id: number; body: string; created_at: string }[]
                 >(
                     `${this.apiBase}/repos/${this.repoFullName}/issues/${pr.number}/comments?since=${since}`,
-                    { headers: this.headers() },
                 );
-                const hit = (resp.body ?? []).find((c) =>
-                    (c.body ?? "").includes("<!-- kody-codereview"),
-                );
+                const hit = this.listOrThrow(
+                    resp,
+                    'github:waitForPipelineStart',
+                ).find((c) => (c.body ?? '').includes('<!-- kody-codereview'));
                 if (!hit) return null;
                 return {
                     startedAt: hit.created_at,
-                    sample: (hit.body ?? "").slice(0, 240),
+                    sample: (hit.body ?? '').slice(0, 240),
                 };
             },
             { timeoutSec: opts.timeoutSec, intervalSec: 3 },
@@ -547,31 +694,208 @@ export class GitHubProvider extends BaseProvider {
         return result;
     }
 
-    async postComment(
+    async postComment(prNumber: number, body: string): Promise<{ id: string }> {
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/repos/${this.repoFullName}/issues/${prNumber}/comments`,
+            {
+                method: 'POST',
+                headers: this.authorHeaders(),
+                body: { body },
+            },
+        );
+        ensureOk(resp, 'github:postComment');
+        return { id: String(resp.body.id) };
+    }
+
+    // Posts an issue comment AS A DIFFERENT GitHub identity (token override).
+    // The conversation scenario needs this: Kody ignores any comment whose
+    // author login contains "kody"/"kodus" (isKodyComment → treats it as its
+    // own), and the e2e bots are all `kodus-e2e-bot-N`. So the `@kody` mention
+    // must come from a non-Kody account.
+    async postCommentAs(
         prNumber: number,
         body: string,
+        token: string,
     ): Promise<{ id: string }> {
         const resp = await http<{ id: number }>(
             `${this.apiBase}/repos/${this.repoFullName}/issues/${prNumber}/comments`,
             {
-                method: "POST",
-                headers: this.headers(),
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28',
+                },
                 body: { body },
             },
         );
-        ensureOk(resp, "github:postComment");
+        ensureOk(resp, 'github:postCommentAs');
         return { id: String(resp.body.id) };
+    }
+
+    // Posts an INLINE review comment as a different identity (token override).
+    // Kody's ConversationAgent only resolves the mention when it's a review
+    // (inline) comment — `getPullRequestReviewComment` lists review comments
+    // only, so an issue comment is never found and the flow silently returns.
+    // We attach it at file level (subject_type=file) so no valid diff line is
+    // needed. Returns the new review comment id.
+    async postReviewCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const h = {
+            'Authorization': `Bearer ${token}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+        };
+        const pr = await http<{ head: { sha: string } }>(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${prNumber}`,
+            { headers: h },
+        );
+        ensureOk(pr, 'github:postReviewCommentAs:getPR');
+        const files = await http<{ filename: string }[]>(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${prNumber}/files`,
+            { headers: h },
+        );
+        ensureOk(files, 'github:postReviewCommentAs:getFiles');
+        const path = files.body?.[0]?.filename;
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${prNumber}/comments`,
+            {
+                method: 'POST',
+                headers: h,
+                body: {
+                    body,
+                    commit_id: pr.body.head.sha,
+                    path,
+                    subject_type: 'file',
+                },
+            },
+        );
+        ensureOk(resp, 'github:postReviewCommentAs');
+        return { id: String(resp.body.id) };
+    }
+
+    // Polls for Kody's conversational reply to an `@kody <question>` review
+    // via createReplyForReviewComment, so the answer lands in the PR's REVIEW
+    // comments. Returns the first NEW review comment that is neither ours
+    // (`@kody …`) nor a code-review finding (those carry the
+    // `<!-- kody-codereview` marker). null at timeout.
+    async pollForKodyReply(
+        pr: { number: number },
+        opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
+    ): Promise<{ id: string; body: string } | null> {
+        const since = encodeURIComponent(opts.sinceIso);
+        return pollUntil(
+            async () => {
+                const comments = await http<
+                    { id: number; body: string; created_at?: string }[]
+                >(
+                    `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/comments?since=${since}`,
+                    { headers: this.headers() },
+                );
+                for (const c of comments.body ?? []) {
+                    if (String(c.id) === opts.triggerId) continue;
+                    const body = c.body ?? '';
+                    if (body.toLowerCase().startsWith('@kody')) continue;
+                    // Skip code-review status/findings — conversation replies
+                    // don't carry the review discriminator.
+                    if (body.includes('<!-- kody-codereview')) continue;
+                    if (!body.trim()) continue;
+                    return { id: String(c.id), body: body.slice(0, 600) };
+                }
+                return null;
+            },
+            { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
+        );
+    }
+
+    // Merges a PR (kody-issues generation and rule-file sync fire off the
+    // closed/MERGED PR webhook). GitHub returns 405 for a while right
+    // after PR creation (mergeability is computed asynchronously), so
+    // retry before concluding the PR is genuinely unmergeable. Only after
+    // the retries fall back to a plain close — and log loudly, because
+    // scenarios that REQUIRE a merged event (kody-rules-file-sync,
+    // rule-file-detection) will otherwise fail downstream with a
+    // confusing "sync never happened".
+    async mergePR(pr: OpenedPR): Promise<void> {
+        let lastStatus = 0;
+        for (let attempt = 0; attempt < 6; attempt++) {
+            if (attempt > 0) {
+                await new Promise((r) => setTimeout(r, 5_000));
+            }
+            const resp = await http(
+                `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/merge`,
+                {
+                    method: 'PUT',
+                    headers: this.headers(),
+                    body: { merge_method: 'squash' },
+                },
+            );
+            if (resp.status >= 200 && resp.status < 300) {
+                return;
+            }
+            lastStatus = resp.status;
+            // 405 = not mergeable *yet* (async mergeability check) or
+            // blocked; 409 = head changed. Both are worth retrying.
+            if (resp.status !== 405 && resp.status !== 409) {
+                break;
+            }
+            log.info(
+                `github:mergePR PR#${pr.number} HTTP ${resp.status} (attempt ${attempt + 1}/6) — retrying`,
+            );
+        }
+        log.warn(
+            `github:mergePR PR#${pr.number} not mergeable after retries (HTTP ${lastStatus}) — falling back to close (NOT a merged event)`,
+        );
+        await this.closePR(pr);
     }
 
     // Return type widened from the literal "token" to the full union so
     // GitHubAppProvider (which extends this class) can override and
     // return "oauth" without TS complaining about variance — the App
     // path identifies the integration by installationId, not a PAT.
-    authMode(): "token" | "oauth" | "app-password" {
-        return "token";
+    authMode(): 'token' | 'oauth' | 'app-password' {
+        return 'token';
     }
 
+    // The credential Kodus STORES on the integration (auth-integration
+    // payload) — the product uses it for its own GitHub calls for the
+    // tenant's lifetime, so it must be DURABLE. `this.token` may be a
+    // GitHub App installation token (runner prefers it for cloud cells'
+    // harness-side quota), which expires in ~1h — storing that would kill
+    // the product's credential mid-run. Always hand the backend the
+    // long-lived base PAT; the assigned token keeps serving the harness's
+    // own API calls (clone, PRs, polling).
+    //
+    // Prefer a DEDICATED integration account (GH_INTEGRATION_TOKEN) so the
+    // product's own GitHub calls (read diff/files, post comments, resolve
+    // threads) draw on a separate 5,000 req/hr budget from the harness
+    // driver pool. Without it, the product and the harness both hammer
+    // GH_TEST_TOKEN — that single account's quota was tripping mid-cell and
+    // cascading scenarios into rate-limit SKIPs. Falls back to GH_TEST_TOKEN
+    // when the dedicated secret is unset, so this is a no-op until wired.
     authToken(): string {
+        // Installation tokens are prefixed ghs_ and die in ~1h. NOTHING with
+        // that prefix may become the stored integration credential — not the
+        // runner-assigned token, and not a misconfigured secret either (a
+        // silent 1h credential in CI config would fail mid-run).
+        const durable =
+            process.env.GH_INTEGRATION_TOKEN || process.env.GH_TEST_TOKEN;
+        if (durable) {
+            if (durable.startsWith('ghs_')) {
+                throw new Error(
+                    'The GitHub integration credential (GH_INTEGRATION_TOKEN / GH_TEST_TOKEN) is a GitHub App installation token (ghs_) — it must be a durable PAT',
+                );
+            }
+            return durable;
+        }
+        if (this.token.startsWith('ghs_')) {
+            throw new Error(
+                'GH_TEST_TOKEN (durable PAT) is required when the harness runs on a GitHub App installation token — the integration credential must not expire',
+            );
+        }
         return this.token;
     }
 
@@ -580,12 +904,12 @@ export class GitHubProvider extends BaseProvider {
             `${this.apiBase}/user`,
             { headers: this.headers(), timeoutMs: 15_000 },
         );
-        ensureOk(resp, "github:currentUserId");
+        ensureOk(resp, 'github:currentUserId');
         return String(resp.body.id);
     }
 
     licenseGitTool(): string {
-        return "github";
+        return 'github';
     }
 
     async pollForLicenseBlock(
@@ -604,7 +928,7 @@ export class GitHubProvider extends BaseProvider {
                     { headers: this.headers() },
                 );
                 if (resp.status < 200 || resp.status >= 300) return null;
-                return (resp.body ?? []).some((r) => r.content === "-1")
+                return (resp.body ?? []).some((r) => r.content === '-1')
                     ? true
                     : null;
             },

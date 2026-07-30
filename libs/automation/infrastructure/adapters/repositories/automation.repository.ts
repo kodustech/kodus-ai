@@ -10,7 +10,7 @@ import {
     UpdateQueryBuilder,
 } from 'typeorm';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { IAutomationRepository } from '@libs/automation/domain/automation/contracts/automation.repository';
 import { AutomationEntity } from '@libs/automation/domain/automation/entities/automation.entity';
 import { IAutomation } from '@libs/automation/domain/automation/interfaces/automation.interface';

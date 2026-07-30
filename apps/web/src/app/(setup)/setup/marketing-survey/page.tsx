@@ -183,7 +183,7 @@ export default function MarketingSurveyPage() {
     const canContinue = selectedSource && selectedGoal;
 
     return (
-        <Page.Root className="mx-auto flex max-h-screen min-h-screen flex-col gap-6 overflow-hidden p-6 lg:flex-row lg:gap-6">
+        <Page.Root className="mx-auto flex min-h-full w-full flex-col gap-6 p-6 lg:flex-row lg:gap-6">
             <div className="bg-card-lv1 flex w-full flex-col justify-center gap-10 rounded-3xl p-8 lg:max-w-none lg:flex-10 lg:p-12">
                 <div className="flex-1 space-y-6 overflow-hidden">
                     <h1 className="text-2xl font-bold">

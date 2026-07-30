@@ -1,4 +1,9 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import {
+    CODE_BASE_CONFIG_SERVICE_TOKEN,
+    ICodeBaseConfigService,
+} from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
+import { requiresKnowledgeApproval } from '@libs/common/utils/kody-rules/knowledge-approval';
 import * as path from 'path';
 
 import {
@@ -17,10 +22,15 @@ import {
 import { ParametersKey } from '@libs/core/domain/enums';
 import {
     RULE_FILE_PATTERNS,
+    RULE_FILE_DISCOVERY_PATTERNS,
     isIdeRuleSource,
     validateAndScopeIdeRulePath,
 } from '@libs/common/utils/kody-rules/file-patterns';
-import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
+import {
+    isKodyRuleTemplateFile,
+    parseKodyRuleFile,
+} from '@libs/common/utils/kody-rules/kody-rule-file-parser';
+import { isFileMatchingGlobCaseInsensitive } from '@libs/common/utils/glob-utils';
 import {
     CreateKodyRuleDto,
     KodyRuleSeverity,
@@ -36,7 +46,13 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { GLOBAL_RULES_TRIAL_IMPORT_LIMIT } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
+import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
+import { tracedGenerateText } from '@libs/llm/llm-call';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import {
     ContextDetectionField,
@@ -49,9 +65,10 @@ import {
 } from '@libs/common/utils/langchainCommon/prompts/kodyRules';
 import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { PromptSourceType } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
+import { DeleteRuleInOrganizationByIdKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/delete-rule-in-organization-by-id.use-case';
 import {
     CONTEXT_RESOLUTION_SERVICE_TOKEN,
     IContextResolutionService,
@@ -131,10 +148,13 @@ export class KodyRulesSyncService {
         private readonly codeManagementService: CodeManagementService,
         private readonly updateOrCreateCodeReviewParameterUseCase: UpdateOrCreateCodeReviewParameterUseCase,
         private readonly createOrUpdateKodyRulesUseCase: CreateOrUpdateKodyRulesUseCase,
+        private readonly deleteRuleInOrganizationByIdKodyRulesUseCase: DeleteRuleInOrganizationByIdKodyRulesUseCase,
         private readonly promptRunnerService: PromptRunnerService,
         private readonly permissionValidationService: PermissionValidationService,
         private readonly observabilityService: ObservabilityService,
         private readonly contextReferenceDetectionService: ContextReferenceDetectionService,
+        @Inject(forwardRef(() => CODE_BASE_CONFIG_SERVICE_TOKEN))
+        private readonly codeBaseConfigService: ICodeBaseConfigService,
     ) {}
 
     /**
@@ -220,19 +240,48 @@ export class KodyRulesSyncService {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId: string;
         sourcePath: string;
-    }): Promise<Partial<{ uuid: string }> | null> {
+    }): Promise<Partial<{ uuid: string; status: KodyRulesStatus }> | null> {
         try {
             const { organizationAndTeamData, repositoryId, sourcePath } =
                 params;
             const existing = await this.kodyRulesService.findByOrganizationId(
                 organizationAndTeamData.organizationId,
             );
-            const found = existing?.rules?.find(
-                (r) =>
-                    r?.repositoryId === repositoryId &&
-                    r?.sourcePath === sourcePath,
+            const matches =
+                existing?.rules?.filter(
+                    (r) =>
+                        r?.repositoryId === repositoryId &&
+                        r?.sourcePath === sourcePath,
+                ) ?? [];
+
+            if (!matches.length) return null;
+
+            // Prefer the NEWEST non-deleted record. The old `Array.find`
+            // returned the first (i.e. oldest) match regardless of status,
+            // so when a sourcePath had both a stale soft-DELETED record and
+            // a newer live one, re-imports kept resurrecting/updating the
+            // stale record (customer-reported: "old rule persisted; toggle
+            // off removed it, toggle on re-added it"). Falling back to a
+            // deleted match is intentional — if the source file still
+            // exists in the repo, reviving that record (with refreshed
+            // content) beats accumulating duplicates.
+            // Missing/invalid createdAt normalises to 0 so NaN can't make
+            // the comparator implementation-defined.
+            const toTime = (value: unknown): number => {
+                const t = new Date((value as any) ?? 0).getTime();
+                return Number.isFinite(t) ? t : 0;
+            };
+            const newestFirst = [...matches].sort(
+                (a, b) =>
+                    toTime((b as any)?.createdAt) -
+                    toTime((a as any)?.createdAt),
             );
-            return found ? { uuid: found.uuid } : null;
+            const found =
+                newestFirst.find(
+                    (r) => r?.status !== KodyRulesStatus.DELETED,
+                ) ?? newestFirst[0];
+
+            return found ? { uuid: found.uuid, status: found.status } : null;
         } catch (error) {
             this.logger.error({
                 message: 'Failed to find rule by sourcePath',
@@ -351,42 +400,44 @@ export class KodyRulesSyncService {
                 repository.id,
             );
 
+            // Fetch PR details once — shared across all code paths below.
+            const prDetails =
+                await this.codeManagementService.getPullRequestByNumber({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                    prNumber: pullRequestNumber,
+                });
+
+            const { head, base } = this.extractRefsFromPullRequest(prDetails);
+            const pullRequestParam: any = {
+                number: pullRequestNumber,
+                head: head ? { ref: head } : undefined,
+                base: base ? { ref: base } : undefined,
+            };
+
             // If the sync is disabled, we need to force sync the files that have @kody-sync
             const forceSyncFiles: string[] = [];
+            // Cache decoded file content from the @kody-sync scan so the
+            // main loop below doesn't re-fetch the same files.
+            const contentCache = new Map<string, string>();
             if (!syncEnabled) {
                 // First, we need to check which files can be rule files
                 const directoryPatterns = await this.getDirectoryPatterns(
                     organizationAndTeamData,
                     repository.id,
                 );
-                const patterns = [...RULE_FILE_PATTERNS, ...directoryPatterns];
+                const patterns = [
+                    ...RULE_FILE_DISCOVERY_PATTERNS,
+                    ...directoryPatterns,
+                ];
                 const isRuleFile = (fp?: string) =>
-                    !!fp && isFileMatchingGlob(fp, patterns);
+                    !!fp && isFileMatchingGlobCaseInsensitive(fp, patterns);
 
                 const ruleChanges = files.filter(
                     (f) =>
                         isRuleFile(f.filename) ||
                         isRuleFile(f.previous_filename),
                 );
-
-                // Get the PR details once
-                const prDetails =
-                    await this.codeManagementService.getPullRequestByNumber({
-                        organizationAndTeamData,
-                        repository: {
-                            id: repository.id,
-                            name: repository.name,
-                        },
-                        prNumber: pullRequestNumber,
-                    });
-
-                const { head, base } =
-                    this.extractRefsFromPullRequest(prDetails);
-                const pullRequestParam: any = {
-                    number: pullRequestNumber,
-                    head: head ? { ref: head } : undefined,
-                    base: base ? { ref: base } : undefined,
-                };
 
                 // Now we need to check which files have @kody-sync in the content
                 for (const f of ruleChanges) {
@@ -402,18 +453,23 @@ export class KodyRulesSyncService {
                         pullRequest: pullRequestParam,
                     });
 
-                    if (content && this.shouldForceSync(content)) {
-                        forceSyncFiles.push(f.filename);
-                        this.logger.log({
-                            message:
-                                'File marked for force sync with @kody-sync',
-                            context: KodyRulesSyncService.name,
-                            metadata: {
-                                filename: f.filename,
-                                repositoryId: repository.id,
-                                organizationAndTeamData,
-                            },
-                        });
+                    if (content) {
+                        // Cache for reuse in the main loop below.
+                        contentCache.set(f.filename, content);
+
+                        if (this.shouldForceSync(content)) {
+                            forceSyncFiles.push(f.filename);
+                            this.logger.log({
+                                message:
+                                    'File marked for force sync with @kody-sync',
+                                context: KodyRulesSyncService.name,
+                                metadata: {
+                                    filename: f.filename,
+                                    repositoryId: repository.id,
+                                    organizationAndTeamData,
+                                },
+                            });
+                        }
                     }
                 }
 
@@ -476,28 +532,17 @@ export class KodyRulesSyncService {
                 });
             }
 
-            const prDetails =
-                await this.codeManagementService.getPullRequestByNumber({
-                    organizationAndTeamData,
-                    repository: { id: repository.id, name: repository.name },
-                    prNumber: pullRequestNumber,
-                });
-
-            const { head, base } = this.extractRefsFromPullRequest(prDetails);
-            const pullRequestParam: any = {
-                number: pullRequestNumber,
-                head: head ? { ref: head } : undefined,
-                base: base ? { ref: base } : undefined,
-            };
-
             const directoryPatterns = await this.getDirectoryPatterns(
                 organizationAndTeamData,
                 repository.id,
             );
 
-            const patterns = [...RULE_FILE_PATTERNS, ...directoryPatterns];
+            const patterns = [
+                ...RULE_FILE_DISCOVERY_PATTERNS,
+                ...directoryPatterns,
+            ];
             const isRuleFile = (fp?: string) =>
-                !!fp && isFileMatchingGlob(fp, patterns);
+                !!fp && isFileMatchingGlobCaseInsensitive(fp, patterns);
 
             let ruleChanges = files.filter(
                 (f) =>
@@ -531,87 +576,103 @@ export class KodyRulesSyncService {
                         ? f.previous_filename
                         : f.filename;
 
-                const contentResp =
-                    await this.codeManagementService.getRepositoryContentFile({
-                        organizationAndTeamData,
-                        repository: {
-                            id: repository.id,
-                            name: repository.name,
-                        },
-                        file: { filename: f.filename },
-                        pullRequest: pullRequestParam,
-                    });
-                // Fallbacks if the source branch was deleted on merge (e.g., GitLab):
-                // 1) Try with base as head
-                // 2) Try with default branch as head
-                let effectiveContent = contentResp;
-                if (!effectiveContent?.data?.content) {
-                    const baseRef = pullRequestParam.base?.ref;
-                    if (baseRef) {
-                        try {
-                            const baseAsHead =
-                                await this.codeManagementService.getRepositoryContentFile(
-                                    {
-                                        organizationAndTeamData,
-                                        repository: {
-                                            id: repository.id,
-                                            name: repository.name,
-                                        },
-                                        file: { filename: f.filename },
-                                        pullRequest: { head: { ref: baseRef } },
-                                    },
-                                );
-                            if (baseAsHead?.data?.content) {
-                                effectiveContent = baseAsHead;
-                            }
-                        } catch {
-                            // Ignore error
-                        }
-                    }
-                }
-                if (!effectiveContent?.data?.content) {
-                    try {
-                        const defaultBranch =
-                            await this.codeManagementService.getDefaultBranch({
+                // Reuse cached content from the @kody-sync scan when
+                // available to avoid a duplicate API call for the same
+                // file (the scan already fetched it moments ago).
+                let decoded: string | null =
+                    contentCache.get(f.filename) ?? null;
+
+                if (!decoded) {
+                    const contentResp =
+                        await this.codeManagementService.getRepositoryContentFile(
+                            {
                                 organizationAndTeamData,
                                 repository: {
                                     id: repository.id,
                                     name: repository.name,
                                 },
-                            });
-                        if (defaultBranch) {
-                            const defAsHead =
-                                await this.codeManagementService.getRepositoryContentFile(
+                                file: { filename: f.filename },
+                                pullRequest: pullRequestParam,
+                            },
+                        );
+                    // Fallbacks if the source branch was deleted on merge (e.g., GitLab):
+                    // 1) Try with base as head
+                    // 2) Try with default branch as head
+                    let effectiveContent = contentResp;
+                    if (!effectiveContent?.data?.content) {
+                        const baseRef = pullRequestParam.base?.ref;
+                        if (baseRef) {
+                            try {
+                                const baseAsHead =
+                                    await this.codeManagementService.getRepositoryContentFile(
+                                        {
+                                            organizationAndTeamData,
+                                            repository: {
+                                                id: repository.id,
+                                                name: repository.name,
+                                            },
+                                            file: { filename: f.filename },
+                                            pullRequest: {
+                                                head: { ref: baseRef },
+                                            },
+                                        },
+                                    );
+                                if (baseAsHead?.data?.content) {
+                                    effectiveContent = baseAsHead;
+                                }
+                            } catch {
+                                // Ignore error
+                            }
+                        }
+                    }
+                    if (!effectiveContent?.data?.content) {
+                        try {
+                            const defaultBranch =
+                                await this.codeManagementService.getDefaultBranch(
                                     {
                                         organizationAndTeamData,
                                         repository: {
                                             id: repository.id,
                                             name: repository.name,
                                         },
-                                        file: { filename: f.filename },
-                                        pullRequest: {
-                                            head: { ref: defaultBranch },
-                                        },
                                     },
                                 );
-                            if (defAsHead?.data?.content) {
-                                effectiveContent = defAsHead;
+                            if (defaultBranch) {
+                                const defAsHead =
+                                    await this.codeManagementService.getRepositoryContentFile(
+                                        {
+                                            organizationAndTeamData,
+                                            repository: {
+                                                id: repository.id,
+                                                name: repository.name,
+                                            },
+                                            file: { filename: f.filename },
+                                            pullRequest: {
+                                                head: { ref: defaultBranch },
+                                            },
+                                        },
+                                    );
+                                if (defAsHead?.data?.content) {
+                                    effectiveContent = defAsHead;
+                                }
                             }
+                        } catch {
+                            // Ignore error
                         }
-                    } catch {
-                        // Ignore error
                     }
-                }
 
-                const rawContent = effectiveContent?.data?.content;
-                if (!rawContent) {
-                    continue;
-                }
+                    const rawContent = effectiveContent?.data?.content;
+                    if (!rawContent) {
+                        continue;
+                    }
 
-                const decoded =
-                    contentResp?.data?.encoding === 'base64'
-                        ? Buffer.from(rawContent, 'base64').toString('utf-8')
-                        : rawContent;
+                    decoded =
+                        effectiveContent?.data?.encoding === 'base64'
+                            ? Buffer.from(rawContent, 'base64').toString(
+                                  'utf-8',
+                              )
+                            : rawContent;
+                }
 
                 //Verify if the file should be ignored due to the @kody-ignore marker
                 if (this.shouldIgnoreFile(decoded)) {
@@ -641,6 +702,13 @@ export class KodyRulesSyncService {
                     repositoryId: repository.id,
                     content: decoded,
                     organizationAndTeamData,
+                    fileRef: {
+                        repository: {
+                            id: repository.id,
+                            name: repository.name,
+                        },
+                        pullRequest: pullRequestParam,
+                    },
                 });
 
                 if (!Array.isArray(rules) || rules.length === 0) {
@@ -690,7 +758,7 @@ export class KodyRulesSyncService {
                             filePath: f.filename,
                         })
                     )?.id,
-                    origin: KodyRulesOrigin.USER,
+                    origin: KodyRulesOrigin.REPO_FILE_SYNC,
                     status: oneRule.status as any,
                     scope:
                         (oneRule.scope as KodyRulesScope) ||
@@ -707,6 +775,27 @@ export class KodyRulesSyncService {
                     // separate backfill step.
                     pinnedSync: this.shouldForceSync(decoded),
                 } as CreateKodyRuleDto;
+
+                // @kody-sync is an EXPLICIT repo-is-source-of-truth marker:
+                // re-syncing changed content over a previously REJECTED rule
+                // must reactivate it. Preserving 'rejected' meant one UI
+                // rejection permanently blocked that file from ever syncing
+                // again — another face of the customer's 'rules never sync'.
+                if (
+                    this.shouldForceSync(decoded) &&
+                    existing?.status === KodyRulesStatus.REJECTED
+                ) {
+                    this.logger.log({
+                        message:
+                            '[kody-rules-sync] force-synced file over a rejected rule — reactivating',
+                        context: KodyRulesSyncService.name,
+                        metadata: {
+                            file: f.filename,
+                            ruleId: existing.uuid,
+                        },
+                    });
+                    (dto as any).status = KodyRulesStatus.ACTIVE;
+                }
 
                 const result =
                     await this.createOrUpdateKodyRulesUseCase.execute(
@@ -792,7 +881,10 @@ export class KodyRulesSyncService {
                 repository.id,
             );
 
-            const patterns = [...RULE_FILE_PATTERNS, ...directoryPatterns];
+            const patterns = [
+                ...RULE_FILE_DISCOVERY_PATTERNS,
+                ...directoryPatterns,
+            ];
 
             if (requestedPath) {
                 const normalizedRequestedPath = requestedPath
@@ -800,7 +892,12 @@ export class KodyRulesSyncService {
                     .replace(/^\.\/+/, '')
                     .replace(/^\/+/, '');
 
-                if (!isFileMatchingGlob(normalizedRequestedPath, patterns)) {
+                if (
+                    !isFileMatchingGlobCaseInsensitive(
+                        normalizedRequestedPath,
+                        patterns,
+                    )
+                ) {
                     this.logger.log({
                         message:
                             'Requested file path is not a supported IDE rule file',
@@ -882,9 +979,7 @@ export class KodyRulesSyncService {
                 //     marker dropped → depin (no-op if already not pinned).
                 //   - sourcePath in `forceSyncFiles` → will be re-synced
                 //     below, which writes `pinnedSync: true` again.
-                const allFilePaths = new Set(
-                    allFiles.map((f: any) => f.path),
-                );
+                const allFilePaths = new Set(allFiles.map((f: any) => f.path));
                 const forceSyncFilePaths = new Set(forceSyncFiles);
                 const existing =
                     await this.kodyRulesService.findByOrganizationId(
@@ -946,6 +1041,11 @@ export class KodyRulesSyncService {
                 });
             }
 
+            const syncOutcome = {
+                imported: [] as string[],
+                skipped: [] as Array<{ file: string; reason: string }>,
+                removed: [] as string[],
+            };
             for (const file of filesToSync) {
                 const contentResp =
                     await this.codeManagementService.getRepositoryContentFile({
@@ -962,7 +1062,13 @@ export class KodyRulesSyncService {
                     });
 
                 const rawContent = contentResp?.data?.content;
-                if (!rawContent) continue;
+                if (!rawContent) {
+                    syncOutcome.skipped.push({
+                        file: file.path,
+                        reason: 'empty or unfetchable content',
+                    });
+                    continue;
+                }
 
                 const decoded =
                     contentResp?.data?.encoding === 'base64'
@@ -989,6 +1095,7 @@ export class KodyRulesSyncService {
                         repositoryId: repository.id,
                         sourcePath: file.path,
                     });
+                    syncOutcome.removed.push(file.path);
                     continue;
                 }
 
@@ -997,6 +1104,13 @@ export class KodyRulesSyncService {
                     repositoryId: repository.id,
                     content: decoded,
                     organizationAndTeamData,
+                    fileRef: {
+                        repository: {
+                            id: repository.id,
+                            name: repository.name,
+                        },
+                        branch,
+                    },
                 });
 
                 const oneRule = rules?.find(
@@ -1004,6 +1118,10 @@ export class KodyRulesSyncService {
                 );
 
                 if (!oneRule) {
+                    syncOutcome.skipped.push({
+                        file: file.path,
+                        reason: 'no rule extracted (disabled template, empty content, or LLM returned none)',
+                    });
                     continue;
                 }
 
@@ -1036,7 +1154,7 @@ export class KodyRulesSyncService {
                             filePath: file.path,
                         })
                     )?.id,
-                    origin: KodyRulesOrigin.USER,
+                    origin: KodyRulesOrigin.REPO_FILE_SYNC,
                     status: oneRule.status as any,
                     scope:
                         (oneRule.scope as KodyRulesScope) ||
@@ -1046,6 +1164,27 @@ export class KodyRulesSyncService {
                         : [],
                     pinnedSync: this.shouldForceSync(decoded),
                 } as CreateKodyRuleDto;
+
+                // @kody-sync is an EXPLICIT repo-is-source-of-truth marker:
+                // re-syncing changed content over a previously REJECTED rule
+                // must reactivate it. Preserving 'rejected' meant one UI
+                // rejection permanently blocked that file from ever syncing
+                // again — another face of the customer's 'rules never sync'.
+                if (
+                    this.shouldForceSync(decoded) &&
+                    existing?.status === KodyRulesStatus.REJECTED
+                ) {
+                    this.logger.log({
+                        message:
+                            '[kody-rules-sync] force-synced file over a rejected rule — reactivating',
+                        context: KodyRulesSyncService.name,
+                        metadata: {
+                            file: file.path,
+                            ruleId: existing.uuid,
+                        },
+                    });
+                    (dto as any).status = KodyRulesStatus.ACTIVE;
+                }
 
                 const result = await this.kodyRulesService.createOrUpdate(
                     organizationAndTeamData,
@@ -1081,7 +1220,23 @@ export class KodyRulesSyncService {
                         },
                     });
                 }
+
+                syncOutcome.imported.push(file.path);
             }
+
+            // Grep-able per-run summary ("[kody-rules-sync] summary"):
+            // the single record self-hosted operators need to answer
+            // "did my file sync, and if not why".
+            this.logger.log({
+                message: `[kody-rules-sync] summary: ${syncOutcome.imported.length} imported, ${syncOutcome.skipped.length} skipped, ${syncOutcome.removed.length} removed (of ${filesToSync.length} candidate file(s))`,
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository.id,
+                    branch,
+                    ...syncOutcome,
+                },
+            });
         } catch (error) {
             this.logger.error({
                 message: 'Failed to sync Kody Rules from main',
@@ -1206,6 +1361,10 @@ export class KodyRulesSyncService {
             repositoryId: repository.id,
             content,
             organizationAndTeamData,
+            fileRef: {
+                repository: { id: repository.id, name: repository.name },
+                branch,
+            },
         });
 
         const oneRule = rules?.find(
@@ -1253,7 +1412,7 @@ export class KodyRulesSyncService {
                     filePath,
                 })
             )?.id,
-            origin: KodyRulesOrigin.USER,
+            origin: KodyRulesOrigin.REPO_FILE_SYNC,
             status: oneRule.status as any,
             scope: (oneRule.scope as KodyRulesScope) || KodyRulesScope.FILE,
             examples: Array.isArray(oneRule.examples)
@@ -1340,7 +1499,10 @@ export class KodyRulesSyncService {
                 organizationAndTeamData,
                 repository.id,
             );
-            const patterns = [...RULE_FILE_PATTERNS, ...directoryPatterns];
+            const patterns = [
+                ...RULE_FILE_DISCOVERY_PATTERNS,
+                ...directoryPatterns,
+            ];
 
             const allFiles =
                 await this.codeManagementService.getRepositoryAllFiles({
@@ -1540,17 +1702,52 @@ export class KodyRulesSyncService {
                 return response;
             }
 
-            const rules = manifestMode
-                ? await this.convertManifestsToKodyRulesFastBatch({
-                      files: candidates,
-                      repositoryId: repository.id,
-                      organizationAndTeamData,
-                  })
-                : await this.convertFilesToKodyRulesFastBatch({
-                      files: candidates,
-                      repositoryId: repository.id,
-                      organizationAndTeamData,
-                  });
+            // Structured `.kody/rules/**` templates never go through the
+            // batch LLM — parse them verbatim and only send the free-form
+            // remainder to the model (same policy as the main sync path).
+            const templateRules: Array<Partial<CreateKodyRuleDto>> = [];
+            const llmCandidates: typeof candidates = [];
+            for (const candidate of candidates) {
+                const parsed = isKodyRuleTemplateFile(candidate.path)
+                    ? parseKodyRuleFile(candidate.content)
+                    : null;
+                if (parsed) {
+                    if (!parsed.enabled) continue;
+                    templateRules.push({
+                        title: parsed.title,
+                        rule: parsed.rule,
+                        path: parsed.path,
+                        sourcePath: candidate.path,
+                        severity: parsed.severity as KodyRuleSeverity,
+                        scope: parsed.scope as KodyRulesScope,
+                        examples: parsed.examples,
+                        // Template paths are author-declared; the loop below
+                        // must not re-scope them.
+                        pathSource: 'declared',
+                    } as any);
+                } else {
+                    llmCandidates.push(candidate);
+                }
+            }
+
+            const llmRules = !llmCandidates.length
+                ? []
+                : manifestMode
+                  ? await this.convertManifestsToKodyRulesFastBatch({
+                        files: llmCandidates,
+                        repositoryId: repository.id,
+                        organizationAndTeamData,
+                    })
+                  : await this.convertFilesToKodyRulesFastBatch({
+                        files: llmCandidates,
+                        repositoryId: repository.id,
+                        organizationAndTeamData,
+                    });
+
+            const rules = [
+                ...templateRules,
+                ...(Array.isArray(llmRules) ? llmRules : []),
+            ];
 
             if (Array.isArray(rules)) {
                 for (const rule of rules) {
@@ -1617,7 +1814,7 @@ export class KodyRulesSyncService {
                         scope:
                             (rule.scope as KodyRulesScope) ||
                             KodyRulesScope.FILE,
-                        origin: KodyRulesOrigin.USER,
+                        origin: KodyRulesOrigin.REPO_FILE_SYNC,
                         status: (rule.status as any) || KodyRulesStatus.PENDING,
                         examples: Array.isArray(rule.examples)
                             ? (rule.examples as any)
@@ -1712,12 +1909,174 @@ export class KodyRulesSyncService {
         return { head, base };
     }
 
+    /**
+     * Default status for a rule synced from a repo rule file. When the org's
+     * knowledge-approval gate is on, IDE-synced rules land PENDING for review
+     * (consistent with generated knowledge) and flow through the normal
+     * pending UI; otherwise they stay ACTIVE. A config-resolution error falls
+     * back to ACTIVE so a sync is never blocked on the lookup.
+     */
+    private async resolveSyncDefaultStatus(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+    ): Promise<KodyRulesStatus> {
+        try {
+            const mergedConfig =
+                await this.codeBaseConfigService.getSimpleConfig(
+                    organizationAndTeamData,
+                    { repositoryId },
+                );
+
+            return requiresKnowledgeApproval(
+                mergedConfig.kodyKnowledgeApproval,
+                KodyRulesOrigin.REPO_FILE_SYNC,
+            )
+                ? KodyRulesStatus.PENDING
+                : KodyRulesStatus.ACTIVE;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve kodyKnowledgeApproval for IDE-synced rule; defaulting to active',
+                context: KodyRulesSyncService.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: { organizationAndTeamData, repositoryId },
+            });
+            return KodyRulesStatus.ACTIVE;
+        }
+    }
+
+    /**
+     * File-reference tokens like `@AGENTS.md` or `@docs/standards.md`:
+     * an `@` at a word boundary followed by a path-ish token that ends in
+     * a file extension. Markers without an extension (`@kody-sync`) and
+     * extglobs (`@(a,b)`) don't match.
+     */
+    private static readonly AT_FILE_REF_RE =
+        /(?:^|[\s(<"'`])@([A-Za-z0-9_\-./]+\.[A-Za-z0-9]{1,8})\b/g;
+
+    /**
+     * Resolves `@file` references in a rule file's content and appends the
+     * referenced files' content, so LLM extraction sees the guidance that
+     * the author factored out (the standard CLAUDE.md → `@AGENTS.md`
+     * convention). Depth 1 (references inside referenced files are NOT
+     * followed), max 5 references, 100KB per file. Each reference is tried
+     * relative to the referencing file's directory first, then repo-root.
+     * Failures are logged and skipped — they never fail the sync (the
+     * context-reference subsystem separately surfaces them as sync errors).
+     */
+    private async inlineAtFileReferences(params: {
+        content: string;
+        filePath: string;
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        branch?: string;
+        pullRequest?: any;
+    }): Promise<string> {
+        const MAX_REFS = 5;
+        const MAX_BYTES_PER_FILE = 100_000;
+
+        const refs = new Set<string>();
+        for (const match of params.content.matchAll(
+            KodyRulesSyncService.AT_FILE_REF_RE,
+        )) {
+            refs.add(match[1]);
+            if (refs.size >= MAX_REFS) break;
+        }
+        if (!refs.size) return params.content;
+
+        const baseDir = path.posix.dirname(params.filePath.replace(/\\/g, '/'));
+        const sections: string[] = [];
+
+        for (const ref of refs) {
+            const candidates = Array.from(
+                new Set([
+                    baseDir && baseDir !== '.'
+                        ? path.posix.join(baseDir, ref)
+                        : ref,
+                    ref,
+                ]),
+            );
+
+            let resolvedPath: string | null = null;
+            let refContent: string | null = null;
+            for (const candidate of candidates) {
+                try {
+                    const content = await this.getFileContent({
+                        organizationAndTeamData: params.organizationAndTeamData,
+                        repository: params.repository,
+                        filename: candidate,
+                        branch: params.branch,
+                        pullRequest: params.pullRequest,
+                    });
+                    if (content) {
+                        resolvedPath = candidate;
+                        refContent = content.slice(0, MAX_BYTES_PER_FILE);
+                        break;
+                    }
+                } catch {
+                    // try next candidate
+                }
+            }
+
+            if (resolvedPath && refContent) {
+                sections.push(
+                    `<referenced-file path="${resolvedPath}" via="@${ref}">\n${refContent}\n</referenced-file>`,
+                );
+            } else {
+                this.logger.warn({
+                    message:
+                        '[kody-rules-sync] could not resolve @file reference while importing rule file',
+                    context: KodyRulesSyncService.name,
+                    metadata: {
+                        reference: `@${ref}`,
+                        referencedFrom: params.filePath,
+                        candidatesTried: candidates,
+                        repositoryId: params.repository.id,
+                    },
+                });
+            }
+        }
+
+        if (!sections.length) return params.content;
+
+        this.logger.log({
+            message: `[kody-rules-sync] inlined ${sections.length} @file reference(s) before rule extraction`,
+            context: KodyRulesSyncService.name,
+            metadata: {
+                filePath: params.filePath,
+                repositoryId: params.repository.id,
+                inlinedCount: sections.length,
+            },
+        });
+
+        return [
+            params.content,
+            '',
+            '<!-- The sections below are files referenced via @file from the content above; treat them as part of the same guidance. -->',
+            ...sections,
+        ].join('\n');
+    }
+
+    /**
+     * `@file` references (e.g. `@AGENTS.md` inside CLAUDE.md) are resolved
+     * and inlined before LLM extraction when the caller provides `fileRef`,
+     * so the referenced content isn't silently dropped from the imported
+     * rules. Verbatim `.kody/rules` templates are exempt (returned before
+     * inlining) — user-authored bodies are never mutated.
+     */
     private async convertFileToKodyRules(
         params: {
             filePath: string;
             repositoryId: string;
             content: string;
             organizationAndTeamData: OrganizationAndTeamData;
+            /** Enables @file reference inlining (needs repo name + ref). */
+            fileRef?: {
+                repository: { id: string; name: string };
+                branch?: string;
+                pullRequest?: any;
+            };
         },
         options?: {
             mainProvider?: LLMModelProvider;
@@ -1736,56 +2095,146 @@ export class KodyRulesSyncService {
             return null;
         }
 
-        const byokConfigValue =
-            await this.permissionValidationService.getBYOKConfig(
+        const [byokConfigValue, subscriptionStatus] = await Promise.all([
+            this.permissionValidationService.getBYOKConfig(
                 params.organizationAndTeamData,
-            );
+            ),
+            this.permissionValidationService.getSubscriptionStatus(
+                params.organizationAndTeamData,
+            ),
+        ]);
 
-        const mainProvider =
-            options?.mainProvider ?? LLMModelProvider.GEMINI_2_5_FLASH;
-        const mainFallback =
-            options?.fallbackProvider ?? LLMModelProvider.GEMINI_2_5_PRO;
+        const effectiveDefaultStatus =
+            options?.defaultStatus ??
+            (await this.resolveSyncDefaultStatus(
+                params.organizationAndTeamData,
+                params.repositoryId,
+            ));
+
+        // Structured `.kody/rules/**` templates are imported VERBATIM —
+        // the user authored the exact shape we document, so LLM conversion
+        // would only lose content (trimmed examples, rewritten wording,
+        // stripped identifiers). Non-template `.kody` files (no/invalid
+        // frontmatter) fall through to the LLM path below.
+        if (isKodyRuleTemplateFile(params.filePath)) {
+            const parsed = parseKodyRuleFile(params.content);
+            if (parsed) {
+                if (!parsed.enabled) {
+                    this.logger.log({
+                        message:
+                            '[kody-rules-sync] template file disabled via frontmatter, skipping import',
+                        context: KodyRulesSyncService.name,
+                        metadata: {
+                            filePath: params.filePath,
+                            repositoryId: params.repositoryId,
+                        },
+                    });
+                    return [];
+                }
+
+                // Keep the same path guard the LLM path uses so a template
+                // can't scope a rule against the rule sources themselves.
+                const validated = validateAndScopeIdeRulePath({
+                    llmPath: parsed.path,
+                    sourceFilePath: params.filePath,
+                    pathSource: 'declared',
+                });
+
+                this.logger.log({
+                    message:
+                        '[kody-rules-sync] imported .kody/rules template verbatim (no LLM)',
+                    context: KodyRulesSyncService.name,
+                    metadata: {
+                        filePath: params.filePath,
+                        repositoryId: params.repositoryId,
+                        examplesCount: parsed.examples.length,
+                        pathValidation: validated.reason,
+                    },
+                });
+
+                return [
+                    {
+                        ...(parsed.uuid ? { uuid: parsed.uuid } : {}),
+                        title: parsed.title,
+                        rule: parsed.rule,
+                        path: validated.path,
+                        sourcePath: params.filePath,
+                        severity: parsed.severity as KodyRuleSeverity,
+                        scope: parsed.scope as KodyRulesScope,
+                        repositoryId: params.repositoryId,
+                        origin: KodyRulesOrigin.REPO_FILE_SYNC,
+                        status: effectiveDefaultStatus,
+                        examples: parsed.examples,
+                    },
+                ];
+            }
+        }
+
+        // Resolve @file references before the LLM sees the content, so
+        // guidance split across files (CLAUDE.md → @AGENTS.md) is imported
+        // instead of silently dropped. Verbatim templates never get here
+        // (returned above), so user-authored bodies are never mutated.
+        let effectiveContent = params.content;
+        if (params.fileRef) {
+            effectiveContent = await this.inlineAtFileReferences({
+                content: params.content,
+                filePath: params.filePath,
+                organizationAndTeamData: params.organizationAndTeamData,
+                repository: params.fileRef.repository,
+                branch: params.fileRef.branch,
+                pullRequest: params.fileRef.pullRequest,
+            });
+        }
+
+        // Our managed (default) models are trial-only. BYOK always wins —
+        // runStructuredReviewCall below uses the customer's model whenever a
+        // BYOK config is present, regardless of subscription state. But once
+        // the trial ends, an org without its own key must NOT silently fall
+        // back to our managed models: skip the LLM conversion instead. Verbatim
+        // `.kody/rules` templates (returned above) use no LLM and are never
+        // gated here. Self-hosted / unknown statuses are left untouched.
+        const POST_TRIAL_REQUIRES_BYOK = [
+            SubscriptionStatus.ACTIVE,
+            SubscriptionStatus.PAYMENT_FAILED,
+            SubscriptionStatus.CANCELED,
+            SubscriptionStatus.EXPIRED,
+        ];
+        const hasByok = !!byokConfigValue?.main;
+        if (
+            !hasByok &&
+            POST_TRIAL_REQUIRES_BYOK.includes(
+                subscriptionStatus as SubscriptionStatus,
+            )
+        ) {
+            this.logger.log({
+                message:
+                    '[kody-rules-sync] skipping LLM file conversion: trial ended and no BYOK configured',
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    filePath: params.filePath,
+                    repositoryId: params.repositoryId,
+                    subscriptionStatus,
+                },
+            });
+            return [];
+        }
+
         const mainRun = options?.runName ?? 'kodyRulesFileToRules';
 
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            mainProvider,
-            mainFallback,
-            byokConfigValue,
-        );
-
         try {
-            const { result } = await this.observabilityService.runLLMInSpan({
-                spanName: `${KodyRulesSyncService.name}::${mainRun}`,
-                runName: mainRun,
+            const result = await runStructuredReviewCall({
+                byokConfig: byokConfigValue ?? undefined,
+                schema: kodyRulesIDEGeneratorSchema,
+                organizationId:
+                    params.organizationAndTeamData?.organizationId,
+                runName: `${KodyRulesSyncService.name}::${mainRun}`,
                 attrs: {
                     repositoryId: params.repositoryId,
                     filePath: params.filePath,
-                    type: promptRunner.executeMode,
                     fallback: false,
                 },
-                byokConfig: byokConfigValue,
-                exec: async (callbacks) => {
-                    return await promptRunner
-                        .builder()
-                        .setParser(
-                            ParserType.ZOD,
-                            kodyRulesIDEGeneratorSchema,
-                            {
-                                provider: LLMModelProvider.OPENAI_GPT_4O_MINI,
-                                fallbackProvider:
-                                    LLMModelProvider.OPENAI_GPT_4O,
-                            },
-                        )
-                        .setLLMJsonMode(true)
-                        .setPayload({
-                            filePath: params.filePath,
-                            repositoryId: params.repositoryId,
-                            content: params.content,
-                        })
-                        .addPrompt({
-                            role: PromptRole.SYSTEM,
-                            prompt: [
+                observabilityService: this.observabilityService,
+                system: [
                                 'Convert repository rule files (Cursor, Claude, GitHub rules, coding standards, etc.) into a JSON array of Kody Rules. IMPORTANT: Enforce exactly one rule per file. If multiple candidate rules exist, merge them COMPREHENSIVELY into one unified rule that preserves all essential details.',
                                 'Output ONLY a valid JSON object with a "rules" array. Format: {"rules": [...]}. If no rules, output {"rules": []}. No comments or explanations.',
                                 'Each item in the "rules" array MUST match exactly:',
@@ -1835,17 +2284,8 @@ export class KodyRulesSyncService {
                                 'Language: always return the rule text in English, even if the source content is in another language.',
                                 'Do NOT include keys like repositoryId, origin, createdAt, updatedAt, uuid, or any extra keys.',
                                 'Keep strings strictly typed, but COMPREHENSIVE in content - do not sacrifice completeness for brevity.',
-                            ].join(' '),
-                        })
-                        .addPrompt({
-                            role: PromptRole.USER,
-                            prompt: `File: ${params.filePath}\n\nContent:\n${params.content}`,
-                        })
-                        .addCallbacks(callbacks) // <- injeta tracker
-                        .addMetadata({ runName: mainRun })
-                        .setRunName(mainRun)
-                        .execute();
-                },
+                ].join(' '),
+                user: `File: ${params.filePath}\n\nContent:\n${effectiveContent}`,
             });
 
             if (!result?.rules || result.rules.length === 0) return [];
@@ -1890,8 +2330,8 @@ export class KodyRulesSyncService {
                     path: validated.path,
                     sourcePath,
                     repositoryId: rule?.repositoryId || params.repositoryId,
-                    origin: KodyRulesOrigin.USER,
-                    status: options?.defaultStatus || KodyRulesStatus.ACTIVE,
+                    origin: KodyRulesOrigin.REPO_FILE_SYNC,
+                    status: effectiveDefaultStatus,
                     examples: Array.isArray(rule?.examples)
                         ? rule.examples.map((example: any) => ({
                               snippet: example?.snippet || '',
@@ -1906,52 +2346,36 @@ export class KodyRulesSyncService {
             const fbRun = `${mainRun}Raw`;
 
             try {
-                const fbProvider =
-                    options?.mainProvider ?? LLMModelProvider.GEMINI_2_5_FLASH;
-                const fbFallback =
-                    options?.fallbackProvider ??
-                    LLMModelProvider.GEMINI_2_5_PRO;
-
-                const promptRunner = new BYOKPromptRunnerService(
-                    this.promptRunnerService,
-                    fbProvider,
-                    fbFallback,
-                    byokConfigValue,
+                // Raw-JSON retry on the LOCAL (Vercel) stack — same default/BYOK
+                // main model as the structured call above, plain-text output so a
+                // schema mismatch that broke Output.object still yields something
+                // extractJsonArray can salvage.
+                const rawModel = wrapByokModel(
+                    byokToVercelModel(byokConfigValue ?? undefined, 'main', {}),
+                    {
+                        byokConfig: byokConfigValue ?? undefined,
+                        organizationId:
+                            params.organizationAndTeamData?.organizationId,
+                        role: 'main',
+                    },
                 );
 
-                const { result: raw } =
-                    await this.observabilityService.runLLMInSpan({
+                const { text: raw } =
+                    await this.observabilityService.runAiSdkLLMInSpan<any>({
                         spanName: `${KodyRulesSyncService.name}::${fbRun}`,
                         runName: fbRun,
+                        model: getModelName(byokConfigValue ?? undefined),
                         attrs: {
                             repositoryId: params.repositoryId,
                             filePath: params.filePath,
-                            type: promptRunner.executeMode,
                             fallback: true,
                         },
-                        byokConfig: byokConfigValue,
-                        exec: async (callbacks) => {
-                            return await promptRunner
-                                .builder()
-                                .setParser(ParserType.STRING)
-                                .setPayload({
-                                    filePath: params.filePath,
-                                    repositoryId: params.repositoryId,
-                                    content: params.content,
-                                })
-                                .addPrompt({
-                                    role: PromptRole.SYSTEM,
-                                    prompt: 'Return ONLY the JSON array for the rules, without code fences. Include a "sourceSnippet" field when you can copy an exact excerpt from the file for each rule. No explanations.',
-                                })
-                                .addPrompt({
-                                    role: PromptRole.USER,
-                                    prompt: `File: ${params.filePath}\n\nContent:\n${params.content}`,
-                                })
-                                .addCallbacks(callbacks)
-                                .addMetadata({ runName: fbRun })
-                                .setRunName(fbRun)
-                                .execute();
-                        },
+                        exec: () =>
+                            tracedGenerateText({
+                                model: rawModel as any,
+                                system: 'Return ONLY the JSON array for the rules, without code fences. Include a "sourceSnippet" field when you can copy an exact excerpt from the file for each rule. No explanations.',
+                                prompt: `File: ${params.filePath}\n\nContent:\n${effectiveContent}`,
+                            } as any),
                     });
 
                 const parsed = this.extractJsonArray(raw);
@@ -1970,8 +2394,8 @@ export class KodyRulesSyncService {
                     path: rule?.path || params.filePath,
                     sourcePath: rule?.sourcePath || params.filePath,
                     repositoryId: rule?.repositoryId || params.repositoryId,
-                    origin: KodyRulesOrigin.USER,
-                    status: options?.defaultStatus || KodyRulesStatus.ACTIVE,
+                    origin: KodyRulesOrigin.REPO_FILE_SYNC,
+                    status: effectiveDefaultStatus,
                     examples: Array.isArray(rule?.examples)
                         ? rule.examples.map((example: any) => ({
                               snippet: example?.snippet || '',
@@ -2457,6 +2881,13 @@ export class KodyRulesSyncService {
             },
         ];
 
+        const [byokConfig, subscriptionStatus] = await Promise.all([
+            this.permissionValidationService.getBYOKConfig(detectionOrgData),
+            this.permissionValidationService.getSubscriptionStatus(
+                detectionOrgData,
+            ),
+        ]);
+
         try {
             const contextReferenceId =
                 await this.contextReferenceDetectionService.detectAndSaveReferences(
@@ -2467,6 +2898,8 @@ export class KodyRulesSyncService {
                         repositoryId,
                         repositoryName,
                         organizationAndTeamData: detectionOrgData,
+                        byokConfig: byokConfig ?? undefined,
+                        subscriptionStatus,
                     },
                 );
 
@@ -2772,14 +3205,34 @@ export class KodyRulesSyncService {
             return true;
         });
 
+        // Route through the centralized-aware use-cases (which fall back to a
+        // direct DB write when centralized config is off) so bulk pause/resume/
+        // delete don't bypass config-as-code: pause/resume re-emit the rule
+        // file (paused → `enabled: false`), delete removes it.
         let changed = 0;
         for (const rule of ideSyncRules) {
             if (!rule.uuid) continue;
-            await this.kodyRulesService.createOrUpdate(
-                organizationAndTeamData,
-                { ...rule, status: targetStatus } as any,
-                this.systemUserInfo,
-            );
+
+            if (targetStatus === KodyRulesStatus.DELETED) {
+                await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
+                    rule.uuid,
+                    {
+                        source: 'web',
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        userId: this.systemUserInfo.userId,
+                        userEmail: this.systemUserInfo.userEmail,
+                    },
+                );
+            } else {
+                await this.createOrUpdateKodyRulesUseCase.execute(
+                    { ...rule, status: targetStatus } as any,
+                    organizationAndTeamData.organizationId,
+                    this.systemUserInfo,
+                    true,
+                    organizationAndTeamData.teamId,
+                );
+            }
             changed += 1;
         }
         return changed;
@@ -2910,5 +3363,446 @@ export class KodyRulesSyncService {
             }
         }
         return counts;
+    }
+
+    // ---------------------------------------------------------------------
+    // Global rules synced from selected source repositories
+    //
+    // Rules imported here live under `repositoryId="global"` (the org-wide
+    // scope) but are tagged with `origin=GLOBAL_REPO_FILE_SYNC` and
+    // `sourceRepositoryId`, which is what separates them from user-authored
+    // global rules and from the onboarding fast-sync scratch that also share
+    // the `"global"` bucket. `directoryId` is intentionally left undefined —
+    // a source-repo directoryId would make the enforcement filter drop the
+    // rule in every other repo's review.
+    // ---------------------------------------------------------------------
+
+    private readonly GLOBAL_SCOPE_ID = 'global';
+
+    /** True for a global rule that this feature owns (safe to reconcile/purge). */
+    private isGlobalSyncedRule(rule: any, sourceRepositoryId?: string): boolean {
+        if (rule?.repositoryId !== this.GLOBAL_SCOPE_ID) return false;
+        if (rule?.origin !== KodyRulesOrigin.GLOBAL_REPO_FILE_SYNC) return false;
+        if (
+            sourceRepositoryId !== undefined &&
+            rule?.sourceRepositoryId !== sourceRepositoryId
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    /** Count of ACTIVE global-synced rules in an already-loaded rules array. */
+    private countActiveGlobalSyncedRulesIn(rules: any[]): number {
+        return (rules ?? []).filter(
+            (r) =>
+                this.isGlobalSyncedRule(r) &&
+                r?.status === KodyRulesStatus.ACTIVE,
+        ).length;
+    }
+
+    /**
+     * Count of ACTIVE global-synced rules across the whole org (every source
+     * repo combined). This is the number the trial cap is measured against.
+     * Loads the org's rules; callers that already hold the rules array (e.g. the
+     * sync loop) should use `countActiveGlobalSyncedRulesIn` instead.
+     */
+    async countGlobalSyncedRules(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<number> {
+        const entity = await this.kodyRulesService.findByOrganizationId(
+            organizationAndTeamData.organizationId,
+        );
+        return this.countActiveGlobalSyncedRulesIn(
+            (entity?.rules ?? []) as any[],
+        );
+    }
+
+    /**
+     * Find an existing global-synced rule in an already-loaded rules array,
+     * keyed by (source repository, source file path). The key includes
+     * `sourceRepositoryId` so two source repos with the same file path (e.g.
+     * both shipping a `CLAUDE.md`) don't collide in the shared `"global"` bucket.
+     * Pure/in-memory so the sync loop can reuse a single org-rules load instead
+     * of re-querying per file.
+     */
+    private selectGlobalRuleFromList(
+        rules: any[],
+        sourceRepositoryId: string,
+        sourcePath: string,
+    ): Partial<{
+        uuid: string;
+        status: KodyRulesStatus;
+        lastContentHash: string;
+    }> | null {
+        const matches =
+            (rules ?? []).filter(
+                (r: any) =>
+                    this.isGlobalSyncedRule(r, sourceRepositoryId) &&
+                    (r?.sourcePath || '').split('#')[0] === sourcePath,
+            ) ?? [];
+        if (!matches.length) return null;
+
+        const toTime = (value: unknown): number => {
+            const t = new Date((value as any) ?? 0).getTime();
+            return Number.isFinite(t) ? t : 0;
+        };
+        const newestFirst = [...matches].sort(
+            (a: any, b: any) => toTime(b?.createdAt) - toTime(a?.createdAt),
+        );
+        const found =
+            newestFirst.find(
+                (r: any) => r?.status !== KodyRulesStatus.DELETED,
+            ) ?? newestFirst[0];
+
+        return found
+            ? {
+                  uuid: found.uuid,
+                  status: found.status,
+                  lastContentHash: (found as any).lastContentHash,
+              }
+            : null;
+    }
+
+    /**
+     * Full scan of a source repository, importing every discovered rule file
+     * into the global scope. Used both by the manual "resync global" action and
+     * by the PR-merge trigger (the git-tree listing is a single cheap call and
+     * the per-file SHA short-circuit skips unchanged files, so re-running on
+     * every merged PR is acceptable).
+     *
+     * Reconciles deletions: any previously-synced global rule from this source
+     * repo whose file no longer exists at HEAD is soft-deleted.
+     */
+    async syncRepositoryGlobal(params: SyncTarget): Promise<void> {
+        const { organizationAndTeamData, repository } = params;
+        try {
+            // Plan gate. Free orgs can't import at all; trial orgs are capped at
+            // GLOBAL_RULES_TRIAL_IMPORT_LIMIT rules TOTAL across every source
+            // repo; paid/self-hosted are unlimited. Resolved here (not just in
+            // the endpoint) so the PR-merge trigger and manual resync honour the
+            // same cap. `budget` is the number of NEW rules still importable;
+            // updates to already-imported rules never consume it.
+            const tier =
+                await this.permissionValidationService.resolveGlobalRulesImportTier(
+                    organizationAndTeamData,
+                    KodyRulesSyncService.name,
+                );
+            if (tier === 'free') {
+                this.logger.log({
+                    message:
+                        '[kody-rules-global-sync] skipped: global rules import is not available on the Free plan',
+                    context: KodyRulesSyncService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        sourceRepositoryId: repository?.id,
+                    },
+                });
+                return;
+            }
+            // Load the org's rules ONCE and reuse the array for the budget
+            // count, every per-file lookup, and the deletion reconciliation.
+            // The rules array only grows by distinct source paths during this
+            // run (each handled once), so an in-memory snapshot stays correct
+            // for lookups; reconciliation is driven by `seenSourcePaths`, not by
+            // whether a just-created rule is in the snapshot.
+            const orgRules = ((
+                await this.kodyRulesService.findByOrganizationId(
+                    organizationAndTeamData.organizationId,
+                )
+            )?.rules ?? []) as any[];
+
+            const importLimit =
+                tier === 'trial' ? GLOBAL_RULES_TRIAL_IMPORT_LIMIT : null;
+            let budget =
+                importLimit === null
+                    ? Number.POSITIVE_INFINITY
+                    : Math.max(
+                          0,
+                          importLimit -
+                              this.countActiveGlobalSyncedRulesIn(orgRules),
+                      );
+
+            const branch = await this.codeManagementService.getDefaultBranch({
+                organizationAndTeamData,
+                repository,
+            });
+
+            const allFiles =
+                await this.codeManagementService.getRepositoryAllFiles({
+                    organizationAndTeamData,
+                    repository: { id: repository.id, name: repository.name },
+                    filters: {
+                        branch,
+                        filePatterns: [...RULE_FILE_DISCOVERY_PATTERNS],
+                    },
+                });
+
+            const seenSourcePaths = new Set<string>();
+            const syncOutcome = {
+                imported: [] as string[],
+                unchanged: [] as string[],
+                skipped: [] as Array<{ file: string; reason: string }>,
+                removed: [] as string[],
+                limitReached: [] as string[],
+            };
+
+            for (const file of allFiles) {
+                seenSourcePaths.add(file.path);
+
+                const existing = this.selectGlobalRuleFromList(
+                    orgRules,
+                    repository.id,
+                    file.path,
+                );
+
+                // SHA short-circuit: unchanged file with a live rule → skip the
+                // content download + LLM conversion entirely.
+                const currentSha = (file as any)?.sha as string | undefined;
+                if (
+                    existing &&
+                    existing.status !== KodyRulesStatus.DELETED &&
+                    currentSha &&
+                    existing.lastContentHash === currentSha
+                ) {
+                    syncOutcome.unchanged.push(file.path);
+                    continue;
+                }
+
+                const contentResp =
+                    await this.codeManagementService.getRepositoryContentFile({
+                        organizationAndTeamData,
+                        repository: {
+                            id: repository.id,
+                            name: repository.name,
+                        },
+                        file: { filename: file.path },
+                        pullRequest: {
+                            head: { ref: branch },
+                            base: { ref: branch },
+                        },
+                    });
+
+                const rawContent = contentResp?.data?.content;
+                if (!rawContent) {
+                    syncOutcome.skipped.push({
+                        file: file.path,
+                        reason: 'empty or unfetchable content',
+                    });
+                    continue;
+                }
+
+                const decoded =
+                    contentResp?.data?.encoding === 'base64'
+                        ? Buffer.from(rawContent, 'base64').toString('utf-8')
+                        : rawContent;
+
+                // @kody-ignore still applies: remove any existing global rule
+                // for this file.
+                if (this.shouldIgnoreFile(decoded)) {
+                    if (existing?.uuid) {
+                        await this.deleteGlobalRuleByUuid({
+                            organizationAndTeamData,
+                            uuid: existing.uuid,
+                        });
+                        syncOutcome.removed.push(file.path);
+                    }
+                    continue;
+                }
+
+                const rules = await this.convertFileToKodyRules({
+                    filePath: file.path,
+                    repositoryId: this.GLOBAL_SCOPE_ID,
+                    content: decoded,
+                    organizationAndTeamData,
+                    fileRef: {
+                        repository: {
+                            id: repository.id,
+                            name: repository.name,
+                        },
+                        branch,
+                    },
+                });
+
+                const oneRule = rules?.find(
+                    (r) => r && typeof r === 'object' && r.title && r.rule,
+                );
+
+                if (!oneRule) {
+                    syncOutcome.skipped.push({
+                        file: file.path,
+                        reason: 'no rule extracted (disabled template, empty content, or LLM returned none)',
+                    });
+                    continue;
+                }
+
+                // Trial cap. A NEW rule (nothing imported for this file yet, or
+                // a soft-deleted/rejected one being revived) counts against the
+                // budget; re-importing changed content over an ACTIVE rule does
+                // not. Once the budget is spent, further NEW rules are skipped —
+                // this is what "import only the first N rules found" enforces,
+                // in git-tree order, across every source repo combined.
+                const consumesBudget =
+                    !existing?.uuid ||
+                    existing.status !== KodyRulesStatus.ACTIVE;
+                if (consumesBudget && budget <= 0) {
+                    syncOutcome.limitReached.push(file.path);
+                    continue;
+                }
+
+                const dto: CreateKodyRuleDto = {
+                    uuid: existing?.uuid,
+                    title: oneRule.title as string,
+                    rule: oneRule.rule as string,
+                    path: validateAndScopeIdeRulePath({
+                        llmPath: oneRule.path as string,
+                        sourceFilePath: file.path,
+                        pathSource: (oneRule as any)?.pathSource,
+                    }).path,
+                    sourcePath: file.path,
+                    severity:
+                        ((
+                            oneRule.severity as any
+                        )?.toLowerCase?.() as KodyRuleSeverity) ||
+                        KodyRuleSeverity.MEDIUM,
+                    // Global scope: the org-wide bucket, no source directoryId
+                    // (see the note above this section).
+                    repositoryId: this.GLOBAL_SCOPE_ID,
+                    sourceRepositoryId: repository.id,
+                    lastContentHash: currentSha,
+                    origin: KodyRulesOrigin.GLOBAL_REPO_FILE_SYNC,
+                    status: oneRule.status as any,
+                    scope:
+                        (oneRule.scope as KodyRulesScope) ||
+                        KodyRulesScope.FILE,
+                    examples: Array.isArray(oneRule.examples)
+                        ? (oneRule.examples as any)
+                        : [],
+                } as CreateKodyRuleDto;
+
+                // Re-syncing changed content over a previously REJECTED rule
+                // reactivates it (mirrors the per-repo force-sync behaviour):
+                // selecting the repo as a global source IS the source-of-truth
+                // signal, so a stale UI rejection must not block re-import.
+                if (existing?.status === KodyRulesStatus.REJECTED) {
+                    (dto as any).status = KodyRulesStatus.ACTIVE;
+                }
+
+                await this.kodyRulesService.createOrUpdate(
+                    organizationAndTeamData,
+                    dto,
+                    this.systemUserInfo,
+                );
+
+                if (consumesBudget) {
+                    budget -= 1;
+                }
+                syncOutcome.imported.push(file.path);
+            }
+
+            // Deletion reconciliation: soft-delete global rules from this source
+            // repo whose file no longer exists at HEAD. Reuses the snapshot
+            // loaded at the top — a rule created during this run is never a
+            // deletion candidate (its path is in `seenSourcePaths`), so the
+            // snapshot missing it is harmless.
+            for (const rule of orgRules) {
+                if (!this.isGlobalSyncedRule(rule, repository.id)) continue;
+                if (rule?.status === KodyRulesStatus.DELETED) continue;
+                const sp = (rule?.sourcePath || '').split('#')[0];
+                if (sp && !seenSourcePaths.has(sp) && rule?.uuid) {
+                    await this.deleteGlobalRuleByUuid({
+                        organizationAndTeamData,
+                        uuid: rule.uuid,
+                    });
+                    syncOutcome.removed.push(sp);
+                }
+            }
+
+            this.logger.log({
+                message: `[kody-rules-global-sync] summary: ${syncOutcome.imported.length} imported, ${syncOutcome.unchanged.length} unchanged, ${syncOutcome.skipped.length} skipped, ${syncOutcome.removed.length} removed, ${syncOutcome.limitReached.length} over ${tier} limit (of ${allFiles.length} candidate file(s))`,
+                context: KodyRulesSyncService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    sourceRepositoryId: repository.id,
+                    branch,
+                    tier,
+                    importLimit,
+                    ...syncOutcome,
+                },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to sync global rules from source repository',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    sourceRepositoryId: repository?.id,
+                },
+            });
+        }
+    }
+
+    /** Soft-delete a single global-synced rule via the centralized-aware path. */
+    private async deleteGlobalRuleByUuid(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        uuid: string;
+    }): Promise<void> {
+        const { organizationAndTeamData, uuid } = params;
+        await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(uuid, {
+            source: 'web',
+            organizationId: organizationAndTeamData.organizationId,
+            teamId: organizationAndTeamData.teamId,
+            userId: this.systemUserInfo.userId,
+            userEmail: this.systemUserInfo.userEmail,
+        });
+    }
+
+    /**
+     * Soft-delete every global rule imported from a given source repository.
+     * Called when the user removes that repo from the global-rules source list.
+     *
+     * CRITICAL: scoped by `origin=GLOBAL_REPO_FILE_SYNC` + `sourceRepositoryId`
+     * (via `isGlobalSyncedRule`) so it never touches user-authored global rules
+     * or another source repo's rules that share the `"global"` bucket.
+     */
+    async purgeGlobalRulesForSourceRepository(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        sourceRepositoryId: string;
+    }): Promise<number> {
+        const { organizationAndTeamData, sourceRepositoryId } = params;
+        try {
+            const entity = await this.kodyRulesService.findByOrganizationId(
+                organizationAndTeamData.organizationId,
+            );
+            if (!entity?.rules) return 0;
+
+            let removed = 0;
+            for (const rule of entity.rules as any[]) {
+                if (!this.isGlobalSyncedRule(rule, sourceRepositoryId)) continue;
+                if (rule?.status === KodyRulesStatus.DELETED) continue;
+                if (!rule?.uuid) continue;
+                await this.deleteGlobalRuleByUuid({
+                    organizationAndTeamData,
+                    uuid: rule.uuid,
+                });
+                removed += 1;
+            }
+
+            this.logger.log({
+                message: `[kody-rules-global-sync] purged ${removed} global rule(s) for removed source repository`,
+                context: KodyRulesSyncService.name,
+                metadata: { organizationAndTeamData, sourceRepositoryId },
+            });
+            return removed;
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to purge global rules for source repository',
+                context: KodyRulesSyncService.name,
+                error,
+                metadata: params,
+            });
+            return 0;
+        }
     }
 }

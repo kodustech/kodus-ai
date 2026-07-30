@@ -52,6 +52,7 @@ export const GitRepositoriesTable = ({
             <DataTable
                 columns={columns}
                 data={repositories}
+                pageSize={25}
                 state={{ globalFilter: query }}
                 onGlobalFilterChange={setQuery}
             />

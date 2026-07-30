@@ -17,7 +17,7 @@
       "benchmarkBaseRef": "744e031019af8dbaacf407e792fbb3756364e2b4",
       "benchmarkHeadRef": "25bf964a844ea0bc64dc838bff038345048cb1fa",
       "extractedFilePaths": "[\"services/src/main/java/org/keycloak/authentication/authenticators/browser/UsernamePasswordForm.java\",\"services/src/main/java/org/keycloak/authentication/authenticators/browser/AbstractUsernameFormAuthenticator.java\",\"services/src/main/java/org/keycloak/authentication/authenticators/util/AuthenticatorUtils.java\",\"services/src/main/java/org/keycloak/authentication/authenticators/browser/PasswordForm.java\",\"services/src/main/java/org/keycloak/authentication/authenticators/browser/WebAuthnConditionalUIAuthenticator.java\",\"themes/src/main/resources/theme/base/login/passkeys.ftl\"]",
-      "omittedFilePaths": "[\"themes/src/main/resources/theme/keycloak.v2/login/login-password.ftl\",\"testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysOrganizationAuthenticationTest.java\",\"testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernameFormTest.java\",\"testsuite/integration-arquillian/tests/base/src/test/java/org/keycloak/testsuite/webauthn/passwordless/PasskeysUsernamePasswordFormTest.java\"]",
+      "omittedFilePaths": "[\"themes/src/main/resources/theme/keycloak.v2/login/login-password.ftl\"]",
       "expectedRequiredTools": "[\"readFile\"]",
       "expectedForbiddenTools": "[\"searchDocs\",\"checkTypes\"]",
       "expectedMaxSteps": 12,

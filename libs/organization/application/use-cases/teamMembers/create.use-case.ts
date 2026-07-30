@@ -2,7 +2,7 @@ import { Inject } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import {
     ITeamMemberService,

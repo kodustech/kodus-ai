@@ -5,7 +5,7 @@ import { FindOptionsWhere, Repository } from 'typeorm';
 import { ICodeReviewExecutionRepository } from '@libs/automation/domain/codeReviewExecutions/contracts/codeReviewExecution.repository.contract';
 import { CodeReviewExecutionEntity } from '@libs/automation/domain/codeReviewExecutions/entities/codeReviewExecution.entity';
 import { CodeReviewExecution } from '@libs/automation/domain/codeReviewExecutions/interfaces/codeReviewExecution.interface';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     mapSimpleModelsToEntities,
     mapSimpleModelToEntity,

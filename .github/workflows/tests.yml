@@ -6,6 +6,7 @@ on:
             - main
         paths:
             - "apps/api/**"
+            - "apps/web/**"
             - "apps/worker/**"
             - "apps/webhooks/**"
             - "libs/**"
@@ -17,7 +18,7 @@ on:
             - "jest.config.ts"
             - "tsconfig*.json"
             - "package.json"
-            - "yarn.lock"
+            - "pnpm-lock.yaml"
 
 jobs:
     test:
@@ -84,18 +85,43 @@ jobs:
               with:
                   node-version: "22"
 
-            - name: Cache Yarn dependencies
+            - name: Install pnpm
+              # Must match package.json's "packageManager" (pnpm@11.9.0).
+              # pnpm-workspace.yaml's `nodeLinker: hoisted` — the flat,
+              # yarn-like node_modules layout this repo requires for
+              # phantom-dependency resolution — is only read from that
+              # file by pnpm 11+; pnpm 10 ignores it (and .npmrc no
+              # longer carries the old `node-linker` key either, per the
+              # comment in pnpm-workspace.yaml), silently falling back to
+              # pnpm's strict/isolated linker. That's what broke this job:
+              # a phantom dep (`@radix-ui/react-avatar`, never declared in
+              # apps/web/package.json) and even declared-but-workspace-only
+              # deps (`class-variance-authority`) stopped resolving once
+              # apps/web's new component specs actually required them.
+              run: npm i -g pnpm@11.9.0
+
+            - name: Cache pnpm store
               uses: actions/cache@v5.0.5
               with:
-                  path: |
-                      .yarn/cache
-                      **/node_modules
-                  key: ${{ runner.os }}-node22-yarn-${{ hashFiles('**/yarn.lock') }}
+                  path: ~/.local/share/pnpm/store
+                  key: ${{ runner.os }}-node22-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
                   restore-keys: |
-                      ${{ runner.os }}-node22-yarn-
+                      ${{ runner.os }}-node22-pnpm-
 
             - name: Install dependencies
-              run: yarn install --frozen-lockfile
+              run: pnpm install --frozen-lockfile
+
+            - name: Install apps/web dependencies
+              # apps/web is an ISOLATED pnpm project — its own
+              # apps/web/pnpm-workspace.yaml makes it a separate root, not a
+              # member of the backend workspace, so the root `pnpm install`
+              # above never touches its node_modules. Any spec that imports a
+              # real apps/web runtime dependency (e.g. @radix-ui/*,
+              # class-variance-authority) fails with "Cannot find module"
+              # unless this dedicated install also runs. The pnpm store cache
+              # above already covers it (hashFiles('**/pnpm-lock.yaml') matches
+              # apps/web/pnpm-lock.yaml and the store is shared).
+              run: cd apps/web && pnpm install --frozen-lockfile
 
             - name: Create environment.ts for tests
               run: |
@@ -115,10 +141,14 @@ jobs:
 
             - name: Run migrations
               if: github.event.pull_request.head.repo.fork == false
-              run: yarn migration:run
+              # Mongo lives on the docker network (db_mongodb), unreachable from
+              # this host step — skip the Mongo migrations here (their modules are
+              # covered by mongo-migrations.integration.spec). Postgres migrations
+              # run normally; prod runs Mongo migrations for real on boot.
+              run: SKIP_MONGO_MIGRATIONS=true pnpm run migration:run
 
             - name: Run tests
-              run: API_NODE_ENV=test yarn test
+              run: API_NODE_ENV=test pnpm run test
 
             - name: Docker Compose Action Cleanup
               uses: hoverkraft-tech/compose-action@v2.6.0
@@ -143,15 +173,18 @@ jobs:
                         body: message,
                       });
 
-            - name: Notify Discord on Deploy Failure
+            - name: Notify Discord on test failure
               if: failure() && github.event.pull_request.head.repo.full_name ==
                   github.repository && env.DISCORD_WEBHOOK != ''
-              uses: sarisia/actions-status-discord@v1.13.0
+              uses: sarisia/actions-status-discord@v1.16.0
               env:
-                  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+                  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
               with:
                   webhook: ${{ env.DISCORD_WEBHOOK }}
-                  status: ${{ job.status }}
-                  content: "❌ failing tests for PR: ${{ github.event.pull_request.title }} Author:
-                      @${{ github.event.pull_request.user.login }}"
+                  status: failure
+                  title: "❌ PR tests failing"
+                  description: |
+                      PR: [#${{ github.event.pull_request.number }}](${{ github.event.pull_request.html_url }}) — ${{ github.event.pull_request.title }}
+                      Author: @${{ github.event.pull_request.user.login }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   username: GitHub Actions

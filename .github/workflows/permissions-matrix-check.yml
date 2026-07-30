@@ -19,14 +19,16 @@ jobs:
             - name: Checkout code
               uses: actions/checkout@v6.0.2
 
+            - uses: pnpm/action-setup@v4
+
             - name: Set up Node
               uses: actions/setup-node@v4
               with:
                   node-version: "22"
-                  cache: "yarn"
+                  cache: "pnpm"
 
             - name: Install dependencies
-              run: yarn install --frozen-lockfile
+              run: pnpm install --frozen-lockfile
 
             - name: Verify docs RBAC matrix is in sync with ROLE_POLICIES
-              run: yarn permissions:matrix:check
+              run: pnpm run permissions:matrix:check

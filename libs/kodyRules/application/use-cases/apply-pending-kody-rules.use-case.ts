@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { CentralizedPrMetadata } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import { CreateKodyRuleDto } from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
@@ -14,7 +14,6 @@ import {
 import {
     IKodyRule,
     KodyRuleRequestType,
-    KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -104,7 +103,7 @@ export class ApplyPendingKodyRulesUseCase {
             for (const pendingRule of pendingRules) {
                 if (
                     pendingRule.requestType ===
-                        KodyRuleRequestType.MEMORY_UPDATE &&
+                        KodyRuleRequestType.UPDATE &&
                     pendingRule.targetRuleUuid
                 ) {
                     const targetRule = rulesById.get(
@@ -242,7 +241,6 @@ export class ApplyPendingKodyRulesUseCase {
         return {
             ...(rule as CreateKodyRuleDto),
             type: rule.type || KodyRulesType.STANDARD,
-            origin: rule.origin || KodyRulesOrigin.GENERATED,
             severity: (rule.severity as any) || 'medium',
             path: rule.path || '',
             examples: (rule.examples as any) || [],

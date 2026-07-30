@@ -10,7 +10,7 @@ import {
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 // Mock logger to silence logs during tests
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -206,8 +206,8 @@ describe('FetchChangedFilesStage', () => {
             expect(result.statusInfo.message).toBe('No Files Changed');
         });
 
-        it('should skip when too many files (over 500)', async () => {
-            const manyFiles = Array.from({ length: 501 }, (_, i) => ({
+        it('should skip when too many files (over the agent limit of 2000)', async () => {
+            const manyFiles = Array.from({ length: 2001 }, (_, i) => ({
                 filename: `file${i}.ts`,
                 status: 'modified',
                 additions: 1,
@@ -224,7 +224,7 @@ describe('FetchChangedFilesStage', () => {
 
             expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
             expect(result.statusInfo.message).toContain('Too Many Files');
-            expect(result.statusInfo.message).toContain('Count: 501');
+            expect(result.statusInfo.message).toContain('Count: 2001');
         });
 
         it('should filter files locally using ignorePaths', async () => {
@@ -494,7 +494,7 @@ describe('FetchChangedFilesStage', () => {
             expect(result.statusInfo).toBeUndefined(); // No skip status
         });
 
-        it('should SKIP at 351 files on legacy engine (over the limit)', async () => {
+        it('does NOT skip at 351 files — the legacy 350 ceiling was removed; the agent engine allows up to 2000', async () => {
             const files = Array.from({ length: 351 }, (_, i) => ({
                 filename: `file${i}.ts`,
                 status: 'modified',
@@ -506,11 +506,14 @@ describe('FetchChangedFilesStage', () => {
             mockPullRequestHandlerService.getChangedFilesMetadata.mockResolvedValue(
                 files,
             );
+            mockPullRequestHandlerService.enrichFilesWithContent.mockResolvedValue(
+                files,
+            );
 
             const context = createBaseContext();
             const result = await (stage as any).executeStage(context);
 
-            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo).toBeUndefined(); // under the agent 2000 limit
         });
 
         it('should handle null returned from getChangedFilesMetadata', async () => {

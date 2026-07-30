@@ -1,5 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { IdGenerator, createLogger } from '@kodus/flow';
+import { IdGenerator } from '@libs/core/utils/id-generator';
+import { createLogger } from '@libs/core/log/logger';
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import {
@@ -42,6 +43,8 @@ export class EnqueueCliReviewUseCase implements IUseCase {
             userEmail: input.userEmail,
             gitContext: input.gitContext,
             cliAuth: input.cliAuth,
+            publicPr: input.publicPr,
+            publicDiff: input.publicDiff,
         };
 
         const jobId = await this.jobQueueService.enqueue({

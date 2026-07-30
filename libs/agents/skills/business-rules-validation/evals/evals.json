@@ -1,0 +1,48 @@
+{
+    "skill_name": "business-rules-validation",
+    "_note": "Eval cases for the business-rules-validation skill (Etapa 1 — eval seam). Each case is a scenario the analyzer must judge: does the PR diff implement what the task requires? `files` name the fixtures (diff + task context) a follow-up wires into the real `analyze` fn; assertions are graded against the ValidationResult (needsMoreInfo/summary/reason/confidence) or the user-facing message. Start small (3 cases) per the Agent Skills eval guidance; expand once the first run produces outputs.",
+    "evals": [
+        {
+            "id": "missing-requirement",
+            "prompt": "Validate the PR diff against the task. The task says 'when a user is soft-deleted, also revoke their active sessions', but the diff only sets deleted_at and never touches the sessions table.",
+            "expected_output": "Flags a real business-logic gap: the session revocation required by the task is not implemented in the diff. Confidence high.",
+            "assertions": [
+                "Reports a violation (not 'valid') — the diff is missing required behavior",
+                "The summary names the missing session revocation specifically",
+                "needsMoreInfo is false (task context and diff were both available)",
+                "confidence is 'high' or 'medium', not 'low'"
+            ],
+            "files": [
+                "evals/files/missing-requirement.diff",
+                "evals/files/missing-requirement.task.md"
+            ]
+        },
+        {
+            "id": "fully-implemented",
+            "prompt": "Validate the PR diff against the task. The task asks to add a `lastSyncedAt` timestamp updated on every successful sync, and the diff adds the field, updates it in the sync success path, and covers it with a test.",
+            "expected_output": "Passes: the diff implements exactly what the task requires. No business-logic violation.",
+            "assertions": [
+                "Does NOT report a business-logic violation",
+                "needsMoreInfo is false",
+                "The summary acknowledges the requirement is implemented"
+            ],
+            "files": [
+                "evals/files/fully-implemented.diff",
+                "evals/files/fully-implemented.task.md"
+            ]
+        },
+        {
+            "id": "no-task-context",
+            "prompt": "Validate the PR diff against the task, but no task-management integration is connected and no task context could be retrieved — only the raw diff is available.",
+            "expected_output": "Does not hallucinate requirements. Signals that task context is missing rather than inventing a violation.",
+            "assertions": [
+                "needsMoreInfo is true OR the summary states task context was unavailable",
+                "Does NOT fabricate a specific business-rule violation with high confidence",
+                "missingInfo (or the summary) explains that task context is required to validate"
+            ],
+            "files": [
+                "evals/files/no-task-context.diff"
+            ]
+        }
+    ]
+}

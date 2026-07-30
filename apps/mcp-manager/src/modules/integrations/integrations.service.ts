@@ -59,7 +59,7 @@ export class IntegrationsService {
         authType: MCPIntegrationAuthType,
         data: CreateIntegrationDto,
     ): string {
-        let authPayload = {};
+        let authPayload: Record<string, unknown>;
 
         switch (authType) {
             case MCPIntegrationAuthType.BEARER_TOKEN:

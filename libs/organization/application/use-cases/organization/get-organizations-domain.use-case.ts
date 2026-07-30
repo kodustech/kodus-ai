@@ -1,7 +1,7 @@
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     IOrganizationService,
     ORGANIZATION_SERVICE_TOKEN,

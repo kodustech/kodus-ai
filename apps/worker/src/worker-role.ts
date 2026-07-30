@@ -3,8 +3,8 @@
  * `WORKER_ROLE`:
  *
  *   code-review  → RabbitMQ consumers, code review pipeline, outbox
- *                  relay, monitors. Does not touch the analytics
- *                  warehouse.
+ *                  relay, monitors, and the self-hosted telemetry
+ *                  heartbeat. Does not touch the analytics warehouse.
  *   analytics    → Analytics ingestion cron + warehouse connection.
  *                  No queue consumers (`enableConsumers: false`), but
  *                  RabbitMQWrapperModule is still imported because
@@ -15,9 +15,10 @@
  *                  alternative is a refactor of the
  *                  OrganizationParametersModule → PlatformModule edge.
  *
- * Both cloud and self-hosted deploy both replicas. Keeping the topology
- * identical across environments is a non-negotiable property of this
- * migration (see issue #951): one pipeline, same bugs, same fixes.
+ * Every deployment needs the code-review role. The analytics role is a
+ * separate Cockpit/warehouse worker and may be absent in community
+ * self-hosted installs, so any fleet-wide self-hosted responsibility must
+ * live on the code-review role.
  */
 export type WorkerRole = 'code-review' | 'analytics';
 

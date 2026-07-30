@@ -1,0 +1,89 @@
+---
+title: "Kubernetes e OpenShift"
+description: "Faça deploy do Kodus em Kubernetes ou OpenShift com os Helm charts oficiais."
+icon: "dharmachakra"
+---
+
+Prefere um cluster em vez de uma única VM? O Kodus disponibiliza **Helm charts**
+para Kubernetes e OpenShift no repositório
+[kodus-installer](https://github.com/kodustech/kodus-installer). Esta página é a
+visão geral — o [README](https://github.com/kodustech/kodus-installer/blob/main/charts/README.md)
+dos charts é a referência completa (instalações air-gapped, ExternalSecrets,
+operadores, observabilidade e hardening orientado a SOC 2).
+
+## Requisitos
+
+- Helm 3.8+
+- Kubernetes 1.28+ ou OpenShift 4.14+
+- Para data stores em `mode: operator`, o operador correspondente instalado no cluster
+
+## Início rápido (data stores embutidos)
+
+O modo padrão `bundled` sobe PostgreSQL (pgvector), MongoDB e RabbitMQ como
+StatefulSets gerenciados pelo chart — o equivalente ao `USE_LOCAL_DB=true` do
+Docker Compose. Um comando, sem operadores:
+
+```bash
+git clone https://github.com/kodustech/kodus-installer
+cd kodus-installer/charts/kodus
+helm dependency build
+helm install kodus . -n kodus --create-namespace \
+  --set imageTag=<versão> \
+  --set global.config.WEB_HOSTNAME_API=api.kodus.example.com \
+  --set global.config.NEXTAUTH_URL=https://kodus.example.com \
+  --set ingress.hosts.web.host=kodus.example.com \
+  --set ingress.hosts.api.host=api.kodus.example.com
+```
+
+`imageTag` fixa a versão do Kodus para toda a stack (como o `IMAGE_TAG` do Docker
+Compose); use uma tag real, nunca `latest`, em produção. Os secrets de
+autenticação/criptografia são gerados automaticamente com o formato correto e
+permanecem estáveis entre upgrades.
+
+<Tip>
+  O serviço de webhooks precisa do seu próprio host público. Aponte
+  `ingress.hosts.webhooks.host` (ou `route.hosts.webhooks.host` no OpenShift) para
+  um hostname dedicado e o chart deriva `API_<provider>_CODE_MANAGEMENT_WEBHOOK`
+  automaticamente.
+</Tip>
+
+## Modos de data store
+
+Cada store (`postgres`, `mongodb`, `rabbitmq`) tem um `mode` independente:
+
+| mode | o que faz | para |
+|------|-----------|------|
+| `bundled` *(padrão)* | um StatefulSet gerenciado pelo chart | dev / testes |
+| `external` | seu serviço gerenciado/próprio via um `existingSecret` | produção |
+| `operator` | um CR reconciliado por um operador do cluster (HA) — CloudNativePG, RabbitMQ Cluster Operator, MongoDB Community Operator | produção |
+
+Em produção, prefira `external` ou `operator` — eles entregam a operação do banco
+a algo feito para isso.
+
+## OpenShift
+
+Adicione o overlay do OpenShift — Routes substituem o Ingress e os UIDs dos pods
+são deixados a cargo do SCC do namespace (`restricted-v2`), sem UIDs fixos:
+
+```bash
+helm install kodus . -f values.yaml -f values-openshift.yaml \
+  -n kodus --create-namespace --set imageTag=<versão>
+```
+
+Deixe `route.hosts.*.host` vazio para o OpenShift atribuir automaticamente o
+hostname `<name>-<namespace>.apps…`. Note que alguns clusters espelham ou bloqueiam
+imagens `library/*` do Docker Hub, então a imagem embutida do `mongo` pode precisar
+de um override (`--set mongodb.bundled.image=mirror.gcr.io/library/mongo:8`) ou de
+um data store `external` / `operator`.
+
+## Serviços opcionais e verificação
+
+- **MCP manager** — `--set services.mcp-manager.enabled=true`
+- **Worker de analytics** — `--set services.worker-analytics.enabled=true`
+- **Health check** — `../../scripts/doctor-k8s.sh -n kodus` inspeciona workloads,
+  configuração e os endpoints reais de saúde.
+
+<Card title="Referência completa do Helm" icon="github" href="https://github.com/kodustech/kodus-installer/blob/main/charts/README.md">
+  Configuração dos operadores de data store, reuso de bancos existentes, instalações
+  air-gapped, secrets via ExternalSecrets, observabilidade e padrões de segurança.
+</Card>

@@ -12,7 +12,6 @@ import { useAsyncAction } from "@hooks/use-async-action";
 import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import { KODY_RULES_PATHS } from "@services/kodyRules";
 import {
-    generateKodyRules,
     getImportedKodyRulesCount,
     syncIDERules,
 } from "@services/kodyRules/fetch";
@@ -35,8 +34,8 @@ import {
     DisableIdeSyncModal,
     type DisableIdeSyncAction,
 } from "./disable-ide-sync-modal";
-import { GenerateFromPastReviewsFirstTimeModal } from "./generate-from-past-reviews-modal";
 import { SyncFromIDEFilesFirstTimeModal } from "./sync-from-ide-files-modal";
+import { ExcludedReviewersPicker } from "./excluded-reviewers-picker";
 
 export const GenerateRulesOptions = () => {
     const cfg = useConfig();
@@ -105,26 +104,25 @@ export const GenerateRulesOptions = () => {
 
             toast({ description: "Settings saved", variant: "success" });
 
+            // First time this repo's generator is enabled, the backend seeds its
+            // rules from the last 3 months of closed PRs (the weekly cron only
+            // looks at the last week). Let the user know it's running.
             if (syncStatus.kodyRulesGeneratorEnabledFirstTime && newValue) {
-                const response = await magicModal.show(() => (
-                    <GenerateFromPastReviewsFirstTimeModal />
-                ));
+                toast({
+                    variant: "info",
+                    title: "We're analyzing your past PRs",
+                    description:
+                        "Kody is reviewing the last 3 months of closed PRs to draft rules. This may take a few minutes; generated rules will appear on this page.",
+                });
 
-                if (response) {
-                    generateKodyRules(teamId);
-
-                    invalidateQueries({
-                        queryKey: generateQueryKey(
-                            PARAMETERS_PATHS.GET_BY_KEY,
-                            {
-                                params: {
-                                    teamId,
-                                    key: ParametersConfigKey.PLATFORM_CONFIGS,
-                                },
-                            },
-                        ),
-                    });
-                }
+                invalidateQueries({
+                    queryKey: generateQueryKey(PARAMETERS_PATHS.GET_BY_KEY, {
+                        params: {
+                            teamId,
+                            key: ParametersConfigKey.PLATFORM_CONFIGS,
+                        },
+                    }),
+                });
             }
         } catch (error) {
             console.error("Error saving settings:", error);
@@ -343,6 +341,17 @@ export const GenerateRulesOptions = () => {
                     </CardHeader>
                 </Card>
             </Button>
+
+            {config?.kodyRulesGeneratorEnabled?.value && (
+                <ExcludedReviewersPicker
+                    teamId={teamId}
+                    repositoryId={repositoryId}
+                    initialExcluded={
+                        config?.kodyLearningExcludedReviewers?.value ?? []
+                    }
+                    canEdit={canEdit}
+                />
+            )}
         </div>
     );
 };

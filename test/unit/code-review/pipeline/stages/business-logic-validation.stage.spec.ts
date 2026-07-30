@@ -1,14 +1,7 @@
 import { BusinessLogicValidationStage } from '@/code-review/pipeline/stages/business-logic-validation.stage';
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/businessRulesValidationAgent';
+import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 
-jest.mock('@kodus/flow', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        info: jest.fn(),
-    }),
+jest.mock('@libs/common/utils/thread-id', () => ({
     createThreadId: jest.fn(),
 }));
 
@@ -27,7 +20,10 @@ const jiraConnection = (organizationId: string): JiraConnection => ({
 describe('BusinessLogicValidationStage', () => {
     let stage: BusinessLogicValidationStage;
     let agentProvider: { execute: jest.Mock };
-    let mcpManagerService: { getConnections: jest.Mock };
+    let mcpManagerService: {
+        getConnections: jest.Mock;
+        getIntegrations: jest.Mock;
+    };
 
     const buildContext = (overrides: Record<string, unknown> = {}) => ({
         organizationAndTeamData: {
@@ -55,6 +51,7 @@ describe('BusinessLogicValidationStage', () => {
         agentProvider = { execute: jest.fn() };
         mcpManagerService = {
             getConnections: jest.fn().mockResolvedValue([jiraConnection('org-1')]),
+            getIntegrations: jest.fn().mockResolvedValue([]),
         };
         stage = new BusinessLogicValidationStage(
             agentProvider as any,
@@ -69,7 +66,7 @@ describe('BusinessLogicValidationStage', () => {
                 pullRequest: {
                     number: 42,
                     body: 'Some prose without identifiers',
-                    title: '[DL-2773] Add print working mode',
+                    title: 'LKDB-286 Add print working mode',
                     head: { ref: 'feature/print-mode' },
                     base: { ref: 'main' },
                 },
@@ -246,6 +243,11 @@ describe('BusinessLogicValidationStage', () => {
     });
 
     describe('detectTicketKeys', () => {
+        it('matches Jira-style keys with underscores', () => {
+            const keys = (stage as any).detectTicketKeys('Implements PROJ_1-42');
+            expect(keys).toEqual(['PROJ_1-42']);
+        });
+
         it('matches uppercase keys', () => {
             const keys = (stage as any).detectTicketKeys('Implements ACME-123');
             expect(keys).toEqual(['ACME-123']);
@@ -274,6 +276,14 @@ describe('BusinessLogicValidationStage', () => {
             );
             expect(result).toBe(true);
         });
+
+        it('matches Jira keys when Atlassian Rovo is the connected MCP', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'LKDB-286 refactor logging',
+                ['atlassianrovo'],
+            );
+            expect(result).toBe(true);
+        });
     });
 
     describe('skip when no task MCP connected', () => {
@@ -281,6 +291,7 @@ describe('BusinessLogicValidationStage', () => {
             mcpManagerService.getConnections.mockResolvedValue([
                 { appName: 'Slack', provider: 'slack', organizationId: 'org-1' },
             ]);
+            mcpManagerService.getIntegrations.mockResolvedValue([]);
 
             const context = buildContext({
                 pullRequest: {
@@ -297,6 +308,62 @@ describe('BusinessLogicValidationStage', () => {
             expect(decision).toEqual(
                 expect.objectContaining({ reason: 'no_task_mcp' }),
             );
+        });
+
+        it('does not skip when Atlassian Rovo OAuth is active without a connection row', async () => {
+            mcpManagerService.getConnections.mockResolvedValue([]);
+            mcpManagerService.getIntegrations.mockResolvedValue([
+                {
+                    id: 'atlassian-rovo-default',
+                    name: 'Atlassian Rovo',
+                    appName: 'Atlassian Rovo',
+                    provider: 'kodusmcp',
+                    active: true,
+                    isConnected: false,
+                },
+            ]);
+
+            const context = buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: 'Implements LKDB-286',
+                    title: '',
+                    head: { ref: '' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            const decision = await (stage as any).evaluateSkip(context);
+
+            expect(decision).toBeNull();
+        });
+
+        it('does not skip for a custom MCP named Jira with only OAuth active', async () => {
+            mcpManagerService.getConnections.mockResolvedValue([]);
+            mcpManagerService.getIntegrations.mockResolvedValue([
+                {
+                    id: 'custom-jira-1',
+                    name: 'Company Jira',
+                    appName: 'Company Jira',
+                    provider: 'custom',
+                    active: true,
+                    isConnected: false,
+                },
+            ]);
+
+            const context = buildContext({
+                pullRequest: {
+                    number: 42,
+                    body: '',
+                    title: 'LKDB-286 Fix checkout',
+                    head: { ref: '' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            const decision = await (stage as any).evaluateSkip(context);
+
+            expect(decision).toBeNull();
         });
     });
 

@@ -1,6 +1,6 @@
 import * as os from 'os';
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     Injectable,
     OnApplicationBootstrap,

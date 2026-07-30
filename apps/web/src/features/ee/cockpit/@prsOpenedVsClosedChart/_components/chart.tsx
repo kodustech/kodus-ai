@@ -1,33 +1,29 @@
 "use client";
 
-import { use, useState } from "react";
-import { Button } from "@components/ui/button";
-import useResizeObserver from "@hooks/use-resize-observer";
-import { ExpandableContext } from "src/core/providers/expandable";
+import { useState } from "react";
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis,
+} from "recharts";
 import type { AwaitedReturnType } from "src/core/types";
 import { cn } from "src/core/utils/components";
 import type { getPRsOpenedVsClosed } from "src/features/ee/cockpit/_services/analytics/productivity/fetch";
+
 import {
-    VictoryAxis,
-    VictoryBar,
-    VictoryChart,
-    VictoryContainer,
-    VictoryStack,
-    VictoryTheme,
-    VictoryTooltip,
-} from "victory";
+    CHART_COLORS,
+    rechartsAxisProps,
+    rechartsGridProps,
+    RechartsTooltip,
+} from "../../_components/charts/recharts-shared";
 
-const [color1, color2] = ["lime", "tomato"] as const;
-
-const legendItems = [
-    {
-        name: "Opened",
-        fill: color1,
-    },
-    {
-        name: "Closed",
-        fill: color2,
-    },
+const series = [
+    { key: "opened", name: "Opened", fill: CHART_COLORS.success },
+    { key: "closed", name: "Closed", fill: CHART_COLORS.danger },
 ] as const;
 
 export const Chart = ({
@@ -35,140 +31,74 @@ export const Chart = ({
 }: {
     data: AwaitedReturnType<typeof getPRsOpenedVsClosed>;
 }) => {
-    const [graphRef, boundingRect] = useResizeObserver();
-    const { isExpanded } = use(ExpandableContext);
-    const isTiltedDate = data?.length > 6 && !isExpanded;
+    const [hidden, setHidden] = useState<Record<string, boolean>>({});
 
-    const [visibleBars, setVisibleBars] = useState(
-        legendItems.reduce(
-            (acc, item) => {
-                acc[item.name] = true;
-                return acc;
-            },
-            {} as Record<(typeof legendItems)[number]["name"], boolean>,
-        ),
-    );
+    const chartData = data?.map((item) => ({
+        week: item.weekStart,
+        opened: item.openedCount,
+        closed: item.closedCount,
+    }));
+
+    const toggle = (key: string) => {
+        setHidden((prev) => {
+            const next = { ...prev, [key]: !prev[key] };
+            if (series.every((s) => next[s.key])) return prev;
+            return next;
+        });
+    };
 
     return (
         <div className="flex h-full w-full flex-col gap-4">
-            <div ref={graphRef} className="w-full flex-1">
-                <VictoryChart
-                    domainPadding={{ x: 30 }}
-                    theme={VictoryTheme.clean}
-                    width={boundingRect.width}
-                    height={boundingRect.height}
-                    padding={{
-                        left: 45,
-                        right: 10,
-                        top: 10,
-                        bottom: isTiltedDate ? 45 : 30,
-                    }}
-                    containerComponent={
-                        <VictoryContainer
-                            responsive={false}
-                            height={boundingRect.height}
+            <div className="min-h-0 w-full flex-1">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                        data={chartData}
+                        margin={{ top: 10, right: 12, left: -16, bottom: 0 }}>
+                        <CartesianGrid {...rechartsGridProps} />
+                        <XAxis
+                            dataKey="week"
+                            tickMargin={8}
+                            {...rechartsAxisProps}
                         />
-                    }>
-                    <VictoryAxis
-                        style={{
-                            axis: { stroke: "#444" },
-                            tickLabels: {
-                                fontSize: 10,
-                                fill: "var(--color-text-primary)",
-                                fontFamily: "var(--font-sans)",
-                                padding: 2,
-                                angle: isTiltedDate && !isExpanded ? -25 : 0,
-                                textAnchor:
-                                    isTiltedDate && !isExpanded
-                                        ? "end"
-                                        : "middle",
-                            },
-                        }}
-                    />
-
-                    <VictoryAxis
-                        dependentAxis
-                        style={{
-                            axis: { stroke: "#444" },
-                            ticks: { stroke: "#444" },
-                            tickLabels: {
-                                fontSize: 10,
-                                fill: "var(--color-text-primary)",
-                            },
-                        }}
-                    />
-
-                    <VictoryStack
-                        labelComponent={
-                            <VictoryTooltip
-                                style={{
-                                    fontSize: 11,
-                                    fontFamily: "var(--font-sans)",
-                                    fontWeight: 700,
-                                }}
+                        <YAxis
+                            allowDecimals={false}
+                            {...rechartsAxisProps}
+                        />
+                        <Tooltip
+                            cursor={{ fill: "#20203266" }}
+                            content={<RechartsTooltip hideZero />}
+                        />
+                        {series.map((s) => (
+                            <Bar
+                                key={s.key}
+                                stackId="prs"
+                                dataKey={s.key}
+                                name={s.name}
+                                hide={hidden[s.key]}
+                                fill={s.fill}
+                                maxBarSize={28}
                             />
-                        }
-                        style={{
-                            data: {
-                                width: 20,
-                                fill: ({ datum }) => datum.fill,
-                            },
-                        }}>
-                        {visibleBars["Opened"] && (
-                            <VictoryBar
-                                labels={({ datum }) => ["Opened", datum.y]}
-                                data={data?.map((item) => ({
-                                    x: item.weekStart,
-                                    y: item.openedCount,
-                                    fill: color1,
-                                }))}
-                            />
-                        )}
-
-                        {visibleBars["Closed"] && (
-                            <VictoryBar
-                                labels={({ datum }) => ["Closed", datum.y]}
-                                data={data?.map((item) => ({
-                                    x: item.weekStart,
-                                    y: item.closedCount,
-                                    fill: color2,
-                                }))}
-                            />
-                        )}
-                    </VictoryStack>
-                </VictoryChart>
+                        ))}
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
 
             <div className="flex items-center gap-5">
-                {legendItems.map((item) => (
-                    <Button
-                        size="xs"
-                        key={item.name}
-                        variant="cancel"
-                        className="flex min-h-auto cursor-pointer items-center gap-2 rounded-none p-0 text-xs"
-                        active={visibleBars[item.name]}
-                        onClick={() => {
-                            setVisibleBars((prev) => {
-                                const nextValue = {
-                                    ...prev,
-                                    [item.name]: !prev[item.name],
-                                };
-
-                                if (Object.values(nextValue).every((v) => !v))
-                                    return prev;
-
-                                return nextValue;
-                            });
-                        }}>
+                {series.map((s) => (
+                    <button
+                        key={s.key}
+                        type="button"
+                        onClick={() => toggle(s.key)}
+                        className="flex cursor-pointer items-center gap-2 text-xs">
                         <span
-                            style={{ backgroundColor: item.fill }}
+                            style={{ backgroundColor: s.fill }}
                             className={cn(
                                 "size-3 rounded-full",
-                                !visibleBars[item.name] && "bg-text-tertiary!",
+                                hidden[s.key] && "bg-text-tertiary!",
                             )}
                         />
-                        {item.name}
-                    </Button>
+                        {s.name}
+                    </button>
                 ))}
             </div>
         </div>

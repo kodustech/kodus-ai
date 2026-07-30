@@ -26,12 +26,13 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 RUN corepack disable \
-  && npm i -g yarn@1.22.22
+  && npm i -g pnpm@10.34.1
 
 FROM base AS deps
-COPY package.json yarn.lock .npmrc ./
+# pnpm-workspace.yaml carries the overrides (moved out of package.json/.npmrc by the pnpm 11 migration).
+# Without it here, the frozen install sees empty overrides and aborts with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/kodus-common ./packages/kodus-common
-COPY packages/kodus-flow ./packages/kodus-flow
 
 # Railway's Metal builder rejects BuildKit secret mounts and requires a
 # service-id-prefixed cache key on cache mounts (which can't share across
@@ -39,15 +40,11 @@ COPY packages/kodus-flow ./packages/kodus-flow
 # copied above only holds registry URLs (no tokens), and the @kodus/*
 # packages are replaced by the local copies in packages/ via `cp -r`.
 RUN cd packages/kodus-common \
-  && yarn install \
-  && yarn prepack
-RUN cd packages/kodus-flow \
-  && yarn install \
-  && yarn build
+  && pnpm install \
+  && pnpm run prepack
 
-RUN yarn install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
-RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 
 FROM deps AS build
 ARG API_CLOUD_MODE=false
@@ -65,31 +62,26 @@ RUN sed -e "s/__CLOUD_MODE__/${API_CLOUD_MODE}/g" \
         -e "/declare const/d" \
         libs/ee/configs/environment/environment.template.ts > libs/ee/configs/environment/environment.ts
 
-RUN yarn build:apps && yarn build:migrations
+RUN pnpm run build:apps && pnpm run build:migrations
 
 # Install production dependencies only
 FROM base AS prod-deps
-COPY package.json yarn.lock .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY packages/kodus-common ./packages/kodus-common
-COPY packages/kodus-flow ./packages/kodus-flow
 
 RUN cd packages/kodus-common \
-  && yarn install \
-  && yarn prepack
-RUN cd packages/kodus-flow \
-  && yarn install \
-  && yarn build
+  && pnpm install \
+  && pnpm run prepack
 
-RUN yarn install --frozen-lockfile --prefer-offline --production=true
+RUN pnpm install --frozen-lockfile --prod
 
-# Drop nested node_modules/src/test that were needed for `yarn prepack`
+# Drop nested node_modules/src/test that were needed for `pnpm run prepack`
 # but not at runtime — keeping them would duplicate hundreds of MB inside
 # the final image. `dist/` and `package.json` are what Node resolves.
-RUN rm -rf packages/kodus-common/node_modules packages/kodus-flow/node_modules \
-           packages/kodus-common/src packages/kodus-flow/src \
-           packages/kodus-common/test packages/kodus-flow/test
+RUN rm -rf packages/kodus-common/node_modules \
+           packages/kodus-common/src \
+           packages/kodus-common/test
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
-RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 
 # Runtime stage — single stage, service selected via SERVICE_TYPE
 FROM docker.io/library/node:22.22.2-slim

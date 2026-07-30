@@ -81,6 +81,13 @@ export interface EventCatalogEntry {
      * (drawer + banner). Defaults to 'View' when absent.
      */
     actionLabel?: string;
+    /**
+     * Roles that actually receive this event (role-fanout events only). When
+     * set, the settings page only offers it under those roles. Absent = any
+     * role can receive it (user/email-directed or PR-author style) — shown
+     * under every role.
+     */
+    defaultRoles?: string[];
 }
 
 /**

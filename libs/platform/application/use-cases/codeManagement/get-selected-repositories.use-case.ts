@@ -14,7 +14,7 @@ import {
     INTEGRATION_CONFIG_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 export class GetSelectedRepositoriesUseCase implements IUseCase {
     private readonly logger = createLogger(GetSelectedRepositoriesUseCase.name);

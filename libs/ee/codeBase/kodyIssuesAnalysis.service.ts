@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     LLMModelProvider,
     PromptRunnerService,
@@ -45,7 +45,14 @@ export class KodyIssuesAnalysisService {
     ): Promise<any> {
         try {
             const provider = LLMModelProvider.GEMINI_2_5_PRO;
-            const fallbackProvider = LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET;
+            // Fallback to a Vertex (SA-auth) model so a failure of the AI
+            // Studio Gemini key falls through to the enterprise Vertex
+            // account. Must be a Gemini model: the legacy v2 engine builds
+            // Vertex models via `ChatVertexAI`, which only speaks the Gemini
+            // protocol. `VERTEX_CLAUDE_3_5_SONNET` was silently broken here
+            // (Claude on Vertex needs the Anthropic protocol). Claude on
+            // Vertex is supported via BYOK (v5) only.
+            const fallbackProvider = LLMModelProvider.VERTEX_GEMINI_2_5_PRO;
             const runName = 'mergeSuggestionsIntoIssues';
 
             const promptRunner = new BYOKPromptRunnerService(

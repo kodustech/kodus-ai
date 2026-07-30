@@ -27,15 +27,15 @@ case "$ENVIRONMENT" in
     export API_DATABASE_ENV=${API_DATABASE_ENV:-development}
     # profiling=opt-in. Most dev flows don't need Pyroscope running and
     # it's another ~150 MiB of headroom in the OrbStack VM. To bring it
-    # up: `ENABLE_PROFILING=true yarn docker:start`, or use the
-    # `yarn docker:start:profiling` shortcut, or `yarn docker:start:full`
+    # up: `ENABLE_PROFILING=true pnpm run docker:start`, or use the
+    # `pnpm run docker:start:profiling` shortcut, or `pnpm run docker:start:full`
     # (which activates the `extras` profile that includes Pyroscope).
     PROFILE_ARGS=()
     if [ "${ENABLE_PROFILING:-false}" = "true" ]; then
       PROFILE_ARGS+=(--profile profiling)
     fi
     # Opt-in extras: webhooks, mcp, analytics, or `extras` (all three).
-    # Default `yarn docker:start` brings up api + worker + web only; pass
+    # Default `pnpm run docker:start` brings up api + worker + web only; pass
     # KODUS_DEV_EXTRAS=mcp (or comma-separated list, or `extras`) to add.
     # Empty/unset = none added.
     if [ -n "${KODUS_DEV_EXTRAS:-}" ]; then

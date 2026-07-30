@@ -41,6 +41,20 @@ export interface SkillExecutionPolicy {
     fetcherMaxIterations?: number;
     /** Analyzer max iterations for agent planner. */
     analyzerMaxIterations?: number;
+    /**
+     * Model context window in tokens. When set, the fetcher runs a
+     * CompressionPolicy that compacts the message window before it overflows.
+     * OFF when absent — don't guess (a wrong value over-compresses or
+     * under-protects); declare the model's real size to opt in.
+     */
+    contextWindowTokens?: number;
+    /**
+     * When true, the analyzer's result passes through a second, independent
+     * Verifier (doer≠checker, refute-to-drop) before it's returned. OFF by
+     * default — promote only after the eval shows precision up without recall
+     * down. Fail-open: a verify error never drops a result.
+     */
+    verifyAnalyzerResult?: boolean;
 }
 
 export interface SkillContracts {

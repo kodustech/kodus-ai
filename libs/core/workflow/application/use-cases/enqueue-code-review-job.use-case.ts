@@ -1,5 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { IdGenerator, createLogger } from '@kodus/flow';
+import { IdGenerator } from '@libs/core/utils/id-generator';
+import { createLogger } from '@libs/core/log/logger';
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';

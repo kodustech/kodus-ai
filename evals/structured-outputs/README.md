@@ -19,7 +19,7 @@ adds a capability gate plus a retry-on-error wrapper.
 
 The matrix below probes both legs of that fix.
 
-## Not part of `yarn test`
+## Not part of `pnpm run test`
 
 This is `repro.ts`, not `repro.spec.ts`, so Jest's
 `testMatch` in `jest.config.ts` ignores it. Run manually.
@@ -28,11 +28,11 @@ This is `repro.ts`, not `repro.spec.ts`, so Jest's
 
 ```bash
 # Full matrix, no network — 8 BYOK scenarios + 1 retry probe
-yarn repro:structured-outputs
+pnpm run repro:structured-outputs
 
 # Live spot-check against a single scenario (real OpenRouter / Google call)
-yarn repro:structured-outputs --scenario openrouter-kimi --live
-yarn repro:structured-outputs --scenario gemini-control --live
+pnpm run repro:structured-outputs --scenario openrouter-kimi --live
+pnpm run repro:structured-outputs --scenario gemini-control --live
 ```
 
 Always requires `API_CRYPTO_KEY` (`.env`). Live mode additionally

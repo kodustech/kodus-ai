@@ -1,8 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IntegrationOAuthService } from '../integrations/integration-oauth.service';
 import { IntegrationsService } from '../integrations/integrations.service';
-import { ComposioProvider } from './composio/composio.provider';
 import { CustomProvider } from './custom/custom.provider';
 import { MCPProvider } from './interfaces/provider.interface';
 import { KodusMCPProvider } from './kodusMCP/kodus-mcp.provider';
@@ -13,7 +12,6 @@ export type ProviderType = string;
 @Injectable()
 export class ProviderFactory {
     private providers: Map<ProviderType, MCPProvider> = new Map();
-    private logger: Logger = new Logger(ProviderFactory.name);
 
     constructor(
         private configService: ConfigService,
@@ -26,22 +24,13 @@ export class ProviderFactory {
 
     private initializeProviders(): void {
         const enabledProviders = this.configService
-            .get<string>('providers', 'composio,kodusmcp,custom')
+            .get<string>('providers', 'kodusmcp,custom')
             .split(',')
             .map((provider) => provider.trim())
             .filter(Boolean);
 
         for (const provider of enabledProviders) {
             switch (provider) {
-                case 'composio':
-                    this.providers.set(
-                        'composio',
-                        new ComposioProvider(
-                            this.configService,
-                            this.integrationDescriptionService,
-                        ),
-                    );
-                    break;
                 case 'kodusmcp':
                     this.providers.set(
                         'kodusmcp',

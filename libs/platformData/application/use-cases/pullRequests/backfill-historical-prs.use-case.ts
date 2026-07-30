@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { with429Retry } from '@libs/core/infrastructure/http/rate-limit-retry';
 import { IPullRequests } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
@@ -407,7 +407,7 @@ export class BackfillHistoricalPRsUseCase {
             updatedAt: pr.updated_at || new Date().toISOString(),
             provider: '',
             user: {
-                id: pr.user?.id || '',
+                id: String(pr.user?.id || ''),
                 username: pr.user?.login || pr.user?.name || '',
             },
             reviewers:

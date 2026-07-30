@@ -115,7 +115,7 @@ export default async function BugRatioAnalytics() {
                 </Tooltip>
             </BugRatioAnalyticsHeader>
 
-            <CardContent className="flex items-center justify-center">
+            <CardContent className="flex items-center justify-start">
                 <div className="text-3xl font-bold">
                     {data?.currentPeriod?.ratio}
                     <small>%</small>

@@ -80,6 +80,22 @@ export const AddRepoModal = ({
         [repositories, selectedIds],
     );
 
+    const filteredSelected = useMemo(
+        () =>
+            selectedRepositories.filter((r) =>
+                r.name.toLowerCase().includes(search.toLowerCase()),
+            ),
+        [selectedRepositories, search],
+    );
+
+    const filteredUnselected = useMemo(
+        () =>
+            unselectedRepositories.filter((r) =>
+                r.name.toLowerCase().includes(search.toLowerCase()),
+            ),
+        [unselectedRepositories, search],
+    );
+
     const singleSelectedRepoId =
         selectedIds.length === 1 ? selectedIds[0] : null;
 
@@ -196,16 +212,71 @@ export const AddRepoModal = ({
                                 />
 
                                 {showRepoList && (
-                                    <CommandList
-                                        className="max-h-56 overflow-y-auto"
-                                        onMouseDown={(e) => e.preventDefault()}>
-                                        <CommandEmpty>
-                                            No repository found.
-                                        </CommandEmpty>
+                                    <div onMouseDown={(e) => e.preventDefault()}>
+                                        {(filteredUnselected.length > 0 ||
+                                            filteredSelected.length > 0) && (
+                                            <div className="flex justify-end gap-3 border-b px-3 py-1.5">
+                                                {filteredSelected.length > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        className="text-text-secondary hover:text-text-primary cursor-pointer text-xs font-medium"
+                                                        onClick={() => {
+                                                            const idsToRemove =
+                                                                new Set(
+                                                                    filteredSelected.map(
+                                                                        (r) =>
+                                                                            r.id,
+                                                                    ),
+                                                                );
+                                                            setSelectedIds(
+                                                                selectedIds.filter(
+                                                                    (id) =>
+                                                                        !idsToRemove.has(
+                                                                            id,
+                                                                        ),
+                                                                ),
+                                                            );
+                                                        }}>
+                                                        Clear selection
+                                                        {search
+                                                            ? ` (${filteredSelected.length})`
+                                                            : ""}
+                                                    </button>
+                                                )}
 
-                                        {selectedRepositories.length > 0 && (
+                                                {filteredUnselected.length >
+                                                    0 && (
+                                                    <button
+                                                        type="button"
+                                                        className="text-primary-light hover:text-primary-dark cursor-pointer text-xs font-medium"
+                                                        onClick={() => {
+                                                            const idsToAdd =
+                                                                filteredUnselected.map(
+                                                                    (r) =>
+                                                                        r.id,
+                                                                );
+                                                            setSelectedIds([
+                                                                ...selectedIds,
+                                                                ...idsToAdd,
+                                                            ]);
+                                                        }}>
+                                                        Select all
+                                                        {search
+                                                            ? ` (${filteredUnselected.length})`
+                                                            : ""}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        <CommandList className="max-h-56 overflow-y-auto">
+                                            <CommandEmpty>
+                                                No repository found.
+                                            </CommandEmpty>
+
+                                        {filteredSelected.length > 0 && (
                                             <CommandGroup heading="Selected">
-                                                {selectedRepositories.map(
+                                                {filteredSelected.map(
                                                     (r) => (
                                                         <CommandItem
                                                             key={r.id}
@@ -229,9 +300,9 @@ export const AddRepoModal = ({
                                             </CommandGroup>
                                         )}
 
-                                        {unselectedRepositories.length > 0 && (
+                                        {filteredUnselected.length > 0 && (
                                             <CommandGroup heading="Not selected">
-                                                {unselectedRepositories.map(
+                                                {filteredUnselected.map(
                                                     (r) => (
                                                         <CommandItem
                                                             key={r.id}
@@ -251,6 +322,7 @@ export const AddRepoModal = ({
                                             </CommandGroup>
                                         )}
                                     </CommandList>
+                                    </div>
                                 )}
                             </Command>
                         </Card>

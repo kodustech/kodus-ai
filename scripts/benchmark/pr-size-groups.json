@@ -1,0 +1,363 @@
+{
+ "criterio": {
+  "P": "<100 linhas",
+  "M": "100-500 linhas",
+  "G": ">500 linhas"
+ },
+ "pequeno": [
+  {
+   "repo": "sentry-greptile",
+   "head": "queue-assignment-enhancement-after",
+   "prNumber": 949,
+   "changes": 5,
+   "files": 1
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "asset-loading-optimized",
+   "prNumber": 902,
+   "changes": 16,
+   "files": 1
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "large-image-processing",
+   "prNumber": 855,
+   "changes": 32,
+   "files": 3
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "sms-retry-enhanced",
+   "prNumber": 896,
+   "changes": 44,
+   "files": 3
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "localization-system-post",
+   "prNumber": 863,
+   "changes": 46,
+   "files": 7
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "website-url-display",
+   "prNumber": 860,
+   "changes": 56,
+   "files": 5
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-group-concurrency-implementation",
+   "prNumber": 868,
+   "changes": 62,
+   "files": 4
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "query-splitting-enhancements",
+   "prNumber": 898,
+   "changes": 63,
+   "files": 4
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "header-layout-optimization-post",
+   "prNumber": 859,
+   "changes": 67,
+   "files": 5
+  },
+  {
+   "repo": "sentry-greptile",
+   "head": "error-upsampling-race-condition",
+   "prNumber": 943,
+   "changes": 73,
+   "files": 4
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "advanced-sql-analytics",
+   "prNumber": 903,
+   "changes": 81,
+   "files": 7
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "unified-storage-enhancements",
+   "prNumber": 904,
+   "changes": 82,
+   "files": 5
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-rolling-updates-implementation",
+   "prNumber": 862,
+   "changes": 88,
+   "files": 11
+  }
+ ],
+ "medio": [
+  {
+   "repo": "cal.com-greptile",
+   "head": "date-algorithm-enhanced",
+   "prNumber": 894,
+   "changes": 121,
+   "files": 4
+  },
+  {
+   "repo": "sentry-greptile",
+   "head": "performance-enhancement-complete",
+   "prNumber": 941,
+   "changes": 138,
+   "files": 3
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "implement-device-limits",
+   "prNumber": 895,
+   "changes": 142,
+   "files": 11
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "blocked-email-validation-post",
+   "prNumber": 857,
+   "changes": 178,
+   "files": 10
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "appstore-async-improvements",
+   "prNumber": 889,
+   "changes": 189,
+   "files": 12
+  },
+  {
+   "repo": "sentry-greptile",
+   "head": "performance-enhancement-complete-v2",
+   "prNumber": 942,
+   "changes": 212,
+   "files": 9
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "plugins/rename-instrumentation-middleware-to-metrics-middleware",
+   "prNumber": 897,
+   "changes": 215,
+   "files": 8
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "topic-email-management",
+   "prNumber": 856,
+   "changes": 225,
+   "files": 18
+  },
+  {
+   "repo": "sentry-greptile",
+   "head": "ecosystem-sync-integration-after",
+   "prNumber": 947,
+   "changes": 227,
+   "files": 7
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "theme-color-scheme-post",
+   "prNumber": 861,
+   "changes": 230,
+   "files": 32
+  },
+  {
+   "repo": "sentry-greptile",
+   "head": "span-flusher-multiprocess",
+   "prNumber": 946,
+   "changes": 249,
+   "files": 6
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "db-cleanup-optimized",
+   "prNumber": 901,
+   "changes": 261,
+   "files": 3
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-idp-cache-implementation",
+   "prNumber": 860,
+   "changes": 271,
+   "files": 4
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "authz-service-improve-caching-pr",
+   "prNumber": 896,
+   "changes": 273,
+   "files": 4
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "calendar-cache-enhanced",
+   "prNumber": 898,
+   "changes": 280,
+   "files": 12
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-recovery-keys-implementation",
+   "prNumber": 867,
+   "changes": 287,
+   "files": 8
+  },
+  {
+   "repo": "sentry-greptile",
+   "head": "oauth-state-secure",
+   "prNumber": 944,
+   "changes": 297,
+   "files": 3
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "improve-two-factor-authentication-features",
+   "prNumber": 890,
+   "changes": 316,
+   "files": 16
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "passkey-integration-buggy",
+   "prNumber": 859,
+   "changes": 333,
+   "files": 15
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "insights-performance-optimization",
+   "prNumber": 892,
+   "changes": 345,
+   "files": 2
+  },
+  {
+   "repo": "sentry-greptile",
+   "head": "workflow-engine-stateful-detector-after",
+   "prNumber": 950,
+   "changes": 400,
+   "files": 4
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-html-sanitizer-implementation",
+   "prNumber": 865,
+   "changes": 448,
+   "files": 48
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "oauth-security-enhanced",
+   "prNumber": 895,
+   "changes": 494,
+   "files": 40
+  }
+ ],
+ "grande": [
+  {
+   "repo": "sentry-greptile",
+   "head": "monitor-incident-refactor-after",
+   "prNumber": 948,
+   "changes": 553,
+   "files": 4
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "guest-management-enhanced",
+   "prNumber": 897,
+   "changes": 555,
+   "files": 15
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "rest-serializer-enhancement-post",
+   "prNumber": 864,
+   "changes": 576,
+   "files": 36
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "fix/handle-collective-multiple-host-destinations",
+   "prNumber": 891,
+   "changes": 584,
+   "files": 22
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "dual-storage-enhanced",
+   "prNumber": 900,
+   "changes": 655,
+   "files": 5
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "embed-url-handling-post",
+   "prNumber": 858,
+   "changes": 666,
+   "files": 28
+  },
+  {
+   "repo": "discourse-greptile",
+   "head": "group-dm-user-addition-post",
+   "prNumber": 862,
+   "changes": 672,
+   "files": 16
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-authz-crypto-implementation",
+   "prNumber": 861,
+   "changes": 682,
+   "files": 12
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-authz-crypto-implementation-v2",
+   "prNumber": 863,
+   "changes": 682,
+   "files": 12
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-token-context-implementation",
+   "prNumber": 866,
+   "changes": 748,
+   "files": 28
+  },
+  {
+   "repo": "keycloak-greptile",
+   "head": "feature-groups-authz-implementation",
+   "prNumber": 864,
+   "changes": 957,
+   "files": 19
+  },
+  {
+   "repo": "grafana-greptile",
+   "head": "notification-rule-enhancements",
+   "prNumber": 899,
+   "changes": 960,
+   "files": 14
+  },
+  {
+   "repo": "sentry-greptile",
+   "head": "replays-delete-stable",
+   "prNumber": 945,
+   "changes": 3293,
+   "files": 106
+  },
+  {
+   "repo": "cal.com-greptile",
+   "head": "workflow-system-enhanced",
+   "prNumber": 893,
+   "changes": 4944,
+   "files": 66
+  }
+ ]
+}

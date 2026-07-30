@@ -29,7 +29,7 @@ description: "構造化されたテンプレートを持つマークダウンフ
 ```markdown
 ---
 title: "<ルール名>"
-scope: "file"            # "file" または "pull_request"
+scope: "file"            # "file" または "pull-request"
 path: []                 # glob のリスト。例：["**/*.ts", "apps/web/**"]
 severity_min: "high"     # "low", "medium", "high", "critical"
 languages: []            # オプション。例：["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
@@ -63,7 +63,7 @@ enabled: true            # オプション
 | フィールド | 説明 | 値 |
 |---------|------|-----|
 | `title` | インターフェースに表示されるルール名 | 任意の説明的な文字列 |
-| `scope` | ルールの分析スコープ | `"file"` または `"pull_request"` |
+| `scope` | ルールの分析スコープ | `"file"` または `"pull-request"` |
 | `path` | ルールが適用されるファイルパス | glob パターンの配列 |
 | `severity_min` | 最小重大度レベル | `"low"`、`"medium"`、`"high"`、`"critical"` |
 
@@ -112,7 +112,7 @@ function processUser(user: User) {
 ```markdown
 ---
 title: "新しい API エンドポイントにはテストが必要"
-scope: "pull_request"
+scope: "pull-request"
 path: ["**/*"]
 severity_min: "high"
 buckets: ["testing"]

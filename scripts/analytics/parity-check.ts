@@ -16,10 +16,10 @@ import { analyticsPostgresConfigLoader } from '@libs/core/infrastructure/config/
  * second module context.
  *
  * Usage:
- *   yarn analytics:parity-check
- *   yarn analytics:parity-check --org <organizationId>
- *   yarn analytics:parity-check --threshold 0.005
- *   yarn analytics:parity-check --sample 5
+ *   pnpm run analytics:parity-check
+ *   pnpm run analytics:parity-check --org <organizationId>
+ *   pnpm run analytics:parity-check --threshold 0.005
+ *   pnpm run analytics:parity-check --sample 5
  */
 
 interface CliArgs {

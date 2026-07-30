@@ -1,3 +1,4 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
@@ -8,6 +9,7 @@ import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { AutoAssignLicenseUseCase } from '@libs/ee/license/use-cases/auto-assign-license.use-case';
+import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 import {
     PermissionValidationService,
     ValidationErrorType,
@@ -19,11 +21,25 @@ import { USER_SERVICE_TOKEN } from '@libs/identity/domain/user/contracts/user.se
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ValidatePrerequisitesStage } from './validate-prerequisites.stage';
 
+// The trial is provisioned cloud-only (the stage early-returns unless
+// environment.API_CLOUD_MODE). Force cloud mode on so the trial path runs.
+jest.mock('@libs/ee/configs/environment', () => {
+    const actual = jest.requireActual('@libs/ee/configs/environment');
+    return {
+        ...actual,
+        environment: { ...actual.environment, API_CLOUD_MODE: true },
+    };
+});
+
 describe('ValidatePrerequisitesStage', () => {
     let stage: ValidatePrerequisitesStage;
 
     let mockPermissionValidationService: {
         validateExecutionPermissions: jest.Mock;
+        getBYOKConfig: jest.Mock;
+    };
+    let mockLicenseService: {
+        startTrial: jest.Mock;
     };
     let mockAutoAssignLicenseUseCase: {
         execute: jest.Mock;
@@ -44,8 +60,12 @@ describe('ValidatePrerequisitesStage', () => {
         createResponseToComment: jest.Mock;
     };
 
-    const makeContext = (): CodeReviewPipelineContext =>
-        ({
+    // Frozen by DEFAULT — production hands every stage after the first
+    // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
+    const makeContext = (
+        over: Record<string, unknown> = {},
+    ): CodeReviewPipelineContext =>
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -78,11 +98,17 @@ describe('ValidatePrerequisitesStage', () => {
                 message: 'started',
             },
             pipelineVersion: '1.0.0',
+            ...over,
         }) as CodeReviewPipelineContext;
 
     beforeEach(async () => {
         mockPermissionValidationService = {
             validateExecutionPermissions: jest.fn(),
+            getBYOKConfig: jest.fn().mockResolvedValue(null),
+        };
+
+        mockLicenseService = {
+            startTrial: jest.fn().mockResolvedValue(false),
         };
 
         mockAutoAssignLicenseUseCase = {
@@ -152,6 +178,10 @@ describe('ValidatePrerequisitesStage', () => {
                 {
                     provide: USER_SERVICE_TOKEN,
                     useValue: { find: jest.fn().mockResolvedValue([]) },
+                },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: mockLicenseService,
                 },
             ],
         }).compile();
@@ -228,6 +258,69 @@ describe('ValidatePrerequisitesStage', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('auto-provisions a missing trial and re-validates for an onboarded org', async () => {
+        const context = makeContext();
+
+        mockPermissionValidationService.validateExecutionPermissions
+            .mockResolvedValueOnce({
+                allowed: false,
+                errorType: ValidationErrorType.INVALID_LICENSE,
+            })
+            .mockResolvedValueOnce({
+                allowed: true,
+                subscriptionStatus: 'trial',
+            });
+
+        mockParametersService.findByKey.mockImplementation((key: string) => {
+            if (key === ParametersKey.PLATFORM_CONFIGS) {
+                return Promise.resolve({
+                    configValue: { finishOnboard: true },
+                });
+            }
+            return Promise.resolve(undefined);
+        });
+
+        mockLicenseService.startTrial.mockResolvedValue(true);
+
+        const result = await stage.execute(context);
+
+        expect(mockLicenseService.startTrial).toHaveBeenCalledWith(
+            context.organizationAndTeamData,
+            false,
+        );
+        // Validated once (INVALID_LICENSE), then again after provisioning.
+        expect(
+            mockPermissionValidationService.validateExecutionPermissions,
+        ).toHaveBeenCalledTimes(2);
+        // Review proceeds instead of being skipped for a missing license.
+        expect(result.statusInfo?.status).not.toBe('skipped');
+        expect(
+            mockCodeManagementService.createIssueComment,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('does not provision a trial when onboarding is not finished', async () => {
+        const context = makeContext();
+
+        mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            {
+                allowed: false,
+                errorType: ValidationErrorType.INVALID_LICENSE,
+            },
+        );
+
+        // No PLATFORM_CONFIGS / finishOnboard flag → onboarding not complete.
+        mockParametersService.findByKey.mockResolvedValue(undefined);
+
+        const result = await stage.execute(context);
+
+        expect(mockLicenseService.startTrial).not.toHaveBeenCalled();
+        expect(
+            mockPermissionValidationService.validateExecutionPermissions,
+        ).toHaveBeenCalledTimes(1);
+        expect(result.statusInfo?.status).toBe('skipped');
+    });
+
     it('should mark notification as handled for early skips when show status feedback is disabled', async () => {
         const context = makeContext();
 
@@ -253,8 +346,10 @@ describe('ValidatePrerequisitesStage', () => {
     });
 
     it('should skip review for centralized config repository when centralized config is enabled', async () => {
-        const context = makeContext();
-        context.repository.id = 'centralized-config-repo';
+        // Override at build time: the context is frozen, like production.
+        const context = makeContext({
+            repository: { id: 'centralized-config-repo', name: 'repo-1' },
+        });
 
         mockParametersService.findByKey.mockImplementation((key: string) => {
             if (key === ParametersKey.CENTRALIZED_CONFIG) {
@@ -281,8 +376,10 @@ describe('ValidatePrerequisitesStage', () => {
     });
 
     it('should not skip review for non-centralized config repository when centralized config is enabled', async () => {
-        const context = makeContext();
-        context.repository.id = 'non-centralized-config-repo';
+        // Override at build time: the context is frozen, like production.
+        const context = makeContext({
+            repository: { id: 'non-centralized-config-repo', name: 'repo-1' },
+        });
 
         mockParametersService.findByKey.mockImplementation((key: string) => {
             if (key === ParametersKey.CENTRALIZED_CONFIG) {
@@ -403,7 +500,66 @@ describe('ValidatePrerequisitesStage', () => {
             const result = await stage.execute(context);
 
             // statusInfo not changed from in_progress
-            expect(result.statusInfo?.status).not.toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+        });
+    });
+
+    describe('trial review credit consumption', () => {
+        it('asks to consume a managed trial credit keyed by repo:pr', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalledWith(
+                context.organizationAndTeamData,
+                'user-1',
+                ValidatePrerequisitesStage.name,
+                {
+                    consumeTrialReviewCredit: true,
+                    trialReviewCreditUsageKey: 'repo-1:42',
+                },
+            );
+        });
+
+        it('posts a BYOK-focused comment (not "trial ended") when trial credits run out', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'trial',
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Kodus-paid PR reviews');
+            expect(body).toContain('/organization/byok');
+            expect(body).not.toContain('trial has ended');
         });
     });
 });

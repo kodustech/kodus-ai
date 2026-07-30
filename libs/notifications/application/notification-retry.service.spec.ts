@@ -7,7 +7,7 @@ import { INotificationDeliveryRepository } from '../domain/contracts/notificatio
 import { NotificationDispatcherService } from './notification-dispatcher.service';
 import { NotificationRetryService } from './notification-retry.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),

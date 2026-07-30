@@ -19,7 +19,7 @@ import {
 } from '../../../fixtures/cross-file-context.fixtures';
 
 // Mock logger to silence logs during tests
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

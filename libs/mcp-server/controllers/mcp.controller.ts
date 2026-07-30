@@ -17,7 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { McpServerService } from '../services/mcp-server.service';
 import { McpEnabledGuard } from '../guards/mcp-enabled.guard';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import {
     handleStatelessMcpPost,

@@ -1,7 +1,7 @@
 import { CodeReviewContextPackService } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service';
 import { AnalysisContext } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 
 export interface LoadedReference {
@@ -75,7 +75,6 @@ export class ExternalReferenceLoaderService {
                 contextReferenceId: rule.contextReferenceId,
                 repository: context.repository,
                 pullRequest: context.pullRequest,
-                executeMCPDependencies: false,
             });
 
             const layers = result.pack?.layers ?? [];

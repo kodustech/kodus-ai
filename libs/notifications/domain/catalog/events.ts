@@ -32,8 +32,9 @@ export enum NotificationEvent {
     // ── SSO ────────────────────────────────────────────────────
     SSO_DOMAIN_VERIFICATION = 'sso.domain_verification',
 
-    // ── Cockpit ────────────────────────────────────────────────
-    WEEKLY_RECAP = 'cockpit.weekly_recap',
+    // ── Cockpit reports ────────────────────────────────────────
+    REPO_REPORT = 'cockpit.repo_report',
+    ORG_REPORT = 'cockpit.org_report',
 
     // ── Billing ────────────────────────────────────────────────
     BILLING_PAYMENT_FAILED = 'billing.payment_failed',
@@ -41,6 +42,10 @@ export enum NotificationEvent {
 
     // ── BYOK ───────────────────────────────────────────────────
     BYOK_LLM_ERRORS_THRESHOLD = 'byok.llm_errors_threshold',
+
+    // ── Spend limit ────────────────────────────────────────────
+    SPEND_LIMIT_THRESHOLD_REACHED = 'spend_limit.threshold_reached',
+    SPEND_LIMIT_EXCEEDED_FINAL = 'spend_limit.exceeded_final',
 
     // ── Kody Rules (continued) ─────────────────────────────────
     RULE_FILE_REFERENCES_INVALID = 'rule.file_references_invalid',
@@ -93,7 +98,12 @@ export interface NotificationPayloadMap {
         domain: string;
     };
 
-    [NotificationEvent.WEEKLY_RECAP]: {
+    [NotificationEvent.REPO_REPORT]: {
+        recipient: { email: string; name: string };
+        props: Record<string, unknown>;
+    };
+
+    [NotificationEvent.ORG_REPORT]: {
         recipient: { email: string; name: string };
         props: Record<string, unknown>;
     };
@@ -108,6 +118,8 @@ export interface NotificationPayloadMap {
     };
 
     [NotificationEvent.ORG_ROLE_CHANGED]: {
+        /** The member whose role changed (this notifies admins, not them). */
+        affectedUserEmail: string;
         previousRole: string;
         newRole: string;
         changedBy: string;
@@ -147,6 +159,7 @@ export interface NotificationPayloadMap {
         prUrl: string;
         repoName: string;
         ownerContact?: string;
+        authorUsername?: string;
     };
 
     // ── Billing ────────────────────────────────────────────────
@@ -173,6 +186,23 @@ export interface NotificationPayloadMap {
         windowStart: string;
         windowEnd: string;
         sampleError: string;
+    };
+
+    // ── Spend limit ────────────────────────────────────────────
+
+    [NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED]: {
+        /** Threshold crossed: 50, 75, 90, or 100. */
+        percentage: number;
+        monthlyLimitUsd: number;
+        spentUsd: number;
+        /** Calendar month the spend covers — YYYY-MM in UTC. */
+        periodKey: string;
+    };
+
+    [NotificationEvent.SPEND_LIMIT_EXCEEDED_FINAL]: {
+        monthlyLimitUsd: number;
+        spentUsd: number;
+        periodKey: string;
     };
 
     // ── Kody Rules (file reference validation) ────────────────

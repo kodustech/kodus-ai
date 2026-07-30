@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
@@ -11,6 +11,10 @@ import {
 } from '@libs/code-review/domain/contracts/RepositoryService.contract';
 import { AstGraphStatus } from '@libs/code-review/infrastructure/adapters/repositories/schemas/repository.model';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
+import {
+    IIntegrationConfigService,
+    INTEGRATION_CONFIG_SERVICE_TOKEN,
+} from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
@@ -58,6 +62,8 @@ export class CreateRepositoriesUseCase implements IUseCase {
         private readonly codeManagementService: CodeManagementService,
         private readonly createOrUpdateParametersUseCase: CreateOrUpdateParametersUseCase,
         private readonly backfillHistoricalPRsUseCase: BackfillHistoricalPRsUseCase,
+        @Inject(INTEGRATION_CONFIG_SERVICE_TOKEN)
+        private readonly integrationConfigService: IIntegrationConfigService,
         @Inject(REPOSITORY_SERVICE_TOKEN)
         private readonly repositoryService: IRepositoryService,
         @Inject(REQUEST)
@@ -86,6 +92,17 @@ export class CreateRepositoriesUseCase implements IUseCase {
             if (!organizationId) {
                 throw new BadRequestException('Organization ID is required.');
             }
+
+            const previouslyPersistedRepoIds = new Set(
+                (
+                    (await this.integrationConfigService.findIntegrationConfigFormatted<
+                        Array<{ id: string | number }>
+                    >(IntegrationConfigKey.REPOSITORIES, {
+                        organizationId,
+                        teamId,
+                    })) ?? []
+                ).map((repo) => String(repo.id)),
+            );
 
             await this.codeManagementService.createOrUpdateIntegrationConfig({
                 configKey: IntegrationConfigKey.REPOSITORIES,
@@ -127,15 +144,29 @@ export class CreateRepositoriesUseCase implements IUseCase {
             }
 
             const repositories = params.repositories || [];
+            const reposToBackfill = repositories.filter(
+                (r: any) => !previouslyPersistedRepoIds.has(String(r.id)),
+            );
 
             const backfillKey = `${organizationId}:${teamId}`;
             if (repositories.length > 0) {
-                // Single-flight: registerRepo fires on every onboarding
-                // save (and can be retried client-side); without this a
-                // double-save kicks off two concurrent backfills that each
-                // fan out over the same repos and double the provider
-                // load — the burst that 429s Bitbucket.
-                if (!backfillInFlight.has(backfillKey)) {
+                if (reposToBackfill.length === 0) {
+                    this.logger.log({
+                        message:
+                            'Skipping PR backfill — no newly-added repositories in this request',
+                        context: CreateRepositoriesUseCase.name,
+                        metadata: {
+                            organizationId,
+                            teamId,
+                            totalRepositories: repositories.length,
+                        },
+                    });
+                } else if (!backfillInFlight.has(backfillKey)) {
+                    // Single-flight: registerRepo fires on every onboarding
+                    // save (and can be retried client-side); without this a
+                    // double-save kicks off two concurrent backfills that each
+                    // fan out over the same repos and double the provider
+                    // load — the burst that 429s Bitbucket.
                     backfillInFlight.add(backfillKey);
                     setImmediate(() => {
                         this.backfillHistoricalPRsUseCase
@@ -144,7 +175,7 @@ export class CreateRepositoriesUseCase implements IUseCase {
                                     organizationId,
                                     teamId,
                                 },
-                                repositories: repositories.map((r: any) => ({
+                                repositories: reposToBackfill.map((r: any) => ({
                                     id: String(r.id),
                                     name: r.name,
                                     fullName:

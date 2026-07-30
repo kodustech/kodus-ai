@@ -25,6 +25,10 @@ Kodus automatically detects and imports the following rule file patterns:
 - `.github/copilot-instructions.md` - Copilot instructions
 - `.github/instructions/**/*.instructions.md` - Detailed instruction files
 
+### Agentic (agents.md convention)
+- `AGENTS.md` - The de-facto standard agent guidance file
+- `.agents.md` / `.agent.md` - Dotfile variants
+
 ### Claude
 - `CLAUDE.md` - Claude-specific rules
 - `.claude/settings.json` - Claude configuration settings
@@ -44,8 +48,15 @@ Kodus automatically detects and imports the following rule file patterns:
 
 ### Generic/Internal Rules
 - `.rules/**/*` - Generic rules directory
-- `.kody/rules/*` - Kody-specific rules
+- `.kody/rules/**` and `rules/**/*.md` - Kody-specific rules (see [Repository Rules](/how_to_use/en/code_review/configs/repository_rules) — these are imported verbatim, without LLM rewriting)
 - `docs/coding-standards/**/*` - Documentation-based coding standards
+
+### Detection details
+
+- **Nested files are discovered.** Every pattern above is matched at the repository root **and under any subdirectory**. A `services/billing/CLAUDE.md` is imported and automatically scoped to `services/billing/**` — per-directory guidance files (the common monorepo convention) work out of the box.
+- **Matching is case-insensitive.** `claude.md` and `CLAUDE.md` are equivalent.
+- **`@file` references are followed.** If a rule file references another file with the standard `@` convention (e.g. `@AGENTS.md` inside `CLAUDE.md`), the referenced file's content is fetched and included during import (one level deep, up to 5 references per file, 100KB per referenced file).
+- **Multiple globs per rule are supported.** A rule path like `app/**/*.rb,lib/**/*.rb` (or a `path: []` list in [Repository Rules](/how_to_use/en/code_review/configs/repository_rules) frontmatter) applies the rule to files matching **any** of the globs.
 
 ## How It Works
 
@@ -53,7 +64,9 @@ Kodus automatically detects and imports the following rule file patterns:
 1. **Enable Auto-sync**: Toggle the "Auto-sync rules from repo" option in your settings
 2. **First Sync Modal**: A modal will appear asking if you want to sync for the first time
 3. **Repository Scan**: When you confirm, Kodus scans your entire repository for supported rule files
-4. **Rule Generation**: An LLM processes the found files and automatically creates corresponding Kody Rules
+4. **Rule Generation**: An LLM processes the found files and automatically creates corresponding Kody Rules. Exception: `.kody/rules/**` and `rules/**/*.md` template files are imported **verbatim** — no LLM conversion — so your instructions, examples and identifiers are preserved exactly as authored.
+
+Each imported file produces **one Kody Rule**. If a file contains several distinct guidelines, the LLM merges them into a single comprehensive rule — split guidance across multiple files when you want independently manageable rules.
 
 ### Ongoing Synchronization
 - **Automatic Updates**: Sync happens automatically when a Pull Request is closed
@@ -72,6 +85,33 @@ You can sync individual rule files without enabling auto-sync:
 
 This lets you selectively sync rules without enabling automatic synchronization for all files.
 
+### Excluding a file (`@kody-ignore`)
+
+To keep a rule/guidance file in your repository but stop Kody from turning it into Kody Rules, add `@kody-ignore` anywhere in the file:
+
+1. Add `@kody-ignore` anywhere in the rule file (case-insensitive)
+2. Commit the change
+
+On the next sync Kody will **skip** that file **and remove any Kody Rules previously created from it**. The rules come back automatically if you later remove the `@kody-ignore` marker (or add `@kody-sync`). Use this to keep house-style docs like a `CLAUDE.md` or `AGENTS.md` in the repo without them becoming enforced review rules.
+
 <Warning>
 If you manually edit a Kody Rule that was created from an IDE rule file, your changes will be overwritten the next time the corresponding file is modified and synced.
 </Warning>
+
+## Verifying sync and rule evaluation (self-hosted)
+
+On self-hosted deployments the API logs carry grep-able markers for debugging:
+
+- `[kody-rules-sync]` — per-run sync summary: which files were imported, skipped (with the reason) or removed.
+- `[kody-rules-eval]` — per-file evaluation trace during a review: exactly which rules (uuid + title) were selected into the prompt for each reviewed file.
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+If a rule shows as active in the UI but never appears in `[kody-rules-eval]` for the files you expect, check its **Path** glob — a rule only runs on files matching its path.
+
+## Rule limits
+
+Self-hosted instances running **without a valid license** (Community Edition) evaluate at most **10 rules** per review (oldest first). Licensed self-hosted and cloud instances have no such limit. If rules beyond the 10th silently don't fire on an unlicensed instance, this limit is why.

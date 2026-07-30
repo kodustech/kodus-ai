@@ -1,4 +1,4 @@
-import type { ContextLayer } from '@kodus/flow';
+import type { ContextLayer } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IExternalPromptContext } from '../interfaces/promptExternalReference.interface';

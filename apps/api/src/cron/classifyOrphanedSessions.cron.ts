@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';

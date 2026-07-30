@@ -25,7 +25,6 @@ export type MentionGroup = { groupLabel: string; items: MentionGroupItem[] };
 
 export type RichTextEditorWithMentionsRef = {
     insertText: (text: string) => void;
-    insertMCPMention: (app: string, tool: string) => void;
     getEditor: () => Editor | null;
     focus: () => void;
 };
@@ -84,23 +83,6 @@ export const RichTextEditorWithMentions = React.forwardRef<
                 } else {
                     const currentValue = typeof value === "string" ? value : "";
                     onChange(`${currentValue}${text}`);
-                }
-            },
-            insertMCPMention: (app: string, tool: string) => {
-                const editor = editorInstanceRef.current;
-                if (editor) {
-                    editor
-                        .chain()
-                        .focus()
-                        .insertContent({
-                            type: "mcpMention",
-                            attrs: { app, tool },
-                        })
-                        .insertContent(" ")
-                        .run();
-                } else {
-                    const currentValue = typeof value === "string" ? value : "";
-                    onChange(`${currentValue}@mcp<${app}|${tool}> `);
                 }
             },
             getEditor: () => editorInstanceRef.current,
@@ -163,7 +145,7 @@ export const RichTextEditorWithMentions = React.forwardRef<
             if (!editor) {
                 const byType =
                     (item.type && formatInsertByType?.[item.type]) ||
-                    ((it: MentionGroupItem) => `@mcp<${it.label}>`);
+                    ((it: MentionGroupItem) => `@${it.label}`);
                 const token = byType(item);
                 const cur = typeof value === "string" ? value : "";
                 const afterAtPos = triggerPos ?? cur.length;
@@ -188,104 +170,32 @@ export const RichTextEditorWithMentions = React.forwardRef<
                 return;
             }
 
-            const byType =
+            const byTypeString =
                 (item.type && formatInsertByType?.[item.type]) ||
-                ((it: MentionGroupItem) => {
-                    const rawApp = String(it?.meta?.appName ?? "");
-                    const app = rawApp
-                        .toLowerCase()
-                        .replace(/\bmcp\b/g, "")
-                        .replace(/[^a-z0-9]+/g, "_")
-                        .replace(/^_+|_+$/g, "");
-                    const tool = String(it.label).toLowerCase();
-                    return { app, tool };
-                });
+                ((it: MentionGroupItem) => `@${it.label}`);
+            const token = byTypeString(item);
 
-            if (item.type === "mcp" && item.meta?.appName) {
-                const rawApp = String(item.meta.appName);
-                const app = rawApp
-                    .toLowerCase()
-                    .replace(/\bmcp\b/g, "")
-                    .replace(/[^a-z0-9]+/g, "_")
-                    .replace(/^_+|_+$/g, "");
-                const tool = String(item.label).toLowerCase();
-
-                const { state } = editor;
-                const { selection } = state;
-                let pos = selection.$from.pos;
-
-                let foundPos = pos;
-                const $pos = state.doc.resolve(pos);
-                let searchPos = $pos.pos;
-                let found = false;
-
-                for (let i = 0; i < 50 && searchPos > 0; i++) {
-                    const char = state.doc.textBetween(
-                        searchPos - 1,
-                        searchPos,
-                    );
-                    if (char === "@") {
-                        foundPos = searchPos - 1;
-                        found = true;
-                        break;
-                    }
-                    searchPos--;
+            const { state } = editor;
+            const { selection } = state;
+            const pos = selection.$from.pos;
+            let foundPos = pos;
+            const $pos = state.doc.resolve(pos);
+            let searchPos = $pos.pos;
+            let found = false;
+            for (let i = 0; i < 50 && searchPos > 0; i++) {
+                const char = state.doc.textBetween(searchPos - 1, searchPos);
+                if (char === "@") {
+                    foundPos = searchPos - 1;
+                    found = true;
+                    break;
                 }
-
-                if (found) {
-                    editor
-                        .chain()
-                        .focus()
-                        .setTextSelection({ from: foundPos, to: pos })
-                        .deleteSelection()
-                        .insertContent({
-                            type: "mcpMention",
-                            attrs: { app, tool },
-                        })
-                        .insertContent(" ")
-                        .run();
-                } else {
-                    editor
-                        .chain()
-                        .focus()
-                        .insertContent({
-                            type: "mcpMention",
-                            attrs: { app, tool },
-                        })
-                        .insertContent(" ")
-                        .run();
-                }
-            } else {
-                const byTypeString =
-                    (item.type && formatInsertByType?.[item.type]) ||
-                    ((it: MentionGroupItem) => `@${it.label}`);
-                const token = byTypeString(item);
-
-                const { state } = editor;
-                const { selection } = state;
-                const pos = selection.$from.pos;
-                let foundPos = pos;
-                const $pos = state.doc.resolve(pos);
-                let searchPos = $pos.pos;
-                let found = false;
-                for (let i = 0; i < 50 && searchPos > 0; i++) {
-                    const char = state.doc.textBetween(
-                        searchPos - 1,
-                        searchPos,
-                    );
-                    if (char === "@") {
-                        foundPos = searchPos - 1;
-                        found = true;
-                        break;
-                    }
-                    searchPos--;
-                }
-                const chain = editor.chain().focus();
-                if (found) {
-                    chain.setTextSelection({ from: foundPos, to: pos });
-                }
-                chain.insertContent(`${token} `).run();
+                searchPos--;
             }
+            const chain = editor.chain().focus();
+            if (found) {
+                chain.setTextSelection({ from: foundPos, to: pos });
+            }
+            chain.insertContent(`${token} `).run();
 
             setOpen(false);
             setQuery("");

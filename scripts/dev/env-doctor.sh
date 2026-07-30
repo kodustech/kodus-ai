@@ -99,7 +99,7 @@ required_backend=(
   "API_MG_DB_DATABASE:Mongo database"
   "API_RABBITMQ_URI:RabbitMQ URI"
   "API_JWT_SECRET:JWT signing secret"
-  "API_JWT_REFRESHSECRET:JWT refresh secret"
+  "API_JWT_REFRESH_SECRET:JWT refresh secret"
   "API_CRYPTO_KEY:Encryption key"
   "CODE_MANAGEMENT_SECRET:Code management secret"
   "CODE_MANAGEMENT_WEBHOOK_TOKEN:Code management webhook token"
@@ -189,7 +189,7 @@ if [[ ${#errors[@]} -gt 0 ]]; then
   for e in "${errors[@]}"; do
     echo "  - $e"
   done
-  echo "[env-doctor] fix tip: run 'yarn setup' and re-check"
+  echo "[env-doctor] fix tip: run 'pnpm run setup' and re-check"
   exit 1
 fi
 

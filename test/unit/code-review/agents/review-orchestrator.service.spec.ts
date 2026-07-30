@@ -1,7 +1,7 @@
 import { ReviewOrchestratorService } from '@/code-review/infrastructure/agents/review-orchestrator.service';
 import { CodeSuggestion } from '@/core/infrastructure/config/types/general/codeReview.type';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -210,6 +210,73 @@ describe('ReviewOrchestratorService', () => {
             // Bug and performance should succeed, security should fail
             expect(result.agentResults).toHaveLength(2);
             expect(result.suggestions.length).toBeGreaterThan(0);
+        });
+    });
+
+    // An agent that runs out of time or steps is NOT a failure — it returns,
+    // possibly with findings. But it stopped looking, so an empty result from
+    // it means "couldn't tell", not "clean". The orchestrator has to report
+    // that separately or the pipeline auto-approves an unfinished review
+    // (#1568).
+    describe('incomplete agents (budget/step ceiling)', () => {
+        it('reports a timed-out agent as incomplete, not as a failure', async () => {
+            mockGeneralistAgent.execute.mockResolvedValue({
+                ...makeOutput('generalist', []),
+                hitHardLimit: true,
+                finishReason: 'timeout',
+            });
+
+            const result = await orchestrator.execute({
+                ...baseInput,
+                reviewOptions: { bug: true, security: true, performance: true },
+            });
+
+            expect(result.failures).toHaveLength(0);
+            expect(result.incomplete).toEqual([
+                expect.objectContaining({
+                    agentName: 'generalist',
+                    finishReason: 'timeout',
+                    suggestionsFound: 0,
+                }),
+            ]);
+        });
+
+        it('reports a max-steps agent as incomplete even when it found something', async () => {
+            mockGeneralistAgent.execute.mockResolvedValue({
+                ...makeOutput('generalist', [
+                    {
+                        relevantFile: 'src/index.ts',
+                        suggestionContent: 'Found before running out of steps',
+                        label: 'bug',
+                        severity: 'high',
+                        relevantLinesStart: 1,
+                        relevantLinesEnd: 2,
+                    },
+                ]),
+                hitHardLimit: true,
+                finishReason: 'max-steps',
+            });
+
+            const result = await orchestrator.execute({
+                ...baseInput,
+                reviewOptions: { bug: true, security: true, performance: true },
+            });
+
+            expect(result.suggestions).toHaveLength(1);
+            expect(result.incomplete[0]).toMatchObject({
+                agentName: 'generalist',
+                finishReason: 'max-steps',
+                suggestionsFound: 1,
+            });
+        });
+
+        it('leaves incomplete empty when every agent ran to completion', async () => {
+            const result = await orchestrator.execute({
+                ...baseInput,
+                reviewOptions: { bug: true, security: true, performance: true },
+            });
+
+            expect(result.incomplete).toEqual([]);
         });
     });
 

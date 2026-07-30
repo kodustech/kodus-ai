@@ -27,7 +27,6 @@ describe('KodyRulesPrLevelAnalysisService — Kody Rule link generation', () => 
             {} as any, // observabilityService
             {} as any, // externalReferenceLoaderService
             {} as any, // fileContextAugmentationService
-            {} as any, // kodyRuleDependencyService
         );
     });
 
@@ -72,9 +71,7 @@ describe('KodyRulesPrLevelAnalysisService — Kody Rule link generation', () => 
 
         // Dot, parens, and backticks are escaped so they render as literals,
         // not as markdown syntax that breaks the link.
-        expect(result).toContain(
-            '[Avoid console\\.log\\(\\) and \\`eval\\`]',
-        );
+        expect(result).toContain('[Avoid console\\.log\\(\\) and \\`eval\\`]');
     });
 
     it('uses the repository-scoped URL when the rule has a non-global repositoryId', async () => {

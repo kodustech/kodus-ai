@@ -50,6 +50,8 @@ describe('GenerateKodyRulesUseCase.fetchPullRequestComments', () => {
             {} as any, // commentAnalysisService
             {} as any, // moduleRef
             {} as any, // sendRulesNotificationUseCase
+            {} as any, // codeBaseConfigService
+            {} as any, // permissionValidationService
         );
 
     const repository = { id: 'repo-1', name: 'repo-1' } as any;

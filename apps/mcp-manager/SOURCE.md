@@ -5,7 +5,6 @@ This app was originally a separate repo: `github.com/kodustech/kodus-mcp-manager
 Imported into kodus-ai as a monorepo merge:
 
 - **Imported from commit**: `fb4c5d9` of `kodustech/kodus-mcp-manager`
-  ("Merge pull request #66 from kodustech/fix/composio-url")
 - **Imported on**: 2026-05-04
 - **Image name preserved**: `ghcr.io/kodustech/kodus-mcp-manager:<tag>`
   — no change required in `kodus-installer/docker-compose.yml`.

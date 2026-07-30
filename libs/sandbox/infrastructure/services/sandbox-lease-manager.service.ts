@@ -1,8 +1,9 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     AcquireResult,
     assertValidPrKey,
     ISandboxLeaseManager,
+    SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import {
     CreateSandboxParams,
@@ -19,6 +20,13 @@ import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { existsSync } from 'fs';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
+import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
+import { buildE2BRemoteCommands } from '../providers/e2b-sandbox.service';
+import {
+    isLocalSandboxPath,
+    deleteLocalSandbox,
+} from './local-sandbox-cleanup.service';
 
 /**
  * Default idle timeout applied when the last lease on a sandbox is released.
@@ -104,6 +112,16 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     private readonly logger = createLogger(SandboxLeaseManager.name);
 
     /**
+     * Lease invariants:
+     * - Only CREATING and READY leases are acquire targets; FAILED and
+     *   INVALIDATED leases are rejected.
+     * - Release/invalidate cleanup requires leaseCount <= 0; expired reaping
+     *   force-cleans because the owning worker is presumed dead.
+     * - Cleanup claims and deletes stay bound to the expected sandboxId and
+     *   cleanup status so a replacement lease cannot remove another sandbox.
+     */
+
+    /**
      * In-memory map from leaseId → prKey.
      *
      * Multi-worker note: leaseId is generated and consumed inside the same
@@ -156,7 +174,60 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             metadata: { prKey, consumer },
         });
 
-        const doc = await this.leaseRepo.upsertAcquire(prKey, leaseTtlMs, consumer);
+        const doc = await this.leaseRepo.upsertAcquire(
+            prKey,
+            leaseTtlMs,
+            consumer,
+        );
+
+        // Finding 1 fix: if cleanup is in progress, wait for it to complete
+        // (doc will be deleted), then retry acquire from scratch. Prevents
+        // attaching to a doc that's being cleaned up.
+        if (doc.cleanupStatus === SANDBOX_LEASE_CLEANUP_STATUS.IN_PROGRESS) {
+            // upsertAcquire() already incremented leaseCount on this doc. Undo
+            // it BEFORE waiting: cleanup's claim requires leaseCount <= 0, so
+            // holding the increment while we poll would deadlock the very
+            // cleanup we're waiting on (and each retry would inflate the count
+            // further). Mirrors the FAILED/INVALIDATED branches below.
+            await this.leaseRepo.decrementLease(prKey);
+            this.logger.log({
+                message: `SandboxLeaseManager: cleanup in progress, waiting for completion prKey="${prKey}"`,
+                context: SandboxLeaseManager.name,
+                metadata: { prKey },
+            });
+            const deadline = Date.now() + MAX_POLL_WAIT_MS;
+            while (Date.now() < deadline) {
+                await sleep(POLL_INTERVAL_MS);
+                const check = await this.leaseRepo.findByPrKey(prKey);
+                if (!check) break; // Doc deleted — cleanup complete
+            }
+            // Retry acquire from scratch
+            return this.acquire(prKey, consumer, leaseTtlMs, cloneParams);
+        }
+
+        if (doc.cleanupStatus === SANDBOX_LEASE_CLEANUP_STATUS.FAILED) {
+            await this.leaseRepo.decrementLease(prKey);
+            throw new Error(
+                `SandboxLeaseManager: local cleanup previously failed for prKey="${prKey}"`,
+            );
+        }
+
+        // Acquire-vs-invalidated race: upsertAcquire() already incremented
+        // leaseCount, but the doc is INVALIDATED. Undo the increment so it
+        // doesn't block cleanup. Do NOT delete the doc — a concurrent creator
+        // may still need to observe the INVALIDATED state, and the reaper
+        // handles stale doc cleanup. Throw so the caller knows the acquire
+        // failed; the caller can retry with a fresh acquire if needed.
+        if (doc.state === 'INVALIDATED') {
+            const updated = await this.leaseRepo.decrementLease(prKey);
+            this.logger.log({
+                message: `SandboxLeaseManager: acquired INVALIDATED doc, decremented lease prKey="${prKey}" leaseCount=${updated?.leaseCount ?? 'unknown'}`,
+                context: SandboxLeaseManager.name,
+                metadata: { prKey, leaseCount: updated?.leaseCount },
+            });
+            throw new SandboxInvalidatedError(prKey);
+        }
+
         const leaseId = randomUUID();
 
         // A new acquire arrived — atomically clear any pending idle-kill so
@@ -176,12 +247,23 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         // 1 on an existing READY doc) would wrongly cold-create another sandbox
         // instead of warm-resuming the one already on the lease doc.
         if (doc.state === 'CREATING' && doc.leaseCount === 1) {
-            return this.handleCreatorPath(prKey, leaseId, consumer, cloneParams);
+            return this.handleCreatorPath(
+                prKey,
+                leaseId,
+                consumer,
+                cloneParams,
+            );
         }
 
         // --- Path B: joiner — doc already existed or someone else is creating ---
         try {
-            return await this.handleJoinerPath(prKey, leaseId, consumer, doc.state, doc.sandboxId);
+            return await this.handleJoinerPath(
+                prKey,
+                leaseId,
+                consumer,
+                doc.state,
+                doc.sandboxId,
+            );
         } catch (err) {
             if (
                 err instanceof SandboxStaleConnectionError ||
@@ -222,10 +304,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * @kody arrives within seconds or much later; conversation uses the
      * 5min default because the user is interactive.
      */
-    async release(
-        leaseId: string,
-        opts?: { idleMs?: number },
-    ): Promise<void> {
+    async release(leaseId: string, opts?: { idleMs?: number }): Promise<void> {
         const prKey = this.leaseIdToPrKey.get(leaseId);
         if (!prKey) {
             this.logger.warn({
@@ -246,6 +325,49 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         });
 
         if (updated && updated.leaseCount <= 0 && updated.sandboxId) {
+            // Local sandbox: immediate cleanup
+            if (isLocalSandboxPath(updated.sandboxId)) {
+                const claimed = await this.leaseRepo.claimCleanup(
+                    prKey,
+                    updated.sandboxId,
+                    true,
+                );
+                if (claimed) {
+                    try {
+                        await deleteLocalSandbox(updated.sandboxId);
+                        await this.leaseRepo.completeCleanup(
+                            prKey,
+                            updated.sandboxId,
+                        );
+                        this.logger.log({
+                            message: `SandboxLeaseManager: cleaned local sandbox sandboxId="${updated.sandboxId}" prKey="${prKey}"`,
+                            context: SandboxLeaseManager.name,
+                            metadata: {
+                                prKey,
+                                sandboxId: updated.sandboxId,
+                            },
+                        });
+                    } catch (err) {
+                        await this.leaseRepo.failCleanup(
+                            prKey,
+                            updated.sandboxId,
+                            (err as Error).message,
+                        );
+                        this.logger.warn({
+                            message: `SandboxLeaseManager: local cleanup failed, retry marker set sandboxId="${updated.sandboxId}"`,
+                            context: SandboxLeaseManager.name,
+                            error: err as Error,
+                            metadata: {
+                                prKey,
+                                sandboxId: updated.sandboxId,
+                            },
+                        });
+                    }
+                }
+                return;
+            }
+
+            // E2B path: existing idle-kill logic (unchanged)
             const idleMs = opts?.idleMs ?? IDLE_TIMEOUT_MS;
             const killAt = new Date(Date.now() + idleMs);
             await this.leaseRepo.setKillAt(prKey, killAt);
@@ -253,13 +375,20 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             this.logger.log({
                 message: `SandboxLeaseManager: scheduled idle-kill at ${killAt.toISOString()} for sandboxId="${updated.sandboxId}"`,
                 context: SandboxLeaseManager.name,
-                metadata: { prKey, sandboxId: updated.sandboxId, idleTimeoutMs: idleMs, killAt },
+                metadata: {
+                    prKey,
+                    sandboxId: updated.sandboxId,
+                    idleTimeoutMs: idleMs,
+                    killAt,
+                },
             });
 
             const apiKey = this.configService.get<string>('API_E2B_KEY');
             if (apiKey) {
                 try {
-                    await Sandbox.setTimeout(updated.sandboxId, idleMs, { apiKey });
+                    await Sandbox.setTimeout(updated.sandboxId, idleMs, {
+                        apiKey,
+                    });
                 } catch (err) {
                     this.logger.warn({
                         message: `SandboxLeaseManager: failed to set E2B-side idle timeout on sandboxId="${updated.sandboxId}" (kill cron is the primary path)`,
@@ -303,6 +432,16 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
         if (doc.state === 'CREATING') {
             // Mid-create race: mark as INVALIDATED so the create path can detect and kill
+            // Local sandbox: mark invalidated (cleanup on creator failure or final release)
+            if (isLocalSandboxPath(doc.sandboxId)) {
+                await this.leaseRepo.markInvalidated(prKey);
+                this.logger.log({
+                    message: `SandboxLeaseManager: marked INVALIDATED (mid-create, local) prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey },
+                });
+                return;
+            }
             await this.leaseRepo.markInvalidated(prKey);
             this.logger.log({
                 message: `SandboxLeaseManager: marked INVALIDATED (mid-create) prKey="${prKey}"`,
@@ -313,6 +452,58 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         }
 
         // READY or PAUSED: soft-drain then delete
+        // Local sandbox path
+        if (isLocalSandboxPath(doc.sandboxId)) {
+            if (doc.leaseCount <= 0) {
+                const claimed = await this.leaseRepo.claimCleanup(
+                    prKey,
+                    doc.sandboxId,
+                    true,
+                );
+                if (claimed) {
+                    try {
+                        await deleteLocalSandbox(doc.sandboxId);
+                        await this.leaseRepo.completeCleanup(
+                            prKey,
+                            doc.sandboxId,
+                        );
+                    } catch (err) {
+                        await this.leaseRepo.failCleanup(
+                            prKey,
+                            doc.sandboxId,
+                            (err as Error).message,
+                        );
+                    }
+                } else {
+                    const latest = await this.leaseRepo.findByPrKey(prKey);
+                    if (
+                        latest?.sandboxId === doc.sandboxId &&
+                        latest.state === 'READY'
+                    ) {
+                        await this.leaseRepo.markInvalidated(prKey);
+                        this.logger.log({
+                            message: `SandboxLeaseManager: invalidated READY local lease after losing cleanup claim prKey="${prKey}"`,
+                            context: SandboxLeaseManager.name,
+                            metadata: { prKey, sandboxId: doc.sandboxId },
+                        });
+                    }
+                }
+            } else {
+                await this.leaseRepo.markInvalidated(prKey);
+                this.logger.log({
+                    message: `SandboxLeaseManager: invalidated active local lease (leaseCount>0) prKey="${prKey}"`,
+                    context: SandboxLeaseManager.name,
+                    metadata: {
+                        prKey,
+                        sandboxId: doc.sandboxId,
+                        leaseCount: doc.leaseCount,
+                    },
+                });
+            }
+            return;
+        }
+
+        // E2B path: soft-drain then delete
         if (doc.sandboxId) {
             const apiKey = this.configService.get<string>('API_E2B_KEY');
             if (apiKey) {
@@ -385,16 +576,34 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 });
                 // Kill the sandbox we just created; it is orphaned
                 if (sandboxId) {
-                    const apiKey = this.configService.get<string>('API_E2B_KEY');
-                    if (apiKey) {
-                        await Sandbox.kill(sandboxId, { apiKey }).catch(() => {});
+                    if (isLocalSandboxPath(sandboxId)) {
+                        try {
+                            await deleteLocalSandbox(sandboxId);
+                        } catch (localErr) {
+                            this.logger.warn({
+                                message: `SandboxLeaseManager: Failed to clean local sandbox after mid-create invalidation prKey="${prKey}"`,
+                                context: SandboxLeaseManager.name,
+                                error: localErr as Error,
+                            });
+                            // Finding 4 fix: don't delete the lease doc when
+                            // local cleanup fails — keep it so the reaper can
+                            // retry the cleanup.
+                            throw new SandboxInvalidatedError(prKey, true, {
+                                cause: localErr,
+                            });
+                        }
+                    } else {
+                        const apiKey =
+                            this.configService.get<string>('API_E2B_KEY');
+                        if (apiKey) {
+                            await Sandbox.kill(sandboxId, {
+                                apiKey,
+                            }).catch(() => {});
+                        }
                     }
                 }
-                // Clean up the invalidated doc
                 await this.leaseRepo.delete(prKey);
-                throw new Error(
-                    `SandboxLeaseManager: sandbox invalidated mid-create for prKey="${prKey}"`,
-                );
+                throw new SandboxInvalidatedError(prKey, true);
             }
 
             this.leaseIdToPrKey.set(leaseId, prKey);
@@ -415,11 +624,37 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
 
             return { sandbox, leaseId, sandboxId, wasCreated: true };
         } catch (err) {
+            // Local sandbox cleanup on creator failure
+            if (sandboxId && isLocalSandboxPath(sandboxId)) {
+                try {
+                    await deleteLocalSandbox(sandboxId);
+                } catch (cleanupErr) {
+                    // Claim cleanup first, then mark as failed
+                    const claimed = await this.leaseRepo.claimCleanup(
+                        prKey,
+                        sandboxId,
+                    );
+                    if (claimed) {
+                        await this.leaseRepo.failCleanup(
+                            prKey,
+                            sandboxId,
+                            (cleanupErr as Error).message,
+                        );
+                    } else {
+                        this.logger.warn({
+                            message: `SandboxLeaseManager: local cleanup failed but sandboxId not on doc — directory may be orphaned prKey="${prKey}" sandboxId="${sandboxId}"`,
+                            context: SandboxLeaseManager.name,
+                            error: cleanupErr as Error,
+                        });
+                    }
+                    throw err;
+                }
+            }
             // If a real E2B sandbox was created but a later step failed
             // (Mongo update, mid-create invalidation, etc.), kill it so it
             // doesn't run for the full ceiling burning quota. Null-sandbox
             // doesn't need killing — its sandboxId is empty.
-            if (sandboxId) {
+            else if (sandboxId) {
                 const apiKey = this.configService.get<string>('API_E2B_KEY');
                 if (apiKey) {
                     this.logger.warn({
@@ -430,7 +665,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                     await Sandbox.kill(sandboxId, { apiKey }).catch(() => {});
                 }
             }
-            // Remove the lease doc so other callers don't poll forever
+            // Remove lease doc only if local cleanup succeeded or E2B/null path
             await this.leaseRepo.delete(prKey).catch(() => {});
             throw err;
         }
@@ -481,9 +716,10 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
         sandboxId?: string,
     ): Promise<AcquireResult> {
         if (state === 'INVALIDATED') {
-            throw new Error(
-                `SandboxLeaseManager: sandbox invalidated for prKey="${prKey}"`,
-            );
+            // Finding 2 fix: do NOT delete the sandbox here — active leases
+            // may still be using it. The reaper will clean up when all leases
+            // release and the TTL expires.
+            throw new SandboxInvalidatedError(prKey);
         }
 
         if (state === 'READY' && sandboxId) {
@@ -509,13 +745,16 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
 
             if (doc.state === 'INVALIDATED') {
-                throw new Error(
-                    `SandboxLeaseManager: sandbox invalidated for prKey="${prKey}"`,
-                );
+                throw new SandboxInvalidatedError(prKey);
             }
 
             if (doc.state === 'READY' && doc.sandboxId) {
-                return this.connectToExisting(prKey, leaseId, consumer, doc.sandboxId);
+                return this.connectToExisting(
+                    prKey,
+                    leaseId,
+                    consumer,
+                    doc.sandboxId,
+                );
             }
         }
 
@@ -588,7 +827,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             throw new SandboxStaleConnectionError(prKey, sandboxId);
         }
 
-        const sandbox: SandboxInstance = this.buildSandboxInstance(e2bSandbox, prKey, leaseId);
+        const sandbox: SandboxInstance = this.buildSandboxInstance(
+            e2bSandbox,
+            prKey,
+            leaseId,
+        );
         this.leaseIdToPrKey.set(leaseId, prKey);
 
         this.logger.log({
@@ -604,36 +847,23 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * Build a minimal SandboxInstance wrapping an existing connected E2B sandbox.
      * This is used by the joiner path when connecting to an already-READY sandbox.
      */
-    private buildSandboxInstance(e2bSandbox: Sandbox, prKey: string, leaseId: string): SandboxInstance {
+    private buildSandboxInstance(
+        e2bSandbox: Sandbox,
+        prKey: string,
+        leaseId: string,
+    ): SandboxInstance {
         return {
-            remoteCommands: {
-                grep: async (pattern: string, path: string, glob?: string) => {
-                    const globArg = glob ? `--glob '${glob}'` : '';
-                    const result = await e2bSandbox.commands.run(
-                        `rg --no-heading -n ${globArg} -e '${pattern}' '${path}' 2>/dev/null || true`,
-                        { timeoutMs: 30_000 },
-                    );
-                    return result.stdout || '';
+            // Single shared implementation (see e2b-sandbox.service.ts) — resolves
+            // paths against the repo root, surfaces errors, logs empty reads.
+            // Sharing it prevents the creator/reconnect drift that blinded reviews.
+            remoteCommands: buildE2BRemoteCommands(e2bSandbox, {
+                logger: this.logger,
+                logContext: SandboxLeaseManager.name,
+                logMetadata: {
+                    organizationId: prKey.split(':')[0],
+                    prKey,
                 },
-                read: async (path: string, start: number, end: number) => {
-                    const result = await e2bSandbox.commands.run(
-                        `sed -n '${start},${end}p' '${path}' 2>/dev/null || true`,
-                        { timeoutMs: 10_000 },
-                    );
-                    return result.stdout || '';
-                },
-                listDir: async (path: string, maxDepth: number) => {
-                    const result = await e2bSandbox.commands.run(
-                        `find '${path}' -maxdepth ${maxDepth} 2>/dev/null | head -200 || true`,
-                        { timeoutMs: 10_000 },
-                    );
-                    return result.stdout || '';
-                },
-                exec: async (command: string) => {
-                    const result = await e2bSandbox.commands.run(command, { timeoutMs: 30_000 });
-                    return { stdout: result.stdout || '', exitCode: result.exitCode };
-                },
-            },
+            }),
             cleanup: async () => {
                 await this.release(leaseId);
             },
@@ -665,7 +895,10 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
      * Build a null sandbox with a release-bound cleanup function.
      * Used when E2B is not configured or when connect is not needed.
      */
-    private buildNullSandboxWithRelease(prKey: string, leaseId: string): SandboxInstance {
+    private buildNullSandboxWithRelease(
+        prKey: string,
+        leaseId: string,
+    ): SandboxInstance {
         return {
             ...NULL_SANDBOX_INSTANCE,
             cleanup: async () => {

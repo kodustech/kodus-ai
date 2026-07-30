@@ -4,7 +4,7 @@ import {
 } from './rabbitmq-error.handler';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         warn: jest.fn(),
         error: jest.fn(),

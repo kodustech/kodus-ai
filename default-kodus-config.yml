@@ -33,16 +33,8 @@ reviewOptions:
 
 # suggestion control
 suggestionControl:
-    groupingMode: 'full' # minimal | full
     applyFiltersToKodyRules: false
-    limitationType: 'pr' # file | pr | severity
-    maxSuggestions: 9 # min 7, no max
-    severityLevelFilter: 'high' # low | medium | high | critical
-    severityLimits: # when limitationType == severity
-        low: 0
-        medium: 0
-        high: 0
-        critical: 0
+    severityLevelFilter: 'medium' # low | medium | high | critical
 
 # PR summary
 summary:
@@ -54,13 +46,22 @@ summary:
 # kody rules
 ideRulesSyncEnabled: false
 kodyRulesGeneratorEnabled: true
-llmGeneratedMemoriesRequireApproval: false
+kodyLearningExcludedReviewers: []
+kodyKnowledgeApproval:
+    enabled: false
 
 # custom messages
 customMessages:
     globalSettings:
         hideComments: false # github only
         suggestionCopyPrompt: true # not available for bitbucket
+
+    # Optional team-authored text appended below Kody's default error comment
+    # when a review fails (e.g. no BYOK provider configured). Empty content
+    # keeps the default error message unchanged.
+    errorReviewMessage:
+        status: 'off' # off | active
+        content: ''
 
     startReviewMessage:
         status: 'every_push' # every_push | only_when_opened | off

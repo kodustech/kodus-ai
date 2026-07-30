@@ -254,6 +254,10 @@ export class IntegrationRepository implements IIntegrationRepository {
             await this.integrationRepository.delete(uuid);
         } catch (error) {
             console.log(error);
+            // Swallowing this error leaves a stale active integration behind
+            // (e.g. when a remaining integration_config still references it),
+            // which breaks reconnecting the provider later.
+            throw error;
         }
     }
 

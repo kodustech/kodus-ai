@@ -1,7 +1,19 @@
-import { createLogger } from '@kodus/flow';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { createLogger } from '@libs/core/log/logger';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    Optional,
+} from '@nestjs/common';
+import { REQUEST } from '@nestjs/core';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import {
+    Action,
+    ResourceType,
+} from '@libs/identity/domain/permissions/enums/permissions.enum';
+import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { KodyRulesSyncService } from '../../infrastructure/adapters/services/kodyRulesSync.service';
 
 /**
@@ -18,7 +30,13 @@ export class ManageImportedKodyRulesUseCase {
         ManageImportedKodyRulesUseCase.name,
     );
 
-    constructor(private readonly syncService: KodyRulesSyncService) {}
+    constructor(
+        private readonly syncService: KodyRulesSyncService,
+        private readonly authorizationService: AuthorizationService,
+        @Optional()
+        @Inject(REQUEST)
+        private readonly request: UserRequest,
+    ) {}
 
     async execute(params: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -42,6 +60,19 @@ export class ManageImportedKodyRulesUseCase {
             throw new BadRequestException(
                 `action must be one of pause | resume | delete (got "${action}")`,
             );
+        }
+
+        // The endpoint guard only checks Update on kody_rules at the type
+        // level; the body's repositoryId decides WHICH repo gets bulk
+        // pause/resume/purge, so verify it against the user's assigned
+        // repositories. Machine flows (no request context) are exempt.
+        if (this.request?.user) {
+            await this.authorizationService.ensure({
+                user: this.request.user,
+                action: Action.Update,
+                resource: ResourceType.KodyRules,
+                repoIds: [repositoryId],
+            });
         }
 
         switch (action) {

@@ -112,19 +112,35 @@ describe('SelfHostedBeaconService', () => {
                 ),
                 first_seen_at: expect.any(String),
                 last_sent_day: null,
+                in_flight_day: null,
+                in_flight_started_at: null,
             }),
         );
 
         expect(collector.collect).toHaveBeenCalledTimes(1);
         expect(transport.send).toHaveBeenCalledTimes(1);
 
-        // Second persist: marks today as sent.
+        // Second persist: claims today before sending so another worker skips.
         const secondPersist =
             globalParameters.createOrUpdateConfig.mock.calls[1]?.[1];
         expect(secondPersist).toEqual(
             expect.objectContaining({
                 instance_id: firstPersist.instance_id,
+                last_sent_day: null,
+                in_flight_day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+                in_flight_started_at: expect.any(String),
+            }),
+        );
+
+        // Third persist: marks today as sent and clears the in-flight claim.
+        const thirdPersist =
+            globalParameters.createOrUpdateConfig.mock.calls[2]?.[1];
+        expect(thirdPersist).toEqual(
+            expect.objectContaining({
+                instance_id: firstPersist.instance_id,
                 last_sent_day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+                in_flight_day: null,
+                in_flight_started_at: null,
             }),
         );
     });
@@ -163,8 +179,48 @@ describe('SelfHostedBeaconService', () => {
 
         expect(collector.collect).toHaveBeenCalledTimes(1);
         expect(transport.send).toHaveBeenCalledTimes(1);
-        // No persist call at all — state was already initialised, and we
-        // only persist the day marker on success.
+        expect(globalParameters.createOrUpdateConfig).toHaveBeenCalledTimes(2);
+
+        const claimPersist =
+            globalParameters.createOrUpdateConfig.mock.calls[0]?.[1];
+        expect(claimPersist).toEqual(
+            expect.objectContaining({
+                last_sent_day: '2026-01-01',
+                in_flight_day: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+                in_flight_started_at: expect.any(String),
+            }),
+        );
+
+        const clearPersist =
+            globalParameters.createOrUpdateConfig.mock.calls[1]?.[1];
+        expect(clearPersist).toEqual(
+            expect.objectContaining({
+                last_sent_day: '2026-01-01',
+                in_flight_day: null,
+                in_flight_started_at: null,
+            }),
+        );
+    });
+
+    it('skips send when another worker already claimed today', async () => {
+        const { service, globalParameters, collector, transport } = build();
+        const now = new Date('2026-06-01T03:17:30.000Z');
+        jest.useFakeTimers().setSystemTime(now);
+
+        globalParameters.findByKey.mockResolvedValue({
+            configValue: {
+                instance_id: '22222222-2222-4222-8222-222222222222',
+                first_seen_at: '2026-01-01T00:00:00.000Z',
+                last_sent_day: '2026-01-01',
+                in_flight_day: '2026-06-01',
+                in_flight_started_at: '2026-06-01T03:17:00.000Z',
+            },
+        });
+
+        await service.run();
+
+        expect(collector.collect).not.toHaveBeenCalled();
+        expect(transport.send).not.toHaveBeenCalled();
         expect(globalParameters.createOrUpdateConfig).not.toHaveBeenCalled();
     });
 
@@ -181,6 +237,15 @@ describe('SelfHostedBeaconService', () => {
 
         await expect(service.run()).resolves.toBeUndefined();
         expect(transport.send).not.toHaveBeenCalled();
+        expect(globalParameters.createOrUpdateConfig).toHaveBeenCalledTimes(2);
+        expect(
+            globalParameters.createOrUpdateConfig.mock.calls[1]?.[1],
+        ).toEqual(
+            expect.objectContaining({
+                in_flight_day: null,
+                in_flight_started_at: null,
+            }),
+        );
     });
 
     it('preview returns the payload that would be sent without calling transport', async () => {

@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider, MODEL_STRATEGIES } from '@kodus/kodus-common/llm';
 import { Injectable } from '@nestjs/common';
 import { encoding_for_model, TiktokenModel } from 'tiktoken';

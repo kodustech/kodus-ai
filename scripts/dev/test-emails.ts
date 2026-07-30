@@ -10,7 +10,7 @@ import { ResendClientProvider } from '@libs/common/email/services/resend.client'
 // Standalone smoke runner for the Resend email pipeline. Sends one of each
 // transactional email to RESEND_TEST_EMAIL and reports per-email status.
 //
-// Run with:  yarn email:test
+// Run with:  pnpm run email:test
 //
 // Required env: RESEND_API_KEY, RESEND_TEST_EMAIL, API_USER_INVITE_BASE_URL.
 

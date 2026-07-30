@@ -10,7 +10,7 @@ import {
     TEAM_SERVICE_TOKEN,
 } from '@libs/organization/domain/team/contracts/team.service.contract';
 import { Inject } from '@nestjs/common';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 export class InteractionService implements IInteractionService {
     private readonly logger = createLogger(InteractionService.name);

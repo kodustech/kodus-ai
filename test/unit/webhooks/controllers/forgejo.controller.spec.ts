@@ -238,6 +238,36 @@ describe('ForgejoController', () => {
                 payload: forgejoPullRequestReviewCommentPayload,
             });
         });
+        it('should enqueue push event', async () => {
+            mockRequest = {
+                headers: { 'x-forgejo-event': 'push' },
+                body: {
+                    ref: 'refs/heads/main',
+                    before: 'old-head-sha',
+                    after: 'new-head-sha',
+                },
+            };
+
+            controller.handleWebhook(
+                mockRequest as Request,
+                mockResponse as Response,
+            );
+
+            expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.OK);
+            expect(mockResponse.send).toHaveBeenCalledWith('Webhook received');
+
+            await new Promise((resolve) => setImmediate(resolve));
+
+            expect(enqueueWebhookUseCase.execute).toHaveBeenCalledWith({
+                platformType: 'FORGEJO',
+                event: 'push',
+                payload: {
+                    ref: 'refs/heads/main',
+                    before: 'old-head-sha',
+                    after: 'new-head-sha',
+                },
+            });
+        });
     });
 
     describe('unsupported pull_request actions - should NOT enqueue', () => {
@@ -324,27 +354,6 @@ describe('ForgejoController', () => {
     });
 
     describe('unsupported events - should NOT enqueue', () => {
-        it('should ignore push event', async () => {
-            mockRequest = {
-                headers: { 'x-forgejo-event': 'push' },
-                body: { ref: 'refs/heads/main' },
-            };
-
-            controller.handleWebhook(
-                mockRequest as Request,
-                mockResponse as Response,
-            );
-
-            expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.OK);
-            expect(mockResponse.send).toHaveBeenCalledWith(
-                'Webhook ignored (event not supported)',
-            );
-
-            await new Promise((resolve) => setImmediate(resolve));
-
-            expect(enqueueWebhookUseCase.execute).not.toHaveBeenCalled();
-        });
-
         it('should ignore pull_request_review event (not the same as pull_request_review_comment)', async () => {
             mockRequest = {
                 headers: { 'x-forgejo-event': 'pull_request_review' },

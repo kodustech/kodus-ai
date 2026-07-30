@@ -1,7 +1,6 @@
 import { MCPConnectionStatus } from '../../mcp/entities/mcp-connection.entity';
 
 export enum MCPProviderType {
-    COMPOSIO = 'composio',
     KODUSMCP = 'kodusmcp',
     CUSTOM = 'custom',
 }
@@ -64,6 +63,23 @@ export interface MCPIntegration {
     apiKeyHeader?: string;
     basicUser?: string;
     active?: boolean;
+    /**
+     * UI-safe selectable auth methods for managed integrations (e.g. Jira:
+     * OAuth or API token). Lets the web app render the auth-method picker +
+     * token form. Never includes secrets.
+     */
+    authMethods?: Array<{
+        id: string;
+        label?: string;
+        type: string;
+        default?: boolean;
+        userFields?: Array<{
+            name: string;
+            label?: string;
+            required?: boolean;
+            secret?: boolean;
+        }>;
+    }>;
 }
 
 export interface MCPRequiredParam {
@@ -80,6 +96,8 @@ export interface MCPTool {
     description: string;
     provider: MCPProviderType;
     warning: boolean;
+    /** True when the tool's MCP `readOnlyHint` annotation marks it read-only. */
+    readOnly?: boolean;
 }
 
 export interface MCPInstallIntegration {
@@ -115,6 +133,7 @@ export interface MCPProvider {
     initiateManagedOAuth?(
         organizationId: string,
         integrationId: string,
+        authMethodId?: string,
     ): Promise<string>;
     finalizeManagedOAuth?(params: {
         organizationId: string;

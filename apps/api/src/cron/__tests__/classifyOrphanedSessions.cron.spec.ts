@@ -2,7 +2,7 @@ import { ClassifyOrphanedSessionsCronProvider } from '../classifyOrphanedSession
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
 import { ClassifySessionUseCase } from '@libs/cli-review/application/use-cases/classify-session.use-case';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

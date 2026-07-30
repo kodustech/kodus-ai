@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { N8nProvider } from '../../infrastructure/providers/n8n.provider';
@@ -235,6 +235,12 @@ export class TelemetryService {
         teamId: string;
         teamName?: string;
         reviewedPR: boolean;
+        /**
+         * Real engineering team size from the just-connected git org (member
+         * count). Enriched at the call site — only Kodus holds the per-org git
+         * auth to fetch it — and forwarded to n8n for lead scoring.
+         */
+        orgMemberCount?: number;
     }): Promise<void> {
         await this.safeCall('onboardingCompleted', async () => {
             this.posthog.capture(
@@ -246,6 +252,7 @@ export class TelemetryService {
                     teamId: p.teamId,
                     teamName: p.teamName,
                     reviewedPR: p.reviewedPR,
+                    orgMemberCount: p.orgMemberCount,
                 },
                 { organization: p.organizationId, team: p.teamId },
             );
@@ -266,6 +273,7 @@ export class TelemetryService {
                 teamId: p.teamId,
                 teamName: p.teamName,
                 reviewedPR: p.reviewedPR,
+                orgMemberCount: p.orgMemberCount,
             });
         });
     }
@@ -345,6 +353,12 @@ export class TelemetryService {
         platform?: string;
         ownerId?: string;
         ownerEmail?: string;
+        /**
+         * Real engineering team size from the connected git org (member
+         * count). Only Kodus holds the per-org git auth to fetch this, so it's
+         * enriched at the call site and forwarded here for lead scoring in n8n.
+         */
+        orgMemberCount?: number;
     }): Promise<void> {
         await this.safeCall('firstReviewCompleted', async () => {
             this.posthog.capture(
@@ -359,6 +373,7 @@ export class TelemetryService {
                     pullRequestNumber: p.pullRequestNumber,
                     platform: p.platform,
                     ownerEmail: p.ownerEmail,
+                    orgMemberCount: p.orgMemberCount,
                 },
                 {
                     organization: p.organizationId,
@@ -377,6 +392,7 @@ export class TelemetryService {
                 platform: p.platform,
                 ownerEmail: p.ownerEmail,
                 ownerId: p.ownerId,
+                orgMemberCount: p.orgMemberCount,
             });
         });
     }

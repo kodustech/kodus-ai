@@ -9,7 +9,7 @@ const logger = {
     debug: jest.fn(),
 };
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: jest.fn(() => logger),
 }));
 

@@ -1,5 +1,5 @@
 import { Logger as ITypeORMLogger } from 'typeorm';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 export class TypeOrmCustomLogger implements ITypeORMLogger {
     private readonly logger = createLogger('TypeORM');

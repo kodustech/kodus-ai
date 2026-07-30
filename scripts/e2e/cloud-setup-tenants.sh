@@ -7,7 +7,7 @@
 # Config sources (caller env wins):
 #   1. inline env on the call
 #   2. scripts/e2e/.env       (per-repo override; gitignored)
-#   3. ~/.kodus-dev/config    (team default, set by `yarn selfhosted:setup`)
+#   3. ~/.kodus-dev/config    (team default, set by `pnpm run selfhosted:setup`)
 #
 # `op://Vault/Item/field` references are resolved via the 1Password CLI
 # the same way `run.sh` does — required since cloud signup needs the
@@ -71,20 +71,24 @@ load_config_file "$LOCAL_ENV"
 load_config_file "$GLOBAL_CONFIG"
 
 # Resolve op:// refs for all provider tokens (signup needs all four to
-# connect provider integrations across the 6 tenants).
+# connect provider integrations across the 6 tenants) plus the BYOK LLM
+# key — now that `paid` is seeded as BYOK too (not just community-byok),
+# configureByok() runs for every paid cell across all four providers, so
+# the key must be present (and op://-resolved) or those seeds fail-loud.
 resolve_op_refs \
     GH_TEST_TOKEN \
     GL_TEST_TOKEN \
     BB_TEST_USER \
     BB_TEST_APP_PASSWORD \
     AZ_TEST_TOKEN \
+    API_OPEN_AI_API_KEY \
     || true  # don't hard-fail when only a subset is configured
 
 cd "$E2E_DIR"
 
 if [ ! -d node_modules ]; then
     warn "Installing tests/e2e dependencies (first run)…"
-    yarn install --silent
+    pnpm install --silent
 fi
 
 exec npx tsx cli/cloud/setup-tenants.ts "$@"

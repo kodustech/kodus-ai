@@ -1,11 +1,10 @@
-import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 
 import { CodeReviewJobProcessorService } from './code-review-job-processor.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),
@@ -55,7 +54,7 @@ describe('CodeReviewJobProcessorService — review.failed emit', () => {
             correlationId,
         );
 
-    it('emits with role:OWNER + PR-author when both resolve', async () => {
+    it('emits with the PR author as the only directed recipient (owners are the config audience)', async () => {
         prAuthorResolver.resolve.mockResolvedValueOnce({
             kind: 'user',
             userId: 'user-1',
@@ -77,10 +76,9 @@ describe('CodeReviewJobProcessorService — review.failed emit', () => {
                 event: NotificationEvent.REVIEW_FAILED,
                 organizationId: 'org-1',
                 correlationId: 'corr-1',
-                recipients: expect.arrayContaining([
-                    { kind: 'role', role: Role.OWNER },
-                    { kind: 'user', userId: 'user-1' },
-                ]),
+                // Owners are no longer hardcoded — they come from the catalog's
+                // defaultRoles; only the PR author is a directed recipient.
+                recipients: [{ kind: 'user', userId: 'user-1' }],
                 payload: expect.objectContaining({
                     prUrl: 'https://github.com/acme/api/pull/1',
                     repoName: 'acme/api',
@@ -91,7 +89,7 @@ describe('CodeReviewJobProcessorService — review.failed emit', () => {
         );
     });
 
-    it('emits with only role:OWNER when PR author cannot be resolved (bot / external)', async () => {
+    it('emits with no directed recipients when the PR author cannot be resolved (owners via audience)', async () => {
         prAuthorResolver.resolve.mockResolvedValueOnce(null);
 
         await callNotify({
@@ -106,9 +104,7 @@ describe('CodeReviewJobProcessorService — review.failed emit', () => {
         });
 
         const emitArgs = notificationService.emit.mock.calls[0][0];
-        expect(emitArgs.recipients).toEqual([
-            { kind: 'role', role: Role.OWNER },
-        ]);
+        expect(emitArgs.recipients).toEqual([]);
     });
 
     it('skips when organizationId is missing from the job payload', async () => {

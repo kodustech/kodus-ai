@@ -1,5 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 import { runWithTimeout } from './run-with-timeout';
 import { IJobProcessorRouter } from '@libs/core/workflow/domain/contracts/job-processor-router.contract';

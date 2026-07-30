@@ -18,15 +18,6 @@
 schema_version: 1
 
 features:
-    agent-review:
-        name: "Agent-first code review"
-        stage: general-availability
-        audience: [cloud, self-hosted]
-        description: >-
-            A new code review engine built on three specialized agents —
-            context, suggestion, and validation — replacing the single-shot
-            model. Higher precision, fewer false positives.
-
     github-enterprise-server-pat:
         name: "GitHub Enterprise Server (PAT auth)"
         stage: beta
@@ -35,3 +26,12 @@ features:
             Connect a GitHub Enterprise Server installation using a personal
             access token, for environments where the GitHub App flow isn't
             available.
+
+    heavy-review:
+        name: "Heavy review (deeper pass)"
+        stage: alpha
+        audience: [cloud, self-hosted]
+        description: >-
+            An opt-in deeper review that re-runs the finder multiple times to
+            surface more real bugs, for the changes where catching everything
+            matters more than speed.

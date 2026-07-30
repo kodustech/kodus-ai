@@ -11,7 +11,7 @@
  *   4. compares against vars declared in .env.schema
  *   5. exits non-zero with a clear message if anything's missing
  *
- * Run locally: yarn env:check:coverage
+ * Run locally: pnpm run env:check:coverage
  * In CI: env-drift-check.yml runs this after the drift check.
  */
 
@@ -58,6 +58,14 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
         pattern: /^(BEARER_TOKEN|GOOGLE_SERVICE_ACCOUNT|NO_AUTH|BASIC_WITH_JWT)$/,
         reason: 'enum/string-literal in mcp-manager (false positive)',
     },
+    {
+        // GitHub Actions runtime variables referenced by inline `node`
+        // scripts in .github/workflows/*.yml (the scan includes *.yml).
+        // Injected by the Actions runner — CI plumbing, never Kodus
+        // runtime config, so they don't belong in .env.schema.
+        pattern: /^(GITHUB_OUTPUT|GITHUB_ENV|GITHUB_STATE|GITHUB_STEP_SUMMARY|GITHUB_PATH|RUNNER_TEMP)$/,
+        reason: 'GitHub Actions workflow plumbing (inline node in *.yml), not a Kodus env var',
+    },
 ];
 
 function grepStrongUsages(): Set<string> {
@@ -76,11 +84,24 @@ function grepStrongUsages(): Set<string> {
         '--exclude-dir=.cache',
         '--exclude-dir=.git',
         '--exclude-dir=.env-preview',
+        // Nested git worktrees (e.g. .worktrees/worker-prodlike-sim) are
+        // separate checkouts — often carrying their own dist/ bundles and EE
+        // libs — not the main tree's source of truth. Scanning them surfaces
+        // env vars that only exist on that other branch (false positives).
+        // Exclude like node_modules/dist.
+        '--exclude-dir=.worktrees',
         // Claude Code / Cursor / IDE local config — sometimes contains
         // example commands with `process.env.X` in escaped JSON. Not code.
         '--exclude-dir=.claude',
         '--exclude-dir=.cursor',
         '--exclude-dir=.vscode',
+        // Nested git worktrees (Claude Code / manual `git worktree`) hold
+        // checkouts of OTHER branches — older code using since-renamed env
+        // names (e.g. API_OPENROUTER_KEY → API_OPEN_ROUTER_API_KEY,
+        // API_SERVICE_AST_URL, API_SENTRY_DNS). Scanning them flags phantom
+        // vars that don't exist in THIS branch's tracked code.
+        '--exclude-dir=.worktrees',
+        '--exclude-dir=worktrees',
         // Tooling that's NOT part of the runtime — has its own config story
         // and shouldn't gate the schema. Promotion/cross-file/safeguard
         // evals reference legacy env names that were renamed in production
@@ -177,7 +198,7 @@ function main() {
     for (const n of undeclared.sort()) console.error(`    ${n}`);
     console.error();
     console.error('Add each one to .env.schema with the right audience and');
-    console.error('a short description, then re-run yarn env:apply. If a var');
+    console.error('a short description, then re-run pnpm run env:apply. If a var');
     console.error("really shouldn't be in the schema (CLI-only, test fixture,");
     console.error('false positive), add it to ALLOWLIST in scripts/env/check-coverage.ts.');
     process.exit(1);

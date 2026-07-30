@@ -1,8 +1,11 @@
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
 import { environment } from '@libs/ee/configs/environment';
-import { SelfHostedBeaconService } from '@libs/telemetry/application/services/self-hosted-beacon.service';
+import {
+    ISelfHostedBeaconService,
+    SELF_HOSTED_BEACON_SERVICE_TOKEN,
+} from '@libs/telemetry/application/services/self-hosted-beacon.service';
 
 /**
  * Daily anonymous heartbeat for self-hosted instances. Sends one POST per
@@ -25,7 +28,10 @@ import { SelfHostedBeaconService } from '@libs/telemetry/application/services/se
 export class SelfHostedBeaconCron implements OnModuleInit {
     private readonly logger = new Logger(SelfHostedBeaconCron.name);
 
-    constructor(private readonly beacon: SelfHostedBeaconService) {}
+    constructor(
+        @Inject(SELF_HOSTED_BEACON_SERVICE_TOKEN)
+        private readonly beacon: ISelfHostedBeaconService,
+    ) {}
 
     onModuleInit(): void {
         // Defensive: this is a transparency log, never a critical path.

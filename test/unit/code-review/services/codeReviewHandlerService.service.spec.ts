@@ -2,7 +2,7 @@ import { AutomationStatus } from '@libs/automation/domain/automation/enum/automa
 import { CodeReviewHandlerService } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

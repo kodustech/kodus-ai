@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { CacheService } from '@libs/core/cache/cache.service';

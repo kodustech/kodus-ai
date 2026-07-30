@@ -77,6 +77,7 @@ function CustomMessagesContent() {
     });
     const wasStartReviewMessageChanged = dirtySection === "startReviewMessage";
     const wasEndReviewMessageChanged = dirtySection === "endReviewMessage";
+    const wasErrorReviewMessageChanged = dirtySection === "errorReviewMessage";
     const wasGlobalSettingsChanged = dirtySection === "globalSettings";
     const handleReset = useCallback(() => {
         setEditorState(buildCustomMessagesEditorState(pullRequestMessages));
@@ -96,6 +97,7 @@ function CustomMessagesContent() {
                 directoryId,
                 startReviewMessage: unformattedMessages.startReviewMessage,
                 endReviewMessage: unformattedMessages.endReviewMessage,
+                errorReviewMessage: unformattedMessages.errorReviewMessage,
                 globalSettings: unformattedGlobalSettings,
             });
 
@@ -136,7 +138,9 @@ function CustomMessagesContent() {
             ? "startReviewMessage"
             : wasEndReviewMessageChanged
               ? "endReviewMessage"
-              : "globalSettings";
+              : wasErrorReviewMessageChanged
+                ? "errorReviewMessage"
+                : "globalSettings";
 
         const fieldElement = document.querySelector(
             `[data-field-name="${fieldName}"]`,
@@ -166,6 +170,7 @@ function CustomMessagesContent() {
         }
     }, [
         wasEndReviewMessageChanged,
+        wasErrorReviewMessageChanged,
         wasGlobalSettingsChanged,
         wasStartReviewMessageChanged,
     ]);
@@ -222,6 +227,12 @@ function CustomMessagesContent() {
                         <TabsTrigger value="end-review-message">
                             End Review message
                             {wasEndReviewMessageChanged && (
+                                <span className="text-tertiary-light">*</span>
+                            )}
+                        </TabsTrigger>
+                        <TabsTrigger value="error-review-message">
+                            Error message
+                            {wasErrorReviewMessageChanged && (
                                 <span className="text-tertiary-light">*</span>
                             )}
                         </TabsTrigger>
@@ -290,6 +301,39 @@ function CustomMessagesContent() {
                                                 ...prev.messages
                                                     .endReviewMessage.status,
                                                 value: endReviewMessage.status,
+                                            },
+                                        },
+                                    },
+                                }));
+                            }}
+                            canEdit={canEdit}
+                        />
+                    </TabsContent>
+
+                    <TabsContent
+                        forceMount
+                        className="flex-1"
+                        value="error-review-message"
+                        data-field-name="errorReviewMessage">
+                        <TabContent
+                            type="errorReviewMessage"
+                            value={editorState.messages.errorReviewMessage}
+                            initialState={initialState.errorReviewMessage}
+                            onChangeAction={(errorReviewMessage) => {
+                                setEditorState((prev) => ({
+                                    ...prev,
+                                    messages: {
+                                        ...prev.messages,
+                                        errorReviewMessage: {
+                                            content: {
+                                                ...prev.messages
+                                                    .errorReviewMessage.content,
+                                                value: errorReviewMessage.content,
+                                            },
+                                            status: {
+                                                ...prev.messages
+                                                    .errorReviewMessage.status,
+                                                value: errorReviewMessage.status,
                                             },
                                         },
                                     },

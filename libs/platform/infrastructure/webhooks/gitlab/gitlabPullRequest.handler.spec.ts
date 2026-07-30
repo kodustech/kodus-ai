@@ -1,4 +1,14 @@
-import { extractGitlabHost } from './gitlabPullRequest.handler';
+jest.mock(
+    '@libs/platform/application/use-cases/codeManagement/chatWithKodyFromGit.use-case',
+    () => ({
+        ChatWithKodyFromGitUseCase: jest.fn(),
+    }),
+);
+
+import {
+    extractGitlabHost,
+    shouldTriggerGitlabCodeReview,
+} from './gitlabPullRequest.handler';
 
 describe('extractGitlabHost', () => {
     it('extracts host from project.git_http_url (real Ikatec payload shape)', () => {
@@ -140,5 +150,62 @@ describe('extractGitlabHost', () => {
         // URL.hostname does not include the port — covers the case where a
         // self-hosted GitLab listens on a non-standard port.
         expect(extractGitlabHost(payload)).toBe('gitlab.example.com');
+    });
+});
+
+describe('shouldTriggerGitlabCodeReview', () => {
+    it('triggers on draft true to false', () => {
+        expect(
+            shouldTriggerGitlabCodeReview({
+                object_attributes: { action: 'update' },
+                changes: { draft: { previous: true, current: false } },
+            }),
+        ).toBe(true);
+    });
+
+    it('triggers on work_in_progress true to false', () => {
+        expect(
+            shouldTriggerGitlabCodeReview({
+                object_attributes: { action: 'update' },
+                changes: {
+                    work_in_progress: { previous: true, current: false },
+                },
+            }),
+        ).toBe(true);
+    });
+
+    it('triggers when draft null change accompanies work_in_progress true to false', () => {
+        expect(
+            shouldTriggerGitlabCodeReview({
+                object_attributes: { action: 'update' },
+                changes: {
+                    draft: { previous: null, current: null },
+                    work_in_progress: { previous: true, current: false },
+                },
+            }),
+        ).toBe(true);
+    });
+
+    it('triggers before skipping a simultaneous description update', () => {
+        expect(
+            shouldTriggerGitlabCodeReview({
+                object_attributes: { action: 'update' },
+                changes: {
+                    description: { previous: 'old', current: 'new' },
+                    work_in_progress: { previous: true, current: false },
+                },
+            }),
+        ).toBe(true);
+    });
+
+    it('does not trigger on work_in_progress false to true', () => {
+        expect(
+            shouldTriggerGitlabCodeReview({
+                object_attributes: { action: 'update' },
+                changes: {
+                    work_in_progress: { previous: false, current: true },
+                },
+            }),
+        ).toBe(false);
     });
 });

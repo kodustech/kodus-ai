@@ -72,14 +72,11 @@ const VertexFields = () => {
             <Alert variant="info">
                 <InfoIcon />
                 <AlertTitle className="text-balance">
-                    Service account JSON, base64-encoded
+                    Service account JSON
                 </AlertTitle>
                 <AlertDescription className="text-pretty">
-                    Run{" "}
-                    <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
-                        base64 -w 0 sa.json
-                    </code>{" "}
-                    and paste the output below. Kodus extracts{" "}
+                    Paste the contents of your service account JSON file
+                    directly (base64-encoded also works). Kodus extracts{" "}
                     <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
                         project_id
                     </code>{" "}
@@ -93,7 +90,7 @@ const VertexFields = () => {
                 render={({ field }) => (
                     <FormControl.Root>
                         <FormControl.Label htmlFor={field.name}>
-                            Service Account JSON (base64)
+                            Service Account JSON
                         </FormControl.Label>
                         <FormControl.Input>
                             <Textarea
@@ -124,12 +121,13 @@ const VertexFields = () => {
                                 onChange={(e) =>
                                     field.onChange(e.target.value || null)
                                 }
-                                placeholder="us-central1"
+                                placeholder="global"
                             />
                         </FormControl.Input>
                         <FormControl.Helper>
-                            e.g. us-central1, europe-west4, asia-northeast1.
-                            Defaults to us-central1 if empty.
+                            Leave empty for the global endpoint (recommended).
+                            Pin a region (e.g. us-east5) only for data
+                            residency.
                         </FormControl.Helper>
                     </FormControl.Root>
                 )}

@@ -17,6 +17,10 @@ BYOK(自带密钥)是 **Kodus 在所有套餐中使用 LLM 的默认方式** —
 
 BYOK 界面提供两条路径:从精选目录中选择一个**推荐模型**(最快路径,覆盖 90% 的情况),或**手动配置任意提供商**(用于自定义端点或未被精选的模型的逃生通道)。
 
+<Info>
+  **谁可以编辑此项。** BYOK 页面**仅限 Owner** — 配置、测试和删除密钥需要 **Owner** 角色。其他角色(Billing Manager、Repo Admin、Contributor)无法访问 `/organization/byok`。参见[工作区角色](/how_to_use/zh/workspace_roles)。
+</Info>
+
 <Steps>
   <Step title="打开 BYOK 设置">
     访问 [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok)。

@@ -19,3 +19,10 @@ export class KodyRulesModel {
 }
 
 export const KodyRulesSchema = SchemaFactory.createForClass(KodyRulesModel);
+
+// findById() looks a rule up by its embedded `rules.uuid` with no
+// organizationId prefix (the rule uuid is a globally-unique v4, and the
+// review pipeline resolves rules by id alone). Without a multikey index
+// on the embedded array that query is a full collection scan across every
+// org's document. This index turns it into a sub-ms lookup.
+KodyRulesSchema.index({ 'rules.uuid': 1 });

@@ -10,6 +10,10 @@ As Regras do Repositório usam o mesmo mecanismo de sincronização automática 
 ## Como Usar
 Você pode criar Kody Rules personalizadas diretamente no seu repositório colocando arquivos markdown estruturados em diretórios específicos. Isso permite versionar suas regras junto com o código e compartilhá-las com toda a equipe.
 
+<Info>
+Arquivos de regras do repositório são importados **verbatim** — sem conversão por LLM. O frontmatter é parseado como está, o corpo markdown vira as instruções da regra exatamente como você escreveu (identificadores, formatação e texto preservados), e os exemplos Bad/Good são importados estruturalmente. Cada arquivo produz uma regra. Arquivos que não seguem o template (sem frontmatter ou `title`) caem no importador LLM usado para arquivos de formato livre.
+</Info>
+
 ### Sincronização
 - **Detecção Automática**: As regras do repositório são detectadas e sincronizadas automaticamente quando habilitado
 - **Sincronização Manual**: Adicione `@kody-sync` a qualquer arquivo de regra para sincronizá-lo individualmente (funciona mesmo com a sincronização automática desabilitada)
@@ -29,7 +33,7 @@ Cada arquivo de regra deve seguir exatamente esta estrutura de template:
 ```markdown
 ---
 title: "<nome da regra>"
-scope: "file"            # "file" ou "pull_request"
+scope: "file"            # "file" ou "pull-request"
 path: []                 # lista de globs. exemplo: ["**/*.ts", "apps/web/**"]
 severity_min: "high"     # "low", "medium", "high", "critical"
 languages: []            # opcional. ex: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
@@ -63,9 +67,17 @@ Descreva o que revisar e como decidir. Seja direto e objetivo.
 | Campo | Descrição | Valores |
 |-------|-------------|---------|
 | `title` | Nome da regra exibido na interface | Qualquer string descritiva |
-| `scope` | Escopo de análise da regra | `"file"` ou `"pull_request"` |
-| `path` | Caminhos de arquivo onde a regra se aplica | Array de padrões glob |
+| `scope` | Escopo de análise da regra | `"file"` ou `"pull-request"` |
+| `path` | Caminhos de arquivo onde a regra se aplica. A regra dispara em arquivos que casam com **qualquer** um dos globs | Array de padrões glob |
 | `severity_min` | Nível mínimo de severidade | `"low"`, `"medium"`, `"high"`, `"critical"` |
+
+### Campos Opcionais
+
+| Campo | Descrição |
+|-------|-------------|
+| `uuid` | Identificador estável da regra — mantém a mesma regra na plataforma entre renomeações |
+| `enabled` | Defina `false` para pular a importação deste arquivo (uma regra já importada não é removida) |
+| `languages`, `buckets` | Metadados informativos |
 
 ## Exemplos de Regras
 
@@ -112,7 +124,7 @@ function processUser(user: User) {
 ```markdown
 ---
 title: "New API endpoints must have tests"
-scope: "pull_request"
+scope: "pull-request"
 path: ["**/*"]
 severity_min: "high"
 buckets: ["testing"]

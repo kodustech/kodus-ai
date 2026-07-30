@@ -10,9 +10,9 @@ The `mintlify` CLI is installed globally on most dev machines. From the
 repo root:
 
 ```bash
-yarn docs:dev          # starts the local preview at localhost:3001
-yarn docs:install      # re-installs Mintlify deps if `dev` fails
-yarn docs:check        # validates broken links across the site
+pnpm run docs:dev          # starts the local preview at localhost:3001
+pnpm run docs:install      # re-installs Mintlify deps if `dev` fails
+pnpm run docs:check        # validates broken links across the site
 ```
 
 If you don't have the CLI yet:
@@ -42,7 +42,7 @@ the default branch.
 - `knowledge_base/` — concept docs / FAQ
 - `_snippets/` — reusable MDX fragments imported via `<Snippet>` component
 - `_snippets/env-vars-generated.mdx` — **auto-generated** from
-  `kodus-ai/.env.schema`. Don't edit by hand. Run `yarn env:apply` to
+  `kodus-ai/.env.schema`. Don't edit by hand. Run `pnpm run env:apply` to
   regenerate after schema changes.
 
 ## Internal engineering docs
@@ -52,6 +52,6 @@ Engineering plans, runbooks, and dev-only guides live in `docs-internal/`
 
 ## Troubleshooting
 
-- `mintlify dev` not running → `yarn docs:install` to re-install deps.
+- `mintlify dev` not running → `pnpm run docs:install` to re-install deps.
 - 404 on load → make sure `docs.json` is in the directory mintlify is
-  running from (the `yarn docs:dev` script handles this for you).
+  running from (the `pnpm run docs:dev` script handles this for you).

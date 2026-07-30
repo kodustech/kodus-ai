@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { PlatformType } from '@libs/core/domain/enums';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
@@ -8,11 +8,12 @@ import {
 } from '../interfaces/checks-adapter.interface';
 import { ChecksAdapterFactory } from './checks-adapter.factory';
 import {
+    KODY_CHECK_RUN_NAME,
     PipelineChecksService,
     checkStageMap,
 } from './pipeline-checks.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: jest.fn().mockReturnValue({
         warn: jest.fn(),
         error: jest.fn(),
@@ -41,6 +42,7 @@ describe('PipelineChecksService', () => {
         checksAdapter = {
             createCheckRun: jest.fn(),
             updateCheckRun: jest.fn(),
+            findCheckRun: jest.fn().mockResolvedValue(null),
         } as any;
 
         checksAdapterFactory = {
@@ -84,12 +86,58 @@ describe('PipelineChecksService', () => {
                 repository: { owner: 'owner', name: 'repo' },
                 headSha: 'test-sha',
                 status: CheckStatus.IN_PROGRESS,
-                name: checkStageMap[stageName].name,
+                name: KODY_CHECK_RUN_NAME,
                 output: {
                     title: checkStageMap[stageName].title,
                     summary: checkStageMap[stageName].summary,
                 },
             });
+            expect(mockObserverContext.checkRunId).toBe('new-check-id');
+        });
+
+        it('should reuse an existing check run for the same commit instead of creating a new one', async () => {
+            const stageName = '_pipelineStart';
+            checksAdapter.findCheckRun.mockResolvedValue('existing-check-id');
+            checksAdapter.updateCheckRun.mockResolvedValue(true);
+
+            await service.startCheck(
+                mockObserverContext,
+                mockContext,
+                stageName,
+            );
+
+            expect(checksAdapter.findCheckRun).toHaveBeenCalledWith({
+                organizationAndTeamData: mockContext.organizationAndTeamData,
+                repository: { owner: 'owner', name: 'repo' },
+                headSha: 'test-sha',
+                name: KODY_CHECK_RUN_NAME,
+            });
+            expect(checksAdapter.updateCheckRun).toHaveBeenCalledWith({
+                checkRunId: 'existing-check-id',
+                organizationAndTeamData: mockContext.organizationAndTeamData,
+                repository: { owner: 'owner', name: 'repo' },
+                status: CheckStatus.IN_PROGRESS,
+                output: {
+                    title: checkStageMap[stageName].title,
+                    summary: checkStageMap[stageName].summary,
+                },
+            });
+            expect(checksAdapter.createCheckRun).not.toHaveBeenCalled();
+            expect(mockObserverContext.checkRunId).toBe('existing-check-id');
+        });
+
+        it('should fall back to creating a check run when reusing fails', async () => {
+            checksAdapter.findCheckRun.mockResolvedValue('existing-check-id');
+            checksAdapter.updateCheckRun.mockResolvedValue(false);
+            checksAdapter.createCheckRun.mockResolvedValue('new-check-id');
+
+            await service.startCheck(
+                mockObserverContext,
+                mockContext,
+                '_pipelineStart',
+            );
+
+            expect(checksAdapter.createCheckRun).toHaveBeenCalled();
             expect(mockObserverContext.checkRunId).toBe('new-check-id');
         });
 

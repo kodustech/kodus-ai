@@ -1,0 +1,23 @@
+[
+    {
+        "id": "discourse-email-validation-3bugs",
+        "source": "claude-sonnet-5 reasoning-only submitResult (finder-recall eval)",
+        "prose": "Traced UsersController#create: user.valid? is called explicitly (line 317) then user.save (line 321) re-runs validations. The new EmailValidator.validate_each calls BlockedEmail.should_block? (lib/validators/email_validator.rb:13-15) which increments match_count and saves — so it fires twice per signup, double-counting the stat. Also BlockedEmail.should_block? does a read-modify-write on match_count with no locking (app/models/blocked_email.rb:11-19) — a lost-update race under concurrent signups. Third: the email lookup is case-sensitive, so blocking spam@example.com is bypassed by Spam@Example.com.",
+        "expectMinFindings": 2,
+        "expectFilesInclude": ["email_validator.rb", "blocked_email.rb"]
+    },
+    {
+        "id": "grafana-webassets-toctou",
+        "source": "claude-sonnet-5 reasoning-only submitResult (finder-recall eval)",
+        "prose": "Traced GetWebAssets in pkg/api/webassets/webassets.go. The diff guards entryPointAssetsCache with an RWMutex but uses a check-then-lock pattern: RLock/read/RUnlock, return if non-Dev and populated, else Lock and unconditionally reload. Between RUnlock (line 43) and Lock (line 48), multiple goroutines can observe ret==nil and all proceed, then the code never re-checks entryPointAssetsCache after acquiring the write lock (lines 40-49), so each redundantly re-runs readWebAssetsFromFile/readWebAssetsFromCDN (disk/network I/O) instead of returning the cache the first goroutine already populated. Missing double-checked locking.",
+        "expectMinFindings": 1,
+        "expectFilesInclude": ["webassets.go"]
+    },
+    {
+        "id": "sentry-paginator-floor-ceil",
+        "source": "claude-sonnet-5 reasoning-only submitResult (finder-recall eval)",
+        "prose": "Traced the new OptimizedCursorPaginator in paginator.py and its wiring into organization_auditlogs.py. Bug lens: get_item_key applies math.floor/math.ceil directly to the value used for the cursor, which for negative or fractional timestamps shifts the boundary and can drop or duplicate rows at the page edge. The endpoint organization_auditlogs.py passes the raw value without normalization.",
+        "expectMinFindings": 1,
+        "expectFilesInclude": ["paginator.py"]
+    }
+]

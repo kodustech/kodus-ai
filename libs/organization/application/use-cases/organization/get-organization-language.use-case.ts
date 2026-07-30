@@ -11,7 +11,7 @@ import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 @Injectable()
 export class GetOrganizationLanguageUseCase implements IUseCase {

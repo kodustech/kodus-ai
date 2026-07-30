@@ -41,12 +41,22 @@ import {
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
+import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import {
+    attachClassification,
+    classifyLLMError,
+} from '@libs/llm/error-classifier';
+import { tracedGenerateText } from '@libs/llm/llm-call';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
 import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils/langchainCommon/prompts/repeatedCodeReviewSuggestionClustering';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
@@ -73,6 +83,77 @@ export class CommentManagerService implements ICommentManagerService {
         private readonly codeManagementService: CodeManagementService,
     ) {
         this.llmResponseProcessor = new LLMResponseProcessor();
+    }
+
+    /**
+     * Run a one-shot text prompt for the PR summary through the v5 (Vercel AI
+     * SDK) path so the user's BYOK model — including Claude-on-Vertex — is
+     * honored. The legacy v2 langchain path (PromptRunnerService) only spoke
+     * Gemini on Vertex, so a Claude-on-Vertex BYOK crashed the summary step
+     * before suggestions could be posted. Defaults to kimi-k2.7-code (Moonshot)
+     * when no BYOK is configured (cloud/trial default).
+     */
+    private async runSummaryPromptV5(params: {
+        byokConfig: BYOKConfig | null;
+        systemPrompt: string;
+        userPrompt: string;
+        runName: string;
+        spanName: string;
+        attrs: Record<string, unknown>;
+        metadata?: {
+            organizationId?: string;
+            teamId?: string;
+            pullRequestId?: number;
+        };
+    }): Promise<string> {
+        const {
+            byokConfig,
+            systemPrompt,
+            userPrompt,
+            runName,
+            spanName,
+            attrs,
+            metadata,
+        } = params;
+
+        // This is an AI SDK call (tracedGenerateText), so use runAiSdkLLMInSpan —
+        // it reads token usage from result.usage. runLLMInSpan is the
+        // LangChain-callback path (TokenTrackingHandler) and can't see AI SDK
+        // usage, which is why summary spans were recorded with 0 tokens.
+        const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
+            spanName,
+            runName,
+            model: byokConfig?.main?.model ?? 'kimi-k2.7-code',
+            attrs,
+            exec: async () => {
+                const model = byokToVercelModel(
+                    byokConfig ?? undefined,
+                    'main',
+                    {},
+                    'kimi-k2.7-code',
+                );
+                // Only pin temperature when the BYOK config sets one. Forcing 0
+                // broke models that reject a non-default temperature — Moonshot's
+                // kimi-k2.7-code rejects anything but 1 (HTTP 400), so the summary
+                // silently failed for kimi users while reviews kept working. The
+                // finder omits temperature for the same reason (finder.agent.ts),
+                // letting the provider default apply.
+                const configuredTemperature = byokConfig?.main?.temperature;
+                return await tracedGenerateText({
+                    model: model as any,
+                    system: systemPrompt,
+                    prompt: userPrompt,
+                    ...(configuredTemperature !== undefined
+                        ? { temperature: configuredTemperature }
+                        : {}),
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry(runName, metadata),
+                    ),
+                });
+            },
+        });
+
+        return (result?.text as string) ?? '';
     }
 
     async generateSummaryPR(
@@ -108,6 +189,23 @@ export class CommentManagerService implements ICommentManagerService {
                 await this.permissionValidationService.getBYOKConfig(
                     organizationAndTeamData,
                 );
+        }
+
+        // Resolve the org's BYOK when the caller didn't pass one (the review
+        // flow passes codeReviewConfig.byokConfig, which can be null even when
+        // the org has BYOK). Without this, the summary falls to the internal
+        // default provider — which hard-fails when that provider is blocked
+        // (e.g. "project denied access") — while the review agents, which
+        // resolve BYOK themselves, keep working. Fetch the same BYOK they use.
+        if (!byokConfigValue) {
+            try {
+                byokConfigValue =
+                    (await this.permissionValidationService.getBYOKConfig(
+                        organizationAndTeamData,
+                    )) ?? null;
+            } catch {
+                byokConfigValue = null;
+            }
         }
 
         const maxRetries = 2;
@@ -210,50 +308,23 @@ export class CommentManagerService implements ICommentManagerService {
                     }
                 }
 
-                const baseContext = {
-                    changedFiles,
-                    pullRequest,
-                    repository,
-                    summaryConfig,
-                    languageResultPrompt,
-                    updatedPR,
-                };
-
                 // For REPLACE on commit runs, the caller now provides the full PR
                 // diff (base...head), so the LLM generates a fresh summary from
                 // scratch — no need to inject the previous summary as context.
 
-                const fallbackProvider = LLMModelProvider.OPENAI_GPT_4O;
-
-                const promptRunner = new BYOKPromptRunnerService(
-                    this.promptRunnerService,
-                    LLMModelProvider.GEMINI_2_5_FLASH,
-                    fallbackProvider,
-                    byokConfigValue,
-                );
-
                 const runName = 'generateSummaryPR';
                 const spanName = `${CommentManagerService.name}::${runName}`;
                 const spanAttrs = {
-                    type: promptRunner.executeMode,
+                    type: byokConfigValue ? 'byok' : 'system',
                     organizationId: organizationAndTeamData?.organizationId,
                     prNumber: pullRequest?.number,
                     repositoryId: repository?.id,
                 };
 
-                const llmMetadata = {
+                const summaryMeta = {
                     organizationId: organizationAndTeamData?.organizationId,
                     teamId: organizationAndTeamData?.teamId,
                     pullRequestId: pullRequest?.number,
-                    repositoryId: repository?.id,
-                    provider:
-                        byokConfigValue?.main?.provider ||
-                        LLMModelProvider.GEMINI_2_5_FLASH,
-                    fallbackProvider:
-                        byokConfigValue?.fallback?.provider || fallbackProvider,
-                    model: byokConfigValue?.main?.model,
-                    fallbackModel: byokConfigValue?.fallback?.model,
-                    runName,
                 };
 
                 // --- Chunk changedFiles if maxInputTokens is configured ---
@@ -287,35 +358,15 @@ export class CommentManagerService implements ICommentManagerService {
                     const userPrompt =
                         `<changedFilesContext>${JSON.stringify(fileChunks[0]) || 'No files changed'}</changedFilesContext>`;
 
-                    const llmResult =
-                        await this.observabilityService.runLLMInSpan<string>({
-                            spanName,
-                            runName,
-                            attrs: spanAttrs,
-                            byokConfig: byokConfigValue,
-                            exec: async (callbacks) => {
-                                return await promptRunner
-                                    .builder()
-                                    .setParser(ParserType.STRING)
-                                    .setLLMJsonMode(false)
-                                    .setPayload(baseContext)
-                                    .addPrompt({
-                                        prompt: promptBase,
-                                        role: PromptRole.SYSTEM,
-                                    })
-                                    .addPrompt({
-                                        prompt: userPrompt,
-                                        role: PromptRole.USER,
-                                    })
-                                    .addMetadata(llmMetadata)
-                                    .addCallbacks(callbacks)
-                                    .setRunName(runName)
-                                    .setTemperature(0)
-                                    .execute();
-                            },
-                        });
-
-                    result = llmResult.result;
+                    result = await this.runSummaryPromptV5({
+                        byokConfig: byokConfigValue,
+                        systemPrompt: promptBase,
+                        userPrompt,
+                        runName,
+                        spanName,
+                        attrs: spanAttrs,
+                        metadata: summaryMeta,
+                    });
                 } else {
                     // Multiple chunks (2–4) — generate partial summaries then consolidate
                     this.logger.log({
@@ -329,58 +380,58 @@ export class CommentManagerService implements ICommentManagerService {
                         },
                     });
 
-                    const partialSummaries: string[] = [];
+                    // Chunk summaries are independent (each summarizes a
+                    // distinct subset of files), so run them concurrently.
+                    // allSettled (not all) so a single chunk failing — e.g. a
+                    // transient LLM / rate-limit error, more likely now that the
+                    // calls run in parallel — doesn't discard the summaries that
+                    // did succeed; the empty-result guard below handles the
+                    // all-failed case. Order is preserved by index. Chunk count
+                    // is small (2–4).
+                    const chunkResults = await Promise.allSettled(
+                        fileChunks.map((chunk, i) => {
+                            const chunkUserPrompt =
+                                `<changedFilesContext>${JSON.stringify(chunk)}</changedFilesContext>`;
 
-                    for (let i = 0; i < fileChunks.length; i++) {
-                        const chunkUserPrompt =
-                            `<changedFilesContext>${JSON.stringify(fileChunks[i])}</changedFilesContext>`;
+                            const chunkRunName = `${runName}_chunk_${i + 1}`;
+                            const chunkSpanName = `${CommentManagerService.name}::${chunkRunName}`;
 
-                        const chunkRunName = `${runName}_chunk_${i + 1}`;
-                        const chunkSpanName = `${CommentManagerService.name}::${chunkRunName}`;
-
-                        const chunkResult =
-                            await this.observabilityService.runLLMInSpan<string>(
-                                {
-                                    spanName: chunkSpanName,
-                                    runName: chunkRunName,
-                                    attrs: {
-                                        ...spanAttrs,
-                                        chunkIndex: i,
-                                        totalChunks: fileChunks.length,
-                                    },
-                                    byokConfig: byokConfigValue,
-                                    exec: async (callbacks) => {
-                                        return await promptRunner
-                                            .builder()
-                                            .setParser(ParserType.STRING)
-                                            .setLLMJsonMode(false)
-                                            .setPayload(baseContext)
-                                            .addPrompt({
-                                                prompt:
-                                                    promptBase +
-                                                    `\n\n**Note**: This is chunk ${i + 1} of ${fileChunks.length}. Generate a summary for these files only.`,
-                                                role: PromptRole.SYSTEM,
-                                            })
-                                            .addPrompt({
-                                                prompt: chunkUserPrompt,
-                                                role: PromptRole.USER,
-                                            })
-                                            .addMetadata({
-                                                ...llmMetadata,
-                                                runName: chunkRunName,
-                                            })
-                                            .addCallbacks(callbacks)
-                                            .setRunName(chunkRunName)
-                                            .setTemperature(0)
-                                            .execute();
-                                    },
+                            return this.runSummaryPromptV5({
+                                byokConfig: byokConfigValue,
+                                systemPrompt:
+                                    promptBase +
+                                    `\n\n**Note**: This is chunk ${i + 1} of ${fileChunks.length}. Generate a summary for these files only.`,
+                                userPrompt: chunkUserPrompt,
+                                runName: chunkRunName,
+                                spanName: chunkSpanName,
+                                attrs: {
+                                    ...spanAttrs,
+                                    chunkIndex: i,
+                                    totalChunks: fileChunks.length,
                                 },
-                            );
+                                metadata: summaryMeta,
+                            });
+                        }),
+                    );
 
-                        if (chunkResult.result) {
-                            partialSummaries.push(chunkResult.result);
+                    const partialSummaries: string[] = [];
+                    chunkResults.forEach((chunkResult, i) => {
+                        if (chunkResult.status === 'fulfilled') {
+                            if (chunkResult.value) {
+                                partialSummaries.push(chunkResult.value);
+                            }
+                        } else {
+                            this.logger.warn({
+                                message: `Chunk ${i + 1}/${fileChunks.length} failed for generateSummaryPR: PR#${pullRequest?.number}`,
+                                context: CommentManagerService.name,
+                                error: chunkResult.reason?.message,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    pullRequestNumber: pullRequest?.number,
+                                },
+                            });
                         }
-                    }
+                    });
 
                     if (partialSummaries.length === 0) {
                         this.logger.error({
@@ -408,38 +459,15 @@ You must always respond in ${languageResultPrompt}.`;
                         )
                         .join('\n\n');
 
-                    const consolidationResult =
-                        await this.observabilityService.runLLMInSpan<string>({
-                            spanName: consolidationSpanName,
-                            runName: consolidationRunName,
-                            attrs: spanAttrs,
-                            byokConfig: byokConfigValue,
-                            exec: async (callbacks) => {
-                                return await promptRunner
-                                    .builder()
-                                    .setParser(ParserType.STRING)
-                                    .setLLMJsonMode(false)
-                                    .setPayload(baseContext)
-                                    .addPrompt({
-                                        prompt: consolidationPrompt,
-                                        role: PromptRole.SYSTEM,
-                                    })
-                                    .addPrompt({
-                                        prompt: consolidationUserPrompt,
-                                        role: PromptRole.USER,
-                                    })
-                                    .addMetadata({
-                                        ...llmMetadata,
-                                        runName: consolidationRunName,
-                                    })
-                                    .addCallbacks(callbacks)
-                                    .setRunName(consolidationRunName)
-                                    .setTemperature(0)
-                                    .execute();
-                            },
-                        });
-
-                    result = consolidationResult.result;
+                    result = await this.runSummaryPromptV5({
+                        byokConfig: byokConfigValue,
+                        systemPrompt: consolidationPrompt,
+                        userPrompt: consolidationUserPrompt,
+                        runName: consolidationRunName,
+                        spanName: consolidationSpanName,
+                        attrs: spanAttrs,
+                        metadata: summaryMeta,
+                    });
                 }
 
                 if (!result) {
@@ -588,7 +616,23 @@ You must always respond in ${languageResultPrompt}.`;
                         error,
                         metadata: { organizationAndTeamData, pullRequest },
                     });
-                    return null;
+                    // Throw, don't `return null`. `null` is the return value for
+                    // the DELIBERATE skips above (summary disabled, license
+                    // denied, diff too large), so returning it here made a dead
+                    // provider indistinguishable from a config decision — the
+                    // caller recorded no pipeline error and the review was
+                    // auto-approved as if the code were clean (#1568).
+                    throw attachClassification(
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                        classifyLLMError(
+                            error,
+                            byokConfigValue?.main?.provider as
+                                | string
+                                | undefined,
+                        ),
+                    );
                 }
             }
         }
@@ -796,6 +840,7 @@ You must always respond in ${languageResultPrompt}.`;
         codeReviewConfig?: CodeReviewConfig,
         language?: string,
         platformType?: PlatformType,
+        lineComments?: CommentResult[],
     ): Promise<string> {
         const placeholderContext = await this.getTemplateContext(
             changedFiles,
@@ -804,6 +849,7 @@ You must always respond in ${languageResultPrompt}.`;
             codeReviewConfig,
             language,
             platformType,
+            lineComments,
         );
 
         const processedBody = await this.messageProcessor.processTemplate(
@@ -829,6 +875,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -848,6 +895,7 @@ You must always respond in ${languageResultPrompt}.`;
                     reviewFailed,
                     reviewErrorMessage,
                     reviewHasPartialErrors,
+                    reviewErrorCustomMessage,
                 );
             } else if (reviewHasPartialErrors) {
                 // Custom end-review template is rendering — the default
@@ -918,6 +966,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -928,6 +977,7 @@ You must always respond in ${languageResultPrompt}.`;
             reviewFailed,
             reviewErrorMessage,
             reviewHasPartialErrors,
+            reviewErrorCustomMessage,
         );
 
         commentBody = this.sanitizeBitbucketMarkdown(commentBody, platformType);
@@ -1491,6 +1541,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<string> {
         try {
             const language =
@@ -1540,6 +1591,21 @@ You must always respond in ${languageResultPrompt}.`;
                         /\{\{errorMessage\}\}/g,
                         errorMessage,
                     );
+
+                    // Optional team-authored note appended below Kody's default
+                    // error comment (issue #1452). The technical reason above is
+                    // always preserved; this is only the org-specific next step
+                    // (e.g. "reach out to #devops"). Single newlines collapse in
+                    // Markdown, so we convert each to a hard break (two trailing
+                    // spaces) — what the author typed is what renders in the PR.
+                    const customError = reviewErrorCustomMessage?.trim();
+                    if (customError) {
+                        const withLineBreaks = customError.replace(
+                            /\n/g,
+                            '  \n',
+                        );
+                        resultText = `${resultText}\n\n${withLineBreaks}`;
+                    }
                 }
             }
 
@@ -2369,6 +2435,7 @@ ${reviewOptions}
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<void> {
         let commentBody: string;
 
@@ -2418,6 +2485,7 @@ ${reviewOptions}
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
+                reviewErrorCustomMessage,
             );
         }
 
@@ -2455,6 +2523,7 @@ ${reviewOptions}
         codeReviewConfig?: CodeReviewConfig,
         language?: string,
         platformType?: PlatformType,
+        lineComments?: CommentResult[],
     ): Promise<PlaceholderContext> {
         return {
             changedFiles,
@@ -2463,6 +2532,7 @@ ${reviewOptions}
             codeReviewConfig,
             language,
             platformType,
+            lineComments,
         };
     }
 

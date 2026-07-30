@@ -8,6 +8,20 @@ const PR_KEY_REGEX: RegExp =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:[^:]+:[^:]+(:[^:]+)?$/i;
 
 /**
+ * Cleanup status for local sandbox directories.
+ * Tracks the lifecycle of filesystem cleanup after a lease is released.
+ */
+export const SANDBOX_LEASE_CLEANUP_STATUS = {
+    PENDING: 'pending',
+    IN_PROGRESS: 'in_progress',
+    COMPLETED: 'completed',
+    FAILED: 'failed',
+} as const;
+
+export type SandboxLeaseCleanupStatus =
+    (typeof SANDBOX_LEASE_CLEANUP_STATUS)[keyof typeof SANDBOX_LEASE_CLEANUP_STATUS];
+
+/**
  * Mongoose schema for the sandbox_leases collection.
  *
  * Each document represents a coordination lease for a single PR (keyed by prKey).
@@ -84,6 +98,31 @@ export class SandboxLeaseModel extends CoreDocument {
      */
     @Prop({ type: Date, required: false })
     killAt?: Date;
+
+    @Prop({
+        type: String,
+        required: false,
+        enum: Object.values(SANDBOX_LEASE_CLEANUP_STATUS),
+    })
+    cleanupStatus?: SandboxLeaseCleanupStatus;
+
+    @Prop({ type: Number, required: false, default: 0 })
+    cleanupAttempts?: number;
+
+    @Prop({ type: Date, required: false })
+    cleanupRetryAt?: Date;
+
+    @Prop({ type: String, required: false })
+    cleanupError?: string;
+
+    /**
+     * Timestamp when cleanup was claimed (set by claimCleanup).
+     * Used by the reaper to detect stale in_progress claims left behind
+     * by a crashed worker. After a timeout (e.g. 5 minutes), the reaper
+     * resets the status to FAILED so the next tick can retry.
+     */
+    @Prop({ type: Date, required: false })
+    cleanupStartedAt?: Date;
 }
 
 // Explicit type annotation: with the killAt field added the inferred type

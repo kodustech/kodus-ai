@@ -25,7 +25,7 @@
  */
 
 import { runWithTimeout } from './run-with-timeout';
-import { composeAbortSignal } from '../../../code-review/infrastructure/agents/llm/parent-signal-compose';
+import { composeAbortSignal } from '@libs/common/utils/parent-signal-compose';
 
 // ─── Layer mocks (mimics the real chain, no DI) ────────────────────────
 

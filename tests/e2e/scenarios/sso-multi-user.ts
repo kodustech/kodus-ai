@@ -92,7 +92,7 @@ export const ssoMultiUser: Scenario = {
             droplet: "sso-e2e",
             subFlowsPassed: passLines.length,
             evidence: passLines.map((l) => l.trim()),
-            note: "Droplet kept alive for follow-up debugging. Tear down with `yarn sso-e2e:droplet:destroy --name sso-e2e`.",
+            note: "Droplet kept alive for follow-up debugging. Tear down with `pnpm run sso-e2e:droplet:destroy --name sso-e2e`.",
         };
     },
 };

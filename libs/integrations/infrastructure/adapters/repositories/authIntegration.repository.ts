@@ -236,6 +236,9 @@ export class AuthIntegrationRepository implements IAuthIntegrationRepository {
             await this.authIntegrationRepository.delete(uuid);
         } catch (error) {
             console.log(error);
+            // Surface the failure so callers don't report a successful
+            // disconnect while the auth integration row is still in place.
+            throw error;
         }
     }
 

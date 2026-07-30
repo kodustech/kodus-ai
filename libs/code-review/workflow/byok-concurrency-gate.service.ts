@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';

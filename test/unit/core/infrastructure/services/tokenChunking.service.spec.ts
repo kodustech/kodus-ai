@@ -2,7 +2,7 @@ import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenCh
 import { LLMModelProvider, MODEL_STRATEGIES } from '@kodus/kodus-common/llm';
 
 // Mock logger
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

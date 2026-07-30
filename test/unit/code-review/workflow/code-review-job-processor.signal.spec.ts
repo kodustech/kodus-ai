@@ -20,7 +20,7 @@ import { ByokConcurrencyGateService } from '@libs/code-review/workflow/byok-conc
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

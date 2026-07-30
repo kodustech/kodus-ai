@@ -1,11 +1,4 @@
-jest.mock('@kodus/flow', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        info: jest.fn(),
-    }),
+jest.mock('@libs/common/utils/thread-id', () => ({
     createThreadId: jest.fn(() => 'vbl-thread-id'),
 }));
 
@@ -26,16 +19,21 @@ import { WaitForCliReviewJobUseCase } from '@libs/cli-review/application/use-cas
 import { SubmitCliSessionCaptureUseCase } from '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case';
 import { AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/authenticated-rate-limiter.service.contract';
 import { TRIAL_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/trial-rate-limiter.service.contract';
+import { GITHUB_PUBLIC_PR_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/github-public-pr.service.contract';
 import { AUTH_SERVICE_TOKEN } from '@libs/identity/domain/auth/contracts/auth.service.contracts';
 import { INTEGRATION_CONFIG_SERVICE_TOKEN } from '@libs/integrations/domain/integrationConfigs/contracts/integration-config.service.contracts';
 import { CLI_DEVICE_SERVICE_TOKEN } from '@libs/organization/domain/cli-device/contracts/cli-device.service.contract';
 import { TEAM_CLI_KEY_SERVICE_TOKEN } from '@libs/organization/domain/team-cli-key/contracts/team-cli-key.service.contract';
 import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/businessRulesValidationAgent';
+import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { TriggerBusinessValidationUseCase } from '@libs/platform/application/use-cases/codeManagement/trigger-business-validation.use-case';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { IngestSessionEventUseCase } from '@libs/cli-review/application/use-cases/ingest-session-event.use-case';
+import { PublicPrReviewUseCase } from '@libs/cli-review/application/use-cases/public-pr-review.use-case';
+import { ListFeaturedPublicReviewsUseCase } from '@libs/cli-review/application/use-cases/list-featured-public-reviews.use-case';
+import { GetFeaturedPublicReviewUseCase } from '@libs/cli-review/application/use-cases/get-featured-public-review.use-case';
+import { ValidateCliKeyUseCase } from '@libs/cli-review/application/use-cases/validate-cli-key.use-case';
 
 describe('CLI business-validation integration', () => {
     let controller: CliReviewController;
@@ -97,6 +95,29 @@ describe('CLI business-validation integration', () => {
                     provide: AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN,
                     useValue: mockRateLimiter,
                 },
+                // Public-demo deps — only the trial endpoints touch
+                // these; mocked so Nest can resolve the constructor.
+                {
+                    provide: GITHUB_PUBLIC_PR_SERVICE_TOKEN,
+                    useValue: { fetch: jest.fn() },
+                },
+                {
+                    provide: PublicPrReviewUseCase,
+                    useValue: { execute: jest.fn() },
+                },
+                {
+                    provide: ListFeaturedPublicReviewsUseCase,
+                    useValue: {
+                        execute: jest.fn().mockResolvedValue({ items: [] }),
+                    },
+                },
+                {
+                    provide: GetFeaturedPublicReviewUseCase,
+                    useValue: {
+                        execute: jest.fn().mockResolvedValue(null),
+                    },
+                },
+                ValidateCliKeyUseCase,
                 {
                     provide: TEAM_CLI_KEY_SERVICE_TOKEN,
                     useValue: mockTeamCliKeyService,

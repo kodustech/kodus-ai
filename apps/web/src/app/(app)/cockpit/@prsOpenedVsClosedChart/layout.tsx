@@ -17,6 +17,7 @@ export default function Layout({ children }: React.PropsWithChildren) {
     return (
         <div ref={ref}>
             <Card
+                color="lv1"
                 style={{
                     ...(isExpanded && {
                         // top: rect.top,

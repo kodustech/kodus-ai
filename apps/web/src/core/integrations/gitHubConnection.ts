@@ -15,6 +15,12 @@ export class GitHubConnection implements IIntegrationConnector {
             );
             return;
         }
-        window.location.href = this.cfg.githubInstallUrl || "";
+        if (!this.cfg.githubInstallUrl) {
+            console.warn(
+                "[GitHubConnection] WEB_GITHUB_INSTALL_URL is not configured — OAuth redirect cannot proceed.",
+            );
+            return;
+        }
+        window.location.href = this.cfg.githubInstallUrl;
     }
 }

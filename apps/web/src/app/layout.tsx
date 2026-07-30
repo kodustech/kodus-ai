@@ -88,7 +88,7 @@ export default function RootLayout({ children }: React.PropsWithChildren) {
 
     return (
         <html lang="en" className="dark" style={{ colorScheme: "dark" }}>
-            <GoogleTagManager gtmId="GTM-KN2J57G" />
+            <GoogleTagManager gtmId="GTM-T2TMHK7K" />
 
             <body
                 className={cn(

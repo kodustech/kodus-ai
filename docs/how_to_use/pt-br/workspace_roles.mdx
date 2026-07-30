@@ -38,11 +38,11 @@ Cada função fornece diferentes níveis de acesso e capacidades dentro do works
 
 ### Repository Admin (Admin de Repositório)
 
-**Acesso de gerenciamento de repositório** focado no gerenciamento de configurações de revisão de código para os repositórios que possui, com acesso completo a issues, cockpit e plugins.
+**Acesso de gerenciamento de repositório**. Vê todas as configurações, pull requests, issues, cockpit e plugins de toda a organização (somente visualização) e pode editar configurações de revisão de código e Kody Rules para os repositórios atribuídos a ele.
 
 ### Contributor (Colaborador)
 
-**Acesso básico** para membros da equipe que precisam visualizar configurações de repositórios aos quais estão atribuídos. Limitado a acesso somente de visualização para a maioria dos recursos.
+**Acesso somente de visualização** a toda a organização. Os Contributors podem visualizar configurações, Kody Rules, pull requests e issues em todos os repositórios — sem necessidade de atribuição a repositórios — mas não podem editar nada. Cockpit, uso de tokens, faturamento e gerenciamento de usuários permanecem exclusivos de administradores.
 
 ## Matriz de Permissões por Função
 
@@ -73,8 +73,8 @@ Habilite o auto-join para permitir que usuários com domínios de e-mail corresp
 **Como funciona:**
 - Usuários que se cadastram com o seu domínio de e-mail podem escolher entrar na sua organização
 - Eles devem confirmar o e-mail após escolher entrar
-- Todos os usuários de auto-join entram com a função de **Contributor** sem acesso a repositórios
-- Como Owner, você precisa atribuí-los a repositórios e ajustar sua função, se necessário
+- Todos os usuários de auto-join entram com a função de **Contributor** (acesso somente de visualização a toda a organização)
+- Como Owner, ajuste sua função se eles precisarem de permissões de edição
 
 ### Alterando Funções de Membros
 
@@ -124,8 +124,7 @@ Habilite o auto-join para permitir que usuários com domínios de e-mail corresp
 
   <Accordion title="Um membro não consegue acessar os recursos do cockpit">
     **Soluções:**
-    - Confirme que o membro tem a função Repository Admin ou Owner
-    - Verifique se o membro está atribuído aos repositórios que deseja acessar
+    - Confirme que o membro tem a função Repository Admin ou Owner (o cockpit não é visível para Contributors ou Billing Managers)
     - Verifique se a atribuição de função do membro está correta
   </Accordion>
 

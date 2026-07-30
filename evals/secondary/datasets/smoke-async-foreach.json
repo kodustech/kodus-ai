@@ -1,0 +1,41 @@
+{
+  "prId": "smoke-async-foreach",
+  "goldenComments": [
+    "forEach with async callbacks creates fire-and-forget promises that are not awaited, so calendar deletions can fail silently."
+  ],
+  "findings": [
+    {
+      "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "relevantLinesStart": 460,
+      "relevantLinesEnd": 470,
+      "severity": "critical",
+      "label": "bug",
+      "oneSentenceSummary": "forEach with async callback is not awaited",
+      "suggestionContent": "WHAT: Array.prototype.forEach is used with an async callback for calendar deletions. WHY: Promises run detached; unhandled rejections and incomplete cleanup. HOW: Replace with for...of or Promise.all(map).",
+      "existingCode": "attendees.forEach(async (a) => { await deleteCalendar(a); });",
+      "improvedCode": "for (const a of attendees) { await deleteCalendar(a); }"
+    },
+    {
+      "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "relevantLinesStart": 462,
+      "relevantLinesEnd": 468,
+      "severity": "high",
+      "label": "bug",
+      "oneSentenceSummary": "Async forEach fire-and-forget on cancel path",
+      "suggestionContent": "WHAT: Calendar deletion uses forEach(async ...). WHY: Outer function returns before deletions finish. HOW: Use await Promise.all(attendees.map(async a => deleteCalendar(a))).",
+      "existingCode": "attendees.forEach(async (a) => { await deleteCalendar(a); });",
+      "improvedCode": "await Promise.all(attendees.map(async (a) => deleteCalendar(a)));"
+    },
+    {
+      "relevantFile": "packages/features/bookings/lib/handleCancelBooking.ts",
+      "relevantLinesStart": 480,
+      "relevantLinesEnd": 485,
+      "severity": "low",
+      "label": "bug",
+      "oneSentenceSummary": "Missing await on sendCancelEmail",
+      "suggestionContent": "WHAT: sendCancelEmail is called without await. WHY: Email failures are swallowed. HOW: await sendCancelEmail(booking).",
+      "existingCode": "sendCancelEmail(booking);",
+      "improvedCode": "await sendCancelEmail(booking);"
+    }
+  ]
+}

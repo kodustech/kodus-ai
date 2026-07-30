@@ -37,7 +37,7 @@ import { IssueStatus } from '@libs/core/infrastructure/config/types/general/issu
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 import { IssueCreationConfig } from '@libs/issues/domain/entities/issue-creation-config.entity';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     KODY_ISSUES_ANALYSIS_SERVICE_TOKEN,
     KodyIssuesAnalysisService,

@@ -3,6 +3,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import {
     FormattedGlobalCodeReviewConfig,
     IFormattedConfigProperty,
+    RepositoryCodeReviewConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import { UpdateCodeReviewParameterRepositoriesUseCase } from './update-code-review-parameter-repositories-use-case';
 import {

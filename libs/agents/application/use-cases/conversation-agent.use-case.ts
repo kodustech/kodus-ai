@@ -1,10 +1,19 @@
-import { Thread } from '@kodus/flow';
 import { Injectable } from '@nestjs/common';
 
-import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/kodus-flow/conversationAgent';
+import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/agents/conversationAgent';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
+
+/**
+ * Thread identifier passed through to the conversation agent. Structurally
+ * compatible with the legacy flow engine's `Thread` ({ id, metadata }) but
+ * typed locally so this use-case carries no flow-engine dependency.
+ */
+interface ConversationThread {
+    id?: unknown;
+    metadata?: Record<string, unknown>;
+}
 
 @Injectable()
 export class ConversationAgentUseCase implements IUseCase {
@@ -15,7 +24,7 @@ export class ConversationAgentUseCase implements IUseCase {
     async execute(context: {
         prompt: string;
         organizationAndTeamData?: OrganizationAndTeamData;
-        thread?: Thread;
+        thread?: ConversationThread;
         prepareContext?: any;
         sandbox?: SandboxInstance;
     }): Promise<any> {

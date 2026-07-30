@@ -29,11 +29,9 @@ import {
     CodeReviewAutomationLabelsResponseDto,
     CodeReviewConfigResponseDto,
     CodeReviewParameterResponseDto,
-    CodeReviewPresetResponseDto,
     ParametersStoredResponseDto,
 } from '../dtos/parameters-response.dto';
 
-import { ApplyCodeReviewPresetUseCase } from '@libs/code-review/application/use-cases/configuration/apply-code-review-preset.use-case';
 import { CentralizedConfigSyncUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-sync.use-case';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
@@ -72,7 +70,6 @@ import { CreateOrUpdateCodeReviewParameterDto } from '@libs/organization/dtos/cr
 import { DeleteRepositoryCodeReviewParameterDto } from '@libs/organization/dtos/delete-repository-code-review-parameter.dto';
 import { PreviewPrSummaryDto } from '@libs/organization/dtos/preview-pr-summary.dto';
 import { finished } from 'stream/promises';
-import { ApplyCodeReviewPresetDto } from '../dtos/apply-code-review-preset.dto';
 
 @ApiTags('Parameters')
 @ApiBearerAuth('jwt')
@@ -93,7 +90,6 @@ export class ParametersController {
         private readonly listCodeReviewAutomationLabelsWithStatusUseCase: ListCodeReviewAutomationLabelsWithStatusUseCase,
         private readonly getDefaultConfigUseCase: GetDefaultConfigUseCase,
         private readonly getCodeReviewParameterUseCase: GetCodeReviewParameterUseCase,
-        private readonly applyCodeReviewPresetUseCase: ApplyCodeReviewPresetUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
         private readonly centralizedConfigDownloadUseCase: CentralizedConfigDownloadUseCase,
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
@@ -290,26 +286,6 @@ export class ParametersController {
             },
             requestUser: toRequestUserContext(this.request?.user),
         });
-    }
-
-    @Post('/apply-code-review-preset')
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(
-        checkPermissions({
-            action: Action.Create,
-            resource: ResourceType.CodeReviewSettings,
-        }),
-    )
-    @ApiOperation({
-        summary: 'Apply code review preset',
-        description: 'Apply a preset configuration for a team.',
-    })
-    @ApiCreatedResponse({ type: CodeReviewPresetResponseDto })
-    public async applyCodeReviewPreset(
-        @Body()
-        body: ApplyCodeReviewPresetDto,
-    ) {
-        return await this.applyCodeReviewPresetUseCase.execute(body);
     }
 
     @Post('/update-code-review-parameter-repositories')

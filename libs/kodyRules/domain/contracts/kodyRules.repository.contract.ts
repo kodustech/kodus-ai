@@ -17,6 +17,9 @@ export interface IKodyRulesRepository {
     findById(uuid: string): Promise<IKodyRule | null>;
     findOne(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity | null>;
     find(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity[]>;
+    /** Projected list of org ids that have ≥1 rule — avoids loading every
+     *  org's full embedded rules array (used by the detector sweep). */
+    findOrganizationIdsWithRules(): Promise<string[]>;
     findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null>;
@@ -30,6 +33,23 @@ export interface IKodyRulesRepository {
         organizationId: string,
         status?: KodyRulesStatus,
     ): Promise<number>;
+
+    /**
+     * Counts rules per (repositoryId, directoryId) for an organization in a
+     * single aggregation. Replaces fetching every repo's full rules array
+     * client-side just to read a `.length` per card. `directoryId` is null
+     * for repository-level rules.
+     */
+    countRulesByRepository(
+        organizationId: string,
+        statuses: KodyRulesStatus[],
+    ): Promise<
+        Array<{
+            repositoryId: string;
+            directoryId: string | null;
+            count: number;
+        }>
+    >;
 
     update(
         uuid: string,

@@ -14,7 +14,7 @@ import {
     CodeSuggestion,
     FileChange,
 } from '@/core/infrastructure/config/types/general/codeReview.type';
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

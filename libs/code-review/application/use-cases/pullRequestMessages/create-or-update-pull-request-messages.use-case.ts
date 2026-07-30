@@ -33,7 +33,7 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { buildKodusConfigCentralizedMutationRequest } from '@libs/centralized-config/utils/kodus-config-centralized-pr.builder';
 
 @Injectable()
@@ -197,9 +197,12 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             directoryId: pullRequestMessages.directoryId,
             startReviewMessage: pullRequestMessages.startReviewMessage,
             endReviewMessage: pullRequestMessages.endReviewMessage,
+            errorReviewMessage: pullRequestMessages.errorReviewMessage,
             existingStartMessage:
                 existingPullRequestMessage?.startReviewMessage,
             existingEndMessage: existingPullRequestMessage?.endReviewMessage,
+            existingErrorMessage:
+                existingPullRequestMessage?.errorReviewMessage,
             globalSettings: pullRequestMessages.globalSettings,
             existingGlobalSettings: existingPullRequestMessage?.globalSettings,
             directoryPath:
@@ -249,6 +252,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             {
                 startReviewMessage: pullRequestMessages.startReviewMessage,
                 endReviewMessage: pullRequestMessages.endReviewMessage,
+                errorReviewMessage: pullRequestMessages.errorReviewMessage,
                 globalSettings: pullRequestMessages.globalSettings,
             },
         );
@@ -270,6 +274,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             customMessagesDelta &&
             (customMessagesDelta.startReviewMessage ||
                 customMessagesDelta.endReviewMessage ||
+                customMessagesDelta.errorReviewMessage ||
                 customMessagesDelta.globalSettings)
         ) {
             configFileContent.customMessages = customMessagesDelta;
@@ -284,6 +289,28 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                   )
                 : undefined;
 
+        let directoryFolders:
+            | Array<{ id?: string; name?: string; path: string }>
+            | undefined;
+        if (
+            pullRequestMessages.configLevel === ConfigLevel.DIRECTORY &&
+            pullRequestMessages.directoryId
+        ) {
+            const codeReviewParam = await this.parametersService.findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                { organizationId, teamId },
+            );
+            const repo = (
+                codeReviewParam?.configValue?.repositories ?? []
+            ).find((r) => r.id === pullRequestMessages.repositoryId);
+            const dir = (repo?.directories ?? []).find(
+                (d) => d.id === pullRequestMessages.directoryId,
+            );
+            if (dir?.folders && dir.folders.length > 0) {
+                directoryFolders = dir.folders;
+            }
+        }
+
         const pr =
             await this.centralizedConfigPrService.createMutationPullRequestIfEnabled(
                 buildKodusConfigCentralizedMutationRequest({
@@ -296,7 +323,10 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                         pullRequestMessages.configLevel === ConfigLevel.GLOBAL
                             ? undefined
                             : pullRequestMessages.repositoryId,
-                    directoryPath: directoryPath || undefined,
+                    directoryPath: directoryFolders
+                        ? undefined
+                        : directoryPath || undefined,
+                    folders: directoryFolders,
                     configFileContent:
                         Object.keys(configFileContent).length > 0
                             ? configFileContent
@@ -325,6 +355,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
     ): {
         startReviewMessage?: IPullRequestMessages['startReviewMessage'];
         endReviewMessage?: IPullRequestMessages['endReviewMessage'];
+        errorReviewMessage?: IPullRequestMessages['errorReviewMessage'];
         globalSettings?: Partial<
             NonNullable<IPullRequestMessages['globalSettings']>
         >;
@@ -332,6 +363,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         const delta: {
             startReviewMessage?: IPullRequestMessages['startReviewMessage'];
             endReviewMessage?: IPullRequestMessages['endReviewMessage'];
+            errorReviewMessage?: IPullRequestMessages['errorReviewMessage'];
             globalSettings?: Partial<
                 NonNullable<IPullRequestMessages['globalSettings']>
             >;
@@ -353,6 +385,15 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             )
         ) {
             delta.endReviewMessage = nextConfig.endReviewMessage;
+        }
+
+        if (
+            !this.areMessagesEqual(
+                nextConfig.errorReviewMessage,
+                parentConfig.errorReviewMessage,
+            )
+        ) {
+            delta.errorReviewMessage = nextConfig.errorReviewMessage;
         }
 
         const globalSettingsDelta: Partial<
@@ -557,6 +598,9 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
                 baseConfig.startReviewMessage,
             endReviewMessage:
                 overrideConfig.endReviewMessage || baseConfig.endReviewMessage,
+            errorReviewMessage:
+                overrideConfig.errorReviewMessage ||
+                baseConfig.errorReviewMessage,
             globalSettings: {
                 hideComments:
                     overrideConfig.globalSettings?.hideComments ??
@@ -574,6 +618,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         return {
             startReviewMessage: config.startReviewMessage,
             endReviewMessage: config.endReviewMessage,
+            errorReviewMessage: config.errorReviewMessage,
             globalSettings: config.globalSettings || {
                 hideComments: false,
                 suggestionCopyPrompt: true,
@@ -590,6 +635,7 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
         return {
             startReviewMessage: json?.startReviewMessage,
             endReviewMessage: json?.endReviewMessage,
+            errorReviewMessage: json?.errorReviewMessage,
             globalSettings: json?.globalSettings,
         };
     }
@@ -613,6 +659,16 @@ export class CreateOrUpdatePullRequestMessagesUseCase implements IUseCase {
             !this.areMessagesEqual(
                 config1.endReviewMessage,
                 config2.endReviewMessage,
+            )
+        ) {
+            return false;
+        }
+
+        // Compare errorReviewMessage
+        if (
+            !this.areMessagesEqual(
+                config1.errorReviewMessage,
+                config2.errorReviewMessage,
             )
         ) {
             return false;

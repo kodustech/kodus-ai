@@ -52,4 +52,22 @@ export interface IParametersRepository {
         configValue: IParameters<K>['configValue'],
         nextVersion: number,
     ): Promise<ParametersEntity<K> | undefined>;
+
+    /**
+     * Insert the first active version for (teamId, configKey) ONLY when none
+     * exists, then return whatever active row is present.
+     *
+     * Unlike createNewActiveVersion (which deactivates the current row and
+     * supersedes it), this NEVER replaces an existing active row. It relies on
+     * the partial unique index UQ_parameters_one_active_per_team_key with
+     * ON CONFLICT DO NOTHING, so a concurrent writer that already populated the
+     * config wins and our insert becomes a no-op. Use it for idempotent
+     * get-or-create / self-heal, where clobbering a populated config with an
+     * empty default would lose data.
+     */
+    createActiveVersionIfAbsent<K extends ParametersKey>(
+        configKey: K,
+        teamId: string,
+        configValue: IParameters<K>['configValue'],
+    ): Promise<ParametersEntity<K> | undefined>;
 }

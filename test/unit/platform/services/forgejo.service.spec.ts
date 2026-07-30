@@ -15,7 +15,7 @@ import { extractOwnerAndRepo } from '../../../../libs/common/utils/helpers';
 import { PullRequestState } from '../../../../libs/core/domain/enums';
 
 // Mock logger
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

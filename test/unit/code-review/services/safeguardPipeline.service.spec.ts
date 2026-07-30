@@ -1,4 +1,4 @@
-jest.mock('@kodus/flow', () => {
+jest.mock('@libs/core/log/logger', () => {
     const mockLogger = {
         log: jest.fn(),
         warn: jest.fn(),
@@ -18,7 +18,11 @@ import { SafeguardPipelineService } from '@/code-review/infrastructure/adapters/
 import { ObservabilityService } from '@/core/log/observability.service';
 import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { ISandboxProvider } from '@libs/sandbox/domain/contracts/sandbox.provider';
-import { __mockLogger as mockLogger } from '@kodus/flow';
+// __mockLogger is provided by the jest.mock factory above; pull it via
+// requireMock so tsc doesn't flag it as a missing export on the real module.
+const mockLogger = (
+    jest.requireMock('@libs/core/log/logger') as { __mockLogger: any }
+).__mockLogger;
 
 describe('SafeguardPipelineService', () => {
     let service: SafeguardPipelineService;

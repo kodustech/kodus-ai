@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 
 import { Inject, Injectable } from '@nestjs/common';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { AuthProvider } from '@libs/core/domain/enums/auth-provider.enum';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';

@@ -15,10 +15,18 @@ import {
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
-import { IPullRequests } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import {
+    authorMatchesExact,
+    isOpenPullRequest,
+    isUnresolvedDeliveredSuggestion,
+} from './utils/pull-request-metrics';
+import {
+    IPullRequests,
+    SuggestionCountsBySeverity,
+} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import {
@@ -87,6 +95,13 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             pullRequestNumber,
             teamId,
             authorPolicy = 'all',
+            status,
+            createdAtFrom,
+            createdAtTo,
+            severity,
+            category,
+            needsAttention,
+            author,
         } = query;
 
         if (!this.request.user?.organization?.uuid) {
@@ -166,7 +181,20 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             const initialSkip = (page - 1) * limit;
             let accumulatedExecutions = 0;
             let totalExecutions = 0;
+            // Distinct PRs matching the DB-level filters — captured from the same
+            // first batch that computes totalExecutions. Surfaced so the header
+            // shows an accurate PR count instead of the loaded-window estimate.
+            let distinctPrTotal = 0;
             let hasMoreExecutions = true;
+            // Keyset cursor for the intra-request loop. The page offset
+            // (initialSkip) still positions the first batch, but once the
+            // author-policy filter drops a batch this loop used to re-query with
+            // `skip: initialSkip + accumulatedExecutions` — an ever-deeper OFFSET
+            // that, under aggressive filtering, walked thousands of rows per
+            // request (the #1432 slowdown). After the first batch we continue via
+            // the last row's (createdAt, uuid) instead — an indexed range scan.
+            let loopCursor:
+                { createdAt: Date | string; uuid: string } | undefined;
             const authorPolicyConfig = await this.getCompiledAuthorPolicyConfig(
                 authorPolicy,
                 organizationAndTeamData,
@@ -174,8 +202,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
 
             // If filtering by title, fetch PR numbers from MongoDB first
             let prFilters:
-                | Array<{ number: number; repositoryId: string }>
-                | undefined;
+                Array<{ number: number; repositoryId: string }> | undefined;
             if (pullRequestTitle) {
                 const prNumbers =
                     await this.pullRequestsService.findPRNumbersByTitleAndOrganization(
@@ -203,32 +230,52 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             }
 
             while (enrichedPullRequests.length < limit && hasMoreExecutions) {
-                const { data: executionsBatch, total } =
-                    await this.automationExecutionService.findPullRequestExecutionsByOrganizationAndTeam(
-                        {
-                            organizationAndTeamData: {
-                                organizationId,
-                                teamId,
-                            },
-                            repositoryIds: allowedRepositoryIds,
-                            repositoryName: repositoryNameFilter,
-                            pullRequestNumber,
-                            prFilters,
-                            skip: initialSkip + accumulatedExecutions,
-                            take: limit,
-                            order: 'DESC',
-                            includeTotal: totalExecutions === 0,
+                const {
+                    data: executionsBatch,
+                    total,
+                    distinctPrTotal: batchDistinctPrTotal,
+                } = await this.automationExecutionService.findPullRequestExecutionsByOrganizationAndTeam(
+                    {
+                        organizationAndTeamData: {
+                            organizationId,
+                            teamId,
                         },
-                    );
+                        repositoryIds: allowedRepositoryIds,
+                        repositoryName: repositoryNameFilter,
+                        pullRequestNumber,
+                        prFilters,
+                        status,
+                        createdAtFrom,
+                        createdAtTo,
+                        // First batch: page offset. Subsequent batches:
+                        // keyset cursor (no OFFSET over-scan).
+                        skip: loopCursor ? undefined : initialSkip,
+                        cursor: loopCursor,
+                        take: limit,
+                        order: 'DESC',
+                        includeTotal: totalExecutions === 0,
+                    },
+                );
 
                 if (totalExecutions === 0) {
                     totalExecutions = total;
+                    distinctPrTotal = batchDistinctPrTotal ?? 0;
                 }
 
                 if (!executionsBatch.length) {
                     hasMoreExecutions = false;
                     break;
                 }
+
+                // Advance the cursor to the last row of this batch (same
+                // createdAt DESC, uuid ASC ordering the repository applies) so
+                // the next iteration continues right after it.
+                const lastBatchRow =
+                    executionsBatch[executionsBatch.length - 1];
+                loopCursor = {
+                    createdAt: lastBatchRow.createdAt,
+                    uuid: lastBatchRow.uuid,
+                };
 
                 // Prepare bulk fetch criteria
                 const prCriteria = executionsBatch
@@ -348,7 +395,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                                 });
                                 return new Map<
                                     string,
-                                    { sent: number; filtered: number }
+                                    SuggestionCountsBySeverity
                                 >();
                             }),
                         this.codeReviewExecutionService
@@ -467,12 +514,66 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             continue;
                         }
 
+                        // Severity filter: keep only PRs that delivered at least
+                        // one suggestion of the requested severity. Applied
+                        // post-aggregation like hasSentSuggestions (same caveat:
+                        // does not adjust totalItems, which counts executions).
+                        if (
+                            severity &&
+                            !(
+                                (suggestionsCount?.bySeverity?.[severity] ??
+                                    0) > 0
+                            )
+                        ) {
+                            continue;
+                        }
+
+                        // Category filter: keep only PRs with a delivered
+                        // suggestion of the requested category (same post-query
+                        // caveat as severity re: totalItems).
+                        if (
+                            category &&
+                            !(
+                                suggestionsCount as {
+                                    categories?: string[];
+                                }
+                            )?.categories?.includes(category)
+                        ) {
+                            continue;
+                        }
+
+                        // Needs-attention filter: an OPEN PR that still carries a
+                        // delivered suggestion the author hasn't applied
+                        // (implementationStatus ≠ implemented). Mirrors the card
+                        // count (countDeliveredPullRequests unresolvedOnly +
+                        // openOnly) so the list you see on click can't disagree
+                        // with the badge — the old "delivered crit/high" filter
+                        // counted a different (and merged/resolved-inclusive) set.
+                        if (needsAttention) {
+                            if (
+                                !isOpenPullRequest(pullRequest) ||
+                                !((suggestionsCount?.unresolved ?? 0) > 0)
+                            ) {
+                                continue;
+                            }
+                        }
+
+                        // Author filter: "me" (current user) or a free-text name
+                        // search matched against the PR author's git identity.
+                        if (
+                            author &&
+                            !this.matchesAuthorFilter(author, pullRequest)
+                        ) {
+                            continue;
+                        }
+
                         const enrichedPR: EnrichedPullRequestResponse = {
                             prId: pullRequest.uuid!,
                             prNumber: pullRequest.number,
                             title: pullRequest.title,
                             status: pullRequest.status,
                             merged: pullRequest.merged,
+                            heavy: pullRequest.heavy,
                             url: pullRequest.url,
                             baseBranchRef: pullRequest.baseBranchRef,
                             headBranchRef: pullRequest.headBranchRef,
@@ -566,6 +667,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 currentPage: page,
                 totalPages,
                 totalItems: totalExecutions,
+                distinctPrTotal,
                 itemsPerPage: limit,
                 hasNextPage: page < totalPages,
                 hasPreviousPage: page > 1,
@@ -614,6 +716,34 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 hasPreviousPage: false,
             },
         };
+    }
+
+    // Author filter. `author === 'me'` resolves to the logged-in user (matched
+    // by email against the PR author's git identity). Any other value is an
+    // EXACT author identity picked from the autocomplete — it must equal the PR
+    // author's display name, username, or email (case-insensitive).
+    private matchesAuthorFilter(
+        author: string,
+        pullRequest: IPullRequests,
+    ): boolean {
+        const prUser = (pullRequest.user || {}) as {
+            email?: string;
+            username?: string;
+            name?: string;
+        };
+
+        // `me` → match the logged-in user by email (handled here since only the
+        // use-case has the request user). Any other value is the exact author
+        // identity selected from the autocomplete (see authorMatchesExact).
+        if (author.toLowerCase() === 'me') {
+            const email = this.request.user?.email?.toLowerCase();
+            const candidates = [prUser.email, prUser.username, prUser.name]
+                .filter((v): v is string => Boolean(v))
+                .map((v) => v.toLowerCase());
+            return Boolean(email) && candidates.includes(email as string);
+        }
+
+        return authorMatchesExact(prUser, author);
     }
 
     private async getCompiledAuthorPolicyConfig(
@@ -807,26 +937,58 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         }
     }
 
-    private extractSuggestionsCount(pullRequest: IPullRequests): {
-        sent: number;
-        filtered: number;
-    } {
+    private extractSuggestionsCount(
+        pullRequest: IPullRequests,
+    ): SuggestionCountsBySeverity {
+        const bySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+        const unresolvedBySeverity = { critical: 0, high: 0, medium: 0, low: 0 };
+        const categorySet = new Set<string>();
+        let sent = 0;
+        let filtered = 0;
+        let failed = 0;
+        let replaced = 0;
+        let unresolved = 0;
+
         // Optimized: check if we have pre-computed counts
         if ((pullRequest as any).suggestionsCount) {
             const precomputed = (pullRequest as any).suggestionsCount;
             return {
                 sent: precomputed.sent ?? 0,
                 filtered: precomputed.filtered ?? 0,
+                failed: precomputed.failed ?? 0,
+                replaced: precomputed.replaced ?? 0,
+                unresolved: precomputed.unresolved ?? 0,
+                unresolvedBySeverity: {
+                    critical: precomputed.unresolvedBySeverity?.critical ?? 0,
+                    high: precomputed.unresolvedBySeverity?.high ?? 0,
+                    medium: precomputed.unresolvedBySeverity?.medium ?? 0,
+                    low: precomputed.unresolvedBySeverity?.low ?? 0,
+                },
+                bySeverity: {
+                    critical: precomputed.bySeverity?.critical ?? 0,
+                    high: precomputed.bySeverity?.high ?? 0,
+                    medium: precomputed.bySeverity?.medium ?? 0,
+                    low: precomputed.bySeverity?.low ?? 0,
+                },
+                categories: Array.isArray(precomputed.categories)
+                    ? precomputed.categories
+                    : [],
             };
         }
 
         // Fallback: compute from files (slower)
-        let sent = 0;
-        let filtered = 0;
-
         const files = pullRequest.files;
         if (!files || files.length === 0) {
-            return { sent: 0, filtered: 0 };
+            return {
+                sent: 0,
+                filtered: 0,
+                failed: 0,
+                replaced: 0,
+                unresolved: 0,
+                unresolvedBySeverity,
+                bySeverity,
+                categories: [],
+            };
         }
 
         for (let i = 0; i < files.length; i++) {
@@ -834,15 +996,53 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             if (!suggestions) continue;
 
             for (let j = 0; j < suggestions.length; j++) {
-                const status = suggestions[j].deliveryStatus;
+                const suggestion = suggestions[j];
+                const status = suggestion.deliveryStatus;
                 if (status === DeliveryStatus.SENT) {
                     sent++;
+                    const severity = String(
+                        (suggestion as any).severity ?? '',
+                    ).toLowerCase();
+                    if (severity in bySeverity) {
+                        bySeverity[severity as keyof typeof bySeverity]++;
+                    }
+                    // Unresolved = sent but not implemented (missing status =
+                    // unresolved) — shared predicate, mirroring the aggregation +
+                    // the card count.
+                    if (isUnresolvedDeliveredSuggestion(suggestion)) {
+                        unresolved++;
+                        if (severity in unresolvedBySeverity) {
+                            unresolvedBySeverity[
+                                severity as keyof typeof unresolvedBySeverity
+                            ]++;
+                        }
+                    }
+                    const label = String(
+                        (suggestion as any).label ?? '',
+                    ).toLowerCase();
+                    if (label) categorySet.add(label);
                 } else if (status === DeliveryStatus.NOT_SENT) {
                     filtered++;
+                } else if (
+                    status === DeliveryStatus.FAILED ||
+                    status === DeliveryStatus.FAILED_LINES_MISMATCH
+                ) {
+                    failed++;
+                } else if (status === DeliveryStatus.REPLACED) {
+                    replaced++;
                 }
             }
         }
 
-        return { sent, filtered };
+        return {
+            sent,
+            filtered,
+            failed,
+            replaced,
+            unresolved,
+            unresolvedBySeverity,
+            bySeverity,
+            categories: Array.from(categorySet),
+        };
     }
 }

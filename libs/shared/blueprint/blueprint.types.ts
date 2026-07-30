@@ -5,7 +5,7 @@
  * Skills have a blueprint (Kodus-owned execution steps) and instructions
  * (SKILL.md body, user-editable per team).
  *
- * No NestJS or @kodus/flow dependencies — pure TypeScript.
+ * No NestJS or flow-engine dependencies — pure TypeScript.
  */
 import type { ZodType } from 'zod';
 
@@ -67,7 +67,7 @@ export interface GateStep<T extends BlueprintContext> {
 
 /**
  * LLM step: delegates to the caller's runLLMStep handler.
- * The handler is responsible for loading SKILL.md instructions and calling @kodus/flow.
+ * The handler is responsible for loading SKILL.md instructions and calling the legacy flow engine.
  */
 export interface LLMStep {
     type: 'llm';
@@ -75,7 +75,7 @@ export interface LLMStep {
     contract?: BlueprintStepContract;
     /** Skill name — resolved to SKILL.md body by the caller's runLLMStep */
     skill: string;
-    /** @kodus/flow agent identifier used in createAgent() / callAgent() */
+    /** Legacy flow-engine agent identifier used in createAgent() / callAgent() */
     agentName: string;
 }
 
@@ -123,7 +123,7 @@ export interface BlueprintRunnerOptions<T extends BlueprintContext> {
      * Called by the runner for each LLMStep.
      * The caller is responsible for:
      * - Loading SKILL.md instructions via SkillLoaderService
-     * - Creating/reusing the @kodus/flow agent
+     * - Creating/reusing the legacy flow-engine agent
      * - Calling orchestration.callAgent()
      * - Writing results back to the returned context
      */

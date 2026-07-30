@@ -11,11 +11,48 @@ import { FeedbackType } from '@libs/kodyFineTuning/domain/enums/feedbackType.enu
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 
+// Per-PR delivered-suggestion counts, plus a breakdown of the SENT ones by
+// severity. Powers the "needs attention" signal + severity filter on the PR
+// dashboard list. Keys are the lowercased SeverityLevel values.
+export type SuggestionSeverityBreakdown = Record<
+    'critical' | 'high' | 'medium' | 'low',
+    number
+>;
+
+export interface SuggestionCountsBySeverity {
+    // deliveryStatus === 'sent' — comment posted on the PR.
+    sent: number;
+    // deliveryStatus === 'not_sent' — held back by the review config/priority
+    // rules (severity threshold, quantity limit, safeguard, clustering…).
+    filtered: number;
+    // deliveryStatus ∈ {'failed', 'failed_lines_mismatch'} — Kody tried to post
+    // but couldn't (API error / lines no longer match the diff). A delivery
+    // failure, NOT a config decision — kept separate so it isn't hidden.
+    failed: number;
+    // deliveryStatus === 'replaced' — superseded by a newer suggestion (e.g. a
+    // re-review). Counted for reconciliation; not surfaced as a live signal.
+    replaced: number;
+    // Delivered (sent) suggestions the author still hasn't applied —
+    // implementationStatus ≠ 'implemented' (not_implemented, partially, or a
+    // legacy doc with no status). This is the "Needs attention" signal: it must
+    // match the card count (countDeliveredPullRequests unresolvedOnly) so the
+    // list you see on click can't disagree with the badge.
+    unresolved: number;
+    // Same unresolved set, broken down by severity — lets the UI lead with
+    // critical/high (the urgent slice) without hiding the lower-severity tail.
+    unresolvedBySeverity: SuggestionSeverityBreakdown;
+    bySeverity: SuggestionSeverityBreakdown;
+    // Distinct labels (categories) among the delivered suggestions, lowercased.
+    categories: string[];
+}
+
 export interface IPullRequests {
     uuid?: string;
     title: string;
     status: string;
     merged: boolean;
+    /** Whether the last review ran in HEAVY mode (resolved post feature-gate). */
+    heavy?: boolean;
     number: number;
     url: string;
     baseBranchRef: string;

@@ -4,7 +4,7 @@ import {
     getTaskContextMissingInfoMessage,
     normalizeTaskQuality,
     TASK_QUALITY_ANALYZER_POLICY,
-} from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/task-quality.rules';
+} from '@libs/agents/infrastructure/services/agents/business-rules-validation/task-quality.rules';
 
 describe('task-quality.rules', () => {
     it('allows analysis only for PARTIAL and COMPLETE', () => {

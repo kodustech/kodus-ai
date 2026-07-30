@@ -1,7 +1,7 @@
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

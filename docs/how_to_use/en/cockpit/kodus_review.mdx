@@ -1,0 +1,86 @@
+---
+title: "Kodus Review"
+description: "Measure how effective Kodus's reviews are — and act on it"
+---
+
+## What is the Kodus Review tab
+
+The **Kodus Review** tab answers one question: *is your team acting on what Kodus says?*
+
+Unlike the Productivity tab (which measures general delivery metrics like deploy frequency and PR cycle time), Kodus Review is about Kodus itself — how many suggestions get implemented, which categories and rules land or get ignored, and where the team pushes back.
+
+Every chart and table respects the global **repository** and **date range** filters at the top of the page. Click a repository row, a category bar, or a rule to drill into the underlying suggestions.
+
+## Summary cards
+
+| Card | What it means |
+| --- | --- |
+| **Implementation rate** | % of sent suggestions the team implemented in the period |
+| **Suggestions sent** | How many suggestions Kodus delivered (as PR comments) in the period |
+| **Negative vote rate** | Share of reactions that were 👎, with the trend vs. the previous period |
+| **Criticals ignored in merged PRs** | Critical suggestions left unimplemented on PRs that were already merged — the actionable risk list |
+
+## Implementation rate
+
+The core metric. A suggestion counts as **implemented** when its final status is `implemented` or `partially_implemented` at the time the PR closes.
+
+```
+Implementation rate = implemented suggestions ÷ sent suggestions
+```
+
+Scope rules — the same across every implementation-rate chart:
+
+- Only **delivered** suggestions count (the ones actually posted as PR comments). Drafts Kodus filtered out before commenting are never counted.
+- Suggestions are attributed to the **week the PR closed**, because implementation status is only final once the PR merges.
+
+### Week over week
+
+The weekly chart shows the trend, with a toggle:
+
+- **Overall** — a single implementation-rate line.
+- **By severity** — one line per severity (critical / high / medium / low), so you can see whether higher-severity suggestions get implemented more.
+
+### By category and by severity
+
+- **By category** — sent vs. implemented per suggestion category. Click a bar to open the suggestions explorer filtered to that category.
+- **By severity** — implementation rate per severity level. The expectation is a descending gradient (critical implemented more than low). If it looks flat or inverted, severity isn't guiding the team.
+
+<Warning>
+  **The "All / Kodus only" toggle on the severity chart matters.** A Kody Rule carries the severity *you* set on the rule, not a risk assessment by Kodus. Mixing the two distorts the calibration read — for example, a pile of medium Kody Rules with high adoption can make Kodus look like it under-rates medium. Switch to **Kodus only** to see Kodus's own severity calibration. Bars built on very few suggestions are faded and marked with `*` — a 0% or 100% from a handful of suggestions is not a real signal.
+</Warning>
+
+## Negative feedback
+
+Feedback comes from 👍 / 👎 reactions on Kodus's suggestion comments.
+
+- **Negative vote rate** (summary card) — `👎 ÷ (👍 + 👎)`, with the trend vs. the previous period. Lower is better.
+- **By category** — where the team disagrees most. A category with many 👎 is a candidate to retune or disable.
+- **Trend** — negative votes week over week.
+
+## Repositories — health
+
+A per-repository table: PRs reviewed, suggestions sent, implementation rate, 👍/👎, and the **weakest category** (the category with the lowest implementation rate in that repo, given a minimum sample). It shows where Kodus is landing versus being ignored.
+
+Clicking a row focuses the whole cockpit on that repository (same as picking it in the repository filter).
+
+## Kody Rules — health
+
+How each Kody Rule is performing in the period: triggers, implementation rate, 👍/👎, and a status. Only active rules appear — deleted or inactive ones are excluded since you can't act on them.
+
+The status is computed per rule, in this priority order:
+
+| Status | Meaning | Suggested action |
+| --- | --- | --- |
+| **Stale** | No triggers in the period | Review whether the rule is still needed |
+| **Low data** | Triggered, but too few times (fewer than 5) to judge | Wait for more data |
+| **Noisy** | The team actively downvotes it (≥ 3 👎 and more 👎 than 👍) | The rule is miscalibrated — rewrite or scope it (e.g. exclude tests) |
+| **Ignored** | Triggers a lot but almost nothing is implemented (≤ 20%) | Question its relevance — does the team care about it? |
+| **Healthy** | Everything else | No action |
+
+**Noisy** and **Ignored** look similar but call for different actions. *Ignored* is passive — the rule fires but nobody implements it, and you can't tell if it's noise or just neglect. *Noisy* is active disagreement — the team explicitly downvotes it, so you know it's noise. That's why a rule that is both shows as **Noisy**: the downvotes are the stronger, more actionable signal. The thresholds are sensible defaults and may be tuned over time.
+
+## Suggestions explorer
+
+Every drill-down — a category bar, a rule row, the "criticals ignored" card — opens the **suggestions explorer**: a filterable, paginated list of the actual suggestions behind the number.
+
+Filters: repository, category, severity, implementation status, Kody Rule, and free-text search. Each row expands to show the existing vs. suggested code and a link to the PR comment.

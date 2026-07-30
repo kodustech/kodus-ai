@@ -54,6 +54,12 @@ export interface IAutomationExecutionService extends IAutomationExecutionReposit
         >,
     ): Promise<void>;
 
+    finalizeInProgressStageLogs(
+        executionUuid: string,
+        status: AutomationStatus,
+        message: string,
+    ): Promise<number>;
+
     findLatestStageLog(
         executionId: string,
         stageName: string,

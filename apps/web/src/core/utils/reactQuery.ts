@@ -5,14 +5,18 @@ import {
     useQuery,
     useQueryClient,
     UseQueryOptions,
+    useSuspenseQueries,
     useSuspenseQuery,
     type UseSuspenseQueryOptions,
 } from "@tanstack/react-query";
 import { AxiosError, AxiosRequestConfig } from "axios";
 
 import { useAuth } from "../providers/auth.provider";
+import {
+    buildAuthorizedSuspenseQueryFn,
+    type SuspenseFetchParams,
+} from "./authorized-fetch";
 import { axiosAuthorized } from "./axios";
-import { addSearchParamsToUrl } from "./url";
 
 /**
  * Suspense-enabled data fetching hook
@@ -38,9 +42,7 @@ import { addSearchParamsToUrl } from "./url";
  */
 export const useSuspenseFetch = <T>(
     url: string | null,
-    params?: {
-        params: Record<string, string | number | boolean | undefined | null>;
-    },
+    params?: SuspenseFetchParams,
     config?: Omit<UseSuspenseQueryOptions<T, Error>, "queryKey"> & {
         /** Used for network errors, parse errors, and 404 (resource not found) */
         fallbackData?: T;
@@ -52,56 +54,48 @@ export const useSuspenseFetch = <T>(
     const context = useSuspenseQuery<T, Error>({
         ...config,
         queryKey,
-        queryFn: async ({ signal }) => {
-            const urlWithParams = addSearchParamsToUrl(url!, params?.params);
-
-            let response: Response;
-            try {
-                response = await fetch(urlWithParams, {
-                    signal,
-                    headers: { Authorization: `Bearer ${accessToken}` },
-                });
-            } catch (networkError) {
-                // Network error (offline, DNS, etc) - use fallback if available
-                if (config?.fallbackData !== undefined) {
-                    return config.fallbackData;
-                }
-                throw new Error(`Network error fetching ${url}`);
-            }
-
-            const text = await response.text();
-
-            let json: { statusCode: number; data: T | undefined };
-            try {
-                json = JSON.parse(text);
-            } catch {
-                // JSON parse error - use fallback if available
-                if (config?.fallbackData !== undefined) {
-                    return config.fallbackData;
-                }
-                throw new Error(`Invalid JSON response from ${url}`);
-            }
-
-            // 404 Not Found - resource doesn't exist, use fallback if available
-            if (json.statusCode === 404) {
-                if (config?.fallbackData !== undefined) {
-                    return config.fallbackData;
-                }
-                throw new Error(`Resource not found: ${url}`);
-            }
-
-            // Other API errors (400, 500, etc) - always throw, show to user
-            if (json.statusCode !== 200 && json.statusCode !== 201) {
-                throw new Error(
-                    `Request failed: ${url} returned status ${json.statusCode}`,
-                );
-            }
-
-            return json.data as T;
-        },
+        queryFn: buildAuthorizedSuspenseQueryFn<T>(
+            url!,
+            params,
+            accessToken,
+            config?.fallbackData,
+        ),
     });
 
     return context.data;
+};
+
+/**
+ * Suspense fetch for N requests that should run IN PARALLEL. Plain
+ * back-to-back `useSuspenseFetch` calls waterfall — the component suspends on
+ * the first before the second's hook runs, so request 2 only starts once
+ * request 1 resolves. `useSuspenseQueries` starts them all together and
+ * suspends until every one settles, so wall-clock = slowest request, not the
+ * sum. Each entry's `queryKey` matches `useSuspenseFetch`, so results are
+ * shared with (and seeded by) the single-fetch cache.
+ */
+export const useSuspenseFetchMany = <T extends readonly unknown[]>(requests: {
+    [K in keyof T]: {
+        url: string;
+        params?: SuspenseFetchParams;
+        fallbackData?: T[K];
+    };
+}): T => {
+    const { accessToken } = useAuth();
+
+    const results = useSuspenseQueries({
+        queries: requests.map((request) => ({
+            queryKey: generateQueryKey(request.url, request.params),
+            queryFn: buildAuthorizedSuspenseQueryFn(
+                request.url,
+                request.params,
+                accessToken,
+                request.fallbackData,
+            ),
+        })),
+    });
+
+    return results.map((result) => result.data) as unknown as T;
 };
 
 /**

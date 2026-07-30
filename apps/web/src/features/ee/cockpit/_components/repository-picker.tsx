@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -21,6 +22,7 @@ import { Check, GitBranch } from "lucide-react";
 import { safeArray } from "src/core/utils/safe-array";
 
 import { setCockpitRepositoryCookie } from "../_actions/set-cockpit-repository";
+import { COCKPIT_PARAM } from "../_constants";
 
 type Props = {
     cookieValue: string | undefined;
@@ -33,6 +35,9 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
     const { data: repositories = [], isLoading } =
         useGetSelectedRepositories(teamId);
 
+    const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [loading, startTransition] = useTransition();
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -41,6 +46,10 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
     const isLoadingMoreRef = useRef(false);
 
     const [selectedRepository, setSelectedRepository] = useState<string>(() => {
+        // URL wins: a shared link reflects its repository in the trigger.
+        if (searchParams.has(COCKPIT_PARAM.repository)) {
+            return searchParams.get(COCKPIT_PARAM.repository) ?? "";
+        }
         if (!cookieValue) return "";
         try {
             return JSON.parse(cookieValue) as string;
@@ -48,6 +57,19 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
             return "";
         }
     });
+
+    // Persist to cookie (cross-session default) and push the selection
+    // onto the URL (source of truth) so the view is shareable. An empty
+    // value means "all repositories".
+    const commitRepository = (repositoryFullName: string) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set(COCKPIT_PARAM.repository, repositoryFullName);
+
+        startTransition(async () => {
+            await setCockpitRepositoryCookie(repositoryFullName);
+            router.push(`${pathname}?${params.toString()}`);
+        });
+    };
 
     const filteredRepositories = safeArray(repositories).filter((r) => {
         if (!searchQuery.trim()) return true;
@@ -68,19 +90,13 @@ export const RepositoryPicker = ({ cookieValue, teamId }: Props) => {
 
         setSelectedRepository(repositoryFullName);
         setOpen(false);
-
-        startTransition(() => {
-            setCockpitRepositoryCookie(repositoryFullName);
-        });
+        commitRepository(repositoryFullName);
     };
 
     const handleClearFilter = () => {
         setSelectedRepository("");
         setOpen(false);
-
-        startTransition(() => {
-            setCockpitRepositoryCookie("");
-        });
+        commitRepository("");
     };
 
     useEffect(() => {

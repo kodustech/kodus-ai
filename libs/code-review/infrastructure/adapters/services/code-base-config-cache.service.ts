@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject } from '@nestjs/common';
 
 import {

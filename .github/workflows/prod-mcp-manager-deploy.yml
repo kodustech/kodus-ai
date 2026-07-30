@@ -82,10 +82,15 @@ jobs:
                   ECR_REPOSITORY: kodus-mcp-manager-prod
                   IMAGE_TAG_VERSION: ${{ steps.tag.outputs.image_tag }}
                   IMAGE_TAG_SHA: ${{ github.sha }}
+                  # Authenticates @vscode/ripgrep's postinstall download via the
+                  # `github_token` build secret — anonymous GitHub API calls from
+                  # runner IPs are rate-limited (403), breaking `pnpm install`.
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   docker buildx build \
                       --file docker/Dockerfile \
                       --target mcp-manager \
+                      --secret id=github_token,env=GITHUB_TOKEN \
                       --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION \
                       --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA \
                       --cache-from type=gha,scope=mcp-manager-prod \
@@ -164,10 +169,13 @@ jobs:
 
             - name: Notify Discord
               if: always()
-              uses: sarisia/actions-status-discord@v1.13.0
+              uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: ${{ job.status }}
-                  content: ":clap: Build successful!"
                   title: "Deploy Prod: kodus-mcp-manager"
+                  description: |
+                      SHA: `${{ github.sha }}`
+                      Triggered by: @${{ github.actor }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   username: GitHub Actions

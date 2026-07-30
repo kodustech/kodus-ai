@@ -333,31 +333,74 @@ env_set() {
     fi
 }
 env_set IMAGE_TAG "$IMAGE_TAG"
-env_set WEB_HOSTNAME_API "kodus-api"
+# Test stacks must be observable: the installer default (error) hides the
+# sync/eval traces the scenarios and the failure-evidence collector rely on.
+env_set API_LOG_LEVEL "info"
+# Point the web's server-side API calls (next-auth authorize → /auth/login,
+# used by rbac-frontend-routes / rbac-ui-render) at the compose SERVICE name
+# `api`, which Docker DNS always resolves on the shared network regardless of
+# container_name. The old literal `kodus-api` matched neither the service
+# (`api`) nor the actual container (`kodus_api` once GLOBAL_API_CONTAINER_NAME
+# is set), so authorize() got ENOTFOUND → returned null → the next-auth login
+# 302'd with no session → both RBAC web scenarios failed on self-hosted only
+# (cloud passes: it reaches the API over the public URL, not a docker host).
+env_set WEB_HOSTNAME_API "api"
 env_set WEB_PORT_API "3001"
 env_set NEXTAUTH_URL "http://$SERVER_IP:3000"
+# Webhook URL env var names are INCONSISTENT across providers in the app:
+# github/gitlab read API_*_CODE_MANAGEMENT_WEBHOOK, but bitbucket and azure
+# read GLOBAL_*_CODE_MANAGEMENT_WEBHOOK (see github.service getGithubWebhookUrl
+# / gitlab.service vs bitbucket-cloud.service:3114 / azureRepos.service:3911,
+# and .env.schema). Setting the API_ name for all four left bitbucket+azure
+# with an empty webhook URL → 0 hooks registered → the review pipeline never
+# fires → "0 findings" timeouts. Set each provider's ACTUAL name.
 env_set API_GITHUB_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/github/webhook"
 env_set API_GITLAB_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/gitlab/webhook"
-env_set API_BITBUCKET_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/bitbucket/webhook"
-env_set API_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/azure-repos/webhook"
+env_set GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/bitbucket/webhook"
+env_set GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/azure-repos/webhook"
+# Bitbucket Cloud rate-limits per-endpoint at ~16-60 req/min. The prod
+# default (400ms ≈ 150/min) and even 800ms (≈75/min) sit ABOVE that ceiling,
+# so under the e2e load — 6 scenarios each re-onboarding (~72 calls to
+# generate kody rules) + the runner's own calls, all on ONE shared test
+# account — the worker's Bitbucket calls (getDefaultBranch, getLanguage-
+# Repository, …) start returning 429 "Rate limit exceeded", which surfaces
+# as NO_REPOSITORIES / 400 on the next scenario. Confirmed in worker logs
+# 2026-05-30. 2500ms ≈ 24/min keeps every call inside the ceiling — slower
+# but deterministic. ONLY the test droplet runs this hot; prod keeps the
+# 400ms default (real installs don't re-onboard one account in a loop).
+env_set BITBUCKET_RATE_GATE_MIN_INTERVAL_MS "2500"
 env_set API_PG_DB_PASSWORD "\$(openssl rand -hex 16)"
 env_set API_MG_DB_PASSWORD "\$(openssl rand -hex 16)"
 env_set API_DATABASE_DISABLE_SSL "true"
 env_set API_PG_DB_SSL "false"
 env_set WORKER_ROLE "code-review"
+# Analytics worker (Cockpit). When ANALYTICS_WORKER=1 is passed to vm.sh,
+# enable the \`analytics\` compose profile so the installer's worker-analytics
+# service (role=analytics) comes up alongside the code-review worker, and point
+# the ingestion cron at a fast schedule so the cockpit-analytics scenario can
+# observe an automatic ingestion run within its poll window. The \`:+\` guard is
+# expanded LOCALLY (unquoted REMOTE heredoc), so COMPOSE_PROFILES is empty when
+# the flag is off → community topology unchanged. We deliberately do NOT set
+# ANALYTICS_PG_DB_HOST (leave it unset → loader cascades to API_PG_DB_*; an
+# empty value would be a footgun pre-loader-fix). Classifier disabled: the test
+# droplet has no LLM key for PR-type classification.
+env_set COMPOSE_PROFILES "${ANALYTICS_WORKER:+analytics}"
+env_set ANALYTICS_PG_DB_SCHEMA "analytics"
+env_set ANALYTICS_INGESTION_CRON "${ANALYTICS_INGESTION_CRON:-*/2 * * * *}"
+env_set ANALYTICS_CLASSIFIER_DISABLED "true"
 # The notifications module hard-requires this (ConfigService.getOrThrow).
 # Set a dummy so the app boots — emails won't actually send.
 env_set RESEND_API_KEY "${RESEND_API_KEY:-disabled-for-dev}"
 # LLM provider config — required for Kodus to actually review PRs in the
 # matrix. Caller must provide these via env (no hardcoded fallback).
 if [ -n "${API_OPEN_AI_API_KEY:-}" ]; then
-    env_set API_OPEN_AI_API_KEY "$API_OPEN_AI_API_KEY"
+    env_set API_OPEN_AI_API_KEY "${API_OPEN_AI_API_KEY:-}"
 fi
 if [ -n "${API_OPENAI_FORCE_BASE_URL:-}" ]; then
-    env_set API_OPENAI_FORCE_BASE_URL "$API_OPENAI_FORCE_BASE_URL"
+    env_set API_OPENAI_FORCE_BASE_URL "${API_OPENAI_FORCE_BASE_URL:-}"
 fi
 if [ -n "${API_LLM_PROVIDER_MODEL:-}" ]; then
-    env_set API_LLM_PROVIDER_MODEL "$API_LLM_PROVIDER_MODEL"
+    env_set API_LLM_PROVIDER_MODEL "${API_LLM_PROVIDER_MODEL:-}"
 fi
 REMOTE
 
@@ -387,7 +430,7 @@ done
 
 if [ ${#HEALTH_FAILED[@]} -gt 0 ]; then
     err "Health check failed for: ${HEALTH_FAILED[*]}"
-    ssh_vm "cd /opt/kodus-installer && docker compose logs api worker webhooks --tail 80 --no-color" || true
+    ssh_vm "cd /opt/kodus-installer && docker compose logs api kodus-web worker webhooks --tail 80 --no-color" || true
     exit 1
 fi
 
@@ -420,6 +463,9 @@ if [ ! -d node_modules ]; then
 fi
 
 export TARGET_BASE_URL="http://$SERVER_IP:3001"
+# For the runner's server-side evidence collector (lib/server-evidence.ts).
+export TARGET_SSH_HOST="$SERVER_IP"
+export TARGET_SSH_KEY="$LOCAL_SSH_KEY"
 export TARGET_WEB_URL="http://$SERVER_IP:3000"
 export TARGET_TUNNEL_URL="$SERVER_TUNNEL_URL"
 export SH_TENANT_EMAIL="$TEST_USER_EMAIL"
@@ -427,5 +473,32 @@ export SH_TENANT_PASSWORD="$TEST_USER_PASSWORD"
 export TEST_USER_EMAIL TEST_USER_PASSWORD
 export TEST_TIMEOUT_REVIEW
 
-ok "Exec matrix runner: ./node_modules/.bin/tsx cli/run-matrix.ts $MATRIX_FILE --target self-hosted"
-exec ./node_modules/.bin/tsx cli/run-matrix.ts "$MATRIX_FILE" --target self-hosted
+# --skip-missing-tokens: drop (not fail) scenarios whose prerequisites are
+# absent. In CI the per-seat-license-toggle scenario needs a seats=1 license
+# JWT at ~/.kodus-dev/license-seats1.jwt that only exists on a dev laptop —
+# without the flag it crashes with ENOENT and reds the whole cell. The
+# matrix YAML already documents this scenario as "skipped automatically when
+# SH_LICENSE_KEY_PATH isn't available"; the flag is what makes that true.
+ok "Run matrix runner: ./node_modules/.bin/tsx cli/run-matrix.ts $MATRIX_FILE --target self-hosted --skip-missing-tokens"
+# NOT `exec`: exec would replace this shell and bypass the EXIT trap, so a
+# scenario failure would (a) leave the droplet alive forever — no teardown —
+# and (b) discard the on-VM logs. Run normally, capture the stack logs into
+# the evidence tree (uploaded as the cell artifact), then exit so `cleanup`
+# tears the droplet down.
+set +e
+./node_modules/.bin/tsx cli/run-matrix.ts "$MATRIX_FILE" --target self-hosted --skip-missing-tokens
+RUN_EXIT=$?
+set -e
+
+# Dump the API + review-worker logs from the droplet into evidence/. The SSH
+# key is ephemeral (discarded with the runner), so this is the only chance to
+# see WHY a scenario failed on the server side — e.g. whether the kody-rules
+# agent actually received the rule. Best-effort: never fail the run on this.
+PROV="${TARGET_FILTER_PROVIDER:-unknown}"
+mkdir -p "$E2E_ROOT/evidence"
+ssh_vm "cd /opt/kodus-installer && docker compose logs api kodus-web worker webhooks --tail 2000 --no-color" \
+    > "$E2E_ROOT/evidence/droplet-logs-${PROV}.txt" 2>&1 \
+    && ok "Captured droplet logs → evidence/droplet-logs-${PROV}.txt" \
+    || warn "Could not capture droplet logs"
+
+exit "$RUN_EXIT"

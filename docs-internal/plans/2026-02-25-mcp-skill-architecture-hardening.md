@@ -32,8 +32,8 @@
 ### Task 3: Business Rules Agent Integration
 
 **Files:**
-- Modify: `libs/agents/infrastructure/services/kodus-flow/business-rules-validation/businessRulesValidationAgent.ts`
-- Modify: `libs/agents/infrastructure/services/kodus-flow/business-rules-validation/required-mcp-feedback.ts`
+- Modify: `libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent.ts`
+- Modify: `libs/agents/infrastructure/services/agents/business-rules-validation/required-mcp-feedback.ts`
 
 1. Replace string-based MCP error detection with typed shared errors.
 2. Use centralized MCP connection failure feedback with detected providers.
@@ -51,7 +51,7 @@
 
 **Files:**
 - Test: `libs/agents/skills/generic-skill-runner.service.spec.ts`
-- Test: `libs/agents/infrastructure/services/kodus-flow/business-rules-validation/task-quality.rules.spec.ts`
+- Test: `libs/agents/infrastructure/services/agents/business-rules-validation/task-quality.rules.spec.ts`
 
 1. Run focused Jest suites.
 2. Validate no regressions in existing behavior.

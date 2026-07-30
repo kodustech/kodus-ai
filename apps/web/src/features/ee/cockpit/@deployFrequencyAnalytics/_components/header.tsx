@@ -8,7 +8,7 @@ export const DeployFrequencyAnalyticsHeader = ({
     return (
         <CardHeader>
             <div className="flex justify-between gap-4">
-                <CardTitle className="text-sm">Deploy Frequency</CardTitle>
+                <CardTitle className="text-text-secondary text-xs font-semibold">Deploy Frequency</CardTitle>
                 {children}
             </div>
         </CardHeader>

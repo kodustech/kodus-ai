@@ -4,17 +4,14 @@ import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 
 // Stages
 import { AggregateResultsStage } from './stages/aggregate-result.stage';
-import { CollectCrossFileContextStage } from './stages/collect-cross-file-context.stage';
 import { CreateFileCommentsStage } from './stages/create-file-comments.stage';
 import { CreatePrLevelCommentsStage } from './stages/create-pr-level-comments.stage';
 import { FetchChangedFilesStage } from './stages/fetch-changed-files.stage';
-import { FileContextGateStage } from './stages/file-context-gate.stage';
 import { UpdateCommentsAndGenerateSummaryStage } from './stages/finish-comments.stage';
 import { NotificationModule } from '@libs/notifications/modules/notification.module';
 import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
-import { GatherDocumentationContextStage } from './stages/gather-documentation-context.stage';
 import { InitialCommentStage } from './stages/initial-comment.stage';
 import { LoadExternalContextStage } from './stages/load-external-context.stage';
 import { ProcessFilesPrLevelReviewStage } from './stages/process-files-pr-level-review.stage';
@@ -43,11 +40,15 @@ import { KodyFineTuningStage } from '@libs/ee/codeReview/stages/kody-fine-tuning
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { KodyFineTuningContextModule } from '@libs/kodyFineTuning/kodyFineTuningContext.module';
+import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
+import { FeatureGateModule } from '@libs/feature-gate';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { GithubChecksService } from '@libs/platform/infrastructure/adapters/services/github/github-checks.service';
 import { GithubModule } from '@libs/platform/modules/github.module';
+import { ForgejoChecksService } from '@libs/platform/infrastructure/adapters/services/forgejo/forgejo-checks.service';
+import { ForgejoModule } from '@libs/platform/modules/forgejo.module';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { SandboxSyntaxValidator } from '../infrastructure/adapters/services/sandboxSyntaxValidator.service';
 import { GraphContentFormatter } from '../infrastructure/adapters/services/graphContentFormatter.service';
@@ -66,7 +67,6 @@ import { ImplementationVerificationProcessor } from '../workflow/implementation-
 import { LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN } from './stages/contracts/loadExternalContextStage.contract';
 import { ValidateSuggestionsStage } from './stages/validate-suggestions.stage';
 import { CodeReviewPipelineStrategy } from './strategy/code-review-pipeline.strategy';
-import { SelectReviewEngineStage } from './stages/select-review-engine.stage';
 
 // Sandbox (lease manager)
 import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
@@ -74,17 +74,23 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
 // V3 Agent-First
 import { CreateSandboxStage } from './stages/create-sandbox.stage';
 import { AgentReviewStage } from './stages/agent-review.stage';
-import { BugAgentProvider } from '../infrastructure/agents/bug-agent.provider';
-import { SecurityAgentProvider } from '../infrastructure/agents/security-agent.provider';
-import { PerformanceAgentProvider } from '../infrastructure/agents/performance-agent.provider';
-import { GeneralistAgentProvider } from '../infrastructure/agents/generalist-agent.provider';
+import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.provider';
+import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
+import { PerformanceAgentProvider } from '../infrastructure/agents/providers/performance-agent.provider';
+import { GeneralistAgentProvider } from '../infrastructure/agents/providers/generalist-agent.provider';
 import { DuplicateLogicAgentProvider } from '../infrastructure/agents/duplicate-logic-agent.provider';
-import { KodyRulesAgentProvider } from '../infrastructure/agents/kody-rules-agent.provider';
+import { KodyRulesAgentProvider } from '../infrastructure/agents/providers/kody-rules-agent.provider';
 // ReflectionAgentProvider removed — verify/discover was hurting recall
 import { ReviewOrchestratorService } from '../infrastructure/agents/review-orchestrator.service';
 
 @Module({
     imports: [
+        // Explicit even though FeatureGateModule is @Global(): the pipeline
+        // (AgentReviewStage) injects FeatureGateService, so declaring it here
+        // guarantees availability for any consumer instead of relying on a
+        // bootstrapping app to import the global module — matching how
+        // FeatureGateModule itself explicitly imports its @Global deps.
+        FeatureGateModule,
         forwardRef(() => CodebaseModule),
         forwardRef(() => DocumentationContextModule),
         forwardRef(() => FileReviewModule),
@@ -99,8 +105,13 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         forwardRef(() => KodyFineTuningContextModule),
         forwardRef(() => AutomationModule),
         forwardRef(() => GithubModule),
+        forwardRef(() => ForgejoModule),
         forwardRef(() => PermissionValidationModule),
         forwardRef(() => LicenseModule),
+        // AgentReviewStage injects KodyRuleSummaryService (long-rule summary
+        // swap for the shard judge). forwardRef: the kodyRules module reaches
+        // back into code-review via CODE_BASE_CONFIG_SERVICE_TOKEN.
+        forwardRef(() => KodyRulesModule),
         AstGraphModule,
         forwardRef(() => McpCoreModule),
         WorkflowCoreModule,
@@ -135,7 +146,6 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         ValidateNewCommitsStage,
         ValidatePrerequisitesStage,
         ResolveConfigStage,
-        SelectReviewEngineStage,
         ValidateConfigStage,
         FetchChangedFilesStage,
         {
@@ -143,10 +153,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
             useExisting: LoadExternalContextStage,
         },
         LoadExternalContextStage,
-        GatherDocumentationContextStage,
-        FileContextGateStage,
         InitialCommentStage,
-        CollectCrossFileContextStage,
         ProcessFilesPrLevelReviewStage,
         BusinessLogicValidationStage,
         ProcessFilesReview,
@@ -177,6 +184,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
 
         // For GitHub Checks
         GithubChecksService,
+        ForgejoChecksService,
         NullChecksAdapter,
         ChecksAdapterFactory,
         {
@@ -208,8 +216,6 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         ValidatePrerequisitesStage,
         FetchChangedFilesStage,
         InitialCommentStage,
-        CollectCrossFileContextStage,
-        GatherDocumentationContextStage,
         AggregateResultsStage,
         LoadExternalContextStage,
         LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN,

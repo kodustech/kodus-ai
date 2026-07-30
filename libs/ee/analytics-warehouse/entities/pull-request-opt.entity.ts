@@ -28,6 +28,10 @@ export class PullRequestOptEntity {
     @Column({ name: 'repositoryId', type: 'text', nullable: true })
     repositoryId: string | null;
 
+    /** Provider-facing PR number — used for "view on PR" deep links. */
+    @Column({ name: 'pr_number', type: 'integer', nullable: true })
+    prNumber: number | null;
+
     @Column({ type: 'text', nullable: true })
     status: string | null;
 

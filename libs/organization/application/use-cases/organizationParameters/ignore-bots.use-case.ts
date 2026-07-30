@@ -10,7 +10,7 @@ import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/con
 import { PullRequestHandlerService } from '@libs/code-review/infrastructure/adapters/services/pullRequestManager.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 @Injectable()
 export class IgnoreBotsUseCase implements IUseCase {

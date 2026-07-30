@@ -12,7 +12,7 @@ import {
     CODE_REVIEW_SETTINGS_LOG_REPOSITORY_TOKEN,
     ICodeReviewSettingsLogRepository,
 } from '@libs/ee/codeReviewSettingsLog/domain/contracts/codeReviewSettingsLog.repository.contract';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject } from '@nestjs/common';
 
 export interface ChangedDataToExport {

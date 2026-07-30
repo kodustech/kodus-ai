@@ -1,0 +1,89 @@
+---
+title: "Dirigir una Revisión (Enfoque)"
+description: "Dirige la atención de Kody hacia un área específica del pull request con una directiva de revisión puntual, mediante comentario en el PR o CLI"
+---
+
+Una **directiva de revisión** te permite indicarle a Kody dónde concentrar su análisis más profundo en una revisión concreta. En lugar de cambiar la configuración, adjuntas una instrucción breve al lanzar la revisión — por ejemplo, "enfócate en la lógica de auth y sesión" — y Kody dedica su análisis más riguroso al código modificado que coincide.
+
+<Note>
+  Una directiva es **efímera**: se aplica solo a esa ejecución de revisión. No se guarda en tu configuración ni afecta a revisiones futuras. Para cambiar el comportamiento de Kody de forma permanente, usa [Custom Prompts](/how_to_use/es/code_review/configs/custom_prompts) o [Kody Rules](/how_to_use/es/code_review/configs/kody_rules).
+</Note>
+
+## Cuándo Usarla
+
+- Un PR toca muchos archivos pero te importa más un área de riesgo (auth, pagos, una migración).
+- Quieres que Kody rastree los callers y callees de un cambio específico y lo cuestione con más rigor.
+- Estás relanzando una revisión y quieres dirigir la atención sin editar ninguna configuración.
+
+## Prioridad, No Filtro
+
+Esto es lo más importante de entender:
+
+<Warning>
+  Una directiva establece **prioridad, no un filtro**. Kody prioriza el área de enfoque, pero sigue reportando cualquier bug, problema de seguridad o de rendimiento concreto que detecte en **otras partes** del diff. Nunca suprime hallazgos fuera del enfoque ni aprueba el resto del PR sin revisarlo.
+</Warning>
+
+Usa una directiva para decir *"mira aquí con más atención"* — no *"mira solo aquí."*
+
+## Cómo Activarla
+
+<Tabs>
+  <Tab title="Comentario en PR / MR">
+    Escribe tu texto de enfoque justo después del comando de revisión en un comentario del pull request:
+
+    ```text
+    @kody review enfócate en la lógica de auth y sesión
+    ```
+
+    También puedes usar `start-review` y combinarlo con `--force`:
+
+    ```text
+    @kody start-review enfócate en la nueva migración de base de datos
+    @kody review --force enfócate en el manejo de errores del parser del webhook
+    ```
+
+    <Note>
+      `--force` vuelve a ejecutar la review incluso cuando Kody normalmente la omitiría ("sin commits nuevos desde la última review"). Úsalo — con o sin directiva de enfoque — para obtener un nuevo análisis después de corregir lo que hizo fallar la ejecución anterior, o para aplicar configuraciones actualizadas a un PR ya revisado.
+    </Note>
+
+    <Note>
+      Solo se usa la **primera línea** después del comando como directiva. Todo lo que esté en líneas posteriores se ignora, así que mantén el enfoque en una sola línea.
+    </Note>
+
+    Funciona en GitHub, GitLab, Azure DevOps, Bitbucket y Forgejo.
+  </Tab>
+  <Tab title="CLI">
+    Pasa la opción `--focus` al ejecutar una revisión:
+
+    ```bash
+    kodus review --focus "la lógica de auth y sesión"
+    ```
+
+    Consulta la [referencia de comandos de la CLI](/how_to_use/es/cli/commands) para ver toda la superficie de comandos.
+  </Tab>
+</Tabs>
+
+## Cómo Escribir una Buena Directiva
+
+- **Sé específico sobre el área, no sobre el veredicto.** "enfócate en la concurrencia del consumidor de la cola" funciona mejor que "encuentra bugs".
+- **Nombra el código, no el resultado.** Apunta a un módulo, flujo o preocupación ("la lógica de retry", "el SQL en el servicio de reportes").
+- **Sé breve.** Las directivas tienen un límite de **500 caracteres**; solo se lee la primera línea del comentario.
+
+<AccordionGroup>
+  <Accordion title="Buenos ejemplos">
+    - `@kody review enfócate en el flujo de autenticación y refresh de token`
+    - `@kody review enfócate en el nuevo manejo del webhook de Stripe`
+    - `kodus review --focus "condiciones de carrera en el worker en segundo plano"`
+  </Accordion>
+  <Accordion title="Ejemplos débiles">
+    - `@kody review por favor sé exhaustivo` — no hay área que priorizar.
+    - `@kody review comenta solo en el archivo X` — una directiva no es un filtro; usa [rutas ignoradas](/how_to_use/es/code_review/configs/general) para acotar archivos.
+  </Accordion>
+</AccordionGroup>
+
+## Notas y Límites
+
+- **Longitud:** las directivas se truncan en 500 caracteres.
+- **Solo la primera línea:** en comentarios de PR, solo la primera línea tras el comando se convierte en la directiva.
+- **No confiable por diseño:** como cualquiera que pueda comentar el PR puede aportar una directiva, el texto se sanea antes de usarse (se eliminan caracteres de control y los signos de menor/mayor). Esto no cambia tu enfoque — solo evita que el texto manipule el prompt interno de Kody.
+- **No persistente:** no se escribe nada en la configuración de tu repositorio u organización.

@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
@@ -10,7 +10,8 @@ import {
 } from '@libs/identity/domain/user/contracts/user.service.contract';
 
 import { NotificationEvent } from '../domain/catalog/events';
-import { EVENT_DEFAULTS } from '../domain/catalog/defaults';
+import { EVENT_DEFAULTS, ROLE_WILDCARD } from '../domain/catalog/defaults';
+import { IRoutingRule } from '../domain/interfaces/routing-rule.interface';
 import {
     Criticality,
     DeliveryStatus,
@@ -57,6 +58,15 @@ interface ResolvedRecipient {
      * recipient gets email and another gets in-app.
      */
     channels?: NotificationChannel[];
+    /**
+     * True for the explicit envelope recipients the emitter chose (the PR
+     * author, the removed user, the sync initiator). They are always
+     * delivered, on their own/default channels, regardless of whether their
+     * role is one of the event's defaultRoles — so a directly-involved
+     * contributor is never gated off. Config-driven audience members
+     * (from defaultRoles) leave this unset.
+     */
+    directed?: boolean;
 }
 
 /**
@@ -106,10 +116,37 @@ export class NotificationDispatcherService {
             return;
         }
 
-        const recipients = await this.resolveRecipients(
-            message,
-            organizationId,
-        );
+        // Preload the org's routing rules once so per-recipient channel
+        // resolution is in-memory (no N queries during fanout). Indexed by
+        // `${event}:${role}` so each recipient's lookup is O(1) rather than an
+        // O(rules) scan — the fanout loop below runs once per recipient.
+        const rules =
+            await this.routingRuleRepo.findByOrganization(organizationId);
+        const ruleByKey = new Map<string, IRoutingRule>();
+        for (const r of rules) {
+            ruleByKey.set(`${r.event}:${r.role}`, r);
+        }
+
+        // Two independent recipient sources, unioned so an event can reach
+        // both at once (the "mixed" events):
+        //
+        //  - directed: the explicit envelope recipients the emitter chose (PR
+        //    author, removed user, …). Always delivered, bypassing role gating.
+        //  - audience: events declaring `defaultRoles` also fan out to every
+        //    org member, gated per role by routing config (default roles on,
+        //    admins can opt others in).
+        //
+        // A user present in both keeps the directed entry (listed first, so
+        // dedup wins) and is never gated off for not being a default role.
+        const directed = message.recipients?.length
+            ? (await this.resolveRecipients(message, organizationId)).map(
+                  (r) => ({ ...r, directed: true }),
+              )
+            : [];
+        const audience = defaults.defaultRoles
+            ? await this.resolveAllOrgMembers(organizationId)
+            : [];
+        const recipients = this.dedupeByUser([...directed, ...audience]);
 
         // Per-recipient try/catch so a thrown error (DB outage, adapter
         // bug) for one recipient does not abort the loop and bubble up
@@ -125,6 +162,7 @@ export class NotificationDispatcherService {
                     payload,
                     organizationId,
                     correlationId,
+                    ruleByKey,
                 );
             } catch (error) {
                 this.logger.error({
@@ -147,6 +185,23 @@ export class NotificationDispatcherService {
         }
     }
 
+    /**
+     * Dedup a unioned recipient list by user (email-only fallbacks keyed by
+     * address). First occurrence wins, so directed recipients — which are
+     * listed before the config audience — take precedence over the same user
+     * resolved as an audience member.
+     */
+    private dedupeByUser(
+        recipients: ResolvedRecipient[],
+    ): ResolvedRecipient[] {
+        const byKey = new Map<string, ResolvedRecipient>();
+        for (const r of recipients) {
+            const key = r.userId ? r.userId : `EMAIL:${r.email}`;
+            if (!byKey.has(key)) byKey.set(key, r);
+        }
+        return [...byKey.values()];
+    }
+
     private async dispatchToRecipient(
         recipient: ResolvedRecipient,
         event: NotificationEvent,
@@ -154,27 +209,24 @@ export class NotificationDispatcherService {
         payload: Record<string, unknown>,
         organizationId: string,
         correlationId: string,
+        ruleByKey: Map<string, IRoutingRule>,
     ): Promise<void> {
-        // System events use the catalog defaults verbatim (admins cannot
-        // configure routing rules for them — see RoutingRuleService).
-        // Critical events fan out across every active channel regardless
-        // of stored configuration. Everything else respects the
-        // per-role / wildcard / catalog-default chain.
-        let enabledChannels: NotificationChannel[];
-        if (defaults.criticality === Criticality.SYSTEM) {
-            enabledChannels = [...defaults.defaultChannels].filter((ch) =>
-                ACTIVE_CHANNELS.has(ch),
-            );
-        } else if (defaults.criticality === Criticality.CRITICAL) {
-            enabledChannels = [...ACTIVE_CHANNELS];
-        } else {
-            enabledChannels = await this.resolveChannels(
-                organizationId,
-                event,
-                recipient.role,
-                defaults,
-            );
-        }
+        // Directed recipients (the directly-involved person — PR author, sync
+        // initiator, removed user) are always reached: they bypass role-based
+        // routing config and resolve to the event's catalog defaults, narrowed
+        // only by any per-recipient channel override below. This is what keeps
+        // a non-default-role directed recipient from being swallowed by an
+        // off ('{}') wildcard baseline. Audience members go through the rules.
+        let enabledChannels = recipient.directed
+            ? [...defaults.defaultChannels].filter((ch) =>
+                  ACTIVE_CHANNELS.has(ch),
+              )
+            : this.resolveEnabledChannels(
+                  ruleByKey,
+                  event,
+                  recipient.role,
+                  defaults,
+              );
 
         // Per-recipient channel override: when the originating
         // NotificationRecipient declared `channels`, intersect with the
@@ -705,41 +757,70 @@ export class NotificationDispatcherService {
     }
 
     /**
-     * Resolution priority for (event, role) channels:
-     *   1. Per-role override row    (org, event, role)   — wins if present
-     *   2. All Roles ('*') row      (org, event, '*')    — wins if present
-     *   3. Catalog defaults         EVENT_DEFAULTS[event].defaultChannels
+     * The channels a (event, role) pair is delivered on, resolved in-memory
+     * from the preloaded org rules:
      *
-     * The repository handles steps 1–2; this method handles step 3.
-     * In all cases the result is intersected with ACTIVE_CHANNELS so
-     * channels that exist in config but aren't built (slack, discord,
-     * webhook) are dropped.
+     *   - SYSTEM events: catalog defaults, role-independent (non-configurable).
+     *   - A specific (event, role) row always wins.
+     *   - Else the '*' ("All Roles") row applies — it is a literal baseline for
+     *     every role, not just the default ones.
+     *   - Else (no rows at all) the code fallback: a default role (or a directed
+     *     recipient) gets the catalog defaults; any other role is off. This is
+     *     what keeps orgs that were never seeded behaving correctly.
+     *
+     * Criticality no longer locks channels — critical events are configurable
+     * like any other (their catalog defaults already cover every active
+     * channel, so this only grants the ability to mute).
+     *
+     * Directed recipients do not go through here at all — they are resolved
+     * to catalog defaults by the caller, so they are never gated off by an
+     * off ('{}') wildcard baseline or a non-default role. Everything is
+     * intersected with ACTIVE_CHANNELS.
      */
-    private async resolveChannels(
-        organizationId: string,
+    private resolveEnabledChannels(
+        ruleByKey: Map<string, IRoutingRule>,
         event: string,
         role: string,
         defaults: (typeof EVENT_DEFAULTS)[NotificationEvent],
-    ): Promise<NotificationChannel[]> {
-        const rule = await this.routingRuleRepo.resolve(
-            organizationId,
-            event,
-            role,
-        );
-
-        if (rule) {
-            return Object.entries(rule.channels)
-                .filter(
-                    ([ch, enabled]) =>
-                        enabled &&
-                        ACTIVE_CHANNELS.has(ch as NotificationChannel),
-                )
-                .map(([ch]) => ch as NotificationChannel);
+    ): NotificationChannel[] {
+        if (defaults.criticality === Criticality.SYSTEM) {
+            return [...defaults.defaultChannels].filter((ch) =>
+                ACTIVE_CHANNELS.has(ch),
+            );
         }
 
-        return [...defaults.defaultChannels].filter((ch) =>
-            ACTIVE_CHANNELS.has(ch),
-        );
+        // A specific (event, role) row wins; otherwise the '*' baseline applies
+        // to every role. Both are honored before the code fallback so the
+        // stored config is the source of truth for seeded orgs. Lookups are
+        // O(1) against the map the caller built once for the whole fanout.
+        const specific = ruleByKey.get(`${event}:${role}`);
+        if (specific) return this.activeEnabledChannels(specific.channels);
+
+        const wildcard = ruleByKey.get(`${event}:${ROLE_WILDCARD}`);
+        if (wildcard) return this.activeEnabledChannels(wildcard.channels);
+
+        // No rows: fall back to the catalog defaults for default roles;
+        // everyone else is off.
+        const isDefaultRole =
+            !defaults.defaultRoles ||
+            (defaults.defaultRoles as readonly string[]).includes(role);
+        if (isDefaultRole) {
+            return [...defaults.defaultChannels].filter((ch) =>
+                ACTIVE_CHANNELS.has(ch),
+            );
+        }
+        return [];
+    }
+
+    private activeEnabledChannels(
+        channels: Record<string, boolean>,
+    ): NotificationChannel[] {
+        return Object.entries(channels)
+            .filter(
+                ([ch, enabled]) =>
+                    enabled && ACTIVE_CHANNELS.has(ch as NotificationChannel),
+            )
+            .map(([ch]) => ch as NotificationChannel);
     }
 
     /**

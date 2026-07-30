@@ -23,22 +23,22 @@ import * as path from 'path';
 import * as fs from 'fs';
 
 // Load .env
-const envArg = process.argv.find(a => a.startsWith('--env='));
+const envArg = process.argv.find((a) => a.startsWith('--env='));
 const envPath = envArg
     ? path.resolve(envArg.split('=')[1])
     : process.env.DOTENV_CONFIG_PATH
-        ? path.resolve(process.env.DOTENV_CONFIG_PATH)
-        : path.resolve(__dirname, '../.env');
+      ? path.resolve(process.env.DOTENV_CONFIG_PATH)
+      : path.resolve(__dirname, '../.env');
 
 dotenv.config({ path: envPath });
 
 // Parse arguments
 const args = process.argv.slice(2);
-const daysArg = args.find(a => a.startsWith('--days='));
-const formatArg = args.find(a => a.startsWith('--format='));
-const outputArg = args.find(a => a.startsWith('--output='));
+const daysArg = args.find((a) => a.startsWith('--days='));
+const formatArg = args.find((a) => a.startsWith('--format='));
+const outputArg = args.find((a) => a.startsWith('--output='));
 
-const orgArg = args.find(a => a.startsWith('--org='));
+const orgArg = args.find((a) => a.startsWith('--org='));
 
 const DAYS_BACK = daysArg ? parseInt(daysArg.split('=')[1], 10) : 7;
 const FORMAT = formatArg ? formatArg.split('=')[1] : 'console';
@@ -132,7 +132,9 @@ function buildMongoUri(): string {
     const authSource = process.env.API_MG_DB_AUTH_SOURCE || 'admin';
 
     if (!host) {
-        throw new Error('Missing MongoDB configuration. Set MONGODB_URI or API_MG_DB_* variables.');
+        throw new Error(
+            'Missing MongoDB configuration. Set MONGODB_URI or API_MG_DB_* variables.',
+        );
     }
 
     if (username && password) {
@@ -148,7 +150,10 @@ function buildMongoUri(): string {
     return `mongodb+srv://${host}`;
 }
 
-function calculatePercentile(sortedValues: number[], percentile: number): number {
+function calculatePercentile(
+    sortedValues: number[],
+    percentile: number,
+): number {
     if (sortedValues.length === 0) return 0;
     const index = Math.floor(sortedValues.length * percentile);
     return sortedValues[Math.min(index, sortedValues.length - 1)];
@@ -164,37 +169,43 @@ function formatDuration(ms: number): string {
 }
 
 function padRight(str: string, len: number): string {
-    return str.length >= len ? str.substring(0, len) : str + ' '.repeat(len - str.length);
+    return str.length >= len
+        ? str.substring(0, len)
+        : str + ' '.repeat(len - str.length);
 }
 
 function padLeft(str: string, len: number): string {
-    return str.length >= len ? str.substring(0, len) : ' '.repeat(len - str.length) + str;
+    return str.length >= len
+        ? str.substring(0, len)
+        : ' '.repeat(len - str.length) + str;
 }
 
-async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<StageMetrics[]> {
+async function getStageMetrics(
+    db: Db,
+    startDate: Date,
+    endDate: Date,
+): Promise<StageMetrics[]> {
     const matchStage: any = {
         message: { $regex: /Stage.*completed in \d+ms/ },
         component: 'PipelineExecutor',
-        timestamp: { $gte: startDate, $lte: endDate }
+        timestamp: { $gte: startDate, $lte: endDate },
     };
 
     if (ORG_FILTER) {
         matchStage['$or'] = [
             { 'attributes.organizationId': ORG_FILTER },
-            { 'attributes.organizationAndTeamData.organizationId': ORG_FILTER }
+            { 'attributes.organizationAndTeamData.organizationId': ORG_FILTER },
         ];
     }
 
-    const pipeline: any[] = [
-        { $match: matchStage }
-    ];
+    const pipeline: any[] = [{ $match: matchStage }];
 
     if (INCLUDE_LEGACY) {
         pipeline.push({
             $unionWith: {
                 coll: 'observability_logs',
-                pipeline: [{ $match: matchStage }]
-            }
+                pipeline: [{ $match: matchStage }],
+            },
         });
     }
 
@@ -205,15 +216,27 @@ async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<
                 durationMs: {
                     $toInt: {
                         $arrayElemAt: [
-                            { $split: [
-                                { $arrayElemAt: [{ $split: ['$message', 'completed in '] }, 1] },
-                                'ms'
-                            ] },
-                            0
-                        ]
-                    }
-                }
-            }
+                            {
+                                $split: [
+                                    {
+                                        $arrayElemAt: [
+                                            {
+                                                $split: [
+                                                    '$message',
+                                                    'completed in ',
+                                                ],
+                                            },
+                                            1,
+                                        ],
+                                    },
+                                    'ms',
+                                ],
+                            },
+                            0,
+                        ],
+                    },
+                },
+            },
         },
         {
             $group: {
@@ -222,8 +245,8 @@ async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<
                 avgMs: { $avg: '$durationMs' },
                 minMs: { $min: '$durationMs' },
                 maxMs: { $max: '$durationMs' },
-                durations: { $push: '$durationMs' }
-            }
+                durations: { $push: '$durationMs' },
+            },
         },
         {
             $project: {
@@ -232,12 +255,15 @@ async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<
                 avgMs: { $round: ['$avgMs', 0] },
                 minMs: 1,
                 maxMs: 1,
-                durations: 1
-            }
-        }
+                durations: 1,
+            },
+        },
     );
 
-    const stagesAgg = await db.collection('observability_logs_ts').aggregate(pipeline).toArray();
+    const stagesAgg = await db
+        .collection('observability_logs_ts')
+        .aggregate(pipeline)
+        .toArray();
 
     // Calculate percentiles and sort by pipeline order
     const stageOrder = [
@@ -247,7 +273,6 @@ async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<
         'CreateGithubCheckStage',
         'FetchChangedFilesStage',
         'LoadExternalContextStage',
-        'FileContextGateStage',
         'InitialCommentStage',
         'KodyFineTuningStage',
         'PRLevelReviewStage',
@@ -258,12 +283,14 @@ async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<
         'AggregateResultsStage',
         'UpdateCommentsAndGenerateSummaryStage',
         'RequestChangesOrApproveStage',
-        'FinalizeGithubCheckStage'
+        'FinalizeGithubCheckStage',
     ];
 
     return stagesAgg
         .map((stage: any) => {
-            const sortedDurations = (stage.durations || []).sort((a: number, b: number) => a - b);
+            const sortedDurations = (stage.durations || []).sort(
+                (a: number, b: number) => a - b,
+            );
             return {
                 stageName: stage.stageName || 'Unknown',
                 count: stage.count,
@@ -271,20 +298,25 @@ async function getStageMetrics(db: Db, startDate: Date, endDate: Date): Promise<
                 p75Ms: calculatePercentile(sortedDurations, 0.75),
                 p95Ms: calculatePercentile(sortedDurations, 0.95),
                 minMs: stage.minMs,
-                maxMs: stage.maxMs
+                maxMs: stage.maxMs,
             };
         })
         .sort((a, b) => {
             const aIndex = stageOrder.indexOf(a.stageName);
             const bIndex = stageOrder.indexOf(b.stageName);
-            if (aIndex === -1 && bIndex === -1) return a.stageName.localeCompare(b.stageName);
+            if (aIndex === -1 && bIndex === -1)
+                return a.stageName.localeCompare(b.stageName);
             if (aIndex === -1) return 1;
             if (bIndex === -1) return -1;
             return aIndex - bIndex;
         });
 }
 
-async function getLLMMetrics(db: Db, startDate: Date, endDate: Date): Promise<LLMMetrics[]> {
+async function getLLMMetrics(
+    db: Db,
+    startDate: Date,
+    endDate: Date,
+): Promise<LLMMetrics[]> {
     const llmMatch: any = {
         timestamp: { $gte: startDate, $lte: endDate },
         name: {
@@ -298,47 +330,60 @@ async function getLLMMetrics(db: Db, startDate: Date, endDate: Date): Promise<LL
                 'KodyRulesPrLevelAnalysisService::prLevelKodyRulesAnalyzer',
                 'CrossFileAnalysisService::crossFileAnalyzeCodeWithAI',
                 'CommentManagerService::generateSummaryPR',
-                'CommentManagerService::repeatedCodeReviewSuggestionClustering'
-            ]
+                'CommentManagerService::repeatedCodeReviewSuggestionClustering',
+            ],
         },
-        duration: { $gt: 0 }
+        duration: { $gt: 0 },
     };
 
     if (ORG_FILTER) {
         llmMatch['attributes.organizationId'] = ORG_FILTER;
     }
 
-    const llmAgg = await db.collection('observability_telemetry').aggregate([
-        { $match: llmMatch },
-        {
-            $group: {
-                _id: '$name',
-                count: { $sum: 1 },
-                avgMs: { $avg: '$duration' },
-                minMs: { $min: '$duration' },
-                maxMs: { $max: '$duration' },
-                durations: { $push: '$duration' },
-                avgInputTokens: { $avg: '$attributes.gen_ai.usage.input_tokens' },
-                avgOutputTokens: { $avg: '$attributes.gen_ai.usage.output_tokens' }
-            }
-        },
-        {
-            $project: {
-                operationName: '$_id',
-                count: 1,
-                avgMs: { $round: ['$avgMs', 0] },
-                minMs: 1,
-                maxMs: 1,
-                durations: 1,
-                avgInputTokens: { $round: [{ $ifNull: ['$avgInputTokens', 0] }, 0] },
-                avgOutputTokens: { $round: [{ $ifNull: ['$avgOutputTokens', 0] }, 0] }
-            }
-        },
-        { $sort: { avgMs: -1 } }
-    ]).toArray();
+    const llmAgg = await db
+        .collection('observability_telemetry')
+        .aggregate([
+            { $match: llmMatch },
+            {
+                $group: {
+                    _id: '$name',
+                    count: { $sum: 1 },
+                    avgMs: { $avg: '$duration' },
+                    minMs: { $min: '$duration' },
+                    maxMs: { $max: '$duration' },
+                    durations: { $push: '$duration' },
+                    avgInputTokens: {
+                        $avg: '$attributes.gen_ai.usage.input_tokens',
+                    },
+                    avgOutputTokens: {
+                        $avg: '$attributes.gen_ai.usage.output_tokens',
+                    },
+                },
+            },
+            {
+                $project: {
+                    operationName: '$_id',
+                    count: 1,
+                    avgMs: { $round: ['$avgMs', 0] },
+                    minMs: 1,
+                    maxMs: 1,
+                    durations: 1,
+                    avgInputTokens: {
+                        $round: [{ $ifNull: ['$avgInputTokens', 0] }, 0],
+                    },
+                    avgOutputTokens: {
+                        $round: [{ $ifNull: ['$avgOutputTokens', 0] }, 0],
+                    },
+                },
+            },
+            { $sort: { avgMs: -1 } },
+        ])
+        .toArray();
 
     return llmAgg.map((llm: any) => {
-        const sortedDurations = (llm.durations || []).sort((a: number, b: number) => a - b);
+        const sortedDurations = (llm.durations || []).sort(
+            (a: number, b: number) => a - b,
+        );
         return {
             operationName: llm.operationName || 'Unknown',
             count: llm.count,
@@ -348,12 +393,16 @@ async function getLLMMetrics(db: Db, startDate: Date, endDate: Date): Promise<LL
             minMs: llm.minMs,
             maxMs: llm.maxMs,
             avgInputTokens: llm.avgInputTokens || 0,
-            avgOutputTokens: llm.avgOutputTokens || 0
+            avgOutputTokens: llm.avgOutputTokens || 0,
         };
     });
 }
 
-async function getModelMetrics(db: Db, startDate: Date, endDate: Date): Promise<ModelMetrics[]> {
+async function getModelMetrics(
+    db: Db,
+    startDate: Date,
+    endDate: Date,
+): Promise<ModelMetrics[]> {
     const modelMatch: any = {
         timestamp: { $gte: startDate, $lte: endDate },
         name: {
@@ -367,68 +416,92 @@ async function getModelMetrics(db: Db, startDate: Date, endDate: Date): Promise<
                 'KodyRulesPrLevelAnalysisService::prLevelKodyRulesAnalyzer',
                 'CrossFileAnalysisService::crossFileAnalyzeCodeWithAI',
                 'CommentManagerService::generateSummaryPR',
-                'CommentManagerService::repeatedCodeReviewSuggestionClustering'
-            ]
+                'CommentManagerService::repeatedCodeReviewSuggestionClustering',
+            ],
         },
-        duration: { $gt: 0 }
+        duration: { $gt: 0 },
     };
 
     if (ORG_FILTER) {
         modelMatch['attributes.organizationId'] = ORG_FILTER;
     }
 
-    const modelAgg = await db.collection('observability_telemetry').aggregate([
-        { $match: modelMatch },
-        {
-            $addFields: {
-                modelName: {
-                    $ifNull: [
-                        { $getField: { field: 'gen_ai.response.model', input: '$attributes' } },
-                        'unknown'
-                    ]
+    const modelAgg = await db
+        .collection('observability_telemetry')
+        .aggregate([
+            { $match: modelMatch },
+            {
+                $addFields: {
+                    modelName: {
+                        $ifNull: [
+                            {
+                                $getField: {
+                                    field: 'gen_ai.response.model',
+                                    input: '$attributes',
+                                },
+                            },
+                            'unknown',
+                        ],
+                    },
+                    inputTokens: {
+                        $getField: {
+                            field: 'gen_ai.usage.input_tokens',
+                            input: '$attributes',
+                        },
+                    },
+                    outputTokens: {
+                        $getField: {
+                            field: 'gen_ai.usage.output_tokens',
+                            input: '$attributes',
+                        },
+                    },
                 },
-                inputTokens: { $getField: { field: 'gen_ai.usage.input_tokens', input: '$attributes' } },
-                outputTokens: { $getField: { field: 'gen_ai.usage.output_tokens', input: '$attributes' } }
-            }
-        },
-        {
-            $group: {
-                _id: '$modelName',
-                count: { $sum: 1 },
-                avgMs: { $avg: '$duration' },
-                minMs: { $min: '$duration' },
-                maxMs: { $max: '$duration' },
-                durations: { $push: '$duration' },
-                avgInputTokens: { $avg: '$inputTokens' },
-                avgOutputTokens: { $avg: '$outputTokens' },
-                slowCallsCount: {
-                    $sum: { $cond: [{ $gt: ['$duration', 60000] }, 1, 0] }
-                }
-            }
-        },
-        {
-            $match: {
-                _id: { $ne: 'unknown' }
-            }
-        },
-        {
-            $project: {
-                model: '$_id',
-                count: 1,
-                avgMs: { $round: ['$avgMs', 0] },
-                minMs: 1,
-                maxMs: 1,
-                durations: 1,
-                avgInputTokens: { $round: [{ $ifNull: ['$avgInputTokens', 0] }, 0] },
-                avgOutputTokens: { $round: [{ $ifNull: ['$avgOutputTokens', 0] }, 0] },
-                slowCallsCount: 1
-            }
-        },
-        { $sort: { count: -1 } }
-    ]).toArray();
+            },
+            {
+                $group: {
+                    _id: '$modelName',
+                    count: { $sum: 1 },
+                    avgMs: { $avg: '$duration' },
+                    minMs: { $min: '$duration' },
+                    maxMs: { $max: '$duration' },
+                    durations: { $push: '$duration' },
+                    avgInputTokens: { $avg: '$inputTokens' },
+                    avgOutputTokens: { $avg: '$outputTokens' },
+                    slowCallsCount: {
+                        $sum: { $cond: [{ $gt: ['$duration', 60000] }, 1, 0] },
+                    },
+                },
+            },
+            {
+                $match: {
+                    _id: { $ne: 'unknown' },
+                },
+            },
+            {
+                $project: {
+                    model: '$_id',
+                    count: 1,
+                    avgMs: { $round: ['$avgMs', 0] },
+                    minMs: 1,
+                    maxMs: 1,
+                    durations: 1,
+                    avgInputTokens: {
+                        $round: [{ $ifNull: ['$avgInputTokens', 0] }, 0],
+                    },
+                    avgOutputTokens: {
+                        $round: [{ $ifNull: ['$avgOutputTokens', 0] }, 0],
+                    },
+                    slowCallsCount: 1,
+                },
+            },
+            { $sort: { count: -1 } },
+        ])
+        .toArray();
 
     return modelAgg.map((m: any) => {
-        const sortedDurations = (m.durations || []).sort((a: number, b: number) => a - b);
+        const sortedDurations = (m.durations || []).sort(
+            (a: number, b: number) => a - b,
+        );
         return {
             model: m.model || 'unknown',
             count: m.count,
@@ -439,63 +512,74 @@ async function getModelMetrics(db: Db, startDate: Date, endDate: Date): Promise<
             maxMs: m.maxMs,
             avgInputTokens: m.avgInputTokens || 0,
             avgOutputTokens: m.avgOutputTokens || 0,
-            slowCallsCount: m.slowCallsCount || 0
+            slowCallsCount: m.slowCallsCount || 0,
         };
     });
 }
 
-async function getOrgMetrics(db: Db, startDate: Date, endDate: Date): Promise<OrgMetrics[]> {
+async function getOrgMetrics(
+    db: Db,
+    startDate: Date,
+    endDate: Date,
+): Promise<OrgMetrics[]> {
     const orgMatch: any = {
-        timestamp: { $gte: startDate, $lte: endDate },
+        'timestamp': { $gte: startDate, $lte: endDate },
         'attributes.prNumber': { $exists: true },
         'attributes.organizationId': { $exists: true },
-        duration: { $gt: 0 }
+        'duration': { $gt: 0 },
     };
 
     if (ORG_FILTER) {
         orgMatch['attributes.organizationId'] = ORG_FILTER;
     }
 
-    const orgAgg = await db.collection('observability_telemetry').aggregate([
-        { $match: orgMatch },
-        {
-            $group: {
-                _id: {
-                    organizationId: '$attributes.organizationId',
-                    prNumber: '$attributes.prNumber',
-                    correlationId: '$correlationId'
+    const orgAgg = await db
+        .collection('observability_telemetry')
+        .aggregate([
+            { $match: orgMatch },
+            {
+                $group: {
+                    _id: {
+                        organizationId: '$attributes.organizationId',
+                        prNumber: '$attributes.prNumber',
+                        correlationId: '$correlationId',
+                    },
+                    maxCallDuration: { $max: '$duration' },
                 },
-                maxCallDuration: { $max: '$duration' }
-            }
-        },
-        {
-            $group: {
-                _id: '$_id.organizationId',
-                prCount: { $sum: 1 },
-                avgMs: { $avg: '$maxCallDuration' },
-                maxMs: { $max: '$maxCallDuration' },
-                durations: { $push: '$maxCallDuration' },
-                slowPRsCount: {
-                    $sum: { $cond: [{ $gt: ['$maxCallDuration', 60000] }, 1, 0] }
-                }
-            }
-        },
-        {
-            $project: {
-                organizationId: '$_id',
-                prCount: 1,
-                avgMs: { $round: ['$avgMs', 0] },
-                maxMs: 1,
-                durations: 1,
-                slowPRsCount: 1
-            }
-        },
-        { $sort: { maxMs: -1 } },
-        { $limit: 15 }
-    ]).toArray();
+            },
+            {
+                $group: {
+                    _id: '$_id.organizationId',
+                    prCount: { $sum: 1 },
+                    avgMs: { $avg: '$maxCallDuration' },
+                    maxMs: { $max: '$maxCallDuration' },
+                    durations: { $push: '$maxCallDuration' },
+                    slowPRsCount: {
+                        $sum: {
+                            $cond: [{ $gt: ['$maxCallDuration', 60000] }, 1, 0],
+                        },
+                    },
+                },
+            },
+            {
+                $project: {
+                    organizationId: '$_id',
+                    prCount: 1,
+                    avgMs: { $round: ['$avgMs', 0] },
+                    maxMs: 1,
+                    durations: 1,
+                    slowPRsCount: 1,
+                },
+            },
+            { $sort: { maxMs: -1 } },
+            { $limit: 15 },
+        ])
+        .toArray();
 
     return orgAgg.map((o: any) => {
-        const sortedDurations = (o.durations || []).sort((a: number, b: number) => a - b);
+        const sortedDurations = (o.durations || []).sort(
+            (a: number, b: number) => a - b,
+        );
         return {
             organizationId: o.organizationId || 'unknown',
             prCount: o.prCount,
@@ -503,34 +587,37 @@ async function getOrgMetrics(db: Db, startDate: Date, endDate: Date): Promise<Or
             p75Ms: calculatePercentile(sortedDurations, 0.75),
             p95Ms: calculatePercentile(sortedDurations, 0.95),
             maxMs: o.maxMs,
-            slowPRsCount: o.slowPRsCount || 0
+            slowPRsCount: o.slowPRsCount || 0,
         };
     });
 }
 
-async function getPipelineMetrics(db: Db, startDate: Date, endDate: Date): Promise<PipelineMetrics> {
+async function getPipelineMetrics(
+    db: Db,
+    startDate: Date,
+    endDate: Date,
+): Promise<PipelineMetrics> {
     const matchStage: any = {
         $or: [
             { message: { $regex: /Starting pipeline: CodeReviewPipeline/ } },
-            { message: { $regex: /Finished pipeline: CodeReviewPipeline/ } }
+            { message: { $regex: /Finished pipeline: CodeReviewPipeline/ } },
         ],
-        timestamp: { $gte: startDate, $lte: endDate }
+        timestamp: { $gte: startDate, $lte: endDate },
     };
 
     if (ORG_FILTER) {
-        matchStage['attributes.organizationAndTeamData.organizationId'] = ORG_FILTER;
+        matchStage['attributes.organizationAndTeamData.organizationId'] =
+            ORG_FILTER;
     }
 
-    const pipeline: any[] = [
-        { $match: matchStage }
-    ];
+    const pipeline: any[] = [{ $match: matchStage }];
 
     if (INCLUDE_LEGACY) {
         pipeline.push({
             $unionWith: {
                 coll: 'observability_logs',
-                pipeline: [{ $match: matchStage }]
-            }
+                pipeline: [{ $match: matchStage }],
+            },
         });
     }
 
@@ -539,16 +626,16 @@ async function getPipelineMetrics(db: Db, startDate: Date, endDate: Date): Promi
             $group: {
                 _id: '$attributes.pipelineId',
                 start: { $min: '$timestamp' },
-                end: { $max: '$timestamp' }
-            }
+                end: { $max: '$timestamp' },
+            },
         },
         {
             $addFields: {
-                durationMs: { $subtract: ['$end', '$start'] }
-            }
+                durationMs: { $subtract: ['$end', '$start'] },
+            },
         },
         {
-            $match: { durationMs: { $gt: 0 } }
+            $match: { durationMs: { $gt: 0 } },
         },
         {
             $group: {
@@ -557,12 +644,15 @@ async function getPipelineMetrics(db: Db, startDate: Date, endDate: Date): Promi
                 avgMs: { $avg: '$durationMs' },
                 minMs: { $min: '$durationMs' },
                 maxMs: { $max: '$durationMs' },
-                durations: { $push: '$durationMs' }
-            }
-        }
+                durations: { $push: '$durationMs' },
+            },
+        },
     );
 
-    const pipelineAgg = await db.collection('observability_logs_ts').aggregate(pipeline).toArray();
+    const pipelineAgg = await db
+        .collection('observability_logs_ts')
+        .aggregate(pipeline)
+        .toArray();
 
     if (pipelineAgg.length === 0) {
         return {
@@ -571,12 +661,14 @@ async function getPipelineMetrics(db: Db, startDate: Date, endDate: Date): Promi
             p75DurationMs: 0,
             p95DurationMs: 0,
             minDurationMs: 0,
-            maxDurationMs: 0
+            maxDurationMs: 0,
         };
     }
 
     const data = pipelineAgg[0];
-    const sortedDurations = (data.durations || []).sort((a: number, b: number) => a - b);
+    const sortedDurations = (data.durations || []).sort(
+        (a: number, b: number) => a - b,
+    );
 
     return {
         totalPipelines: data.count,
@@ -584,52 +676,64 @@ async function getPipelineMetrics(db: Db, startDate: Date, endDate: Date): Promi
         p75DurationMs: calculatePercentile(sortedDurations, 0.75),
         p95DurationMs: calculatePercentile(sortedDurations, 0.95),
         minDurationMs: data.minMs,
-        maxDurationMs: data.maxMs
+        maxDurationMs: data.maxMs,
     };
 }
 
-async function getSlowestPRs(db: Db, startDate: Date, endDate: Date, limit: number = 10): Promise<any[]> {
+async function getSlowestPRs(
+    db: Db,
+    startDate: Date,
+    endDate: Date,
+    limit: number = 10,
+): Promise<any[]> {
     const slowMatch: any = {
-        timestamp: { $gte: startDate, $lte: endDate },
+        'timestamp': { $gte: startDate, $lte: endDate },
         'attributes.prNumber': { $exists: true },
-        duration: { $gt: 60000 } // > 1 minute
+        'duration': { $gt: 60000 }, // > 1 minute
     };
 
     if (ORG_FILTER) {
         slowMatch['attributes.organizationId'] = ORG_FILTER;
     }
 
-    const slowPRs = await db.collection('observability_telemetry').aggregate([
-        { $match: slowMatch },
-        {
-            $group: {
-                _id: {
-                    prNumber: '$attributes.prNumber',
-                    correlationId: '$correlationId'
+    const slowPRs = await db
+        .collection('observability_telemetry')
+        .aggregate([
+            { $match: slowMatch },
+            {
+                $group: {
+                    _id: {
+                        prNumber: '$attributes.prNumber',
+                        correlationId: '$correlationId',
+                    },
+                    totalDuration: { $sum: '$duration' },
+                    maxSingleCall: { $max: '$duration' },
+                    timestamp: { $first: '$timestamp' },
+                    repository: {
+                        $first: '$attributes.organizationAndTeamData.repository.fullName',
+                    },
+                    repositoryAlt: {
+                        $first: '$attributes.repository.fullName',
+                    },
+                    organizationId: { $first: '$attributes.organizationId' },
                 },
-                totalDuration: { $sum: '$duration' },
-                maxSingleCall: { $max: '$duration' },
-                timestamp: { $first: '$timestamp' },
-                repository: { $first: '$attributes.organizationAndTeamData.repository.fullName' },
-                repositoryAlt: { $first: '$attributes.repository.fullName' },
-                organizationId: { $first: '$attributes.organizationId' }
-            }
-        },
-        { $sort: { maxSingleCall: -1 } }, // Sort by slowest single call, not total
-        { $limit: limit },
-        {
-            $project: {
-                _id: 0,
-                prNumber: '$_id.prNumber',
-                correlationId: '$_id.correlationId',
-                repository: { $ifNull: ['$repository', '$repositoryAlt'] },
-                organizationId: 1,
-                durationMs: '$totalDuration',
-                maxSingleCallMs: '$maxSingleCall',
-                timestamp: 1
-            }
-        }
-    ]).toArray();
+            },
+            { $sort: { maxSingleCall: -1 } }, // Sort by slowest single call, not total
+            { $limit: limit },
+            {
+                $project: {
+                    _id: 0,
+                    prNumber: '$_id.prNumber',
+                    correlationId: '$_id.correlationId',
+                    repository: { $ifNull: ['$repository', '$repositoryAlt'] },
+                    organizationId: 1,
+                    durationMs: '$totalDuration',
+                    maxSingleCallMs: '$maxSingleCall',
+                    timestamp: 1,
+                },
+            },
+        ])
+        .toArray();
 
     return slowPRs;
 }
@@ -663,37 +767,55 @@ function generateConsoleReport(data: ReportData): string {
     output += `${thinLine}\n`;
     output += `STAGE METRICS\n`;
     output += `${thinLine}\n`;
-    output += padRight('Stage', 45) + padLeft('Count', 8) + padLeft('Avg', 10) + padLeft('P75', 10) + padLeft('P95', 10) + padLeft('Max', 10) + '\n';
+    output +=
+        padRight('Stage', 45) +
+        padLeft('Count', 8) +
+        padLeft('Avg', 10) +
+        padLeft('P75', 10) +
+        padLeft('P95', 10) +
+        padLeft('Max', 10) +
+        '\n';
     output += thinLine + '\n';
 
     for (const stage of data.stages) {
         const highlight = stage.p95Ms > 60000 ? ' ⚠️' : '';
-        output += padRight(stage.stageName, 45) +
+        output +=
+            padRight(stage.stageName, 45) +
             padLeft(String(stage.count), 8) +
             padLeft(formatDuration(stage.avgMs), 10) +
             padLeft(formatDuration(stage.p75Ms), 10) +
             padLeft(formatDuration(stage.p95Ms), 10) +
             padLeft(formatDuration(stage.maxMs), 10) +
-            highlight + '\n';
+            highlight +
+            '\n';
     }
 
     // LLM Metrics
     output += `\n${thinLine}\n`;
     output += `LLM CALL METRICS\n`;
     output += `${thinLine}\n`;
-    output += padRight('Operation', 50) + padLeft('Count', 8) + padLeft('Avg', 10) + padLeft('P75', 10) + padLeft('P95', 10) + padLeft('Max', 10) + '\n';
+    output +=
+        padRight('Operation', 50) +
+        padLeft('Count', 8) +
+        padLeft('Avg', 10) +
+        padLeft('P75', 10) +
+        padLeft('P95', 10) +
+        padLeft('Max', 10) +
+        '\n';
     output += thinLine + '\n';
 
     for (const llm of data.llmCalls) {
         const highlight = llm.p95Ms > 120000 ? ' ⚠️' : '';
         const shortName = llm.operationName.replace('Service::', '::');
-        output += padRight(shortName, 50) +
+        output +=
+            padRight(shortName, 50) +
             padLeft(String(llm.count), 8) +
             padLeft(formatDuration(llm.avgMs), 10) +
             padLeft(formatDuration(llm.p75Ms), 10) +
             padLeft(formatDuration(llm.p95Ms), 10) +
             padLeft(formatDuration(llm.maxMs), 10) +
-            highlight + '\n';
+            highlight +
+            '\n';
     }
 
     // Model Metrics
@@ -701,19 +823,31 @@ function generateConsoleReport(data: ReportData): string {
         output += `\n${thinLine}\n`;
         output += `MODEL METRICS\n`;
         output += `${thinLine}\n`;
-        output += padRight('Model', 40) + padLeft('Count', 8) + padLeft('Avg', 10) + padLeft('P75', 10) + padLeft('P95', 10) + padLeft('Slow', 8) + '\n';
+        output +=
+            padRight('Model', 40) +
+            padLeft('Count', 8) +
+            padLeft('Avg', 10) +
+            padLeft('P75', 10) +
+            padLeft('P95', 10) +
+            padLeft('Slow', 8) +
+            '\n';
         output += thinLine + '\n';
 
         for (const model of data.modelMetrics) {
             const highlight = model.p95Ms > 120000 ? ' ⚠️' : '';
-            const slowPct = model.count > 0 ? ((model.slowCallsCount / model.count) * 100).toFixed(1) : '0';
-            output += padRight(model.model.substring(0, 39), 40) +
+            const slowPct =
+                model.count > 0
+                    ? ((model.slowCallsCount / model.count) * 100).toFixed(1)
+                    : '0';
+            output +=
+                padRight(model.model.substring(0, 39), 40) +
                 padLeft(String(model.count), 8) +
                 padLeft(formatDuration(model.avgMs), 10) +
                 padLeft(formatDuration(model.p75Ms), 10) +
                 padLeft(formatDuration(model.p95Ms), 10) +
                 padLeft(`${slowPct}%`, 8) +
-                highlight + '\n';
+                highlight +
+                '\n';
         }
     }
 
@@ -722,18 +856,27 @@ function generateConsoleReport(data: ReportData): string {
         output += `\n${thinLine}\n`;
         output += `SLOWEST ORGANIZATIONS (by max single LLM call)\n`;
         output += `${thinLine}\n`;
-        output += padRight('OrgId', 40) + padLeft('PRs', 6) + padLeft('Avg', 10) + padLeft('P95', 10) + padLeft('Max', 10) + padLeft('Slow', 8) + '\n';
+        output +=
+            padRight('OrgId', 40) +
+            padLeft('PRs', 6) +
+            padLeft('Avg', 10) +
+            padLeft('P95', 10) +
+            padLeft('Max', 10) +
+            padLeft('Slow', 8) +
+            '\n';
         output += thinLine + '\n';
 
         for (const org of data.orgMetrics) {
             const highlight = org.maxMs > 600000 ? ' ⚠️' : ''; // > 10min
-            output += padRight(org.organizationId.substring(0, 39), 40) +
+            output +=
+                padRight(org.organizationId.substring(0, 39), 40) +
                 padLeft(String(org.prCount), 6) +
                 padLeft(formatDuration(org.avgMs), 10) +
                 padLeft(formatDuration(org.p95Ms), 10) +
                 padLeft(formatDuration(org.maxMs), 10) +
                 padLeft(String(org.slowPRsCount), 8) +
-                highlight + '\n';
+                highlight +
+                '\n';
         }
     }
 
@@ -742,15 +885,29 @@ function generateConsoleReport(data: ReportData): string {
         output += `\n${thinLine}\n`;
         output += `SLOWEST PRs (by slowest single LLM call)\n`;
         output += `${thinLine}\n`;
-        output += padRight('PR', 10) + padRight('OrgId', 30) + padLeft('Slowest Call', 14) + padLeft('Total Time', 14) + padLeft('Date', 12) + '\n';
+        output +=
+            padRight('PR', 10) +
+            padRight('OrgId', 30) +
+            padLeft('Slowest Call', 14) +
+            padLeft('Total Time', 14) +
+            padLeft('Date', 12) +
+            '\n';
         output += thinLine + '\n';
 
         for (const pr of data.slowestPRs) {
-            output += padRight(`#${pr.prNumber}`, 10) +
-                padRight((pr.organizationId || pr.repository || 'unknown').substring(0, 29), 30) +
+            output +=
+                padRight(`#${pr.prNumber}`, 10) +
+                padRight(
+                    (pr.organizationId || pr.repository || 'unknown').substring(
+                        0,
+                        29,
+                    ),
+                    30,
+                ) +
                 padLeft(formatDuration(pr.maxSingleCallMs), 14) +
                 padLeft(formatDuration(pr.durationMs), 14) +
-                padLeft(pr.timestamp?.toISOString().split('T')[0] || '', 12) + '\n';
+                padLeft(pr.timestamp?.toISOString().split('T')[0] || '', 12) +
+                '\n';
         }
     }
 
@@ -809,7 +966,10 @@ function generateMarkdownReport(data: ReportData): string {
 
         for (const model of data.modelMetrics) {
             const highlight = model.p95Ms > 120000 ? ' ⚠️' : '';
-            const slowPct = model.count > 0 ? ((model.slowCallsCount / model.count) * 100).toFixed(1) : '0';
+            const slowPct =
+                model.count > 0
+                    ? ((model.slowCallsCount / model.count) * 100).toFixed(1)
+                    : '0';
             output += `| ${model.model} | ${model.count} | ${formatDuration(model.avgMs)} | ${formatDuration(model.p75Ms)} | ${formatDuration(model.p95Ms)}${highlight} | ${model.slowCallsCount} (${slowPct}%) |\n`;
         }
     }
@@ -847,16 +1007,19 @@ async function generateReport(db: Db): Promise<ReportData> {
     const endDate = new Date();
     const startDate = new Date(Date.now() - DAYS_BACK * 24 * 60 * 60 * 1000);
 
-    console.error(`Fetching data from ${startDate.toISOString()} to ${endDate.toISOString()}...`);
+    console.error(
+        `Fetching data from ${startDate.toISOString()} to ${endDate.toISOString()}...`,
+    );
 
-    const [pipeline, stages, llmCalls, modelMetrics, orgMetrics, slowestPRs] = await Promise.all([
-        getPipelineMetrics(db, startDate, endDate),
-        getStageMetrics(db, startDate, endDate),
-        getLLMMetrics(db, startDate, endDate),
-        getModelMetrics(db, startDate, endDate),
-        getOrgMetrics(db, startDate, endDate),
-        getSlowestPRs(db, startDate, endDate, 15)
-    ]);
+    const [pipeline, stages, llmCalls, modelMetrics, orgMetrics, slowestPRs] =
+        await Promise.all([
+            getPipelineMetrics(db, startDate, endDate),
+            getStageMetrics(db, startDate, endDate),
+            getLLMMetrics(db, startDate, endDate),
+            getModelMetrics(db, startDate, endDate),
+            getOrgMetrics(db, startDate, endDate),
+            getSlowestPRs(db, startDate, endDate, 15),
+        ]);
 
     return {
         generatedAt: new Date(),
@@ -868,7 +1031,7 @@ async function generateReport(db: Db): Promise<ReportData> {
         llmCalls,
         modelMetrics,
         orgMetrics,
-        slowestPRs
+        slowestPRs,
     };
 }
 
@@ -932,7 +1095,6 @@ Examples:
         } else {
             console.log(output);
         }
-
     } catch (error) {
         console.error('ERROR:', error);
         process.exit(1);

@@ -158,6 +158,10 @@ export class PullRequestIngestionService {
             _id: 1,
             organizationId: 1,
             repository: 1,
+            // Provider-facing PR number — feeds `pull_requests_opt.pr_number`
+            // (explorer deep links). Easy to miss: anything not listed here
+            // silently arrives as undefined in writeOnePR.
+            number: 1,
             status: 1,
             user: 1,
             totalChanges: 1,
@@ -419,19 +423,20 @@ export class PullRequestIngestionService {
                 "status", "authorId", "author_username", "totalChanges",
                 "createdAt", "openedAt", "closedAt",
                 "parsed_created_at", "parsed_opened_at", "parsed_closed_at",
-                "files", "commits", "source_updated_at"
+                "files", "commits", "source_updated_at", "pr_number"
              )
              VALUES (
                 $1, $2, $3, $4,
                 $5, $6, $7, $8,
                 $9, $10, $11,
                 $12, $13, $14,
-                $15::jsonb, $16::jsonb, $17
+                $15::jsonb, $16::jsonb, $17, $18
              )
              ON CONFLICT ("_id") DO UPDATE SET
                 "organizationId" = EXCLUDED."organizationId",
                 "repo_full_name" = EXCLUDED."repo_full_name",
                 "repositoryId" = EXCLUDED."repositoryId",
+                "pr_number" = EXCLUDED."pr_number",
                 "status" = EXCLUDED."status",
                 "authorId" = EXCLUDED."authorId",
                 "author_username" = EXCLUDED."author_username",
@@ -464,6 +469,7 @@ export class PullRequestIngestionService {
                 JSON.stringify(pr.files ?? []),
                 JSON.stringify(pr.commits ?? []),
                 sourceUpdatedAt,
+                typeof pr.number === 'number' ? pr.number : null,
             ],
         );
 
@@ -504,14 +510,15 @@ export class PullRequestIngestionService {
                         "suggestion_id", "organizationId", "pullRequestId",
                         "repositoryId", "filePath", "label", "severity",
                         "suggestionDeliveryStatus", "suggestionImplementationStatus",
-                        "suggestionCreatedAt", "raw"
+                        "suggestionCreatedAt", "brokenKodyRulesIds", "raw"
                      ) VALUES (
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb
                      )
                      ON CONFLICT ("suggestion_id") DO UPDATE SET
                         "suggestionDeliveryStatus" = EXCLUDED."suggestionDeliveryStatus",
                         "suggestionImplementationStatus" = EXCLUDED."suggestionImplementationStatus",
                         "suggestionCreatedAt" = EXCLUDED."suggestionCreatedAt",
+                        "brokenKodyRulesIds" = EXCLUDED."brokenKodyRulesIds",
                         "raw" = EXCLUDED."raw"`,
                     [
                         s.id,
@@ -524,6 +531,9 @@ export class PullRequestIngestionService {
                         s.deliveryStatus ?? null,
                         implStatus,
                         createdAt,
+                        Array.isArray(s.brokenKodyRulesIds)
+                            ? s.brokenKodyRulesIds
+                            : null,
                         JSON.stringify(s),
                     ],
                 );
@@ -622,6 +632,7 @@ export class PullRequestIngestionService {
         // root cause of ~33k PRs missing from the first prod backfill
         // (April 2026).
         const stripNulls = (s: string): string =>
+            // eslint-disable-next-line no-control-regex -- intentional: Postgres text/jsonb reject U+0000, so strip it
             s.replace(/\u0000/g, '');
         const message = stripNulls(
             input.err instanceof Error

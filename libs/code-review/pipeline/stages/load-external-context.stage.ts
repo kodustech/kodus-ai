@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ContextLayer } from '@kodus/flow';
+import type { ContextLayer } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 
 import { ILoadExternalContextStage } from './contracts/loadExternalContextStage.contract';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import {
     IPromptExternalReferenceManagerService,
@@ -113,7 +113,6 @@ export class LoadExternalContextStage
                             externalLayers: contextLayers,
                             repository: context.repository,
                             pullRequest: context.pullRequest,
-                            executeMCPDependencies: false,
                         });
 
                     if (resolved.sanitizedOverrides) {

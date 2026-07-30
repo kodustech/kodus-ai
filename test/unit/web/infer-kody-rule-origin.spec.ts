@@ -62,20 +62,20 @@ describe("inferRuleOrigin", () => {
     // Local reproduction: 3 rules from fast-sync on a fresh account where
     // sourcePath is a glob (bug that falls back path → sourcePath) or a
     // config file that the onboarding LLM analysed.
-    it('returns "Onboard" when sourcePath is a glob (fast-sync fallback)', () => {
+    it('returns "Onboarding" when sourcePath is a glob (fast-sync fallback)', () => {
         const result = inferRuleOrigin({
             sourcePath: "src/**/*.ts",
             origin: "user",
         });
-        expect(result).toBe("Onboard");
+        expect(result).toBe("Onboarding");
     });
 
-    it('returns "Onboard" when sourcePath is a config file from the onboarding analysis', () => {
+    it('returns "Onboarding" when sourcePath is a config file from the onboarding analysis', () => {
         const result = inferRuleOrigin({
             sourcePath: "esbuild.config.js",
             origin: "user",
         });
-        expect(result).toBe("Onboard");
+        expect(result).toBe("Onboarding");
     });
 
     // Client data: ff8ecc7e (Transaction Management) — hand-authored
@@ -109,5 +109,28 @@ describe("inferRuleOrigin", () => {
         expect(inferRuleOrigin({ sourcePath: undefined } as any)).toBe(
             "manual",
         );
+    });
+
+    describe("explicit origin → label (sourcePath irrelevant)", () => {
+        it.each([
+            ["repo_file_sync", "Auto-sync"],
+            ["onboarding_repo_analysis", "Onboarding"],
+            ["past_reviews", "Kody-generated"],
+            ["library", "Library"],
+            ["mcp_agent", "MCP/Agent"],
+            ["cli", "CLI"],
+            ["manual", "manual"],
+        ])("maps %s → %s", (origin, label) => {
+            expect(inferRuleOrigin({ origin, sourcePath: null })).toBe(label);
+        });
+
+        it("explicit origin wins over a leaked sourcePath", () => {
+            expect(
+                inferRuleOrigin({
+                    origin: "mcp_agent",
+                    sourcePath: ".cursorrules",
+                }),
+            ).toBe("MCP/Agent");
+        });
     });
 });

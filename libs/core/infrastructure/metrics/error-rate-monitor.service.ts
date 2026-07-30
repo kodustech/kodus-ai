@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { MetricsEventModel } from './schemas/metrics-event.schema';
 import { IncidentManagerService } from '../incident/incident-manager.service';
 import { MetricsCollectorService } from './metrics-collector.service';

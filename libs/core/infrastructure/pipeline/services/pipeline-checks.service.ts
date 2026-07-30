@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { IPipelineChecksService } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-checks-service.interface';
 import { Injectable } from '@nestjs/common';
@@ -9,46 +9,45 @@ import {
 import { PipelineObserverContext } from '../interfaces/pipeline-observer.interface';
 import { ChecksAdapterFactory } from './checks-adapter.factory';
 
+// Single stable check-run name for every pipeline execution. The platform
+// groups check runs by (name, head_sha) and only surfaces the most recent
+// one, so a stable name guarantees one check per commit whose status is
+// always the latest run's outcome — state lives in title/summary instead.
+export const KODY_CHECK_RUN_NAME = 'Kody Code Review';
+
 export const checkStageMap = {
     _pipelineStart: {
-        name: 'Code Review Started',
         title: 'Code Review Starting',
         summary: 'Kody is analyzing your code changes...',
     },
 
     PRLevelReviewStage: {
-        name: 'PR-Level Analysis',
         title: 'Code Review In Progress',
         summary:
             'Reviewing PR-level changes: analyzing overall intent, descriptions, and cross-file impacts.',
     },
     FileAnalysisStage: {
-        name: 'File-Level Analysis',
         title: 'Code Review In Progress',
         summary:
             'Reviewing file-level changes: analyzing each modified file for issues and improvement suggestions.',
     },
 
     _pipelineEndSuccess: {
-        name: 'Code Review Completed',
         title: 'Code Review Complete',
         summary:
             'Review finished successfully. Suggestions (if any) were posted as PR/file comments.',
     },
     _pipelineEndFailure: {
-        name: 'Code Review Failed',
         title: 'Code Review Failed',
         summary:
             'An error occurred during the review. Please check the logs for details.',
     },
     _pipelineEndPartial: {
-        name: 'Code Review Completed with Warnings',
         title: 'Code Review Completed with Warnings',
         summary:
             'Review finished, but one or more non-critical stages failed. See details below.',
     },
     _pipelineEndSkipped: {
-        name: 'Code Review Skipped',
         title: 'Code Review Skipped',
         summary: 'Review skipped.',
     },
@@ -276,7 +275,7 @@ export class PipelineChecksService implements IPipelineChecksService {
         const stageData = checkStageMap[stageName];
         if (!stageData) return;
 
-        const { name, title, summary } = stageData;
+        const { title, summary } = stageData;
 
         if (checkRunId) {
             this.logger.warn({
@@ -292,12 +291,40 @@ export class PipelineChecksService implements IPipelineChecksService {
         }
 
         try {
+            // Reuse the check run from a previous execution on the same
+            // commit (manual re-runs, retries after errors) so the PR shows
+            // a single check whose status is the latest run's outcome.
+            const existingCheckId = await adapter.findCheckRun({
+                organizationAndTeamData,
+                repository,
+                headSha,
+                name: KODY_CHECK_RUN_NAME,
+            });
+
+            if (existingCheckId) {
+                const reused = await adapter.updateCheckRun({
+                    checkRunId: existingCheckId,
+                    organizationAndTeamData,
+                    repository,
+                    status,
+                    output: {
+                        title,
+                        summary,
+                    },
+                });
+
+                if (reused) {
+                    observerContext.checkRunId = existingCheckId;
+                    return;
+                }
+            }
+
             const checkId = await adapter.createCheckRun({
                 organizationAndTeamData,
                 repository,
                 headSha,
                 status,
-                name,
+                name: KODY_CHECK_RUN_NAME,
                 output: {
                     title,
                     summary,
@@ -405,13 +432,11 @@ export class PipelineChecksService implements IPipelineChecksService {
             return;
         }
 
-        let name: string | undefined;
         let title: string | undefined;
         let summary: string | undefined = reason || undefined;
         if (stageName) {
             const stageCheckInfo = checkStageMap[stageName];
             if (stageCheckInfo) {
-                name = stageCheckInfo.name;
                 title = stageCheckInfo.title;
                 summary = summary || stageCheckInfo.summary;
             }
@@ -437,7 +462,6 @@ export class PipelineChecksService implements IPipelineChecksService {
                 repository,
                 status: CheckStatus.COMPLETED,
                 conclusion,
-                name,
                 output: summary
                     ? { title: title ?? 'Code Review', summary }
                     : undefined,

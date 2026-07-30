@@ -6,8 +6,8 @@
 #   3. Runs the Playwright spec.
 #
 # Usage:
-#   yarn sso-e2e:droplet:multi-user             # headless
-#   yarn sso-e2e:droplet:multi-user --headed    # visible Chromium
+#   pnpm run sso-e2e:droplet:multi-user             # headless
+#   pnpm run sso-e2e:droplet:multi-user --headed    # visible Chromium
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -253,4 +253,46 @@ export class ParametersRepository implements IParametersRepository {
             },
         );
     }
+
+    async createActiveVersionIfAbsent<K extends ParametersKey>(
+        configKey: K,
+        teamId: string,
+        configValue: IParameters<K>['configValue'],
+    ): Promise<ParametersEntity<K> | undefined> {
+        // Insert a first active version only when none exists. `orIgnore()`
+        // emits ON CONFLICT DO NOTHING, which the partial unique index
+        // UQ_parameters_one_active_per_team_key turns into a no-op when a
+        // concurrent writer already created the active row — so this never
+        // supersedes (and never clobbers) an existing config. There is no
+        // unique constraint on `version`, so version 1 is always safe here.
+        await this.parametersRepository
+            .createQueryBuilder()
+            .insert()
+            .into(ParametersModel)
+            .values({
+                uuid: uuidv4(),
+                configKey,
+                configValue,
+                team: { uuid: teamId } as never,
+                active: true,
+                version: 1,
+            })
+            .orIgnore()
+            .execute();
+
+        // Return whatever active row is now present — ours, or the one a
+        // concurrent writer created — so callers get the real config.
+        const active = await this.parametersRepository.findOne({
+            where: {
+                team: { uuid: teamId },
+                configKey,
+                active: true,
+            } as FindOneOptions<ParametersModel>['where'],
+            relations: ['team'],
+        });
+
+        return active
+            ? mapSimpleModelToEntity(active, ParametersEntity)
+            : undefined;
+    }
 }

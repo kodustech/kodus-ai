@@ -1,5 +1,4 @@
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/businessRulesValidationAgent';
-import { BaseAgentProvider } from '@libs/agents/infrastructure/services/kodus-flow/base-agent.provider';
+import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 
 function createProvider(): BusinessRulesValidationAgentProvider {
     return new BusinessRulesValidationAgentProvider(
@@ -201,10 +200,18 @@ describe('BusinessRulesValidationAgentProvider.formatValidationResponse', () => 
             },
         );
 
+        // The 4th arg is the Langfuse telemetry metadata (org/team/PR/repo) so
+        // the formatter trace groups under the PR session; this ctx carries none.
         expect((provider as any).formatUserFacingMessage).toHaveBeenCalledWith(
             '## 🤔 Need Task Information',
             'pt-BR',
             'limitation',
+            {
+                organizationId: undefined,
+                teamId: undefined,
+                pullRequestId: undefined,
+                repositoryId: undefined,
+            },
         );
         expect(formatted).toBe('## 🤔 Preciso de mais contexto');
     });
@@ -262,9 +269,6 @@ describe('BusinessRulesValidationAgentProvider.formatValidationResponse', () => 
 
 describe('BusinessRulesValidationAgentProvider analyzer execution', () => {
     it('awaits async formatting before writing formattedResponse into context', async () => {
-        const createLLMAdapterSpy = jest
-            .spyOn(BaseAgentProvider.prototype as any, 'createLLMAdapter')
-            .mockReturnValue({} as any);
         const provider = new BusinessRulesValidationAgentProvider(
             {} as any,
             {} as any,
@@ -312,7 +316,6 @@ describe('BusinessRulesValidationAgentProvider analyzer execution', () => {
 
         expect(result.formattedResponse).toBe('## Business Rules Validation');
         expect(result.formattedResponse).not.toBeInstanceOf(Promise);
-        createLLMAdapterSpy.mockRestore();
     });
 
     it('parses analyzer JSON and applies eligibility defaults from the pipeline context', () => {

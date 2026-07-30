@@ -1,3 +1,4 @@
+import { frozenContext } from '../../../../test/fixtures/frozen-pipeline-context';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
@@ -7,6 +8,7 @@ import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/c
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { AutoAssignLicenseUseCase } from '@libs/ee/license/use-cases/auto-assign-license.use-case';
+import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.interface';
 import {
     PermissionValidationService,
     ValidationErrorType,
@@ -20,7 +22,7 @@ import { USER_SERVICE_TOKEN } from '@libs/identity/domain/user/contracts/user.se
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { ValidatePrerequisitesStage } from './validate-prerequisites.stage';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),
@@ -46,8 +48,12 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
     let permissionValidationService: { validateExecutionPermissions: jest.Mock };
     let autoAssignLicenseUseCase: { execute: jest.Mock };
 
-    const makeContext = (): CodeReviewPipelineContext =>
-        ({
+    // Frozen by DEFAULT — production hands every stage after the first
+    // produce() a deep-frozen context. See test/fixtures/frozen-pipeline-context.ts.
+    const makeContext = (
+        over: Record<string, unknown> = {},
+    ): CodeReviewPipelineContext =>
+        frozenContext({
             organizationAndTeamData: {
                 organizationId: 'org-1',
                 teamId: 'team-1',
@@ -76,6 +82,7 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
             pipelineMetadata: {},
             statusInfo: { status: 'in_progress' as any, message: 'started' },
             pipelineVersion: '1.0.0',
+            ...over,
         }) as CodeReviewPipelineContext;
 
     beforeEach(async () => {
@@ -146,6 +153,12 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
                     useValue: prAuthorResolver,
                 },
                 { provide: USER_SERVICE_TOKEN, useValue: usersService },
+                {
+                    provide: LICENSE_SERVICE_TOKEN,
+                    useValue: {
+                        startTrial: jest.fn().mockResolvedValue(false),
+                    },
+                },
             ],
         }).compile();
 
@@ -173,10 +186,52 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
                     prUrl: 'https://github.com/acme/api/pull/42',
                     repoName: 'acme/api',
                     ownerContact: 'owner@acme.com',
+                    authorUsername: 'alex',
                 }),
             }),
         );
     });
+
+    // The author handle mirrors the precedence used to persist `user.username`
+    // in the pullRequests collection (PullRequestsService.extractUser):
+    // login -> username -> nickname -> uniqueName -> descriptor.
+    it.each([
+        // GitHub: raw payload exposes only `login` (the @username).
+        [{ login: 'octocat' }, 'octocat'],
+        // GitLab / Bitbucket DC: username handle.
+        [{ username: 'ada' }, 'ada'],
+        // Bitbucket Cloud: no login/username, only the nickname.
+        [{ nickname: 'ada-lovelace' }, 'ada-lovelace'],
+        // Azure: identified by the UPN in `uniqueName` (email-format).
+        [{ uniqueName: 'ada@contoso.com' }, 'ada@contoso.com'],
+    ])(
+        'resolves the author handle like the pullRequests collection (%o)',
+        async (user, expected) => {
+            prAuthorResolver.resolve.mockResolvedValueOnce({
+                kind: 'user',
+                userId: 'user-1',
+            });
+            usersService.find.mockResolvedValueOnce([
+                { email: 'owner@acme.com' } as any,
+            ]);
+
+            // Built frozen, so the author shape is an override, not a
+            // post-hoc mutation.
+            const context = makeContext({
+                pullRequest: { number: 42, state: 'open', locked: false, user },
+            });
+
+            await stage.execute(context);
+
+            expect(notificationService.emit).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    payload: expect.objectContaining({
+                        authorUsername: expected,
+                    }),
+                }),
+            );
+        },
+    );
 
     it('skips the emit when the rate limiter rejects (already notified within 24h)', async () => {
         prAuthorResolver.resolve.mockResolvedValueOnce({
@@ -190,13 +245,28 @@ describe('ValidatePrerequisitesStage — review.skipped_no_license emit', () => 
         expect(notificationService.emit).not.toHaveBeenCalled();
     });
 
-    it('skips the emit when PR author is bot/external (resolver returns null)', async () => {
+    it('falls back to org owners when the PR author is a bot/external user (resolver returns null)', async () => {
         prAuthorResolver.resolve.mockResolvedValueOnce(null);
+        usersService.find.mockResolvedValueOnce([
+            { email: 'owner@acme.com' } as any,
+        ]);
 
         await stage.execute(makeContext());
 
-        expect(rateLimiter.shouldEmit).not.toHaveBeenCalled();
-        expect(notificationService.emit).not.toHaveBeenCalled();
+        // Rate-limited under a shared "owners" bucket, then emitted to OWNER.
+        expect(rateLimiter.shouldEmit).toHaveBeenCalledWith(
+            expect.stringContaining(':owners:'),
+            expect.any(Number),
+        );
+        expect(notificationService.emit).toHaveBeenCalledWith(
+            expect.objectContaining({
+                event: NotificationEvent.REVIEW_SKIPPED_NO_LICENSE,
+                recipients: expect.objectContaining({
+                    kind: 'role',
+                    role: 'owner',
+                }),
+            }),
+        );
     });
 
     it('omits ownerContact when no owner is registered for the org', async () => {

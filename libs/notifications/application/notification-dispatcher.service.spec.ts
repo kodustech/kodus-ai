@@ -21,7 +21,7 @@ import {
 } from './notification-dispatcher.service';
 import { NotificationSseService } from './notification-sse.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),
@@ -236,6 +236,258 @@ describe('NotificationDispatcherService', () => {
             const t = makeDispatcher();
             await t.dispatcher.dispatch(baseMessage({ recipients: [] }));
             expect(t.deliveryRepo.create).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('audience-driven events (defaultRoles)', () => {
+        // SPEND_LIMIT_THRESHOLD_REACHED → defaultRoles [OWNER], informational.
+        const SPEND_THRESHOLD =
+            NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED;
+        // SPEND_LIMIT_EXCEEDED_FINAL → defaultRoles [OWNER], critical.
+        const SPEND_EXCEEDED = NotificationEvent.SPEND_LIMIT_EXCEEDED_FINAL;
+
+        const thresholdPayload = {
+            percentage: 75,
+            monthlyLimitUsd: 1000,
+            spentUsd: 760,
+            periodKey: '2026-06',
+        };
+
+        it('delivers to default audience roles only — others are off', async () => {
+            const t = makeDispatcher();
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+            ]);
+
+            await t.dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: thresholdPayload,
+                    recipients: [],
+                }),
+            );
+
+            // Owner gets both default channels; the contributor gets nothing.
+            expect(t.emailAdapter.deliver).toHaveBeenCalledTimes(1);
+            expect(t.inAppAdapter.deliver).toHaveBeenCalledTimes(1);
+            expect(t.emailAdapter.deliver.mock.calls[0][0].userEmail).toBe(
+                'o@a.com',
+            );
+            // Audience is resolved from all org members, not the emit recipients.
+            expect(t.usersService.find).toHaveBeenCalledWith(
+                { organization: { uuid: 'org-1' } },
+                expect.anything(),
+            );
+        });
+
+        it('applies a "*" rule to every role (literal all-roles baseline)', async () => {
+            const t = makeDispatcher();
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+            ]);
+            // A wildcard rule now reaches non-default roles too, not just owners.
+            t.routingRuleRepo.findByOrganization.mockResolvedValueOnce([
+                {
+                    event: SPEND_THRESHOLD,
+                    role: '*',
+                    channels: { email: true, in_app: false },
+                } as any,
+            ]);
+
+            await t.dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: thresholdPayload,
+                    recipients: [],
+                }),
+            );
+
+            // Both owner and contributor get email via the '*' baseline.
+            expect(t.emailAdapter.deliver).toHaveBeenCalledTimes(2);
+            expect(t.inAppAdapter.deliver).not.toHaveBeenCalled();
+        });
+
+        it('opts a non-audience role in via an explicit routing rule', async () => {
+            const t = makeDispatcher();
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+            ]);
+            t.routingRuleRepo.findByOrganization.mockResolvedValueOnce([
+                {
+                    event: SPEND_THRESHOLD,
+                    role: 'contributor',
+                    channels: { email: true, in_app: false },
+                } as any,
+            ]);
+
+            await t.dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: thresholdPayload,
+                    recipients: [],
+                }),
+            );
+
+            // Owner: email + in_app (default). Contributor: email only (opt-in).
+            expect(t.emailAdapter.deliver).toHaveBeenCalledTimes(2);
+            expect(t.inAppAdapter.deliver).toHaveBeenCalledTimes(1);
+        });
+
+        it('CRITICAL events resolve to catalog defaults (no lock), others off', async () => {
+            const t = makeDispatcher();
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+                { uuid: 'c-1', email: 'c@a.com', role: 'contributor' } as any,
+            ]);
+
+            await t.dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_EXCEEDED,
+                    payload: {
+                        monthlyLimitUsd: 1000,
+                        spentUsd: 1200,
+                        periodKey: '2026-06',
+                    },
+                    recipients: [],
+                }),
+            );
+
+            // Owner (audience) → default channels; contributor off.
+            expect(t.emailAdapter.deliver).toHaveBeenCalledTimes(1);
+            expect(t.inAppAdapter.deliver).toHaveBeenCalledTimes(1);
+            expect(t.emailAdapter.deliver.mock.calls[0][0].userEmail).toBe(
+                'o@a.com',
+            );
+        });
+
+        it('a routing rule can now mute a channel on a CRITICAL event', async () => {
+            const t = makeDispatcher();
+            t.usersService.find.mockResolvedValueOnce([
+                { uuid: 'owner-1', email: 'o@a.com', role: 'owner' } as any,
+            ]);
+            // Owner mutes in-app for the critical spend-exceeded event — under
+            // the old lock this was rejected/ignored; now it takes effect.
+            t.routingRuleRepo.findByOrganization.mockResolvedValueOnce([
+                {
+                    event: SPEND_EXCEEDED,
+                    role: 'owner',
+                    channels: { email: true, in_app: false },
+                } as any,
+            ]);
+
+            await t.dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_EXCEEDED,
+                    payload: {
+                        monthlyLimitUsd: 1000,
+                        spentUsd: 1200,
+                        periodKey: '2026-06',
+                    },
+                    recipients: [],
+                }),
+            );
+
+            expect(t.emailAdapter.deliver).toHaveBeenCalledTimes(1);
+            expect(t.inAppAdapter.deliver).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('mixed events (directed recipient + config audience)', () => {
+        // A defaultRoles event that ALSO carries an explicit directed
+        // recipient: the directed user is delivered even when their role is
+        // not a default role, while the config audience is gated as usual.
+        const SPEND_THRESHOLD =
+            NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED; // defaultRoles [OWNER]
+
+        it('delivers to the directed recipient AND the config audience', async () => {
+            const t = makeDispatcher();
+            // resolveRecipients (directed user) and resolveAllOrgMembers
+            // (audience) both call find — route by the query shape.
+            t.usersService.find.mockImplementation(async (q: any) => {
+                if (q?.uuid === 'author-1') {
+                    return [
+                        {
+                            uuid: 'author-1',
+                            email: 'author@a.com',
+                            role: 'contributor',
+                        },
+                    ] as any;
+                }
+                // all org members
+                return [
+                    { uuid: 'owner-1', email: 'o@a.com', role: 'owner' },
+                    {
+                        uuid: 'author-1',
+                        email: 'author@a.com',
+                        role: 'contributor',
+                    },
+                ] as any;
+            });
+
+            await t.dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: {
+                        percentage: 75,
+                        monthlyLimitUsd: 1000,
+                        spentUsd: 760,
+                        periodKey: '2026-06',
+                    },
+                    recipients: [{ kind: 'user', userId: 'author-1' }],
+                }),
+            );
+
+            const emailed = t.emailAdapter.deliver.mock.calls.map(
+                (c) => c[0].userEmail,
+            );
+            // Owner via the config audience; the contributor author via the
+            // directed bypass (would be gated off as a non-default role).
+            expect(emailed).toEqual(
+                expect.arrayContaining(['o@a.com', 'author@a.com']),
+            );
+            // author-1 is in both lists but deduped to a single (directed) entry.
+            expect(t.emailAdapter.deliver).toHaveBeenCalledTimes(2);
+            expect(t.inAppAdapter.deliver).toHaveBeenCalledTimes(2);
+        });
+
+        it('still delivers to a directed recipient when an off "*" baseline would gate their role', async () => {
+            const t = makeDispatcher();
+            // author-1 is a contributor (a non-default role for this event).
+            t.usersService.find.mockResolvedValue([
+                {
+                    uuid: 'author-1',
+                    email: 'author@a.com',
+                    role: 'contributor',
+                },
+            ] as any);
+            // The seeded role-fanout shape: an off ('{}') wildcard baseline.
+            // The directed recipient must NOT be swallowed by it.
+            t.routingRuleRepo.findByOrganization.mockResolvedValueOnce([
+                { event: SPEND_THRESHOLD, role: '*', channels: {} } as any,
+            ]);
+
+            await t.dispatcher.dispatch(
+                baseMessage({
+                    event: SPEND_THRESHOLD,
+                    payload: {
+                        percentage: 75,
+                        monthlyLimitUsd: 1000,
+                        spentUsd: 760,
+                        periodKey: '2026-06',
+                    },
+                    recipients: [{ kind: 'user', userId: 'author-1' }],
+                }),
+            );
+
+            // Directed → catalog defaults (email + in_app), despite '*' = {}.
+            expect(t.emailAdapter.deliver).toHaveBeenCalledTimes(1);
+            expect(t.inAppAdapter.deliver).toHaveBeenCalledTimes(1);
+            expect(t.emailAdapter.deliver.mock.calls[0][0].userEmail).toBe(
+                'author@a.com',
+            );
         });
     });
 

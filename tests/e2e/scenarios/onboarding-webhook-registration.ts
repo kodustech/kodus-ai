@@ -73,7 +73,13 @@ export const onboardingWebhookRegistration: Scenario = {
         }
 
         await ctx.kodus.registerIntegration(session);
-        const repo = await ctx.kodus.registerRepo(session);
+        // forceRecreate: this scenario just deleted the repo's webhook in
+        // the pre-clean above and asserts registerRepo recreated it, so it
+        // must bypass the per-run registration cache (which otherwise skips
+        // the POST that re-creates the hook).
+        const repo = await ctx.kodus.registerRepo(session, {
+            forceRecreate: true,
+        });
         await ctx.kodus.finishOnboarding(session, repo);
 
         const after = await ctx.provider.listWebhooks();

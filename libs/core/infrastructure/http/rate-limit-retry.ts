@@ -21,7 +21,7 @@
  * agnostic.
  */
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 const logger = createLogger('rate-limit-retry');
 
@@ -79,7 +79,7 @@ export async function with429Retry<T>(
     throw lastError;
 }
 
-function is429Error(err: unknown): boolean {
+export function is429Error(err: unknown): boolean {
     if (!err || typeof err !== 'object') return false;
     const anyErr = err as {
         status?: unknown;
@@ -107,6 +107,41 @@ function is429Error(err: unknown): boolean {
         return true;
     }
     return false;
+}
+
+// Transport-level failures where the request never produced an HTTP
+// response: undici's bare `fetch failed`, connection resets, DNS blips,
+// timeouts. Like a 429, they mean "we could not fetch", NOT "the resource
+// is empty" — callers that swallow errors into an empty result must treat
+// these as fetch failures and rethrow, or a transient network hiccup
+// silently masquerades as "PR has no commits" and the review posts nothing
+// while reporting success (observed 2026-07-29, bitbucket cloud cell).
+export function isTransientFetchError(err: unknown): boolean {
+    if (!err || typeof err !== 'object') return false;
+    const anyErr = err as {
+        message?: unknown;
+        code?: unknown;
+        cause?: unknown;
+    };
+    const cause = (anyErr.cause ?? {}) as {
+        message?: unknown;
+        code?: unknown;
+    };
+    // Test messages AND codes: undici's timeout errors carry their
+    // UND_ERR_* identifier in `.code` while the message is prose
+    // ("Headers Timeout Error"), and when thrown through fetch() the
+    // useful detail lives on `.cause`.
+    const haystack = [
+        anyErr.message,
+        anyErr.code,
+        cause.message,
+        cause.code,
+    ]
+        .filter((v): v is string => typeof v === 'string')
+        .join(' ');
+    return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang ?up|network error|Recv failure|operation was aborted|UND_ERR|HeadersTimeout|BodyTimeout|ConnectTimeout|TimeoutError|Timeout Error/i.test(
+        haystack,
+    );
 }
 
 function resolveDelayMs(

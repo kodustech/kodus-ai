@@ -1,21 +1,21 @@
-export type Target = "cloud" | "self-hosted";
+export type Target = 'cloud' | 'self-hosted';
 
 export type ProviderName =
-    | "github"
-    | "github-app"
-    | "gitlab"
-    | "bitbucket"
-    | "azure-devops";
+    | 'github'
+    | 'github-app'
+    | 'gitlab'
+    | 'bitbucket'
+    | 'azure-devops';
 
 export type LicenseMode =
-    | "free"
-    | "trial"
-    | "paid"
-    | "community-byok" // free plan with the org's own LLM API key configured
-    | "license-paid"
-    | "license-free";
+    | 'free'
+    | 'trial'
+    | 'paid'
+    | 'community-byok' // free plan with the org's own LLM API key configured
+    | 'license-paid'
+    | 'license-free';
 
-export type Priority = "P0" | "P1" | "P2";
+export type Priority = 'P0' | 'P1' | 'P2';
 
 export interface TargetContext {
     target: Target;
@@ -35,6 +35,8 @@ export interface OpenPRArgs {
     title: string;
     body: string;
     fixtureFiles: Record<string, string>;
+    /** Repo-relative paths to git-rm in the same commit (lifecycle tests: file removal must remove the synced rule). */
+    deleteFiles?: string[];
     baseBranch?: string;
 }
 
@@ -77,7 +79,7 @@ export interface ReviewSignal {
     // license/trial/BYOK-prompt comment from Kody on the PR.
     licenseBlockedNotice?: {
         message: string;
-        kind: "trial-ended" | "byok-required" | "no-license" | "other";
+        kind: 'trial-ended' | 'byok-required' | 'no-license' | 'other';
     };
 }
 
@@ -131,7 +133,34 @@ export interface Provider {
         opts: { sinceIso: string; timeoutSec: number },
     ): Promise<{ startedAt: string; sample: string }>;
     postComment(prNumber: number, body: string): Promise<{ id: string }>;
-    authMode(): "token" | "oauth" | "app-password";
+    // Optional: posts a comment as a DIFFERENT identity (token override). The
+    // conversation scenario needs this — Kody ignores comments whose author
+    // login contains "kody"/"kodus" (the e2e bots), so the `@kody` mention must
+    // come from a non-Kody account.
+    postCommentAs?(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }>;
+    // Optional: posts an INLINE review comment as a different identity. Kody's
+    // ConversationAgent only resolves the mention from a review comment (issue
+    // comments are never found), so the conversation scenario needs this.
+    postReviewCommentAs?(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }>;
+    // Optional: polls for Kody's conversational reply to an `@kody <question>`
+    // new non-trigger, non-code-review comment, or null at timeout. Only GitHub
+    // is wired; the conversation scenario gates on its presence.
+    pollForKodyReply?(
+        pr: { number: number },
+        opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
+    ): Promise<{ id: string; body: string } | null>;
+    // Optional: merges a PR (falls back to close). Drives the closed/merged-PR
+    // webhook that triggers kody-issues generation (v2/BYOK path).
+    mergePR?(pr: OpenedPR): Promise<void>;
+    authMode(): 'token' | 'oauth' | 'app-password';
     authToken(): string;
     // Provider-specific extra body fields for POST /code-management/auth-integration.
     // Azure DevOps needs `orgUrl` + `orgName`; everything else returns {}.
@@ -178,6 +207,16 @@ export interface Provider {
 export interface TenantCredentials {
     email: string;
     password: string;
+    // Optional per-tenant fixture repo (cloud only). When set, the
+    // provider for this cell targets THIS repo instead of the
+    // env-resolved per-target default. Required for cloud GitHub PAT
+    // tenants, where each license tier is a separate Kodus org: sharing
+    // one repo across orgs makes the webhook→org resolution ambiguous
+    // (it picks the first org by updatedAt DESC), so the test's own org
+    // isn't reliably the one that reviews its PR. One repo per tenant
+    // restores the 1 org : 1 repo invariant the other providers already
+    // have. `owner/name` form, e.g. `kodus-e2e/tiny-url-cloud-paid`.
+    repoFullName?: string;
 }
 
 export interface KodusSession {
@@ -194,7 +233,10 @@ export interface RunContext {
     kodus: {
         login: (creds: TenantCredentials) => Promise<KodusSession>;
         registerIntegration: (session: KodusSession) => Promise<void>;
-        registerRepo: (session: KodusSession) => Promise<ProviderRepoRef>;
+        registerRepo: (
+            session: KodusSession,
+            opts?: { forceRecreate?: boolean },
+        ) => Promise<ProviderRepoRef>;
         finishOnboarding: (
             session: KodusSession,
             repo: ProviderRepoRef,
@@ -217,17 +259,13 @@ export interface RunContext {
 // `failed`. Plain Error subclasses won't match (we check by name
 // to survive a bundler dropping prototype-chain identity).
 export class ScenarioSkipError extends Error {
-    readonly name = "ScenarioSkipError";
+    readonly name = 'ScenarioSkipError';
     constructor(reason: string) {
         super(reason);
     }
 }
 
-export type ScenarioStatus =
-    | "passed"
-    | "failed"
-    | "skipped"
-    | "blocked";
+export type ScenarioStatus = 'passed' | 'failed' | 'skipped' | 'blocked';
 
 export interface ScenarioResult {
     scenarioId: string;

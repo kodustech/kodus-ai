@@ -10,8 +10,8 @@
  *   npx ts-node scripts/analyze-pr-performance.cli.ts 558 04bd288b-595a-4ee1-87cd-8bbbdc312b3c --env=.env.prod
  *   npx ts-node scripts/analyze-pr-performance.cli.ts 723 97442318-9d2a-496b-a0d2-b45fb --days=1 --env=.env.prod
  *
- * Or with yarn script:
- *   yarn analyze-pr 558 04bd288b-595a-4ee1-87cd-8bbbdc312b3c --env=.env.prod
+ * Or with pnpm run script:
+ *   pnpm run analyze-pr 558 04bd288b-595a-4ee1-87cd-8bbbdc312b3c --env=.env.prod
  *
  * Environment variables (uses .env):
  *   API_MG_DB_HOST, API_MG_DB_PORT, API_MG_DB_USERNAME, API_MG_DB_PASSWORD, API_MG_DB_DATABASE
@@ -480,9 +480,9 @@ Options:
   --env=PATH    Path to .env file (e.g., --env=.env.prod)
 
 Examples:
-  yarn analyze-pr 558 04bd288b-595a-4ee1-87cd-8bbbdc312b3c --env=.env.prod
-  yarn analyze-pr 8 97442318-9d2a-496b-a0d2-b45fb --days=14 --env=.env.prod
-  yarn analyze-pr 8 97442318-9d2a-496b-a0d2-b45fb --exec=3 --env=.env.prod
+  pnpm run analyze-pr 558 04bd288b-595a-4ee1-87cd-8bbbdc312b3c --env=.env.prod
+  pnpm run analyze-pr 8 97442318-9d2a-496b-a0d2-b45fb --days=14 --env=.env.prod
+  pnpm run analyze-pr 8 97442318-9d2a-496b-a0d2-b45fb --exec=3 --env=.env.prod
 `);
         process.exit(0);
     }

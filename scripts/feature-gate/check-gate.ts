@@ -13,7 +13,7 @@
  * Pure read; never writes to DB or PostHog.
  *
  * Usage:
- *   yarn feature-gate:check
+ *   pnpm run feature-gate:check
  *
  * Env vars (read from `.env`, override via inline):
  *   API_PG_DB_HOST  defaults to 127.0.0.1 if .env contains the

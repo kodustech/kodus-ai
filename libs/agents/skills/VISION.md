@@ -541,7 +541,7 @@ libs/agents/skills/
     skill-capabilities.ts
     skill-loader.service.ts
 
-libs/agents/infrastructure/services/kodus-flow/
+libs/agents/infrastructure/services/agents/
     business-rules-validation/
         blueprint.ts
         blueprint.tooling.ts

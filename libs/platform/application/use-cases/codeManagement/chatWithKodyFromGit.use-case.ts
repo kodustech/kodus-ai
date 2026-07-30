@@ -1,4 +1,5 @@
-import { createLogger, createThreadId } from '@kodus/flow';
+import { createThreadId } from '@libs/common/utils/thread-id';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { BusinessRulesValidationAgentUseCase } from '@libs/agents/application/use-cases/business-rules-validation-agent.use-case';
@@ -6,6 +7,10 @@ import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/con
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IntegrationConfigEntity } from '@libs/integrations/domain/integrationConfigs/entities/integration-config.entity';
+import {
+    PermissionValidationService,
+    ValidationErrorType,
+} from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import {
     ISandboxLeaseManager,
@@ -33,6 +38,16 @@ const ACKNOWLEDGMENT_MESSAGES = {
     BUSINESS_LOGIC_INVALID_CONTEXT:
         'The "@kody -v business-logic" command can only be used in the general PR conversation, not in code suggestions or inline comments. Please use it in the main PR discussion thread.',
 } as const;
+
+/**
+ * Posted instead of running the agent when the org may not use Kodus-funded
+ * LLM calls (cloud, past trial, no BYOK). A visible pointer beats silence:
+ * without it the dev reads the missing reply as Kody being broken.
+ */
+const CONVERSATION_PLAN_GATE_MESSAGE =
+    "I can't reply right now: your organization's trial has ended and no " +
+    'LLM API key (BYOK) is configured. Connect your key in the Kodus ' +
+    'settings to keep chatting with Kody.';
 
 enum CommandType {
     BUSINESS_LOGIC_VALIDATION = 'business_logic_validation',
@@ -159,6 +174,7 @@ export class ChatWithKodyFromGitUseCase {
         private readonly codeManagementService: CodeManagementService,
         private readonly conversationAgentUseCase: ConversationAgentUseCase,
         private readonly businessRulesValidationAgentUseCase: BusinessRulesValidationAgentUseCase,
+        private readonly permissionValidationService: PermissionValidationService,
 
         @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
         private readonly leaseManager: ISandboxLeaseManager,
@@ -692,6 +708,59 @@ export class ChatWithKodyFromGitUseCase {
                     repository: repository.name,
                     pullRequestNumber,
                 },
+            });
+            return;
+        }
+
+        // Who pays for this conversation — same policy as code review:
+        // BYOK always allowed (any plan); managed trial and development mode
+        // run on the Kodus default model; cloud orgs past the trial without
+        // BYOK are not funded by Kodus — reply with a pointer to connect a
+        // key instead of running the agent.
+        //
+        // userGitId is intentionally omitted: the gate is an ORG-level plan
+        // check (does this org get replies at all), NOT per-seat licensing.
+        // Passing the commenter's id would make BYOK/managed plans run the
+        // per-user license check and block unlicensed commenters — which
+        // contradicts "BYOK orgs always get replies regardless of plan".
+        // NOT_ERROR is exactly that "no userGitId, so we skipped the per-user
+        // check" signal — the code-review pipeline treats it as a pass
+        // (validate-prerequisites.stage.ts), so we do too.
+        const permission =
+            await this.permissionValidationService.validateExecutionPermissions(
+                organizationAndTeamData,
+                undefined,
+                ChatWithKodyFromGitUseCase.name,
+            );
+
+        const permissionBlocked =
+            !permission.allowed &&
+            permission.errorType !== ValidationErrorType.NOT_ERROR;
+
+        if (permissionBlocked) {
+            this.logger.warn({
+                message:
+                    'Conversation blocked by plan policy (no BYOK outside trial); replying with BYOK guidance',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repository: repository.name,
+                    pullRequestNumber,
+                    errorType: permission.errorType,
+                    subscriptionStatus: permission.subscriptionStatus,
+                },
+            });
+
+            await this.codeManagementService.createResponseToComment({
+                organizationAndTeamData,
+                inReplyToId: comment.id,
+                discussionId:
+                    params.payload?.object_attributes?.discussion_id ??
+                    comment.discussionId,
+                threadId: comment.threadId,
+                body: CONVERSATION_PLAN_GATE_MESSAGE,
+                repository,
+                prNumber: pullRequestNumber,
             });
             return;
         }

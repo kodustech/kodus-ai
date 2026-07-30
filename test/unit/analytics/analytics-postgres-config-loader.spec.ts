@@ -75,6 +75,24 @@ describe('analyticsPostgresConfigLoader', () => {
         expect(cfg.schema).toBe('analytics');
     });
 
+    it('treats an empty / whitespace ANALYTICS_PG_DB_HOST as unset and cascades (Bug #4 regression)', () => {
+        // docker-compose writes unset vars as empty strings (`${VAR:-}`) and the
+        // deploy docs tell self-hosted operators to leave ANALYTICS_PG_DB_HOST
+        // empty. An empty string must NOT win the `??` chain — that resolved
+        // host to '' → driver connects to 127.0.0.1 → ECONNREFUSED → the
+        // analytics worker crash-loops.
+        process.env.ANALYTICS_PG_DB_HOST = '';
+        process.env.ANALYTICS_PG_DB_USERNAME = '   ';
+        process.env.API_PG_DB_HOST = 'oltp.internal';
+        process.env.API_PG_DB_USERNAME = 'kodus';
+        process.env.API_PG_DB_PASSWORD = 'kodus';
+
+        const cfg = load();
+        expect(cfg.host).toBe('oltp.internal');
+        expect(cfg.username).toBe('kodus');
+        expect(cfg.password).toBe('kodus');
+    });
+
     it('honors a custom schema override', () => {
         process.env.API_PG_DB_HOST = 'oltp';
         process.env.ANALYTICS_PG_DB_SCHEMA = 'warehouse';

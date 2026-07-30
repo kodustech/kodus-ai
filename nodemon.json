@@ -2,7 +2,6 @@
     "watch": [
         "libs",
         "apps",
-        ".yalc/@kodus/flow",
         ".yalc/@kodus/kodus-common"
     ],
     "ext": "ts,js,json",

@@ -10,6 +10,8 @@ import {
     CentralizedConfigPrService,
     CentralizedPrMetadata,
 } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { KODY_RULE_DETECTOR_COMPILER_TOKEN } from '@libs/kodyRules/domain/contracts/kody-rule-detector-compiler.contract';
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import {
@@ -24,7 +26,7 @@ import {
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -40,8 +42,10 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
         createMutationPullRequestIfEnabled: jest.Mock;
         getCentralizedRepositoryIfEnabled: jest.Mock;
         resolveRepositoryFolderName: jest.Mock;
+        resolveDirectoryGroupFolderName: jest.Mock;
         buildCentralizedPath: jest.Mock;
         sanitizeFileName: jest.Mock;
+        buildRuleFileName: jest.Mock;
     };
 
     beforeEach(async () => {
@@ -55,8 +59,18 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
             createMutationPullRequestIfEnabled: jest.fn(),
             getCentralizedRepositoryIfEnabled: jest.fn(),
             resolveRepositoryFolderName: jest.fn(),
+            resolveDirectoryGroupFolderName: jest
+                .fn()
+                .mockResolvedValue(null),
             buildCentralizedPath: jest.fn(),
             sanitizeFileName: jest.fn(),
+            buildRuleFileName: jest.fn(
+                (title?: string, uuid?: string) =>
+                    `${centralizedConfigPrServiceMock.sanitizeFileName(
+                        title,
+                        'rule',
+                    )}${uuid ? `-${String(uuid).slice(0, 8)}` : ''}.yml`,
+            ),
         };
 
         centralizedConfigPrServiceMock.getCentralizedRepositoryIfEnabled.mockResolvedValue(
@@ -92,6 +106,23 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 {
                     provide: CentralizedConfigPrService,
                     useValue: centralizedConfigPrServiceMock,
+                },
+                {
+                    provide: PermissionValidationService,
+                    useValue: {
+                        getBYOKConfig: jest.fn().mockResolvedValue(null),
+                        getSubscriptionStatus: jest
+                            .fn()
+                            .mockResolvedValue(undefined),
+                    },
+                },
+                {
+                    provide: KODY_RULE_DETECTOR_COMPILER_TOKEN,
+                    useValue: {
+                        compileAndSave: jest
+                            .fn()
+                            .mockResolvedValue(undefined),
+                    },
                 },
                 {
                     provide: REQUEST,
@@ -137,7 +168,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 severity: 'medium' as any,
                 scope: KodyRulesScope.FILE,
                 path: '**/*',
-                origin: KodyRulesOrigin.USER,
+                origin: KodyRulesOrigin.MANUAL,
                 repositoryId: 'repo-1',
                 examples: [],
             },
@@ -181,7 +212,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
             severity: 'medium',
             scope: KodyRulesScope.FILE,
             path: '**/*',
-            origin: KodyRulesOrigin.USER,
+            origin: KodyRulesOrigin.MANUAL,
             repositoryId: 'repo-1',
             status: KodyRulesStatus.ACTIVE,
             centralizedConfig: {
@@ -202,7 +233,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 severity: 'medium' as any,
                 scope: KodyRulesScope.FILE,
                 path: '**/*',
-                origin: KodyRulesOrigin.USER,
+                origin: KodyRulesOrigin.MANUAL,
                 repositoryId: 'repo-1',
                 examples: [],
             },
@@ -259,7 +290,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 severity: 'high' as any,
                 scope: KodyRulesScope.FILE,
                 path: '**/*',
-                origin: KodyRulesOrigin.USER,
+                origin: KodyRulesOrigin.MANUAL,
                 repositoryId: 'global',
                 examples: [],
             },
@@ -324,7 +355,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
             severity: 'medium',
             scope: KodyRulesScope.FILE,
             path: '**/*',
-            origin: KodyRulesOrigin.USER,
+            origin: KodyRulesOrigin.MANUAL,
             repositoryId: 'repo-1',
             status: KodyRulesStatus.ACTIVE,
             centralizedConfig: undefined,
@@ -342,7 +373,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 severity: 'medium' as any,
                 scope: KodyRulesScope.FILE,
                 path: '**/*',
-                origin: KodyRulesOrigin.USER,
+                origin: KodyRulesOrigin.MANUAL,
                 repositoryId: 'repo-1',
                 examples: [],
             },
@@ -364,7 +395,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 uuid: 'rule-legacy-1',
                 status: KodyRulesStatus.ACTIVE,
                 centralizedConfig: {
-                    path: 'repo-one/.kody-rules/review/legacy-title.yml',
+                    path: 'repo-one/.kody-rules/review/legacy-title-rule-leg.yml',
                     status: KodyRuleCentralizedStatus.PENDING_EDIT,
                 },
             }),
@@ -385,7 +416,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                 severity: 'medium' as any,
                 scope: KodyRulesScope.FILE,
                 path: '**/*',
-                origin: KodyRulesOrigin.USER,
+                origin: KodyRulesOrigin.MANUAL,
                 repositoryId: 'repo-1',
                 examples: [],
             },
@@ -430,7 +461,7 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
                     severity: 'medium' as any,
                     scope: KodyRulesScope.FILE,
                     path: '**/*',
-                    origin: KodyRulesOrigin.USER,
+                    origin: KodyRulesOrigin.MANUAL,
                     repositoryId: 'repo-1',
                     examples: [],
                 },
@@ -441,5 +472,42 @@ describe('CreateOrUpdateKodyRulesUseCase (centralized pending states)', () => {
         );
 
         expect(kodyRulesServiceMock.createOrUpdate).not.toHaveBeenCalled();
+    });
+
+    it('does NOT route a PENDING rule through centralized config — persists directly, no throw', async () => {
+        // Centralized config is the source of truth for approved rules only.
+        // A rule awaiting approval (e.g. a gated IDE-synced rule) must be
+        // written to the DB as pending, not exported to the rolling PR.
+        centralizedConfigPrServiceMock.getCentralizedRepositoryIfEnabled.mockResolvedValue(
+            { id: 'central-repo-id', name: 'central-repo' },
+        );
+        kodyRulesServiceMock.findById.mockResolvedValue(null);
+        kodyRulesServiceMock.createOrUpdate.mockResolvedValue({
+            uuid: 'pending-rule-1',
+        } as any);
+
+        const result = await useCase.execute(
+            {
+                type: KodyRulesType.STANDARD,
+                title: 'Auto-synced rule',
+                rule: 'From a repo file',
+                severity: 'medium' as any,
+                scope: KodyRulesScope.FILE,
+                path: '**/*',
+                origin: KodyRulesOrigin.REPO_FILE_SYNC,
+                repositoryId: 'repo-1',
+                examples: [],
+                status: KodyRulesStatus.PENDING,
+            },
+            'org-1',
+        );
+
+        expect(
+            centralizedConfigPrServiceMock.createMutationPullRequestIfEnabled,
+        ).not.toHaveBeenCalled();
+        expect(kodyRulesServiceMock.createOrUpdate).toHaveBeenCalled();
+        expect(result).toEqual(
+            expect.objectContaining({ uuid: 'pending-rule-1' }),
+        );
     });
 });

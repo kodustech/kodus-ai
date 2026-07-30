@@ -7,7 +7,7 @@ import {
     IJobQueueService,
     JOB_QUEUE_SERVICE_TOKEN,
 } from '@libs/core/workflow/domain/contracts/job-queue.service.contract';
-import { IdGenerator } from '@kodus/flow';
+import { IdGenerator } from '@libs/core/utils/id-generator';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 
 @Injectable()

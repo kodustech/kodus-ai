@@ -4,17 +4,17 @@ import { Button } from "@components/ui/button";
 import { CardHeader } from "@components/ui/card";
 import { Heading } from "@components/ui/heading";
 import { Switch } from "@components/ui/switch";
-import { useSuspenseGetConnections } from "@services/setup/hooks";
 import { Controller, useFormContext } from "react-hook-form";
 import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
-import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-import { PlatformType } from "src/core/types";
-import { safeArray } from "src/core/utils/safe-array";
+import { useShouldHideRequestChanges } from "src/app/(app)/settings/_components/use-code-management-platform";
 
 import type { CodeReviewFormType } from "../../../_types";
 
 export const IsRequestChangesActive = () => {
     const form = useFormContext<CodeReviewFormType>();
+    const shouldHide = useShouldHideRequestChanges();
+
+    if (shouldHide) return null;
 
     return (
         <div className="flex flex-col gap-2">

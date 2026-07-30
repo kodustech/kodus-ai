@@ -16,6 +16,9 @@ interface ReviewState {
     summaryPanelOpen: boolean;
     severityFilter: string | null;
     categoryFilter: string | null;
+    /** Per-file "marked as viewed" state, shared by the file tree (shows a
+        strike-through) and the diff viewer (collapses the file). */
+    viewedFiles: Record<string, boolean>;
 }
 
 type ReviewAction =
@@ -24,7 +27,8 @@ type ReviewAction =
     | { type: "TOGGLE_SIDEBAR" }
     | { type: "TOGGLE_SUMMARY" }
     | { type: "SET_SEVERITY_FILTER"; severity: string | null }
-    | { type: "SET_CATEGORY_FILTER"; category: string | null };
+    | { type: "SET_CATEGORY_FILTER"; category: string | null }
+    | { type: "SET_VIEWED"; path: string; viewed: boolean };
 
 const initialState: ReviewState = {
     selectedFilePath: null,
@@ -33,6 +37,7 @@ const initialState: ReviewState = {
     summaryPanelOpen: true,
     severityFilter: null,
     categoryFilter: null,
+    viewedFiles: {},
 };
 
 function reviewReducer(state: ReviewState, action: ReviewAction): ReviewState {
@@ -52,6 +57,14 @@ function reviewReducer(state: ReviewState, action: ReviewAction): ReviewState {
             return { ...state, severityFilter: action.severity };
         case "SET_CATEGORY_FILTER":
             return { ...state, categoryFilter: action.category };
+        case "SET_VIEWED":
+            return {
+                ...state,
+                viewedFiles: {
+                    ...state.viewedFiles,
+                    [action.path]: action.viewed,
+                },
+            };
         default:
             return state;
     }

@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
 
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
@@ -30,7 +30,10 @@ import * as yaml from 'js-yaml';
 import { decrypt } from '@libs/common/utils/crypto';
 import { ValidateCodeManagementIntegration } from '@libs/common/utils/decorators/validate-code-management-integration.decorator';
 import { deepMerge } from '@libs/common/utils/deep';
-import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
+import {
+    buildDefaultGlobalCodeReviewConfig,
+    getDefaultKodusConfigFile,
+} from '@libs/common/utils/validateCodeReviewConfigFile';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
@@ -125,10 +128,24 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                 this.getKodyFineTuningConfigParameter(organizationAndTeamData),
             ]);
 
+            // Self-heal: a team can reach a review without its
+            // `code_review_config` row (created too late in onboarding, or a
+            // creation write that failed). Persist the default global config so
+            // this review — and every one after it — runs on a real row instead
+            // of only the in-memory DEFAULT_CONFIG. Best-effort: if the write
+            // fails, getMergedCodeReviewConfigs still falls back to DEFAULT_CONFIG.
+            let codeReviewConfigValue = parameters?.configValue;
+            if (!parameters) {
+                codeReviewConfigValue =
+                    await this.ensureDefaultCodeReviewConfig(
+                        organizationAndTeamData,
+                    );
+            }
+
             const mergedConfigs = await this.getMergedCodeReviewConfigs(
                 organizationAndTeamData,
                 repository,
-                parameters?.configValue,
+                codeReviewConfigValue,
                 defaultBranch,
                 preliminaryFiles || [],
             );
@@ -325,6 +342,52 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         };
     }
 
+    /**
+     * Persist and return the default global `code_review_config` for a team
+     * that reached a review without one. Best-effort: a write failure logs and
+     * returns the in-memory default so the review still proceeds.
+     */
+    private async ensureDefaultCodeReviewConfig(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CodeReviewParameter> {
+        const defaultConfig = buildDefaultGlobalCodeReviewConfig();
+
+        try {
+            // Insert-if-absent (not deactivate-and-insert): if a concurrent
+            // writer already populated the config between our read and here,
+            // this is a no-op and returns THEIR config — so a review-time
+            // self-heal can never clobber a populated config with the empty
+            // default.
+            const ensured =
+                await this.parametersService.createActiveVersionIfAbsent(
+                    ParametersKey.CODE_REVIEW_CONFIG,
+                    organizationAndTeamData.teamId,
+                    defaultConfig,
+                );
+
+            if (ensured?.configValue) {
+                this.logger.log({
+                    message:
+                        'Ensured code_review_config exists at review time for a team without one',
+                    context: CodeBaseConfigService.name,
+                    metadata: { organizationAndTeamData },
+                });
+                return ensured.configValue as CodeReviewParameter;
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to persist default code_review_config at review time; using in-memory default',
+                context: CodeBaseConfigService.name,
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
+                metadata: { organizationAndTeamData },
+            });
+        }
+
+        return defaultConfig;
+    }
+
     async getMergedCodeReviewConfigs(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: string },
@@ -367,7 +430,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         const directoryFileDelta = await this.getKodusConfigFile({
             organizationAndTeamData,
             repository,
-            directoryPath: this.getDirectoryPrimaryPath(directoryConfig),
+            directoryId: directoryConfig?.id,
             defaultBranch,
             overrideConfig: this.getFileOverridePreference(
                 repoConfig,
@@ -638,6 +701,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         repository: { id: string; name: string };
         overrideConfig?: boolean;
         directoryPath?: string;
+        directoryId?: string;
         defaultBranch?: string;
         removeProperties?: boolean;
     }): Promise<KodusConfigFile | undefined> {
@@ -645,6 +709,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             organizationAndTeamData,
             repository,
             directoryPath,
+            directoryId,
             defaultBranch,
             overrideConfig = true,
             removeProperties = true,
@@ -669,6 +734,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
             repository,
             defaultBranchName,
             directoryPath,
+            directoryId,
         );
 
         if (!kodusConfigFileContent) {
@@ -701,9 +767,16 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         repository: { id: string; name: string },
         defaultBranchName = 'main',
         directoryPath?: string,
+        directoryId?: string,
     ): Promise<string | null> {
         const configFileName = 'kodus-config.yml';
         let fullPath = configFileName;
+
+        // Directory groups override config through the centralized config
+        // repo only — there is no managed-repo override file at a group level.
+        if (directoryId && !directoryPath) {
+            return null;
+        }
 
         if (directoryPath) {
             const normalizedPath = directoryPath.endsWith('/')

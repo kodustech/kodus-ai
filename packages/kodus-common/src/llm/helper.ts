@@ -348,6 +348,12 @@ export enum LLMModelProvider {
     VERTEX_GEMINI_2_0_FLASH = 'vertex:gemini-2.0-flash',
     VERTEX_GEMINI_2_5_PRO = 'vertex:gemini-2.5-pro',
     VERTEX_GEMINI_2_5_FLASH = 'vertex:gemini-2.5-flash',
+    /**
+     * @deprecated Non-functional on the legacy v2 engine: its factory
+     * (`getChatVertexAI` → langchain `ChatVertexAI`) only speaks the Gemini
+     * protocol, so a Claude model id never worked here. Use BYOK (v5) for
+     * Claude on Vertex, which routes via `@ai-sdk/google-vertex/anthropic`.
+     */
     VERTEX_CLAUDE_3_5_SONNET = 'vertex:claude-3-5-sonnet-v2@20241022',
     NOVITA_DEEPSEEK_V3 = 'novita:deepseek-v3',
     NOVITA_DEEPSEEK_V3_0324 = 'novita:deepseek-v3-0324',

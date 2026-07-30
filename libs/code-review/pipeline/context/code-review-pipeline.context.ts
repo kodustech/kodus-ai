@@ -1,4 +1,4 @@
-import type { ContextEvidence, ContextLayer, ContextPack } from '@kodus/flow';
+import type { ContextEvidence, ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { IExternalPromptContext } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { ContextAugmentationsMap } from '@libs/ai-engine/infrastructure/adapters/services/context/interfaces/code-review-context-pack.interface';
 import { AutomationExecutionEntity } from '@libs/automation/domain/automationExecution/entities/automation-execution.entity';
@@ -8,8 +8,8 @@ import {
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
-import { ReviewErrorCategory } from '@libs/code-review/infrastructure/agents/llm/error-classifier';
-import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/llm/review-warnings';
+import { LlmErrorCategory } from '@libs/llm/error-classifier';
+import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { PlatformType } from '@libs/core/domain/enums';
 import {
     AnalysisContext,
@@ -66,6 +66,19 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     platformType: PlatformType;
     triggerCommentId?: number | string;
     userGitId?: string;
+    /**
+     * Free-text steering directive from a review command
+     * (`@kody review focus on the auth logic`). Threaded into the finder prompt
+     * as a high-priority focus block. Empty/undefined = a normal review.
+     */
+    reviewDirective?: string;
+
+    /**
+     * HEAVY mode — opt-in per review (CLI `--heavy` or PR `@kody review
+     * --heavy`). Runs an extra "what did you miss?" critic pass in the finder
+     * for higher recall, at ~+1 finder pass of cost. Off by default.
+     */
+    heavy?: boolean;
 
     codeReviewConfig?: CodeReviewConfig;
     automaticReviewStatus?: AutomaticReviewStatus;
@@ -92,14 +105,23 @@ export interface CodeReviewPipelineContext extends PipelineContext {
         lastAnalyzedCommit?: any;
     };
     pipelineMetadata?: {
+        // Inherited from PipelineContext.pipelineMetadata — re-declared here
+        // because TS treats the child shape as a full override of the parent,
+        // not an intersection, and the PipelineExecutor populates these at
+        // runtime (see pipeline-executor.service.ts).
+        pipelineId?: string;
+        pipelineName?: string;
+        parentPipelineId?: string;
+        rootPipelineId?: string;
         lastExecution?: AutomationExecutionEntity;
         notificationHandled?: boolean;
         showStatusFeedback?: boolean;
         forceFullRerun?: boolean;
-        /** Set by the pipeline provider before execution. When true, the
-         *  agent (v4) engine will run, which has its own token-budget chunking
-         *  and tolerates much larger PRs than the legacy engine. */
-        useAgentEngine?: boolean;
+        /** Org subscription status (e.g. 'trial', 'active'), captured by
+         *  ValidatePrerequisitesStage from the license validation so later
+         *  stages can pick a trial-specific model. */
+        subscriptionStatus?: string;
+        [key: string]: any;
     };
 
     initialCommentData?: {
@@ -222,7 +244,7 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * this only exists to interpolate the user-facing reason.
      */
     lastReviewError?: {
-        category: ReviewErrorCategory;
+        category: LlmErrorCategory;
         provider?: string;
         friendlyMessage: string;
         agentName?: string;

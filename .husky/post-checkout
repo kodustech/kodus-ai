@@ -1,0 +1,4 @@
+# $3 = 1 means branch checkout; 0 means file checkout. Only the former
+# changes git state in a way that can move .env.schema, so skip file
+# checkouts to keep `git checkout <file>` cheap.
+[ "$3" = "1" ] && ./scripts/dev/check-env-drift.sh "$1" "$2"

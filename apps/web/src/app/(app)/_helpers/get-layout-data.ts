@@ -17,7 +17,7 @@ import {
  * All API calls are made in parallel to minimize latency.
  */
 export const getLayoutData = cache(
-    async (teamId: string, _organizationId: string) => {
+    async (teamId: string) => {
         const releaseTrackPromise = getOrganizationReleaseTrack();
 
         const [

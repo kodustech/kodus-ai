@@ -923,3 +923,71 @@ describe('CommentManagerService - fallback suggestion logic', () => {
         });
     });
 });
+
+// Guards the context→template wiring for the @agentPrompt placeholder:
+// processEndReviewMessageTemplate must thread `lineComments` all the way into
+// the real MessageTemplateProcessor. lineComments is an optional trailing arg no
+// typecheck would flag if a refactor silently dropped it — the exact failure
+// mode that only an end-to-end test catches.
+describe('CommentManagerService - agent prompt wiring', () => {
+    let service: CommentManagerService;
+
+    const org = { organizationId: 'org-1', teamId: 'team-1' } as any;
+
+    const lineComment = (suggestion: Record<string, unknown>) =>
+        ({
+            comment: { path: 'src/x.ts', line: 4, body: {}, suggestion },
+            deliveryStatus: 'sent',
+        }) as any;
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                CommentManagerService,
+                { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
+                // Real processor so the @agentPrompt handler actually runs.
+                MessageTemplateProcessor,
+                { provide: PromptRunnerService, useValue: {} },
+                { provide: ObservabilityService, useValue: {} },
+                { provide: PermissionValidationService, useValue: {} },
+                { provide: CodeManagementService, useValue: {} },
+            ],
+        }).compile();
+        service = module.get<CommentManagerService>(CommentManagerService);
+    });
+
+    it('threads lineComments into the @agentPrompt block', async () => {
+        const result = await service.processEndReviewMessageTemplate(
+            'Done!\n\n@agentPrompt',
+            [],
+            org,
+            1,
+            undefined,
+            'en-US',
+            undefined,
+            [lineComment({ llmPrompt: 'Fix the leak', improvedCode: '' })],
+        );
+
+        expect(result).toContain('Done!');
+        expect(result).not.toContain('@agentPrompt');
+        expect(result).toContain('Fix the leak');
+        expect(result).toContain('Open Agent Prompt');
+    });
+
+    it('renders the placeholder empty when lineComments is omitted', async () => {
+        const result = await service.processEndReviewMessageTemplate(
+            'Done!\n\n@agentPrompt',
+            [],
+            org,
+            1,
+            undefined,
+            'en-US',
+            undefined,
+            // lineComments omitted — the block must degrade to nothing
+        );
+
+        expect(result).toContain('Done!');
+        expect(result).not.toContain('@agentPrompt');
+        expect(result).not.toContain('Open Agent Prompt');
+    });
+});

@@ -1,0 +1,89 @@
+---
+title: "Steer a Review (Focus)"
+description: "Direct Kody's attention to a specific area of a pull request with a one-off review directive, via PR comment or CLI"
+---
+
+A **review directive** lets you tell Kody where to focus its deepest analysis for a single review. Instead of changing any configuration, you attach a short instruction when you trigger the review — for example, "focus on the auth and session logic" — and Kody spends its hardest analysis on the changed code that matches.
+
+<Note>
+  A directive is **ephemeral**: it applies to that one review run only. It is not saved to your settings and does not affect future reviews. To change Kody's behavior permanently, use [Custom Prompts](/how_to_use/en/code_review/configs/custom_prompts) or [Kody Rules](/how_to_use/en/code_review/configs/kody_rules) instead.
+</Note>
+
+## When to Use It
+
+- A PR touches many files but you care most about one risky area (auth, payments, a migration).
+- You want Kody to trace the callers and callees of a specific change and challenge it harder.
+- You're re-running a review and want to steer attention without editing any config.
+
+## Priority, Not a Filter
+
+This is the most important thing to understand:
+
+<Warning>
+  A directive sets **priority, not a filter**. Kody prioritizes the focus area, but it still reports any concrete bug, security, or performance issue it notices **elsewhere** in the diff. It never suppresses findings outside the focus, and it never approves the rest of the PR unseen.
+</Warning>
+
+Use a directive to say *"look here hardest"* — not *"only look here."*
+
+## How to Trigger It
+
+<Tabs>
+  <Tab title="PR / MR Comment">
+    Add your focus text right after the review command in a pull request comment:
+
+    ```text
+    @kody review focus on the auth and session logic
+    ```
+
+    You can also use `start-review`, and combine it with `--force`:
+
+    ```text
+    @kody start-review focus on the new database migration
+    @kody review --force focus on error handling in the webhook parser
+    ```
+
+    <Note>
+      `--force` re-runs the review even when Kody would normally skip it ("no new commits since the last review"). Use it — with or without a focus directive — to get a fresh pass after fixing whatever made the previous run fail, or to apply updated settings to an already-reviewed PR.
+    </Note>
+
+    <Note>
+      Only the **first line** after the command is used as the directive. Everything on later lines is ignored, so keep your focus to a single line.
+    </Note>
+
+    Works on GitHub, GitLab, Azure DevOps, Bitbucket, and Forgejo.
+  </Tab>
+  <Tab title="CLI">
+    Pass the `--focus` flag when running a review:
+
+    ```bash
+    kodus review --focus "the auth and session logic"
+    ```
+
+    See the [CLI commands reference](/how_to_use/en/cli/commands) for the full command surface.
+  </Tab>
+</Tabs>
+
+## Writing a Good Directive
+
+- **Be specific about the area, not the verdict.** "focus on concurrency in the queue consumer" works better than "find bugs".
+- **Name the code, not the outcome.** Point at a module, flow, or concern ("the retry logic", "the SQL in the reports service").
+- **Keep it short.** Directives are capped at **500 characters**; only the first line of a comment is read.
+
+<AccordionGroup>
+  <Accordion title="Good examples">
+    - `@kody review focus on the authentication and token-refresh flow`
+    - `@kody review focus on the new Stripe webhook handling`
+    - `kodus review --focus "race conditions in the background worker"`
+  </Accordion>
+  <Accordion title="Weak examples">
+    - `@kody review please be thorough` — no area to prioritize.
+    - `@kody review only comment on file X` — a directive is not a filter; use [ignore paths](/how_to_use/en/code_review/configs/general) to scope files instead.
+  </Accordion>
+</AccordionGroup>
+
+## Notes & Limits
+
+- **Length:** directives are truncated at 500 characters.
+- **First line only:** for PR comments, only the first line after the command becomes the directive.
+- **Untrusted by design:** because anyone who can comment on the PR can supply a directive, the text is sanitized before use (control characters and angle brackets are stripped). This does not change your focus — it only prevents the text from tampering with Kody's internal prompt.
+- **Not persisted:** nothing is written to your repository or organization settings.

@@ -13,8 +13,8 @@ import { sign } from 'jsonwebtoken';
  * the UI — parity runs, curl probing, etc.
  *
  * Usage:
- *   yarn analytics:mint-dev-jwt --email you@kodus.io
- *   yarn analytics:mint-dev-jwt --email you@kodus.io --expires 24h
+ *   pnpm run analytics:mint-dev-jwt --email you@kodus.io
+ *   pnpm run analytics:mint-dev-jwt --email you@kodus.io --expires 24h
  *
  * Env (from `.env`):
  *   API_JWT_SECRET       (required — same secret the api container uses)
@@ -125,7 +125,7 @@ async function main() {
             expiresIn: args.expires as unknown as number,
         });
         // Print ONLY the token on stdout so the caller can do:
-        //   JWT=$(yarn -s analytics:mint-dev-jwt --email ...)
+        //   JWT=$(pnpm -s analytics:mint-dev-jwt --email ...)
         process.stdout.write(token + '\n');
     } finally {
         await client.end();

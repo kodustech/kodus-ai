@@ -16,8 +16,11 @@ ARG RABBITMQADMIN_SHA256=af0ac0b8126c21aaa289c2438994349ca7a89265ca4777c3ed32bf9
 # don't need at runtime. Keeping python3 because rabbitmqadmin is a
 # Python script. BuildKit cache mounts reuse apt lists/cache across
 # builds instead of re-downloading packages every time.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+# sharing=private: builds never need concurrent apt access here, and
+# sharing=locked deadlocks the next build if one is killed mid-apt (the
+# buildkitd lock stays held). private isolates each build's apt cache.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
+    --mount=type=cache,target=/var/lib/apt,sharing=private \
     set -eux; \
     rm -f /etc/apt/apt.conf.d/docker-clean; \
     apt-get update; \

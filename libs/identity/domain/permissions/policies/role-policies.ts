@@ -28,9 +28,12 @@ const owner: PolicyRule[] = [
     { action: Action.Manage, resource: ResourceType.All, scope: 'org' },
 ];
 
+// Repo Admin sees the whole org by default (reads are org-wide); only WRITES
+// are gated by repo assignment — editing settings/rules/issues of a repo
+// requires that repo to be assigned to the user.
 const repoAdmin: PolicyRule[] = [
-    // Code review settings — read global + assigned repos, edit assigned repos.
-    { action: Action.Read, resource: ResourceType.CodeReviewSettings, scope: 'repo', global: true },
+    // Code review settings — read org-wide, edit assigned repos.
+    { action: Action.Read, resource: ResourceType.CodeReviewSettings, scope: 'org' },
     { action: Action.Update, resource: ResourceType.CodeReviewSettings, scope: 'repo' },
     { action: Action.Create, resource: ResourceType.CodeReviewSettings, scope: 'repo' },
 
@@ -42,7 +45,7 @@ const repoAdmin: PolicyRule[] = [
     { action: Action.Delete, resource: ResourceType.KodyRules, scope: 'repo' },
 
     // Cockpit — read only (no org-wide Update: cockpit *settings* are owner-only).
-    { action: Action.Read, resource: ResourceType.Cockpit, scope: 'repo', global: true },
+    { action: Action.Read, resource: ResourceType.Cockpit, scope: 'org' },
 
     // Issues — read across the org, create/update on assigned repos.
     { action: Action.Read, resource: ResourceType.Issues, scope: 'org' },
@@ -54,19 +57,15 @@ const repoAdmin: PolicyRule[] = [
     { action: Action.Update, resource: ResourceType.IssuesSettings, scope: 'org' },
     { action: Action.Create, resource: ResourceType.IssuesSettings, scope: 'org' },
 
-    { action: Action.Read, resource: ResourceType.Logs, scope: 'repo', global: true },
+    { action: Action.Read, resource: ResourceType.Logs, scope: 'org' },
 
-    // Pull requests — read only on assigned repos, consistent with the
-    // repo-scoped nature of this role (the PR dashboard filters to these via
-    // getRepositoryScope).
-    { action: Action.Read, resource: ResourceType.PullRequests, scope: 'repo' },
+    { action: Action.Read, resource: ResourceType.PullRequests, scope: 'org' },
 
     { action: Action.Read, resource: ResourceType.GitSettings, scope: 'org' },
     { action: Action.Read, resource: ResourceType.PluginSettings, scope: 'org' },
     { action: Action.Read, resource: ResourceType.TokenUsage, scope: 'org' },
 
-    // CLI reviews — own (assigned repos).
-    { action: Action.Read, resource: ResourceType.CliReview, scope: 'repo' },
+    { action: Action.Read, resource: ResourceType.CliReview, scope: 'org' },
 ];
 
 const billingManager: PolicyRule[] = [
@@ -84,13 +83,19 @@ const billingManager: PolicyRule[] = [
     { action: Action.Read, resource: ResourceType.TokenUsage, scope: 'org' },
 ];
 
+// Contributor is a read-only role that is NOT gated by repo assignment: it
+// sees the whole org (settings, kody rules, issues, PRs, logs) by default.
+// Cockpit and Token Usage stay admin-only.
 const contributor: PolicyRule[] = [
-    { action: Action.Read, resource: ResourceType.CodeReviewSettings, scope: 'repo', global: true },
+    { action: Action.Read, resource: ResourceType.CodeReviewSettings, scope: 'org' },
     { action: Action.Read, resource: ResourceType.KodyRules, scope: 'org' },
-    { action: Action.Read, resource: ResourceType.Issues, scope: 'repo' },
+    { action: Action.Read, resource: ResourceType.Issues, scope: 'org' },
     { action: Action.Read, resource: ResourceType.IssuesSettings, scope: 'org' },
-    // CLI reviews — own (assigned repos).
-    { action: Action.Read, resource: ResourceType.CliReview, scope: 'repo' },
+    { action: Action.Read, resource: ResourceType.CliReview, scope: 'org' },
+    { action: Action.Read, resource: ResourceType.PullRequests, scope: 'org' },
+    { action: Action.Read, resource: ResourceType.Logs, scope: 'org' },
+    { action: Action.Read, resource: ResourceType.GitSettings, scope: 'org' },
+    { action: Action.Read, resource: ResourceType.PluginSettings, scope: 'org' },
 ];
 
 export const ROLE_POLICIES: Record<Role, PolicyRule[]> = {
@@ -99,3 +104,12 @@ export const ROLE_POLICIES: Record<Role, PolicyRule[]> = {
     [Role.BILLING_MANAGER]: billingManager,
     [Role.CONTRIBUTOR]: contributor,
 };
+
+/**
+ * Whether repository assignment has any effect for the role — i.e. at least
+ * one of its grants is repo-scoped. Drives UI such as the repo-assignment
+ * chip in user management; derived from ROLE_POLICIES so it cannot drift
+ * when a role's scoping changes.
+ */
+export const roleUsesRepoAssignment = (role: Role | string): boolean =>
+    (ROLE_POLICIES[role as Role] ?? []).some((rule) => rule.scope === 'repo');

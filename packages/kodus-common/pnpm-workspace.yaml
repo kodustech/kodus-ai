@@ -1,0 +1,22 @@
+# Build-script approval for STANDALONE installs of this package — the Docker
+# image builds kodus-common on its own (`cd packages/kodus-common && pnpm
+# install`), outside the monorepo-root config. pnpm 11 treats unreviewed build
+# scripts as a hard error (strictDepBuilds=true), so deny the native-build deps
+# explicitly here, mirroring the repo root. Settings-only (no `packages:`); not
+# published (package `files` is dist/** only).
+# Flat (yarn-like) node_modules so undeclared "phantom" deps (e.g. json5)
+# keep resolving. Was `node-linker=hoisted` in .npmrc, which pnpm 11 ignores.
+nodeLinker: hoisted
+
+allowBuilds:
+  '@datadog/pprof': false
+  '@nestjs/core': false
+  '@scarf/scarf': false
+  '@sentry-internal/node-cpu-profiler': false
+  '@sentry/cli': false
+  '@swc/core': false
+  '@vscode/ripgrep': false
+  esbuild: false
+  protobufjs: false
+  sharp: false
+  unrs-resolver: false

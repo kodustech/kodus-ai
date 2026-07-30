@@ -58,15 +58,7 @@ export const DeleteRepoConfigModal = ({
                 directoryId: directory?.id,
             });
 
-            if (isCentralizedPrResponse(deleteResult)) {
-                toast(
-                    getCentralizedPrToastPayload(
-                        deleteResult,
-                        "Configuration removal proposed through centralized pull request.",
-                    ),
-                );
-                return;
-            }
+            const isCentralizedPr = isCentralizedPrResponse(deleteResult);
 
             await updateCodeReviewParameterRepositories(teamId);
 
@@ -90,6 +82,16 @@ export const DeleteRepoConfigModal = ({
                     ),
                 }),
             ]);
+
+            if (isCentralizedPr) {
+                toast(
+                    getCentralizedPrToastPayload(
+                        deleteResult,
+                        "Configuration removal proposed through centralized pull request.",
+                    ),
+                );
+                return;
+            }
 
             toast({
                 title: "Configuration removed",

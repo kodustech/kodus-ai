@@ -28,13 +28,13 @@ import { SharedMongoModule } from '@libs/shared/database/shared-mongo.module';
  *                          / fresh tenants.
  *
  * Usage:
- *   yarn analytics:backfill                    # chunked, resumes from checkpoint
- *   yarn analytics:backfill --fresh            # chunked, ignores checkpoint
- *   yarn analytics:backfill --from 2024-01-01 --until 2024-02-01
- *   yarn analytics:backfill --org <organizationId>
- *   yarn analytics:backfill --step-days 1 --pause-ms 5000 --batch 200
- *   yarn analytics:backfill --single-shot      # legacy mode
- *   yarn analytics:backfill --single-shot --max 10000 --batch 500
+ *   pnpm run analytics:backfill                    # chunked, resumes from checkpoint
+ *   pnpm run analytics:backfill --fresh            # chunked, ignores checkpoint
+ *   pnpm run analytics:backfill --from 2024-01-01 --until 2024-02-01
+ *   pnpm run analytics:backfill --org <organizationId>
+ *   pnpm run analytics:backfill --step-days 1 --pause-ms 5000 --batch 200
+ *   pnpm run analytics:backfill --single-shot      # legacy mode
+ *   pnpm run analytics:backfill --single-shot --max 10000 --batch 500
  */
 @Module({
     imports: [

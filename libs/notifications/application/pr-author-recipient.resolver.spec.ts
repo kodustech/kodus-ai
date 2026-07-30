@@ -3,7 +3,7 @@ import { IUsersService } from '@libs/identity/domain/user/contracts/user.service
 
 import { PrAuthorRecipientResolver } from './pr-author-recipient.resolver';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),

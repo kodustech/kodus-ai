@@ -17,12 +17,13 @@ ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
-COPY package*.json yarn.lock ./
+RUN corepack enable
 
-RUN --mount=type=cache,target=/yarn-cache,sharing=locked \
-    YARN_CACHE_FOLDER=/yarn-cache \
-    yarn install --frozen-lockfile
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+RUN --mount=type=cache,target=/pnpm-store,sharing=private \
+    pnpm install --frozen-lockfile --store-dir=/pnpm-store
 
 EXPOSE 3000
 
-CMD ["yarn", "start:dev"]
+CMD ["pnpm", "start:dev"]

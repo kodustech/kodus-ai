@@ -1,19 +1,27 @@
 name: "E2E: cloud matrix"
 
 # Minimal token scope — CodeQL actions/missing-workflow-permissions.
-# These jobs only read the repo (checkout); provider/cloud creds come
-# from secrets, not GITHUB_TOKEN. No job writes back to the repo.
+# Job only reads the repo (checkout); provider/cloud creds come from
+# secrets, not GITHUB_TOKEN.
 permissions:
     contents: read
 
-# Runs the matrix runner against the existing cloud QA target. Cloud is a
-# permanent environment, so this job does NOT provision anything — it
-# authenticates as pre-existing test tenants (free / trial / paid) and
-# exercises real provider integrations against the QA cloud URL.
+# Runs the canonical e2e matrix against the cloud QA target. Mirrors
+# `pnpm run e2e:matrix matrix/fast.yml --target cloud` locally:
+#   - Same matrix YAML (tests/e2e/matrix/fast.yml) — single source of
+#     truth. Adding a scenario or cell to fast.yml is automatically
+#     picked up by CI; no parallel matrix list to keep in sync.
+#   - Same skip-missing-tokens behaviour — a cell without its provider
+#     token is SKIPPED, not failed (community forks, partial setups).
+#   - Same internal parallelism — the matrix runner (run-matrix.ts)
+#     fans out cells via Promise.allSettled, so a single job here is
+#     already concurrent across cells.
 #
 # Trigger:
-#   - workflow_call from qa-build-push-and-pr-green.yml after the GitOps PR
-#     merges and the QA cloud rolls out the new image.
+#   - workflow_call from qa-build-push-and-pr-green.yml after the GitOps
+#     PR for the QA deploy is opened.
+#   - schedule nightly 05:17 UTC — catch-all for drift / provider
+#     regressions / flaky cells that don't reproduce per-deploy.
 #   - workflow_dispatch for manual runs.
 
 on:
@@ -29,6 +37,11 @@ on:
                 required: false
                 default: matrix/fast.yml
                 type: string
+    schedule:
+        # 05:17 UTC = ~02:17 BRT. Off-peak; offset from the benchmark
+        # cron (which lives at 04:17 UTC) so they don't share a runner
+        # spike.
+        - cron: "17 5 * * *"
     workflow_dispatch:
         inputs:
             image_tag:
@@ -48,19 +61,27 @@ concurrency:
 
 jobs:
     cloud-matrix:
-        name: ${{ matrix.cell.provider }} × ${{ matrix.cell.license }}
+        name: cloud matrix (${{ inputs.matrix_file || 'matrix/fast.yml' }})
         runs-on: ubuntu-latest
-        timeout-minutes: 25
-        strategy:
-            fail-fast: false
-            matrix:
-                cell:
-                    - { provider: github, license: paid }
-                    - { provider: gitlab, license: paid }
-                    - { provider: bitbucket, license: paid }
-                    - { provider: azure-devops, license: paid }
-                    - { provider: github, license: free }
-                    - { provider: github, license: trial }
+        # QA environment: where the QA-scoped secrets live (GH_REPO_ADMIN_TOKEN
+        # for trial-managed-review's throwaway repos). Branch policy allows
+        # `main` only — fine, every real trigger (qa-build workflow_call,
+        # nightly schedule, dispatch) runs from main. Repo-level secrets keep
+        # resolving as before.
+        #
+        # CLOUD_TENANTS_JSON must exist ONLY at repo level: environment
+        # secrets SHADOW repo secrets, and a stale environment-scoped copy
+        # (sealed 05-30, pre-#1237, no repoFullName) silently dropped every
+        # GitHub tenant onto one shared repo from 06-03 to 06-05 — webhook
+        # fan-out collisions, "review never started" flakes. The env copy was
+        # deleted on 2026-06-05; don't recreate it. (lib/runner.ts now also
+        # falls back to lib/cloud-tenant-registry.ts for the repo mapping, so
+        # a stale secret can't reintroduce the collision either way.)
+        environment: QA
+        # fast.yml = ~30-45 min, full.yml = ~75-120 min. Cap with
+        # generous headroom; cell-level timeouts inside the runner stop
+        # individual flakes from eating the whole budget.
+        timeout-minutes: 150
         steps:
             - name: Checkout monorepo
               uses: actions/checkout@v6.0.2
@@ -68,34 +89,232 @@ jobs:
             - name: Setup Node
               uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: "22"
 
             - name: Install e2e deps
               working-directory: tests/e2e
               run: npm install --no-audit --no-fund
 
-            - name: Run cloud matrix shard
+            # Seed the cloud tenant registry. The runner resolves each cloud
+            # cell's tenant by (provider, license) from ~/.kodus-dev/cloud-
+            # tenants.json (runner.ts:readCloudTenantsFile). Locally that file
+            # exists; in CI it didn't, so every cell fell back to the per-
+            # license env vars — which only cover free/trial/paid GITHUB, so
+            # paid-bitbucket / paid-azure / community-byok had no tenant (and
+            # the github-paid fallback lacks the bitbucket/azure connected
+            # repos → "repo not in integration's available list"). Writing the
+            # file restores the exact per-provider tenants the local runs used.
+            - name: Seed cloud tenants registry
               env:
-                  TARGET_BASE_URL: ${{ vars.CLOUD_QA_API_URL || 'https://api-qa.kodus.io' }}
-                  TARGET_WEB_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://app-qa.kodus.io' }}
+                  CLOUD_TENANTS_JSON: ${{ secrets.CLOUD_TENANTS_JSON }}
+              run: |
+                  if [ -z "${CLOUD_TENANTS_JSON:-}" ]; then
+                      echo "::warning::CLOUD_TENANTS_JSON secret empty — cells fall back to per-license env vars (github only)"
+                      exit 0
+                  fi
+                  mkdir -p "$HOME/.kodus-dev"
+                  printf '%s' "$CLOUD_TENANTS_JSON" > "$HOME/.kodus-dev/cloud-tenants.json"
+                  COUNT=$(node -e "console.log(JSON.parse(require('fs').readFileSync(process.env.HOME+'/.kodus-dev/cloud-tenants.json','utf8')).length)")
+                  echo "Seeded $COUNT cloud tenants"
 
+            - name: Wait for QA backend to be healthy (avoid deploy-race 403s)
+              id: readiness
+              env:
+                  TARGET_WEB_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://qa.web.kodus.io' }}
+                  # The image tag GitOps is deploying for THIS run. When set we
+                  # poll the backend's /health `version` until it reports this
+                  # tag — otherwise the matrix races the rollout and tests the
+                  # PREVIOUS build (e.g. a brand-new endpoint 404s even though
+                  # the code is on main). See the deploy-lag class of failures.
+                  EXPECTED_VERSION: ${{ inputs.image_tag }}
+                  # WAF Allow-rule header (QA environment secret): GitHub
+                  # runner IPs come from a shared pool and intermittently land
+                  # on the QA WAF's block rules, 403-ing the whole run. Empty
+                  # → probes run bare (rule absent / fork).
+                  QA_WAF_BYPASS_HEADER: ${{ secrets.QA_WAF_BYPASS_HEADER }}
+              run: |
+                  set -uo pipefail
+                  BASE="${TARGET_WEB_URL%/}/api/proxy/api"
+                  WAF_HDR=()
+                  if [ -n "${QA_WAF_BYPASS_HEADER:-}" ]; then
+                      WAF_HDR=(-H "x-kodus-e2e: ${QA_WAF_BYPASS_HEADER}")
+                  fi
+
+                  # --- Phase 0: version gate (best-effort) ----------------------
+                  # Health (@Public, @Controller('health')) returns the running
+                  # build's RELEASE_VERSION. If we know the tag we just deployed,
+                  # wait until the live version matches it so the matrix runs the
+                  # build under test, not the one it replaced. This is BEST-EFFORT:
+                  # if the version is 'unknown' (RELEASE_VERSION unset) or never
+                  # converges, we WARN and fall through to the app-readiness probe
+                  # rather than fail — never trade deploy-lag for a new false-fail.
+                  if [ -n "${EXPECTED_VERSION:-}" ]; then
+                      SHORT="${EXPECTED_VERSION:0:7}"
+                      echo "Waiting for QA /health version to report '$EXPECTED_VERSION' (short '$SHORT')…"
+                      matched=""
+                      for i in $(seq 1 60); do
+                          ver=$(curl -sS "${WAF_HDR[@]}" "$BASE/health" 2>/dev/null \
+                              | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version||'')}catch{console.log('')}})" \
+                              2>/dev/null || echo "")
+                          case "$ver" in
+                              "" |unknown)
+                                  echo "attempt $i/60: version='${ver:-<none>}' (health not reporting a build yet) — waiting 10s…" ; sleep 10 ;;
+                              *"$EXPECTED_VERSION"*|*"$SHORT"*)
+                                  echo "QA is running the expected build (version=$ver) after $i attempt(s)." ; matched=1 ; break ;;
+                              *)
+                                  echo "attempt $i/60: version=$ver (still the prior build) — waiting 10s…" ; sleep 10 ;;
+                          esac
+                      done
+                      if [ -z "$matched" ]; then
+                          echo "::warning::QA /health never reported expected version '$EXPECTED_VERSION' within ~10min — proceeding on app-readiness only (deploy-lag false failures possible)."
+                      fi
+                  else
+                      echo "No image_tag input — skipping version gate, app-readiness probe only."
+                  fi
+
+                  # --- Phase 1: app-level readiness + SETTLE (hard gate) -------
+                  # Chained right after the QA GitOps deploy, the backend can still
+                  # be rolling out: the gateway answers 403/5xx/000, OR — the case
+                  # that bit us on 2026-06-12 — the API answers app-level for a
+                  # moment and then restarts AGAIN as the rollout rolls across
+                  # replicas. A single momentary 200 is exactly how the review
+                  # WORKER ends up not-yet-consuming when the matrix starts, so the
+                  # first review "never starts" (no kody-codereview status comment).
+                  # So we do NOT proceed on the first healthy probe: we require the
+                  # backend to stay app-ready AND on the expected build for several
+                  # CONSECUTIVE checks, proving the rollout has actually settled.
+                  echo "Probing $BASE/auth/login for app-level readiness (settle gate)…"
+                  NEED_OK=3          # consecutive clean probes required to proceed
+                  SETTLE_SLEEP=10    # spacing between probes (s)
+                  ok_streak=0
+                  for i in $(seq 1 90); do
+                      code=$(curl -sS -o /dev/null -w '%{http_code}' \
+                          -X POST "$BASE/auth/login" \
+                          "${WAF_HDR[@]}" \
+                          -H 'Content-Type: application/json' \
+                          -d '{"email":"readiness-probe@invalid.kodus","password":"x"}' \
+                          2>/dev/null || echo 000)
+                      # If we know the target build, the live version must ALSO still
+                      # match on each probe — a flip back to the prior build means a
+                      # replica is mid-restart, so the rollout hasn't settled. Stays
+                      # best-effort: an empty/'unknown' version (RELEASE_VERSION unset)
+                      # can't be gated on, so it never blocks here.
+                      ver_ok=1
+                      if [ -n "${EXPECTED_VERSION:-}" ]; then
+                          ver=$(curl -sS "${WAF_HDR[@]}" "$BASE/health" 2>/dev/null \
+                              | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version||'')}catch{console.log('')}})" \
+                              2>/dev/null || echo "")
+                          case "$ver" in
+                              ""|unknown) ver_ok=1 ;;
+                              *"$EXPECTED_VERSION"*|*"${EXPECTED_VERSION:0:7}"*) ver_ok=1 ;;
+                              *) ver_ok=0 ;;
+                          esac
+                      fi
+                      case "$code" in
+                          200|201|400|401|404|422)
+                              if [ "$ver_ok" = 1 ]; then
+                                  ok_streak=$((ok_streak + 1))
+                                  echo "attempt $i/90: app-ready (HTTP $code), settle streak $ok_streak/$NEED_OK"
+                                  if [ "$ok_streak" -ge "$NEED_OK" ]; then
+                                      echo "QA settled on the expected build — proceeding."
+                                      exit 0
+                                  fi
+                              else
+                                  echo "attempt $i/90: app-ready (HTTP $code) but version flipped to '$ver' (rollout still moving) — resetting streak"
+                                  ok_streak=0
+                              fi
+                              sleep "$SETTLE_SLEEP" ;;
+                          *)
+                              echo "attempt $i/90: HTTP $code (gateway/rollout) — resetting streak, waiting ${SETTLE_SLEEP}s…"
+                              ok_streak=0
+                              sleep "$SETTLE_SLEEP" ;;
+                      esac
+                  done
+                  echo "::error::QA backend never settled (app-ready + expected build, $NEED_OK consecutive) in ~15min — aborting before the matrix to avoid deploy-race false failures."
+                  exit 1
+
+            - name: Run cloud matrix
+              id: matrix
+              # Deliberately BELOW the job's timeout-minutes. When the JOB
+              # times out, GitHub CANCELS it: `failure()` is false, so every
+              # notify below is skipped and the run dies silently — the worse
+              # the breakage, the longer the burn, the likelier the timeout,
+              # the more certain the silence. Failing the STEP instead keeps
+              # the job alive to run the digest + notify path. 135 leaves 15min
+              # for evidence upload and Discord.
+              timeout-minutes: 135
+              env:
+                  # target.sh expects TARGET_BASE_URL + TARGET_WEB_URL.
+                  # vars.CLOUD_QA_* canonicalise the URLs; the matrix
+                  # runner ignores TARGET_BASE_URL for cloud target (it
+                  # derives the API from web URL + /api/proxy/api) but
+                  # target.sh requires it set, so we still export it.
+                  TARGET_BASE_URL: ${{ vars.CLOUD_QA_API_URL || 'https://qa.api.kodus.io' }}
+                  TARGET_WEB_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://qa.web.kodus.io' }}
+                  MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
+
+                  # Provider tokens — cells without the right token are
+                  # skipped (target.sh passes --skip-missing-tokens).
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  # Extra bot-account tokens for the round-robin pool (see
+                  # tests/e2e/lib/github-token-pool.ts). Optional — the pool
+                  # collapses to GH_TEST_TOKEN alone when these are unset.
+                  GH_TEST_TOKEN_2: ${{ secrets.GH_TEST_TOKEN_2 }}
+                  GH_TEST_TOKEN_3: ${{ secrets.GH_TEST_TOKEN_3 }}
+                  # GitHub App installation token (opt-in, preferred over the
+                  # PAT pool for cloud cells): 5000/h of its own budget,
+                  # immune to the bot-account abuse flags. All three unset →
+                  # PAT pool behavior unchanged. See lib/github-app-token.ts.
+                  GH_APP_ID: ${{ secrets.GH_APP_ID }}
+                  GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+                  GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+                  GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
+
+                  # LLM key for the run-start tenant BYOK refresh (see
+                  # refreshCloudTenantByok in lib/runner.ts): persistent QA
+                  # tenants store their BYOK key at seed time, so a key
+                  # rotation strands them on the revoked key and every paid
+                  # cell dies with `partial_error: Incorrect API key`. Same
+                  # secret + model the self-hosted matrix injects, so both
+                  # targets review with one debuggable configuration.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+                  # Org-Administration token (QA environment secret) used ONLY
+                  # by trial-managed-review to create/delete its throwaway repo
+                  # per run. Absent → that scenario is SKIPPED, not failed
+                  # (SCENARIO_REQUIRED in run-matrix.ts).
+                  GH_REPO_ADMIN_TOKEN: ${{ secrets.GH_REPO_ADMIN_TOKEN }}
+                  # Second admin account (DIFFERENT GitHub user). GitHub's
+                  # primary rate limit is per-account, so repo create/delete/
+                  # mirror round-robins across these admin tokens (see
+                  # github-repos.ts) to spread the heaviest GitHub traffic over
+                  # multiple per-account quotas instead of exhausting one.
+                  GH_REPO_ADMIN_TOKEN_2: ${{ secrets.GH_REPO_ADMIN_TOKEN_2 }}
+
+                  # WAF Allow-rule header: lib/http.ts injects `x-kodus-e2e`
+                  # on every request bound for qa.*.kodus.io (and ONLY those)
+                  # so runner IPs that land on the WAF's block rules don't 403
+                  # the whole run. Playwright contexts inject it via route().
+                  QA_WAF_BYPASS_HEADER: ${{ secrets.QA_WAF_BYPASS_HEADER }}
 
                   GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
                   GL_TEST_REPO: ${{ secrets.GL_TEST_REPO }}
+                  GL_TEST_REPO_CLOUD: ${{ secrets.GL_TEST_REPO_CLOUD }}
                   GL_TEST_MR_IID: ${{ secrets.GL_TEST_MR_IID }}
 
                   BB_TEST_USER: ${{ secrets.BB_TEST_USER }}
                   BB_TEST_APP_PASSWORD: ${{ secrets.BB_TEST_APP_PASSWORD }}
                   BB_TEST_REPO: ${{ secrets.BB_TEST_REPO }}
+                  BB_TEST_REPO_CLOUD: ${{ secrets.BB_TEST_REPO_CLOUD }}
                   BB_TEST_PR_ID: ${{ secrets.BB_TEST_PR_ID }}
 
                   AZ_TEST_TOKEN: ${{ secrets.AZ_TEST_TOKEN }}
                   AZ_TEST_ORG: ${{ secrets.AZ_TEST_ORG }}
                   AZ_TEST_PROJECT: ${{ secrets.AZ_TEST_PROJECT }}
                   AZ_TEST_REPO: ${{ secrets.AZ_TEST_REPO }}
+                  AZ_TEST_REPO_CLOUD: ${{ secrets.AZ_TEST_REPO_CLOUD }}
                   AZ_TEST_PR_ID: ${{ secrets.AZ_TEST_PR_ID }}
 
                   CLOUD_TENANT_PAID_EMAIL: ${{ secrets.CLOUD_TENANT_PAID_EMAIL }}
@@ -104,45 +323,131 @@ jobs:
                   CLOUD_TENANT_TRIAL_PASSWORD: ${{ secrets.CLOUD_TENANT_TRIAL_PASSWORD }}
                   CLOUD_TENANT_FREE_EMAIL: ${{ secrets.CLOUD_TENANT_FREE_EMAIL }}
                   CLOUD_TENANT_FREE_PASSWORD: ${{ secrets.CLOUD_TENANT_FREE_PASSWORD }}
-              run: |
-                  CELL_MATRIX=$(mktemp --suffix=.yml)
-                  cat >"$CELL_MATRIX" <<EOF
-                  id: cloud-shard-${{ matrix.cell.provider }}-${{ matrix.cell.license }}
-                  scenarios:
-                    - code-review-basic
-                    - kody-rules-create-and-apply
-                    - license-attribution
-                  cells:
-                    - target: cloud
-                      provider: ${{ matrix.cell.provider }}
-                      license: ${{ matrix.cell.license }}
-                  EOF
-                  export MATRIX_FILE="$CELL_MATRIX"
-                  ./tests/e2e/provisioning/cloud/target.sh
+              run: bash tests/e2e/provisioning/cloud/target.sh
 
             - name: Upload evidence
               if: always()
               uses: actions/upload-artifact@v4
               with:
-                  name: e2e-cloud-${{ matrix.cell.provider }}-${{ matrix.cell.license }}
+                  name: e2e-cloud-matrix
                   path: tests/e2e/evidence/
                   if-no-files-found: warn
-                  retention-days: 14
-
-    aggregate:
-        name: Aggregate evidence
-        runs-on: ubuntu-latest
-        needs: cloud-matrix
-        if: always()
-        steps:
-            - uses: actions/download-artifact@v4
-              with:
-                  pattern: e2e-cloud-*
-                  merge-multiple: true
-                  path: evidence
-
-            - uses: actions/upload-artifact@v4
-              with:
-                  name: e2e-cloud-matrix
-                  path: evidence/
                   retention-days: 30
+
+            # Build the human-readable digest from the matrix's notify.json
+            # (written next to result.json) so Discord shows REAL numbers
+            # ("69/70 passed — 1 failed: …") instead of a binary "failed"
+            # that reads like the whole release gate collapsed.
+            - name: Build notification digest
+              id: digest
+              if: always()
+              run: |
+                  set -uo pipefail
+                  f=$(find tests/e2e/evidence -name notify.json -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2- || true)
+                  if [ -z "$f" ]; then
+                      echo "found=false" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+                  echo "found=true" >> "$GITHUB_OUTPUT"
+                  NOTIFY_JSON="$f" node - <<'__JS__'
+                  const fs = require("fs");
+                  const n = JSON.parse(fs.readFileSync(process.env.NOTIFY_JSON, "utf8"));
+                  const fmt = (l) => l.map((x) => `• \`${x.cell}\`\n  ${x.error}`).join("\n");
+                  const out = [];
+                  out.push(`headline=${n.passed}/${n.total} passed (failed=${n.failed}, skipped=${n.skipped})`);
+                  out.push(`gating_count=${n.gatingFailures.length}`);
+                  out.push(`advisory_count=${n.advisoryFailures.length}`);
+                  out.push(`retried_count=${n.retriedCells.length}`);
+                  const body = [];
+                  if (n.gatingFailures.length) body.push(`**P0 failures (gating):**\n${fmt(n.gatingFailures)}`);
+                  if (n.advisoryFailures.length) body.push(`**Advisory (non-gating):**\n${fmt(n.advisoryFailures)}`);
+                  if (n.retriedCells.length) body.push(`Recovered on retry: ${n.retriedCells.map((c) => `\`${c}\``).join(", ")}`);
+                  // GITHUB_OUTPUT multiline
+                  out.push("details<<__EOF__");
+                  out.push(body.join("\n") || "—");
+                  out.push("__EOF__");
+                  fs.appendFileSync(process.env.GITHUB_OUTPUT, out.join("\n") + "\n");
+                  __JS__
+
+            # Case 1 — infra: QA never became reachable; the matrix NEVER RAN.
+            # Distinct wording so nobody reads it as "the tests broke".
+            - name: Notify Discord — QA unreachable (infra, matrix did not run)
+              if: failure() && steps.readiness.outcome == 'failure'
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "🔌 E2E: QA unreachable — matrix did NOT run"
+                  description: |
+                      The readiness gate could not reach QA (${{ vars.CLOUD_QA_WEB_URL || 'https://qa.web.kodus.io' }}) at the app level — this is an INFRA condition (deploy still rolling out, or WAF blocking the runner IP), not a test failure. No scenario was executed.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                      Trigger: ${{ github.event_name }}${{ github.event_name == 'schedule' && ' (nightly catch-all)' || '' }}
+
+            # Case 2 — the matrix ran, wrote a digest, and exited non-zero.
+            #
+            # Gate on the STEP outcome, not on gating_count. run-matrix exits 1
+            # for THREE reasons (`gating.length > 0 || summary.blocked > 0 ||
+            # targetCrashed`) and only the first surfaces as gating_count, so a
+            # digest-only guard goes quiet on a fully-blocked or crashed target
+            # — trading silence-on-timeout for silence-on-blocked.
+            #
+            # This is safe now only because the matrix step carries its own
+            # timeout-minutes (above): a timed-out STEP fails, so `failure()`
+            # holds. Previously a job-level timeout CANCELLED the step,
+            # `failure()` was false, and this notify was skipped exactly when it
+            # mattered most — the inversion that hid a broken QA github cell for
+            # 6 days (last green 2026-07-08).
+            - name: Notify Discord — gating failures
+              if: >-
+                  failure() && steps.matrix.outcome == 'failure' &&
+                  steps.digest.outputs.found == 'true'
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "❌ E2E cloud matrix: ${{ steps.digest.outputs.headline || 'failed (no digest)' }}"
+                  description: |
+                      ${{ steps.digest.outputs.details || 'No notify.json produced — see the run log.' }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                      Trigger: ${{ github.event_name }}${{ github.event_name == 'schedule' && ' (nightly catch-all)' || '' }}
+
+            # Case 2b — the matrix ran but produced no digest at all: it hit
+            # its step timeout (or died) before writing notify.json, which
+            # runMatrix only emits at the very end. Without this the run is
+            # indistinguishable from silence, which is how a broken QA github
+            # cell went unreported for 6 days (last green 2026-07-08) while
+            # every run burned its budget on scenarios polling for a review
+            # that never came.
+            #
+            # Guarded by failure(), NOT always(): a concurrency cancel
+            # (`group: qa-gitops, cancel-in-progress: true` — any push to main
+            # supersedes the running deploy) leaves the job CANCELLED, and a
+            # superseded run is not news. Only a genuine failure reports.
+            - name: Notify Discord — matrix produced no result (timed out)
+              if: >-
+                  failure() && steps.readiness.outcome == 'success' &&
+                  steps.digest.outputs.found != 'true'
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: '⏱️ E2E cloud matrix: ended with no result'
+                  description: |
+                      QA was reachable and the matrix started, but it never wrote a result — it ran out of time (step cap: 135min) before finishing. A cell whose reviews never arrive burns its full poll window on every scenario (600–1500s each, then one retry), so a single broken provider can eat the whole budget and starve the cells behind it.
+                      Start with the FIRST failing cell in the log, not the last: later cells are usually collateral.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                      Trigger: ${{ github.event_name }}${{ github.event_name == 'schedule' && ' (nightly catch-all)' || '' }}
+
+            # Case 3 — run is GREEN but advisory (P1/P2/quarantined) cells
+            # failed: warn without crying wolf.
+            - name: Notify Discord — advisory failures on a green run
+              if: success() && steps.digest.outputs.advisory_count != '0' && steps.digest.outputs.advisory_count != ''
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: cancelled
+                  title: "⚠️ E2E cloud matrix GREEN with advisories: ${{ steps.digest.outputs.headline }}"
+                  description: |
+                      All P0 gates passed. Non-gating failures to keep an eye on:
+                      ${{ steps.digest.outputs.details }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

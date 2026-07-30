@@ -63,7 +63,7 @@ async function main() {
         if (!response.ok) {
             const err = await response.text();
             console.error(`❌ Falha ao disparar review: HTTP ${response.status} - ${err}`);
-            console.log("\n💡 Dica: Se a API local não estiver rodando na porta 3000, inicie o ambiente com 'yarn docker:start:all'");
+            console.log("\n💡 Dica: Se a API local não estiver rodando na porta 3000, inicie o ambiente com 'pnpm run docker:start:all'");
             process.exit(1);
         }
 
@@ -78,7 +78,7 @@ async function main() {
     console.log("\n📡 Anexando aos logs do Worker para espionar os Agentes e suas Tools em tempo real...");
     console.log("==========================================================================");
     
-    // Usar docker logs para seguir o worker (assumindo que roda via yarn docker:start ou similar)
+    // Usar docker logs para seguir o worker (assumindo que roda via pnpm run docker:start ou similar)
     // Filtramos apenas logs relevantes de AgentLoop, Tool Calls e Sandbox
     const logProcess = spawn('docker', ['logs', '-f', 'kodus-worker-1'], { shell: true });
     

@@ -5,7 +5,7 @@
 #   dry-run   Validates wiring without provisioning or hitting providers.
 #             Instant. No secrets needed. Run this first.
 #   smoke     Runs ONE scenario × provider against the alive self-hosted droplet
-#             from `yarn selfhosted:provision`. Fast (~3 min). Needs provider
+#             from `pnpm run selfhosted:provision`. Fast (~3 min). Needs provider
 #             token for the chosen provider.
 #   matrix    Full matrix from tests/e2e/matrix/*.yml. Provisions fresh droplets
 #             per self-hosted cell, hits all configured providers. Slow (~30-45
@@ -13,15 +13,15 @@
 #             provider token are SKIPPED with a warning, not failed.
 #
 # Usage:
-#   yarn e2e:dry-run
-#   yarn e2e:smoke                                # github × code-review-basic
-#   yarn e2e:smoke --provider gitlab              # different provider
-#   yarn e2e:smoke --scenario kody-rules-create-and-apply
-#   yarn e2e:smoke --name junior                  # against named instance
-#   yarn e2e:matrix                               # default: matrix/fast.yml
-#   yarn e2e:matrix matrix/full.yml               # full tier (adds upgrade/SSO/Stripe)
-#   yarn e2e:matrix -y                            # skip confirmation prompt
-#   yarn e2e:matrix matrix/full.yml --auto-provision -y
+#   pnpm run e2e:dry-run
+#   pnpm run e2e:smoke                                # github × code-review-basic
+#   pnpm run e2e:smoke --provider gitlab              # different provider
+#   pnpm run e2e:smoke --scenario kody-rules-create-and-apply
+#   pnpm run e2e:smoke --name junior                  # against named instance
+#   pnpm run e2e:matrix                               # default: matrix/fast.yml
+#   pnpm run e2e:matrix matrix/full.yml               # full tier (adds upgrade/SSO/Stripe)
+#   pnpm run e2e:matrix -y                            # skip confirmation prompt
+#   pnpm run e2e:matrix matrix/full.yml --auto-provision -y
 #                                                 # also ensure self-hosted +
 #                                                 # sso-e2e droplets, seed
 #                                                 # cloud tenants, and export
@@ -32,7 +32,7 @@
 # Config sources (same as scripts/selfhosted/):
 #   1. Inline env (highest)
 #   2. scripts/e2e/.env (gitignored)
-#   3. ~/.kodus-dev/config (managed by `yarn selfhosted:setup`)
+#   3. ~/.kodus-dev/config (managed by `pnpm run selfhosted:setup`)
 #
 # Per-provider env vars needed for smoke/matrix (matrix skips cells without):
 #   github       GH_TEST_TOKEN, GH_TEST_REPO        (optional: GH_TEST_PR_NUMBER)
@@ -166,7 +166,7 @@ case "$MODE" in
         STATE_FILE="$STATE_DIR/selfhosted-vm-${INSTANCE_NAME}.json"
         if [ ! -f "$STATE_FILE" ]; then
             err "No alive self-hosted instance named '$INSTANCE_NAME'."
-            err "  Run: yarn selfhosted:provision${INSTANCE_NAME:+ --name $INSTANCE_NAME}"
+            err "  Run: pnpm run selfhosted:provision${INSTANCE_NAME:+ --name $INSTANCE_NAME}"
             err "  (smoke runs against the droplet you already have — it does not provision one)"
             exit 1
         fi
@@ -332,7 +332,7 @@ case "$MODE" in
                 if [ -z "${SH_LICENSE_KEY:-}" ]; then
                     err "Matrix references sso-* scenarios but SH_LICENSE_KEY is empty."
                     err "  sso-e2e droplet provision will fail at POST /sso-config (HTTP 403 enterprise tier)."
-                    err "  Fix: set SH_LICENSE_KEY in ~/.kodus-dev/config (yarn selfhosted:setup)."
+                    err "  Fix: set SH_LICENSE_KEY in ~/.kodus-dev/config (pnpm run selfhosted:setup)."
                     err "  Workaround for this run: use a YAML without sso-cookie-domain / sso-multi-user."
                     exit 1
                 fi

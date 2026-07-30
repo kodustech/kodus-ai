@@ -1,4 +1,8 @@
 import * as dotenv from 'dotenv';
+// Cascade: .env.local (per-dev) wins, .env (team baseline) fills the rest.
+// dotenv won't override an already-set key, so loading .env.local first
+// is what makes the override semantics work.
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 // rabbitMQWrapper.module.ts
@@ -37,7 +41,10 @@ export class RabbitMQWrapperModule {
             | DynamicModule
             | Promise<DynamicModule>
             | ForwardReference
-        )[] = [ConfigModule.forRoot(), ConfigModule.forFeature(RabbitMQLoader)];
+        )[] = [
+            ConfigModule.forRoot({ envFilePath: ['.env.local', '.env'] }),
+            ConfigModule.forFeature(RabbitMQLoader),
+        ];
 
         const rabbitMQEnabled = process.env.API_RABBITMQ_ENABLED !== 'false';
         const providers: Provider[] = [

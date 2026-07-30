@@ -14,7 +14,7 @@ const mockRegisterTool = jest.fn();
 const mockConnect = jest.fn();
 const mockClose = jest.fn();
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => loggerMock,
 }));
 

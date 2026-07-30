@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { DeepPartial } from 'typeorm';
 
@@ -148,6 +148,10 @@ export class FindByRepositoryOrDirectoryIdPullRequestMessagesUseCase {
             endReviewMessage: {
                 content: json?.endReviewMessage?.content,
                 status: json?.endReviewMessage?.status,
+            },
+            errorReviewMessage: {
+                content: json?.errorReviewMessage?.content,
+                status: json?.errorReviewMessage?.status,
             },
             startReviewMessage: {
                 content: json?.startReviewMessage?.content,

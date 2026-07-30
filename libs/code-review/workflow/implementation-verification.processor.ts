@@ -17,7 +17,7 @@ import {
 } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     ISuggestionService,
     SUGGESTION_SERVICE_TOKEN,

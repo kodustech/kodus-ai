@@ -22,6 +22,7 @@ export function getAdapter(providerId: string): ProviderAdapter {
         case 'open_router':
             return new OpenAIAdapter();
         case 'anthropic':
+        case 'anthropic_compatible':
             return new AnthropicAdapter();
         case 'google_gemini':
             return new GoogleGeminiAdapter();

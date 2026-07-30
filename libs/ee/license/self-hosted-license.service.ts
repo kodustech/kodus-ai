@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -10,6 +10,7 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 
 import {
+    ConsumeTrialReviewCreditResult,
     ILicenseService,
     OrganizationLicenseValidationResult,
     SelfHostedLicensePayload,
@@ -24,6 +25,18 @@ MCowBQYDK2VwAyEAig1JYVU3PCPOY18JGKsMdcoPeDMrGRCRb5XPZeLniZc=
 -----END PUBLIC KEY-----`;
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+type AssignedUserEntry = {
+    gitId: string;
+    status: 'active' | 'inactive';
+};
+
+function isLegacyFormat(
+    users: unknown,
+): users is string[] {
+    if (!Array.isArray(users)) return false;
+    return users.length === 0 || typeof users[0] === 'string';
+}
 
 @Injectable()
 export class SelfHostedLicenseService implements ILicenseService {
@@ -107,10 +120,33 @@ export class SelfHostedLicenseService implements ILicenseService {
             const assignedUsers = await this.getAssignedUsers(
                 organizationAndTeamData,
             );
-            return assignedUsers.map((gitId) => ({ git_id: gitId }));
+            return assignedUsers
+                .filter((u) => u.status === 'active')
+                .map((u) => ({ git_id: u.gitId }));
         } catch (error) {
             this.logger.error({
                 message: 'Error getting assigned users',
+                context: SelfHostedLicenseService.name,
+                error,
+            });
+            return [];
+        }
+    }
+
+    async getAllUsersEverWithLicense(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<UserWithLicense[]> {
+        try {
+            const assignedUsers = await this.getAssignedUsers(
+                organizationAndTeamData,
+            );
+            return assignedUsers.map((u) => ({
+                git_id: u.gitId,
+                status: u.status,
+            }));
+        } catch (error) {
+            this.logger.error({
+                message: 'Error getting all users ever with license',
                 context: SelfHostedLicenseService.name,
                 error,
             });
@@ -135,8 +171,38 @@ export class SelfHostedLicenseService implements ILicenseService {
                 organizationAndTeamData,
             );
 
-            // Already assigned
-            if (assignedUsers.includes(userGitId)) {
+            const existing = assignedUsers.find(
+                (u) => u.gitId === userGitId,
+            );
+            if (existing) {
+                if (existing.status === 'active') {
+                    return true;
+                }
+
+                const maxSeats = validation.numberOfLicenses || 0;
+                if (maxSeats > 0) {
+                    const globalCount =
+                        await this.getGlobalAssignedUsersCount();
+                    if (globalCount >= maxSeats) {
+                        this.logger.warn({
+                            message:
+                                'Cannot reactivate license: global seat limit reached',
+                            context: SelfHostedLicenseService.name,
+                            metadata: {
+                                currentGlobal: globalCount,
+                                max: maxSeats,
+                                userGitId,
+                            },
+                        });
+                        return false;
+                    }
+                }
+
+                existing.status = 'active';
+                await this.saveAssignedUsers(
+                    organizationAndTeamData,
+                    assignedUsers,
+                );
                 return true;
             }
 
@@ -159,7 +225,7 @@ export class SelfHostedLicenseService implements ILicenseService {
                 }
             }
 
-            assignedUsers.push(userGitId);
+            assignedUsers.push({ gitId: userGitId, status: 'active' });
             await this.saveAssignedUsers(
                 organizationAndTeamData,
                 assignedUsers,
@@ -183,13 +249,16 @@ export class SelfHostedLicenseService implements ILicenseService {
             const assignedUsers = await this.getAssignedUsers(
                 organizationAndTeamData,
             );
-            const filtered = assignedUsers.filter((id) => id !== userGitId);
 
-            if (filtered.length === assignedUsers.length) {
-                return true; // User wasn't assigned
+            const existing = assignedUsers.find(
+                (u) => u.gitId === userGitId,
+            );
+            if (!existing) {
+                return true;
             }
 
-            await this.saveAssignedUsers(organizationAndTeamData, filtered);
+            existing.status = 'inactive';
+            await this.saveAssignedUsers(organizationAndTeamData, assignedUsers);
             return true;
         } catch (error) {
             this.logger.error({
@@ -201,9 +270,28 @@ export class SelfHostedLicenseService implements ILicenseService {
         }
     }
 
+    async consumeTrialReviewCredit(
+        _organizationAndTeamData: OrganizationAndTeamData,
+        _usageKey?: string,
+    ): Promise<ConsumeTrialReviewCreditResult> {
+        return {
+            allowed: true,
+            reason: 'SELF_HOSTED',
+        };
+    }
+
+    // Trials are a cloud-billing concept; self-hosted installs are licensed
+    // via signed keys, so there is nothing to provision here.
+    async startTrial(
+        _organizationAndTeamData: OrganizationAndTeamData,
+        _byok: boolean,
+    ): Promise<boolean> {
+        return false;
+    }
+
     private async getAssignedUsers(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<string[]> {
+    ): Promise<AssignedUserEntry[]> {
         try {
             const param = await this.organizationParametersService.findByKey(
                 OrganizationParametersKey.LICENSE_ASSIGNED_USERS,
@@ -213,7 +301,14 @@ export class SelfHostedLicenseService implements ILicenseService {
                 param?.configValue?.users &&
                 Array.isArray(param.configValue.users)
             ) {
-                return param.configValue.users;
+                const raw = param.configValue.users;
+                if (isLegacyFormat(raw)) {
+                    return raw.map((id) => ({
+                        gitId: id,
+                        status: 'active' as const,
+                    }));
+                }
+                return raw as AssignedUserEntry[];
             }
         } catch {
             // Not found yet
@@ -223,7 +318,7 @@ export class SelfHostedLicenseService implements ILicenseService {
 
     private async saveAssignedUsers(
         organizationAndTeamData: OrganizationAndTeamData,
-        users: string[],
+        users: AssignedUserEntry[],
     ): Promise<void> {
         await this.organizationParametersService.createOrUpdateConfig(
             OrganizationParametersKey.LICENSE_ASSIGNED_USERS,
@@ -244,10 +339,15 @@ export class SelfHostedLicenseService implements ILicenseService {
 
             const uniqueUsers = new Set<string>();
             for (const param of allParams) {
-                const users = param.configValue?.users;
-                if (Array.isArray(users)) {
-                    for (const user of users) {
-                        uniqueUsers.add(user);
+                const raw = param.configValue?.users;
+                if (Array.isArray(raw)) {
+                    const entries: AssignedUserEntry[] = isLegacyFormat(raw)
+                        ? raw.map((id) => ({ gitId: id, status: 'active' as const }))
+                        : (raw as AssignedUserEntry[]);
+                    for (const entry of entries) {
+                        if (entry.status === 'active') {
+                            uniqueUsers.add(entry.gitId);
+                        }
                     }
                 }
             }

@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Sandbox } from 'e2b';
 import pLimit from 'p-limit';
 import { ValidationCandidate } from '@libs/code-review/domain/types/astValidate.type';
 import { shSingleQuote } from './shell-quote';
+import { KODUS_GRAPH_VERSION } from './graph/kodus-graph-cli';
 
 const PARSE_TIMEOUT_MS = 30_000;
 const CONCURRENCY_LIMIT = 10;
@@ -122,7 +123,7 @@ export class SandboxSyntaxValidator {
             [
                 'which bun > /dev/null 2>&1 || (curl -fsSL https://bun.sh/install | bash > /dev/null 2>&1)',
                 'export PATH="$HOME/.bun/bin:$PATH"',
-                'bun install -g @kodus/kodus-graph@latest 2>&1',
+                `bun install -g @kodus/kodus-graph@${KODUS_GRAPH_VERSION} 2>&1`,
             ].join(' && '),
             { timeoutMs: INSTALL_TIMEOUT_MS },
         );

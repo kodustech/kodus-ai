@@ -6,7 +6,7 @@ import { IRepositoryService, REPOSITORY_SERVICE_TOKEN } from '@libs/code-review/
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import type { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

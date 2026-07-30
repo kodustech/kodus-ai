@@ -1,5 +1,6 @@
 import {
     CreateCheckRunParams,
+    FindCheckRunParams,
     IChecksAdapter,
     UpdateCheckRunParams,
 } from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
@@ -14,5 +15,8 @@ export class NullChecksAdapter implements IChecksAdapter {
     }
     updateCheckRun(params: UpdateCheckRunParams): Promise<boolean> {
         return Promise.resolve(true);
+    }
+    findCheckRun(params: FindCheckRunParams): Promise<string | number | null> {
+        return Promise.resolve(null);
     }
 }

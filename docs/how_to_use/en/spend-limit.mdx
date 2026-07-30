@@ -1,0 +1,125 @@
+---
+title: "Monthly Spend Limit"
+description: "Get alerted as your BYOK model spend approaches a monthly cap. Alerts only — reviews keep running."
+---
+
+The monthly spend limit watches how much you're spending on your **BYOK models** and notifies your organization's Owners as that spend approaches a cap you set. It's an early-warning signal, not a hard stop.
+
+<Warning>
+  **This is a notification, not a cap. Kodus never blocks or pauses reviews when the limit is hit.** Spend keeps accruing on your provider account past 100%. To actually stop spend, set a hard limit in your **model provider's** dashboard (OpenAI, Anthropic, Google, etc.) — that's the only thing that can enforce it. Treat the Kodus limit as a heads-up so the provider cap is never a surprise.
+</Warning>
+
+## What it tracks
+
+- **BYOK models only.** Spend is measured against the models you configured under [Bring Your Own Key](/how_to_use/en/byok) — the keys you pay your provider for directly. Models Kodus runs on its own side don't count.
+- **Priced at current rates, per model.** Each model's tokens are priced at that model's current rate. There's no snapshot — if a model's price changes (catalog update or a manual edit), that model's month-to-date usage is recomputed at the new rate. Switching to a different model doesn't re-price the model you were using before.
+- **Per calendar month (UTC).** The window runs from the 1st of the month to the 1st of the next. Usage resets to $0 automatically at the start of each month — there's nothing to reset by hand.
+
+<Info>
+  For the figure to reflect only Kodus, we recommend the **API key you give Kodus is used exclusively with Kodus**. If the same key also powers other tools, your provider usage — and any estimate based on it — mixes the two.
+</Info>
+
+## Configure it
+
+The limit lives on the BYOK screen, below your Main and Fallback models.
+
+<Steps>
+  <Step title="Open BYOK settings">
+    Go to [app.kodus.io/organization/byok](https://app.kodus.io/organization/byok) and scroll to **Monthly spend limit**. (The section appears once you have at least one BYOK model configured.)
+  </Step>
+
+  <Step title="Check the model prices">
+    Each configured model shows its per-token price — **input, output, cache read, cache write** — as **$ / 1M tokens**. A **Catalog** badge means Kodus found the price automatically; a **Manual** badge means you've entered it yourself.
+  </Step>
+
+  <Step title="Fix any model with no price">
+    A model badged **No price** couldn't be priced automatically (a custom or uncatalogued model). Type its per-token prices from your provider's pricing page. You can't enable the limit until every model has a price — spend can't be tracked for a model Kodus can't price.
+  </Step>
+
+  <Step title="Set the monthly limit and enable">
+    Enter your cap in US$, flip **Enable spend alerts** on, and click **Save spend limit**.
+  </Step>
+</Steps>
+
+### Model pricing
+
+<AccordionGroup>
+  <Accordion title="Catalog vs. manual prices">
+    Kodus looks each model up in a public pricing catalog and pre-fills what it finds (**Catalog**). If the catalog is wrong or missing a model, type the correct per-token rates — the badge switches to **Manual** and your values are used instead.
+  </Accordion>
+
+  <Accordion title="Revert a manual price back to catalog">
+    On a model you've overridden, click **Revert to catalog price**. The inputs reset to the catalog values and the badge flips back to **Catalog**. From then on that model tracks the live catalog price again (no frozen snapshot).
+  </Accordion>
+
+  <Accordion title="Why a model might show 'No price'">
+    Custom endpoints, self-hosted models, or models the catalog hasn't indexed have no automatic price. Enter the rates manually to make them trackable. Until then, the limit can't be enabled.
+  </Accordion>
+</AccordionGroup>
+
+## Alerts
+
+Once enabled, Kodus checks your month-to-date spend roughly **once an hour** and notifies your organization's **Owners** in the notification center as you cross each threshold:
+
+| Threshold | What you get |
+| --- | --- |
+| **50%** | Heads-up alert |
+| **75%** | Heads-up alert |
+| **90%** | Heads-up alert |
+| **100%** | "Limit reached" alert |
+| **Over 100%** | One final "you're over your limit — we won't notify again this month" notice, then silence for the rest of the month |
+
+Each threshold fires **at most once per month**, so you won't get repeat pings for the same level. The slate clears automatically when the new month starts.
+
+<Note>
+  Reviews continue running normally the entire time — at 50%, at 100%, and beyond. The alerts are the only thing that happens.
+</Note>
+
+You can manage where these land (and which roles receive them) under **Spend Limit** in [Notification settings](https://app.kodus.io/organization/notifications).
+
+## Accuracy
+
+Spend is an **estimate**. It's derived from the tokens your reviews used and the per-token prices shown on the BYOK screen — it won't match your provider invoice to the cent.
+
+<CardGroup cols={2}>
+  <Card title="Keep prices accurate" icon="tags">
+    Check the catalog prices against your provider's pricing page and correct any that are off. Subscription/flat-rate plans especially won't match per-token catalog pricing.
+  </Card>
+  <Card title="Use the key only with Kodus" icon="key">
+    A dedicated key means the usage Kodus sees is the usage Kodus caused — nothing else inflates the figure.
+  </Card>
+</CardGroup>
+
+<Warning>
+  **Concurrent reviews can briefly overshoot the cap.** Many PRs reviewed at once near the limit can push month-to-date spend a bit past 100% before the next hourly check catches it. This is expected — another reason the real cap belongs at your provider.
+</Warning>
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Does hitting the limit stop my reviews?">
+    No. It's notification-only. To stop spend, set a hard limit in your model provider's billing dashboard.
+  </Accordion>
+
+  <Accordion title="What counts toward the spend?">
+    Only token usage on your **BYOK** models, priced at the current rates shown on the BYOK screen. Kodus-hosted models don't count.
+  </Accordion>
+
+  <Accordion title="When does the spend reset?">
+    On the 1st of each calendar month (UTC). Month-to-date spend goes back to $0 and all threshold alerts re-arm automatically.
+  </Accordion>
+
+  <Accordion title="I switched models mid-month — does my spend jump?">
+    No. Spend is tracked **per model**: each model's tokens are priced at *that model's* rate. If you spent \$50 on model A and then switch to model B, model A's usage stays at \$50 — switching to B never re-prices A's tokens at B's rate. Your total just grows by what model B then uses.
+
+    The only thing that re-prices already-incurred usage is a change to **that same model's price** — when the pricing catalog updates a model's rate, or you edit its manual price on the BYOK screen, that model's month-to-date usage is recomputed at the new rate (there's no frozen snapshot).
+  </Accordion>
+
+  <Accordion title="Why can't I enable the limit?">
+    Every configured model must have a price (catalog or manual) and the monthly limit must be greater than $0. Fix any **No price** model and set a positive amount, then save.
+  </Accordion>
+
+  <Accordion title="Who gets the alerts?">
+    Your organization's Owners, in the in-app notification center. Adjust routing under **Spend Limit** in Notification settings.
+  </Accordion>
+</AccordionGroup>

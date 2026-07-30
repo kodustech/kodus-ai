@@ -1,9 +1,9 @@
 import { Injectable, Inject } from '@nestjs/common';
-import { IdGenerator } from '@kodus/flow';
+import { IdGenerator } from '@libs/core/utils/id-generator';
 
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     IJobQueueService,
     JOB_QUEUE_SERVICE_TOKEN,

@@ -46,7 +46,7 @@ LOCAL_SSH_KEY=$(ssh_key_path_for "${NAME}")
 
 DROPLET_STATE="${REPO_ROOT}/.tmp/sso-e2e-droplet.json"
 if [ ! -f "${DROPLET_STATE}" ]; then
-    err "Missing ${DROPLET_STATE}. Run: yarn sso-e2e:droplet:provision --reuse"
+    err "Missing ${DROPLET_STATE}. Run: pnpm run sso-e2e:droplet:provision --reuse"
     exit 1
 fi
 SERVER_IP=$(state_get "${NAME}" .server_ip)
@@ -96,9 +96,9 @@ env_set() {
     fi
 }
 CURR_HOSTNAME=$(grep -E '^WEB_HOSTNAME_API=' /opt/kodus-installer/.env | head -1 | cut -d= -f2-)
-if [ "${CURR_HOSTNAME}" != "kodus-api" ]; then
-    echo "==> repairing WEB_HOSTNAME_API (was '${CURR_HOSTNAME}') -> kodus-api" >&2
-    env_set WEB_HOSTNAME_API "kodus-api"
+if [ "${CURR_HOSTNAME}" != "api" ]; then
+    echo "==> repairing WEB_HOSTNAME_API (was '${CURR_HOSTNAME}') -> api" >&2
+    env_set WEB_HOSTNAME_API "api"
     env_set WEB_PORT_API "3001"
     cd /opt/kodus-installer && docker compose -p kodus-installer -f docker-compose.yml up -d --force-recreate kodus-web
 fi

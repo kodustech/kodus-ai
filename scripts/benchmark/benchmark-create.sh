@@ -100,12 +100,21 @@ DELETED=$(docker exec mongodb mongosh -u kodusdev -p 123456 --authenticationData
   "var r = db.pullRequests.deleteMany({}); print(r.deletedCount)" 2>/dev/null || echo 0)
 echo "  ✓ Pipeline cleaned (removed $DELETED PRs from MongoDB)"
 
-# Recreate worker with benchmark-specific env overrides
-echo "▸ Recreating worker..."
-cp "$SOURCE_ENV_FILE" "$RUNTIME_ENV_FILE"
-ENV_FILE="$RUNTIME_ENV_FILE" docker compose -f "$REPO_DIR/docker-compose.dev.yml" --profile local-db up -d --force-recreate worker db_postgres db_mongodb > /dev/null
-# Clear webpack cache AFTER recreate so it persists in the volume
-docker exec $WORKER rm -rf /usr/src/app/node_modules/.cache/webpack 2>/dev/null || true
+# Recreate worker with benchmark-specific env overrides.
+# SKIP_WORKER_RECREATE=1 leaves the already-running worker/db untouched — needed
+# when the live containers belong to a different compose project (e.g. a
+# coexisting worktree stack) so `up --force-recreate` would collide on the fixed
+# container_name. BYOK is read from the DB per review, so no recreate is needed
+# just to switch models.
+if [ "${SKIP_WORKER_RECREATE:-0}" = "1" ]; then
+  echo "▸ Skipping worker recreate (SKIP_WORKER_RECREATE=1) — reusing running worker"
+else
+  echo "▸ Recreating worker..."
+  cp "$SOURCE_ENV_FILE" "$RUNTIME_ENV_FILE"
+  ENV_FILE="$RUNTIME_ENV_FILE" docker compose -f "$REPO_DIR/docker-compose.dev.yml" --profile local-db up -d --force-recreate worker db_postgres db_mongodb > /dev/null
+  # Clear webpack cache AFTER recreate so it persists in the volume
+  docker exec $WORKER rm -rf /usr/src/app/node_modules/.cache/webpack 2>/dev/null || true
+fi
 
 READY=0
 for _ in $(seq 1 18); do

@@ -20640,13 +20640,6 @@
         "rule": "If the PR references a ticket (e.g., 'Refs: ABC-123' or a Linear/Jira/Asana/ClickUp/Trello link), verify the diff covers each Acceptance Criterion.\n- If a ticketing MCP is available: fetch the ticket and list AC → code/tests mapping.\n- If no MCP is available or the ticket is inaccessible: ask the author to paste the Acceptance Criteria in the PR description.\nFlag any missing criteria, unhandled edge cases, or partial implementations before human review.",
         "why_is_this_important": "Prevents shipping incomplete work and keeps requirements-to-code traceability.",
         "severity": "high",
-        "required_mcps": [
-            "Linear",
-            "Jira",
-            "Asana",
-            "ClickUp",
-            "Trello"
-        ],
         "bad_example": "Refs: PAY-123\nImplements UI only; AC requires backend validation and audit logging.",
         "good_example": "Refs: PAY-123\nAcceptance Criteria coverage:\n- AC1 (validate input): src/payments/validator.ts + tests/payment-validator.test.ts\n- AC2 (audit trail): src/audit/payments.ts\n- AC3 (docs): docs/payments.md",
         "scope": "pull-request",
@@ -20673,11 +20666,6 @@
         "rule": "If the PR claims to fix a specific issue (e.g., 'Fixes #123' / 'Fix PAY-123'), validate it against the real production error.\n- If an observability MCP is available (Sentry/Datadog/Bugsnag): fetch the event/stack trace and confirm the change addresses the root cause.\n- Require a regression test (or a clearly documented reason why a test cannot be added).\nCall out fixes that only hide symptoms (catch-and-ignore, broader retries, defaulting values) without removing the underlying failure mode.",
         "why_is_this_important": "Prevents repeat incidents by ensuring the PR targets the actual failing path in production.",
         "severity": "high",
-        "required_mcps": [
-            "Sentry",
-            "Datadog",
-            "Bugsnag"
-        ],
         "bad_example": "Fixes #123: wrap everything in try/catch and return 200.",
         "good_example": "Fixes #123: reproduce failing stack trace, fix null invariant, add regression test, and keep error reporting intact.",
         "scope": "pull-request",
@@ -20733,9 +20721,6 @@
         "rule": "When a PR changes dependency manifests (e.g., package.json, yarn.lock, requirements.txt, composer.json), check for known vulnerabilities and risky packages.\n- If an OSV/SCA MCP is available: query it for the new package versions and flag recent CVEs.\n- Otherwise: require evidence (audit output, advisory links) in the PR description.\nAlso flag suspicious packages (typosquats, low-maintenance critical libs, unexpected transitive jumps) and require lockfile updates.",
         "why_is_this_important": "Prevents supply-chain attacks and avoids introducing known-vulnerable versions.",
         "severity": "high",
-        "required_mcps": [
-            "OSV"
-        ],
         "bad_example": "Adds new package with no vetting; lockfile not updated.",
         "good_example": "Adds package X pinned; OSV check clean; lockfile updated; rationale included.",
         "scope": "pull-request",
@@ -20789,10 +20774,6 @@
         "rule": "If a PR changes an API endpoint/controller/route, assess current production health before adding heavier logic.\n- If a monitoring MCP is available (Datadog/Grafana): query current p95 latency and error rate for that endpoint.\n- If the endpoint is already degraded, warn against adding heavy queries, blocking I/O, or complex synchronous logic; require performance evidence or a safe rollout plan.\nTo enable this check, the PR should reference the endpoint path (e.g., `POST /api/payments`) or the controller/action name.",
         "why_is_this_important": "Avoids worsening already-unstable services and reduces incident risk from incremental latency.",
         "severity": "high",
-        "required_mcps": [
-            "Datadog",
-            "Grafana"
-        ],
         "bad_example": "Adds multiple DB queries inside a hot endpoint with no monitoring/rollout plan.",
         "good_example": "Checks endpoint health, adds caching/index, benchmarks, and rolls out behind a flag.",
         "scope": "pull-request",
@@ -20847,10 +20828,6 @@
         "rule": "If the PR introduces or expands usage of deprecated libraries/patterns the team is migrating away from (e.g., Moment.js, React Class Components), block and suggest the modern replacement.\nIf the repo includes a migration guide (e.g., `docs/migration.md`, `CONTRIBUTING.md`, `docs/adr/*`), follow it and propose the equivalent snippet.\nIf no guide exists, use an available web/search MCP to propose a safe, modern alternative and ask for confirmation of project standards.",
         "why_is_this_important": "Prevents new tech debt and accelerates standardization across the codebase.",
         "severity": "low",
-        "required_mcps": [
-            "Exa",
-            "Perplexity"
-        ],
         "bad_example": "Adds new Moment.js usage in a new feature.",
         "good_example": "Uses date-fns/Luxon or native Intl APIs per migration guide; avoids new class components.",
         "scope": "file",
@@ -20933,9 +20910,6 @@
         "rule": "If a PR changes redirect/header configuration (e.g., middleware redirects, CDN headers, security headers), validate it against the active edge rules to avoid conflicts.\n- If a Cloudflare MCP is available: fetch active rules and detect potential redirect loops, duplicate rules, or header conflicts.\n- Otherwise: require the author to link the relevant Cloudflare rules/screenshots in the PR description.",
         "why_is_this_important": "Edge misconfigurations can cause global outages (redirect loops) and security regressions.",
         "severity": "high",
-        "required_mcps": [
-            "Cloudflare"
-        ],
         "bad_example": "Adds app-level redirect that conflicts with an existing Cloudflare redirect rule.",
         "good_example": "Checks active Cloudflare rules, avoids loops, and documents the intended precedence.",
         "scope": "pull-request",
@@ -20989,14 +20963,6 @@
         "rule": "If a PR adds new TODO/FIXME comments, require a tracking ticket.\nPreferred formats: `TODO(ABC-123): ...` or `FIXME(ABC-123): ...`.\nIf a ticketing MCP is available, suggest (or create) the ticket and link it in the PR. Avoid leaving untracked TODOs in mainline code.",
         "why_is_this_important": "Prevents technical debt from being forgotten and improves accountability.",
         "severity": "low",
-        "required_mcps": [
-            "Linear",
-            "Jira",
-            "Asana",
-            "Notion",
-            "GitHub Issues",
-            "Trello"
-        ],
         "bad_example": "// TODO: fix this later",
         "good_example": "// TODO(PAY-742): remove legacy path after rollout reaches 100%",
         "scope": "pull-request",
@@ -21024,10 +20990,6 @@
         "rule": "Before approving/merging risky changes, check whether there is an active critical production incident.\n- If an incident/monitoring MCP is available (PagerDuty, Datadog Monitors): query for active Sev1/Sev2 incidents.\n- If there is an active incident: warn the author and suggest delaying merges/deploys or using an explicit emergency override process.",
         "why_is_this_important": "Avoids piling changes onto an unstable system and reduces MTTR during incident response.",
         "severity": "high",
-        "required_mcps": [
-            "PagerDuty",
-            "Datadog"
-        ],
         "bad_example": "Merges a risky deploy while an ongoing Sev1 incident is open.",
         "good_example": "Flags active incident and recommends deploy freeze until resolved.",
         "scope": "pull-request",
@@ -21081,9 +21043,6 @@
         "rule": "When removing or decommissioning a feature, ensure the associated feature flag is also removed from:\n- application code paths,\n- config/registry files (e.g., flags.ts, config.json), and\n- analytics/feature flag tools (if applicable).\nIf a PostHog (or similar) MCP is available, verify the flag is disabled/removed and not referenced elsewhere. Otherwise, require a repo-wide search evidence in the PR.",
         "why_is_this_important": "Prevents accumulating dead flags, reduces complexity, and avoids accidental re-enablement of retired code paths.",
         "severity": "low",
-        "required_mcps": [
-            "PostHog"
-        ],
         "bad_example": "Deletes old code but leaves `flag.checkoutV2` referenced in config and analytics.",
         "good_example": "Removes flag from code + config + cleans up tracking; documents rollout completion.",
         "scope": "pull-request",

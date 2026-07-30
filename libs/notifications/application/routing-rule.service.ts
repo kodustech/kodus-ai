@@ -31,6 +31,12 @@ export interface NotificationConfigEvent {
     icon?: string;
     pageSeverity?: boolean;
     actionLabel?: string;
+    /**
+     * Roles this event actually reaches (role-fanout events only). When set,
+     * the settings UI should offer per-role routing for these roles only.
+     * Absent = directed at a specific user/email or any role — show all.
+     */
+    defaultRoles?: string[];
 }
 
 export interface NotificationConfig {
@@ -103,6 +109,9 @@ export class RoutingRuleService {
                         ? defaults.pageSeverity
                         : undefined,
                 actionLabel: defaults.actionLabel,
+                defaultRoles: defaults.defaultRoles
+                    ? [...defaults.defaultRoles]
+                    : undefined,
             };
         });
 
@@ -158,25 +167,8 @@ export class RoutingRuleService {
                 );
             }
 
-            // Skip channel checks for deletes — the row is going away.
-            if (rule.delete) continue;
-
-            // Critical events: cannot disable any active channel.
-            if (eventDefaults.criticality === Criticality.CRITICAL) {
-                const disabledChannels = Object.entries(rule.channels)
-                    .filter(
-                        ([ch, enabled]) =>
-                            !enabled &&
-                            ACTIVE_CHANNELS.has(ch as NotificationChannel),
-                    )
-                    .map(([ch]) => ch);
-
-                if (disabledChannels.length > 0) {
-                    throw new BadRequestException(
-                        `Cannot disable channels [${disabledChannels.join(', ')}] for critical event "${rule.event}". Critical notifications must be delivered on all active channels.`,
-                    );
-                }
-            }
+            // Critical events are no longer locked: every non-system event is
+            // freely configurable per role, criticality included.
         }
 
         const toDelete = rules.filter((r) => r.delete);
@@ -232,14 +224,27 @@ export class RoutingRuleService {
                 channels[ch] = defaults.defaultChannels.has(ch);
             }
 
-            // Seed for wildcard role — applies to all roles by default
-            rules.push({
+            const base = (role: string, ch: Record<string, boolean>) => ({
                 organization: { uuid: organizationId },
                 event,
                 category: defaults.category,
-                role: '*',
-                channels,
+                role,
+                channels: ch,
             });
+
+            if (defaults.defaultRoles?.length) {
+                // Role-fanout event: '*' is an off baseline (so non-default
+                // roles inherit nothing) and each default role gets the
+                // catalog channels via an explicit override row.
+                rules.push(base(ROLE_WILDCARD, {}));
+                for (const role of defaults.defaultRoles) {
+                    rules.push(base(role, channels));
+                }
+            } else {
+                // Directed event (no role-fanout): '*' carries the catalog
+                // defaults so directly-targeted recipients deliver on them.
+                rules.push(base(ROLE_WILDCARD, channels));
+            }
         }
 
         return this.routingRuleRepo.upsertBatch(rules);

@@ -7,7 +7,7 @@ import {
     ValidateRuleFileReferencesUseCase,
 } from './validate-rule-file-references.use-case';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),

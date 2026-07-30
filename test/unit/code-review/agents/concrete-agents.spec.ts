@@ -2,24 +2,11 @@
  * Tests for concrete agent providers (Bug, Security, Performance).
  * Verifies identity, category label, and category prompt.
  */
-import { BugAgentProvider } from '@/code-review/infrastructure/agents/bug-agent.provider';
-import { SecurityAgentProvider } from '@/code-review/infrastructure/agents/security-agent.provider';
-import { PerformanceAgentProvider } from '@/code-review/infrastructure/agents/performance-agent.provider';
-import { GeneralistAgentProvider } from '@/code-review/infrastructure/agents/generalist-agent.provider';
-
-jest.mock('@kodus/flow', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        info: jest.fn(),
-    }),
-    createOrchestration: jest.fn(),
-    createThreadId: jest.fn(),
-    PlannerType: { REACT: 'react' },
-    EnhancedJSONParser: { parse: jest.fn() },
-}));
+import { BugAgentProvider } from '@/code-review/infrastructure/agents/providers/bug-agent.provider';
+import { SecurityAgentProvider } from '@/code-review/infrastructure/agents/providers/security-agent.provider';
+import { PerformanceAgentProvider } from '@/code-review/infrastructure/agents/providers/performance-agent.provider';
+import { GeneralistAgentProvider } from '@/code-review/infrastructure/agents/providers/generalist-agent.provider';
+import { resolveSuggestionLabel } from '@/code-review/infrastructure/agents/collaborators/finding-mapper';
 
 function createAgent<T>(AgentClass: new (...args: any[]) => T): T {
     return Object.create(AgentClass.prototype);
@@ -109,8 +96,16 @@ describe('GeneralistAgentProvider — label preservation on discarded suggestion
     // resolveSuggestionLabel preserves the original label when it is one of
     // the allowed values and falls back to the first allowed label otherwise.
 
+    // resolveSuggestionLabel moved off the provider into finding-mapper; it now
+    // takes a LabelPolicy built from the provider's own policy methods (exactly
+    // how base-code-review-agent.provider assembles it before mapping findings).
+    const policyFor = (i: any) => ({
+        categoryLabel: (agent as any).getCategoryLabel(),
+        allowedLabels: (agent as any).getAllowedSuggestionLabels(i),
+        supportsMixed: (agent as any).supportsMixedLabels(),
+    });
     const resolve = (label: unknown) =>
-        (agent as any).resolveSuggestionLabel({ label }, input);
+        resolveSuggestionLabel({ label } as any, policyFor(input));
 
     it('preserves a "bug" label emitted by the LLM', () => {
         expect(resolve('bug')).toBe('bug');
@@ -146,7 +141,7 @@ describe('GeneralistAgentProvider — label preservation on discarded suggestion
             requestedCategories: ['security', 'performance'],
         } as any;
         const narrowResolve = (label: unknown) =>
-            (agent as any).resolveSuggestionLabel({ label }, narrowInput);
+            resolveSuggestionLabel({ label } as any, policyFor(narrowInput));
 
         // bug is out of the allowed set now — must fall back to the first
         // allowed category instead of leaking through.

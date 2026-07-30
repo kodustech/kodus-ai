@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 
@@ -39,6 +39,9 @@ export class AutomationExecutionService implements IAutomationExecutionService {
                 execution?.dataExecution?.organizationAndTeamData
                     ?.organizationId;
             if (orgId) {
+                // Cross-process delivery to the API's SSE endpoint happens
+                // via CrossProcessEventsBridge, which forwards this local
+                // emit over Postgres NOTIFY.
                 this.eventEmitter.emit(PR_EXECUTION_UPDATED_EVENT, {
                     organizationId: orgId,
                     executionUuid: execution.uuid,
@@ -128,6 +131,16 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         return this.automationExecutionRepository.delete(uuid);
     }
 
+    findStaleInProgress(
+        cutoffDate: Date,
+        limit?: number,
+    ): Promise<AutomationExecutionEntity[]> {
+        return this.automationExecutionRepository.findStaleInProgress(
+            cutoffDate,
+            limit,
+        );
+    }
+
     findById(uuid: string): Promise<AutomationExecutionEntity> {
         return this.automationExecutionRepository.findById(uuid);
     }
@@ -145,12 +158,46 @@ export class AutomationExecutionService implements IAutomationExecutionService {
         pullRequestNumber?: number;
         pullRequestTitle?: string;
         prFilters?: Array<{ number: number; repositoryId: string }>;
+        status?: string;
+        createdAtFrom?: string;
+        createdAtTo?: string;
         skip?: number;
+        cursor?: { createdAt: string | Date; uuid: string };
         take?: number;
         order?: 'ASC' | 'DESC';
         includeTotal?: boolean;
-    }): Promise<{ data: AutomationExecutionEntity[]; total: number }> {
+    }): Promise<{
+        data: AutomationExecutionEntity[];
+        total: number;
+        distinctPrTotal: number;
+    }> {
         return this.automationExecutionRepository.findPullRequestExecutionsByOrganizationAndTeam(
+            params,
+        );
+    }
+
+    getDistinctReviewedPullRequestKeys(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds?: string[];
+        createdAtFrom?: Date | string;
+    }): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            hasError: boolean;
+        }>
+    > {
+        return this.automationExecutionRepository.getDistinctReviewedPullRequestKeys(
+            params,
+        );
+    }
+
+    getAwaitingReviewPullRequestKeys(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds?: string[];
+        createdAtFrom?: Date | string;
+    }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>> {
+        return this.automationExecutionRepository.getAwaitingReviewPullRequestKeys(
             params,
         );
     }
@@ -338,6 +385,54 @@ export class AutomationExecutionService implements IAutomationExecutionService {
                 },
             });
             return null;
+        }
+    }
+
+    async finalizeInProgressStageLogs(
+        executionUuid: string,
+        status: AutomationStatus,
+        message: string,
+    ): Promise<number> {
+        try {
+            const inProgressLogs = await this.codeReviewExecutionService.find({
+                automationExecution: { uuid: executionUuid },
+                status: AutomationStatus.IN_PROGRESS,
+            } as any);
+
+            if (!inProgressLogs?.length) {
+                return 0;
+            }
+
+            // allSettled, not all: these stage-log updates are independent, so
+            // one failing update must not reject the whole batch and mask the
+            // progress of the others.
+            const results = await Promise.allSettled(
+                inProgressLogs.map((log) =>
+                    this.codeReviewExecutionService.updateById(log.uuid, {
+                        status,
+                        message,
+                        finishedAt: new Date(),
+                    } as any),
+                ),
+            );
+            const failed = results.filter((r) => r.status === 'rejected');
+            if (failed.length) {
+                this.logger.warn({
+                    message: `finalizeInProgressStageLogs: ${failed.length}/${inProgressLogs.length} stage-log updates failed`,
+                    context: AutomationExecutionService.name,
+                    metadata: { executionUuid, status },
+                });
+            }
+
+            return inProgressLogs.length;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error finalizing in-progress stage logs',
+                error,
+                context: AutomationExecutionService.name,
+                metadata: { executionUuid, status },
+            });
+            return 0;
         }
     }
 

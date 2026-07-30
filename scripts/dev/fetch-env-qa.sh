@@ -11,7 +11,6 @@ KEYS=(
 
     "/qa/kodus-orchestrator/API_JWT_EXPIRES_IN"
     "/qa/kodus-orchestrator/API_JWT_SECRET"
-    "/qa/kodus-orchestrator/API_JWT_REFRESHSECRET"
     "/qa/kodus-orchestrator/API_JWT_REFRESH_EXPIRES_IN"
 
     "/qa/kodus-orchestrator/API_PG_DB_HOST"
@@ -88,6 +87,7 @@ KEYS=(
     "/qa/kodus-orchestrator/API_NOVITA_AI_API_KEY"
 
     "/qa/kodus-orchestrator/GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK"
+    "/qa/kodus-orchestrator/BITBUCKET_RATE_GATE_MIN_INTERVAL_MS"
 
     "/qa/kodus-orchestrator/CODE_MANAGEMENT_SECRET"
     "/qa/kodus-orchestrator/CODE_MANAGEMENT_WEBHOOK_TOKEN"
@@ -159,3 +159,17 @@ for KEY in "${KEYS[@]}"; do
     echo "${KEY##*/}=$VALUE" >> "$ENV_FILE"
   fi
 done
+
+# API_JWT_REFRESH_SECRET: o código lê o nome com underscore
+# (jwt.config.loader.ts), mas o parâmetro no SSM pode ainda usar o typo
+# legado API_JWT_REFRESHSECRET. Tenta o nome canônico, cai pro legado,
+# e sempre escreve a chave canônica — o .env precisa bater com o código.
+REFRESH_SECRET=$(aws ssm get-parameter --name "/qa/kodus-orchestrator/API_JWT_REFRESH_SECRET" --with-decryption --query "Parameter.Value" --output text 2>/dev/null)
+if [ -z "$REFRESH_SECRET" ] || [[ "$REFRESH_SECRET" == "ParameterNotFound" ]]; then
+  REFRESH_SECRET=$(aws ssm get-parameter --name "/qa/kodus-orchestrator/API_JWT_REFRESHSECRET" --with-decryption --query "Parameter.Value" --output text 2>/dev/null)
+fi
+if [ -n "$REFRESH_SECRET" ] && [[ "$REFRESH_SECRET" != "ParameterNotFound" ]]; then
+  echo "API_JWT_REFRESH_SECRET=$REFRESH_SECRET" >> "$ENV_FILE"
+else
+  echo "WARNING: API_JWT_REFRESH_SECRET não encontrado (nem o legado API_JWT_REFRESHSECRET)." >&2
+fi

@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
@@ -24,6 +24,11 @@ import {
     PullRequestFileChange,
 } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
+import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
 import {
     PullRequest,
     PullRequestAuthor,
@@ -74,6 +79,87 @@ export class CodeManagementService implements ICodeManagementService {
             });
             return null;
         }
+    }
+
+    async listIssues(
+        params: ListIssuesParams,
+        type?: PlatformType,
+    ): Promise<CodeManagementIssue[]> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        if (!type) {
+            return [];
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.listIssues !== 'function') {
+            throw new Error(
+                `Reading issues is not supported for platform ${type}`,
+            );
+        }
+
+        return codeManagementService.listIssues(params);
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+        type?: PlatformType,
+    ): Promise<CodeManagementIssue | null> {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        if (!type) {
+            return null;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.getIssue !== 'function') {
+            throw new Error(
+                `Reading issues is not supported for platform ${type}`,
+            );
+        }
+
+        return codeManagementService.getIssue(params);
+    }
+
+    /**
+     * Whether the team's connected code host supports reading native issues.
+     * False for hosts without an issue tracker (Azure Repos → none; Bitbucket
+     * Data Center → none, refined via `supportsIssues`). Used to gate installing
+     * the generic issues MCP.
+     */
+    async isIssuesSupported(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const type = await this.getTypeIntegration(organizationAndTeamData);
+
+        if (!type) {
+            return false;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (typeof codeManagementService.listIssues !== 'function') {
+            return false;
+        }
+
+        if (typeof codeManagementService.supportsIssues === 'function') {
+            return codeManagementService.supportsIssues(organizationAndTeamData);
+        }
+
+        return true;
     }
 
     async findRepositoryByName(
@@ -928,6 +1014,15 @@ export class CodeManagementService implements ICodeManagementService {
             type = await this.getTypeIntegration(
                 extractOrganizationAndTeamData(params),
             );
+        }
+
+        // Same guard the list-returning methods here already apply: with no
+        // integration, getTypeIntegration answers null and the factory would
+        // throw "Repository service for type 'null' not found". Callers already
+        // treat a null result as "no clone params" — the adapters return null
+        // on failure too.
+        if (!type) {
+            return null;
         }
 
         const codeManagementService =

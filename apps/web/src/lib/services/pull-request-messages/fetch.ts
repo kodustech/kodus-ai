@@ -11,6 +11,7 @@ export const savePullRequestMessages = async ({
     repositoryId,
     startReviewMessage,
     endReviewMessage,
+    errorReviewMessage,
     directoryId,
     globalSettings,
 }: {
@@ -26,6 +27,10 @@ export const savePullRequestMessages = async ({
         content: string;
         status: PullRequestMessageStatus;
     };
+    errorReviewMessage?: {
+        content: string;
+        status: PullRequestMessageStatus;
+    };
     globalSettings?: {
         hideComments: boolean;
         suggestionCopyPrompt: boolean;
@@ -38,6 +43,7 @@ export const savePullRequestMessages = async ({
             teamId,
             directoryId,
             endReviewMessage,
+            errorReviewMessage,
             startReviewMessage,
             globalSettings,
             repositoryId: repositoryId === "global" ? null : repositoryId,

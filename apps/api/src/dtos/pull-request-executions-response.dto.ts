@@ -127,6 +127,13 @@ export class PullRequestExecutionsPaginationDto {
     @ApiProperty()
     totalItems: number;
 
+    // Distinct PRs matching the DB-level filters — the accurate "N pull
+    // requests" for the header. Undefined on error/empty responses. Kept in the
+    // API envelope so class-transformer doesn't strip it and the OpenAPI
+    // contract matches the runtime `PaginationMetadata`.
+    @ApiProperty({ required: false })
+    distinctPrTotal?: number;
+
     @ApiProperty()
     itemsPerPage: number;
 
@@ -148,68 +155,6 @@ export class PullRequestExecutionsDataDto {
 export class PullRequestExecutionsResponseDto extends ApiResponseBaseDto {
     @ApiProperty({ type: PullRequestExecutionsDataDto })
     data: PullRequestExecutionsDataDto;
-}
-
-export class PullRequestOnboardingMetricsDto {
-    @ApiProperty()
-    hotfixPct: number;
-
-    @ApiProperty()
-    bugfixPct: number;
-
-    @ApiProperty()
-    securityPct: number;
-
-    @ApiProperty()
-    perfPct: number;
-
-    @ApiProperty()
-    sensitiveTouchPct: number;
-
-    @ApiProperty()
-    medianLines: number;
-
-    @ApiProperty()
-    p90Lines: number;
-
-    @ApiProperty()
-    mergesPerWeek: number;
-
-    @ApiProperty()
-    commentsPerPR: number;
-
-    @ApiProperty()
-    qualityPct: number;
-
-    @ApiProperty()
-    nitPct: number;
-}
-
-export class PullRequestOnboardingRecommendationDto {
-    @ApiProperty()
-    mode: string;
-
-    @ApiProperty({ type: String, isArray: true })
-    reasons: string[];
-}
-
-export class PullRequestOnboardingSignalDto {
-    @ApiProperty()
-    repositoryId: string;
-
-    @ApiProperty()
-    sampleSize: number;
-
-    @ApiProperty({ type: PullRequestOnboardingMetricsDto })
-    metrics: PullRequestOnboardingMetricsDto;
-
-    @ApiProperty({ type: PullRequestOnboardingRecommendationDto })
-    recommendation: PullRequestOnboardingRecommendationDto;
-}
-
-export class PullRequestOnboardingSignalsResponseDto extends ApiResponseBaseDto {
-    @ApiProperty({ type: PullRequestOnboardingSignalDto, isArray: true })
-    data: PullRequestOnboardingSignalDto[];
 }
 
 export class PullRequestBackfillDataDto {

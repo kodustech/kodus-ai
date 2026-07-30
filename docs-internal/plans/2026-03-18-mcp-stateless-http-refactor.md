@@ -45,10 +45,10 @@
 ### Task 4: Validate Internal Client Compatibility
 
 **Files:**
-- Modify: `packages/kodus-flow/tests/adapters/mcp/adapter-connection.test.ts`
-- Modify: `packages/kodus-flow/tests/adapters/mcp/tools.test.ts`
-- Modify: `packages/kodus-flow/src/adapters/mcp/client.ts` only if tests prove a compatibility issue.
-- Modify: `packages/kodus-flow/src/adapters/mcp/registry.ts` only if tests prove a compatibility issue.
+- Modify: `libs/mcp-server/mcp-adapter/adapter-connection.test.ts`
+- Modify: `libs/mcp-server/mcp-adapter/tools.test.ts`
+- Modify: `libs/mcp-server/mcp-adapter/client.ts` only if tests prove a compatibility issue.
+- Modify: `libs/mcp-server/mcp-adapter/registry.ts` only if tests prove a compatibility issue.
 
 1. Verify `connect()`, `listTools()`, and `callTool()` against a stateless Streamable HTTP server.
 2. Run targeted tests.

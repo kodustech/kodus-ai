@@ -16,6 +16,7 @@ import { PermissionsModule } from '@libs/identity/modules/permissions.module';
 import { OrganizationParametersModule } from '@libs/organization/modules/organizationParameters.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
+import { OrganizationModule } from '@libs/organization/modules/organization.module';
 import { PlatformDataModule } from '@libs/platformData/platformData.module';
 import CodeManagementUseCases from '../application/use-cases/codeManagement';
 import { AzureReposPullRequestHandler } from '../infrastructure/webhooks/azure/azureReposPullRequest.handler';
@@ -30,6 +31,8 @@ import { GetOrganizationLanguageUseCase } from '../application/use-cases/organiz
 import { PlatformCoreModule } from './platform-core.module';
 
 import { AutomationModule } from '@libs/automation/modules/automation.module';
+import { LicenseModule } from '@libs/ee/license/license.module';
+import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
 import { CodeReviewConfigurationModule } from '@libs/code-review/modules/code-review-configuration.module';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
 import { IssuesModule } from '@libs/issues/issues.module';
@@ -51,6 +54,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         forwardRef(() => AgentsModule),
         forwardRef(() => OrganizationParametersModule),
         forwardRef(() => TeamModule),
+        forwardRef(() => OrganizationModule),
         forwardRef(() => ParametersModule),
         forwardRef(() => PlatformDataModule),
         PermissionsModule,
@@ -63,6 +67,8 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         forwardRef(() => McpCoreModule),
         forwardRef(() => CodeReviewConfigurationModule),
         forwardRef(() => SandboxModule),
+        forwardRef(() => LicenseModule),
+        forwardRef(() => PermissionValidationModule),
     ],
     providers: [
         ...CodeManagementUseCases,
@@ -97,6 +103,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
     ],
     exports: [
         PlatformCoreModule,
+        GithubModule,
         ...CodeManagementUseCases,
         GetConnectionsUseCase,
         GetOrganizationLanguageUseCase,

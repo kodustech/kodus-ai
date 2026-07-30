@@ -6,9 +6,9 @@
  * isolation pattern.
  *
  * Usage:
- *   yarn cloud:setup-tenants                    # all tenants
+ *   pnpm run cloud:setup-tenants                    # all tenants
  *   CLOUD_SETUP_ONLY=e2e-paid-gh@kodus.io \     # one tenant
- *     yarn cloud:setup-tenants
+ *     pnpm run cloud:setup-tenants
  *
  * Idempotent: signUp() returns silently on 409, integration POST
  * upserts in place, repo registration is idempotent on the Kodus side.
@@ -35,11 +35,11 @@ import {
 } from "../../lib/onboarding.js";
 import { http } from "../../lib/http.js";
 import { makeProvider } from "../../providers/index.js";
-import type {
-    KodusSession,
-    ProviderName,
-    TargetContext,
-} from "../../lib/types.js";
+import {
+    CLOUD_TENANTS,
+    type TenantSpec,
+} from "../../lib/cloud-tenant-registry.js";
+import type { KodusSession, TargetContext } from "../../lib/types.js";
 
 const QA_WEB_URL =
     process.env.CLOUD_WEB_URL?.replace(/\/$/, "") ?? "https://qa.web.kodus.io";
@@ -58,131 +58,13 @@ const CREDS_FILE = join(homedir(), ".kodus-dev", "cloud-tenants.json");
 const SHARED_PASSWORD =
     process.env.CLOUD_SETUP_PASSWORD ?? "E2eCloud!2026Smoke";
 
-type TenantLicense = "paid" | "trial" | "free" | "community-byok";
+// Tenant registry + the github repo-isolation invariant now live in
+// lib/cloud-tenant-registry.ts so the matrix runner can fall back to the
+// SAME canonical (provider, license) → repoFullName mapping when the
+// CLOUD_TENANTS_JSON secret is stale (see the registry header for the
+// 2026-06-03 environment-secret shadowing incident this guards against).
+const TENANTS: TenantSpec[] = CLOUD_TENANTS;
 
-interface TenantSpec {
-    email: string;
-    name: string;
-    license: TenantLicense;
-    provider: ProviderName;
-    repoFullName: string;
-}
-
-// Tenant registry. Names can only contain letters / spaces / hyphens /
-// apostrophes (Kodus validates `^[A-Za-z\s\-']+$` server-side), so no
-// digits in the visible name.
-//
-// Repos are shared across tiers of the same provider — license tier is
-// per-org on cloud (Stripe-driven), so each tier needs its own
-// organization, but webhooks from a single repo can be disambiguated
-// by Kodus per integration (App installation id for GitHub, OAuth/PAT
-// integration uuid for GitLab/Bitbucket/Azure). One downside: the
-// `generateKodyRulesUseCase` step at finish-onboarding reads the
-// repo's PR history regardless of which org is onboarding, so the
-// rules generated for tier B can be shaped by traffic from tier A —
-// acceptable for the QA matrix where the license-attribution and
-// per-seat gates are the real signal; revisit if a scenario needs
-// strictly isolated rule histories.
-const TENANTS: TenantSpec[] = [
-    {
-        email: "e2e-paid-gh@kodus.io",
-        name: "Smoke Paid GitHub",
-        license: "paid",
-        provider: "github",
-        repoFullName: "kodus-e2e/tiny-url",
-    },
-    {
-        email: "e2e-free-gh@kodus.io",
-        name: "Smoke Free GitHub",
-        license: "free",
-        provider: "github",
-        repoFullName: "kodus-e2e/tiny-url",
-    },
-    {
-        email: "e2e-trial-gh@kodus.io",
-        name: "Smoke Trial GitHub",
-        license: "trial",
-        provider: "github",
-        repoFullName: "kodus-e2e/tiny-url",
-    },
-    {
-        email: "e2e-paid-gl@kodus.io",
-        name: "Smoke Paid GitLab",
-        license: "paid",
-        provider: "gitlab",
-        repoFullName: "kodus-e2e/tiny-url",
-    },
-    {
-        email: "e2e-paid-bb@kodus.io",
-        name: "Smoke Paid Bitbucket",
-        license: "paid",
-        provider: "bitbucket",
-        repoFullName: "kodustech/tiny-url",
-    },
-    {
-        email: "e2e-paid-az@kodus.io",
-        name: "Smoke Paid Azure",
-        license: "paid",
-        provider: "azure-devops",
-        repoFullName: "kodustech/kodus-e2e/tiny-url",
-    },
-    {
-        // Community tenant: NO billing subscription, but with BYOK
-        // configured. Reviews work with the 10-rule limit. Distinct
-        // from `free` (trial expired + no BYOK = gate blocks).
-        email: "e2e-community-byok-gh@kodus.io",
-        name: "Smoke Community BYOK GitHub",
-        license: "community-byok",
-        provider: "github",
-        repoFullName: "kodus-e2e/tiny-url",
-    },
-    {
-        // Stripe billing scenario — sub-flow #1 (free → paid via
-        // Checkout) and then sub-flow #3 (cancel via Customer Portal
-        // once paid). Seeded as `free` so the scenario can drive the
-        // first Checkout completion itself; the cancel step runs
-        // inside the same scenario after the upgrade lands. Re-runs
-        // are idempotent: if the tenant ends up cancelled, the next
-        // run starts with the cancel state and exercises the upgrade
-        // path again.
-        email: "e2e-stripe-checkout-free@kodus.io",
-        name: "Stripe Checkout Free GitHub",
-        license: "free",
-        provider: "github",
-        repoFullName: "kodus-e2e/tiny-url",
-    },
-    {
-        // Stripe billing scenario — sub-flow #2 (trial → paid via
-        // Checkout) and then sub-flow #4 (downgrade paid → free via
-        // /billing/migrate-to-free). Seeded as `trial` so the
-        // /billing/trial call lands a fresh subscription record the
-        // Checkout flow can upgrade.
-        email: "e2e-stripe-checkout-trial@kodus.io",
-        name: "Stripe Checkout Trial GitHub",
-        license: "trial",
-        provider: "github",
-        repoFullName: "kodus-e2e/tiny-url",
-    },
-    {
-        // GitHub App (OAuth installation) variant. Needs a DEDICATED
-        // tenant — sharing one with the PAT cells would have the App
-        // and the PAT both registered against the same Kodus
-        // organization, which makes the auth-integration upsert
-        // overwrite one with the other on each run. The repo
-        // (kodus-e2e/tiny-url-app) is the scope-limited install
-        // target of the kodus-ai-qa GitHub App; the App's webhook
-        // delivers to qa.web.kodus.io. Connect step is SKIPPED at
-        // seed time (provider==="github-app") because the scenario
-        // itself calls /code-management/auth-integration with
-        // authMode=oauth + code=installation_id, which has a
-        // different payload than the PAT path used by the seeder.
-        email: "e2e-paid-gh-app@kodus.io",
-        name: "Smoke Paid GitHub App",
-        license: "paid",
-        provider: "github-app",
-        repoFullName: "kodus-e2e/tiny-url-app",
-    },
-];
 
 interface SavedTenant extends TenantSpec {
     password: string;
@@ -246,20 +128,32 @@ function targetForCloud(): TargetContext {
 //                          (`/organization-parameters/create-or-update`
 //                          with key=byok_config). Gate allows reviews
 //                          using the org's own LLM key; 10-rule limit.
-//   - `trial` / `paid`  → activate the trial billing record via
-//                          `POST /api/proxy/billing/trial`. Real
-//                          paid would need Stripe Checkout but for
-//                          the matrix's gate-allows assertion trial
-//                          is sufficient. TODO: hook up the Stripe
-//                          flow when we need to differentiate paid-
-//                          specific limits.
+//   - `trial`           → activate the trial billing record via
+//                          `POST /api/proxy/billing/trial` (byok:false).
+//                          Status=trial, valid while the 14-day window is
+//                          open; exercises the trial-period gate.
+//   - `paid`            → exercised as BYOK (we deliberately do NOT test
+//                          the platform-managed LLM path). Same three-step
+//                          dance as community-byok → ends ACTIVE/free_byok,
+//                          which never expires. The real Stripe checkout
+//                          (free→paid ACTIVE via Stripe) lives in the
+//                          dedicated stripe-checkout scenario, not here.
 async function ensureLicenseTier(
     target: TargetContext,
     session: KodusSession,
     tenant: TenantSpec,
 ): Promise<boolean> {
     if (tenant.license === "free") return true;
-    if (tenant.license === "community-byok") {
+    // `paid` is exercised as a BYOK tenant (decision: we don't test the
+    // platform-managed LLM path). It takes the SAME three-step BYOK dance
+    // as community-byok, which is what makes it robust in CI: the final
+    // /migrate-to-free flips the row to planType=free_byok AND
+    // subscriptionStatus=ACTIVE — so it NEVER expires. The old `paid`
+    // path (/billing/trial byok:false) created a 14-day TRIAL row that
+    // createTrialLicense refuses to renew (throws "já existe"), so a
+    // once-seeded tenant silently rotted to validate-org-license:false
+    // ~14 days later. ACTIVE/free_byok has no such clock.
+    if (tenant.license === "community-byok" || tenant.license === "paid") {
         // The cloud gate (libs/ee/shared/services/permissionValidation
         // .service.ts) requires `validation.valid===true` AND
         // `planType` containing "byok" AND a stored BYOK config. The
@@ -268,6 +162,7 @@ async function ensureLicenseTier(
         //   1. POST /billing/trial         → creates the license row
         //   2. configure BYOK in org params
         //   3. POST /billing/migrate-to-free → flips planType to free_byok
+        //      (and subscriptionStatus to ACTIVE → no trial expiry)
         // /migrate-to-free fails with "Licença não encontrada" if step 1
         // didn't run first — the endpoint mutates an existing row.
         const trial = await http(
@@ -294,7 +189,7 @@ async function ensureLicenseTier(
                 ));
         if (!trialOk) {
             console.log(
-                `  [warn] community-byok: trial step returned HTTP ${trial.status}: ${trial.raw.slice(0, 200)}`,
+                `  [warn] ${tenant.license}: trial step returned HTTP ${trial.status}: ${trial.raw.slice(0, 200)}`,
             );
             return false;
         }
@@ -325,7 +220,7 @@ async function ensureLicenseTier(
             return true;
         }
         console.log(
-            `  [warn] community-byok: migrate-to-free returned HTTP ${migrate.status}: ${migrate.raw.slice(0, 200)}`,
+            `  [warn] ${tenant.license}: migrate-to-free returned HTTP ${migrate.status}: ${migrate.raw.slice(0, 200)}`,
         );
         return false;
     }
@@ -387,7 +282,7 @@ async function configureByok(
     const provider = process.env.API_LLM_PROVIDER ?? "openai";
     const baseURL =
         process.env.API_OPENAI_FORCE_BASE_URL ?? "https://api.openai.com/v1";
-    const model = process.env.API_LLM_PROVIDER_MODEL ?? "kimi-k2.6";
+    const model = process.env.API_LLM_PROVIDER_MODEL ?? "gpt-5.4-mini";
 
     const resp = await http(
         `${target.apiBaseUrl}/organization-parameters/create-or-update`,
@@ -422,18 +317,23 @@ async function connectProvider(
     repoRegistered: boolean;
     onboardingFinished: boolean;
 }> {
-    // Provider PATs + repo addressing come from the same env vars the
-    // self-hosted matrix uses (GH_TEST_TOKEN / GH_TEST_REPO / GL_*,
-    // BB_*, AZ_TEST_ORG/PROJECT/REPO). All cloud tenants point at the
-    // same fixture repos as self-hosted — there's nothing per-tenant
-    // to override here. The earlier attempt to overwrite e.g.
-    // `AZ_TEST_REPO` with the full `<org>/<project>/<repo>` path broke
-    // the Azure provider because it composes the URL from the three
-    // separate env pieces and the merged string isn't a valid repo
-    // name. Leave env alone.
-    // Cloud tenant seeding uses the cloud-target repo so onboarding registers
-    // the same `*-cloud` fixture repo the cloud cells open PRs against.
-    const provider = makeProvider(tenant.provider, "cloud");
+    // Provider PATs come from the same env vars the self-hosted matrix
+    // uses (GH_TEST_TOKEN / GL_*, BB_*, AZ_TEST_ORG/PROJECT/REPO).
+    //
+    // Repo addressing: GitHub PAT tenants pin their OWN repo via
+    // `tenant.repoFullName` (1 org : 1 repo — see the registry comment),
+    // forwarded as makeProvider's repoOverride. The other providers
+    // ignore the override and resolve their cloud repo from env
+    // (GL_TEST_REPO_CLOUD etc.) — they're already 1 org : 1 repo on
+    // cloud. NB: an earlier attempt to overwrite `AZ_TEST_REPO` with the
+    // full `<org>/<project>/<repo>` path broke Azure (it composes the URL
+    // from three separate env pieces), which is exactly why the override
+    // is scoped to GitHub only and the others keep reading env.
+    const provider = makeProvider(
+        tenant.provider,
+        "cloud",
+        tenant.repoFullName,
+    );
     await registerIntegration(target, provider, session);
     // Wait for /code-management/auth-integration's async post-processing
     // to land before /repositories queries depend on it. The UI flow

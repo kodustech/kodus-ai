@@ -7,8 +7,8 @@
 # alongside the base stack.
 #
 # Usage:
-#   yarn sso-e2e:droplet:destroy                    # default instance
-#   yarn sso-e2e:droplet:destroy --name <name>      # named instance
+#   pnpm run sso-e2e:droplet:destroy                    # default instance
+#   pnpm run sso-e2e:droplet:destroy --name <name>      # named instance
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

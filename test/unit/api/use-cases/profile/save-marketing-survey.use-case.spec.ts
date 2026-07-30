@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SaveMarketingSurveyUseCase } from '@libs/identity/application/use-cases/profile/save-marketing-survey.use-case';
 import { PROFILE_SERVICE_TOKEN } from '@libs/identity/domain/profile/contracts/profile.service.contract';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

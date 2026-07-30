@@ -100,7 +100,7 @@
         "automaticTitle": "Automatic Review",
         "automaticDesc": "Kody reviews this PR automatically on every push.",
         "autoPauseTitle": "Auto-Pause Mode",
-        "autoPauseDesc": "Kody reviews automatically but pauses after rapid changes ({pushes}+ pushes in {timeWindow} minutes). Use @kody resume to continue.",
+        "autoPauseDesc": "Kody reviews automatically but pauses after rapid changes ({pushes}+ pushes in {timeWindow} minutes). Use @kody start-review to continue.",
         "manualTitle": "Manual Review",
         "manualDesc": "Kody reviews the first push automatically, then only when you request with @kody start-review."
     }

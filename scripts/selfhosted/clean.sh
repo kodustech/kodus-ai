@@ -13,10 +13,10 @@
 #   - Anything outside Docker
 #
 # Usage:
-#   yarn selfhosted:clean              # interactive (shows usage + asks confirm)
-#   yarn selfhosted:clean -y           # skip confirmation
-#   yarn selfhosted:clean --volumes    # also prune dangling volumes
-#   yarn selfhosted:clean --nuke       # 'docker system prune -af' — aggressive
+#   pnpm run selfhosted:clean              # interactive (shows usage + asks confirm)
+#   pnpm run selfhosted:clean -y           # skip confirmation
+#   pnpm run selfhosted:clean --volumes    # also prune dangling volumes
+#   pnpm run selfhosted:clean --nuke       # 'docker system prune -af' — aggressive
 
 set -euo pipefail
 

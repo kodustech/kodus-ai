@@ -14,6 +14,7 @@ const buttonVariants = cva(
         "[&[aria-haspopup=dialog]]:ring-1",
         "button-focused:ring-3!",
         "button-hover:brightness-120 button-active:brightness-120",
+        "cursor-pointer",
         "button-loading:cursor-wait",
         "button-disabled:cursor-not-allowed group-disabled/link:cursor-not-allowed",
         "group-disabled/link:[&:hover]:brightness-100!",

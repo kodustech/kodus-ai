@@ -1,14 +1,7 @@
 import { ProcessFilesPrLevelReviewStage } from '@/code-review/pipeline/stages/process-files-pr-level-review.stage';
 import posthog from '@libs/common/utils/posthog';
 
-jest.mock('@kodus/flow', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        info: jest.fn(),
-    }),
+jest.mock('@libs/common/utils/thread-id', () => ({
     createThreadId: jest.fn(),
 }));
 

@@ -2,7 +2,7 @@ import { AzureReposRequestHelper } from './azure-repos-request-helper';
 
 /**
  * Tests for the two pre-existing bugs in the Azure DevOps adapter
- * that surfaced once the kodus-flow logger stopped masking errors
+ * that surfaced once the structured logger stopped masking errors
  * under `loggerFallback: true / RangeError`:
  *
  *  1. `mapAzureStatusToFileChangeStatus` only handles bare verbs

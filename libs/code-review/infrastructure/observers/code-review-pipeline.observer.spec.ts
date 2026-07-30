@@ -9,6 +9,10 @@ import {
 import { IPipelineChecksService } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-checks-service.interface';
 import { PipelineObserverContext } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-observer.interface';
 import { CheckStageNames } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
+import {
+    LlmErrorCategory,
+    attachClassification,
+} from '@libs/llm/error-classifier';
 import { CodeReviewPipelineObserver } from './code-review-pipeline.observer';
 
 describe('CodeReviewPipelineObserver', () => {
@@ -122,6 +126,58 @@ describe('CodeReviewPipelineObserver', () => {
             expect.stringContaining(
                 'MODEL_NOT_FOUND: hf:zai-org/GLM-4.6 is no longer supported',
             ),
+        );
+    });
+
+    // The stages that swallow their failures return normally, so statusInfo
+    // never leaves SUCCESS — `errors[]` is the only evidence the run was
+    // degraded. If the conclusion were driven by statusInfo alone, a dead LLM
+    // provider would still publish a green check (#1568).
+    it('finalizes as FAILURE on a critical error even when statusInfo says SUCCESS', async () => {
+        context.statusInfo = { status: AutomationStatus.SUCCESS } as any;
+        context.errors = [
+            {
+                stage: 'AgentReviewStage',
+                error: new Error('Path not found: /chat/completions'),
+                severity: 'critical',
+            } as any,
+        ];
+
+        await observer.onPipelineFinish(
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(mockPipelineCheckService.finalizeCheck).toHaveBeenCalledWith(
+            observersContext,
+            context,
+            CheckConclusion.FAILURE,
+            CheckStageNames._pipelineEndFailure,
+            expect.stringContaining('Path not found: /chat/completions'),
+        );
+    });
+
+    it('finalizes as NEUTRAL on a partial error even when statusInfo says SUCCESS', async () => {
+        context.statusInfo = { status: AutomationStatus.SUCCESS } as any;
+        context.errors = [
+            {
+                stage: 'UpdateCommentsAndGenerateSummaryStage',
+                error: new Error('summary provider unreachable'),
+                severity: 'partial',
+            } as any,
+        ];
+
+        await observer.onPipelineFinish(
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(mockPipelineCheckService.finalizeCheck).toHaveBeenCalledWith(
+            observersContext,
+            context,
+            CheckConclusion.NEUTRAL,
+            CheckStageNames._pipelineEndPartial,
+            expect.stringContaining('summary provider unreachable'),
         );
     });
 
@@ -485,6 +541,78 @@ describe('CodeReviewPipelineObserver', () => {
         );
     });
 
+    // A stage message the user can act on. The raw provider string for this
+    // failure is "Not Found", which tells them nothing — the agent classifies
+    // at the throw site and the UI shows that wording instead (#1568).
+    it('shows the classified reason when the throw site attached one', async () => {
+        const error = new Error('Not Found');
+        attachClassification(error, {
+            category: LlmErrorCategory.MODEL_NOT_FOUND,
+            rawMessage: 'Not Found',
+            friendlyMessage:
+                'The configured model is not available on the provider. Verify the model name in your settings.',
+        });
+        context.errors = [
+            { stage: 'AgentReviewStage', error, severity: 'critical' } as any,
+        ];
+
+        await observer.onStageStart(
+            'AgentReviewStage',
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+        await observer.onStageFinish(
+            'AgentReviewStage',
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(
+            mockAutomationExecutionService.updateStageLog,
+        ).toHaveBeenCalledWith(
+            'stage-log-uuid',
+            expect.objectContaining({
+                message:
+                    'The configured model is not available on the provider. Verify the model name in your settings.',
+            }),
+        );
+    });
+
+    // The screenshot in #1568: "Agent-Based Code Review — Success, 7s" for a
+    // run whose LLM 404'd. The stage returns instead of throwing, so
+    // onStageFinish (not onStageError) fires — the badge has to come from the
+    // error the stage recorded, or a failed review renders green.
+    it('logs a stage that RETURNED but recorded a critical error as ERROR', async () => {
+        context.errors = [
+            {
+                stage: 'AgentReviewStage',
+                error: new Error('Path not found: /chat/completions'),
+                severity: 'critical',
+            } as any,
+        ];
+
+        await observer.onStageStart(
+            'AgentReviewStage',
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+        await observer.onStageFinish(
+            'AgentReviewStage',
+            context as CodeReviewPipelineContext,
+            observersContext,
+        );
+
+        expect(
+            mockAutomationExecutionService.updateStageLog,
+        ).toHaveBeenCalledWith(
+            'stage-log-uuid',
+            expect.objectContaining({
+                status: AutomationStatus.ERROR,
+                message: 'Path not found: /chat/completions',
+            }),
+        );
+    });
+
     it('should log stage as PARTIAL_ERROR if context has errors with severity=partial for the stage', async () => {
         // severity is required to disambiguate partial-vs-critical at the
         // stage level — matches deriveFinalStatus in automationCodeReview.ts
@@ -691,7 +819,7 @@ describe('CodeReviewPipelineObserver', () => {
             );
         });
 
-        it('should show up to 3 unique errors separated by pipe and indicate remaining count', async () => {
+        it('should show one reason plus a count of the remaining issues', async () => {
             context.errors = [
                 {
                     stage: 'FileAnalysisStage',
@@ -744,13 +872,16 @@ describe('CodeReviewPipelineObserver', () => {
                 observersContext,
             );
 
+            // One reason plus a count, NOT three messages glued together.
+            // Concatenating produced unreadable run-ons in the UI; the full
+            // per-file list is in `partialErrors` metadata, which the UI
+            // already renders under "View failed files" (#1568).
             expect(
                 mockAutomationExecutionService.updateStageLog,
             ).toHaveBeenCalledWith(
                 'stage-log-uuid',
                 expect.objectContaining({
-                    message:
-                        'Error type A\nError type B\nError type C\n(+2 more)',
+                    message: 'Error type A (+4 more issues)',
                 }),
             );
         });

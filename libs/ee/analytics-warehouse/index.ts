@@ -2,6 +2,8 @@ export * from './classification/classification.prompts';
 export * from './classification/pull-request-classifier.service';
 export * from './entities';
 export * from './ingestion/backfill-orchestrator.service';
+export * from './ingestion/feedback-ingestion.service';
 export * from './ingestion/pull-request-ingestion.service';
+export * from './ingestion/review-operational-ingestion.service';
 export * from './modules/analytics-warehouse.module';
 export * from './schema.constant';

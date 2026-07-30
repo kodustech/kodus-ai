@@ -1,5 +1,11 @@
 name: "Self-Hosted: Send Discord Notification"
 
+# Manual fallback. The release flow already posts to Discord via the
+# automated notify-discord-failure inside selfhosted-build-push.yml and
+# the changelog publish in changelog-publish.yml — use this only when
+# you need to push a status to the team channel out-of-band (e.g. you
+# canceled a release mid-flight and want to tell people).
+
 on:
     workflow_dispatch:
         inputs:
@@ -16,6 +22,9 @@ on:
                     - success
                     - failure
 
+permissions:
+    contents: read
+
 jobs:
     notify-discord:
         name: Notify Discord
@@ -23,38 +32,16 @@ jobs:
         environment: production
         permissions: {}
         steps:
-            - name: Check Discord webhook configuration
-              id: discord-webhook
-              run: |
-                  if [ -n "${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}" ]; then
-                    echo "configured=true" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "configured=false" >> "$GITHUB_OUTPUT"
-                    echo "DISCORD_WEBHOOK_SELFHOSTED is not configured for the production environment."
-                    exit 1
-                  fi
-
-            - name: Notify Discord on Success
-              if: github.event.inputs.status == 'success'
+            - name: Notify Discord
               uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
-                  content: ":tada: New Self-Hosted Release `${{ github.event.inputs.release_tag
-                      }}` published!"
-                  title: "Self-Hosted Release"
-                  description: "Docker images were already built and published. This message was
-                      sent manually."
+                  # Same fallback chain every release-pipeline notification uses.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ github.event.inputs.status }}
+                  title: ${{ github.event.inputs.status == 'success' && 'Self-Hosted Release' || 'Self-Hosted Release Failed' }}
+                  description: |
+                      Release tag: `${{ github.event.inputs.release_tag }}`
+                      Status:      ${{ github.event.inputs.status }}
+                      Sent manually by: @${{ github.actor }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   username: "GitHub Actions"
-                  color: 0xff00
-
-            - name: Notify Discord on Failure
-              if: github.event.inputs.status == 'failure'
-              uses: sarisia/actions-status-discord@v1.16.0
-              with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
-                  content: ":x: Self-hosted release `${{ github.event.inputs.release_tag }}`
-                      requires attention."
-                  title: "Self-Hosted Release Failed"
-                  description: "This message was sent manually from the workflow dispatcher."
-                  username: "GitHub Actions"
-                  color: 0xff0000

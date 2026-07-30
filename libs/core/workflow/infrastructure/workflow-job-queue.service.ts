@@ -5,7 +5,7 @@ import { IJobQueueService } from '@libs/core/workflow/domain/contracts/job-queue
 import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job.interface';
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 import {
     IWorkflowJobRepository,

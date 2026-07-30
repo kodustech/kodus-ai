@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { DocumentationSearchCacheRepository } from '@libs/code-review/infrastructure/adapters/repositories/documentation-search-cache.repository';
 import { DocumentationItem } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { Injectable } from '@nestjs/common';

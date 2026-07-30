@@ -117,7 +117,7 @@ export default async function PRSizeAnalytics() {
                 </Tooltip>
             </PRSizeAnalyticsHeader>
 
-            <CardContent className="flex items-center justify-center">
+            <CardContent className="flex items-center justify-start">
                 <div className="text-3xl font-bold">
                     {data?.currentPeriod?.averagePRSize}
                 </div>

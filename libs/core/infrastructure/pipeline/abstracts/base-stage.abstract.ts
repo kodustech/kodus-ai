@@ -76,12 +76,16 @@ export abstract class BasePipelineStage<
     ): TContext {
         const incoming: readonly string[] =
             typeof names === 'string' ? [names] : names;
+
         return produce(context, (draft) => {
             const mergedSet = new Set(draft.statusInfo.skipStages ?? []);
+
             for (const name of incoming) {
                 mergedSet.add(name);
             }
+
             draft.statusInfo.skipStages = Array.from(mergedSet);
+
             if (message !== undefined) {
                 draft.statusInfo.message = message;
             }

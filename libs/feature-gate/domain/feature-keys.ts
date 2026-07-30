@@ -5,8 +5,8 @@
  * cloud). Keep additions in lockstep with the YAML.
  */
 export const FEATURE_KEYS = {
-    agentReview: 'agent-review',
     githubEnterpriseServerPat: 'github-enterprise-server-pat',
+    heavyReview: 'heavy-review',
 } as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];

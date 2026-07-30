@@ -4,7 +4,7 @@ import { Criticality, DeliveryStatus, NotificationChannel } from '../../domain/e
 import { NotificationDeliveryRepository } from './notification-delivery.repository';
 import { NotificationDeliveryModel } from './schemas/notification-delivery.model';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),

@@ -4,7 +4,7 @@ import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-r
 import { PlatformType } from '@/core/domain/enums';
 
 // Mock logger to silence logs during tests
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

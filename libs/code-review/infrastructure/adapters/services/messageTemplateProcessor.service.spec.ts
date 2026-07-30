@@ -120,8 +120,42 @@ describe('MessageTemplateProcessor', () => {
                     '@reviewOptions',
                     '@reviewCadence',
                     '@reviewScope',
+                    '@agentPrompt',
                 ]),
             );
+        });
+
+        it('resolves the deprecated @consolidatedLLMPrompt alias without advertising it', async () => {
+            // Renamed to @agentPrompt, but saved templates may still use the old
+            // name — it must render the same block, not the literal placeholder.
+            expect(processor.getAvailablePlaceholders()).not.toContain(
+                '@consolidatedLLMPrompt',
+            );
+
+            const viaAlias = await processor.processTemplate(
+                '@consolidatedLLMPrompt',
+                { lineComments: [] },
+            );
+            const viaCurrent = await processor.processTemplate('@agentPrompt', {
+                lineComments: [],
+            });
+
+            expect(viaAlias).not.toContain('@consolidatedLLMPrompt');
+            expect(viaAlias).toBe(viaCurrent);
+        });
+
+        it('does not route unknown placeholders through an empty-string handler', async () => {
+            // Guards the alias fallback: an empty-key handler must not become
+            // reachable for every unrecognized placeholder.
+            processor.registerHandler('', () => '__EMPTY__');
+
+            const result = await processor.processTemplate(
+                'Hi @notARealPlaceholder bye',
+                {},
+            );
+
+            expect(result).toBe('Hi @notARealPlaceholder bye');
+            expect(result).not.toContain('__EMPTY__');
         });
 
         it('lets callers register a custom placeholder handler', async () => {
@@ -159,6 +193,107 @@ describe('MessageTemplateProcessor', () => {
             );
 
             expect(result).toBe('__OVERRIDDEN__');
+        });
+    });
+
+    describe('agent prompt (@agentPrompt)', () => {
+        const makeLineComment = (
+            suggestion: Record<string, unknown>,
+            over: Record<string, unknown> = {},
+        ) =>
+            ({
+                comment: {
+                    path: 'src/foo.ts',
+                    line: 8,
+                    body: {},
+                    suggestion,
+                    ...over,
+                },
+                deliveryStatus: 'sent',
+            }) as any;
+
+        it('returns empty for an empty comment list', () => {
+            expect(processor.getConsolidatedLLMPromptBody([])).toBe('');
+        });
+
+        it('returns empty when no comment carries an llmPrompt', () => {
+            const body = processor.getConsolidatedLLMPromptBody([
+                makeLineComment({ suggestionContent: 'x', improvedCode: '' }),
+            ]);
+            expect(body).toBe('');
+        });
+
+        it('builds a block with the file list and one section per issue', () => {
+            const body = processor.getConsolidatedLLMPromptBody([
+                makeLineComment(
+                    { llmPrompt: 'Fix the null deref', improvedCode: '' },
+                    { path: 'src/a.ts', line: 3 },
+                ),
+                makeLineComment(
+                    { llmPrompt: 'Guard the index', improvedCode: '' },
+                    { path: 'src/b.ts', line: 9 },
+                ),
+            ]);
+            expect(body).toContain('2 suggested fixes');
+            expect(body).toContain('- src/a.ts:3');
+            expect(body).toContain('- src/b.ts:9');
+            expect(body).toContain('[1/2] src/a.ts:3');
+            expect(body).toContain('Fix the null deref');
+            expect(body).toContain('[2/2] src/b.ts:9');
+            expect(body).toContain('Guard the index');
+        });
+
+        it('omits the :line suffix when the comment has no line number', () => {
+            const body = processor.getConsolidatedLLMPromptBody([
+                makeLineComment(
+                    { llmPrompt: 'File-level finding', improvedCode: '' },
+                    { path: 'src/c.ts', line: undefined },
+                ),
+            ]);
+            expect(body).toContain('- src/c.ts');
+            expect(body).not.toContain('src/c.ts:');
+            expect(body).toContain('[1/1] src/c.ts');
+        });
+
+        it('includes improvedCode as a reference implementation when present', () => {
+            const body = processor.getConsolidatedLLMPromptBody([
+                makeLineComment({
+                    llmPrompt: 'Rename the variable',
+                    improvedCode: 'const total = a + b;',
+                }),
+            ]);
+            expect(body).toContain('Reference implementation');
+            expect(body).toContain('const total = a + b;');
+        });
+
+        it('wraps the block in a fence longer than any backtick run inside it', () => {
+            // improvedCode carrying its own ``` fence must NOT close the outer
+            // block early — the outer fence has to grow past the inner run.
+            const body = processor.getConsolidatedLLMPromptBody([
+                makeLineComment({
+                    llmPrompt: 'See the fenced snippet',
+                    improvedCode: '```ts\nconst x = 1;\n```',
+                }),
+            ]);
+            expect(body).toMatch(/`{4,}/); // outer fence bumped to >=4 backticks
+            expect(body).toContain('```ts'); // inner 3-backtick fence preserved
+        });
+
+        it('renders through the @agentPrompt placeholder', async () => {
+            const result = await processor.processTemplate(
+                'Summary:\n\n@agentPrompt',
+                {
+                    lineComments: [
+                        makeLineComment({
+                            llmPrompt: 'Fix it',
+                            improvedCode: '',
+                        }),
+                    ],
+                },
+            );
+            expect(result).toContain('Summary:');
+            expect(result).not.toContain('@agentPrompt');
+            expect(result).toContain('Fix it');
         });
     });
 });

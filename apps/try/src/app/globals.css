@@ -1,0 +1,265 @@
+@import "tailwindcss";
+
+:root {
+    /* Kodus design tokens — mirror the marketing site + apps/web so
+       try.kodus.io feels like the same product. The accent is the
+       Kodus peach (#F8B76D), not the Linear-ish cyan we started with. */
+
+    --bg: #101019;
+    --bg-2: #181825;
+    --bg-3: #202032;
+    --bg-4: #30304b;
+    --bg-input: #181825;
+
+    --border: #30304b;
+    --border-strong: #3d3d5c;
+    --border-glow: rgba(248, 183, 109, 0.35);
+
+    --text: #f3f3f7;
+    --text-muted: #cdcddf;
+    --text-dim: rgba(243, 243, 247, 0.5);
+
+    /* Kodus primary: warm peach. Hover is a hair brighter (matches the
+       gradient used on .btn--primary in the marketing site). */
+    --accent: #f8b76d;
+    --accent-hover: #ffca8a;
+    --accent-dark: #443024;
+    --accent-soft: rgba(248, 183, 109, 0.1);
+    --accent-glow: rgba(248, 183, 109, 0.22);
+    --accent-fg: #1a0f04;
+
+    /* Secondary / tertiary brand colors — used sparingly for variety
+       (e.g. the "Merged" badge picks up secondary lavender). */
+    --secondary: #c9bbf2;
+    --secondary-dark: #312b4b;
+    --tertiary: #fdbfbf;
+    --tertiary-dark: #592830;
+
+    /* Semantic tokens — keep the marketing-site set so green/red/yellow
+       feel consistent across surfaces. */
+    --green: #42be65;
+    --red: #fa5867;
+    --yellow: #f2c631;
+    --orange: #ff8b40;
+    --info: #5190ff;
+
+    --shadow-card:
+        0 1px 0 0 rgba(255, 255, 255, 0.02) inset,
+        0 1px 2px rgba(0, 0, 0, 0.4),
+        0 8px 24px -8px rgba(0, 0, 0, 0.4);
+    --shadow-elevated:
+        0 1px 0 0 rgba(255, 255, 255, 0.03) inset,
+        0 4px 8px rgba(0, 0, 0, 0.5),
+        0 16px 40px -12px rgba(0, 0, 0, 0.55);
+
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+}
+
+html {
+    background: var(--bg);
+}
+
+html, body {
+    color: var(--text);
+    font-family: var(--font-dm-sans), "DM Sans", ui-sans-serif, system-ui,
+        -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+body {
+    background:
+        /* Top-right peach ember — primary brand glow */
+        radial-gradient(
+            ellipse 1100px 600px at 85% -10%,
+            rgba(248, 183, 109, 0.07),
+            transparent 55%
+        ),
+        /* Bottom-left lavender — secondary brand color */
+            radial-gradient(
+                ellipse 900px 500px at 10% 110%,
+                rgba(201, 187, 242, 0.05),
+                transparent 60%
+            ),
+        var(--bg);
+    background-attachment: fixed;
+}
+
+/* Subtle grain so flat surfaces breathe a little. */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.02 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.55;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+    z-index: 0;
+}
+
+* {
+    border-color: var(--border);
+}
+
+code, pre, .mono, .font-mono {
+    font-family: var(--font-overpass-mono), "Overpass Mono", ui-monospace,
+        "SF Mono", Menlo, Monaco, monospace;
+}
+
+/* Pierre annotation slot lives inside a CSS grid cell that inherits
+   the diff content's track width — i.e. the WIDEST source line, not
+   the visible viewport. That's why long identifiers in a suggestion
+   used to bleed off-screen instead of wrapping. The fix has three
+   layers:
+     1. The Pierre scroll container becomes an inline-size container
+        so descendants can size against the viewport (`cqi`), not the
+        scrollable grid width.
+     2. The annotation row sticks to `left: 0` so when the user scrolls
+        the diff horizontally, the suggestion card stays glued to the
+        visible left edge.
+     3. The card itself is clamped to `100cqi` and given every wrap-
+        related hint we can throw at it. */
+.pierre-diff-container {
+    container-type: inline-size;
+    container-name: pierre;
+}
+
+.pierre-diff-container [data-annotation],
+.pierre-diff-container [class*="annotation"] {
+    position: sticky !important;
+    left: 0 !important;
+    width: 100cqi !important;
+    max-width: 100cqi !important;
+    box-sizing: border-box !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+    min-width: 0 !important;
+    font-family: var(--font-dm-sans), "DM Sans", ui-sans-serif, system-ui,
+        sans-serif !important;
+}
+
+/* And every descendant — defensive in case Pierre adds an inner
+   wrapper that itself ignores its parent's width. */
+.pierre-diff-container [data-annotation] > *,
+.pierre-diff-container [class*="annotation"] > * {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+/* Decorative grid background for the hero — peach perspective lines
+   that fade out toward the center. */
+.hero-grid {
+    background-image:
+        linear-gradient(rgba(248, 183, 109, 0.06) 1px, transparent 1px),
+        linear-gradient(
+            90deg,
+            rgba(248, 183, 109, 0.06) 1px,
+            transparent 1px
+        );
+    background-size: 56px 56px;
+    background-position: center top;
+    mask-image: radial-gradient(
+        ellipse 70% 60% at 50% 30%,
+        black 0%,
+        transparent 75%
+    );
+    -webkit-mask-image: radial-gradient(
+        ellipse 70% 60% at 50% 30%,
+        black 0%,
+        transparent 75%
+    );
+}
+
+@keyframes kodus-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes kodus-pulse-ring {
+    0% {
+        transform: scale(0.95);
+        opacity: 0.55;
+    }
+    70%, 100% {
+        transform: scale(1.6);
+        opacity: 0;
+    }
+}
+
+@keyframes kodus-shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(700%);
+    }
+}
+
+@keyframes kodus-skeleton-wave {
+    0% {
+        background-position: -200% 0;
+    }
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.kodus-skeleton {
+    background: linear-gradient(
+        90deg,
+        var(--bg-3) 0%,
+        var(--bg-4) 50%,
+        var(--bg-3) 100%
+    );
+    background-size: 200% 100%;
+    animation: kodus-skeleton-wave 1.8s ease-in-out infinite;
+    border-radius: var(--radius-md);
+}
+
+.fade-up {
+    animation: kodus-fade-up 0.6s cubic-bezier(0.21, 0.6, 0.35, 1) both;
+}
+
+.focus-ring:focus-visible,
+.focus-ring:focus-within {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow:
+        0 0 0 3px var(--accent-soft),
+        0 0 0 1px var(--accent);
+}
+
+.hairline-top {
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.03);
+}
+.hairline-bottom {
+    box-shadow: inset 0 -1px 0 0 rgba(255, 255, 255, 0.03);
+}
+
+.kodus-scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+.kodus-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+.kodus-scroll::-webkit-scrollbar-thumb {
+    background: var(--bg-4);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+.kodus-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+    background-clip: padding-box;
+}

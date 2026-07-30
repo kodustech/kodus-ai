@@ -5,7 +5,7 @@ import {
     ContextRequirement,
     ContextRevisionActor,
     ContextRevisionScope,
-} from '@kodus/flow';
+} from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 
 @Entity('context_references')
 export class ContextReferenceModel extends CoreModel {

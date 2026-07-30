@@ -3,7 +3,7 @@
  * Kodus Tech. All rights reserved.
  */
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
@@ -15,6 +15,7 @@ import {
     ReviewStatusReaction,
 } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
+import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -97,11 +98,10 @@ export class CodeReviewHandlerService {
         if (!organizationId) return;
 
         try {
-            const existing =
-                await this.organizationParametersService.findByKey(
-                    OrganizationParametersKey.FIRST_REVIEW_AT,
-                    { organizationId },
-                );
+            const existing = await this.organizationParametersService.findByKey(
+                OrganizationParametersKey.FIRST_REVIEW_AT,
+                { organizationId },
+            );
             if (existing) return;
 
             await this.organizationParametersService.createOrUpdateConfig(
@@ -114,7 +114,7 @@ export class CodeReviewHandlerService {
             // milestone notification actionable (Discord/email). If any
             // lookup fails we still fire telemetry with whatever we have —
             // the milestone marker is the source of truth, names are gravy.
-            const [org, owner] = await Promise.all([
+            const [org, owner, members] = await Promise.all([
                 this.organizationService
                     .findOne({ uuid: organizationId })
                     .catch(() => undefined),
@@ -124,7 +124,23 @@ export class CodeReviewHandlerService {
                         role: Role.OWNER,
                     } as any)
                     .catch(() => undefined),
+                // Real engineering team size from the connected git org — the
+                // strongest lead-scoring signal, and only reachable here since
+                // Kodus holds the per-org git installation auth. Deferred via
+                // `Promise.resolve().then` so even a synchronous throw becomes a
+                // caught rejection and never drops the milestone telemetry.
+                Promise.resolve()
+                    .then(() =>
+                        this.codeManagement.getListMembers({
+                            organizationAndTeamData,
+                        }),
+                    )
+                    .catch(() => undefined),
             ]);
+
+            const orgMemberCount = Array.isArray(members)
+                ? members.length
+                : undefined;
 
             await this.telemetry.firstReviewCompleted({
                 organizationId,
@@ -136,6 +152,7 @@ export class CodeReviewHandlerService {
                 platform: platformType,
                 ownerEmail: owner?.email,
                 ownerId: owner?.uuid,
+                orgMemberCount,
             });
         } catch (error) {
             this.logger.warn({
@@ -165,11 +182,11 @@ export class CodeReviewHandlerService {
         workflowJobId?: string, // Optional: ID of workflow job (for pausing/resuming)
         lastExecutionData?: any, // Data from the last successful execution
         correlationId?: string,
-        // Parent (job-level) AbortSignal — forwarded from the strategy
-        // which got it from runCodeReview use-case, originally created by
-        // JobProcessorRouterService.runWithTimeout. When this aborts, all
-        // downstream LLM/agent calls cancel via parentSignal composition.
         parentSignal?: AbortSignal,
+        // Free-text steering directive from `@kody review <directive>`.
+        reviewDirective?: string,
+        // `@kody review --heavy` — extra critic pass in the finder.
+        heavy?: boolean,
     ) {
         let initialContext: CodeReviewPipelineContext;
 
@@ -197,6 +214,8 @@ export class CodeReviewHandlerService {
                 platformType: platformType as PlatformType,
                 triggerCommentId,
                 userGitId,
+                reviewDirective,
+                heavy,
                 pipelineMetadata: {
                     lastExecution: {
                         ...(lastExecutionData || null),
@@ -223,14 +242,6 @@ export class CodeReviewHandlerService {
                 this.pipelineFactory.getPipeline('CodeReviewPipeline');
             const result = await pipeline.execute(initialContext);
 
-            // Classify the final status BEFORE reactions/logs so the right
-            // emoji (hooray vs confused) and the persisted automation status
-            // reflect reality. Errors with `severity === 'partial'` come from
-            // auxiliary stages (business-logic validation, PR-level comments,
-            // summary) or the kody-rules agent — they degrade the run but do
-            // not kill it. Critical errors (default) flip the whole execution
-            // to ERROR. Previously, a pipeline that finished in IN_PROGRESS
-            // with agent failures was silently relabeled as SUCCESS here.
             const collectedErrors = result.errors || [];
             const hasCriticalError = collectedErrors.some(
                 (e) => (e.severity ?? 'critical') === 'critical',
@@ -239,26 +250,36 @@ export class CodeReviewHandlerService {
                 (e) => e.severity === 'partial',
             );
 
-            // `result.statusInfo` is frozen by immer — build a new object and
-            // produce a shallow-cloned result that the rest of the function
-            // (handleReactionsByStatus, logs, return value) can read.
+            // Why the run failed, in the user's words. `classifiedStatus.message`
+            // is NOT a usable fallback here: stages that fail without throwing
+            // never update it, so it still holds whatever the pipeline set at
+            // startup — which is how a failed review ended up reported as
+            // "Kody Review Finished / Error / Pipeline started" (#1568).
+            const failureReason =
+                result.lastReviewError?.friendlyMessage ||
+                describePipelineError(
+                    collectedErrors.find(
+                        (e) => (e.severity ?? 'critical') === 'critical',
+                    ) ?? collectedErrors[0],
+                ).text;
+
             let classifiedStatus = result.statusInfo;
             if (classifiedStatus.status === AutomationStatus.IN_PROGRESS) {
                 if (hasCriticalError) {
                     classifiedStatus = {
                         ...classifiedStatus,
                         status: AutomationStatus.ERROR,
-                        message:
-                            classifiedStatus.message ||
-                            'Code review failed: one or more critical stages did not complete.',
+                        message: failureReason
+                            ? `Code review failed: ${failureReason}`
+                            : 'Code review failed: one or more critical stages did not complete.',
                     };
                 } else if (hasPartialError) {
                     classifiedStatus = {
                         ...classifiedStatus,
                         status: AutomationStatus.PARTIAL_ERROR,
-                        message:
-                            classifiedStatus.message ||
-                            'Code review completed with warnings: one or more auxiliary stages failed.',
+                        message: failureReason
+                            ? `Code review completed with issues: ${failureReason}`
+                            : 'Code review completed with warnings: one or more auxiliary stages failed.',
                     };
                 } else {
                     classifiedStatus = {
@@ -275,22 +296,10 @@ export class CodeReviewHandlerService {
             };
 
             // Handle reactions based on classified result status
-            await this.handleReactionsByStatus(initialContext, classifiedResult);
-
-            this.logger.log({
-                message: `Code review pipeline completed for PR#${pullRequest.number} with status=${classifiedStatus.status}`,
-                context: CodeReviewHandlerService.name,
-                serviceName: CodeReviewHandlerService.name,
-                metadata: {
-                    suggestionsCount: result?.lineComments?.length || 0,
-                    organizationAndTeamData,
-                    pullRequestNumber: pullRequest.number,
-                    executionId,
-                    finalStatus: classifiedStatus.status,
-                    criticalErrors: hasCriticalError,
-                    partialErrors: hasPartialError,
-                },
-            });
+            await this.handleReactionsByStatus(
+                initialContext,
+                classifiedResult,
+            );
 
             if (classifiedStatus.status === AutomationStatus.SUCCESS) {
                 void this.captureFirstReviewIfNeeded(
@@ -311,10 +320,6 @@ export class CodeReviewHandlerService {
                 automaticReviewStatus: result?.automaticReviewStatus,
                 statusInfo: finalStatus,
                 orphanedBaseCommit: result?.orphanedBaseCommit,
-                // Forward adaptive-fit fidelity warnings to the
-                // automation_execution.dataExecution payload (see
-                // _buildExecutionData) so the web dashboard can render
-                // them. Absent on full-fidelity runs.
                 reviewWarnings: result?.reviewWarnings,
             };
         } catch (error) {

@@ -13,6 +13,14 @@ function budget(
     return { type: 'budget', options: { min, default: defaultBudget } };
 }
 
+// Anthropic's API rejects thinking.budget_tokens < 1024, so Claude budget
+// models must floor at 1024 regardless of caller-provided value.
+function anthropicBudget(
+    defaultBudget: number = DEFAULT_REASONING_BUDGET,
+): ReasoningConfig {
+    return budget(defaultBudget, 1024);
+}
+
 function adaptive(
     options: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'],
 ): ReasoningConfig {
@@ -105,12 +113,12 @@ export const MODELS_WITH_REASONING = new Map<string, ReasoningConfig>([
     ['gemini-2.5-flash-lite', budget()],
     ['gemini-3.1-flash-lite-preview', budget()],
 
-    // Anthropic Claude models - reasoning budget (numeric)
-    ['claude-opus-4-1-20250805', budget()],
-    ['claude-opus-4-20250514', budget()],
-    ['claude-sonnet-4-5-20250929', budget()],
-    ['claude-sonnet-4-20250514', budget()],
-    ['claude-3-7-sonnet-20250219', budget()],
+    // Anthropic Claude models - reasoning budget (numeric, min 1024)
+    ['claude-opus-4-1-20250805', anthropicBudget()],
+    ['claude-opus-4-20250514', anthropicBudget()],
+    ['claude-sonnet-4-5-20250929', anthropicBudget()],
+    ['claude-sonnet-4-20250514', anthropicBudget()],
+    ['claude-3-7-sonnet-20250219', anthropicBudget()],
 ]);
 
 // Models that do not support OpenAI Responses API JSON mode (response_format)
@@ -159,9 +167,9 @@ const REASONING_PATTERN_RULES: Array<[RegExp, ReasoningConfig]> = [
     // Anthropic Claude - adaptive for 4.7+, budget for older families
     [/^claude-opus-4-7(\b|[-_@])/, adaptive()],
     [/^claude-sonnet-4-7(\b|[-_@])/, adaptive()],
-    [/^claude-opus-4(\b|[-_@])/, budget()],
-    [/^claude-sonnet-4(\b|[-_@])/, budget()],
-    [/^claude-3-7-sonnet(\b|[-_@])/, budget()],
+    [/^claude-opus-4(\b|[-_@])/, anthropicBudget()],
+    [/^claude-sonnet-4(\b|[-_@])/, anthropicBudget()],
+    [/^claude-3-7-sonnet(\b|[-_@])/, anthropicBudget()],
 ];
 
 // Default max tokens by model (when provider allows setting output tokens)

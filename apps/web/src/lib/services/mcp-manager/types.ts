@@ -5,8 +5,7 @@ export enum MCP_CONNECTION_STATUS {
     PENDING = "PENDING",
 }
 
-export const KODUS_MCP_GITHUB_ISSUES_INTEGRATION_ID =
-    "kodus-github-issues-default";
+export const KODUS_ISSUES_INTEGRATION_ID = "kodus-issues-default";
 
 export type CustomMCPPlugin = {
     id: string;
@@ -17,6 +16,21 @@ export type CustomMCPPlugin = {
     logo: string;
     provider: string;
     isConnected: boolean;
+};
+
+export type MCPAuthMethodUserField = {
+    name: string;
+    label?: string;
+    required?: boolean;
+    secret?: boolean;
+};
+
+export type MCPAuthMethod = {
+    id: string;
+    label?: string;
+    type: string;
+    default?: boolean;
+    userFields?: MCPAuthMethodUserField[];
 };
 
 export const CUSTOM_MCP_AUTH_METHODS = {

@@ -1,13 +1,20 @@
-import { ParametersKey } from '@libs/core/domain/enums';
+import { ParametersKey, OrganizationParametersKey } from '@libs/core/domain/enums';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
+import {
+    IOrganizationParametersService,
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
+import { GlobalRulesSourceConfig } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
 import { Inject, Injectable } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
 import { KodyRulesSyncService } from '../services/kodyRulesSync.service';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     IDE_RULES_SYNC_DISABLED_EVENT,
     IdeRulesSyncDisabledEvent,
@@ -21,7 +28,89 @@ export class KodyRulesSyncListener {
         private readonly kodyRulesSyncService: KodyRulesSyncService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
+        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
+        private readonly organizationParametersService: IOrganizationParametersService,
+        @InjectDataSource()
+        private readonly dataSource: DataSource,
     ) {}
+
+    /**
+     * Whether the repo where this PR merged is a configured source of GLOBAL
+     * rules. When true, merged changes to its rule files must also refresh the
+     * org-wide global scope.
+     */
+    private async isGlobalSourceRepo(event: PullRequestClosedEvent): Promise<boolean> {
+        try {
+            const parameter =
+                await this.organizationParametersService.findByKey(
+                    OrganizationParametersKey.GLOBAL_RULES_SOURCE_REPOSITORIES,
+                    event.organizationAndTeamData,
+                );
+            const config = parameter?.configValue as
+                | GlobalRulesSourceConfig
+                | undefined;
+            return (config?.repositories ?? []).some(
+                (r) => String(r.id) === String(event.repository.id),
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to check global-rules source membership',
+                context: KodyRulesSyncListener.name,
+                error,
+                metadata: {
+                    organizationAndTeamData: event.organizationAndTeamData,
+                    repositoryId: event.repository?.id,
+                },
+            });
+            return false;
+        }
+    }
+
+    /**
+     * Cross-process idempotency claim. The pull-request.closed event reaches
+     * every process that hosts this listener (local emit in the webhook
+     * consumer + CrossProcessEventsBridge re-emits elsewhere), and in
+     * production there are N worker replicas — without a shared claim each
+     * of them imports the same rule files concurrently and the sync creates
+     * DUPLICATE rules (observed live: two identical rules from one merge).
+     * First INSERT wins; everyone else skips. On infrastructure failure we
+     * choose availability: proceed (worst case a duplicate, never a lost
+     * sync).
+     */
+    private async claimSyncRun(claimKey: string): Promise<boolean> {
+        try {
+            // Concurrent CREATE IF NOT EXISTS can still race (duplicate
+            // relation) — tolerated: the table exists either way.
+            await this.dataSource
+                .query(
+                    `CREATE TABLE IF NOT EXISTS kodus_event_claims (
+                    claim_key text PRIMARY KEY,
+                    created_at timestamptz NOT NULL DEFAULT now()
+                )`,
+                )
+                .catch(() => undefined);
+            // Opportunistic TTL sweep so the table never grows unbounded.
+            await this.dataSource.query(
+                `DELETE FROM kodus_event_claims WHERE created_at < now() - interval '7 days'`,
+            );
+            const rows: unknown[] = await this.dataSource.query(
+                `INSERT INTO kodus_event_claims (claim_key) VALUES ($1)
+                 ON CONFLICT (claim_key) DO NOTHING
+                 RETURNING claim_key`,
+                [claimKey],
+            );
+            return rows.length > 0;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Sync claim check failed — proceeding without dedupe (availability over exactly-once)',
+                context: KodyRulesSyncListener.name,
+                error,
+                metadata: { claimKey },
+            });
+            return true;
+        }
+    }
 
     @OnEvent('pull-request.closed')
     async handlePullRequestClosedEvent(event: PullRequestClosedEvent) {
@@ -76,12 +165,48 @@ export class KodyRulesSyncListener {
             return;
         }
 
-        await this.kodyRulesSyncService.syncFromChangedFiles({
-            organizationAndTeamData: event.organizationAndTeamData,
-            repository: event.repository,
-            pullRequestNumber: event.pullRequestNumber,
-            files: event.files,
-        });
+        const claimKey = `kody-rules-sync:${event.organizationAndTeamData?.organizationId}:${event.repository.id}:${event.pullRequestNumber}`;
+        if (!(await this.claimSyncRun(claimKey))) {
+            this.logger.log({
+                message:
+                    'Sync already claimed by another process for this merge — skipping duplicate run',
+                context: KodyRulesSyncListener.name,
+                metadata: {
+                    claimKey,
+                    prNumber: event.pullRequestNumber,
+                },
+            });
+            return;
+        }
+
+        try {
+            await this.kodyRulesSyncService.syncFromChangedFiles({
+                organizationAndTeamData: event.organizationAndTeamData,
+                repository: event.repository,
+                pullRequestNumber: event.pullRequestNumber,
+                files: event.files,
+            });
+
+            // If this repo is also a global-rules source, refresh the global
+            // scope. Full scan is fine — the per-file SHA short-circuit skips
+            // unchanged files, so unrelated merges are cheap.
+            if (await this.isGlobalSourceRepo(event)) {
+                await this.kodyRulesSyncService.syncRepositoryGlobal({
+                    organizationAndTeamData: event.organizationAndTeamData,
+                    repository: event.repository,
+                });
+            }
+        } catch (error) {
+            // Release the claim so a redelivery/retry can sync this merge —
+            // a stale claim would turn one transient failure into a
+            // permanently lost sync.
+            await this.dataSource
+                .query(`DELETE FROM kodus_event_claims WHERE claim_key = $1`, [
+                    claimKey,
+                ])
+                .catch(() => undefined);
+            throw error;
+        }
     }
 
     @OnEvent(IDE_RULES_SYNC_DISABLED_EVENT)
@@ -118,16 +243,20 @@ export class KodyRulesSyncListener {
                 // stay ACTIVE.
                 return;
             case 'pause':
-                await this.kodyRulesSyncService.pauseAllIdeSyncRulesForRepository({
-                    organizationAndTeamData: event.organizationAndTeamData,
-                    repositoryId: event.repositoryId,
-                });
+                await this.kodyRulesSyncService.pauseAllIdeSyncRulesForRepository(
+                    {
+                        organizationAndTeamData: event.organizationAndTeamData,
+                        repositoryId: event.repositoryId,
+                    },
+                );
                 return;
             case 'delete':
-                await this.kodyRulesSyncService.purgeAllIdeSyncRulesForRepository({
-                    organizationAndTeamData: event.organizationAndTeamData,
-                    repositoryId: event.repositoryId,
-                });
+                await this.kodyRulesSyncService.purgeAllIdeSyncRulesForRepository(
+                    {
+                        organizationAndTeamData: event.organizationAndTeamData,
+                        repositoryId: event.repositoryId,
+                    },
+                );
                 return;
         }
     }

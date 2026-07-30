@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { CliReviewPipelineContext } from '../context/cli-review-pipeline.context';
 import { CliInputConverter } from '@libs/cli-review/infrastructure/converters/cli-input.converter';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 /**
  * Pipeline stage to format analysis results into CLI response format

@@ -86,6 +86,11 @@ class CliConfigDto {
     fast?: boolean;
 
     @IsOptional()
+    @IsBoolean()
+    @ApiPropertyOptional({ type: Boolean, example: false })
+    heavy?: boolean;
+
+    @IsOptional()
     @IsArray()
     @ArrayMaxSize(500, {
         message: 'Too many files (max 500 files per request)',
@@ -186,6 +191,25 @@ export class TrialCliReviewRequestDto extends CliReviewRequestDto {
     @MaxLength(256, { message: 'Fingerprint too long (max 256 characters)' })
     @ApiProperty({ example: 'device_fingerprint_123' })
     fingerprint: string; // Device fingerprint for rate limiting
+}
+
+export class PublicPrReviewRequestDto {
+    @IsString()
+    @MaxLength(1000, { message: 'PR URL too long (max 1000 characters)' })
+    @ApiProperty({
+        description: 'Public GitHub PR URL to review',
+        example: 'https://github.com/sgl-project/sglang/pull/12668',
+    })
+    prUrl: string;
+
+    @IsString()
+    @MaxLength(256, { message: 'Fingerprint too long (max 256 characters)' })
+    @ApiProperty({
+        description:
+            'Device fingerprint for rate limiting (generated client-side)',
+        example: 'device_fingerprint_123',
+    })
+    fingerprint: string;
 }
 
 export class CliBusinessValidationRequestDto {

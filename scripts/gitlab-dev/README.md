@@ -27,7 +27,7 @@ everything.
 
 ```sh
 # Creates the kodus-backend-services network that compose attaches to
-yarn docker:start
+pnpm run docker:start
 ```
 
 Roughly 4 GB free RAM and 3 GB free disk for the GitLab volumes.
@@ -76,7 +76,7 @@ so GitLab will POST to **any** target you give it:
 
 - a public tunnel (zrok / ngrok) — works as-is; GitLab has internet
 - `http://kodus-api:3001/gitlab/webhook` — for the docker dev stack
-- `http://host.docker.internal:3001/gitlab/webhook` — for `yarn start:dev` on the host
+- `http://host.docker.internal:3001/gitlab/webhook` — for `pnpm run start:dev` on the host
 
 You generally don't need to change anything: when you connect the
 integration in the Kodus UI, Kodus registers the webhook itself using

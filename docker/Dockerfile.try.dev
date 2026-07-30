@@ -1,0 +1,25 @@
+# syntax=docker/dockerfile:1.7
+# Development stage for kodus-try (try.kodus.io demo, Next.js).
+#
+# Application code is provided at runtime via the bind mount declared in
+# docker-compose.dev.yml (./apps/try:/usr/src/app) and node_modules is
+# supplied by the named volume `try_node_modules_cache`. The install here
+# only exists to seed the node_modules volume the first time it's created.
+
+FROM docker.io/library/node:22.22.2-slim
+
+WORKDIR /usr/src/app
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+COPY package*.json yarn.lock ./
+
+RUN --mount=type=cache,target=/yarn-cache,sharing=private \
+    YARN_CACHE_FOLDER=/yarn-cache \
+    yarn install --frozen-lockfile
+
+EXPOSE 3002
+
+CMD ["yarn", "dev"]

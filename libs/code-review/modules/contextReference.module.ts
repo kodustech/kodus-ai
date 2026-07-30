@@ -8,7 +8,6 @@ import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { ContextReferenceService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference.service';
 import { ContextReferenceDetectionService } from '@libs/ai-engine/infrastructure/adapters/services/context/context-reference-detection.service';
 import { CodeReviewContextPackService } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service';
-import { MCPToolArgResolverAgentService } from '@libs/ai-engine/infrastructure/adapters/services/context/mcp-tool-arg-resolver-agent.service';
 import { MCPToolMetadataService } from '@libs/mcp-server/services/mcp-tool-metadata.service';
 import { CONTEXT_REFERENCE_SERVICE_TOKEN } from '@libs/ai-engine/domain/contextReference/contracts/context-reference.service.contract';
 import { ContextReferenceRepository } from '@libs/ai-engine/infrastructure/adapters/repositories/contextReference.repository';
@@ -27,7 +26,6 @@ import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
         ContextReferenceService,
         ContextReferenceDetectionService,
         CodeReviewContextPackService,
-        MCPToolArgResolverAgentService,
         MCPToolMetadataService,
         {
             provide: CONTEXT_REFERENCE_SERVICE_TOKEN,
@@ -42,7 +40,6 @@ import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
         ContextReferenceService,
         ContextReferenceDetectionService,
         CodeReviewContextPackService,
-        MCPToolArgResolverAgentService,
         MCPToolMetadataService,
         CONTEXT_REFERENCE_SERVICE_TOKEN,
         CONTEXT_REFERENCE_REPOSITORY_TOKEN,

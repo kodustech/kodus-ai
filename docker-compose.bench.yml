@@ -1,0 +1,316 @@
+# ==============================================================================
+# Docker Compose for the BENCHMARK FARM (headless droplet, built artifact)
+# ==============================================================================
+# Why this file exists (and is NOT an override of docker-compose.dev.yml):
+#
+#   The dev compose runs the apps in WATCH mode (`nest build --watch`) and
+#   bind-mounts the source tree (`.:/usr/src/app`). For the benchmark we want
+#   the COMPILED artifact (`node dist/...`) — the same thing that ships — so the
+#   run is stable on a headless droplet (nothing edits files there) and each
+#   branch is an immutable, reproducible build.
+#
+#   We can't get there by overriding the dev file: Compose *appends* volume
+#   lists across `-f` files (verified — it does not dedupe by target), so the
+#   dev source bind-mount would survive and shadow the image's `dist/`. Hence a
+#   standalone, self-contained compose.
+#
+#   It is NOT prod config either: prod compose pulls a fixed GHCR image and has
+#   no RabbitMQ (the review pipeline needs it). This file BUILDS the branch
+#   locally (docker/Dockerfile targets) and runs against the same local
+#   infra + the same `.env` the dev stack uses, so DB/broker wiring matches.
+#
+# Usage (on the droplet, driven over SSH from the Mac by bench-sync.sh):
+#   docker compose -f docker-compose.bench.yml up -d --build
+#
+# Host hostnames the app expects (from .env): API_PG_DB_HOST=db_postgres,
+# API_MG_DB_HOST=db_mongodb, RABBITMQ_HOSTNAME=rabbitmq-local — the service
+# keys / aliases below match these exactly.
+# ==============================================================================
+
+x-bench-logging: &bench-logging
+    driver: 'json-file'
+    options:
+        max-size: '20m'
+        max-file: '5'
+
+# Shared build + env definition for the three app services. They all build the
+# SAME docker/Dockerfile; only the `target` stage (api/worker/webhooks) differs.
+x-bench-app: &bench-app
+    image: kodus-ai-bench:${BENCH_TAG:-latest}
+    build:
+        context: .
+        dockerfile: docker/Dockerfile
+        args:
+            - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+            - RELEASE_VERSION=${BENCH_TAG:-local}
+    env_file:
+        - path: ${ENV_FILE:-.env}
+        - path: .env.local
+          required: false
+    restart: unless-stopped
+    networks:
+        - kodus-bench-net
+    logging: *bench-logging
+
+services:
+    #----------------------------------------------------------------
+    # Application Services (compiled artifact — node dist/...)
+    #----------------------------------------------------------------
+    kodus-api:
+        <<: *bench-app
+        # Distinct image per service: all three build the SAME Dockerfile but
+        # different target stages (api/worker/webhooks), each with its own baked
+        # CMD. Sharing one image tag (the anchor's) makes the last-built target
+        # overwrite it, so all three containers run whatever built last — e.g.
+        # the api container running `node dist/apps/worker/main.js` (no HTTP
+        # server → /health refused). Per-service tags keep them separate.
+        image: kodus-ai-bench-api:${BENCH_TAG:-latest}
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+            target: api
+            args:
+                - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+                - RELEASE_VERSION=${BENCH_TAG:-local}
+        container_name: kodus_api_bench
+        # The web proxy + MCP URL reach the API by the dev container name
+        # `kodus_api` (.env: GLOBAL_API_CONTAINER_NAME, API_KODUS_MCP_SERVER_URL),
+        # but our container is `kodus_api_bench` — add `kodus_api` as a network
+        # alias so those hostnames resolve. Overrides the anchor's short-form net.
+        networks:
+            kodus-bench-net:
+                aliases:
+                    - kodus_api
+        # Only the API runs migrations/seeds, once, before the others come up.
+        # The entrypoint gates on RUN_MIGRATIONS; worker/webhooks set it false
+        # so they don't race the schema.
+        environment:
+            - COMPONENT_TYPE=api
+            - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+            - RUN_MIGRATIONS=${RUN_MIGRATIONS:-true}
+            - RUN_SEEDS=${RUN_SEEDS:-true}
+        ports:
+            - '${API_PORT:-3001}:3001'
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+            db_mongodb:
+                condition: service_healthy
+            rabbitmq:
+                condition: service_healthy
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    'node -e "const http=require(''http''); http.get({host:''127.0.0.1'',port:3001,path:''/health'',timeout:2000},r=>process.exit(r.statusCode===200?0:1)).on(''error'',()=>process.exit(1));"',
+                ]
+            interval: 20s
+            timeout: 10s
+            retries: 10
+            start_period: 240s
+
+    worker:
+        <<: *bench-app
+        image: kodus-ai-bench-worker:${BENCH_TAG:-latest}
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+            target: worker
+            args:
+                - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+                - RELEASE_VERSION=${BENCH_TAG:-local}
+        container_name: kodus_worker_bench
+        environment:
+            - COMPONENT_TYPE=worker
+            - WORKER_ROLE=code-review
+            - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+            - RUN_MIGRATIONS=false
+            - RUN_SEEDS=false
+        depends_on:
+            kodus-api:
+                condition: service_started
+            rabbitmq:
+                condition: service_healthy
+        healthcheck:
+            # The compiled worker runs `node dist/apps/worker/main.js`, so the
+            # dev `pgrep nest start worker` check doesn't apply. Match the node
+            # process running the worker entrypoint instead.
+            test: ['CMD-SHELL', 'pgrep -f "dist/apps/worker/main.js" >/dev/null']
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+
+    webhooks:
+        <<: *bench-app
+        image: kodus-ai-bench-webhooks:${BENCH_TAG:-latest}
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+            target: webhooks
+            args:
+                - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+                - RELEASE_VERSION=${BENCH_TAG:-local}
+        container_name: kodus_webhooks_bench
+        environment:
+            - COMPONENT_TYPE=webhook
+            - API_CLOUD_MODE=${API_CLOUD_MODE:-false}
+            - RUN_MIGRATIONS=false
+            - RUN_SEEDS=false
+        # The droplet's own public IP serves this port — GitHub webhooks for the
+        # slot's forked repo-set point straight here, no nginx/wildcard needed.
+        ports:
+            - '${API_WEBHOOKS_PORT:-3332}:3332'
+        depends_on:
+            kodus-api:
+                condition: service_started
+            rabbitmq:
+                condition: service_healthy
+        healthcheck:
+            test: ['CMD-SHELL', 'pgrep -f "dist/apps/webhooks/main.js" >/dev/null']
+            interval: 30s
+            timeout: 10s
+            retries: 3
+            start_period: 60s
+
+    #----------------------------------------------------------------
+    # Web (Next.js proxy) — the benchmark orchestrator talks to the stack
+    # through web's /api/proxy/* routes (billing, onboarding, code-management),
+    # exactly like the local/QA benchmark does. Web is NOT the engine, so the
+    # branch barely affects it: docker/Dockerfile.web only copies apps/web +
+    # libs/feature-gate + libs/identity/permissions, so engine changes
+    # (libs/code-review/**) don't invalidate its build cache — it builds once
+    # and stays cached across engine iterations. Runtime-configured (no API URL
+    # baked), so it picks up the droplet's .env.
+    #----------------------------------------------------------------
+    web:
+        image: kodus-ai-web-bench:${BENCH_TAG:-latest}
+        build:
+            context: .
+            dockerfile: docker/Dockerfile.web
+            args:
+                - RELEASE_VERSION=${BENCH_TAG:-local}
+        container_name: kodus_web_bench
+        env_file:
+            - path: ${ENV_FILE:-.env}
+            - path: .env.local
+              required: false
+        environment:
+            - NODE_ENV=production
+            - NEXT_TELEMETRY_DISABLED=1
+        ports:
+            - '${WEB_PORT:-3000}:3000'
+        depends_on:
+            kodus-api:
+                condition: service_started
+        restart: unless-stopped
+        networks:
+            - kodus-bench-net
+        healthcheck:
+            test:
+                [
+                    'CMD',
+                    'node',
+                    '-e',
+                    "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 5
+            start_period: 60s
+        logging: *bench-logging
+
+    #----------------------------------------------------------------
+    # Databases & Infrastructure (self-contained — mirrors dev wiring)
+    #----------------------------------------------------------------
+    rabbitmq:
+        build:
+            context: ./docker/rabbitMQ
+            dockerfile: Dockerfile
+        container_name: kodus_rabbitmq_bench
+        hostname: ${RABBITMQ_HOSTNAME:-rabbitmq-local}
+        environment:
+            - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER:-dev}
+            - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS:-devpass}
+            - RABBITMQ_HOSTNAME=${RABBITMQ_HOSTNAME:-rabbitmq-local}
+            - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 1000000000 -rabbit heartbeat 60
+        volumes:
+            - rabbitmq_bench:/var/lib/rabbitmq
+        networks:
+            kodus-bench-net:
+                aliases:
+                    - rabbitmq-local
+                    - rabbitmq
+        command: /usr/local/bin/init-definitions.sh
+        healthcheck:
+            test: ['CMD', 'rabbitmq-diagnostics', '-q', 'check_running']
+            interval: 30s
+            timeout: 10s
+            retries: 5
+        ulimits:
+            nofile:
+                soft: 65536
+                hard: 65536
+        restart: unless-stopped
+        logging: *bench-logging
+
+    db_postgres:
+        image: docker.io/pgvector/pgvector:pg16
+        container_name: kodus_postgres_bench
+        environment:
+            POSTGRES_USER: ${API_PG_DB_USERNAME}
+            POSTGRES_PASSWORD: ${API_PG_DB_PASSWORD}
+            POSTGRES_DB: ${API_PG_DB_DATABASE}
+        volumes:
+            - pgdata_bench:/var/lib/postgresql/data
+            - ./docker/postgres/initdb.d:/docker-entrypoint-initdb.d
+        networks:
+            - kodus-bench-net
+        restart: unless-stopped
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    'pg_isready -U ${API_PG_DB_USERNAME} -d ${API_PG_DB_DATABASE}',
+                ]
+            interval: 5s
+            timeout: 3s
+            retries: 20
+            start_period: 10s
+        logging: *bench-logging
+
+    db_mongodb:
+        image: docker.io/mongo:8
+        container_name: kodus_mongodb_bench
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: ${API_MG_DB_USERNAME}
+            MONGO_INITDB_ROOT_PASSWORD: ${API_MG_DB_PASSWORD}
+            MONGO_INITDB_DATABASE: ${API_MG_DB_DATABASE}
+        volumes:
+            - mongodbdata_bench:/data/db
+        networks:
+            - kodus-bench-net
+        restart: unless-stopped
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    "echo 'db.runCommand({ ping: 1 }).ok' | mongosh --quiet mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/admin | grep -q 1",
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 20
+            start_period: 20s
+        logging: *bench-logging
+
+volumes:
+    pgdata_bench:
+    mongodbdata_bench:
+    rabbitmq_bench:
+
+networks:
+    # Local (NOT external) so a fresh droplet boots without a pre-created
+    # network. One bench stack per droplet, so a single bridge is enough.
+    kodus-bench-net:
+        driver: bridge
+        name: kodus-bench-net

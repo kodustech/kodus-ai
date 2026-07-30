@@ -5,4 +5,5 @@ export const INTEGRATION = {
     CHECK_CONNECTION_PLATFORM: pathToApiUrl(
         "/integration/check-connection-platform",
     ),
+    ISSUES_SUPPORTED: pathToApiUrl("/integration/issues-supported"),
 } as const;

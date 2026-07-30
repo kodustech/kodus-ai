@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { v4 as uuid } from 'uuid';
 
@@ -32,8 +32,13 @@ export interface EmitNotificationInput<E extends NotificationEvent> {
     event: E;
     payload: NotificationPayloadMap[E];
     organizationId: string;
-    /** One or more recipients. A bare object is normalized to an array. */
-    recipients: NotificationRecipient | NotificationRecipient[];
+    /**
+     * Explicit recipients (a bare object is normalized to an array).
+     * Optional for events that declare `defaultRoles` in the catalog — those
+     * resolve their audience from notification config at dispatch time, so the
+     * emitter doesn't choose recipients.
+     */
+    recipients?: NotificationRecipient | NotificationRecipient[];
     /** Optional correlation id for tracing. Generated if absent. */
     correlationId?: string;
 }
@@ -71,11 +76,18 @@ export class NotificationService {
     async emit<E extends NotificationEvent>(
         input: EmitNotificationInput<E>,
     ): Promise<void> {
-        const recipients = Array.isArray(input.recipients)
-            ? input.recipients
-            : [input.recipients];
+        const recipients = !input.recipients
+            ? []
+            : Array.isArray(input.recipients)
+              ? input.recipients
+              : [input.recipients];
 
-        if (recipients.length === 0) {
+        // Events that declare defaultRoles derive their audience from config
+        // at dispatch time, so empty recipients is expected. For everything
+        // else, no recipients means there is nothing to deliver.
+        const usesConfigAudience =
+            !!EVENT_DEFAULTS[input.event]?.defaultRoles;
+        if (recipients.length === 0 && !usesConfigAudience) {
             this.logger.warn({
                 message: `emit called with no recipients — skipping ${input.event}`,
                 context: NotificationService.name,

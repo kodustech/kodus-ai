@@ -1,11 +1,11 @@
-import { authorizedFetch } from "@services/fetch";
-import { auth } from "src/core/config/auth";
+import { authorizedFetch } from '@services/fetch';
+import { auth } from 'src/core/config/auth';
 
-import { ORGANIZATIONS_PATHS } from ".";
+import { ORGANIZATIONS_PATHS } from '.';
 
 export const getOrganizationId = async () => {
     const session = await auth();
-    return session?.user.organizationId!;
+    return session?.user?.organizationId!;
 };
 
 export const getOrganizationName = () =>

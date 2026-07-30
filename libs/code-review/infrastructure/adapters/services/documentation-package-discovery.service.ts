@@ -2,7 +2,7 @@ export const DOCUMENTATION_PACKAGE_DISCOVERY_SERVICE_TOKEN = Symbol.for(
     'DocumentationPackageDiscoveryService',
 );
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     IPullRequestManagerService,
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,

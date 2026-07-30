@@ -1,7 +1,11 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import {
     parkRateGate,
     rateGateKey,
@@ -53,6 +57,11 @@ import { AuthMode } from '@libs/platform/domain/platformIntegrations/enums/codeM
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 import { GitCloneParams } from '@libs/platform/domain/platformIntegrations/types/codeManagement/gitCloneParams.type';
 import {
+    CodeManagementIssue,
+    GetIssueParams,
+    ListIssuesParams,
+} from '@libs/platform/domain/platformIntegrations/types/codeManagement/issues.type';
+import {
     OneSentenceSummaryItem,
     PullRequest,
     PullRequestAuthor,
@@ -76,6 +85,10 @@ import {
     buildDefaultSourceBranchName,
     DEFAULT_COMMIT_MESSAGE,
     DEFAULT_PR_TITLE,
+    EMPTY_REPO_DEFAULT_BRANCH,
+    EMPTY_REPO_SEED_COMMIT_MESSAGE,
+    EMPTY_REPO_SEED_CONTENT,
+    EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 
 @Injectable()
@@ -201,7 +214,8 @@ export class BitbucketCloudService implements Omit<
                 (await this.getDefaultBranch({
                     organizationAndTeamData,
                     repository,
-                }));
+                })) ||
+                EMPTY_REPO_DEFAULT_BRANCH;
             const resolvedBaseBranch = baseBranch || resolvedTargetBranch;
 
             const bitbucketAuthDetail = await this.getAuthDetails(
@@ -226,6 +240,17 @@ export class BitbucketCloudService implements Omit<
                     'Failed to get workspace from repository',
                 );
             }
+
+            // An empty repository has no default-branch ref yet, so branch
+            // creation and the PR below fail. Seed an initial commit so the
+            // base branch exists. No-op when the branch is already there.
+            await this.ensureBaseBranchExists({
+                bitbucketAPI,
+                workspace,
+                repositoryId: repository.id,
+                baseBranch: resolvedBaseBranch,
+                author,
+            });
 
             const uploadResult = await this.uploadFiles({
                 organizationAndTeamData,
@@ -432,6 +457,55 @@ export class BitbucketCloudService implements Omit<
         return Boolean(head);
     }
 
+    // Seeds an empty repository with an initial commit so the base branch
+    // exists for the branch + PR flow. A no-op when the branch already exists.
+    private async ensureBaseBranchExists(params: {
+        bitbucketAPI: any;
+        workspace: string;
+        repositoryId: string;
+        baseBranch: string;
+        author?: { name: string; email?: string };
+    }): Promise<void> {
+        const { bitbucketAPI, workspace, repositoryId, baseBranch, author } =
+            params;
+
+        const exists = await this.checkBitbucketBranchExists({
+            bitbucketAPI,
+            workspace,
+            repositoryId,
+            branchName: baseBranch,
+        });
+        if (exists) {
+            return;
+        }
+
+        // Committing to /src with a `branch` and no `parents` creates the
+        // first commit on an empty repository.
+        const form = new FormData();
+        form.append('branch', baseBranch);
+        form.append('message', EMPTY_REPO_SEED_COMMIT_MESSAGE);
+        if (author?.name) {
+            form.append(
+                'author',
+                `${author.name} <${author.email || 'kody@kodus.io'}>`,
+            );
+        }
+        form.append(`/${EMPTY_REPO_SEED_PATH}`, EMPTY_REPO_SEED_CONTENT);
+
+        await bitbucketAPI.source.createFileCommit({
+            workspace: `{${workspace}}`,
+            repo_slug: `{${repositoryId}}`,
+            _body: form,
+        });
+
+        this.logger.log({
+            message:
+                'Seeded empty Bitbucket repository with an initial commit for centralized config',
+            context: BitbucketCloudService.name,
+            metadata: { repositoryId, baseBranch },
+        });
+    }
+
     private async getBitbucketBranchHeadHash(params: {
         bitbucketAPI: any;
         workspace: string;
@@ -632,7 +706,13 @@ export class BitbucketCloudService implements Omit<
                 params.organizationAndTeamData,
             );
 
-            if (!bitbucketAuthDetail) {
+            // getAuthDetails spreads the lookup and defaults authMode, so it is
+            // always truthy — a plain `!bitbucketAuthDetail` check never fires
+            // for an organization with no Bitbucket integration. Assert on the
+            // auth material instead: without it we would hand back a
+            // bitbucket.org clone URL carrying an empty token (same failure as
+            // #1541).
+            if (!bitbucketAuthDetail?.appPassword) {
                 throw new BadRequestException('Installation not found');
             }
             const fullBitbucketUrl = `https://bitbucket.org/${params?.repository?.fullName}`;
@@ -938,9 +1018,25 @@ export class BitbucketCloudService implements Omit<
             fields: '+values.participants,+values.reviewers,+values.draft',
         });
 
+        // PRs come back sorted `-created_on` (newest first), so once a page's
+        // oldest PR predates startDate every later page is older still — stop
+        // paging there instead of walking the entire PR history. The boundary
+        // page still mixes in- and out-of-window PRs, so startDate is also
+        // enforced in the filter below.
         const pullRequests = await this.getPaginatedResults(
             bitbucketAPI,
             response,
+            {
+                stopAfterPage: (page) => {
+                    if (!startDate || !page.length) {
+                        return false;
+                    }
+                    const oldest = page[page.length - 1];
+                    return oldest?.created_on
+                        ? new Date(oldest.created_on) < startDate
+                        : false;
+                },
+            },
         );
 
         return pullRequests.filter((pr) => {
@@ -1027,10 +1123,10 @@ export class BitbucketCloudService implements Omit<
         });
 
         // Use the limited pagination method
-        const pullRequests = await this.getPaginatedResultsWithLimit(
+        const pullRequests = await this.getPaginatedResults(
             bitbucketAPI,
             response,
-            limit,
+            { limit },
         );
 
         return pullRequests.filter((pr) => {
@@ -2420,6 +2516,18 @@ export class BitbucketCloudService implements Omit<
                     params,
                 },
             });
+            // A 429 or a transport failure (undici `fetch failed`, resets,
+            // timeouts) means "we couldn't fetch the commits", NOT "the PR
+            // has no commits". Swallowing them as null lets it collapse to []
+            // upstream, where createLineComments reads it as "nothing to
+            // anchor" and posts ZERO inline comments while the stage reports
+            // success — the review ships with sent=0 and the error never
+            // surfaces (observed 2026-07-29, cloud bitbucket cell). Re-throw
+            // so callers can tell a genuine empty list apart from a failed
+            // fetch. Other errors keep the historical null contract.
+            if (is429Error(error) || isTransientFetchError(error)) {
+                throw error;
+            }
             return null;
         }
     }
@@ -3077,7 +3185,16 @@ export class BitbucketCloudService implements Omit<
                 params.type,
             );
 
-            this.createWebhook(params.organizationAndTeamData);
+            // Deliberately not awaited (webhook creation must not block the
+            // integration-config save) — but the promise MUST be caught:
+            // createWebhook rethrows on failure (e.g. Bitbucket's 50-hook
+            // per-repo cap rejecting the create), and an orphaned rejection
+            // here escalated to an unhandledRejection that crashed the whole
+            // API process. The failure still gets a loud error log from
+            // createWebhook's own catch; this catch only stops the crash.
+            void this.createWebhook(params.organizationAndTeamData).catch(
+                () => undefined,
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error to create or update integration config',
@@ -3123,7 +3240,7 @@ export class BitbucketCloudService implements Omit<
                     .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
                 const hookExists = existingHooks.some(
-                    (hook) => hook.url === webhookUrl,
+                    (hook) => hook?.url === webhookUrl,
                 );
 
                 if (!hookExists) {
@@ -3178,6 +3295,103 @@ export class BitbucketCloudService implements Omit<
         }
     }
 
+    async listIssues(
+        params: ListIssuesParams,
+    ): Promise<CodeManagementIssue[]> {
+        const { organizationAndTeamData, repository, filters = {} } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return [];
+        }
+
+        const bitbucketAPI = this.instanceBitbucketApi(authDetail);
+
+        const { data } = await bitbucketAPI.repositories.listIssues({
+            workspace: repository.owner,
+            repo_slug: repository.name,
+            pagelen: Math.min(Math.max(1, filters.perPage ?? 30), 100),
+            ...(filters.page ? { page: String(filters.page) } : {}),
+        });
+
+        let issues = (data?.values ?? []).map((issue) =>
+            this.mapBitbucketIssue(issue),
+        );
+
+        // Bitbucket filters via BBQL; keep state filtering client-side for a
+        // simple, robust mapping.
+        if (filters.state && filters.state !== 'all') {
+            issues = issues.filter((issue) => issue.state === filters.state);
+        }
+
+        return issues;
+    }
+
+    async getIssue(
+        params: GetIssueParams,
+    ): Promise<CodeManagementIssue | null> {
+        const { organizationAndTeamData, repository, issueNumber } = params;
+
+        const authDetail = await this.getAuthDetails(organizationAndTeamData);
+        if (!authDetail) {
+            return null;
+        }
+
+        const bitbucketAPI = this.instanceBitbucketApi(authDetail);
+
+        try {
+            const { data } = await bitbucketAPI.repositories.getIssue({
+                workspace: repository.owner,
+                repo_slug: repository.name,
+                issue_id: String(issueNumber),
+            });
+            return data ? this.mapBitbucketIssue(data) : null;
+        } catch (error) {
+            if ((error as { status?: number })?.status === 404) {
+                return null;
+            }
+            throw error;
+        }
+    }
+
+    private mapBitbucketIssue(issue: any): CodeManagementIssue {
+        const closedStates = new Set([
+            'resolved',
+            'closed',
+            'invalid',
+            'duplicate',
+            'wontfix',
+        ]);
+
+        const reporter = issue.reporter;
+        const assignee = issue.assignee;
+
+        return {
+            id: String(issue.id),
+            number: issue.id,
+            title: issue.title,
+            body: issue.content?.raw ?? null,
+            state: closedStates.has(issue.state) ? 'closed' : 'open',
+            url: issue.links?.html?.href ?? '',
+            labels: [],
+            assignees: assignee
+                ? [assignee.nickname ?? assignee.display_name].filter(
+                      (name): name is string => Boolean(name),
+                  )
+                : [],
+            author: reporter
+                ? {
+                      username: reporter.nickname ?? reporter.display_name,
+                      id: reporter.account_id,
+                  }
+                : null,
+            createdAt: issue.created_on,
+            updatedAt: issue.updated_on,
+            closedAt: null,
+            platform: PlatformType.BITBUCKET,
+        };
+    }
+
     async getAuthDetails(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<BitbucketAuthDetail> {
@@ -3221,6 +3435,13 @@ export class BitbucketCloudService implements Omit<
         process.env.BITBUCKET_RATE_GATE_MIN_INTERVAL_MS ?? 400,
     );
 
+    // How many Retry-After-honoured waits rawFetch performs on a 429 before
+    // giving up and surfacing it. 4 covers transient per-endpoint bursts
+    // without hanging a request indefinitely on a genuinely throttled account.
+    private static readonly RATE_GATE_429_MAX_RETRIES = Number(
+        process.env.BITBUCKET_RATE_GATE_429_MAX_RETRIES ?? 4,
+    );
+
     private safeFetch(url: string, options: any): Promise<any> {
         // Gate every Bitbucket HTTP call through a single-slot, spaced
         // queue keyed by the app-password (carried in the Authorization
@@ -3244,51 +3465,76 @@ export class BitbucketCloudService implements Omit<
         );
     }
 
-    private rawFetch(
+    private async rawFetch(
         url: string,
         options: any,
         gateKey: string,
     ): Promise<any> {
-        // Bounded timeout via AbortController — the Bitbucket SDK itself
-        // does not expose a timeout option, so without this a single
-        // unresponsive Bitbucket API call can hang the worker for the
-        // entire drain window. 30s covers the 99p of real calls.
-        const controller = new AbortController();
-        const timer = setTimeout(
-            () => controller.abort(),
-            INTEGRATION_REQUEST_TIMEOUT_MS,
-        );
+        // Retry 429 in-place. EVERY Bitbucket SDK call funnels through here
+        // (instanceBitbucketApi sets request.fetch = safeFetch → rawFetch),
+        // and almost none of the ~46 call sites wrap themselves in
+        // with429Retry. Bitbucket Cloud rate-limits hard (per-endpoint burst
+        // ceilings well below its 1000/hr budget), so on a busy account a
+        // single 429 on getDefaultBranch / getLanguageRepository /
+        // getRepositoryContentFile used to propagate straight up and break
+        // the code review (and onboarding). Retrying here — honouring
+        // Retry-After, after the gate park — fixes every call site at once:
+        // a transient 429 becomes a short wait instead of a failed review.
+        // Only a sustained 429 (still limited after RATE_GATE_429_MAX_RETRIES
+        // honoured waits) surfaces the 429 to the caller.
+        for (let attempt = 0; ; attempt++) {
+            // Per-attempt timeout: the Bitbucket SDK exposes no timeout, so
+            // without this one unresponsive call hangs the worker for the
+            // whole drain window. 30s covers the 99p of real calls.
+            const controller = new AbortController();
+            const timer = setTimeout(
+                () => controller.abort(),
+                INTEGRATION_REQUEST_TIMEOUT_MS,
+            );
 
-        return fetch(url, { ...options, signal: controller.signal })
-            .then((response) => {
-                // Park the whole key proactively on 429 so sibling calls
-                // wait out the server cooldown instead of re-colliding.
-                // The current call still returns the 429 to the SDK; the
-                // higher-level with429Retry decides whether to retry, and
-                // its next attempt re-enters the gate and blocks on the
-                // park window set here.
-                if (response.status === 429) {
-                    parkRateGate(
-                        gateKey,
-                        Date.now() +
-                            this.parseRetryAfterMs(
-                                response.headers.get('retry-after'),
-                            ),
-                    );
-                }
-                if (!response.headers.get('content-type')) {
-                    const patchedHeaders = new Headers(response.headers);
-                    patchedHeaders.set('content-type', 'text/plain');
+            let response: Response;
+            try {
+                response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal,
+                });
+            } finally {
+                clearTimeout(timer);
+            }
 
-                    return new Response(response.body, {
-                        status: response.status,
-                        statusText: response.statusText,
-                        headers: patchedHeaders,
+            if (response.status === 429) {
+                // Park the whole key so sibling calls wait out the cooldown
+                // instead of re-colliding, then wait it out ourselves and
+                // retry. parseRetryAfterMs falls back to a conservative
+                // cooldown when Bitbucket omits the header (it often does on
+                // per-endpoint burst 429s).
+                const waitMs = this.parseRetryAfterMs(
+                    response.headers.get('retry-after'),
+                );
+                parkRateGate(gateKey, Date.now() + waitMs);
+                if (attempt < BitbucketCloudService.RATE_GATE_429_MAX_RETRIES) {
+                    this.logger.warn({
+                        message: `Bitbucket 429 — waiting ${waitMs}ms then retrying (attempt ${attempt + 1}/${BitbucketCloudService.RATE_GATE_429_MAX_RETRIES})`,
+                        context: BitbucketCloudService.name,
+                        metadata: { url, gateKey },
                     });
+                    await new Promise((r) => setTimeout(r, waitMs));
+                    continue;
                 }
-                return response;
-            })
-            .finally(() => clearTimeout(timer));
+                // Exhausted: fall through and return the 429 to the caller.
+            }
+
+            if (!response.headers.get('content-type')) {
+                const patchedHeaders = new Headers(response.headers);
+                patchedHeaders.set('content-type', 'text/plain');
+                return new Response(response.body, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: patchedHeaders,
+                });
+            }
+            return response;
+        }
     }
 
     // Parses a Retry-After header (delta-seconds or HTTP-date) into a
@@ -4120,11 +4366,9 @@ export class BitbucketCloudService implements Omit<
             const pullRequests = await bitbucketAPI.pullrequests
                 .list(listParams)
                 .then((res) => {
-                    return this.getPaginatedResultsWithLimit(
-                        bitbucketAPI,
-                        res,
-                        100,
-                    );
+                    return this.getPaginatedResults(bitbucketAPI, res, {
+                        limit: 100,
+                    });
                 });
 
             return pullRequests.map((pr) =>
@@ -4291,69 +4535,54 @@ export class BitbucketCloudService implements Omit<
     this can be inferred from the response type and there's no need to specify it
     manually, but in some cases it might be necessary to specify it manually
     (e.g `getPaginatedResults<Schema.Diffstat>(bitbucketAPI, res)`)
+
+    pass `options` to stop paging early instead of walking the whole history:
+    - `limit`: cap the total number of items (also slices the result).
+    - `stopAfterPage`: stop once a page satisfies the predicate. Useful for
+      results sorted by date — e.g. stop when a page's oldest item predates a
+      startDate, since every later page is older still. The predicate receives
+      the just-fetched page and the accumulated results so far.
     */
     private async getPaginatedResults<T>(
         bitbucketAPI: APIClient,
         response: BitbucketResponse<{ values?: T[] }>,
+        options?: {
+            limit?: number;
+            stopAfterPage?: (page: T[], all: T[]) => boolean;
+        },
     ): Promise<T[]> {
         if (!response.data.values || !Array.isArray(response.data.values)) {
             return [];
         }
 
-        let allResults = [...response.data.values];
-        let currentResults = response.data;
-
-        while (bitbucketAPI.hasNextPage(currentResults)) {
-            currentResults = (await bitbucketAPI.getNextPage(currentResults))
-                .data;
-
-            if (currentResults.values && Array.isArray(currentResults.values)) {
-                allResults = allResults.concat(currentResults.values);
-            }
-        }
-
-        return allResults;
-    }
-
-    /**
-     * Retrieves paginated results with a limit for optimization.
-     * Used specifically for scenarios where we only need recent data (like authors).
-     * @param bitbucketAPI - The Bitbucket API client.
-     * @param response - The initial response from the API.
-     * @param limit - Maximum number of items to fetch.
-     * @returns A promise that resolves to an array of items (limited).
-     */
-    private async getPaginatedResultsWithLimit<T>(
-        bitbucketAPI: APIClient,
-        response: BitbucketResponse<{ values?: T[] }>,
-        limit: number = 100,
-    ): Promise<T[]> {
-        if (!response.data.values || !Array.isArray(response.data.values)) {
-            return [];
-        }
+        const { limit, stopAfterPage } = options ?? {};
 
         let allResults = [...response.data.values];
         let currentResults = response.data;
 
-        // Early termination if we already have enough results
-        if (allResults.length >= limit) {
-            return allResults.slice(0, limit);
-        }
+        const shouldStop = (page: T[]): boolean =>
+            (limit !== undefined && allResults.length >= limit) ||
+            !!stopAfterPage?.(page, allResults);
 
-        while (
-            bitbucketAPI.hasNextPage(currentResults) &&
-            allResults.length < limit
-        ) {
-            currentResults = (await bitbucketAPI.getNextPage(currentResults))
-                .data;
+        if (!shouldStop(response.data.values)) {
+            while (bitbucketAPI.hasNextPage(currentResults)) {
+                currentResults = (
+                    await bitbucketAPI.getNextPage(currentResults)
+                ).data;
 
-            if (currentResults.values && Array.isArray(currentResults.values)) {
-                allResults = allResults.concat(currentResults.values);
+                if (
+                    currentResults.values &&
+                    Array.isArray(currentResults.values)
+                ) {
+                    allResults = allResults.concat(currentResults.values);
+                    if (shouldStop(currentResults.values)) {
+                        break;
+                    }
+                }
             }
         }
 
-        // Return only up to the limit
-        return allResults.slice(0, limit);
+        return limit !== undefined ? allResults.slice(0, limit) : allResults;
     }
 
     /** Bitbucket's API returns IDs with curly braces around them (e.g. "{123}").
@@ -4500,7 +4729,7 @@ export class BitbucketCloudService implements Omit<
                             );
 
                         const webhook = existingHooks.find(
-                            (hook) => hook.url === webhookUrl,
+                            (hook) => hook?.url === webhookUrl,
                         );
 
                         if (webhook) {

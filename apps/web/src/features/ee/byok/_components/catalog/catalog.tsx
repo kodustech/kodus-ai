@@ -13,12 +13,14 @@ import { CuratedModelCard } from "./model-card";
 
 export function CuratedCatalog({
     slot,
+    existingConfig,
     existingKeyByProvider,
     onSave,
     onCancel,
     showManualLink = true,
 }: {
     slot: "main" | "fallback";
+    existingConfig?: BYOKConfig;
     existingKeyByProvider?: Partial<Record<string, string>>;
     onSave: (_: BYOKConfig) => Promise<void>;
     onCancel?: () => void;
@@ -34,6 +36,11 @@ export function CuratedCatalog({
         return (
             <CuratedConnectPanel
                 model={selected}
+                existingConfig={
+                    existingConfig?.model === selected.id
+                        ? existingConfig
+                        : undefined
+                }
                 existingKey={existingKeyByProvider?.[selected.provider]}
                 onBack={() => setSelected(null)}
                 onSave={onSave}

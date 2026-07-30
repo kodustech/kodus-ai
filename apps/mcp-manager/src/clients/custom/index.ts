@@ -1,4 +1,4 @@
-import { createMCPAdapter, MCPAdapter } from '@kodus/flow';
+import { createMCPAdapter, MCPAdapter } from '@libs/mcp-server/mcp-adapter';
 import { MCPIntegrationAuthType } from '../../modules/integrations/enums/integration.enum';
 import { MCPIntegrationInterface } from '../../modules/integrations/interfaces/mcp-integration.interface';
 import {
@@ -44,12 +44,13 @@ export class CustomClient {
                 headers[this.integration.apiKeyHeader] =
                     this.integration.apiKey;
                 break;
-            case MCPIntegrationAuthType.BASIC:
+            case MCPIntegrationAuthType.BASIC: {
                 const basicAuth = Buffer.from(
                     `${this.integration.basicUser}:${this.integration.basicPassword || ''}`,
                 ).toString('base64');
                 headers['Authorization'] = `Basic ${basicAuth}`;
                 break;
+            }
             case MCPIntegrationAuthType.OAUTH2:
                 if (this.integration.tokens?.accessToken) {
                     headers['Authorization'] =
@@ -114,11 +115,12 @@ export class CustomClient {
                 provider:
                     this.integration.providerType || MCPProviderType.CUSTOM,
                 warning: false,
+                readOnly: Boolean(tool.annotations?.readOnlyHint),
             }));
         } catch (error) {
-            console.error(`Failed to fetch custom tools:`, error.message);
             throw new Error(
                 `Failed to fetch tools from custom integration: ${error.message}`,
+                { cause: error },
             );
         } finally {
             await this.disconnect();

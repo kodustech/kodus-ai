@@ -1,0 +1,25 @@
+{
+    "__doc": [
+        "Per-model floors for the kody-rules gate (occurrence-recall + specificity).",
+        "occurrence-recall varies HUGELY by model (35%-72%), so a single flat",
+        "threshold is wrong — each model gates against its own floor.",
+        "",
+        "occMin = observed occurrence-recall − ~2·binomial-SE (SE = sqrt(p(1-p)/43)",
+        "≈ 0.07 over the 43 golden sites), rounded down. specMin stays flat: every",
+        "model measured 99-100% specificity, so 95% is a safe shared floor.",
+        "",
+        "Calibrated 2026-07-03 from one full github-cases run (14 cases / 43 sites)",
+        "per model. Single run — tighten with more runs. NOTE: gpt-5.4 (40%) and",
+        "gemini (35%) are low because kody-rules inherits the bug-finder's",
+        "depth-first prompt (a breadth task on a depth brain) — a prompt fix is a",
+        "separate follow-up; these floors just stop a regression below today's real.",
+        "RATCHET: when a PR intentionally moves a model, refresh its floor here with",
+        "a fresh run as evidence."
+    ],
+    "dataset": "github-cases",
+    "models": {
+        "gpt-5.4": { "occMin": 25, "specMin": 95, "observed": { "occ": 40, "spec": 99 } },
+        "gpt-5.4-mini": { "occMin": 55, "specMin": 95, "observed": { "occ": 72, "spec": 99 } },
+        "gemini-3-flash-preview": { "occMin": 20, "specMin": 95, "observed": { "occ": 35, "spec": 100 } }
+    }
+}

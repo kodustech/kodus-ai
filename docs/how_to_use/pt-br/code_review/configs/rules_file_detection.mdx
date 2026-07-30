@@ -25,6 +25,10 @@ Kodus detecta e importa automaticamente os seguintes padrões de arquivos de reg
 - `.github/copilot-instructions.md` - Instruções do Copilot
 - `.github/instructions/**/*.instructions.md` - Arquivos de instrução detalhados
 
+### Agentic (convenção agents.md)
+- `AGENTS.md` - O arquivo padrão de-facto de orientação para agentes
+- `.agents.md` / `.agent.md` - Variantes dotfile
+
 ### Claude
 - `CLAUDE.md` - Regras específicas do Claude
 - `.claude/settings.json` - Configurações do Claude
@@ -44,8 +48,15 @@ Kodus detecta e importa automaticamente os seguintes padrões de arquivos de reg
 
 ### Regras Genéricas/Internas
 - `.rules/**/*` - Diretório de regras genéricas
-- `.kody/rules/*` - Regras específicas do Kody
+- `.kody/rules/**` e `rules/**/*.md` - Regras específicas do Kody (veja [Regras de Repositório](/how_to_use/pt-br/code_review/configs/repository_rules) — importadas verbatim, sem reescrita por LLM)
 - `docs/coding-standards/**/*` - Padrões de codificação baseados em documentação
+
+### Detalhes da detecção
+
+- **Arquivos aninhados são descobertos.** Todos os padrões acima são casados na raiz do repositório **e em qualquer subdiretório**. Um `services/billing/CLAUDE.md` é importado e automaticamente escopado para `services/billing/**` — arquivos de orientação por diretório (convenção comum em monorepos) funcionam sem configuração.
+- **O matching é case-insensitive.** `claude.md` e `CLAUDE.md` são equivalentes.
+- **Referências `@arquivo` são seguidas.** Se um arquivo de regra referencia outro com a convenção `@` (ex: `@AGENTS.md` dentro do `CLAUDE.md`), o conteúdo do arquivo referenciado é buscado e incluído na importação (um nível de profundidade, até 5 referências por arquivo, 100KB por arquivo referenciado).
+- **Múltiplos globs por regra são suportados.** Um path como `app/**/*.rb,lib/**/*.rb` (ou uma lista `path: []` no frontmatter de [Regras de Repositório](/how_to_use/pt-br/code_review/configs/repository_rules)) aplica a regra a arquivos que casem com **qualquer** um dos globs.
 
 ## Como Funciona
 
@@ -53,7 +64,9 @@ Kodus detecta e importa automaticamente os seguintes padrões de arquivos de reg
 1. **Habilitar Sincronização Automática**: Alterne a opção "Sincronizar automaticamente regras do repositório" nas suas configurações
 2. **Modal de Primeira Sincronização**: Um modal aparecerá perguntando se você deseja sincronizar pela primeira vez
 3. **Varredura do Repositório**: Quando você confirmar, Kodus varre todo o seu repositório em busca de arquivos de regras suportados
-4. **Geração de Regras**: Um LLM processa os arquivos encontrados e cria automaticamente as Kody Rules correspondentes
+4. **Geração de Regras**: Um LLM processa os arquivos encontrados e cria automaticamente as Kody Rules correspondentes. Exceção: arquivos de template `.kody/rules/**` e `rules/**/*.md` são importados **verbatim** — sem conversão por LLM — preservando instruções, exemplos e identificadores exatamente como escritos.
+
+Cada arquivo importado produz **uma Kody Rule**. Se um arquivo contém várias diretrizes distintas, o LLM as mescla em uma única regra abrangente — divida a orientação em múltiplos arquivos quando quiser regras gerenciáveis de forma independente.
 
 ### Sincronização Contínua
 - **Atualizações Automáticas**: A sincronização acontece automaticamente quando um Pull Request é fechado
@@ -75,3 +88,21 @@ Isso permite sincronizar regras seletivamente sem habilitar a sincronização au
 <Warning>
 Se você editar manualmente uma Kody Rule que foi criada a partir de um arquivo de regra da IDE, suas alterações serão sobrescritas na próxima vez que o arquivo correspondente for modificado e sincronizado.
 </Warning>
+
+## Verificando sincronização e avaliação de regras (self-hosted)
+
+Em deployments self-hosted, os logs da API carregam marcadores grep-áveis para debug:
+
+- `[kody-rules-sync]` — sumário por execução de sync: quais arquivos foram importados, pulados (com o motivo) ou removidos.
+- `[kody-rules-eval]` — trace de avaliação por arquivo durante um review: exatamente quais regras (uuid + título) foram selecionadas para o prompt de cada arquivo revisado.
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+Se uma regra aparece como ativa na UI mas nunca aparece em `[kody-rules-eval]` para os arquivos esperados, verifique o glob do campo **Path** — uma regra só roda em arquivos que casam com o path.
+
+## Limites de regras
+
+Instâncias self-hosted rodando **sem licença válida** (Community Edition) avaliam no máximo **10 regras** por review (as mais antigas primeiro). Instâncias self-hosted licenciadas e cloud não têm esse limite. Se regras além da 10ª silenciosamente não disparam numa instância sem licença, esse limite é o motivo.

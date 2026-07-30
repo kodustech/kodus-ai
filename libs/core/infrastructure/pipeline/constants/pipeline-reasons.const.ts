@@ -41,6 +41,12 @@ export const PipelineReasons = {
             message: 'Only Merge Commits',
             description: 'Merge commits are skipped to avoid noise',
         } as PipelineReason,
+        PROVIDER_RATE_LIMITED: {
+            message: 'Provider Rate Limited',
+            description:
+                'The Git provider throttled the commit fetch (HTTP 429); the review was not run',
+            action: 'Re-run the review once the provider rate-limit window refills',
+        } as PipelineReason,
     },
     PREREQUISITES: {
         CLOSED: {

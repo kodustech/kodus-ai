@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     IJobStatusService,
     JOB_STATUS_SERVICE_TOKEN,

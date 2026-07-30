@@ -70,6 +70,43 @@ describe('ValidateNewCommitsStage', () => {
         expect(result.pipelineMetadata?.forceFullRerun).toBe(false);
     });
 
+    it('should skip with an explicit rate-limit reason (not "0 commits") when the commit fetch throws HTTP 429', async () => {
+        mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            null,
+        );
+        // Provider throttled the commit fetch — the error propagates instead
+        // of collapsing to an empty list (issue #1165).
+        const rateLimitError: any = new Error('Too Many Requests');
+        rateLimitError.status = 429;
+        mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockRejectedValue(
+            rateLimitError,
+        );
+
+        const result = await stage.execute(context);
+
+        expect(result.statusInfo.status).toBe(AutomationStatus.SKIPPED);
+
+        const expectedMessage = StageMessageHelper.skippedWithReason(
+            PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+            'Provider rate-limited the commit fetch (HTTP 429)',
+        );
+        expect(result.statusInfo.message).toBe(expectedMessage);
+        // Must NOT be masked as an empty PR.
+        expect(result.statusInfo.message).not.toContain('0 commits');
+    });
+
+    it('should rethrow non-429 errors from the commit fetch (preserve existing behaviour)', async () => {
+        mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(
+            null,
+        );
+        const genericError = new Error('boom');
+        mockPullRequestManagerService.getNewCommitsSinceLastExecution.mockRejectedValue(
+            genericError,
+        );
+
+        await expect(stage.execute(context)).rejects.toThrow('boom');
+    });
+
     it('should skip if no NEW commits are found (using PipelineReasons)', async () => {
         // Mock last execution exists
         mockAutomationExecutionService.findLatestExecutionByFilters.mockResolvedValue(

@@ -19,6 +19,7 @@ import {
     GitPullRequestIcon,
     InfoIcon,
     LibraryBig,
+    LockIcon,
     SlidersHorizontalIcon,
     TerminalIcon,
 } from "lucide-react";
@@ -75,11 +76,14 @@ export const NavMenu = () => {
             {
                 label: "Cockpit",
                 href: "/cockpit",
-                // Mirrors the /cockpit route guard (apps/web/.../cockpit/layout.tsx)
-                // and the backend tier-policy. Self-hosted on Enterprise gets the
-                // icon; unlicensed self-hosted / free_byok stays hidden.
-                visible: isCockpitTierAllowed(subscription.license),
+                // Always visible: below the allowed tier the route renders a
+                // blurred preview with an upgrade CTA (apps/web/.../cockpit/
+                // layout.tsx), so the nav item shows a lock instead of hiding.
+                visible: true,
                 icon: <GaugeIcon className="size-6" />,
+                badge: isCockpitTierAllowed(subscription.license) ? undefined : (
+                    <LockIcon className="size-3.5" />
+                ),
             },
 
             {
@@ -170,7 +174,13 @@ export const NavMenu = () => {
                 <SvgKodus className="h-8 max-w-max" />
             </NextLink>
 
-            <div className="-mb-1 h-full flex-1">
+            {/* min-w-0 lets this flex child shrink below the nav's intrinsic
+                (whitespace-nowrap) width instead of forcing the whole h-16 bar
+                past the viewport — which, under the shell's w-screen +
+                overflow-hidden, clipped every page's content on the right at
+                widths below ~1230px. overflow-x-auto keeps the links reachable
+                by scrolling within the bar. */}
+            <div className="-mb-1 h-full min-w-0 flex-1 overflow-x-auto">
                 <NavigationMenu className="h-full *:h-full">
                     <NavigationMenuList className="h-full gap-0">
                         {items.map(
@@ -192,7 +202,7 @@ export const NavMenu = () => {
                                             href={href}
                                             active={isActive(href, matcher)}
                                             className={cn(
-                                                "text-text-tertiary relative flex h-full flex-row items-center gap-2 border-b-2 border-transparent px-4 text-sm transition",
+                                                "text-text-tertiary relative flex h-full flex-row items-center gap-2 border-b-2 border-transparent px-3 text-xs whitespace-nowrap transition",
                                                 "hover:text-white focus-visible:text-white",
                                                 "data-active:font-semibold data-active:text-white",
                                                 "data-active:border-primary-light",

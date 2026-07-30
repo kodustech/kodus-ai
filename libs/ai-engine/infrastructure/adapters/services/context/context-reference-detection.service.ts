@@ -5,13 +5,12 @@ import type {
     ContextDependency,
     ContextDomain,
     ContextRequirement,
-} from '@kodus/flow';
-import { MCPServerConfig, createLogger } from '@kodus/flow';
+} from './context-pack';
+import { createLogger } from '@libs/core/log/logger';
 import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import {
     IPromptReferenceSyncError,
-    PromptReferenceErrorType,
     PromptSourceType,
 } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -23,10 +22,6 @@ import {
     CONTEXT_REFERENCE_SERVICE_TOKEN,
     IContextReferenceService,
 } from '@libs/ai-engine/domain/contextReference/contracts/context-reference.service.contract';
-import {
-    MCPToolMetadata,
-    MCPToolMetadataService,
-} from '@libs/mcp-server/services/mcp-tool-metadata.service';
 
 export interface ContextDetectionField {
     fieldId?: string;
@@ -51,6 +46,7 @@ export interface ContextReferenceDetectionParams {
     repositoryName?: string;
     organizationAndTeamData: OrganizationAndTeamData;
     byokConfig?: BYOKConfig;
+    subscriptionStatus?: string;
 }
 
 @Injectable()
@@ -63,7 +59,6 @@ export class ContextReferenceDetectionService {
         private readonly promptContextEngine: IPromptContextEngineService,
         @Inject(CONTEXT_REFERENCE_SERVICE_TOKEN)
         private readonly contextReferenceService: IContextReferenceService,
-        private readonly mcpToolMetadataService: MCPToolMetadataService,
     ) {}
 
     async detectAndSaveReferences(
@@ -77,6 +72,7 @@ export class ContextReferenceDetectionService {
             repositoryName,
             organizationAndTeamData,
             byokConfig,
+            subscriptionStatus,
         } = params;
 
         if (!fields || fields.length === 0) {
@@ -131,6 +127,7 @@ export class ContextReferenceDetectionService {
                 repositoryName,
                 organizationAndTeamData,
                 byokConfig,
+                subscriptionStatus,
             });
 
             if (!result) {
@@ -149,6 +146,39 @@ export class ContextReferenceDetectionService {
         }
 
         if (!requirements.length) {
+            // A CLEAN detection must still overwrite a previously-errored
+            // revision: skipping the save here left stale syncErrors (and
+            // their UI chip) alive forever — once a rule ever had a sync
+            // error, no later fix could clear it because the clean result
+            // was never persisted.
+            const previous =
+                await this.contextReferenceService.getLatestRevision(
+                    entityType,
+                    entityId,
+                );
+            if (previous) {
+                this.logger.log({
+                    message:
+                        'Clean detection over an existing revision — committing empty revision to clear stale state',
+                    context: ContextReferenceDetectionService.name,
+                    metadata: { entityType, entityId },
+                });
+                return this.saveToContextOS({
+                    entityType,
+                    entityId,
+                    requirements: [],
+                    knowledgeRefs: [],
+                    entityHash: this.calculateEntityHash(
+                        preparedFields
+                            .map((field) => field.text.trim())
+                            .join('\n:::\n'),
+                    ),
+                    aggregatedSyncErrors: [],
+                    organizationAndTeamData,
+                    repositoryId,
+                    repositoryName,
+                });
+            }
             this.logger.warn({
                 message: 'No requirements generated after processing fields',
                 context: ContextReferenceDetectionService.name,
@@ -188,6 +218,7 @@ export class ContextReferenceDetectionService {
         repositoryName?: string;
         organizationAndTeamData: OrganizationAndTeamData;
         byokConfig?: BYOKConfig;
+        subscriptionStatus?: string;
     }): Promise<
         | {
               requirement: ContextRequirement;
@@ -204,6 +235,7 @@ export class ContextReferenceDetectionService {
             repositoryName,
             organizationAndTeamData,
             byokConfig,
+            subscriptionStatus,
         } = params;
 
         const trimmedText = field.text.trim();
@@ -259,6 +291,7 @@ export class ContextReferenceDetectionService {
                 repositoryName,
                 organizationAndTeamData,
                 byokConfig,
+                subscriptionStatus,
                 fieldId: fieldKey,
             });
 
@@ -276,11 +309,9 @@ export class ContextReferenceDetectionService {
             });
         }
 
-        const normalization = await this.applyFullMCPNormalization({
+        const normalization = this.buildKnowledgeDependencies({
             references: detectionReferences,
             syncErrors: detectionSyncErrors,
-            organizationAndTeamData,
-            entityType,
             repositoryName,
             repositoryId,
         });
@@ -468,6 +499,7 @@ export class ContextReferenceDetectionService {
         repositoryName?: string;
         organizationAndTeamData: OrganizationAndTeamData;
         byokConfig?: BYOKConfig;
+        subscriptionStatus?: string;
         fieldId?: string;
     }): Promise<{
         references: Array<{
@@ -499,6 +531,7 @@ export class ContextReferenceDetectionService {
                 detectionMode:
                     params.entityType === 'kodyRule' ? 'rule' : 'prompt',
                 byokConfig: params.byokConfig,
+                subscriptionStatus: params.subscriptionStatus,
             });
 
         const allDependencies: ContextDependency[] =
@@ -570,7 +603,12 @@ export class ContextReferenceDetectionService {
         };
     }
 
-    private async applyFullMCPNormalization(params: {
+    /**
+     * Convert detected references into `knowledge` context dependencies (the
+     * `@file` path). MCP-tool references are no longer supported in context
+     * packs, so every detected reference maps to a knowledge dependency.
+     */
+    private buildKnowledgeDependencies(params: {
         references: Array<{
             filePath: string;
             description?: string;
@@ -583,39 +621,15 @@ export class ContextReferenceDetectionService {
             estimatedTokens?: number;
         }>;
         syncErrors: IPromptReferenceSyncError[];
-        organizationAndTeamData: OrganizationAndTeamData;
-        entityType: 'kodyRule' | 'codeReviewConfig';
         repositoryName?: string;
         repositoryId?: string;
-    }): Promise<{
+    }): {
         dependencies: ContextDependency[];
         syncErrors: IPromptReferenceSyncError[];
-    }> {
-        const {
-            references,
-            syncErrors,
-            organizationAndTeamData,
-            entityType,
-            repositoryName,
-            repositoryId,
-        } = params;
+    } {
+        const { references, syncErrors, repositoryName, repositoryId } = params;
 
-        const dependenciesInput: ContextDependency[] = references.map((ref) => {
-            if (ref.filePath.includes('|')) {
-                const [provider, tool] = ref.filePath.split('|', 2);
-                return {
-                    type: 'mcp' as const,
-                    id: ref.filePath,
-                    metadata: {
-                        provider,
-                        toolName: tool,
-                        description: ref.description,
-                        originalText: ref.originalText,
-                        detectedAt: new Date(),
-                    },
-                } satisfies ContextDependency;
-            }
-
+        const dependencies: ContextDependency[] = references.map((ref) => {
             const knowledgeId = ref.repositoryId
                 ? `${ref.repositoryId}|${ref.filePath}`
                 : ref.repositoryName
@@ -642,588 +656,7 @@ export class ContextReferenceDetectionService {
             } satisfies ContextDependency;
         });
 
-        if (!dependenciesInput.some((dep) => dep.type === 'mcp')) {
-            return { dependencies: dependenciesInput, syncErrors };
-        }
-
-        const { connections: mcpConnections, metadata: toolMetadata } =
-            await this.mcpToolMetadataService.loadMetadataForOrganization(
-                organizationAndTeamData,
-            );
-
-        const { providerAliases, toolAliases, allowedTools } =
-            this.buildMCPAliasStructures(mcpConnections);
-
-        const normalizedDependencies = this.normalizeMCPDependencies(
-            dependenciesInput,
-            providerAliases,
-            toolAliases,
-            allowedTools,
-            toolMetadata,
-            mcpConnections,
-        );
-
-        const allSyncErrors = [...syncErrors, ...normalizedDependencies.errors];
-
-        return {
-            dependencies: normalizedDependencies.dependencies,
-            syncErrors: allSyncErrors,
-        };
-    }
-
-    private buildMCPAliasStructures(connections: MCPServerConfig[]): {
-        providerAliases: Map<string, string>;
-        toolAliases: Map<string, Map<string, string>>;
-        allowedTools: Map<string, Set<string>>;
-    } {
-        const providerAliases = new Map<string, string>();
-        const toolAliases = new Map<string, Map<string, string>>();
-        const allowedTools = new Map<string, Set<string>>();
-
-        const registerProviderAlias = (
-            alias: string | undefined,
-            canonical: string,
-        ) => {
-            const trimmed = alias?.trim();
-            if (!trimmed) {
-                return;
-            }
-            if (!providerAliases.has(trimmed)) {
-                providerAliases.set(trimmed, canonical);
-            }
-            const normalized = this.normalizeProviderKey(trimmed);
-            if (normalized && !providerAliases.has(normalized)) {
-                providerAliases.set(normalized, canonical);
-            }
-        };
-
-        const registerToolAlias = (
-            aliasMap: Map<string, string>,
-            canonicalTool: string,
-        ) => {
-            const trimmed = canonicalTool?.trim();
-            if (!trimmed) {
-                return;
-            }
-
-            if (!aliasMap.has(trimmed)) {
-                aliasMap.set(trimmed, trimmed);
-            }
-
-            const lower = trimmed.toLowerCase();
-            if (!aliasMap.has(lower)) {
-                aliasMap.set(lower, trimmed);
-            }
-
-            const upper = trimmed.toUpperCase();
-            if (!aliasMap.has(upper)) {
-                aliasMap.set(upper, trimmed);
-            }
-
-            const normalized = this.normalizeToolKey(trimmed);
-            if (normalized && !aliasMap.has(normalized)) {
-                aliasMap.set(normalized, trimmed);
-            }
-        };
-
-        for (const connection of connections ?? []) {
-            const canonicalProvider =
-                connection.provider?.trim() ||
-                connection.name?.trim() ||
-                connection.url?.trim();
-
-            if (!canonicalProvider) {
-                continue;
-            }
-
-            registerProviderAlias(canonicalProvider, canonicalProvider);
-            registerProviderAlias(connection.provider, canonicalProvider);
-            registerProviderAlias(connection.name, canonicalProvider);
-            registerProviderAlias(connection.url, canonicalProvider);
-
-            if (!allowedTools.has(canonicalProvider)) {
-                allowedTools.set(canonicalProvider, new Set());
-            }
-
-            if (!toolAliases.has(canonicalProvider)) {
-                toolAliases.set(canonicalProvider, new Map());
-            }
-
-            const aliasMap = toolAliases.get(canonicalProvider)!;
-            const providerAllowedTools = allowedTools.get(canonicalProvider)!;
-
-            for (const tool of connection.allowedTools ?? []) {
-                const canonicalTool = tool?.trim();
-                if (!canonicalTool) {
-                    continue;
-                }
-
-                providerAllowedTools.add(canonicalTool);
-                registerToolAlias(aliasMap, canonicalTool);
-            }
-        }
-
-        return { providerAliases, toolAliases, allowedTools };
-    }
-
-    private normalizeMCPDependencies(
-        dependencies: ContextDependency[] | undefined,
-        providerAliases: Map<string, string>,
-        toolAliases: Map<string, Map<string, string>>,
-        allowedTools: Map<string, Set<string>>,
-        toolMetadata: Map<string, MCPToolMetadata>,
-        mcpConnections: MCPServerConfig[],
-    ): {
-        dependencies: ContextDependency[];
-        errors: IPromptReferenceSyncError[];
-    } {
-        if (!dependencies?.length) {
-            return { dependencies: [], errors: [] };
-        }
-
-        const merged: ContextDependency[] = [];
-        const errors: IPromptReferenceSyncError[] = [];
-
-        for (const dependency of dependencies) {
-            const normalized = this.normalizeDependency(
-                dependency,
-                providerAliases,
-                toolAliases,
-                allowedTools,
-                mcpConnections,
-            );
-            if (normalized.errors.length) {
-                errors.push(...normalized.errors);
-            }
-            if (normalized.dependency) {
-                const enriched = this.applyToolMetadata(
-                    normalized.dependency,
-                    toolMetadata,
-                    providerAliases,
-                    toolAliases,
-                );
-                merged.push(enriched);
-            }
-        }
-
-        return { dependencies: merged, errors };
-    }
-
-    private normalizeDependency(
-        dependency: ContextDependency,
-        providerAliases: Map<string, string>,
-        toolAliases: Map<string, Map<string, string>>,
-        allowedTools: Map<string, Set<string>>,
-        mcpConnections: MCPServerConfig[],
-    ): {
-        dependency?: ContextDependency;
-        errors: IPromptReferenceSyncError[];
-    } {
-        if (dependency.type !== 'mcp' && dependency.type !== 'tool') {
-            return { dependency, errors: [] };
-        }
-
-        const originalProvider = this.resolveDependencyProvider(dependency);
-        const connection = originalProvider
-            ? this.findConnectionByAlias(originalProvider, mcpConnections)
-            : undefined;
-
-        const canonicalProvider = connection?.provider?.trim();
-
-        const errors: IPromptReferenceSyncError[] = [];
-
-        const finalProvider =
-            canonicalProvider ??
-            (originalProvider && allowedTools.has(originalProvider)
-                ? originalProvider
-                : undefined);
-
-        if (!finalProvider) {
-            if (originalProvider) {
-                errors.push({
-                    type: PromptReferenceErrorType.INVALID_FORMAT,
-                    message: `MCP provider "${originalProvider}" is not configured for this organization/team. Adjust the prompt or enable the corresponding connection.`,
-                    details: {
-                        timestamp: new Date(),
-                    },
-                });
-            }
-            return { dependency: undefined, errors };
-        }
-
-        const originalTool = this.resolveDependencyToolName(dependency);
-        const canonicalTool = this.resolveCanonicalTool(
-            originalTool,
-            finalProvider,
-            toolAliases,
-        );
-        const finalTool = canonicalTool ?? originalTool;
-
-        const metadata: Record<string, unknown> = {
-            ...(dependency.metadata ?? {}),
-        };
-
-        if (connection?.name) {
-            metadata.providerName = connection.name;
-        }
-
-        metadata.provider = finalProvider;
-        if (
-            originalProvider &&
-            originalProvider !== finalProvider &&
-            !metadata.providerAlias
-        ) {
-            metadata.providerAlias = originalProvider;
-        }
-
-        if (finalTool) {
-            metadata.toolName = finalTool;
-        }
-        if (
-            originalTool &&
-            finalTool &&
-            originalTool !== finalTool &&
-            !metadata.toolNameAlias
-        ) {
-            metadata.toolNameAlias = originalTool;
-        }
-
-        if (!finalTool && originalTool) {
-            const available = allowedTools.get(finalProvider);
-            const availableList = available
-                ? Array.from(available.values()).join(', ')
-                : 'no tools registered';
-
-            errors.push({
-                type: PromptReferenceErrorType.INVALID_FORMAT,
-                message: `Tool "${originalTool}" is not enabled for MCP provider "${finalProvider}". Available tools: ${availableList}.`,
-                details: {
-                    timestamp: new Date(),
-                },
-            });
-            return { dependency: undefined, errors };
-        }
-
-        let descriptor = dependency.descriptor;
-        if (descriptor && typeof descriptor === 'object') {
-            const candidate = descriptor as Record<string, unknown>;
-            descriptor = {
-                ...candidate,
-                mcpId: finalProvider,
-                ...(finalTool ? { toolName: finalTool } : {}),
-            };
-        }
-
-        let normalizedId = dependency.id;
-        if (finalTool) {
-            normalizedId = `${finalProvider}|${finalTool}`;
-        } else if (
-            typeof normalizedId === 'string' &&
-            normalizedId.includes('|')
-        ) {
-            const [, tool] = normalizedId.split('|', 2);
-            normalizedId = tool ? `${finalProvider}|${tool}` : finalProvider;
-        } else {
-            normalizedId = finalProvider;
-        }
-
-        return {
-            dependency: {
-                ...dependency,
-                id: normalizedId,
-                metadata,
-                descriptor,
-            },
-            errors,
-        };
-    }
-
-    private applyToolMetadata(
-        dependency: ContextDependency,
-        metadataMap: Map<string, MCPToolMetadata>,
-        providerAliases: Map<string, string>,
-        toolAliases: Map<string, Map<string, string>>,
-    ): ContextDependency {
-        const provider = this.resolveDependencyProvider(dependency);
-        const toolName = this.resolveDependencyToolName(dependency);
-
-        if (!provider || !toolName) {
-            return dependency;
-        }
-
-        const canonicalProvider =
-            this.resolveCanonicalProvider(provider, providerAliases) ??
-            provider;
-        const canonicalToolName =
-            this.resolveCanonicalTool(
-                toolName,
-                canonicalProvider,
-                toolAliases,
-            ) ?? toolName;
-
-        const metadataEntry = this.mcpToolMetadataService.resolveToolMetadata(
-            metadataMap,
-            canonicalProvider,
-            canonicalToolName,
-        );
-
-        const resolvedProvider = metadataEntry?.providerId ?? canonicalProvider;
-        const resolvedToolName = metadataEntry?.toolName ?? canonicalToolName;
-        const metadata = metadataEntry?.metadata;
-
-        if (!metadata) {
-            return dependency;
-        }
-
-        const currentMetadata = (dependency.metadata ?? {}) as Record<
-            string,
-            unknown
-        >;
-        const existingRequired = Array.isArray(currentMetadata.requiredArgs)
-            ? (currentMetadata.requiredArgs as string[])
-            : [];
-        const mergedRequired = Array.from(
-            new Set([...existingRequired, ...metadata.requiredArgs]),
-        );
-
-        const mergedMetadata = {
-            ...currentMetadata,
-            requiredArgs: mergedRequired,
-            toolInputSchema: metadata.inputSchema,
-            provider: resolvedProvider,
-            toolName: resolvedToolName,
-        } as Record<string, unknown>;
-
-        if (
-            provider &&
-            resolvedProvider &&
-            provider !== resolvedProvider &&
-            !mergedMetadata.providerAlias
-        ) {
-            mergedMetadata.providerAlias = provider;
-        }
-
-        if (
-            toolName &&
-            resolvedToolName &&
-            toolName !== resolvedToolName &&
-            !mergedMetadata.toolNameAlias
-        ) {
-            mergedMetadata.toolNameAlias = toolName;
-        }
-
-        let descriptor = dependency.descriptor;
-        if (descriptor && typeof descriptor === 'object') {
-            const candidate = descriptor as Record<string, unknown>;
-            descriptor = {
-                ...candidate,
-                mcpId: resolvedProvider,
-                toolName: resolvedToolName,
-            };
-        }
-
-        return {
-            ...dependency,
-            id: `${resolvedProvider}|${resolvedToolName}`,
-            metadata: mergedMetadata,
-            descriptor,
-        };
-    }
-
-    private resolveCanonicalProvider(
-        provider: string,
-        aliasMap: Map<string, string>,
-    ): string | undefined {
-        const trimmed = provider?.trim();
-        if (!trimmed) {
-            return undefined;
-        }
-
-        if (aliasMap.has(trimmed)) {
-            return aliasMap.get(trimmed);
-        }
-
-        const key = this.normalizeProviderKey(trimmed);
-        if (key && aliasMap.has(key)) {
-            return aliasMap.get(key);
-        }
-
-        return undefined;
-    }
-
-    private resolveCanonicalTool(
-        toolName: string | undefined,
-        provider: string,
-        toolAliases: Map<string, Map<string, string>>,
-    ): string | undefined {
-        if (!toolName) {
-            return undefined;
-        }
-
-        const trimmedProvider = provider?.trim();
-        if (!trimmedProvider) {
-            return undefined;
-        }
-
-        const aliasMap = toolAliases.get(trimmedProvider);
-
-        if (!aliasMap) {
-            return undefined;
-        }
-
-        const trimmedTool = toolName.trim();
-        if (!trimmedTool) {
-            return undefined;
-        }
-
-        if (aliasMap.has(trimmedTool)) {
-            return aliasMap.get(trimmedTool);
-        }
-
-        const lower = trimmedTool.toLowerCase();
-        if (aliasMap.has(lower)) {
-            return aliasMap.get(lower);
-        }
-
-        const upper = trimmedTool.toUpperCase();
-        if (aliasMap.has(upper)) {
-            return aliasMap.get(upper);
-        }
-
-        const normalized = this.normalizeToolKey(trimmedTool);
-        if (normalized && aliasMap.has(normalized)) {
-            return aliasMap.get(normalized);
-        }
-
-        return undefined;
-    }
-
-    private resolveDependencyProvider(
-        dependency: ContextDependency,
-    ): string | undefined {
-        const metadata = dependency.metadata as
-            | Record<string, unknown>
-            | undefined;
-
-        if (metadata) {
-            const provider = metadata.provider as string | undefined;
-            if (provider && provider.trim()) {
-                return provider;
-            }
-
-            const providerAlias = metadata.providerAlias as string | undefined;
-            if (providerAlias && providerAlias.trim()) {
-                return providerAlias;
-            }
-        }
-
-        if (
-            dependency.descriptor &&
-            typeof dependency.descriptor === 'object'
-        ) {
-            const candidate = dependency.descriptor as Record<string, unknown>;
-            const descriptorProvider = candidate.mcpId as string | undefined;
-            if (descriptorProvider && descriptorProvider.trim()) {
-                return descriptorProvider;
-            }
-        }
-
-        if (typeof dependency.id === 'string' && dependency.id.includes('|')) {
-            const [providerId] = dependency.id.split('|', 2);
-            if (providerId && providerId.trim()) {
-                return providerId;
-            }
-        }
-
-        return undefined;
-    }
-
-    private resolveDependencyToolName(
-        dependency: ContextDependency,
-    ): string | undefined {
-        const metadata = dependency.metadata as
-            | Record<string, unknown>
-            | undefined;
-
-        if (metadata && typeof metadata.toolName === 'string') {
-            return metadata.toolName;
-        }
-
-        if (
-            dependency.descriptor &&
-            typeof dependency.descriptor === 'object'
-        ) {
-            const candidate = dependency.descriptor as Record<string, unknown>;
-            if (typeof candidate.toolName === 'string') {
-                return candidate.toolName;
-            }
-        }
-
-        if (typeof dependency.id === 'string' && dependency.id.includes('|')) {
-            const [, tool] = dependency.id.split('|', 2);
-            if (tool && tool.trim()) {
-                return tool;
-            }
-        }
-
-        return undefined;
-    }
-
-    private normalizeProviderKey(value?: string | null): string | undefined {
-        if (!value) {
-            return undefined;
-        }
-
-        const normalized = value
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, '');
-
-        if (!normalized) {
-            return undefined;
-        }
-
-        return normalized.endsWith('mcp') && normalized.length > 3
-            ? normalized.slice(0, -3)
-            : normalized;
-    }
-
-    private normalizeToolKey(value?: string | null): string | undefined {
-        if (!value) {
-            return undefined;
-        }
-
-        const normalized = value
-            .trim()
-            .toLowerCase()
-            .replace(/[^a-z0-9]/g, '');
-
-        return normalized || undefined;
-    }
-
-    private findConnectionByAlias(
-        alias: string,
-        mcpConnections: MCPServerConfig[],
-    ): MCPServerConfig | undefined {
-        const normalizedAlias = this.normalizeProviderKey(alias);
-        if (!normalizedAlias) {
-            return undefined;
-        }
-
-        for (const connection of mcpConnections) {
-            const candidates = [
-                connection.name,
-                connection.provider,
-                connection.url,
-            ];
-            for (const candidate of candidates) {
-                if (this.normalizeProviderKey(candidate) === normalizedAlias) {
-                    return connection;
-                }
-            }
-        }
-
-        return undefined;
+        return { dependencies, syncErrors };
     }
 
     private buildScopePath(

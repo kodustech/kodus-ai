@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
     AuthenticatedRateLimitResult,

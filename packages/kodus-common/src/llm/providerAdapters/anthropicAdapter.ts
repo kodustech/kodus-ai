@@ -1,4 +1,5 @@
 import { ChatAnthropic } from '@langchain/anthropic';
+import { anthropicCompatibleRootURL } from '../byokProvider.service';
 import { resolveModelOptions } from './resolver';
 import {
     AdapterBuildParams,
@@ -9,7 +10,7 @@ import {
 
 export class AnthropicAdapter implements ProviderAdapter {
     build(params: AdapterBuildParams): ChatAnthropic {
-        const { model, apiKey, options } = params;
+        const { model, apiKey, baseURL, options } = params;
         const resolved = resolveModelOptions(model, {
             temperature: options?.temperature,
             maxTokens: options?.maxTokens,
@@ -48,6 +49,11 @@ export class AnthropicAdapter implements ProviderAdapter {
         const payload: ConstructorParameters<typeof ChatAnthropic>[0] = {
             model,
             apiKey,
+            // Anthropic-compatible endpoints (Kimi Code, Z.ai, etc.):
+            // ChatAnthropic appends /v1/messages itself, so pass the root.
+            ...(baseURL
+                ? { anthropicApiUrl: anthropicCompatibleRootURL(baseURL) }
+                : {}),
             ...(resolved.temperature !== undefined && !thinkingConfig
                 ? { temperature: resolved.temperature }
                 : {}),

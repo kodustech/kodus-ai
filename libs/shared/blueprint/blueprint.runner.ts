@@ -46,12 +46,12 @@ function validateContract<T extends BlueprintContext>(
 /**
  * runBlueprint — Execute a skill blueprint against an initial context.
  *
- * Pure async function — no NestJS or @kodus/flow dependencies.
+ * Pure async function — no NestJS or flow-engine dependencies.
  * Each step type is handled as follows:
  *
  * - `deterministic`: await step.fn(ctx), replace ctx with result
  * - `gate`: if condition(ctx) is false → call onFail(ctx), return early with skippedAt set
- * - `llm`: delegate to options.runLLMStep(step, ctx); caller owns the @kodus/flow call
+ * - `llm`: delegate to options.runLLMStep(step, ctx); caller owns the legacy flow-engine call
  * - `format`: step.fn(ctx), replace ctx with result (sync)
  * - `parallel`: not handled here — caller must handle via ISkillRunner.runParallel()
  *

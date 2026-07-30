@@ -2,8 +2,10 @@ import {
     hasKodyMarker,
     hasReviewMarker,
     isForceReviewCommand,
+    isHeavyReviewCommand,
     isKodyMentionNonReview,
     isReviewCommand,
+    parseReviewDirective,
 } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 
 describe('codeCommentMarkers', () => {
@@ -213,6 +215,58 @@ describe('codeCommentMarkers', () => {
             // must agree so the handler still routes it as a review.
             expect(isReviewCommand('@kody review --force')).toBe(true);
             expect(isReviewCommand('@kody start-review --force')).toBe(true);
+        });
+    });
+
+    describe('isHeavyReviewCommand', () => {
+        it('matches --heavy in any position', () => {
+            expect(isHeavyReviewCommand('@kody review --heavy')).toBe(true);
+            expect(isHeavyReviewCommand('@kody review auth --heavy')).toBe(true);
+            expect(
+                isHeavyReviewCommand('@kody review --heavy --force'),
+            ).toBe(true);
+        });
+
+        it('does NOT match a bare `heavy` (dash required, like --force)', () => {
+            expect(isHeavyReviewCommand('@kody review heavy')).toBe(false);
+            expect(
+                isHeavyReviewCommand('@kody review heavy checkout path'),
+            ).toBe(false);
+        });
+    });
+
+    describe('parseReviewDirective', () => {
+        it('returns the focus text for a plain directive', () => {
+            expect(parseReviewDirective('@kody review auth logic')).toBe(
+                'auth logic',
+            );
+        });
+
+        it('returns undefined when there is no directive', () => {
+            expect(parseReviewDirective('@kody review')).toBeUndefined();
+            expect(parseReviewDirective('@kody review --force')).toBeUndefined();
+            expect(parseReviewDirective('@kody review --heavy')).toBeUndefined();
+        });
+
+        it('strips flags whatever their position (leading, trailing, multiple)', () => {
+            expect(parseReviewDirective('@kody review --heavy auth')).toBe(
+                'auth',
+            );
+            expect(parseReviewDirective('@kody review auth --heavy')).toBe(
+                'auth',
+            );
+            expect(
+                parseReviewDirective('@kody review auth --heavy --force'),
+            ).toBe('auth');
+            expect(
+                parseReviewDirective('@kody review --force auth --heavy'),
+            ).toBe('auth');
+        });
+
+        it('does not strip focus words that merely contain heavy/force', () => {
+            expect(
+                parseReviewDirective('@kody review the forced retries path'),
+            ).toBe('the forced retries path');
         });
     });
 

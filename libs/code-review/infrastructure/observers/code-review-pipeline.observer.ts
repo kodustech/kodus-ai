@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import {
     AUTOMATION_EXECUTION_SERVICE_TOKEN,
@@ -6,6 +6,7 @@ import {
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { IAutomationExecution } from '@libs/automation/domain/automationExecution/interfaces/automation-execution.interface';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
+import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import {
     CheckConclusion,
@@ -42,6 +43,63 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
             context,
             '_pipelineStart',
         );
+
+        await this.persistCheckRunInfo(context, observerContext);
+    }
+
+    /**
+     * Persist the platform check-run reference into the execution's
+     * dataExecution while the review is running. The checkRunId otherwise
+     * lives only in the in-memory observer context, so if the process dies
+     * mid-review nothing can finalize the check — the stale-review watchdog
+     * cron reads this to complete orphaned checks. The completion path
+     * overwrites dataExecution, so this key is only reliable (and only
+     * needed) while status is IN_PROGRESS.
+     */
+    private async persistCheckRunInfo(
+        context: CodeReviewPipelineContext,
+        observerContext: PipelineObserverContext,
+    ): Promise<void> {
+        const checkRunId = observerContext.checkRunId;
+        const executionUuid = context.pipelineMetadata?.lastExecution?.uuid;
+
+        if (!checkRunId || !executionUuid) {
+            return;
+        }
+
+        const headSha = context.pullRequest?.head?.sha;
+        const [owner, repo] = context.repository?.fullName?.split('/') || [];
+
+        try {
+            const execution =
+                await this.automationExecutionService.findById(executionUuid);
+
+            if (!execution) {
+                return;
+            }
+
+            await this.automationExecutionService.update(
+                { uuid: executionUuid },
+                {
+                    dataExecution: {
+                        ...(execution.dataExecution || {}),
+                        checkRun: {
+                            id: checkRunId,
+                            headSha,
+                            repository: { owner, name: repo },
+                        },
+                    },
+                },
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to persist check run info for stale-review recovery',
+                context: CodeReviewPipelineObserver.name,
+                error,
+                metadata: { executionUuid, checkRunId },
+            });
+        }
     }
 
     async onPipelineFinish(
@@ -145,7 +203,7 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
         const errorsByMessage = new Map<string, number>();
 
         (context.errors || []).forEach((item) => {
-            const message = item.error?.message?.trim();
+            const message = describePipelineError(item).text;
             if (message) {
                 errorsByMessage.set(
                     message,
@@ -334,15 +392,22 @@ export class CodeReviewPipelineObserver implements IPipelineObserver {
 
         let message = '';
         if (errors.length > 0) {
-            const uniqueMessages = [
-                ...new Set(
-                    errors.map((e) => e.error?.message || String(e.error)),
-                ),
-            ];
-            const displayMessages = uniqueMessages.slice(0, 3);
-            const remaining = uniqueMessages.length - displayMessages.length;
+            // One sentence, not a concatenation. Joining every raw provider
+            // string produced run-ons like "Not Found [kody-rules] all 1 judge
+            // shard(s) failed… green-wash…" in the UI — three internal messages
+            // glued together, none of them actionable. Show the single most
+            // actionable reason; the rest stay in `partialErrors` metadata,
+            // which the UI already renders under "View failed files".
+            const reasons = errors.map((e) => describePipelineError(e));
+            const best =
+                reasons.find((r) => r.classified)?.text ?? reasons[0]?.text;
+            const others = new Set(
+                reasons.map((r) => r.text).filter((t) => t !== best),
+            ).size;
 
-            message = `${displayMessages.join('\n')}${remaining > 0 ? `\n(+${remaining} more)` : ''}`;
+            message = best
+                ? `${best}${others > 0 ? ` (+${others} more issue${others > 1 ? 's' : ''})` : ''}`
+                : '';
         }
 
         // Surface the BusinessLogicValidationStage outcome message so the

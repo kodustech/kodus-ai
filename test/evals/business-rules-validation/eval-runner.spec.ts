@@ -3,8 +3,8 @@ import path from 'node:path';
 
 import { runBlueprint } from '@libs/shared/blueprint/blueprint.runner';
 import { LLMStep } from '@libs/shared/blueprint/blueprint.types';
-import { createBusinessRulesBlueprint } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/blueprint';
-import { BusinessRulesContext } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/types';
+import { createBusinessRulesBlueprint } from '@libs/agents/infrastructure/services/agents/business-rules-validation/blueprint';
+import { BusinessRulesContext } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
 import {
     SkillCapabilityRuntimeConfig,
     ToolCaller,

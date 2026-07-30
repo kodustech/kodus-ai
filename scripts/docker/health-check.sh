@@ -218,12 +218,12 @@ else
     
     echo -e "${BLUE}💡 Next steps:${NC}"
     if [ "$migrations_ok" = false ]; then
-        echo -e "   ${YELLOW}yarn migration:run   # Run database migrations${NC}"
+        echo -e "   ${YELLOW}pnpm run migration:run   # Run database migrations${NC}"
     fi
     if [ "$seed_ok" = false ]; then
-        echo -e "   ${YELLOW}yarn seed           # Load initial data${NC}"
+        echo -e "   ${YELLOW}pnpm run seed           # Load initial data${NC}"
     fi
-    echo -e "   ${YELLOW}yarn docker:logs    # Check API startup progress${NC}"
+    echo -e "   ${YELLOW}pnpm run docker:logs    # Check API startup progress${NC}"
     echo -e "   ${YELLOW}./scripts/docker/health-check.sh  # Re-run this check${NC}"
     echo ""
     echo -e "${BLUE}🕐 Wait 1-2 minutes for full startup${NC}"

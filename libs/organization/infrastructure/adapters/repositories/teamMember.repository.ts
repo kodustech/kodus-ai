@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { FindOneOptions, Repository, UpdateQueryBuilder } from 'typeorm';
 import { In } from 'typeorm';
 

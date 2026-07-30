@@ -1,0 +1,31 @@
+# Current-engine FINDER-RECALL eval.
+#
+# Runs the live `generalist` review agent (same prompt assembly + agent loop as
+# production) over benchmark-grounded cases with DETERMINISTIC tool replay (no
+# sandbox / droplet / GitHub), then judge-scores its findings against the golden
+# bugs. This is what validates the finder — vs promptfoo.yaml, which only checks
+# tool-use behavior.
+#
+# Needs: API_GOOGLE_AI_API_KEY (the finder) + ANTHROPIC_API_KEY (the Sonnet judge).
+# Scope: defaults to one PR per repo. RECALL_ALL=1 for every case.
+# Model: defaults to the `model` below; override with RECALL_MODEL=<id> to A/B any
+# model from this one config (e.g. RECALL_MODEL=gemini-3.5-flash).
+#
+# ALWAYS run with PROMPTFOO_DISABLE_TEMPLATING=1 — the case payload embeds real
+# diffs whose code contains `#{...}` / `{{ }}` (Ruby/JS interpolation), which
+# promptfoo's nunjucks templating otherwise tries to render and dies on. The
+# prompt-loader builds the full prompt itself, so templating is not needed.
+#   env -u ANTHROPIC_API_KEY -u BYOK_ANTHROPIC_API_KEY \
+#     PROMPTFOO_DISABLE_TEMPLATING=1 RECALL_ALL=1 \
+#     promptfoo eval -c promptfoo-recall.yaml --no-cache
+description: Current-engine finder recall (findings vs goldenComments, Sonnet judge)
+providers:
+  - id: file://agent-provider.js
+    config:
+      label: gemini-2.5-flash-recall
+      provider: google
+      model: gemini-2.5-flash
+      apiKeyEnv: API_GOOGLE_AI_API_KEY
+prompts:
+  - file://prompt-loader.js
+tests: file://recall-tests.js

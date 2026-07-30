@@ -49,7 +49,7 @@ jobs:
                         - 'libs/**'
                         - 'packages/**'
                         - 'package.json'
-                        - 'yarn.lock'
+                        - 'pnpm-lock.yaml'
                         - 'docker/Dockerfile'
                         - 'docker-bake.hcl'
 
@@ -114,6 +114,7 @@ jobs:
             (needs.detect-changes.outputs.web == 'true' || needs.detect-changes.outputs.backend == 'true') &&
             !cancelled()
         runs-on: ubuntu-latest
+        environment: Preview
         outputs:
             preview_url: ${{ steps.deploy.outputs.preview_url }}
         env:

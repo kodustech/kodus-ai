@@ -1,4 +1,4 @@
-import type { ContextLayer, ContextPack } from '@kodus/flow';
+import type { ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -27,11 +27,11 @@ import {
     ReviewCadenceType,
     ReviewModeConfig,
     ReviewModeResponse,
-    ReviewPreset,
     SuggestionType,
 } from '@libs/core/domain/enums/code-review.enum';
 import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { KodyKnowledgeApprovalConfig } from '@libs/common/utils/kody-rules/knowledge-approval';
 import { OrganizationAndTeamData } from './organizationAndTeamData';
 import { ConfigLevel } from './pullRequestMessages.type';
 
@@ -46,7 +46,6 @@ export {
     ReviewCadenceType,
     ReviewModeConfig,
     ReviewModeResponse,
-    ReviewPreset,
     SuggestionType,
 };
 
@@ -306,6 +305,9 @@ export type ImplementedSuggestionsToAnalyze = {
 export type CodeReviewConfig = {
     ignorePaths: string[];
     reviewMode?: 'fast' | 'normal' | 'deep';
+    /** HEAVY mode — extra critic pass in the finder for more recall. Opt-in per
+     *  review (CLI `--heavy` / PR `@kody review --heavy`). Off by default. */
+    heavy?: boolean;
     reviewOptions: ReviewOptions;
     ignoredTitleKeywords: string[];
     baseBranches: string[];
@@ -322,7 +324,10 @@ export type CodeReviewConfig = {
     kodusConfigFileOverridesWebPreferences: boolean;
     isRequestChangesActive?: boolean;
     kodyRulesGeneratorEnabled?: boolean;
-    llmGeneratedMemoriesRequireApproval?: boolean;
+    // Provider-native user ids whose review comments are EXCLUDED when learning
+    // Kody Rules from past reviews. Denylist: empty/absent = learn from everyone.
+    kodyLearningExcludedReviewers?: string[];
+    kodyKnowledgeApproval?: KodyKnowledgeApprovalConfig;
     reviewModeConfig?: ReviewModeConfig;
     ideRulesSyncEnabled?: boolean;
     kodyFineTuningConfig?: KodyFineTuningConfig;
@@ -376,6 +381,10 @@ export type CodeReviewConfig = {
     contextReferenceId?: string;
     contextRequirementsHash?: string;
     enableCommittableSuggestions?: boolean;
+    /** Experimental A/B (default off): when true, the finder's readFile returns
+     *  a symbol outline for range-less reads of large files instead of dumping
+     *  the head — fewer model tokens. Threaded to ReviewAgentInput.outlineFirst. */
+    outlineFirst?: boolean;
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform
@@ -403,7 +412,10 @@ export type KodusConfigFile = DeepPartial<
     version: string;
     customMessages?: Pick<
         IPullRequestMessages,
-        'startReviewMessage' | 'endReviewMessage' | 'globalSettings'
+        | 'startReviewMessage'
+        | 'endReviewMessage'
+        | 'errorReviewMessage'
+        | 'globalSettings'
     >;
 };
 

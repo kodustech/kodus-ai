@@ -12,7 +12,7 @@
 #   5. Prints PASS/FAIL
 #
 # Prereqs:
-#   - `yarn docker:start` has been run; all `as_*` containers up.
+#   - `pnpm run docker:start` has been run; all `as_*` containers up.
 #   - `as_kodus_api` was started AFTER `API_ANALYTICS_ALLOW_TRIGGER=true`
 #     was added to docker-compose.override.yml (you may need to restart
 #     it once after pulling this branch).
@@ -70,7 +70,7 @@ psql_q() {
 
 # Run seed inside the worker container (which has node_modules).
 seed() {
-    docker exec "$WORKER_CONTAINER" yarn analytics:seed-test "$@" >/dev/null 2>&1
+    docker exec "$WORKER_CONTAINER" pnpm run analytics:seed-test "$@" >/dev/null 2>&1
 }
 
 backfill_http() {
@@ -352,7 +352,7 @@ T2_7() {
     trigger "" >/dev/null || { fail "trigger endpoint unreachable"; return; }
 
     # Run parity-check inside the worker container (no ts-node on host).
-    if docker exec "$WORKER_CONTAINER" yarn analytics:parity-check --threshold 0.005 >/dev/null 2>&1; then
+    if docker exec "$WORKER_CONTAINER" pnpm run analytics:parity-check --threshold 0.005 >/dev/null 2>&1; then
         pass "parity-check exit 0"
     else
         fail "parity-check exit non-zero"

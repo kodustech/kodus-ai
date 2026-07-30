@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -10,6 +10,7 @@ import {
     IKodyRulesService,
     KODY_RULES_SERVICE_TOKEN,
 } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 import { enrichRulesWithContextReferences } from './utils/enrich-rules-with-context-references.util';
 
@@ -45,8 +46,18 @@ export class FindByOrganizationIdKodyRulesUseCase {
                 );
             }
 
+            // Soft-deleted rules stay in the document for audit/history but
+            // must not surface on the Kody Rules screen. APPLIED is also
+            // hidden to match find-rules-in-organization-by-filter, which is
+            // the other listing endpoint the UI uses.
+            const visibleRules = (existing.rules || []).filter(
+                (rule) =>
+                    rule.status !== KodyRulesStatus.DELETED &&
+                    rule.status !== KodyRulesStatus.APPLIED,
+            );
+
             const enrichedRulesArray = await enrichRulesWithContextReferences(
-                existing.rules || [],
+                visibleRules,
                 this.contextReferenceService,
                 this.logger,
             );

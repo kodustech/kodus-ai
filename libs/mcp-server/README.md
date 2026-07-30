@@ -65,7 +65,7 @@ yarn mcp:server
 Para consumir este servidor MCP via HTTP:
 
 ```typescript
-import { createMCPAdapter } from '@kodus/flow';
+import { createMCPAdapter } from '@libs/mcp-server/mcp-adapter';
 
 const mcpAdapter = createMCPAdapter({
   servers: [

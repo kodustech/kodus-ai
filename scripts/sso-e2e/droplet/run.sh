@@ -9,8 +9,8 @@
 # pointer to provision.sh.
 #
 # Usage:
-#   yarn sso-e2e:droplet:run             # headless
-#   yarn sso-e2e:droplet:run --headed    # visible Chromium window
+#   pnpm run sso-e2e:droplet:run             # headless
+#   pnpm run sso-e2e:droplet:run --headed    # visible Chromium window
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,7 +34,7 @@ if [ ! -f "${STATE}" ]; then
 error: no droplet state at ${STATE}
 
 Provision a droplet first:
-    yarn sso-e2e:droplet:provision
+    pnpm run sso-e2e:droplet:provision
 EOF
     exit 1
 fi

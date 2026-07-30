@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PostHog } from 'posthog-node';
@@ -24,10 +24,7 @@ export interface IPostHogProvider {
         groups?: Record<string, string | undefined>,
     ): void;
 
-    identify(
-        distinctId: string,
-        properties?: Record<string, unknown>,
-    ): void;
+    identify(distinctId: string, properties?: Record<string, unknown>): void;
 
     groupIdentify(
         groupType:
@@ -84,7 +81,9 @@ export class PostHogProvider implements IPostHogProvider {
         properties: Record<string, unknown> = {},
         groups: Record<string, string | undefined> = {},
     ): void {
-        if (!this.client) return;
+        if (!this.client) {
+            return;
+        }
 
         try {
             this.client.capture({
@@ -102,7 +101,9 @@ export class PostHogProvider implements IPostHogProvider {
         distinctId: string,
         properties: Record<string, unknown> = {},
     ): void {
-        if (!this.client) return;
+        if (!this.client) {
+            return;
+        }
         try {
             this.client.identify({ distinctId, properties });
         } catch (error) {
@@ -120,7 +121,9 @@ export class PostHogProvider implements IPostHogProvider {
         groupKey: string,
         properties: Record<string, unknown> = {},
     ): void {
-        if (!this.client) return;
+        if (!this.client) {
+            return;
+        }
         try {
             this.client.groupIdentify({ groupType, groupKey, properties });
         } catch (error) {
@@ -145,7 +148,9 @@ export class PostHogProvider implements IPostHogProvider {
         organizationAndTeamData: OrganizationAndTeamData,
         evaluationContext?: FeatureEvaluationContext,
     ): Promise<boolean> {
-        if (!this.client) return true;
+        if (!this.client) {
+            return true;
+        }
 
         const groups: Record<string, string> = {
             organization: organizationAndTeamData.organizationId,
@@ -153,7 +158,9 @@ export class PostHogProvider implements IPostHogProvider {
         for (const [key, value] of Object.entries(
             evaluationContext?.groups ?? {},
         )) {
-            if (value) groups[key] = value;
+            if (value) {
+                groups[key] = value;
+            }
         }
 
         try {
@@ -162,6 +169,7 @@ export class PostHogProvider implements IPostHogProvider {
                 identifier,
                 { groups },
             );
+
             return result === true;
         } catch (error) {
             this.swallow('isFeatureEnabled', featureName, error);
@@ -173,8 +181,11 @@ export class PostHogProvider implements IPostHogProvider {
         groups: Record<string, string | undefined>,
     ): Record<string, string> {
         const out: Record<string, string> = {};
+
         for (const [k, v] of Object.entries(groups)) {
-            if (v) out[k] = v;
+            if (v) {
+                out[k] = v;
+            }
         }
         return out;
     }

@@ -9,7 +9,7 @@ import {
     IPullRequestManagerService,
     PULL_REQUEST_MANAGER_SERVICE_TOKEN,
 } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     AutomationMessage,
     AutomationStatus,
@@ -19,6 +19,7 @@ import { Commit } from '@libs/core/infrastructure/config/types/general/commit.ty
 import { IStageValidationResult } from '@libs/core/infrastructure/pipeline/interfaces/stage-result.interface';
 import { PipelineReasons } from '@libs/core/infrastructure/pipeline/constants/pipeline-reasons.const';
 import { StageMessageHelper } from '@libs/core/infrastructure/pipeline/utils/stage-message.helper';
+import { is429Error } from '@libs/core/infrastructure/http/rate-limit-retry';
 
 @Injectable()
 export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -97,12 +98,40 @@ export class ValidateNewCommitsStage extends BasePipelineStage<CodeReviewPipelin
         }
 
         // Buscar TODOS os commits do PR
-        const allCommits =
-            await this.pullRequestHandlerService.getNewCommitsSinceLastExecution(
-                context.organizationAndTeamData,
-                context.repository,
-                context.pullRequest,
-            );
+        let allCommits: Commit[];
+        try {
+            allCommits =
+                await this.pullRequestHandlerService.getNewCommitsSinceLastExecution(
+                    context.organizationAndTeamData,
+                    context.repository,
+                    context.pullRequest,
+                );
+        } catch (error) {
+            if (!is429Error(error)) {
+                throw error;
+            }
+
+            this.logger.warn({
+                message: `Skipping code review for PR#${context.pullRequest.number} — provider rate-limited the commit fetch (HTTP 429)`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: context.repository.name,
+                    pullRequestNumber: context.pullRequest.number,
+                    reason: 'provider_rate_limited',
+                },
+            });
+
+            return this.updateContext(context, (draft) => {
+                draft.statusInfo = {
+                    status: AutomationStatus.SKIPPED,
+                    message: StageMessageHelper.skippedWithReason(
+                        PipelineReasons.COMMITS.PROVIDER_RATE_LIMITED,
+                        'Provider rate-limited the commit fetch (HTTP 429)',
+                    ),
+                };
+            });
+        }
 
         // Filtrar commits novos localmente (após lastAnalyzedCommit)
         let newCommits = allCommits || [];

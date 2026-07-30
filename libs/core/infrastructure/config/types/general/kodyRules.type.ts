@@ -15,7 +15,6 @@ export type LibraryKodyRule = {
      * Optional list of MCP providers (display hint for UI).
      * Examples: ["Sentry", "Datadog"], ["Linear", "Jira"].
      */
-    required_mcps?: string[];
     examples?: KodyRulesExamples[];
     tags?: string[];
     buckets?: string[];
@@ -44,5 +43,4 @@ export type KodyRuleFilters = {
     language?: ProgrammingLanguage;
     buckets?: string[];
     plug_and_play?: boolean;
-    needMCPS?: boolean;
 };

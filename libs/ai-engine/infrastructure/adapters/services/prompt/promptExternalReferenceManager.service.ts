@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 
-import type { ContextRequirement, ContextDependency } from '@kodus/flow';
-import { computeRequirementsHash } from '@kodus/flow';
-import { createLogger } from '@kodus/flow';
+import type { ContextRequirement, ContextDependency } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { computeRequirementsHash } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { CONTEXT_REFERENCE_SERVICE_TOKEN } from '@libs/ai-engine/domain/contextReference/contracts/context-reference.service.contract';

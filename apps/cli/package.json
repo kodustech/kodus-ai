@@ -1,6 +1,6 @@
 {
     "name": "@kodus/cli",
-    "version": "0.4.18",
+    "version": "0.4.19",
     "description": "Kodus CLI - AI-powered code review from your terminal",
     "type": "module",
     "bin": {
@@ -17,26 +17,26 @@
         "url": "https://github.com/kodustech/kodus-ai/issues"
     },
     "scripts": {
-        "build": "yarn clean && tsc && chmod +x dist/index.js",
+        "build": "pnpm clean && tsc && chmod +x dist/index.js",
         "dev": "tsc --watch",
         "start": "node dist/index.js",
         "start:local": "KODUS_API_URL=http://localhost:3001 node dist/index.js",
         "start:qa": "KODUS_API_URL=https://qa.api.kodus.io node dist/index.js",
         "test": "vitest run",
         "test:watch": "vitest",
-        "test:integration": "yarn build && vitest run --config vitest.integration.config.ts",
+        "test:integration": "pnpm build && vitest run --config vitest.integration.config.ts",
         "test:installer": "sh tests/install_business_rules_validation_test.sh",
         "lint": "eslint src --ext .ts",
         "lint:fix": "eslint src --ext .ts --fix",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
-        "check": "yarn format:check && yarn lint",
+        "check": "pnpm format:check && pnpm lint",
         "skills:sync": "node scripts/sync-skills-aliases.mjs",
         "skills:validate": "node scripts/validate-skills.mjs",
         "skills:prompt": "node scripts/skills-to-prompt.mjs --format=xml",
         "skills:prompt:json": "node scripts/skills-to-prompt.mjs --format=json",
         "clean": "rm -rf dist",
-        "prepublishOnly": "yarn build"
+        "prepublishOnly": "pnpm build"
     },
     "keywords": [
         "kodus",
@@ -82,7 +82,7 @@
     "engines": {
         "node": ">=20.0.0"
     },
-    "packageManager": "yarn@1.22.22",
+    "packageManager": "pnpm@11.9.0",
     "files": [
         "dist",
         "skills"

@@ -21,7 +21,7 @@ import {
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { enrichRulesWithContextReferences } from './utils/enrich-rules-with-context-references.util';
 

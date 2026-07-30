@@ -1,5 +1,5 @@
-import { buildBusinessRulesAnalysisPrompt } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/analysis-prompt.builder';
-import { BusinessRulesContext } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/types';
+import { buildBusinessRulesAnalysisPrompt } from '@libs/agents/infrastructure/services/agents/business-rules-validation/analysis-prompt.builder';
+import { BusinessRulesContext } from '@libs/agents/infrastructure/services/agents/business-rules-validation/types';
 
 describe('buildBusinessRulesAnalysisPrompt', () => {
     it('renders a fallback marker when the PR diff is an empty string', () => {

@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {

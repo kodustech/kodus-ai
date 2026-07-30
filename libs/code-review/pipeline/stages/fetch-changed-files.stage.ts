@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     AutomationMessage,
     AutomationStatus,
@@ -111,16 +111,11 @@ export class FetchChangedFilesStage extends BasePipelineStage<CodeReviewPipeline
             ) || [];
         const filesToAnalyze = filteredFiles;
 
-        const useAgentEngine = !!context.pipelineMetadata?.useAgentEngine;
-        const maxFiles = useAgentEngine
-            ? FetchChangedFilesStage.AGENT_MAX_FILES
-            : FetchChangedFilesStage.LEGACY_MAX_FILES;
-
         const validation = this.validateFiles(
             filesToProcess,
             filesToAnalyze,
             ignorePaths,
-            maxFiles,
+            FetchChangedFilesStage.AGENT_MAX_FILES,
         );
 
         if (!validation.canProceed) {

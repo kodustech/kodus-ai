@@ -14,7 +14,8 @@ permissions:
 # an RC build, before any promotion is allowed.
 #
 # Inputs:
-#   image_tag    Image tag to test against (REQUIRED, e.g. selfhosted-1.42.0-rc.1)
+#   image_tag    DOCKER image tag to test against (REQUIRED, e.g. 1.42.0-rc.1 —
+#                the ghcr tag, NOT the selfhosted-* git tag)
 #   matrix_file  Path to a matrix YAML file in tests/e2e/matrix/ (default fast.yml)
 #   keep_running Optional — leave droplets alive after each cell for debug
 #
@@ -57,25 +58,59 @@ on:
                 required: false
                 default: false
                 type: boolean
+            only_provider:
+                description: "Run only one provider's cells (debug). 'all' runs the full matrix."
+                required: false
+                default: all
+                type: choice
+                options:
+                    - all
+                    - github
+                    - gitlab
+                    - bitbucket
+                    - azure-devops
 
 concurrency:
     group: e2e-self-hosted-matrix-${{ inputs.image_tag }}
     cancel-in-progress: true
 
 jobs:
+    # Build the cell list, optionally narrowed to a single provider via the
+    # only_provider dispatch input. workflow_call has no only_provider input,
+    # so released runs always get the full matrix (inputs.only_provider is ''
+    # there → falls through to 'all').
+    plan:
+        runs-on: ubuntu-latest
+        outputs:
+            cells: ${{ steps.gen.outputs.cells }}
+        steps:
+            - id: gen
+              env:
+                  ONLY: ${{ inputs.only_provider || 'all' }}
+              run: |
+                  ALL='[{"provider":"github","license":"license-paid"},{"provider":"gitlab","license":"license-paid"},{"provider":"bitbucket","license":"license-paid"},{"provider":"azure-devops","license":"license-paid"},{"provider":"github","license":"license-free"}]'
+                  if [ "$ONLY" = "all" ] || [ -z "$ONLY" ]; then
+                      CELLS="$ALL"
+                  else
+                      CELLS=$(printf '%s' "$ALL" | jq -c --arg p "$ONLY" '[.[] | select(.provider == $p)]')
+                  fi
+                  echo "Selected cells: $CELLS"
+                  echo "cells=$CELLS" >> "$GITHUB_OUTPUT"
+
     matrix:
+        needs: plan
         name: ${{ matrix.cell.provider }} × ${{ matrix.cell.license }}
         runs-on: ubuntu-latest
-        timeout-minutes: 40
+        # ~7min provision + 5 review scenarios (~16min) + per-seat-license-
+        # toggle (3 sequential PRs, ~10-12min real though its internal poll
+        # ceiling is 40min) + rbac. Headroom over the observed ~35min so a
+        # slow LLM round on one scenario doesn't kill the whole cell.
+        timeout-minutes: 60
+        environment: ci
         strategy:
             fail-fast: false
             matrix:
-                cell:
-                    - { provider: github, license: license-paid }
-                    - { provider: gitlab, license: license-paid }
-                    - { provider: bitbucket, license: license-paid }
-                    - { provider: azure-devops, license: license-paid }
-                    - { provider: github, license: license-free }
+                cell: ${{ fromJson(needs.plan.outputs.cells) }}
         steps:
             - name: Checkout monorepo
               uses: actions/checkout@v6.0.2
@@ -90,7 +125,7 @@ jobs:
             - name: Setup Node
               uses: actions/setup-node@v4
               with:
-                  node-version: "20"
+                  node-version: "22"
 
             - name: Install e2e deps
               working-directory: tests/e2e
@@ -111,7 +146,7 @@ jobs:
             - name: Run provisioning + matrix runner
               env:
                   IMAGE_TAG: ${{ inputs.image_tag }}
-                  MATRIX_FILE: ${{ inputs.matrix_file }}
+                  SOURCE_MATRIX_FILE: ${{ inputs.matrix_file }}
                   LICENSE_MODE: ${{ matrix.cell.license }}
                   KODUS_INSTALLER_PATH: ${{ github.workspace }}/kodus-installer
                   TEST_VM_PROVIDER: digitalocean
@@ -119,7 +154,26 @@ jobs:
 
                   DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
+                  # GitHub bot-account token POOL. The runner round-robins
+                  # every github scenario across GH_TEST_TOKEN + GH_TEST_TOKEN_2..N
+                  # (see lib/github-token-pool.ts), so the ~26-scenario
+                  # license-paid cell spreads its polling/content-creation load
+                  # across multiple accounts instead of draining one account's
+                  # 5,000 req/hr primary quota and cascading into ~19 misleading
+                  # rate-limit SKIPs. GH_TEST_TOKEN_2 is a second dedicated bot
+                  # (Admin on the fixture repo). Empty siblings are dropped, so
+                  # this stays a single-token pool — identical to before — until
+                  # the secret is set.
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  GH_TEST_TOKEN_2: ${{ secrets.GH_TEST_TOKEN_FREE }}
+                  # Dedicated account for the PRODUCT's stored GitHub
+                  # integration credential, separate from the harness driver
+                  # pool above. The self-hosted product uses this for all its
+                  # own GitHub calls (read diff/files, post comments) — pinning
+                  # it to GH_TEST_TOKEN meant product + harness drained one
+                  # account and tripped the rate limit mid-cell. Falls back to
+                  # GH_TEST_TOKEN when unset (see github.ts authToken()).
+                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
 
@@ -141,23 +195,123 @@ jobs:
                   SH_LICENSE_KEY_PAID: ${{ secrets.SH_LICENSE_KEY_PAID }}
                   SH_LICENSE_KEY_FREE: ${{ secrets.SH_LICENSE_KEY_FREE }}
 
+                  # seats=1 license JWT for per-seat-license-toggle. Written to
+                  # a file below (the scenario reads SH_LICENSE_KEY_PATH, never
+                  # the raw env, to mirror the chmod-600 dev-laptop convention).
+                  # When the secret is unset the file isn't created and the
+                  # scenario auto-skips via --skip-missing-tokens.
+                  SH_LICENSE_KEY_SEATS1: ${{ secrets.SH_LICENSE_KEY_SEATS1 }}
+
+                  # Claude-on-Vertex BYOK scenarios (code-review-vertex-byok /
+                  # conversation-vertex-byok). Each auto-skips when its secret is
+                  # unset. VERTEX_MODEL must be enabled in the SA project's Vertex
+                  # AI Model Garden; `global` serves the bare-id Claude models.
+                  # conversation-vertex-byok additionally needs a NON-Kody GitHub
+                  # account token (login without "kody"/"kodus", PR R/W on the
+                  # fixture repo) AND a kodus-common release carrying the v2
+                  # adapter fix — until that release it runs red, not skip.
+                  VERTEX_SA_JSON: ${{ secrets.VERTEX_SA_JSON }}
+                  VERTEX_REGION: global
+                  VERTEX_MODEL: claude-haiku-4-5
+                  CONVERSATION_USER_TOKEN: ${{ secrets.CONVERSATION_USER_TOKEN }}
+
+                  # LLM provider — vm.sh expects these to write to the VM's .env.
+                  # OpenAI gpt-5.4-mini: light/fast (Kimi via Moonshot was too
+                  # slow and flaked on 429s). Native OpenAI endpoint, so NO
+                  # FORCE_BASE_URL override. Same model the cloud BYOK seed
+                  # configures (setup-tenants configureByok), so cloud and
+                  # self-hosted run the identical model — one variable to debug.
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+
                   TARGET_FILTER_PROVIDER: ${{ matrix.cell.provider }}
+
+                  # Cockpit analytics: bring up the worker-analytics service
+                  # (COMPOSE_PROFILES=analytics, via vm.sh) and let the
+                  # cockpit-analytics scenario assert the cron-driven ingestion
+                  # (layer 3). Only on github cells — cockpit-analytics is
+                  # github-only (appliesTo), so other providers would just run
+                  # an idle analytics worker. Requires the worker-analytics
+                  # service in the kodus-installer compose (shipped together).
+                  ANALYTICS_WORKER: ${{ matrix.cell.provider == 'github' && '1' || '' }}
+                  ANALYTICS_WORKER_EXPECTED: ${{ matrix.cell.provider == 'github' && '1' || '' }}
               run: |
-                  # The provisioning script runs the full matrix file. To exercise
-                  # only this cell, narrow the matrix down to the current provider
-                  # using a synthesized matrix file. This keeps each shard fast.
+                  # Build a single-cell matrix YAML that mirrors the SOURCE
+                  # matrix (fast.yml / full.yml) instead of hardcoding a
+                  # subset. Scenarios are read from the source so adding one
+                  # there is automatically picked up by CI. The matrix runner
+                  # filters scenarios by `appliesTo` at runtime, so listing
+                  # ALL is safe — non-applicable scenarios are skipped, not
+                  # failed.
+                  set -euo pipefail
+
+                  # Materialize the seats=1 license JWT where the per-seat
+                  # scenario expects it. If the secret is empty we leave the
+                  # path unset so run-matrix --skip-missing-tokens skips the
+                  # scenario instead of crashing on a 0-byte file.
+                  if [ -n "${SH_LICENSE_KEY_SEATS1:-}" ]; then
+                      mkdir -p "$HOME/.kodus-dev"
+                      printf '%s' "$SH_LICENSE_KEY_SEATS1" > "$HOME/.kodus-dev/license-seats1.jwt"
+                      export SH_LICENSE_KEY_PATH="$HOME/.kodus-dev/license-seats1.jwt"
+                  fi
+
+                  # Materialize ~/.kodus-dev/config for the SSO E2E scenarios.
+                  # sso-cookie-domain / sso-multi-user shell out to
+                  # scripts/sso-e2e/droplet/provision.sh → selfhosted/provision.sh,
+                  # which — finding no ~/.kodus-dev/config — runs the INTERACTIVE
+                  # setup.sh and aborts in ~1s on the non-TTY runner. Writing the
+                  # config from the secrets we already pass lets the script find a
+                  # ready config instead. Plain values (not op:// refs) skip the
+                  # 1Password resolver in _common.sh. Harmless for non-SSO cells
+                  # (nothing else reads it). Written to the file directly (never
+                  # echoed) so secret values don't hit the log.
+                  mkdir -p "$HOME/.kodus-dev"
+                  {
+                      echo "DIGITALOCEAN_TOKEN=${DIGITALOCEAN_TOKEN:-}"
+                      echo "SH_LICENSE_KEY=${SH_LICENSE_KEY_PAID:-}"
+                      echo "GH_DEV_TOKEN=${GH_TEST_TOKEN:-}"
+                      echo "API_OPEN_AI_API_KEY=${API_OPEN_AI_API_KEY:-}"
+                      echo "API_OPENAI_FORCE_BASE_URL=${API_OPENAI_FORCE_BASE_URL:-}"
+                      echo "API_LLM_PROVIDER_MODEL=${API_LLM_PROVIDER_MODEL:-}"
+                      echo "KODUS_INSTALLER_PATH=${KODUS_INSTALLER_PATH:-}"
+                  } > "$HOME/.kodus-dev/config"
+                  chmod 600 "$HOME/.kodus-dev/config"
+
+                  SOURCE="tests/e2e/${SOURCE_MATRIX_FILE}"
+                  if [ ! -f "$SOURCE" ]; then
+                      echo "::error::source matrix file not found: $SOURCE"
+                      exit 1
+                  fi
+                  SCENARIOS=$(awk '
+                      /^scenarios:/ { in_block=1; next }
+                      /^[a-zA-Z]/   { in_block=0 }
+                      in_block && /^[[:space:]]*-[[:space:]]/ {
+                          sub(/^[[:space:]]*-[[:space:]]*/, "")
+                          # Strip trailing inline comment / whitespace
+                          sub(/[[:space:]]+#.*/, "")
+                          if ($0 != "") print "  - " $0
+                      }
+                  ' "$SOURCE")
+                  if [ -z "$SCENARIOS" ]; then
+                      echo "::error::no scenarios found in $SOURCE"
+                      exit 1
+                  fi
+
                   CELL_MATRIX=$(mktemp --suffix=.yml)
-                  cat >"$CELL_MATRIX" <<EOF
-                  id: shard-${{ matrix.cell.provider }}-${{ matrix.cell.license }}
-                  scenarios:
-                    - code-review-basic
-                    - kody-rules-create-and-apply
-                    - license-attribution
-                  cells:
-                    - target: self-hosted
-                      provider: ${{ matrix.cell.provider }}
-                      license: ${{ matrix.cell.license }}
-                  EOF
+                  {
+                      echo "id: shard-${{ matrix.cell.provider }}-${{ matrix.cell.license }}"
+                      echo "scenarios:"
+                      echo "$SCENARIOS"
+                      echo "cells:"
+                      echo "  - target: self-hosted"
+                      echo "    provider: ${{ matrix.cell.provider }}"
+                      echo "    license: ${{ matrix.cell.license }}"
+                  } > "$CELL_MATRIX"
+
+                  echo "::group::Generated cell matrix"
+                  cat "$CELL_MATRIX"
+                  echo "::endgroup::"
+
                   export MATRIX_FILE="$CELL_MATRIX"
                   ./tests/e2e/provisioning/self-hosted/vm.sh
 
@@ -189,3 +343,22 @@ jobs:
                   name: e2e-self-hosted-matrix
                   path: evidence/
                   retention-days: 30
+
+            - name: Checkout monorepo (for composite action)
+              if: needs.matrix.result == 'failure'
+              uses: actions/checkout@v6.0.2
+
+            - name: Notify Discord on failure
+              if: needs.matrix.result == 'failure'
+              uses: ./.github/actions/discord-notify
+              with:
+                  # SH matrix runs as part of the release (gates promote) or
+                  # ad-hoc via dispatch. Either way, QA channel — the release
+                  # workflow's own notify-discord-failure covers the release
+                  # case with full context.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "❌ E2E self-hosted matrix failed"
+                  description: |
+                      `${{ inputs.matrix_file }}` failed against image `${{ inputs.image_tag }}`.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

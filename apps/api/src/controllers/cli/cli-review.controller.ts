@@ -1,17 +1,25 @@
 import { EnqueueCliReviewUseCase } from '@libs/cli-review/application/use-cases/enqueue-cli-review.use-case';
 import { ExecuteCliReviewUseCase } from '@libs/cli-review/application/use-cases/execute-cli-review.use-case';
+import { PublicPrReviewUseCase } from '@libs/cli-review/application/use-cases/public-pr-review.use-case';
 import { GetCliReviewJobStatusUseCase } from '@libs/cli-review/application/use-cases/get-cli-review-job-status.use-case';
 import { IngestSessionEventUseCase } from '@libs/cli-review/application/use-cases/ingest-session-event.use-case';
 import { SubmitCliSessionCaptureUseCase } from '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case';
 import { WaitForCliReviewJobUseCase } from '@libs/cli-review/application/use-cases/wait-for-cli-review-job.use-case';
-import {
-    AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN,
-    IAuthenticatedRateLimiterService,
-} from '@libs/cli-review/domain/contracts/authenticated-rate-limiter.service.contract';
+import { ListFeaturedPublicReviewsUseCase } from '@libs/cli-review/application/use-cases/list-featured-public-reviews.use-case';
+import { GetFeaturedPublicReviewUseCase } from '@libs/cli-review/application/use-cases/get-featured-public-review.use-case';
+import { ValidateCliKeyUseCase } from '@libs/cli-review/application/use-cases/validate-cli-key.use-case';
 import {
     ITrialRateLimiterService,
     TRIAL_RATE_LIMITER_SERVICE_TOKEN,
 } from '@libs/cli-review/domain/contracts/trial-rate-limiter.service.contract';
+import {
+    IAuthenticatedRateLimiterService,
+    AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN,
+} from '@libs/cli-review/domain/contracts/authenticated-rate-limiter.service.contract';
+import {
+    IGitHubPublicPrService,
+    GITHUB_PUBLIC_PR_SERVICE_TOKEN,
+} from '@libs/cli-review/domain/contracts/github-public-pr.service.contract';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 import {
     ITeamCliKeyService,
@@ -31,6 +39,7 @@ import {
     HttpException,
     HttpStatus,
     Inject,
+    NotFoundException,
     Param,
     Post,
     Query,
@@ -68,6 +77,7 @@ import { ApiErrorDto } from '../../dtos/api-error.dto';
 import {
     CliBusinessValidationRequestDto,
     CliReviewRequestDto,
+    PublicPrReviewRequestDto,
     TrialCliReviewRequestDto,
 } from '../../dtos/cli-review.dto';
 import { CliSessionCaptureRequestDto } from '../../dtos/cli-session-capture.dto';
@@ -103,6 +113,12 @@ export class CliReviewController {
         private readonly trialRateLimiter: ITrialRateLimiterService,
         @Inject(AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN)
         private readonly authenticatedRateLimiter: IAuthenticatedRateLimiterService,
+        @Inject(GITHUB_PUBLIC_PR_SERVICE_TOKEN)
+        private readonly githubPublicPrService: IGitHubPublicPrService,
+        private readonly publicPrReviewUseCase: PublicPrReviewUseCase,
+        private readonly listFeaturedPublicReviewsUseCase: ListFeaturedPublicReviewsUseCase,
+        private readonly getFeaturedPublicReviewUseCase: GetFeaturedPublicReviewUseCase,
+        private readonly validateCliKeyUseCase: ValidateCliKeyUseCase,
         @Inject(TEAM_CLI_KEY_SERVICE_TOKEN)
         private readonly teamCliKeyService: ITeamCliKeyService,
         @Inject(TEAM_SERVICE_TOKEN)
@@ -156,47 +172,17 @@ export class CliReviewController {
         @Headers('user-agent') userAgent: string,
         @Res() res,
     ) {
-        const payload = await this.validateKeyInternal(
+        const payload = await this.validateCliKeyUseCase.execute({
             teamKey,
             authHeader,
             queryTeamId,
-        );
-
-        // Device tracking (opt-in)
-        if (deviceId && payload.valid && payload.organizationId) {
-            try {
-                const deviceResult =
-                    await this.cliDeviceService.validateOrRegisterDevice({
-                        deviceId,
-                        deviceToken,
-                        organizationId: payload.organizationId,
-                        userAgent,
-                    });
-                if (deviceResult.deviceToken) {
-                    res.setHeader(
-                        'x-kodus-device-token',
-                        deviceResult.deviceToken,
-                    );
-                    payload.deviceToken = deviceResult.deviceToken;
-                    if (payload.data) {
-                        payload.data.deviceToken = deviceResult.deviceToken;
-                    }
-                }
-            } catch (error) {
-                return res.status(error.getStatus?.() ?? 401).json({
-                    ...payload,
-                    valid: false,
-                    error: error.message,
-                    ...(error.getResponse?.()?.code
-                        ? { code: error.getResponse().code }
-                        : {}),
-                    ...(error.getResponse?.()?.details
-                        ? { details: error.getResponse().details }
-                        : {}),
-                });
-            }
+            deviceId,
+            deviceToken,
+            userAgent,
+        });
+        if (payload.deviceToken) {
+            res.setHeader('x-kodus-device-token', payload.deviceToken);
         }
-
         return res.status(payload.valid ? 200 : 401).json(payload);
     }
 
@@ -238,231 +224,18 @@ export class CliReviewController {
         @Headers('user-agent') userAgent: string,
         @Res() res,
     ) {
-        const payload = await this.validateKeyInternal(
+        const payload = await this.validateCliKeyUseCase.execute({
             teamKey,
             authHeader,
             queryTeamId,
-        );
-
-        // Device tracking (opt-in)
-        if (deviceId && payload.valid && payload.organizationId) {
-            try {
-                const deviceResult =
-                    await this.cliDeviceService.validateOrRegisterDevice({
-                        deviceId,
-                        deviceToken,
-                        organizationId: payload.organizationId,
-                        userAgent,
-                    });
-                if (deviceResult.deviceToken) {
-                    res.setHeader(
-                        'x-kodus-device-token',
-                        deviceResult.deviceToken,
-                    );
-                    payload.deviceToken = deviceResult.deviceToken;
-                    if (payload.data) {
-                        payload.data.deviceToken = deviceResult.deviceToken;
-                    }
-                }
-            } catch (error) {
-                return res.status(error.getStatus?.() ?? 401).json({
-                    ...payload,
-                    valid: false,
-                    error: error.message,
-                    ...(error.getResponse?.()?.code
-                        ? { code: error.getResponse().code }
-                        : {}),
-                    ...(error.getResponse?.()?.details
-                        ? { details: error.getResponse().details }
-                        : {}),
-                });
-            }
-        }
-
-        return res.status(payload.valid ? 200 : 401).json(payload);
-    }
-
-    private async validateKeyInternal(
-        teamKey?: string,
-        authHeader?: string,
-        queryTeamId?: string,
-    ) {
-        const bearerToken = authHeader?.replace(/^Bearer\s+/i, '');
-
-        const buildPayload = (base: any) => ({
-            ...base,
-            data: {
-                ...base,
-            },
+            deviceId,
+            deviceToken,
+            userAgent,
         });
-
-        const buildInvalidPayload = (error: string) =>
-            buildPayload({
-                valid: false,
-                error,
-                team: {
-                    id: null,
-                    name: '',
-                },
-                organization: {
-                    id: null,
-                    name: '',
-                },
-                user: {
-                    email: '',
-                    name: '',
-                },
-            });
-
-        // Route 1: Team CLI key (via X-Team-Key or Bearer with kodus_ prefix)
-        if (teamKey || bearerToken?.startsWith('kodus_')) {
-            const key = teamKey || bearerToken;
-
-            if (!key) {
-                return buildInvalidPayload(
-                    'Team API key required. Provide via X-Team-Key or Authorization: Bearer header.',
-                );
-            }
-
-            const teamData = await this.teamCliKeyService.validateKey(key);
-
-            if (!teamData) {
-                return buildInvalidPayload('Invalid or revoked team API key');
-            }
-
-            const { team, organization } = teamData;
-
-            const safeTeam: any = team ?? {};
-            const safeOrg: any = organization ?? {};
-            const safeTeamName =
-                typeof safeTeam.name === 'string' ? safeTeam.name : '';
-            const safeOrgName =
-                typeof safeOrg.name === 'string' ? safeOrg.name : '';
-
-            const result = {
-                valid: !!(safeTeam.uuid && safeOrg.uuid),
-                teamId: safeTeam.uuid ?? null,
-                organizationId: safeOrg.uuid ?? null,
-                teamName: safeTeamName,
-                organizationName: safeOrgName,
-                team: {
-                    id: safeTeam.uuid ?? null,
-                    name: safeTeamName,
-                },
-                organization: {
-                    id: safeOrg.uuid ?? null,
-                    name: safeOrgName,
-                },
-                user: {
-                    email: '',
-                    name: '',
-                },
-                email: '',
-                userEmail: '',
-            };
-
-            if (!result.valid) {
-                result['error'] = 'Invalid or incomplete team API key';
-            }
-
-            return buildPayload(result);
+        if (payload.deviceToken) {
+            res.setHeader('x-kodus-device-token', payload.deviceToken);
         }
-
-        // Route 2: JWT Bearer token
-        if (bearerToken) {
-            let jwtPayload: any;
-            try {
-                jwtPayload = this.jwtService.verify(bearerToken, {
-                    secret: this.jwtConfig.secret,
-                });
-            } catch {
-                return buildInvalidPayload('Invalid or expired JWT token');
-            }
-
-            const user = await this.authService.validateUser({
-                email: jwtPayload.email,
-            });
-
-            if (
-                !user ||
-                user.role !== jwtPayload.role ||
-                user.status !== jwtPayload.status ||
-                user.status === STATUS.REMOVED
-            ) {
-                return buildInvalidPayload(
-                    'User account is inactive or removed',
-                );
-            }
-
-            // Resolve team: prefer queryTeamId lookup, fall back to first team
-            // for the organization (handles CLI sending organizationId as teamId)
-            let team = queryTeamId
-                ? await this.teamService.findById(queryTeamId)
-                : null;
-
-            // queryTeamId was explicitly provided but is not a valid team
-            // and is not the orgId (CLI compat: CLI sends orgId as teamId)
-            if (
-                !team &&
-                queryTeamId &&
-                queryTeamId !== jwtPayload.organizationId
-            ) {
-                return buildInvalidPayload(
-                    `Team not found for the provided teamId: ${queryTeamId}`,
-                );
-            }
-
-            if (!team) {
-                team = await this.teamService.findFirstCreatedTeam(
-                    jwtPayload.organizationId,
-                );
-            }
-
-            if (!team) {
-                return buildInvalidPayload(
-                    'No active team found for the authenticated user',
-                );
-            }
-
-            if (team.organization?.uuid !== jwtPayload.organizationId) {
-                return buildInvalidPayload(
-                    'Team does not belong to the authenticated organization',
-                );
-            }
-
-            const safeTeamName = typeof team.name === 'string' ? team.name : '';
-            const safeOrgName =
-                typeof team.organization?.name === 'string'
-                    ? team.organization.name
-                    : '';
-
-            return buildPayload({
-                valid: true,
-                teamId: team.uuid,
-                organizationId: jwtPayload.organizationId,
-                teamName: safeTeamName,
-                organizationName: safeOrgName,
-                team: {
-                    id: team.uuid,
-                    name: safeTeamName,
-                },
-                organization: {
-                    id: jwtPayload.organizationId,
-                    name: safeOrgName,
-                },
-                user: {
-                    email: jwtPayload.email ?? '',
-                    name: '',
-                },
-                email: jwtPayload.email ?? '',
-                userEmail: jwtPayload.email ?? '',
-            });
-        }
-
-        // No auth provided
-        return buildInvalidPayload(
-            'Authentication required. Provide a team API key via X-Team-Key header, or a JWT via Authorization: Bearer header.',
-        );
+        return res.status(payload.valid ? 200 : 401).json(payload);
     }
 
     @Post('business-validation')
@@ -495,11 +268,11 @@ export class CliReviewController {
         @Headers('authorization') authHeader?: string,
         @Query('teamId') queryTeamId?: string,
     ) {
-        const auth = await this.validateKeyInternal(
+        const auth = await this.validateCliKeyUseCase.execute({
             teamKey,
             authHeader,
             queryTeamId,
-        );
+        });
 
         if (!auth.valid || !auth.organizationId || !auth.teamId) {
             throw new UnauthorizedException(
@@ -978,11 +751,11 @@ export class CliReviewController {
         @Query('teamId') queryTeamId?: string,
         @Res({ passthrough: true }) res?: any,
     ) {
-        const auth = await this.validateKeyInternal(
+        const auth = await this.validateCliKeyUseCase.execute({
             teamKey,
             authHeader,
             queryTeamId,
-        );
+        });
 
         if (!auth.valid || !auth.organizationId || !auth.teamId) {
             throw new UnauthorizedException(
@@ -1060,11 +833,11 @@ export class CliReviewController {
         @Headers('authorization') authHeader?: string,
         @Query('teamId') queryTeamId?: string,
     ) {
-        const auth = await this.validateKeyInternal(
+        const auth = await this.validateCliKeyUseCase.execute({
             teamKey,
             authHeader,
             queryTeamId,
-        );
+        });
 
         if (!auth.valid || !auth.organizationId || !auth.teamId) {
             throw new UnauthorizedException(
@@ -1247,5 +1020,163 @@ export class CliReviewController {
                 resetAt: rateLimitResult.resetAt?.toISOString(),
             },
         };
+    }
+
+    /**
+     * Public PR review endpoint (no auth).
+     *
+     * Accepts a public GitHub PR URL, fetches metadata + diff from GitHub,
+     * and enqueues a trial-mode review. Returns a jobId the client can poll
+     * via GET /cli/public/review/jobs/:jobId.
+     *
+     * Rate-limited by device fingerprint (same bucket as /cli/trial/review).
+     * Repos that return 404/403 surface as 403 { code: 'requires_auth' } so
+     * the frontend can redirect to signup.
+     *
+     * NOTE on DoS protection. The fingerprint check here is a soft
+     * per-browser dedup, not the abuse defense. An attacker can rotate
+     * the fingerprint trivially. The real per-IP rate limit lives in
+     * the AWS WAF rule attached to the ALB in front of this service
+     * (rate-based, scoped to `/cli/public/*`) where the source IP is
+     * trusted and not spoofable. We deliberately don't read req.ip
+     * here because without a tightly scoped `trust proxy` config it's
+     * either useless (ALB IP for everyone) or spoofable
+     * (X-Forwarded-For). See the deployment runbook for the WAF rule.
+     */
+    @Post('public/review-pr')
+    @ApiOperation({
+        summary: 'Run a code review on a public GitHub PR URL',
+        description:
+            'Fetches the PR diff from GitHub and enqueues a trial-mode review. Anonymous, rate-limited by device fingerprint.',
+    })
+    @ApiOkResponse({
+        description: 'Review enqueued',
+        schema: {
+            type: 'object',
+            properties: {
+                jobId: { type: 'string' },
+                status: { type: 'string', example: 'pending' },
+                statusUrl: { type: 'string' },
+                pr: {
+                    type: 'object',
+                    properties: {
+                        owner: { type: 'string' },
+                        repo: { type: 'string' },
+                        prNumber: { type: 'number' },
+                        title: { type: 'string' },
+                        headSha: { type: 'string' },
+                        baseSha: { type: 'string' },
+                        additions: { type: 'number' },
+                        deletions: { type: 'number' },
+                        changedFiles: { type: 'number' },
+                        htmlUrl: { type: 'string' },
+                    },
+                },
+            },
+        },
+    })
+    @ApiBadRequestResponse({ type: ApiErrorDto })
+    @ApiTooManyRequestsResponse({ type: CliReviewRateLimitErrorDto })
+    async publicPrReview(
+        @Body() body: PublicPrReviewRequestDto,
+        @Res({ passthrough: true }) res?: any,
+    ) {
+        if (!body.fingerprint) {
+            throw new BadRequestException(
+                'Device fingerprint is required for public reviews',
+            );
+        }
+
+        const result = await this.publicPrReviewUseCase.execute({
+            prUrl: body.prUrl,
+            fingerprint: body.fingerprint,
+        });
+
+        if (result.ok === false) {
+            if (result.code === 'rate_limited') {
+                throw new HttpException(
+                    {
+                        message: result.message,
+                        remaining: result.rateLimit?.remaining,
+                        resetAt: result.rateLimit?.resetAt,
+                        limit: result.rateLimit?.limit,
+                    },
+                    result.statusCode,
+                );
+            }
+            throw new HttpException(
+                { code: result.code, message: result.message },
+                result.statusCode,
+            );
+        }
+
+        if (res) {
+            res.status(HttpStatus.ACCEPTED);
+        }
+        return result.response;
+    }
+
+    /**
+     * Public job status endpoint (no auth).
+     *
+     * Mirrors GET /cli/review/jobs/:jobId but scopes lookup to the 'trial'
+     * organization so callers can poll public-demo jobs without a session.
+     * Cross-tenant lookups still fail because the use case validates
+     * organizationId match.
+     */
+    @Get('public/review/jobs/:jobId')
+    @ApiOperation({
+        summary: 'Get status of a public PR review job',
+        description:
+            'Poll for the result of a job enqueued via POST /cli/public/review-pr. No auth required.',
+    })
+    async getPublicReviewJob(
+        @Param('jobId') jobId: string,
+        @Query('omit') omit?: string,
+    ) {
+        // The frontend caches publicPr/publicDiff in sessionStorage
+        // after the first poll, so subsequent polls pass `?omit=payload`
+        // to skip re-downloading ~15 KB every 3 seconds.
+        const omitPayload = omit === 'payload';
+        return this.getCliReviewJobStatusUseCase.execute({
+            jobId,
+            organizationId: 'trial',
+            omitPayload,
+        });
+    }
+
+    /**
+     * Featured public reviews — pre-curated snapshots of real PRs the
+     * Kodus team picked because they expose interesting bugs. Used by
+     * the home grid on try.kodus.io and embedded on the kodus.io
+     * WordPress site so visitors can explore a real review without
+     * waiting for one to run.
+     */
+    @Get('public/featured-reviews')
+    @ApiOperation({
+        summary: 'List featured public PR reviews',
+        description:
+            'Lightweight metadata for the public-demo home grid. Each item links to /cli/public/featured-reviews/:slug for the full snapshot.',
+    })
+    async listFeaturedReviews() {
+        return this.listFeaturedPublicReviewsUseCase.execute();
+    }
+
+    @Get('public/featured-reviews/:slug')
+    @ApiOperation({
+        summary: 'Get a featured public PR review snapshot',
+        description:
+            'Returns the full review (PR metadata, raw diff, issues). Slug is the URL-safe identifier assigned at curation time (e.g. "vercel-nextjs-93759").',
+    })
+    async getFeaturedReview(@Param('slug') slug: string) {
+        const review = await this.getFeaturedPublicReviewUseCase.execute({
+            slug,
+        });
+        if (!review) {
+            throw new NotFoundException(
+                `Featured review "${slug}" not found`,
+            );
+        }
+        return review;
     }
 }

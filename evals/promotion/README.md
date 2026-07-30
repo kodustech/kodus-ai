@@ -19,25 +19,25 @@ What this is for:
 Smoke run:
 
 ```bash
-yarn eval:promotion
+pnpm run eval:promotion
 ```
 
 List datasets:
 
 ```bash
-yarn eval:promotion --list-datasets
+pnpm run eval:promotion --list-datasets
 ```
 
 List model presets:
 
 ```bash
-yarn eval:promotion --list-presets
+pnpm run eval:promotion --list-presets
 ```
 
 Run one dataset:
 
 ```bash
-yarn eval:promotion:no-cache \
+pnpm run eval:promotion:no-cache \
   --dataset async-import-of-the-appstore-packages-cal-com.json \
   --preset gemini-3.1-pro
 ```
@@ -45,7 +45,7 @@ yarn eval:promotion:no-cache \
 Run all datasets:
 
 ```bash
-yarn eval:promotion:all:no-cache \
+pnpm run eval:promotion:all:no-cache \
   --preset gpt-5.4 \
   --preset gemini-3.1-pro
 ```
@@ -53,7 +53,7 @@ yarn eval:promotion:all:no-cache \
 Generate a verification dataset from a benchmark run plus an existing investigation seed:
 
 ```bash
-yarn eval:promotion:extract \
+pnpm run eval:promotion:extract \
   --run gemini-planner-r01-r01 \
   --title "Async import of the appStore packages"
 ```

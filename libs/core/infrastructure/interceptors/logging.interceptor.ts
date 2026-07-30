@@ -1,5 +1,5 @@
 import { isRabbitContext } from '@golevelup/nestjs-rabbitmq';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     CallHandler,
     ExecutionContext,

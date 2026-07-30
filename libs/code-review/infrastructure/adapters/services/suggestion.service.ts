@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -43,6 +43,7 @@ import { LLM_ANALYSIS_SERVICE_TOKEN } from './llmAnalysis.service';
 
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { CacheService } from '@libs/core/cache/cache.service';
 import {
     DocumentationContextItem,
     Repository,
@@ -63,6 +64,7 @@ export class SuggestionService implements ISuggestionService {
         @Inject(COMMENT_MANAGER_SERVICE_TOKEN)
         private readonly commentManagerService: ICommentManagerService,
         private readonly codeManagementService: CodeManagementService,
+        private readonly cacheService: CacheService,
     ) {}
 
     /**
@@ -1993,24 +1995,47 @@ export class SuggestionService implements ISuggestionService {
         }
 
         try {
-            const reviewComments =
-                platformType === PlatformType.GITHUB
-                    ? await this.codeManagementService.getPullRequestReviewThreads(
-                          {
-                              organizationAndTeamData,
-                              repository,
-                              prNumber,
-                          },
-                          platformType,
-                      )
-                    : await this.codeManagementService.getPullRequestReviewComments(
-                          {
-                              organizationAndTeamData,
-                              repository,
-                              prNumber,
-                          },
-                          platformType,
-                      );
+            // The provider round-trip (GraphQL review threads on GitHub, REST
+            // review comments elsewhere) is the dominant cost of the review
+            // screen's blocking suggestions fetch and its main rate-limit (429)
+            // surface — it runs on every open, and the PR list warms it on
+            // hover. Cache the raw provider result under a short TTL so repeat
+            // opens and prefetches collapse onto one call. TTL is deliberately
+            // short (unlike the files cache, which keys on the immutable head
+            // SHA): review threads mutate when a comment is resolved or added
+            // without any SHA change, so we trade a few seconds of staleness
+            // for the burst absorption. A miss returns null; an empty result is
+            // cached as [] so PRs with no comments don't re-hit the provider.
+            const cacheKey = `pr-active-review-comments:${organizationAndTeamData.organizationId}:${repository.id}:${prNumber}:${platformType}`;
+            let reviewComments =
+                await this.cacheService.getFromCache<any[]>(cacheKey);
+
+            if (reviewComments == null) {
+                reviewComments =
+                    platformType === PlatformType.GITHUB
+                        ? await this.codeManagementService.getPullRequestReviewThreads(
+                              {
+                                  organizationAndTeamData,
+                                  repository,
+                                  prNumber,
+                              },
+                              platformType,
+                          )
+                        : await this.codeManagementService.getPullRequestReviewComments(
+                              {
+                                  organizationAndTeamData,
+                                  repository,
+                                  prNumber,
+                              },
+                              platformType,
+                          );
+
+                await this.cacheService.addToCache(
+                    cacheKey,
+                    reviewComments ?? [],
+                    45_000,
+                );
+            }
 
             if (!reviewComments?.length) {
                 return suggestions;
@@ -2175,7 +2200,13 @@ export class SuggestionService implements ISuggestionService {
                         const commentId =
                             platformType === PlatformType.BITBUCKET
                                 ? foundComment.id
-                                : foundComment.threadId;
+                                : platformType === PlatformType.FORGEJO
+                                  ? null
+                                  : foundComment.threadId;
+
+                        if (commentId == null) {
+                            return null;
+                        }
 
                         return this.codeManagementService.markReviewCommentAsResolved(
                             {

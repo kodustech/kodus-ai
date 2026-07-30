@@ -1,17 +1,12 @@
 import { Button } from "@components/ui/button";
-import { Card } from "@components/ui/card";
+import { Card, CardTitle } from "@components/ui/card";
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import {
-    ArrowDownIcon,
-    ArrowUpIcon,
-    BrainIcon,
-    HelpCircleIcon,
-    LayersIcon,
-} from "lucide-react";
+import { HelpCircleIcon } from "lucide-react";
+import { PercentageDiff } from "src/features/ee/cockpit/_components/percentage-diff";
 
 function formatNumber(num: number): string {
     if (num >= 1_000_000) {
@@ -23,112 +18,175 @@ function formatNumber(num: number): string {
     return num.toLocaleString();
 }
 
-// Tailwind JIT requires full class names - cannot use string interpolation
-const colorStyles = {
-    primary: {
-        bg: "bg-primary-light",
-        bgDark: "bg-primary-dark",
-        text: "text-primary-light",
-    },
-    secondary: {
-        bg: "bg-secondary-light",
-        bgDark: "bg-secondary-dark",
-        text: "text-secondary-light",
-    },
-    tertiary: {
-        bg: "bg-tertiary-light",
-        bgDark: "bg-tertiary-dark",
-        text: "text-tertiary-light",
-    },
-} as const;
+function formatCurrency(amount: number): string {
+    if (amount >= 1000) {
+        // Truncate instead of round to avoid overstating values
+        const truncated = Math.floor((amount / 1000) * 100) / 100;
+        return `$${truncated.toFixed(2)}K`;
+    }
+    return `$${amount.toFixed(2)}`;
+}
 
+interface TotalUsageShape {
+    input: number; // uncached input shown to user
+    output: number;
+    total: number;
+    outputReasoning: number;
+    cacheRead: number;
+    cacheWrite: number;
+    totalCost: number;
+    inputCost: number;
+    outputCost: number;
+    cacheReadCost: number;
+    cacheWriteCost: number;
+}
+
+interface CardSpec {
+    label: string;
+    value: string;
+    footer?: string;
+    tooltip?: string;
+    /** Percent change vs the previous window (cockpit PercentageDiff). */
+    delta?: number;
+}
+
+/** % change current vs previous; null when there's no meaningful baseline. */
+const pctChange = (current: number, previous?: number | null) =>
+    previous && previous > 0
+        ? Math.round(((current - previous) / previous) * 100)
+        : null;
+
+/**
+ * KPI row in the cockpit MetricCard vocabulary (see
+ * cockpit/@kodusReviewTab/_components/review-cards.tsx): label on top,
+ * one bold value, quiet footer. Cost is the lead metric; the token cards
+ * carry their own billed cost in the footer, so nothing repeats.
+ */
 export const SummaryCards = ({
     totalUsage,
+    avgPerDay,
+    avgPerPR,
+    savedByCache = 0,
+    previousTotals,
 }: {
-    totalUsage: {
-        input: number;
-        output: number;
-        total: number;
-        outputReasoning: number;
-    };
+    totalUsage: TotalUsageShape;
+    avgPerDay: number;
+    avgPerPR: number;
+    /** USD saved by prompt caching vs paying the full input rate. */
+    savedByCache?: number;
+    /** Totals of the same-length window immediately before this one. */
+    previousTotals?: { cost: number; tokens: number } | null;
 }) => {
-    const cards = [
+    // Backend's `totals.input` already excludes cache reads — name the local
+    // alias explicitly so the rendering is unambiguous.
+    const uncachedInput = Math.max(0, totalUsage.input - totalUsage.cacheRead);
+
+    const cards: CardSpec[] = [
         {
-            label: "Input Tokens",
-            value: totalUsage.input,
-            icon: ArrowDownIcon,
-            color: "primary" as const,
+            label: "Total cost",
+            value: formatCurrency(totalUsage.totalCost),
+            footer: `≈ ${formatCurrency(avgPerDay)}/day · ${formatCurrency(avgPerPR)}/PR`,
+            delta:
+                pctChange(totalUsage.totalCost, previousTotals?.cost) ??
+                undefined,
         },
         {
-            label: "Output Tokens",
-            value: totalUsage.output,
-            icon: ArrowUpIcon,
-            color: "secondary" as const,
+            label: "Total tokens",
+            value: formatNumber(totalUsage.total),
+            footer:
+                totalUsage.outputReasoning > 0
+                    ? `incl. ${formatNumber(totalUsage.outputReasoning)} reasoning`
+                    : undefined,
+            delta:
+                pctChange(totalUsage.total, previousTotals?.tokens) ??
+                undefined,
         },
         {
-            label: "Total Tokens",
-            value: totalUsage.total,
-            icon: LayersIcon,
-            color: "tertiary" as const,
+            label: "Uncached input",
+            value: formatNumber(uncachedInput),
+            footer: formatCurrency(totalUsage.inputCost),
         },
         {
-            label: "Reasoning",
-            value: totalUsage.outputReasoning,
-            icon: BrainIcon,
-            color: "primary" as const,
-            tooltip: "Reasoning tokens are already included in Output Tokens.",
+            label: "Cache read",
+            value: formatNumber(totalUsage.cacheRead),
+            footer:
+                savedByCache > 0.01
+                    ? `${formatCurrency(totalUsage.cacheReadCost)} · saved ${formatCurrency(savedByCache)}`
+                    : formatCurrency(totalUsage.cacheReadCost),
+            tooltip:
+                "Input tokens served from the provider's prompt cache. Already counted inside input tokens; shown separately because they're billed at a discounted rate. \"Saved\" compares against paying the full input rate for these tokens.",
+        },
+        {
+            label: "Output",
+            value: formatNumber(totalUsage.output),
+            footer: formatCurrency(totalUsage.outputCost),
+            tooltip:
+                totalUsage.outputReasoning > 0
+                    ? `Includes ${formatNumber(totalUsage.outputReasoning)} reasoning tokens (billed at the output rate).`
+                    : undefined,
         },
     ];
 
-    return (
-        <div className="grid grid-cols-4 gap-3">
-            {cards.map((card) => {
-                const Icon = card.icon;
-                const styles = colorStyles[card.color];
-                return (
-                    <Card
-                        key={card.label}
-                        className="group relative overflow-hidden p-4">
-                        {/* Background decoration */}
-                        <div
-                            className={`absolute -top-4 -right-4 size-20 rounded-full opacity-5 ${styles.bg}`}
-                        />
+    if (totalUsage.cacheWrite > 0) {
+        cards.push({
+            label: "Cache write",
+            value: formatNumber(totalUsage.cacheWrite),
+            footer: formatCurrency(totalUsage.cacheWriteCost),
+            tooltip:
+                "Input tokens that populated a cache entry on this call (Anthropic). Other providers don't charge a write premium.",
+        });
+    }
 
-                        <div className="relative space-y-2">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div
-                                        className={`flex size-7 items-center justify-center rounded-md ${styles.bgDark}`}>
-                                        <Icon
-                                            className={`size-4 ${styles.text}`}
-                                        />
-                                    </div>
-                                    <span className="text-text-secondary text-sm">
-                                        {card.label}
-                                    </span>
-                                </div>
-                                {card.tooltip && (
-                                    <Tooltip>
-                                        <TooltipContent className="text-text-primary max-w-48 text-pretty">
-                                            {card.tooltip}
-                                        </TooltipContent>
-                                        <TooltipTrigger asChild>
-                                            <Button
-                                                variant="cancel"
-                                                size="icon-xs">
-                                                <HelpCircleIcon className="size-3.5" />
-                                            </Button>
-                                        </TooltipTrigger>
-                                    </Tooltip>
-                                )}
-                            </div>
-                            <p className="text-text-primary text-2xl font-semibold tabular-nums">
-                                {formatNumber(card.value)}
-                            </p>
+    return (
+        <div
+            className="grid gap-2"
+            style={{
+                gridTemplateColumns: `repeat(${cards.length}, minmax(0, 1fr))`,
+            }}>
+            {cards.map((card) => (
+                <Card
+                    key={card.label}
+                    color="lv1"
+                    className="justify-between gap-2 p-5">
+                    <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-text-secondary text-xs leading-snug font-semibold">
+                            {card.label}
+                        </CardTitle>
+                        {card.tooltip && (
+                            <Tooltip>
+                                <TooltipContent className="text-text-primary max-w-64 text-pretty">
+                                    {card.tooltip}
+                                </TooltipContent>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="cancel"
+                                        size="icon-xs"
+                                        className="-my-1">
+                                        <HelpCircleIcon className="size-3.5" />
+                                    </Button>
+                                </TooltipTrigger>
+                            </Tooltip>
+                        )}
+                    </div>
+                    <div className="flex items-end justify-between gap-3">
+                        <div className="text-3xl font-bold tabular-nums">
+                            {card.value}
                         </div>
-                    </Card>
-                );
-            })}
+                        {card.delta != null && card.delta !== 0 && (
+                            <div className="flex justify-end pb-1 text-xs font-semibold">
+                                <PercentageDiff
+                                    mode="lower-is-better"
+                                    status={card.delta > 0 ? "bad" : "good"}>
+                                    {Math.abs(card.delta)}%
+                                </PercentageDiff>
+                            </div>
+                        )}
+                    </div>
+                    <div className="text-text-tertiary min-h-4 text-xs leading-snug tabular-nums">
+                        {card.footer}
+                    </div>
+                </Card>
+            ))}
         </div>
     );
 };

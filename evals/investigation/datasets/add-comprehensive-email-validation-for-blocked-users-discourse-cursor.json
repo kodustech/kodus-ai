@@ -17,7 +17,7 @@
       "benchmarkBaseRef": null,
       "benchmarkHeadRef": "5f8a130277dbddc95d133cd2832be639baf89213",
       "extractedFilePaths": "[\"app/models/user.rb\",\"app/controllers/users_controller.rb\",\"app/models/blocked_email.rb\",\"lib/validators/email_validator.rb\",\"db/migrate/20130724201552_create_blocked_emails.rb\",\"app/assets/javascripts/discourse/controllers/create_account_controller.js\"]",
-      "omittedFilePaths": "[\"config/locales/server.en.yml\",\"spec/models/blocked_email_spec.rb\",\"spec/components/validators/email_validator_spec.rb\",\"spec/fabricators/blocked_email_fabricator.rb\"]",
+      "omittedFilePaths": "[\"config/locales/server.en.yml\"]",
       "expectedRequiredTools": "[\"readFile\"]",
       "expectedForbiddenTools": "[\"searchDocs\",\"checkTypes\"]",
       "expectedMaxSteps": 12,

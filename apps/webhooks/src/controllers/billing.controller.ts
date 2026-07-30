@@ -1,18 +1,11 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 
-import { createLogger } from '@kodus/flow';
-import {
-    Controller,
-    HttpStatus,
-    Post,
-    Req,
-    Res,
-} from '@nestjs/common';
+import { createLogger } from '@libs/core/log/logger';
+import { Controller, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
-import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 
@@ -96,10 +89,6 @@ export class BillingController {
                     updatePaymentUrl: body.updatePaymentUrl,
                 },
                 organizationId: body.organizationId,
-                recipients: [
-                    { kind: 'role', role: Role.OWNER },
-                    { kind: 'role', role: Role.BILLING_MANAGER },
-                ],
             }),
         );
 
@@ -132,10 +121,6 @@ export class BillingController {
                     upgradeUrl: body.upgradeUrl,
                 },
                 organizationId: body.organizationId,
-                recipients: [
-                    { kind: 'role', role: Role.OWNER },
-                    { kind: 'role', role: Role.BILLING_MANAGER },
-                ],
             }),
         );
 
@@ -202,7 +187,8 @@ export class BillingController {
         } catch (error) {
             this.logger.error({
                 message: 'Failed to emit billing notification',
-                error: error instanceof Error ? error : new Error(String(error)),
+                error:
+                    error instanceof Error ? error : new Error(String(error)),
                 context: BillingController.name,
             });
         }

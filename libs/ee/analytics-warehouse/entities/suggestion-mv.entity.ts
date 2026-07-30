@@ -54,6 +54,18 @@ export class SuggestionMvEntity {
     })
     suggestionCreatedAt: Date | null;
 
+    /**
+     * Kody Rule UUIDs this suggestion enforces — promoted from `raw` so
+     * rule-level analytics can aggregate via GIN index.
+     */
+    @Column({
+        name: 'brokenKodyRulesIds',
+        type: 'text',
+        array: true,
+        nullable: true,
+    })
+    brokenKodyRulesIds: string[] | null;
+
     @Column({ name: 'raw', type: 'jsonb', nullable: true })
     raw: unknown;
 }

@@ -1,7 +1,5 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
-
-import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 import { CacheService } from '@libs/core/cache/cache.service';
 import { NotificationEvent } from '../domain/catalog/events';
@@ -91,7 +89,6 @@ export class ByokErrorCounter {
                     windowEnd,
                     sampleError: errorMessage,
                 },
-                recipients: [{ kind: 'role', role: Role.OWNER }],
             });
         } catch (error) {
             this.logger.error({

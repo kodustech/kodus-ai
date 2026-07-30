@@ -36,6 +36,15 @@ function byokBody(model: BenchModel) {
         apiKey: model.apiKey,
         model: model.id,
         ...(model.baseURL ? { baseURL: model.baseURL } : {}),
+        // Pin the model's required temperature from the catalog defaults. Some
+        // models reject the engine's per-prompt temperature outright — e.g.
+        // kimi-k2.7-code: "invalid temperature: only 1 is allowed for this
+        // model" — which fails EVERY LLM call -> 0 findings -> a bogus F1.
+        // byokPromptRunner forwards byokConfig.main.temperature to the LLM, so
+        // pinning it here makes the review actually run for that model.
+        ...((model.defaults as { temperature?: number } | undefined)?.temperature !== undefined
+            ? { temperature: (model.defaults as { temperature?: number }).temperature }
+            : {}),
     };
 }
 

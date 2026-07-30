@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { CentralizedConfigSyncUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-sync.use-case';
@@ -25,9 +25,14 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import {
+    CodeReviewParameter,
+    RepositoryCodeReviewConfig,
+} from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
+import {
     CentralizedConfigActivePullRequest,
     CentralizedConfigParameter,
 } from '@libs/organization/domain/parameters/types/configValue.type';
+import { buildGroupFolderName } from '@libs/centralized-config/utils/path-encoder';
 import { Repositories } from '@libs/platform/domain/platformIntegrations/types/codeManagement/repositories.type';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { PullRequestFileChange } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
@@ -404,6 +409,68 @@ export class CentralizedConfigPrService {
         return `${params.repositoryFolder}/${params.relativePath}`;
     }
 
+    buildDirectoryGroupConfigPath(
+        repositoryFolder: string,
+        groupFolderName: string,
+    ): string {
+        if (repositoryFolder === 'global') {
+            return `${groupFolderName}/kodus-config.yml`;
+        }
+
+        return `${repositoryFolder}/${groupFolderName}/kodus-config.yml`;
+    }
+
+    buildDirectoryGroupRulesPath(
+        repositoryFolder: string,
+        groupFolderName: string,
+        rulesDirectory: string,
+        fileName: string,
+    ): string {
+        if (repositoryFolder === 'global') {
+            return `${groupFolderName}/.kody-rules/${rulesDirectory}/${fileName}`;
+        }
+
+        return `${repositoryFolder}/${groupFolderName}/.kody-rules/${rulesDirectory}/${fileName}`;
+    }
+
+    async resolveDirectoryGroupFolderName(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string | undefined,
+        directoryId: string | undefined,
+    ): Promise<string | null> {
+        if (!repositoryId || !directoryId) {
+            return null;
+        }
+
+        const parameter = await this.parametersService.findByKey(
+            ParametersKey.CODE_REVIEW_CONFIG,
+            organizationAndTeamData,
+        );
+        const configValue = parameter?.configValue as
+            | CodeReviewParameter
+            | undefined;
+        const repository = (configValue?.repositories ?? []).find(
+            (repo: RepositoryCodeReviewConfig) =>
+                String(repo.id) === String(repositoryId),
+        );
+        const directory = (repository?.directories ?? []).find(
+            (dir) => String(dir.id) === String(directoryId),
+        );
+        const paths = (directory?.folders ?? [])
+            .map((f) => f.path)
+            .filter((path): path is string => typeof path === 'string');
+
+        if (paths.length === 0) {
+            return null;
+        }
+
+        try {
+            return buildGroupFolderName(paths);
+        } catch {
+            return null;
+        }
+    }
+
     sanitizeFileName(name?: string, fallback = 'item', maxLength = 30): string {
         const normalized = (name || '')
             .trim()
@@ -413,6 +480,111 @@ export class CentralizedConfigPrService {
             .slice(0, maxLength);
 
         return normalized || fallback;
+    }
+
+    /**
+     * Canonical centralized-config file name for a rule. The init export and
+     * every mutation MUST derive the name the same way — otherwise updating a
+     * rule writes to a freshly-named file, orphaning the original and creating
+     * a duplicate on the next sync. The uuid suffix keeps it stable and unique.
+     */
+    buildRuleFileName(title?: string, uuid?: string): string {
+        const base = this.sanitizeFileName(title, 'rule');
+        return `${base}${uuid ? `-${uuid.slice(0, 8)}` : ''}.yml`;
+    }
+
+    async getCentralizedConfigWithValidatedPullRequest(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<CentralizedConfigParameter | null> {
+        const centralizedConfig = await this.getCentralizedConfigParameter(
+            organizationAndTeamData,
+        );
+
+        if (
+            !centralizedConfig?.enabled ||
+            !centralizedConfig.activePullRequest
+        ) {
+            return centralizedConfig;
+        }
+
+        const centralizedRepository =
+            await this.getCentralizedRepositoryIfEnabled(
+                organizationAndTeamData,
+            );
+
+        if (!centralizedRepository) {
+            return centralizedConfig;
+        }
+
+        const trackedPullRequest = centralizedConfig.activePullRequest;
+        const trackedPrNumber =
+            trackedPullRequest.prNumber ||
+            this.extractPullRequestNumber(trackedPullRequest.prUrl);
+
+        if (
+            this.normalizeRepositoryId(trackedPullRequest.repository?.id) &&
+            this.normalizeRepositoryId(trackedPullRequest.repository?.id) !==
+                this.normalizeRepositoryId(centralizedRepository.id)
+        ) {
+            await this.clearActivePullRequestMetadata(organizationAndTeamData);
+
+            return {
+                ...centralizedConfig,
+                activePullRequest: null,
+            };
+        }
+
+        if (!trackedPrNumber) {
+            await this.clearActivePullRequestMetadata(organizationAndTeamData);
+
+            return {
+                ...centralizedConfig,
+                activePullRequest: null,
+            };
+        }
+
+        try {
+            const trackedPullRequestState =
+                await this.codeManagementService.getPullRequest({
+                    organizationAndTeamData,
+                    repository: centralizedRepository,
+                    prNumber: trackedPrNumber,
+                });
+
+            if (
+                trackedPullRequestState &&
+                trackedPullRequestState.state === PullRequestState.OPENED
+            ) {
+                return centralizedConfig;
+            }
+
+            await this.clearActivePullRequestMetadata(organizationAndTeamData);
+
+            await this.triggerBestEffortSyncAfterTrackedPullRequestClosed({
+                organizationAndTeamData,
+                repository: centralizedRepository,
+                state: trackedPullRequestState?.state,
+                pullRequestNumber: trackedPrNumber,
+            });
+
+            return {
+                ...centralizedConfig,
+                activePullRequest: null,
+            };
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to validate tracked centralized pull request for config read. Returning stale active pull request metadata.',
+                context: CentralizedConfigPrService.name,
+                error: this.normalizeError(error),
+                metadata: {
+                    organizationAndTeamData,
+                    trackedPrNumber,
+                },
+            });
+
+            return centralizedConfig;
+        }
     }
 
     async getScopedKodusConfigFileContent(params: {
@@ -429,9 +601,10 @@ export class CentralizedConfigPrService {
             return null;
         }
 
-        const centralizedConfig = await this.getCentralizedConfigParameter(
-            params.organizationAndTeamData,
-        );
+        const centralizedConfig =
+            await this.getCentralizedConfigWithValidatedPullRequest(
+                params.organizationAndTeamData,
+            );
 
         const branchRef = await this.resolveScopedConfigReadBranchRef({
             organizationAndTeamData: params.organizationAndTeamData,

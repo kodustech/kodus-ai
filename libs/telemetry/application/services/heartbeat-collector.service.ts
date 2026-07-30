@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import * as os from 'node:os';
 import { join } from 'node:path';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -66,8 +66,16 @@ export interface HeartbeatMetrics {
     };
 }
 
+export const HEARTBEAT_COLLECTOR_SERVICE_TOKEN = Symbol.for(
+    'HeartbeatCollectorService',
+);
+
+export interface IHeartbeatCollectorService {
+    collect(input: { firstSeenAt: Date }): Promise<HeartbeatMetrics>;
+}
+
 @Injectable()
-export class HeartbeatCollectorService {
+export class HeartbeatCollectorService implements IHeartbeatCollectorService {
     private readonly logger = createLogger(HeartbeatCollectorService.name);
 
     constructor(

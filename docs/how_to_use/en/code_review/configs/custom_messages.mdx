@@ -85,6 +85,23 @@ the first automated review:
 - **Manual**: Kody waits for someone to run `@kody start-review` before doing
   another pass.
 
+### reviewScope
+
+Shows which configuration level — global, repository, or directory — was used to
+review this pull request, so authors know which settings applied.
+
+### agentPrompt
+
+<Note>
+  **End review message only.** It bundles the review's line-comment suggestions,
+  which don't exist until the review has run — so it isn't offered on the start
+  message.
+</Note>
+
+Bundles every suggestion from the review into a single, copy‑paste prompt block
+(rendered as a collapsible **Open Agent Prompt**). Paste it into your coding
+agent to apply all of the review's fixes at once.
+
 <Info>
   These context variables will be automatically populated with the actual data
   from your pull request when Kody sends the message.

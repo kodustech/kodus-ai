@@ -3,10 +3,18 @@ import {
     getModelCapabilities,
     ReasoningConfig,
 } from '@kodus/kodus-common/llm';
+import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
-import { createLogger } from '@kodus/flow';
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { createLogger } from '@libs/core/log/logger';
+import {
+    IOrganizationParametersService,
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import axios from 'axios';
+
+import { resolveByokSlot } from './byok-credentials.util';
+import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 
 // Interfaces for API responses
 interface OpenAIModel {
@@ -46,6 +54,16 @@ interface GeminiResponse {
     models: GeminiModel[];
 }
 
+/**
+ * Providers whose model list is a CURATED static catalog (not fetched live), so
+ * it isn't exhaustive — a model missing from it is NOT proof the model is
+ * invalid. Callers must not treat a miss as a hard mismatch/failure for these.
+ */
+export const CURATED_CATALOG_PROVIDERS = new Set<BYOKProvider>([
+    BYOKProvider.AMAZON_BEDROCK,
+    BYOKProvider.GOOGLE_VERTEX,
+]);
+
 export interface ModelResponse {
     provider: BYOKProvider;
     models: Array<{
@@ -60,47 +78,82 @@ export interface ModelResponse {
 export class GetModelsByProviderUseCase {
     private readonly logger = createLogger(GetModelsByProviderUseCase.name);
 
-    constructor(private readonly providerService: ProviderService) {}
+    constructor(
+        private readonly providerService: ProviderService,
+        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
+        private readonly organizationParametersService: IOrganizationParametersService,
+    ) {}
 
-    async execute(provider: string): Promise<ModelResponse> {
+    async execute(
+        provider: string,
+        organizationAndTeamData?: OrganizationAndTeamData,
+    ): Promise<ModelResponse> {
         if (!this.providerService.isProviderSupported(provider)) {
             throw new BadRequestException(`Unsupported provider: ${provider}`);
         }
 
         const byokProvider = provider as BYOKProvider;
 
+        // Prefer the org's OWN saved BYOK credentials so the catalog reflects
+        // the user's actual endpoint/key (e.g. an openai_compatible proxy like
+        // Moonshot) rather than Kodus' bundled env keys — otherwise the list is
+        // for the wrong account and the user's real models all look "unknown".
+        // Falls back to env when no saved slot matches (e.g. the setup wizard,
+        // before the config is saved).
+        const creds = await resolveByokSlot(
+            this.organizationParametersService,
+            byokProvider,
+            organizationAndTeamData,
+        );
+
         switch (byokProvider) {
             case BYOKProvider.OPENAI:
-                return this.getOpenAIModels(process.env.API_OPEN_AI_API_KEY);
+                return this.getOpenAIModels(
+                    creds?.apiKey ?? process.env.API_OPEN_AI_API_KEY,
+                );
 
             case BYOKProvider.ANTHROPIC:
                 return this.getAnthropicModels(
-                    process.env.API_ANTHROPIC_API_KEY,
+                    creds?.apiKey ?? process.env.API_ANTHROPIC_API_KEY,
                 );
 
             case BYOKProvider.GOOGLE_GEMINI:
-                return this.getGeminiModels(process.env.API_GOOGLE_AI_API_KEY);
+                return this.getGeminiModels(
+                    creds?.apiKey ?? process.env.API_GOOGLE_AI_API_KEY,
+                );
 
             case BYOKProvider.GOOGLE_VERTEX:
-                return this.getVertexModels(process.env.API_GOOGLE_AI_API_KEY);
+                return this.getVertexModels();
 
             case BYOKProvider.OPEN_ROUTER:
                 return this.getOpenRouterModels(
-                    process.env.API_OPEN_ROUTER_API_KEY,
+                    creds?.apiKey ?? process.env.API_OPEN_ROUTER_API_KEY,
                 );
 
             case BYOKProvider.NOVITA:
-                return this.getNovitaModels(process.env.API_NOVITA_AI_API_KEY);
+                return this.getNovitaModels(
+                    creds?.apiKey ?? process.env.API_NOVITA_AI_API_KEY,
+                );
 
             case BYOKProvider.OPENAI_COMPATIBLE:
                 return this.getOpenAICompatibleModels(
-                    process.env.API_OPEN_AI_API_KEY,
-                    process.env.API_OPENAI_FORCE_BASE_URL ||
-                        'https://api.openai.com',
+                    creds?.apiKey ?? process.env.API_OPEN_AI_API_KEY,
+                    creds?.baseURL ??
+                        (process.env.API_OPENAI_FORCE_BASE_URL ||
+                            'https://api.openai.com'),
                 );
 
             case BYOKProvider.AMAZON_BEDROCK:
                 return this.getBedrockModels();
+
+            case BYOKProvider.ANTHROPIC_COMPATIBLE:
+                // Listing needs the user's baseURL + key, which aren't
+                // available here; the frontend forces free-form model input
+                // for baseURL-requiring providers, so this is never called
+                // in the normal flow.
+                throw new BadRequestException(
+                    'Model listing is not available for anthropic_compatible — enter the model ID manually.',
+                );
 
             default:
                 throw new BadRequestException(
@@ -366,16 +419,39 @@ export class GetModelsByProviderUseCase {
             );
         }
 
+        // SSRF guard: the baseURL can come from the org's stored BYOK config
+        // (user-controlled), so reject private/reserved IPs, the cloud metadata
+        // endpoint, and non-https schemes before making the server-side request
+        // — the same guard the connection probe uses.
+        await assertSafeOpenAICompatibleUrl(baseUrl);
+
         try {
-            const modelsUrl = baseUrl.endsWith('/')
-                ? `${baseUrl}v1/models`
-                : `${baseUrl}/v1/models`;
+            // Trim trailing slashes without a regex (backtracking-safe), then
+            // only add `/v1` when the base URL doesn't already end in a version
+            // segment — a stored openai_compatible baseURL usually includes
+            // `/v1` (e.g. Moonshot's `https://api.moonshot.ai/v1`), so a naive
+            // `${baseUrl}/v1/models` would 404 on `/v1/v1/models`. Mirrors the
+            // connection probe's URL logic.
+            let trimmed = baseUrl;
+            while (trimmed.endsWith('/')) {
+                trimmed = trimmed.slice(0, -1);
+            }
+            const needsV1 = !/\/v\d+$/i.test(trimmed);
+            const modelsUrl = needsV1
+                ? `${trimmed}/v1/models`
+                : `${trimmed}/models`;
 
             const response = await axios.get<OpenAIResponse>(modelsUrl, {
                 headers: {
                     'Authorization': `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
                 },
+                // The SSRF guard only validates the base host: without these a
+                // public URL could 302-redirect the request onto a private IP /
+                // the cloud metadata endpoint (169.254.169.254), or hang. Mirror
+                // the connection probe: never follow redirects, bounded timeout.
+                maxRedirects: 0,
+                timeout: 15_000,
             });
 
             return {
@@ -392,59 +468,63 @@ export class GetModelsByProviderUseCase {
         }
     }
 
-    private async getVertexModels(apiKey?: string): Promise<ModelResponse> {
-        try {
-            if (!apiKey) {
-                throw new BadRequestException(
-                    'API key is required for Google Vertex',
-                );
-            }
+    /**
+     * Vertex models can't be listed generically: per-project/region
+     * availability requires the user's service-account JSON, which isn't
+     * available to this (GET, credential-less) endpoint. Listing it live
+     * would mean putting a sensitive ~3KB SA JSON in a query string.
+     *
+     * So, like Bedrock, return a curated catalog. It covers both Vertex
+     * model families served via different protocols:
+     *   - Gemini (`gemini-*`)  → Gemini protocol  (createVertex)
+     *   - Claude (`claude-*@…`) → Anthropic protocol on Vertex MaaS
+     *                            (createVertexAnthropic)
+     * Model-id routing happens in `byok-to-vercel.ts`. Users on other
+     * regions or with custom/newer models can still paste a model ID —
+     * the Vertex model field allows free-form input.
+     *
+     * Vertex Claude ID convention (per Anthropic's official Vertex docs):
+     * recent models use a bare id (e.g. `claude-opus-4-8`), older ones use
+     * the `@<version>` suffix (e.g. `claude-sonnet-4-5@20250929`). Both
+     * route through createVertexAnthropic. Catalog reflects models that are
+     * current (non-deprecated) on Vertex as of 2026-06.
+     */
+    private getVertexModels(): ModelResponse {
+        const catalog: Array<{ id: string; name: string }> = [
+            // gemini-3-pro-preview was discontinued on Vertex (2026-03-26);
+            // Google's migration target is gemini-3.1-pro-preview.
+            { id: 'gemini-3.1-pro-preview', name: 'Vertex Gemini 3.1 Pro' },
+            { id: 'gemini-3.5-flash', name: 'Vertex Gemini 3.5 Flash' },
+            { id: 'gemini-2.5-pro', name: 'Vertex Gemini 2.5 Pro' },
+            { id: 'gemini-2.5-flash', name: 'Vertex Gemini 2.5 Flash' },
+            // Only Claude models served by the GLOBAL endpoint (bare ids) are
+            // listed, so any catalog pick works with the default global region
+            // out of the box. Older @date-suffixed Claude models (Sonnet 4.5,
+            // Haiku 4.5, …) are region-only (e.g. us-east5) — users who want
+            // those can type the id manually and pin the region.
+            { id: 'claude-opus-4-8', name: 'Vertex Claude Opus 4.8' },
+            { id: 'claude-opus-4-7', name: 'Vertex Claude Opus 4.7' },
+            { id: 'claude-sonnet-4-6', name: 'Vertex Claude Sonnet 4.6' },
+        ];
 
-            this.logger.debug({
-                message: 'Fetching Vertex models',
-                context: GetModelsByProviderUseCase.name,
-                metadata: {
-                    apiKeyPrefix: apiKey.substring(0, 10) + '...',
-                },
-            });
+        // Capability lookup keys on a plain model name; strip the Vertex
+        // `@<version>` suffix so versioned Claude entries resolve their
+        // reasoning config (bare ids pass through unchanged).
+        const reasoningKeyOf = (id: string): string => id.split('@')[0];
 
-            // Use Gemini API to list models and map to Vertex
-            const response = await axios.get<GeminiResponse>(
-                `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
-            );
-
-            this.logger.debug({
-                message: 'Gemini response received',
-                context: GetModelsByProviderUseCase.name,
-                metadata: {
-                    modelCount: response.data.models?.length || 0,
-                },
-            });
-
-            return {
-                provider: BYOKProvider.GOOGLE_VERTEX,
-                models: response.data.models
-                    .filter(
-                        (model: GeminiModel) =>
-                            model.name.includes('gemini') &&
-                            model.supportedGenerationMethods.includes(
-                                'generateContent',
-                            ),
-                    )
-                    .map((model: GeminiModel) => ({
-                        id: model.name.split('/')[1],
-                        name: `Vertex ${model.displayName || model.name}`,
-                    })),
-            };
-        } catch (error) {
-            this.logger.error({
-                message: 'Error fetching Vertex models',
-                context: GetModelsByProviderUseCase.name,
-                error: error,
-            });
-            throw new BadRequestException(
-                `Error fetching Google Vertex models: ${(error as Error).message}`,
-            );
-        }
+        return {
+            provider: BYOKProvider.GOOGLE_VERTEX,
+            models: catalog.map(({ id, name }) => {
+                const capabilities = getModelCapabilities(reasoningKeyOf(id));
+                return {
+                    id,
+                    name,
+                    ...(capabilities.supportsReasoning && {
+                        supportsReasoning: true,
+                        reasoningConfig: capabilities.reasoningConfig,
+                    }),
+                };
+            }),
+        };
     }
 }

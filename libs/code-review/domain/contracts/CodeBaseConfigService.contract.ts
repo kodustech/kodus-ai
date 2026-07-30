@@ -47,6 +47,7 @@ export interface ICodeBaseConfigService {
         repository: { id: string; name: string };
         overrideConfig?: boolean;
         directoryPath?: string;
+        directoryId?: string;
         defaultBranch?: string;
         removeProperties?: boolean;
     }): Promise<KodusConfigFile | undefined>;

@@ -26,7 +26,7 @@ export class QueryDto {
     })
     pageSize = 50;
 
-    @ApiPropertyOptional({ example: 'composio' })
+    @ApiPropertyOptional({ example: 'kodusmcp' })
     @IsString()
     @IsOptional()
     provider: string;
@@ -36,10 +36,10 @@ export class QueryDto {
     @IsOptional()
     appName: string;
 
-    @ApiPropertyOptional({ example: 'org_123' })
-    @IsString()
-    @IsOptional()
-    organizationId: string;
+    // NOTE: organizationId is intentionally NOT a query field. The tenant scope
+    // is derived from the authenticated request (request.organizationId) and
+    // injected server-side. Accepting it here let a client override the tenant
+    // (cross-tenant leak) via the `...where` spread in McpService.getConnections.
 
     @ApiPropertyOptional({ example: 'int_456' })
     @IsString()

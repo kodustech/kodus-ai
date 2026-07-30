@@ -131,7 +131,7 @@ export default async function LeadTimeForChangeAnalytics() {
                 </Tooltip>
             </PRCycleTimeAnalyticsHeader>
 
-            <CardContent className="flex items-center justify-center">
+            <CardContent className="flex items-center justify-start">
                 <div className="text-3xl font-bold">
                     {currentPeriod.hours}
                     <small className="text-text-secondary">h</small>{" "}

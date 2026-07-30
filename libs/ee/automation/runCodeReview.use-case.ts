@@ -9,7 +9,7 @@ import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 
 import { Inject, Injectable } from '@nestjs/common';
 import { getMappedPlatform } from '@libs/common/utils/webhooks';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { EnqueueCodeReviewJobInput } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
@@ -228,15 +228,12 @@ export class RunCodeReviewAutomationUseCase implements IUseCase {
                 platformType: platformType,
                 origin: sanitizedPayload?.origin,
                 action,
-                //TODO: prcisa do byokauu
-                //byokConfig,
                 triggerCommentId: sanitizedPayload?.triggerCommentId,
+                reviewDirective: sanitizedPayload?.reviewDirective,
+                heavy: sanitizedPayload?.heavy,
                 userGitId,
                 workflowJobId,
                 correlationId,
-                // Job-level AbortSignal — strategies that reach the LLM call
-                // chain (agent-loop, plan-pass, etc.) listen to this and abort
-                // when the 1h45min job timeout fires.
                 signal,
             };
 

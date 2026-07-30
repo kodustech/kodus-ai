@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     BYOKConfig,
     LLMModelProvider,
@@ -38,8 +38,14 @@ export interface RemoteCommands {
     grep: (pattern: string, path: string, glob?: string) => Promise<string>;
     read: (path: string, start: number, end: number) => Promise<string>;
     listDir: (path: string, maxDepth: number) => Promise<string>;
-    /** Run an arbitrary read-only shell command in the sandbox. */
-    exec?: (command: string) => Promise<{ stdout: string; exitCode: number }>;
+    /**
+     * Run an arbitrary read-only shell command in the sandbox.
+     * stdout and stderr are returned SEPARATELY (not merged) so consumers can
+     * distinguish real output from error/diagnostic text and gate on exitCode.
+     */
+    exec?: (
+        command: string,
+    ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
 }
 
 //#region Constants

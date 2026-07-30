@@ -36,20 +36,20 @@ Local tooling:
 
 ```sh
 # Full happy path: provision + bootstrap + run the test (~7–8 min)
-yarn sso-e2e:droplet:provision
+pnpm run sso-e2e:droplet:provision
 
 # Provision only (no Playwright)
-yarn sso-e2e:droplet:provision --skip-test
+pnpm run sso-e2e:droplet:provision --skip-test
 
 # Reuse an existing droplet (skip the 5-min provision)
-yarn sso-e2e:droplet:provision --reuse
+pnpm run sso-e2e:droplet:provision --reuse
 
 # Re-run Playwright against the already-provisioned droplet
-yarn sso-e2e:droplet:run                # headless
-yarn sso-e2e:droplet:run --headed       # visible Chromium
+pnpm run sso-e2e:droplet:run                # headless
+pnpm run sso-e2e:droplet:run --headed       # visible Chromium
 
 # Tear down (also cleans .tmp/sso-e2e-*)
-yarn sso-e2e:droplet:destroy
+pnpm run sso-e2e:droplet:destroy
 ```
 
 ## What it asserts
@@ -70,7 +70,7 @@ test with a clear breadcrumb.
   `sslip.io`. Override with `CADDY_ACME_CA=https://acme-staging-v02.api.letsencrypt.org/directory`
   to use LE staging and re-provision.
 - **Keycloak login form not found** — usually means Caddy hasn't routed to
-  Keycloak yet. Re-run `yarn sso-e2e:droplet:run`.
+  Keycloak yet. Re-run `pnpm run sso-e2e:droplet:run`.
 - **Cookie has Domain=.sslip.io instead of .<IP>.sslip.io** — that would
   be a regression in `deriveSsoCookieDomain`; the unit suite would already
   fail at the `sslip.io / 5+ label common parent` describe block.

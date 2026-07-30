@@ -262,7 +262,7 @@ function analyzeCase(caseEntry) {
         missedAllRuns: missedAllRuns.length,
         noisyRuns: noisyRuns.length,
         topMissed,
-        extractionCommand: `yarn eval:investigation:extract --title ${JSON.stringify(caseEntry.title)}`,
+        extractionCommand: `pnpm run eval:investigation:extract --title ${JSON.stringify(caseEntry.title)}`,
     };
 }
 

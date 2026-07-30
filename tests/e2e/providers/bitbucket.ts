@@ -16,6 +16,9 @@ import {
 } from "./base.js";
 import { ensureOk, http } from "../lib/http.js";
 import { prepareBranch } from "../lib/git.js";
+import { logger } from "../lib/log.js";
+
+const log = logger("bitbucket");
 
 interface BitbucketComment {
     id: number;
@@ -314,6 +317,57 @@ export class BitbucketProvider extends BaseProvider {
             }
             url = resp.body.next ?? null;
         }
+
+        // Also purge webhooks left behind by prior runs. Every run's
+        // registerRepo makes the product create a webhook pointing at that
+        // run's ephemeral trycloudflare tunnel, and nothing ever deleted
+        // them — the fixture accumulated 50 (Bitbucket's per-repo cap), at
+        // which point the CURRENT run's webhook registration fails
+        // silently, the droplet never receives a single PR event, and the
+        // review never runs (the root cause of the standing bitbucket ×
+        // code-review-basic timeout). Delete every hook aimed at a dead
+        // ephemeral tunnel; leave non-tunnel hooks (e.g. the QA instance)
+        // alone. Requires the app password to carry the
+        // `delete:webhook:bitbucket` scope — without it Bitbucket 403s,
+        // which we surface loudly instead of silently re-hitting the cap.
+        try {
+            const hooksResp = await http<{
+                values?: Array<{ uuid: string; url: string }>;
+            }>(
+                `${this.apiBase}/repositories/${this.workspaceSlug}/hooks?pagelen=100`,
+                { headers: this.headers() },
+            );
+            ensureOk(hooksResp, "bitbucket:cleanupStale:listHooks");
+            const stale = (hooksResp.body.values ?? []).filter(
+                (h) =>
+                    /trycloudflare\.com|localhost|127\.0\.0\.1/.test(
+                        h.url ?? "",
+                    ),
+            );
+            let hooksDeleted = 0;
+            for (const h of stale) {
+                const del = await http(
+                    `${this.apiBase}/repositories/${this.workspaceSlug}/hooks/${encodeURIComponent(h.uuid)}`,
+                    { method: "DELETE", headers: this.headers() },
+                );
+                if (del.status === 403) {
+                    log.warn(
+                        `bitbucket:cleanupStale: cannot delete stale webhook ${h.url} — app password lacks the delete:webhook:bitbucket scope. ` +
+                            `${stale.length} dead tunnel webhook(s) remain; at Bitbucket's 50-hook cap NEW webhook registration fails silently and reviews never trigger.`,
+                    );
+                    break;
+                }
+                if (del.status >= 200 && del.status < 300) hooksDeleted += 1;
+            }
+            if (hooksDeleted > 0) {
+                log.info(
+                    `bitbucket:cleanupStale: deleted ${hooksDeleted} stale tunnel webhook(s)`,
+                );
+            }
+        } catch {
+            // Best-effort — webhook cleanup failing must not block the run;
+            // the loud 403 warn above is the actionable signal.
+        }
         return { closed };
     }
 
@@ -362,10 +416,67 @@ export class BitbucketProvider extends BaseProvider {
         };
     }
 
+    // Classify a PR comment against the "is this a real Kody review finding?"
+    // rules, returning WHY it was dropped so a timeout can dump the reasons
+    // (product-posted-nothing vs detector-rejected-a-real-review). Keep the
+    // predicate here single-sourced so the diagnostic can't drift from the
+    // live filter.
+    private classifyReviewComment(
+        c: BitbucketComment,
+        opts: { sinceIso: string; triggerId?: string },
+    ): { keep: boolean; reason: string } {
+        if (c.created_on <= opts.sinceIso)
+            return { keep: false, reason: "before sinceIso" };
+        if (opts.triggerId && String(c.id) === opts.triggerId)
+            return { keep: false, reason: "the @kody trigger comment itself" };
+        const raw = c.content?.raw ?? "";
+        if (raw.toLowerCase().startsWith("@kody"))
+            return { keep: false, reason: "@kody command echo" };
+        // Drop "Started!" placeholder but keep "Complete!" — the latter is a
+        // valid mechanics signal even when Kody found no inline findings.
+        // Bitbucket-specific: Kody does NOT inject the `<!-- kody-codereview -->`
+        // HTML marker into Bitbucket comments (it does on github/gitlab), so
+        // the marker check alone matches nothing. Fall back to detecting the
+        // visible heading text Kody renders into the placeholder.
+        if (
+            raw.includes("<!-- kody-codereview") &&
+            !raw.includes("kody-codereview-completed")
+        ) {
+            return { keep: false, reason: "in-progress kody-codereview marker" };
+        }
+        if (raw.includes("Code Review Started!")) {
+            return { keep: false, reason: "'Code Review Started!' placeholder" };
+        }
+        // Bitbucket-only leftover: when the gate skips the pipeline mid-flow,
+        // Kody overwrites its "Code Review Started!" placeholder so only the
+        // docs.kodus.io feedback footer remains (~80 chars of just the 👎
+        // link, no review content) — easy to confuse with a real "No issues
+        // found" outcome. Drop it.
+        const trimmed = raw.trim();
+        // Regex (not String.includes) so CodeQL doesn't read this as URL-host
+        // sanitization — `trimmed` is a review-comment body and we're plain
+        // text-matching the footer's docs link, not validating a URL.
+        if (
+            trimmed.length < 200 &&
+            /docs\.kodus\.io/.test(trimmed) &&
+            !trimmed.includes("Kody Review Complete") &&
+            !trimmed.includes("Kody Guide")
+        ) {
+            return {
+                keep: false,
+                reason: "footer-only placeholder (<200 chars, docs link)",
+            };
+        }
+        return { keep: true, reason: "real finding" };
+    }
+
     async pollForReview(
         pr: { number: number },
         opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
     ): Promise<ReviewSignal> {
+        // Last page of comments the poll actually saw, so a timeout can report
+        // what WAS on the PR instead of a bare "no findings".
+        let lastSeen: BitbucketComment[] = [];
         const result = await pollUntil(
             async () => {
                 const resp = await http<{ values: BitbucketComment[] }>(
@@ -373,50 +484,10 @@ export class BitbucketProvider extends BaseProvider {
                     { headers: this.headers() },
                 );
                 ensureOk(resp, "bitbucket:pollForReview");
-                const filtered = (resp.body.values ?? []).filter((c) => {
-                    if (c.created_on <= opts.sinceIso) return false;
-                    if (opts.triggerId && String(c.id) === opts.triggerId) return false;
-                    const raw = c.content?.raw ?? "";
-                    if (raw.toLowerCase().startsWith("@kody")) return false;
-                    // Drop "Started!" placeholder but keep "Complete!" — the
-                    // latter is a valid mechanics signal even when Kody
-                    // found no inline findings. Bitbucket-specific: Kody
-                    // does NOT inject the `<!-- kody-codereview -->` HTML
-                    // marker into Bitbucket comments (it does on github/
-                    // gitlab), so the marker check alone matches nothing.
-                    // Fall back to detecting the visible heading text
-                    // Kody renders into the placeholder.
-                    if (
-                        raw.includes("<!-- kody-codereview") &&
-                        !raw.includes("kody-codereview-completed")
-                    ) {
-                        return false;
-                    }
-                    if (raw.includes("Code Review Started!")) {
-                        return false;
-                    }
-                    // Bitbucket-only leftover: when the gate skips the pipeline
-                    // mid-flow, Kody overwrites its "Code Review Started!"
-                    // placeholder comment so only the docs.kodus.io feedback
-                    // footer remains. The comment is then ~80 chars of just
-                    // the 👎 link with no actual review content — meaningless
-                    // for the per-seat scenario and easy to confuse with a
-                    // real "No issues found" outcome. Drop it.
-                    const trimmed = raw.trim();
-                    // Regex (not String.includes) so CodeQL doesn't read this
-                    // as URL-host sanitization — `trimmed` is a review-comment
-                    // body and we're plain text-matching the footer's docs
-                    // link, not validating a URL.
-                    if (
-                        trimmed.length < 200 &&
-                        /docs\.kodus\.io/.test(trimmed) &&
-                        !trimmed.includes("Kody Review Complete") &&
-                        !trimmed.includes("Kody Guide")
-                    ) {
-                        return false;
-                    }
-                    return true;
-                });
+                lastSeen = resp.body.values ?? [];
+                const filtered = lastSeen.filter(
+                    (c) => this.classifyReviewComment(c, opts).keep,
+                );
                 if (filtered.length) {
                     return {
                         reviewComments: filtered.length,
@@ -429,7 +500,42 @@ export class BitbucketProvider extends BaseProvider {
             },
             { timeoutSec: opts.timeoutSec ?? 600, intervalSec: 10 },
         );
+        if (!result) {
+            this.dumpNoFindingsDiagnostic(pr.number, opts, lastSeen);
+        }
         return result ?? { reviewComments: 0, issueComments: 0, reviews: 0 };
+    }
+
+    // On a pollForReview timeout, dump every comment posted after the trigger
+    // with the reason the detector dropped it. Zero comments after sinceIso ⇒
+    // the PRODUCT never posted (webhook/pipeline problem); comments present but
+    // all dropped ⇒ a DETECTOR filter is rejecting a real review. This is the
+    // one signal the fail-log tails don't carry.
+    private dumpNoFindingsDiagnostic(
+        prNumber: number,
+        opts: { sinceIso: string; triggerId?: string },
+        lastSeen: BitbucketComment[],
+    ): void {
+        const afterSince = lastSeen.filter((c) => c.created_on > opts.sinceIso);
+        log.warn(
+            `bitbucket:pollForReview TIMEOUT on PR#${prNumber} — ${afterSince.length} comment(s) after the trigger, none accepted as a real finding:`,
+        );
+        for (const c of afterSince) {
+            const { reason } = this.classifyReviewComment(c, opts);
+            const raw = c.content?.raw ?? "";
+            log.warn(
+                `  - #${c.id} by ${c.user?.display_name ?? "?"} @${c.created_on} ` +
+                    `[dropped: ${reason}] len=${raw.length}: ` +
+                    JSON.stringify(raw.slice(0, 200)),
+            );
+        }
+        if (afterSince.length === 0) {
+            log.warn(
+                `  → ZERO comments after the trigger: the PRODUCT posted no review ` +
+                    `(webhook not delivered / pipeline crashed / review skipped) — ` +
+                    `NOT a detector-filter problem. Check the worker's code-review pipeline logs.`,
+            );
+        }
     }
 
     async postComment(

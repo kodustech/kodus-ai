@@ -1,62 +1,78 @@
-// eslint.config.js
+// eslint.config.js — ESLint 10 flat config.
+//
+// Configs flat-native são espalhadas diretamente (NÃO via FlatCompat): o
+// `next/core-web-vitals` do eslint-config-next 16 é um flat config que traz o
+// eslint-plugin-react com refs circulares — passá-lo pelo FlatCompat quebra o
+// validador legado ("Converting circular structure to JSON"). FlatCompat fica
+// só para o `standard`, que ainda é eslintrc.
 import { FlatCompat } from "@eslint/eslintrc";
-import typescriptPlugin from "@typescript-eslint/eslint-plugin";
-import typescriptParser from "@typescript-eslint/parser";
-import jsxA11yPlugin from "eslint-plugin-jsx-a11y";
-import prettierPlugin from "eslint-plugin-prettier";
-import tailwindcssPlugin from "eslint-plugin-tailwindcss";
+import globals from "globals";
+import tseslint from "typescript-eslint";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import prettierRecommended from "eslint-plugin-prettier/recommended";
 
-const compat = new FlatCompat();
+const compat = new FlatCompat({ baseDirectory: import.meta.dirname });
 
 export default [
+    ...nextCoreWebVitals,
+    ...tseslint.configs.recommended,
+    ...compat.extends("standard"),
+    // prettier/recommended por ÚLTIMO entre os presets: desliga as regras de
+    // formatação (indent/quotes/semi) do standard que conflitam com o Prettier
+    // do projeto (4 espaços, aspas duplas, ponto-e-vírgula).
+    prettierRecommended,
+    {
+        // Fixa a versão do React em vez de deixar o eslint-plugin-react
+        // auto-detectar: a detecção chama `context.getFilename()`, removido no
+        // ESLint 10, o que quebra o lint. Com a versão explícita o plugin pula
+        // esse caminho e roda no ESLint 10.
+        settings: {
+            react: {
+                version: "19.2",
+            },
+        },
+    },
     {
         files: ["**/*.{js,ts,tsx}"],
         languageOptions: {
             ecmaVersion: "latest",
             sourceType: "module",
-            parser: typescriptParser,
-            ecmaFeatures: {
-                jsx: true,
+            parser: tseslint.parser,
+            parserOptions: {
+                ecmaFeatures: {
+                    jsx: true,
+                },
+            },
+            globals: {
+                ...globals.browser,
+                ...globals.es2021,
+                ...globals.jest,
             },
         },
-        env: {
-            es2021: true,
-            browser: true,
-            jest: true,
-        },
-        plugins: {
-            "@typescript-eslint": typescriptPlugin,
-            "jsx-a11y": jsxA11yPlugin,
-            "tailwindcss": tailwindcssPlugin,
-            "prettier": prettierPlugin,
-        },
+        // jsx-a11y é registrado pelo next/core-web-vitals (as regras jsx-a11y
+        // abaixo usam o plugin do next). O eslint-plugin-tailwindcss foi
+        // deixado de fora: exige um CSS-entry (Tailwind v4 é CSS-first) que não
+        // está configurado, e já estava efetivamente desligado antes
+        // (recommended comentado + regra num glob que não casava src/). Religar
+        // o class-order lint do tailwind é tarefa à parte (settings.cssFiles).
         rules: {
             "prettier/prettier": "error",
         },
     },
-    ...compat.extends(
-        "standard",
-        "plugin:@typescript-eslint/recommended",
-        "plugin:prettier/recommended",
-        // "plugin:tailwindcss/recommended",
-        "next/core-web-vitals",
-    ),
     {
-        files: ["*.js"],
+        files: ["**/*.js"],
         rules: {
-            "@typescript-eslint/no-var-requires": "off",
+            // renomeada no typescript-eslint 8 (era no-var-requires)
+            "@typescript-eslint/no-require-imports": "off",
         },
     },
     {
-        files: ["*.ts", "*.tsx"],
+        files: ["**/*.ts", "**/*.tsx"],
         rules: {
             "@next/next/no-html-link-for-pages": "off",
-            "@next/next/no-html-link-for-pages": "off",
-            "tailwindcss/no-custom-classname": "off",
-            "tailwindcss/classnames-order": "error",
             "@typescript-eslint/explicit-module-boundary-types": "off",
             "@typescript-eslint/no-empty-function": "warn",
-            "@typescript-eslint/ban-types": "warn",
+            // ban-types foi removida no v8; os substitutos já vêm no recommended
             "@typescript-eslint/ban-ts-comment": "warn",
             "@typescript-eslint/no-explicit-any": "off",
             "@typescript-eslint/no-unused-vars": [

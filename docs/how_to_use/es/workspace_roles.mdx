@@ -38,11 +38,11 @@ Cada rol proporciona diferentes niveles de acceso y capacidades dentro del espac
 
 ### Administrador de Repositorio (Repository Admin)
 
-**Acceso a la gestión de repositorios** centrado en la gestión de configuraciones de revisión de código para los repositorios que poseen, con acceso completo a issues, cockpit y plugins.
+**Acceso a la gestión de repositorios**. Ve todas las configuraciones, pull requests, issues, cockpit y plugins de toda la organización (solo lectura) y puede editar las configuraciones de revisión de código y las Kody Rules para los repositorios que tiene asignados.
 
 ### Colaborador (Contributor)
 
-**Acceso básico** para los miembros del equipo que necesitan ver las configuraciones de los repositorios a los que están asignados. Limitado a acceso de solo lectura para la mayoría de las funciones.
+**Acceso de solo lectura** a toda la organización. Los Contributors pueden ver las configuraciones, las Kody Rules, los pull requests y los issues en todos los repositorios — sin necesidad de asignación a repositorios — pero no pueden editar nada. El cockpit, el uso de tokens, la facturación y la gestión de usuarios permanecen exclusivos de los administradores.
 
 ## Matriz de Permisos por Rol
 
@@ -73,8 +73,8 @@ Habilita la unión automática para permitir que los usuarios con dominios de co
 **Cómo funciona:**
 - Los usuarios que se registran con tu dominio de correo electrónico pueden elegir unirse a tu organización
 - Deben confirmar su correo electrónico después de elegir unirse
-- Todos los usuarios de unión automática entran con el rol **Contributor** sin acceso a repositorios
-- Como Propietario, necesitas asignarles repositorios y ajustar su rol si es necesario
+- Todos los usuarios de unión automática entran con el rol **Contributor** (acceso de solo lectura a toda la organización)
+- Como Propietario, ajusta su rol si necesitan permisos de edición
 
 ### Cambiar Roles de Miembros
 
@@ -124,8 +124,7 @@ Habilita la unión automática para permitir que los usuarios con dominios de co
 
   <Accordion title="Un miembro no puede acceder a las funciones de cockpit">
     **Soluciones:**
-    - Confirma que el miembro tiene el rol de Administrador de Repositorio o Propietario
-    - Comprueba si el miembro está asignado a los repositorios a los que quiere acceder
+    - Confirma que el miembro tiene el rol de Administrador de Repositorio o Propietario (el cockpit no es visible para Contributors ni Billing Managers)
     - Verifica que la asignación de rol del miembro sea correcta
   </Accordion>
 

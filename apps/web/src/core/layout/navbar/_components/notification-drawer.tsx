@@ -95,7 +95,13 @@ export const NotificationDrawer = ({
                 markRead.mutate(notification.uuid);
             }
             if (notification.delivery.ctaUrl) {
-                window.location.href = notification.delivery.ctaUrl;
+                // Open in a new tab so the user keeps their place in the app
+                // (CTAs are often external, e.g. a PR link).
+                window.open(
+                    notification.delivery.ctaUrl,
+                    "_blank",
+                    "noopener,noreferrer",
+                );
                 onOpenChange(false);
             }
         },

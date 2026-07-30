@@ -38,12 +38,47 @@ jest.mock(
     }),
 );
 
+// generateSummaryPR now runs through the v5 path (byok-to-vercel +
+// tracedGenerateText) instead of the v2 BYOKPromptRunnerService builder, so
+// Claude-on-Vertex works. Mock that path: capture the system/user prompts
+// (Bug E) and return a deterministic summary (Bug A).
+jest.mock('@libs/llm/byok-to-vercel', () => ({
+    byokToVercelModel: jest.fn(() => ({ __mockModel: true })),
+}));
+// `tracedGenerateText` moved to @libs/llm/llm-call (the legacy
+// agents/engine/agent-loop module was removed). requireActual keeps the rest of
+// the module (AGENT_TIMEOUT_MS, etc.) and overrides only the LLM call.
+jest.mock('@libs/llm/llm-call', () => ({
+    ...jest.requireActual('@libs/llm/llm-call'),
+    tracedGenerateText: jest.fn(
+        async ({ system, prompt }: { system?: string; prompt?: string }) => {
+            if (system) {
+                capturedPrompts.push({ prompt: system, role: 'system' });
+            }
+            if (prompt) {
+                capturedPrompts.push({ prompt, role: 'user' });
+            }
+            return { text: NEW_SUMMARY_TEXT };
+        },
+    ),
+}));
+jest.mock('@libs/core/log/langfuse', () => ({
+    buildLangfuseTelemetry: () => ({ isEnabled: false, functionId: 'test' }),
+    toAiSdkTelemetryArgs: (cfg: any) => ({ telemetry: cfg }),
+}));
+
+import { getClassification } from '@libs/llm/error-classifier';
+import { tracedGenerateText } from '@libs/llm/llm-call';
+
 import { CommentManagerService } from './commentManager.service';
 
 describe('CommentManagerService.generateSummaryPR', () => {
     let service: CommentManagerService;
     let codeManagementService: { getPullRequestByNumber: jest.Mock };
-    let observabilityService: { runLLMInSpan: jest.Mock };
+    let observabilityService: {
+        runLLMInSpan: jest.Mock;
+        runAiSdkLLMInSpan: jest.Mock;
+    };
     let parametersService: any;
     let messageProcessor: any;
     let promptRunnerService: any;
@@ -66,6 +101,20 @@ describe('CommentManagerService.generateSummaryPR', () => {
     beforeEach(() => {
         capturedPrompts.length = 0;
 
+        // Restore the happy-path LLM stub — the failure tests below swap it
+        // for a rejection and must not leak into the prompt-shape tests.
+        (tracedGenerateText as jest.Mock).mockImplementation(
+            async ({ system, prompt }: { system?: string; prompt?: string }) => {
+                if (system) {
+                    capturedPrompts.push({ prompt: system, role: 'system' });
+                }
+                if (prompt) {
+                    capturedPrompts.push({ prompt, role: 'user' });
+                }
+                return { text: NEW_SUMMARY_TEXT };
+            },
+        );
+
         codeManagementService = { getPullRequestByNumber: jest.fn() };
 
         observabilityService = {
@@ -75,6 +124,9 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 const result = await exec(() => {});
                 return { result };
             }),
+            // generateSummaryPR now uses runAiSdkLLMInSpan (AI SDK usage path).
+            // It returns the exec result directly; the caller reads `.text`.
+            runAiSdkLLMInSpan: jest.fn(async ({ exec }) => exec()),
         };
 
         parametersService = {};
@@ -296,6 +348,123 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 capturedPrompts.map((p) => p.prompt).join('\n');
 
             expect(systemPrompt).not.toContain('Length Constraint');
+        });
+    });
+
+    // A provider failure and a deliberate skip must not share a return value.
+    // `null` means "we chose not to generate one" (summary disabled, license
+    // denied, diff too large) — callers treat it as a non-event. When the LLM
+    // itself is unreachable the caller has to be able to tell, or the review is
+    // reported as clean and the PR auto-approved without any analysis (#1568).
+    describe('provider failure is thrown, not returned as null', () => {
+        const providerError = Object.assign(
+            new Error('Path not found: /chat/completions'),
+            { name: 'AI_APICallError', statusCode: 404 },
+        );
+
+        it('throws after exhausting its retries when the LLM call keeps failing', async () => {
+            codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                body: '',
+            });
+            (tracedGenerateText as jest.Mock).mockRejectedValue(providerError);
+
+            await expect(
+                service.generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                    null,
+                ),
+            ).rejects.toThrow('Path not found: /chat/completions');
+        });
+
+        it('classifies the thrown error so the PR comment can name the cause', async () => {
+            codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                body: '',
+            });
+            (tracedGenerateText as jest.Mock).mockRejectedValue(providerError);
+
+            const thrown = await service
+                .generateSummaryPR(
+                    stubPR,
+                    stubRepository,
+                    [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                    stubOrg,
+                    'en-US',
+                    summaryConfig,
+                    null,
+                )
+                .catch((e) => e);
+
+            expect(getClassification(thrown)).toBeDefined();
+        });
+
+        it('still returns null for the deliberate skip (summary disabled)', async () => {
+            const result = await service.generateSummaryPR(
+                stubPR,
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                { ...summaryConfig, generatePRSummary: false } as any,
+                null,
+            );
+
+            expect(result).toBeNull();
+        });
+    });
+
+    // Error message (issue #1452): the team's optional note is appended below
+    // Kody's default error comment; the technical reason is always preserved.
+    describe('error message custom note', () => {
+        const genErrorSummary = (customNote?: string) =>
+            (service as any).generatePullRequestFinishSummaryMarkdown(
+                stubOrg,
+                7,
+                [], // commentResults
+                { languageResultPrompt: 'en-US' } as any, // codeReviewConfig
+                [], // prLevelCommentResults
+                true, // reviewFailed
+                'invalid or missing API key', // reviewErrorMessage (the reason)
+                false, // reviewHasPartialErrors
+                customNote, // reviewErrorCustomMessage
+            );
+
+        beforeEach(() => {
+            // Isolate the error comment from the always-appended config guide.
+            (service as any).generateConfigReviewMarkdown = jest
+                .fn()
+                .mockResolvedValue('');
+        });
+
+        it('appends the custom note below the default error comment', async () => {
+            const result = await genErrorSummary('Ping #devops for help.');
+
+            // Default reason preserved AND the note appended after it.
+            expect(result).toContain('Code Review Could Not Complete');
+            expect(result).toContain('invalid or missing API key');
+            expect(result).toContain('Ping #devops for help.');
+            expect(result.indexOf('invalid or missing API key')).toBeLessThan(
+                result.indexOf('Ping #devops for help.'),
+            );
+        });
+
+        it('posts only the default comment when there is no custom note', async () => {
+            const result = await genErrorSummary(undefined);
+
+            expect(result).toContain('Code Review Could Not Complete');
+            expect(result).toContain('invalid or missing API key');
+        });
+
+        it('preserves the author line breaks as Markdown hard breaks', async () => {
+            const result = await genErrorSummary('line one\nline two\nline three');
+
+            // Each single newline becomes a hard break (two trailing spaces)
+            // so the note renders on separate lines in the PR comment.
+            expect(result).toContain('line one  \nline two  \nline three');
         });
     });
 });

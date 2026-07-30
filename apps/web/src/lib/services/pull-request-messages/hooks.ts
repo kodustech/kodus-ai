@@ -51,6 +51,18 @@ export const useSuspensePullRequestMessages = () => {
                             PullRequestMessageStatus.EVERY_PUSH,
                     },
                 },
+                errorReviewMessage: {
+                    content: {
+                        level: FormattedConfigLevel.DEFAULT,
+                        value: defaults?.errorReviewMessage?.content ?? "",
+                    },
+                    status: {
+                        level: FormattedConfigLevel.DEFAULT,
+                        value:
+                            defaults?.errorReviewMessage?.status ??
+                            PullRequestMessageStatus.OFF,
+                    },
+                },
                 globalSettings: {
                     hideComments: {
                         level: FormattedConfigLevel.DEFAULT,
@@ -110,6 +122,18 @@ export const useSuspensePullRequestMessagesFor = (
                         value:
                             defaults?.endReviewMessage?.status ??
                             PullRequestMessageStatus.EVERY_PUSH,
+                    },
+                },
+                errorReviewMessage: {
+                    content: {
+                        level: FormattedConfigLevel.DEFAULT,
+                        value: defaults?.errorReviewMessage?.content ?? "",
+                    },
+                    status: {
+                        level: FormattedConfigLevel.DEFAULT,
+                        value:
+                            defaults?.errorReviewMessage?.status ??
+                            PullRequestMessageStatus.OFF,
                     },
                 },
                 globalSettings: {

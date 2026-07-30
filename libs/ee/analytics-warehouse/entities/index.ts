@@ -5,6 +5,8 @@ import { IngestionRunEntity } from './ingestion-run.entity';
 import { IngestionWatermarkEntity } from './ingestion-watermark.entity';
 import { PullRequestOptEntity } from './pull-request-opt.entity';
 import { PullRequestTypeEntity } from './pull-request-type.entity';
+import { ReviewOperationalExecutionEntity } from './review-operational-execution.entity';
+import { SuggestionFeedbackEntity } from './suggestion-feedback.entity';
 import { SuggestionMvEntity } from './suggestion-mv.entity';
 
 export {
@@ -15,12 +17,16 @@ export {
     IngestionWatermarkEntity,
     PullRequestOptEntity,
     PullRequestTypeEntity,
+    ReviewOperationalExecutionEntity,
+    SuggestionFeedbackEntity,
     SuggestionMvEntity,
 };
 
 export const ANALYTICS_ENTITIES = [
     PullRequestOptEntity,
     SuggestionMvEntity,
+    SuggestionFeedbackEntity,
+    ReviewOperationalExecutionEntity,
     CommitsViewEntity,
     PullRequestTypeEntity,
     IngestionWatermarkEntity,

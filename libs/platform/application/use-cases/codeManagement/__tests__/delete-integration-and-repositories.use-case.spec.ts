@@ -11,7 +11,7 @@
  * with both OAuth and Token auth modes where applicable.
  */
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

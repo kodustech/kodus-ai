@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     SUPPORTED_LANGUAGES,
     ValidationCandidate,

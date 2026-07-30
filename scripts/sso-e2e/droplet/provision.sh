@@ -9,7 +9,7 @@
 #      so secrets live in one place (~/.kodus-dev/config).
 #   2. Layers Caddy + Keycloak on top via docker/sso-e2e/droplet/compose.yml.
 #      Caddy fronts three sslip.io hostnames:
-#          api.<IP>.sslip.io  → kodus-api:3001
+#          api.<IP>.sslip.io  → api:3001
 #          app.<IP>.sslip.io  → kodus-web-prod:3000
 #          kc.<IP>.sslip.io   → kc-sso-e2e:8080
 #      with Let's Encrypt auto-issued certs (HTTP-01 over port 80).
@@ -36,9 +36,9 @@
 #   CADDY_ACME_CA               (optional; default LE production)
 #
 # Usage:
-#   yarn sso-e2e:droplet:provision                 # provision + run test
-#   yarn sso-e2e:droplet:provision --skip-test     # provision only
-#   yarn sso-e2e:droplet:provision --reuse         # reuse existing droplet
+#   pnpm run sso-e2e:droplet:provision                 # provision + run test
+#   pnpm run sso-e2e:droplet:provision --skip-test     # provision only
+#   pnpm run sso-e2e:droplet:provision --reuse         # reuse existing droplet
 
 set -euo pipefail
 
@@ -93,7 +93,7 @@ if [ "${REUSE}" = "1" ] && state_exists "${NAME}"; then
 else
     if state_exists "${NAME}"; then
         warn "Droplet '${NAME}' already exists (IP $(state_get "${NAME}" .server_ip))."
-        warn "Pass --reuse to reuse it, or destroy first: yarn sso-e2e:droplet:destroy --name ${NAME}"
+        warn "Pass --reuse to reuse it, or destroy first: pnpm run sso-e2e:droplet:destroy --name ${NAME}"
         exit 1
     fi
     log "Provisioning base Kodus stack on a fresh droplet (~5 min)…"
@@ -189,7 +189,11 @@ env_set NEXTAUTH_URL "${APP_BASE_URL}"
 # sign-in form's /auth/sso/check call). The public API origin lives
 # in API_URL above for cookie-domain / SAML purposes — those code
 # paths read API_URL directly, not WEB_HOSTNAME_API.
-env_set WEB_HOSTNAME_API "kodus-api"
+# Use the compose SERVICE name `api` (Docker DNS always resolves it on the
+# shared network) — NOT the literal `kodus-api`, which matches neither the
+# service (`api`) nor the container (`kodus_api`, GLOBAL_API_CONTAINER_NAME's
+# installer default) and so 502s every web→API server-side call.
+env_set WEB_HOSTNAME_API "api"
 env_set WEB_PORT_API "3001"
 # kodus-installer defaults API_NODE_ENV to "development" for the
 # self-hosted dev experience. The SSO cookie code path explicitly
@@ -396,14 +400,14 @@ cat <<EOF
 
   Test user   sso-user@kodus-test.com / TestSso!2026
 
-  Run test    yarn sso-e2e:droplet:run
-  Destroy     yarn sso-e2e:droplet:destroy --name ${NAME}
+  Run test    pnpm run sso-e2e:droplet:run
+  Destroy     pnpm run sso-e2e:droplet:destroy --name ${NAME}
 
 EOF
 
 # ---------- step 10: run Playwright ----------
 if [ "${SKIP_TEST}" = "1" ]; then
-    log "Skipping Playwright (--skip-test). Run later: yarn sso-e2e:droplet:run"
+    log "Skipping Playwright (--skip-test). Run later: pnpm run sso-e2e:droplet:run"
     exit 0
 fi
 

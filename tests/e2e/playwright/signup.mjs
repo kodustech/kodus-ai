@@ -8,6 +8,7 @@
 // page HTML to ./failure.html so you can pick a new selector quickly.
 
 import { chromium } from "playwright";
+import { applyWafBypass } from "./waf-bypass.mjs";
 import { writeFileSync } from "node:fs";
 
 const {
@@ -115,6 +116,7 @@ async function clickFirst(page, selectors) {
 
 const browser = await chromium.launch({ headless: true });
 const ctx = await browser.newContext();
+await applyWafBypass(ctx);
 const page = await ctx.newPage();
 
 // Instrumentation — log network failures and any console errors. Critical

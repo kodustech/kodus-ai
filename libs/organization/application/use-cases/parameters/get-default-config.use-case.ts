@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 
 @Injectable()

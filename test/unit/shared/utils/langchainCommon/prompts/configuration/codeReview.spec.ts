@@ -1,4 +1,4 @@
-import type { ContextPack } from '@kodus/flow';
+import type { ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 
 import type { CodeReviewPayload } from '@/shared/utils/langchainCommon/prompts/configuration/codeReview';
 import { prompt_codereview_system_gemini_v2 } from '@/shared/utils/langchainCommon/prompts/configuration/codeReview';

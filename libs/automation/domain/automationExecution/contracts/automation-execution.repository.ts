@@ -30,14 +30,39 @@ export interface IAutomationExecutionRepository {
         pullRequestNumber?: number;
         pullRequestTitle?: string;
         prFilters?: Array<{ number: number; repositoryId: string }>;
+        status?: string;
+        createdAtFrom?: string;
+        createdAtTo?: string;
         skip?: number;
+        cursor?: { createdAt: string | Date; uuid: string };
         take?: number;
         order?: 'ASC' | 'DESC';
         includeTotal?: boolean;
     }): Promise<{
         data: AutomationExecutionEntity[];
         total: number;
+        // Distinct PRs matching the DB-level filters (only with includeTotal).
+        distinctPrTotal: number;
     }>;
+    getDistinctReviewedPullRequestKeys(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds?: string[];
+        createdAtFrom?: Date | string;
+    }): Promise<
+        Array<{
+            repositoryId: string;
+            pullRequestNumber: number;
+            hasError: boolean;
+        }>
+    >;
+    // Distinct PRs still awaiting their first review: every execution for the PR
+    // was 'skipped' (no license, BYOK, manual/paused cadence, ignored user…) and
+    // none ran a review. Drives the Awaiting facet, sourced from execution rows.
+    getAwaitingReviewPullRequestKeys(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryIds?: string[];
+        createdAtFrom?: Date | string;
+    }): Promise<Array<{ repositoryId: string; pullRequestNumber: number }>>;
     findCliReviewExecutionsByOrganization(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repositoryId?: string;
@@ -54,6 +79,10 @@ export interface IAutomationExecutionRepository {
     findLatestExecutionByFilters(
         filters?: Partial<any>,
     ): Promise<AutomationExecutionEntity | null>;
+    findStaleInProgress(
+        cutoffDate: Date,
+        limit?: number,
+    ): Promise<AutomationExecutionEntity[]>;
     findByPeriodAndTeamAutomationId(
         startDate: Date,
         endDate: Date,

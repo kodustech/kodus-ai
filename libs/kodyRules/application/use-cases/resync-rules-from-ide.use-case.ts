@@ -1,11 +1,10 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { v4 as uuid } from 'uuid';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
-import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { KodyRulesSyncService } from '@libs/kodyRules/infrastructure/adapters/services/kodyRulesSync.service';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
@@ -166,11 +165,10 @@ export class ResyncRulesFromIdeUseCase {
         reason: string,
     ): Promise<void> {
         try {
+            // Owners are the config-driven audience (defaultRoles); only the
+            // sync initiator is passed as a directed recipient.
             const userId = this.request.user?.uuid;
-            const recipients: Array<
-                | { kind: 'user'; userId: string }
-                | { kind: 'role'; role: Role }
-            > = [{ kind: 'role', role: Role.OWNER }];
+            const recipients: Array<{ kind: 'user'; userId: string }> = [];
             if (userId) recipients.push({ kind: 'user', userId });
 
             await this.notificationService.emit({

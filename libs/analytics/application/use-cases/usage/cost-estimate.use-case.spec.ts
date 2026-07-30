@@ -1,4 +1,6 @@
 import { CostEstimateUseCase } from './cost-estimate.use-case';
+import { ModelCostCalculator } from './model-cost-calculator';
+import { PricingResolver } from './pricing-resolver';
 import { ModelPricingInfo } from './token-pricing.use-case';
 
 type UsageRow = {
@@ -18,40 +20,36 @@ const pricingFromMillions = (opts: {
     outputPerM: number;
     cacheReadPerM?: number;
     cacheWritePerM?: number;
-    inputPerMAbove200k?: number;
-    outputPerMAbove200k?: number;
-    cacheReadPerMAbove200k?: number;
-    cacheWritePerMAbove200k?: number;
+    inputPerMTier?: number;
+    outputPerMTier?: number;
+    cacheReadPerMTier?: number;
+    cacheWritePerMTier?: number;
 }): ModelPricingInfo => {
-    const perToken = (x?: number) => (typeof x === 'number' ? x / 1e6 : undefined);
+    const perToken = (x?: number) =>
+        typeof x === 'number' ? x / 1e6 : undefined;
+    const withTier = (def: number, tieredPerM?: number) => ({
+        default: def,
+        ...(tieredPerM !== undefined
+            ? { tiers: [{ threshold: 200_000, rate: perToken(tieredPerM) ?? 0 }] }
+            : {}),
+    });
     return {
         id: 'gemini-3.1-pro',
         provider: 'google',
         pricing: {
-            input: {
-                default: perToken(opts.inputPerM) ?? 0,
-                ...(opts.inputPerMAbove200k !== undefined && {
-                    above200k: perToken(opts.inputPerMAbove200k),
-                }),
-            },
-            output: {
-                default: perToken(opts.outputPerM) ?? 0,
-                ...(opts.outputPerMAbove200k !== undefined && {
-                    above200k: perToken(opts.outputPerMAbove200k),
-                }),
-            },
-            cacheRead: {
-                default: perToken(opts.cacheReadPerM) ?? 0,
-                ...(opts.cacheReadPerMAbove200k !== undefined && {
-                    above200k: perToken(opts.cacheReadPerMAbove200k),
-                }),
-            },
-            cacheWrite: {
-                default: perToken(opts.cacheWritePerM) ?? 0,
-                ...(opts.cacheWritePerMAbove200k !== undefined && {
-                    above200k: perToken(opts.cacheWritePerMAbove200k),
-                }),
-            },
+            input: withTier(perToken(opts.inputPerM) ?? 0, opts.inputPerMTier),
+            output: withTier(
+                perToken(opts.outputPerM) ?? 0,
+                opts.outputPerMTier,
+            ),
+            cacheRead: withTier(
+                perToken(opts.cacheReadPerM) ?? 0,
+                opts.cacheReadPerMTier,
+            ),
+            cacheWrite: withTier(
+                perToken(opts.cacheWritePerM) ?? 0,
+                opts.cacheWritePerMTier,
+            ),
             prompt: perToken(opts.inputPerM) ?? 0,
             completion: perToken(opts.outputPerM) ?? 0,
             internal_reasoning: perToken(opts.outputPerM) ?? 0,
@@ -69,10 +67,16 @@ describe('CostEstimateUseCase', () => {
         tokenUsageService = { getUsageByPr: jest.fn() };
         pullRequestsService = { findOne: jest.fn() };
         tokenPricingUseCase = { execute: jest.fn() };
+        // Real calculator over the mocked pricing source: cost math is now
+        // owned by ModelCostCalculator, so the end-to-end assertions below
+        // exercise it through the use case.
+        const modelCostCalculator = new ModelCostCalculator(
+            new PricingResolver(tokenPricingUseCase as any),
+        );
         useCase = new CostEstimateUseCase(
             tokenUsageService as any,
             pullRequestsService as any,
-            tokenPricingUseCase as any,
+            modelCostCalculator as any,
         );
     });
 
@@ -209,39 +213,57 @@ describe('CostEstimateUseCase', () => {
             expect(tokenPricingUseCase.execute).not.toHaveBeenCalled();
         });
 
-        it('prices a large workload using the >200K tier and applies cache discount', async () => {
-            // 1M input (big — aggregate >200K so above200k tier kicks in)
-            // 500K output, 200K cache read, 50K cache write.
-            tokenUsageService.getUsageByPr.mockResolvedValue(
-                buildUsage([
+        it('prices a workload where calls landed in the >200K tier bucket', async () => {
+            // Both rows have byTier with all usage attributed to `gt` (the
+            // repository pre-buckets per-call; here we mimic that result).
+            const rows = buildUsage([
+                {
+                    input: 600_000,
+                    output: 300_000,
+                    outputReasoning: 120_000,
+                    cacheRead: 150_000,
+                    cacheWrite: 30_000,
+                },
+                {
+                    input: 400_000,
+                    output: 200_000,
+                    outputReasoning: 80_000,
+                    cacheRead: 50_000,
+                    cacheWrite: 20_000,
+                },
+            ]).map((r) => ({
+                ...r,
+                byTier: [
                     {
-                        input: 600_000,
-                        output: 300_000,
-                        outputReasoning: 120_000,
-                        cacheRead: 150_000,
-                        cacheWrite: 30_000,
+                        input: 0,
+                        output: 0,
+                        total: 0,
+                        outputReasoning: 0,
+                        cacheRead: 0,
+                        cacheWrite: 0,
                     },
                     {
-                        input: 400_000,
-                        output: 200_000,
-                        outputReasoning: 80_000,
-                        cacheRead: 50_000,
-                        cacheWrite: 20_000,
+                        input: r.input,
+                        output: r.output,
+                        total: r.input + r.output,
+                        outputReasoning: r.outputReasoning,
+                        cacheRead: r.cacheRead ?? 0,
+                        cacheWrite: r.cacheWrite ?? 0,
                     },
-                ]),
-            );
+                ],
+            }));
+            tokenUsageService.getUsageByPr.mockResolvedValue(rows);
             pullRequestsService.findOne
                 .mockResolvedValueOnce({ user: { username: 'alice' } })
                 .mockResolvedValueOnce({ user: { username: 'bob' } });
             tokenPricingUseCase.execute.mockResolvedValue(
-                // Gemini 3.1 Pro-ish rates. Use above200k because aggregate input = 1M.
                 pricingFromMillions({
                     inputPerM: 2,
                     outputPerM: 12,
                     cacheReadPerM: 0.2,
-                    inputPerMAbove200k: 4,
-                    outputPerMAbove200k: 18,
-                    cacheReadPerMAbove200k: 0.4,
+                    inputPerMTier: 4,
+                    outputPerMTier: 18,
+                    cacheReadPerMTier: 0.4,
                 }),
             );
 
@@ -256,10 +278,10 @@ describe('CostEstimateUseCase', () => {
                 cacheWriteTokens: 50_000,
             });
 
-            // Expected 14-day cost with above200k tier + cache:
+            // 14-day cost in the gt bucket only:
             //   uncachedInput = 1M - 200K = 800K → 800K × $4/M = $3.20
             //   cacheRead     = 200K × $0.40/M = $0.08
-            //   cacheWrite    = 50K × $0 (no above200k rate → fallback default 0) = $0
+            //   cacheWrite    = 50K × $0 (no tier rate → 0) = $0
             //   output        = 500K × $18/M = $9.00
             //   total         = $12.28
             const cost14 = 3.2 + 0.08 + 0 + 9.0;
@@ -277,8 +299,9 @@ describe('CostEstimateUseCase', () => {
             );
         });
 
-        it('prices a small workload using the default tier', async () => {
-            // 150K input total (< 200K) → default tier, no cache.
+        it('prices a small workload at the default rate when no byTier is set', async () => {
+            // Flat rows (no byTier) — every call stayed below the tier
+            // threshold, so the repo returned them without a tier breakdown.
             tokenUsageService.getUsageByPr.mockResolvedValue(
                 buildUsage([
                     { input: 100_000, output: 40_000, outputReasoning: 0 },
@@ -289,8 +312,8 @@ describe('CostEstimateUseCase', () => {
                 pricingFromMillions({
                     inputPerM: 2,
                     outputPerM: 12,
-                    inputPerMAbove200k: 4,
-                    outputPerMAbove200k: 18,
+                    inputPerMTier: 4,
+                    outputPerMTier: 18,
                 }),
             );
 
@@ -317,6 +340,25 @@ describe('CostEstimateUseCase', () => {
                     total: 600_000,
                     model: 'gemini-3.1-pro',
                     prNumber: 1,
+                    // Tier-aware model with all calls in gt.
+                    byTier: [
+                    {
+                            input: 0,
+                            output: 0,
+                            total: 0,
+                            outputReasoning: 0,
+                            cacheRead: 0,
+                            cacheWrite: 0,
+                        },
+                    {
+                            input: 500_000,
+                            output: 100_000,
+                            total: 600_000,
+                            outputReasoning: 0,
+                            cacheRead: 0,
+                            cacheWrite: 0,
+                        },
+                ],
                 },
                 {
                     input: 500_000,
@@ -325,6 +367,7 @@ describe('CostEstimateUseCase', () => {
                     total: 600_000,
                     model: 'claude-sonnet-4-5',
                     prNumber: 2,
+                    // Flat-priced model — no byTier.
                 },
             ]);
             tokenPricingUseCase.execute.mockImplementation(
@@ -333,11 +376,10 @@ describe('CostEstimateUseCase', () => {
                         return pricingFromMillions({
                             inputPerM: 2,
                             outputPerM: 12,
-                            inputPerMAbove200k: 4,
-                            outputPerMAbove200k: 18,
+                            inputPerMTier: 4,
+                            outputPerMTier: 18,
                         });
                     }
-                    // Claude has no tiered rate → default applies always.
                     return pricingFromMillions({
                         inputPerM: 3,
                         outputPerM: 15,
@@ -347,8 +389,8 @@ describe('CostEstimateUseCase', () => {
 
             const result = await useCase.execute('org-1');
 
-            // Gemini (above200k): 500K × $4 + 100K × $18 = $2.00 + $1.80 = $3.80
-            // Claude (default):   500K × $3 + 100K × $15 = $1.50 + $1.50 = $3.00
+            // Gemini gt bucket: 500K × $4 + 100K × $18 = $2.00 + $1.80 = $3.80
+            // Claude (flat):    500K × $3 + 100K × $15 = $1.50 + $1.50 = $3.00
             // Total 14-day = $6.80
             const cost14 = 3.8 + 3.0;
             const monthly = cost14 * (30 / 14);

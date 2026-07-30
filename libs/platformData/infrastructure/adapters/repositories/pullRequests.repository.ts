@@ -23,9 +23,11 @@ import {
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
     ISuggestion,
+    SuggestionCountsBySeverity,
 } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { PullRequestsEntity } from '@libs/platformData/domain/pullRequests/entities/pullRequests.entity';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 
 @Injectable()
 export class PullRequestsRepository implements IPullRequestsRepository {
@@ -97,6 +99,38 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             number: doc.number,
             repositoryId: doc.repository?.id || '',
         }));
+    }
+
+    // Cap on PR numbers returned for a repository scope. Feeds a Mongo `$in`
+    // in the Token Usage read, so an unbounded list would risk a huge query /
+    // BSON-size blowup. The newest PRs (most likely to have usage in the
+    // window) are kept. Backed by the compound index on
+    // {organizationId, 'repository.id', createdAt, number} (pullRequests.model).
+    static readonly REPO_PR_NUMBERS_CAP = 10_000;
+
+    async findNumbersByRepositoryId(
+        organizationId: string,
+        repositoryId: string,
+        until?: Date,
+    ): Promise<number[]> {
+        const filter: any = {
+            organizationId,
+            'repository.id': repositoryId,
+        };
+        // No lower bound on purpose: reviews can run on PRs opened long
+        // before the queried window (re-reviews), so bounding by createdAt
+        // would silently drop their usage. The upper bound is safe — a PR
+        // created after the window can't have spans inside it.
+        if (until) filter.createdAt = { $lte: until };
+
+        const results = await this.pullRequestsModel
+            .find(filter, { number: 1 })
+            .sort({ createdAt: -1 })
+            .limit(PullRequestsRepository.REPO_PR_NUMBERS_CAP)
+            .lean()
+            .exec();
+
+        return results.map((doc) => doc.number);
     }
 
     async findByNumberAndRepositoryName(
@@ -248,14 +282,84 @@ export class PullRequestsRepository implements IPullRequestsRepository {
      *
      * @returns Map keyed by `${repositoryId}_${prNumber}` with counts
      */
+    // Counts SENT suggestions of a given severity, tolerant of legacy docs that
+    // stored severity capitalized. Used inside the $group of the counts pipeline.
+    private sumSentBySeverity(severity: string) {
+        return {
+            $sum: {
+                $cond: [
+                    {
+                        $and: [
+                            {
+                                $eq: [
+                                    '$files.suggestions.deliveryStatus',
+                                    DeliveryStatus.SENT,
+                                ],
+                            },
+                            {
+                                $eq: [
+                                    {
+                                        $toLower: {
+                                            $ifNull: [
+                                                '$files.suggestions.severity',
+                                                '',
+                                            ],
+                                        },
+                                    },
+                                    severity,
+                                ],
+                            },
+                        ],
+                    },
+                    1,
+                    0,
+                ],
+            },
+        };
+    }
+
+    // A delivered (sent) suggestion is "unresolved" when the author hasn't
+    // implemented it: implementationStatus ≠ 'implemented'. A missing field
+    // (legacy docs) compares ≠ 'implemented' → counted as unresolved, matching
+    // countDeliveredPullRequests' `$ne` semantics so the list and the card agree.
+    private unresolvedSentCond(severity?: string) {
+        const conds: Record<string, any>[] = [
+            {
+                $eq: [
+                    '$files.suggestions.deliveryStatus',
+                    DeliveryStatus.SENT,
+                ],
+            },
+            {
+                $ne: [
+                    '$files.suggestions.implementationStatus',
+                    ImplementationStatus.IMPLEMENTED,
+                ],
+            },
+        ];
+        if (severity) {
+            conds.push({
+                $eq: [
+                    {
+                        $toLower: {
+                            $ifNull: ['$files.suggestions.severity', ''],
+                        },
+                    },
+                    severity,
+                ],
+            });
+        }
+        return { $sum: { $cond: [{ $and: conds }, 1, 0] } };
+    }
+
     async findSuggestionCountsByNumbersAndRepositoryIds(
         criteria: Array<{
             number: number;
             repositoryId: string;
         }>,
         organizationId: string,
-    ): Promise<Map<string, { sent: number; filtered: number }>> {
-        const result = new Map<string, { sent: number; filtered: number }>();
+    ): Promise<Map<string, SuggestionCountsBySeverity>> {
+        const result = new Map<string, SuggestionCountsBySeverity>();
 
         if (!criteria.length) {
             return result;
@@ -324,6 +428,81 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                 ],
                             },
                         },
+                        // Delivery failures (Kody tried to post but couldn't) —
+                        // kept distinct from `filtered` (a config decision) so
+                        // they aren't silently dropped from the totals.
+                        failed: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $in: [
+                                            '$files.suggestions.deliveryStatus',
+                                            [
+                                                DeliveryStatus.FAILED,
+                                                DeliveryStatus.FAILED_LINES_MISMATCH,
+                                            ],
+                                        ],
+                                    },
+                                    1,
+                                    0,
+                                ],
+                            },
+                        },
+                        // Superseded by a newer suggestion — counted for
+                        // reconciliation, not surfaced as a live signal.
+                        replaced: {
+                            $sum: {
+                                $cond: [
+                                    {
+                                        $eq: [
+                                            '$files.suggestions.deliveryStatus',
+                                            DeliveryStatus.REPLACED,
+                                        ],
+                                    },
+                                    1,
+                                    0,
+                                ],
+                            },
+                        },
+                        // Breakdown of DELIVERED (sent) suggestions by severity —
+                        // this powers the "needs attention" signal + severity
+                        // filter on the PR list. Severity is $toLower-normalized
+                        // because older docs stored it capitalized.
+                        critical: this.sumSentBySeverity('critical'),
+                        high: this.sumSentBySeverity('high'),
+                        medium: this.sumSentBySeverity('medium'),
+                        low: this.sumSentBySeverity('low'),
+                        // Unresolved (sent + implementationStatus ≠ implemented)
+                        // total and by severity — the "Needs attention" signal.
+                        unresolved: this.unresolvedSentCond(),
+                        ucritical: this.unresolvedSentCond('critical'),
+                        uhigh: this.unresolvedSentCond('high'),
+                        umedium: this.unresolvedSentCond('medium'),
+                        ulow: this.unresolvedSentCond('low'),
+                        // Distinct categories (labels) among DELIVERED suggestions
+                        // — powers the category filter. null entries (non-sent
+                        // rows) are stripped when the map is built.
+                        categories: {
+                            $addToSet: {
+                                $cond: [
+                                    {
+                                        $eq: [
+                                            '$files.suggestions.deliveryStatus',
+                                            DeliveryStatus.SENT,
+                                        ],
+                                    },
+                                    {
+                                        $toLower: {
+                                            $ifNull: [
+                                                '$files.suggestions.label',
+                                                '',
+                                            ],
+                                        },
+                                    },
+                                    null,
+                                ],
+                            },
+                        },
                     },
                 },
                 // Project to clean output
@@ -334,6 +513,18 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         prNumber: '$_id.prNumber',
                         sent: 1,
                         filtered: 1,
+                        failed: 1,
+                        replaced: 1,
+                        critical: 1,
+                        high: 1,
+                        medium: 1,
+                        low: 1,
+                        unresolved: 1,
+                        ucritical: 1,
+                        uhigh: 1,
+                        umedium: 1,
+                        ulow: 1,
+                        categories: 1,
                     },
                 },
             ])
@@ -345,10 +536,199 @@ export class PullRequestsRepository implements IPullRequestsRepository {
             result.set(key, {
                 sent: row.sent || 0,
                 filtered: row.filtered || 0,
+                failed: row.failed || 0,
+                replaced: row.replaced || 0,
+                unresolved: row.unresolved || 0,
+                unresolvedBySeverity: {
+                    critical: row.ucritical || 0,
+                    high: row.uhigh || 0,
+                    medium: row.umedium || 0,
+                    low: row.ulow || 0,
+                },
+                bySeverity: {
+                    critical: row.critical || 0,
+                    high: row.high || 0,
+                    medium: row.medium || 0,
+                    low: row.low || 0,
+                },
+                categories: Array.isArray(row.categories)
+                    ? row.categories.filter(
+                          (c: unknown): c is string =>
+                              typeof c === 'string' && c.length > 0,
+                      )
+                    : [],
             });
         }
 
         return result;
+    }
+
+    // Keys of still-open PRs opened on/after `since` (ISO string). Used by the
+    // daily-digest to compute "awaiting review" = opened today but with no Kody
+    // execution yet. openedAt is stored as an ISO-8601 string, so a lexicographic
+    // $gte against an ISO cutoff is a correct range compare.
+    async findOpenPullRequestKeysOpenedSince(
+        since: string,
+        organizationId: string,
+        repositoryIds?: string[],
+    ): Promise<Array<{ number: number; repositoryId: string }>> {
+        const match: Record<string, any> = {
+            organizationId,
+            openedAt: { $gte: since },
+            merged: { $ne: true },
+            status: { $nin: ['closed'] },
+        };
+
+        if (repositoryIds?.length) {
+            match['repository.id'] = { $in: repositoryIds };
+        }
+
+        const rows = await this.pullRequestsModel
+            .find(match, { 'number': 1, 'repository.id': 1, '_id': 0 })
+            .lean()
+            .exec();
+
+        return rows
+            .filter((r: any) => r?.number != null && r?.repository?.id)
+            .map((r: any) => ({
+                number: r.number,
+                repositoryId: r.repository.id,
+            }));
+    }
+
+    // Distinct PR authors (by display name) for the org/team repo scope — powers
+    // the Author search autocomplete. Optional `search` narrows by a
+    // case-insensitive substring of name/username; results are ordered by PR
+    // count (most active first) and capped. Only authors with a non-empty
+    // display name are returned, since the list filters on the exact name.
+    async findDistinctAuthorsByRepositoryIds(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        search?: string,
+        limit = 20,
+    ): Promise<
+        Array<{
+            id: string;
+            name: string;
+            username: string;
+            count: number;
+        }>
+    > {
+        const match: Record<string, any> = { organizationId };
+        if (repositoryIds?.length) {
+            match['repository.id'] = { $in: repositoryIds };
+        }
+        const trimmed = search?.trim();
+        if (trimmed) {
+            const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const rx = new RegExp(escaped, 'i');
+            match.$or = [{ 'user.name': rx }, { 'user.username': rx }];
+        }
+
+        const rows = await this.pullRequestsModel
+            .aggregate([
+                { $match: match },
+                {
+                    $group: {
+                        // Group by the git identity — username is the stable key;
+                        // fall back to name when a provider omits it.
+                        _id: { $ifNull: ['$user.username', '$user.name'] },
+                        name: { $first: '$user.name' },
+                        username: { $first: '$user.username' },
+                        userId: { $first: '$user.id' },
+                        count: { $sum: 1 },
+                    },
+                },
+                // Exact-name filtering means an author with no display name can't
+                // be selected — drop them from the suggestions.
+                { $match: { name: { $nin: [null, ''] } } },
+                { $sort: { count: -1, name: 1 } },
+                // Cap generously — the caller caches the full list once per team
+                // and filters in memory, so this runs rarely (not per keystroke).
+                { $limit: Math.max(1, Math.min(limit, 500)) },
+            ])
+            .exec();
+
+        // Author email is deliberately NOT returned: the autocomplete only
+        // shows name/username and matching is done server-side, so surfacing it
+        // would leak colleague emails to any user with Read PullRequests.
+        return rows.map((r: any) => ({
+            id: r.userId != null ? String(r.userId) : '',
+            name: r.name ?? '',
+            username: r.username ?? '',
+            count: r.count ?? 0,
+        }));
+    }
+
+    // Counts DISTINCT PRs that delivered ≥1 suggestion, optionally narrowed by
+    // severity (lowercased) and/or author email. Powers the "Needs attention"
+    // (severities critical/high) and "Mine" (authorEmail) segment facets.
+    async countDeliveredPullRequests(
+        organizationId: string,
+        repositoryIds: string[] | undefined,
+        opts: {
+            severities?: string[];
+            authorEmail?: string;
+            // Only count a PR when it still has a delivered suggestion the dev
+            // hasn't addressed (implementationStatus ≠ 'implemented'). Powers the
+            // "Needs attention" facet — a PR with everything resolved shouldn't
+            // count. Freshness caveat: implementationStatus is only as current as
+            // the last verification pass.
+            unresolvedOnly?: boolean;
+            // Only count PRs that are still open (not merged, not closed) — a
+            // stale suggestion on a merged PR isn't actionable.
+            openOnly?: boolean;
+        },
+    ): Promise<number> {
+        const filter: Record<string, any> = { organizationId };
+        if (repositoryIds?.length) {
+            filter['repository.id'] = { $in: repositoryIds };
+        }
+        if (opts.authorEmail) {
+            filter.$expr = {
+                $eq: [
+                    { $toLower: { $ifNull: ['$user.email', ''] } },
+                    opts.authorEmail.toLowerCase(),
+                ],
+            };
+        }
+        if (opts.openOnly) {
+            filter.merged = { $ne: true };
+            filter.status = { $nin: ['closed'] };
+        }
+
+        // Count each qualifying PR once, WITHOUT $unwind of files×suggestions —
+        // that explosion turned a distinct-PR count into a multi-second
+        // collection scan at scale. A PR qualifies when it carries a delivered
+        // suggestion; when severity/unresolved conditions are given they must
+        // ALL hold on the SAME suggestion, so they go inside a nested
+        // $elemMatch. Severity is stored lowercase, matching the already-
+        // lowercased `opts.severities`. Backed by the
+        // {organizationId, 'files.suggestions.deliveryStatus'} index.
+        const suggestionMatch: Record<string, any> = {
+            deliveryStatus: DeliveryStatus.SENT,
+        };
+        if (opts.severities?.length) {
+            suggestionMatch.severity = { $in: opts.severities };
+        }
+        if (opts.unresolvedOnly) {
+            // not_implemented OR partially_implemented — anything the dev hasn't
+            // fully applied. Missing field (legacy docs) is treated as
+            // unresolved via $ne.
+            suggestionMatch.implementationStatus = {
+                $ne: ImplementationStatus.IMPLEMENTED,
+            };
+        }
+
+        if (opts.severities?.length || opts.unresolvedOnly) {
+            filter.files = {
+                $elemMatch: { suggestions: { $elemMatch: suggestionMatch } },
+            };
+        } else {
+            filter['files.suggestions.deliveryStatus'] = DeliveryStatus.SENT;
+        }
+
+        return this.pullRequestsModel.countDocuments(filter).exec();
     }
 
     async findFileWithSuggestions(
@@ -471,8 +851,13 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         const fileSuggestions = await this.pullRequestsModel
             .aggregate([
                 {
+                    // Pre-filter to PRs that reference this rule BEFORE the
+                    // files×suggestions unwind — otherwise every PR in the org
+                    // is exploded just to surface the few carrying the rule.
+                    // Backed by {organizationId, files.suggestions.brokenKodyRulesIds}.
                     $match: {
-                        organizationId: organizationId,
+                        'organizationId': organizationId,
+                        'files.suggestions.brokenKodyRulesIds': ruleId,
                     },
                 },
                 {
@@ -508,8 +893,11 @@ export class PullRequestsRepository implements IPullRequestsRepository {
         const prLevelSuggestions = await this.pullRequestsModel
             .aggregate([
                 {
+                    // Same pre-filter for PR-level suggestions: keep only PRs
+                    // that reference the rule before unwinding.
                     $match: {
-                        organizationId: organizationId,
+                        'organizationId': organizationId,
+                        'prLevelSuggestions.brokenKodyRulesIds': ruleId,
                     },
                 },
                 {
@@ -915,11 +1303,11 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 // ordered: false — one bad op doesn't stop the rest,
                 // and every op is self-contained (adds a file or
                 // pushes suggestions onto an existing file by id).
-                const res = await this.pullRequestsModel.bulkWrite(
-                    chunk,
-                    { ordered: false },
-                );
-                modified += (res?.modifiedCount ?? 0) + (res?.upsertedCount ?? 0);
+                const res = await this.pullRequestsModel.bulkWrite(chunk, {
+                    ordered: false,
+                });
+                modified +=
+                    (res?.modifiedCount ?? 0) + (res?.upsertedCount ?? 0);
             } catch (err: unknown) {
                 // MongoBulkWriteError still carries the partial result
                 // on `err.result` plus `err.writeErrors[]`. With

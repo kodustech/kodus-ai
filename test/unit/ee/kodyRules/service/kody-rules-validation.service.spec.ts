@@ -64,6 +64,25 @@ describe('KodyRulesValidationService', () => {
 
             expect(result).toBe(false);
         });
+
+        it('allows exactly MAX_KODY_RULES (10) at the boundary', async () => {
+            // The ceiling is inclusive (`<= 10`): the 10th rule is allowed,
+            // only the 11th is rejected. Pins the off-by-one boundary.
+            shouldLimitResourcesMock.mockResolvedValue(true);
+
+            expect(
+                await service.validateRulesLimit(
+                    { organizationId: 'org-1' } as any,
+                    service.MAX_KODY_RULES,
+                ),
+            ).toBe(true);
+            expect(
+                await service.validateRulesLimit(
+                    { organizationId: 'org-1' } as any,
+                    service.MAX_KODY_RULES + 1,
+                ),
+            ).toBe(false);
+        });
     });
 
     describe('filterKodyRules', () => {
@@ -608,6 +627,138 @@ describe('KodyRulesValidationService', () => {
             });
 
             expect(result.map((rule) => rule.uuid)).toEqual(['included']);
+        });
+    });
+
+    describe('comma-joined multi-glob rule paths (#1483)', () => {
+        // The IDE-rule importer persists multi-glob paths comma-joined
+        // (e.g. frontmatter `path: ["app/**/*.rb", "lib/**/*.rb"]` becomes
+        // "app/**/*.rb,lib/**/*.rb"). picomatch treats a comma as a literal
+        // character, so before the split these rules matched ZERO files and
+        // were silently never enforced.
+        const filters = { repositoryId: 'repo-1' };
+
+        it('matches a file against ANY of the comma-joined globs', () => {
+            const rule = createRule({
+                uuid: 'multi',
+                path: 'app/**/*.rb,lib/**/*.rb',
+            });
+
+            for (const file of ['app/models/user.rb', 'lib/tasks/foo.rb']) {
+                const result = service.getKodyRulesForFile(
+                    file,
+                    [rule],
+                    filters,
+                );
+                expect(result.map((r) => r.uuid)).toEqual(['multi']);
+            }
+        });
+
+        it('does not match files outside every glob', () => {
+            const rule = createRule({
+                uuid: 'multi',
+                path: 'app/services/**/*.rb,app/interactors/**/*.rb',
+            });
+
+            const result = service.getKodyRulesForFile(
+                'app/models/user.rb',
+                [rule],
+                filters,
+            );
+
+            expect(result).toEqual([]);
+        });
+
+        it('tolerates whitespace around the commas', () => {
+            const rule = createRule({
+                uuid: 'spaced',
+                path: 'app/**/*.rb, lib/**/*.rb',
+            });
+
+            const result = service.getKodyRulesForFile(
+                'lib/foo.rb',
+                [rule],
+                filters,
+            );
+
+            expect(result.map((r) => r.uuid)).toEqual(['spaced']);
+        });
+
+        it('keeps brace alternations intact (comma inside {} is not a separator)', () => {
+            const rule = createRule({
+                uuid: 'braced',
+                path: '{app,lib}/**/*.rb,config/**/*.yml',
+            });
+
+            for (const file of [
+                'app/models/user.rb',
+                'lib/foo.rb',
+                'config/settings.yml',
+            ]) {
+                const result = service.getKodyRulesForFile(
+                    file,
+                    [rule],
+                    filters,
+                );
+                expect(result.map((r) => r.uuid)).toEqual(['braced']);
+            }
+        });
+
+        it('keeps character classes intact (comma inside [] is not a separator)', () => {
+            const rule = createRule({
+                uuid: 'bracketed',
+                path: 'src/[ab,cd]/**/*.ts,docs/**/*.md',
+            });
+
+            // picomatch treats "[ab,cd]" as a character class: any single
+            // char of a, b, comma, c, d. A naive comma-split would produce
+            // the invalid fragments "src/[ab" and "cd]/**/*.ts".
+            expect(
+                service
+                    .getKodyRulesForFile('src/a/main.ts', [rule], filters)
+                    .map((r) => r.uuid),
+            ).toEqual(['bracketed']);
+            expect(
+                service
+                    .getKodyRulesForFile('docs/readme.md', [rule], filters)
+                    .map((r) => r.uuid),
+            ).toEqual(['bracketed']);
+        });
+
+        it('still matches single-glob paths as before', () => {
+            const rule = createRule({
+                uuid: 'single',
+                path: 'app/jobs/**/*.rb',
+            });
+
+            expect(
+                service
+                    .getKodyRulesForFile('app/jobs/sync_job.rb', [rule], filters)
+                    .map((r) => r.uuid),
+            ).toEqual(['single']);
+            expect(
+                service.getKodyRulesForFile('app/models/user.rb', [rule], filters),
+            ).toEqual([]);
+        });
+
+        it('matches folders against ANY of the comma-joined globs', () => {
+            const rule = createRule({
+                uuid: 'folder-multi',
+                path: 'app/services/**,lib/tasks/**',
+            });
+
+            for (const folder of ['app/services', 'lib/tasks']) {
+                const result = service.getKodyRulesForFolder(
+                    folder,
+                    [rule],
+                    filters,
+                );
+                expect(result.map((r) => r.uuid)).toEqual(['folder-multi']);
+            }
+
+            expect(
+                service.getKodyRulesForFolder('app/models', [rule], filters),
+            ).toEqual([]);
         });
     });
 });

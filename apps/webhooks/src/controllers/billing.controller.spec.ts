@@ -6,11 +6,10 @@ import { Response } from 'express';
 
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
-import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 
 import { BillingController } from './billing.controller';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),
@@ -55,9 +54,11 @@ describe('BillingController', () => {
     beforeEach(async () => {
         notify = { emit: jest.fn().mockResolvedValue(undefined) };
         config = {
-            get: jest.fn().mockImplementation((key: string) =>
-                key === 'API_BILLING_WEBHOOK_SECRET' ? SECRET : undefined,
-            ),
+            get: jest
+                .fn()
+                .mockImplementation((key: string) =>
+                    key === 'API_BILLING_WEBHOOK_SECRET' ? SECRET : undefined,
+                ),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -157,10 +158,6 @@ describe('BillingController', () => {
                     updatePaymentUrl: 'https://app.kodus.io/billing',
                 },
                 organizationId: 'org-1',
-                recipients: expect.arrayContaining([
-                    { kind: 'role', role: Role.OWNER },
-                    { kind: 'role', role: Role.BILLING_MANAGER },
-                ]),
             });
         });
 
@@ -229,10 +226,6 @@ describe('BillingController', () => {
                     upgradeUrl: 'https://app.kodus.io/billing',
                 },
                 organizationId: 'org-1',
-                recipients: expect.arrayContaining([
-                    { kind: 'role', role: Role.OWNER },
-                    { kind: 'role', role: Role.BILLING_MANAGER },
-                ]),
             });
         });
     });

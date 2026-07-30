@@ -4,7 +4,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import {
     describeEnvLLMConfig,
     type EnvLLMProviderId,
-} from '@libs/code-review/infrastructure/agents/llm/env-llm-config';
+} from '@libs/llm/env-llm-config';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,

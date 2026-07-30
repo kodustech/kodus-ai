@@ -1,6 +1,6 @@
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
@@ -8,6 +8,7 @@ import {
 import {
     DEFAULT_COCKPIT_METRICS_VISIBILITY,
     ICockpitMetricsVisibility,
+    mergeCockpitMetricsVisibility,
 } from '@libs/organization/domain/organizationParameters/interfaces/cockpit-metrics-visibility.interface';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -47,7 +48,11 @@ export class GetCockpitMetricsVisibilityUseCase {
                 return DEFAULT_COCKPIT_METRICS_VISIBILITY;
             }
 
-            return parameter.configValue as ICockpitMetricsVisibility;
+            // Merge over defaults so newly-added fields (e.g. `tabs`) are
+            // present even for orgs that saved a config before they existed.
+            return mergeCockpitMetricsVisibility(
+                parameter.configValue as Partial<ICockpitMetricsVisibility>,
+            );
         } catch (error) {
             this.logger.error({
                 message:

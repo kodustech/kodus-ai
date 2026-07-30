@@ -28,7 +28,7 @@ describe("countConfigOverridesByRoute — kody-rules", () => {
         const config: any = {
             ideRulesSyncEnabled: overridden("repository", "default", true, false),
             kodyRulesGeneratorEnabled: noOverride("default"),
-            llmGeneratedMemoriesRequireApproval: noOverride("default"),
+            kodyKnowledgeApproval: { enabled: noOverride("default") },
         };
 
         const count = countConfigOverridesByRoute(
@@ -40,13 +40,12 @@ describe("countConfigOverridesByRoute — kody-rules", () => {
         expect(count).toBe(0);
     });
 
-    it("counts kodyRulesGeneratorEnabled and llmGeneratedMemoriesRequireApproval overrides", () => {
+    it("counts kodyRulesGeneratorEnabled and kodyKnowledgeApproval overrides", () => {
         const config: any = {
             kodyRulesGeneratorEnabled: overridden("repository", "default"),
-            llmGeneratedMemoriesRequireApproval: overridden(
-                "repository",
-                "default",
-            ),
+            kodyKnowledgeApproval: {
+                enabled: overridden("repository", "default"),
+            },
             ideRulesSyncEnabled: noOverride("default"),
         };
 
@@ -62,7 +61,7 @@ describe("countConfigOverridesByRoute — kody-rules", () => {
     it("returns 0 when no rule-policy fields have repository-level overrides", () => {
         const config: any = {
             kodyRulesGeneratorEnabled: noOverride("default"),
-            llmGeneratedMemoriesRequireApproval: noOverride("default"),
+            kodyKnowledgeApproval: { enabled: noOverride("default") },
             ideRulesSyncEnabled: noOverride("default"),
         };
 

@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { BetterStackClient } from './betterstack.client';
 
 type IncidentSeverity = 'critical' | 'major' | 'minor';

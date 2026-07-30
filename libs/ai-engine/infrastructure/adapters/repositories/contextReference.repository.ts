@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsWhere } from 'typeorm';
+import { Repository, FindOptionsWhere, In } from 'typeorm';
 import { ContextReferenceModel } from './schemas/contextReference.model';
 import { ContextReferenceEntity } from '@libs/ai-engine/domain/contextReference/entities/context-reference.entity';
 import { IContextReference } from '@libs/ai-engine/domain/contextReference/interfaces/context-reference.interface';
 import { IContextReferenceRepository } from '@libs/ai-engine/domain/contextReference/contracts/context-reference.repository.contract';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 function modelToEntity(model: ContextReferenceModel): ContextReferenceEntity {
     return ContextReferenceEntity.create({
@@ -122,6 +122,16 @@ export class ContextReferenceRepository implements IContextReferenceRepository {
             where: { uuid },
         });
         return result ? modelToEntity(result) : undefined;
+    }
+
+    async findByIds(uuids: string[]): Promise<ContextReferenceEntity[]> {
+        if (!uuids?.length) {
+            return [];
+        }
+        const results = await this.repository.find({
+            where: { uuid: In(uuids) },
+        });
+        return results.map(modelToEntity);
     }
 
     async update(

@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
@@ -18,13 +18,15 @@ import {
     IIntegrationService,
     INTEGRATION_SERVICE_TOKEN,
 } from '@libs/integrations/domain/integrations/contracts/integration.service.contracts';
-import { KodyLearningStatus } from '@libs/organization/domain/parameters/types/configValue.type';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from './find-rules-in-organization-by-filter.use-case';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import {
+    IKodyRule,
+    KodyRulesOrigin,
+} from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 @Injectable()
 export class CheckSyncStatusUseCase {
@@ -60,11 +62,6 @@ export class CheckSyncStatusUseCase {
             teamId: teamId,
         };
 
-        const platformConfig = await this.parametersService.findByKey(
-            ParametersKey.PLATFORM_CONFIGS,
-            organizationAndTeamData,
-        );
-
         try {
             const codeReviewConfigs: CodeReviewParameter =
                 await this.getCodeReviewConfigs(organizationAndTeamData);
@@ -79,17 +76,17 @@ export class CheckSyncStatusUseCase {
                 return syncStatusFlags;
             }
 
+            const rules =
+                await this.findRulesInOrganizationByRuleFilterKodyRulesUseCase.execute(
+                    organizationAndTeamData.organizationId,
+                    {},
+                    repositoryId,
+                );
+
             const ideRulesSyncEnabled =
                 currentRepositoryConfig.configs.ideRulesSyncEnabled;
 
             if (!ideRulesSyncEnabled) {
-                const rules =
-                    await this.findRulesInOrganizationByRuleFilterKodyRulesUseCase.execute(
-                        organizationAndTeamData.organizationId,
-                        {},
-                        repositoryId,
-                    );
-
                 const ideRules = rules?.find((rule) =>
                     rule?.rules?.find((r: IKodyRule) => r.sourcePath),
                 );
@@ -97,18 +94,20 @@ export class CheckSyncStatusUseCase {
                 syncStatusFlags.ideRulesSyncEnabledFirstTime = !ideRules;
             }
 
-            const kodyRulesGeneratorEnabled =
-                currentRepositoryConfig.configs.kodyRulesGeneratorEnabled;
+            // "First time" for the generator means the repo has never been
+            // seeded from past reviews. It drives the one-time onboarding
+            // notice; the current toggle value and platform learning status are
+            // irrelevant to that fact (issue #1506 — the old logic returned the
+            // pre-toggle value, so it was false exactly when it should be true).
+            const hasPastReviewRules = rules?.some((rule) =>
+                rule?.rules?.some(
+                    (r: IKodyRule) =>
+                        r.origin === KodyRulesOrigin.PAST_REVIEWS,
+                ),
+            );
 
-            if (
-                platformConfig.configValue.kodyLearningStatus ===
-                KodyLearningStatus.DISABLED
-            ) {
-                syncStatusFlags.kodyRulesGeneratorEnabledFirstTime = false;
-            } else {
-                syncStatusFlags.kodyRulesGeneratorEnabledFirstTime =
-                    kodyRulesGeneratorEnabled;
-            }
+            syncStatusFlags.kodyRulesGeneratorEnabledFirstTime =
+                !hasPastReviewRules;
 
             return syncStatusFlags;
         } catch (error) {

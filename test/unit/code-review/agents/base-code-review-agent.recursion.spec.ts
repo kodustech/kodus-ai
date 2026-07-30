@@ -33,7 +33,7 @@
  * inputs because those are the gates the bug rides on.
  */
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -44,7 +44,7 @@ jest.mock('@kodus/flow', () => ({
 }));
 
 jest.mock(
-    '@/code-review/infrastructure/agents/llm/byok-to-vercel',
+    '@libs/llm/byok-to-vercel',
     () => ({
         byokToVercelModel: jest.fn(() => ({ id: 'fake-model' })),
         getModelName: jest.fn(() => 'fake-model'),
@@ -52,7 +52,7 @@ jest.mock(
 );
 
 jest.mock(
-    '@/code-review/infrastructure/agents/llm/model-context-window',
+    '@libs/llm/model-context-window',
     () => ({
         resolveContextWindow: jest.fn(() => 200_000),
     }),
@@ -62,8 +62,11 @@ jest.mock('@libs/core/log/langfuse', () => ({
     shouldTrace: jest.fn(() => false),
 }));
 
-jest.mock('@/code-review/infrastructure/agents/llm/agent-loop', () => ({
-    runAgentLoop: jest.fn(async () => ({
+// execute() runs the agent via runAgentLoopViaCore (the harness adapter) — stub
+// that boundary so the recursion/chunking logic under test runs with real
+// estimatePromptTokens/chunkFilesByTokenBudget, but no real LLM.
+jest.mock('@/code-review/infrastructure/agents/core/core-agent-loop.adapter', () => ({
+    runAgentLoopViaCore: jest.fn(async () => ({
         findings: { suggestions: [] },
         text: '',
         steps: 0,
@@ -108,11 +111,11 @@ jest.mock('@/code-review/infrastructure/agents/llm/agent-loop', () => ({
     })),
 }));
 
+import { BaseCodeReviewAgentProvider } from '@/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
 import {
-    BaseCodeReviewAgentProvider,
     type ReviewAgentIdentity,
     type ReviewAgentInput,
-} from '@/code-review/infrastructure/agents/base-code-review-agent.provider';
+} from '@/code-review/infrastructure/agents/review-agent.contract';
 import type { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
 class TestAgent extends BaseCodeReviewAgentProvider {

@@ -5,13 +5,14 @@ import {
     ISandboxLeaseManager,
     SANDBOX_LEASE_MANAGER_TOKEN,
     AcquireResult,
+    SandboxInvalidatedError,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
 import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 import { CodeManagementService } from '@/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@/core/domain/enums';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -268,6 +269,30 @@ describe('CreateSandboxStage', () => {
             const result = await (stage as any).executeStage(context);
 
             expect(result.sandboxHandle).toBeUndefined();
+        });
+
+        it('logs an invalidation as a supersede (warn, not error) and continues', async () => {
+            // A PR closed / force-pushed mid-acquire surfaces as
+            // SandboxInvalidatedError — a supersede, not a failure. The stage
+            // must log it at warn (so it doesn't pollute error rates/alerts)
+            // and still continue self-contained.
+            mockLeaseManager.acquire.mockRejectedValue(
+                new SandboxInvalidatedError(
+                    '7e2e97b8-aefa-422e-92d4-30b378c0332e:repo:5',
+                    true,
+                ),
+            );
+
+            const context = createBaseContext({
+                changedFiles: [{ filename: 'test.ts' } as any],
+            });
+
+            const result = await (stage as any).executeStage(context);
+            const logger = (stage as any).logger;
+
+            expect(result.sandboxHandle).toBeUndefined();
+            expect(logger.warn).toHaveBeenCalled();
+            expect(logger.error).not.toHaveBeenCalled();
         });
 
         it('does not retry acquire itself — retry+backoff lives inside the lease manager', async () => {

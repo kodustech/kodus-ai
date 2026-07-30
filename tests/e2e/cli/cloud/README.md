@@ -59,11 +59,11 @@ license-attribution and per-seat gates are the real signal.
 
 ## Usage
 
-    yarn cloud:setup-tenants                          # all tenants
+    pnpm run cloud:setup-tenants                          # all tenants
     CLOUD_SETUP_ONLY=e2e-free-gh@kodus.io \           # one tenant
-      yarn cloud:setup-tenants
+      pnpm run cloud:setup-tenants
     CLOUD_SETUP_PASSWORD='your-pass' \                # override default
-      yarn cloud:setup-tenants
+      pnpm run cloud:setup-tenants
 
 Env overrides:
 

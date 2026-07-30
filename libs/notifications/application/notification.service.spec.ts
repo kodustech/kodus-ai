@@ -5,7 +5,7 @@ import { IOutboxMessageRepository } from '@libs/core/workflow/domain/contracts/o
 import { NotificationEvent } from '../domain/catalog/events';
 import { NotificationService } from './notification.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),

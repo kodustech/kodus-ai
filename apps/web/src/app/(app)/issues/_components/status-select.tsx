@@ -65,6 +65,12 @@ export const StatusSelect = ({
                             d.uuid === issueId ? { ...d, status } : d,
                         ),
                 );
+
+                queryClient.invalidateQueries({
+                    queryKey: generateQueryKey(
+                        apiProxyPath("/issues/count"),
+                    ),
+                });
             } catch {
                 toast({
                     variant: "warning",

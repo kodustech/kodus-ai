@@ -13,6 +13,7 @@ import {
     type LLMConfigStatus,
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
+import type { ByokModelCost } from "@services/usage/byok-cost";
 import {
     ExternalLinkIcon,
     InfoIcon,
@@ -28,6 +29,8 @@ import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side"
 import type { BYOKConfig } from "../_types";
 import { CuratedCatalog } from "./catalog/catalog";
 import { ConfiguredSummary } from "./configured-summary";
+import { ModelOverridesBanner } from "./model-overrides-banner";
+import { SpendLimitSection } from "./spend-limit-section";
 
 type SlotState = "idle" | "editing";
 
@@ -41,6 +44,7 @@ const CURATED_PROVIDERS = new Set([
     "anthropic",
     "openai",
     "openai_compatible",
+    "anthropic_compatible",
     "google_gemini",
     "openrouter",
 ]);
@@ -54,6 +58,8 @@ const providerLabel = (providerId?: string) => {
             return "OpenAI";
         case "openai_compatible":
             return "OpenAI-compatible";
+        case "anthropic_compatible":
+            return "Anthropic-compatible";
         case "anthropic":
             return "Anthropic";
         case "google_gemini":
@@ -157,9 +163,19 @@ const confirmEnvOverride = (): Promise<boolean> =>
 export const ByokPageClient = ({
     config,
     llmConfigStatus,
+    teamId,
+    mainCost,
+    fallbackCost,
+    periodLabel,
+    costRangeQuery,
 }: {
     config: { main: BYOKConfig; fallback: BYOKConfig } | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
+    teamId?: string;
+    mainCost?: ByokModelCost;
+    fallbackCost?: ByokModelCost;
+    periodLabel?: string;
+    costRangeQuery?: string;
 }) => {
     const router = useRouter();
     const [mainState, setMainState] = useState<SlotState>(
@@ -338,6 +354,8 @@ export const ByokPageClient = ({
                     <EnvConfigNotice env={llmConfigStatus.env} />
                 )}
 
+                <ModelOverridesBanner teamId={teamId} />
+
                 <section className="flex flex-col gap-3">
                     <SlotHeader
                         icon={<ShieldCheckIcon size={16} />}
@@ -348,6 +366,9 @@ export const ByokPageClient = ({
                     {mainState === "idle" && config?.main ? (
                         <ConfiguredSummary
                             config={config.main}
+                            cost={mainCost}
+                            periodLabel={periodLabel}
+                            costRangeQuery={costRangeQuery}
                             isDeleting={isDeletingMain}
                             onChange={() => handleEdit("main")}
                             onDelete={onDeleteMain}
@@ -355,6 +376,7 @@ export const ByokPageClient = ({
                     ) : (
                         <CuratedCatalog
                             slot="main"
+                            existingConfig={config?.main}
                             existingKeyByProvider={existingKeyByProvider}
                             onSave={onSaveMain}
                             onCancel={
@@ -377,6 +399,9 @@ export const ByokPageClient = ({
                         {fallbackState === "idle" && config?.fallback ? (
                             <ConfiguredSummary
                                 config={config.fallback}
+                                cost={fallbackCost}
+                                periodLabel={periodLabel}
+                                costRangeQuery={costRangeQuery}
                                 isDeleting={isDeletingFallback}
                                 onChange={() => handleEdit("fallback")}
                                 onDelete={onDeleteFallback}
@@ -388,6 +413,7 @@ export const ByokPageClient = ({
                         ) : (
                             <CuratedCatalog
                                 slot="fallback"
+                                existingConfig={config?.fallback}
                                 existingKeyByProvider={existingKeyByProvider}
                                 onSave={onSaveFallback}
                                 onCancel={() => setFallbackState("idle")}
@@ -408,6 +434,8 @@ export const ByokPageClient = ({
                         )}
                     </section>
                 )}
+
+                {config?.main && <SpendLimitSection teamId={teamId} />}
             </Page.Content>
         </Page.Root>
     );

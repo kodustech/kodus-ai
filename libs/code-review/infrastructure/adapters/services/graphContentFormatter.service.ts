@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { parsePatch } from 'diff';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 

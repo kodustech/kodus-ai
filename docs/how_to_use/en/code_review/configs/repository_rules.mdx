@@ -10,6 +10,10 @@ Repository Rules use the same auto-sync mechanism as IDE rule file detection. En
 ## How to Use
 You can create custom Kody Rules directly in your repository by placing structured markdown files in specific directories. This allows you to version control your rules alongside your code and share them across your team.
 
+<Info>
+Repository rule files are imported **verbatim** — no LLM conversion. The frontmatter is parsed as-is, the markdown body becomes the rule's instructions exactly as you wrote it (identifiers, formatting and wording preserved), and the Bad/Good examples are imported structurally. Each file produces one rule. Files that don't parse as the template (missing frontmatter or `title`) fall back to the LLM importer used for free-form files.
+</Info>
+
 ### Synchronization
 - **Automatic Detection**: Repository rules are automatically detected and synchronized when enabled
 - **Manual Sync**: Add `@kody-sync` to any rule file to sync it individually (works even with auto-sync disabled)
@@ -29,7 +33,7 @@ Each rule file must follow this exact template structure:
 ```markdown
 ---
 title: "<rule name>"
-scope: "file"            # "file" or "pull_request"
+scope: "file"            # "file" or "pull-request"
 path: []                 # list of globs. example: ["**/*.ts", "apps/web/**"]
 severity_min: "high"     # "low", "medium", "high", "critical"
 languages: []            # optional. ex: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
@@ -63,9 +67,17 @@ Describe what to review and how to decide. Be direct and objective.
 | Field | Description | Values |
 |-------|-------------|---------|
 | `title` | Rule name displayed in the interface | Any descriptive string |
-| `scope` | Rule analysis scope | `"file"` or `"pull_request"` |
-| `path` | File paths where rule applies | Array of glob patterns |
+| `scope` | Rule analysis scope | `"file"` or `"pull-request"` |
+| `path` | File paths where rule applies. The rule fires on files matching **any** of the globs | Array of glob patterns |
 | `severity_min` | Minimum severity level | `"low"`, `"medium"`, `"high"`, `"critical"` |
+
+### Optional Fields
+
+| Field | Description |
+|-------|-------------|
+| `uuid` | Stable rule identifier — keeps the same platform rule across renames |
+| `enabled` | Set to `false` to skip importing this file (an already-imported rule is not removed) |
+| `languages`, `buckets` | Informational metadata |
 
 ## Example Rules
 
@@ -112,7 +124,7 @@ function processUser(user: User) {
 ```markdown
 ---
 title: "New API endpoints must have tests"
-scope: "pull_request"
+scope: "pull-request"
 path: ["**/*"]
 severity_min: "high"
 buckets: ["testing"]

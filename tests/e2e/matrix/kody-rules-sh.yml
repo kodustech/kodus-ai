@@ -1,0 +1,21 @@
+id: kody-rules-sh
+description: |
+    Self-hosted end-to-end validation of the sharded kody-rules rewrite
+    (#1449). Proves the shipped provider runs through the REAL pipeline
+    (webhook → AgentReviewStage → sharded KodyRulesAgentProvider → suggestion)
+    on a live self-hosted instance — the gap the unit/behavioral checks can't
+    cover — plus the multi-site coverage guard.
+
+    onboarding-webhook-registration runs first: if the webhook isn't
+    registered after onboarding, the downstream review scenarios time out
+    instead of failing fast.
+
+scenarios:
+    - onboarding-webhook-registration
+    - kody-rules-create-and-apply
+    - kody-rules-coverage
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid

@@ -79,6 +79,82 @@ describe('UpdateCodeReviewParameterRepositoriesUseCase', () => {
         expect(result).toEqual({ ok: true });
     });
 
+    it('creates the default global config when the team has none, then attaches repositories', async () => {
+        const createOrUpdateParametersUseCase = {
+            execute: jest.fn().mockResolvedValue({ ok: true }),
+        };
+
+        // First lookup misses (team has no config row); after we create the
+        // default it resolves to the freshly-created empty global config.
+        const findByKey = jest
+            .fn()
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce({
+                configValue: {
+                    id: 'global',
+                    name: 'Global',
+                    isSelected: true,
+                    configs: {},
+                    repositories: [],
+                },
+            });
+
+        const useCase = new UpdateCodeReviewParameterRepositoriesUseCase(
+            { findByKey } as any,
+            createOrUpdateParametersUseCase as any,
+            {
+                findIntegrationConfigFormatted: jest.fn().mockResolvedValue([
+                    { id: 'repo-1', name: 'alpha' },
+                ]),
+            } as any,
+            { emit: jest.fn() } as any,
+            {} as any,
+        );
+
+        const result = await useCase.execute({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+        });
+
+        // The default global config is created first...
+        expect(
+            createOrUpdateParametersUseCase.execute,
+        ).toHaveBeenNthCalledWith(
+            1,
+            'code_review_config',
+            {
+                id: 'global',
+                name: 'Global',
+                isSelected: true,
+                configs: {},
+                repositories: [],
+            },
+            { organizationId: 'org-1', teamId: 'team-1' },
+        );
+        // ...then the selected repositories are attached to it.
+        expect(
+            createOrUpdateParametersUseCase.execute,
+        ).toHaveBeenNthCalledWith(
+            2,
+            'code_review_config',
+            expect.objectContaining({
+                repositories: [
+                    {
+                        id: 'repo-1',
+                        name: 'alpha',
+                        isSelected: true,
+                        configs: {},
+                        directories: [],
+                    },
+                ],
+            }),
+            { organizationId: 'org-1', teamId: 'team-1' },
+        );
+        expect(result).toEqual({ ok: true });
+    });
+
     it('emits an audit log with a CLI actor when invoked from the CLI flow', async () => {
         const createOrUpdateParametersUseCase = {
             execute: jest.fn().mockResolvedValue({ ok: true }),

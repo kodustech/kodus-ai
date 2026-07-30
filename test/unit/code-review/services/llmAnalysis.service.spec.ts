@@ -7,7 +7,7 @@ import { SANDBOX_PROVIDER_TOKEN } from '@libs/sandbox/domain/contracts/sandbox.p
 import { Test, TestingModule } from '@nestjs/testing';
 
 // Mock logger to silence logs during tests
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

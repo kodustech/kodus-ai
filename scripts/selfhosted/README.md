@@ -19,19 +19,19 @@ provision   ─►   deploy   ─►   destroy
 
 ```bash
 # 1) Bootstrap (once per machine — saves to ~/.kodus-dev/config)
-yarn selfhosted:setup
+pnpm run selfhosted:setup
 
 # 2) Provision a droplet (~10 min, runs published :latest image)
-yarn selfhosted:provision
+pnpm run selfhosted:provision
 
 # 3) Deploy YOUR branch onto the droplet (~3 min)
-yarn selfhosted:deploy
+pnpm run selfhosted:deploy
 
 # 4) Iterate — edit code, deploy again as needed
-yarn selfhosted:deploy
+pnpm run selfhosted:deploy
 
 # 5) Destroy when done
-yarn selfhosted:destroy
+pnpm run selfhosted:destroy
 ```
 
 After step 2, `provision` will print a `⚠️` warning reminding you that the running image is the published one, not your code. After step 3, you're running your branch.
@@ -41,10 +41,10 @@ After step 2, `provision` will print a `⚠️` warning reminding you that the r
 For repro-ing a customer bug, validating an RC, or running a demo:
 
 ```bash
-yarn selfhosted:setup
-IMAGE_TAG=selfhosted-2.1.11 yarn selfhosted:provision
+pnpm run selfhosted:setup
+IMAGE_TAG=selfhosted-2.1.11 pnpm run selfhosted:provision
 # poke the dashboard manually
-yarn selfhosted:destroy
+pnpm run selfhosted:destroy
 ```
 
 Skip the `deploy` step entirely — you want exactly the published image.
@@ -52,27 +52,27 @@ Skip the `deploy` step entirely — you want exactly the published image.
 ## Inspecting and debugging
 
 ```bash
-yarn selfhosted:status                       # health + URLs of all instances
-yarn selfhosted:ssh                          # open shell on the VM
-yarn selfhosted:ssh -- 'docker compose ps'   # run a one-off remote command
-yarn selfhosted:logs                         # tail all service logs
-yarn selfhosted:logs -- api worker           # tail specific services
+pnpm run selfhosted:status                       # health + URLs of all instances
+pnpm run selfhosted:ssh                          # open shell on the VM
+pnpm run selfhosted:ssh -- 'docker compose ps'   # run a one-off remote command
+pnpm run selfhosted:logs                         # tail all service logs
+pnpm run selfhosted:logs -- api worker           # tail specific services
 ```
 
 ## Where secrets live
 
 In priority order (higher wins):
 
-1. **Inline-exported env** — `IMAGE_TAG=foo yarn selfhosted:provision`
+1. **Inline-exported env** — `IMAGE_TAG=foo pnpm run selfhosted:provision`
 2. **`scripts/selfhosted/.env`** — per-repo override (gitignored)
-3. **`~/.kodus-dev/config`** — global per-machine (managed by `yarn selfhosted:setup`)
+3. **`~/.kodus-dev/config`** — global per-machine (managed by `pnpm run selfhosted:setup`)
 
 `~/.kodus-dev/config` is the recommended path: set it up once and forget. Works across every clone of the repo, survives project reinstalls.
 
 ```bash
-yarn selfhosted:setup         # interactive (auto-runs on first provision)
-yarn selfhosted:setup --show  # show current config (masked)
-yarn selfhosted:setup --path  # print config file path
+pnpm run selfhosted:setup         # interactive (auto-runs on first provision)
+pnpm run selfhosted:setup --show  # show current config (masked)
+pnpm run selfhosted:setup --path  # print config file path
 ```
 
 If `direnv` is installed, the setup script offers to create a `.envrc` in the repo that auto-loads the config when you `cd` into the directory. Without direnv, the scripts read `~/.kodus-dev/config` directly anyway.
@@ -95,12 +95,12 @@ See [`op-references.md`](./op-references.md) for the team's standard paths and s
 You and a teammate can have stacks alive at the same time:
 
 ```bash
-yarn selfhosted:provision --name junior
-yarn selfhosted:provision --name wellington
-yarn selfhosted:status                       # lists both
-yarn selfhosted:deploy --name junior         # only deploys to junior's VM
-yarn selfhosted:destroy --name junior
-yarn selfhosted:destroy --name wellington
+pnpm run selfhosted:provision --name junior
+pnpm run selfhosted:provision --name wellington
+pnpm run selfhosted:status                       # lists both
+pnpm run selfhosted:deploy --name junior         # only deploys to junior's VM
+pnpm run selfhosted:destroy --name junior
+pnpm run selfhosted:destroy --name wellington
 ```
 
 Each `--name` becomes a suffix on the droplet (`kodus-selfhosted-junior`) and the local state file (`.kodus-dev/selfhosted-vm-junior.json`). The Docker image tag pushed by `deploy` is also per-name (`dev-junior`), so deploys don't collide.
@@ -126,8 +126,8 @@ Iteration cost:
 Variants:
 
 ```bash
-yarn selfhosted:deploy -- api worker    # only rebuild these (faster)
-yarn selfhosted:deploy --no-build       # skip build, just pull + restart
+pnpm run selfhosted:deploy -- api worker    # only rebuild these (faster)
+pnpm run selfhosted:deploy --no-build       # skip build, just pull + restart
 ```
 
 Requirements:
@@ -138,7 +138,7 @@ Images are pushed to `ghcr.io/<your-gh-user>/kodus-ai-{api,worker,webhook,web,mc
 
 ## Configuration
 
-Recommended: run `yarn selfhosted:setup`, which prompts for the fields below interactively. To set values manually, use any of the 3 sources in [Where secrets live](#where-secrets-live).
+Recommended: run `pnpm run selfhosted:setup`, which prompts for the fields below interactively. To set values manually, use any of the 3 sources in [Where secrets live](#where-secrets-live).
 
 ### Required
 
@@ -192,26 +192,26 @@ Recommended: run `yarn selfhosted:setup`, which prompts for the fields below int
 - DO `s-2vcpu-4gb`: ~$0.036/h ≈ **$0.86/day** ≈ $26/month if left running
 - Hetzner CX22: ~$0.006/h ≈ **$0.14/day** (cheaper for sustained dev use)
 
-Don't forget `yarn selfhosted:destroy` when you're done.
+Don't forget `pnpm run selfhosted:destroy` when you're done.
 
 ## Troubleshooting
 
 ### "Instance 'default' already exists"
 
 You tried to `provision` but one is already alive. Options:
-- Use a different name: `yarn selfhosted:provision --name new`
-- Destroy the current one: `yarn selfhosted:destroy`
+- Use a different name: `pnpm run selfhosted:provision --name new`
+- Destroy the current one: `pnpm run selfhosted:destroy`
 
 ### Stack came up but dashboard doesn't load
 
 ```bash
-yarn selfhosted:ssh -- 'docker compose ps'         # which containers are healthy
-yarn selfhosted:logs -- web api                    # check for errors
+pnpm run selfhosted:ssh -- 'docker compose ps'         # which containers are healthy
+pnpm run selfhosted:logs -- web api                    # check for errors
 ```
 
 Common causes:
 - Memory pressure on `s-2vcpu-4gb` → use `DO_SIZE=s-4vcpu-8gb`
-- `WEB_HOSTNAME_API` wrong (must be `kodus-api`, the internal container name)
+- `WEB_HOSTNAME_API` wrong (must be `localhost`, the sentinel that makes the web resolve the API via `GLOBAL_API_CONTAINER_NAME`, i.e. the `kodus_api` container)
 - Container crash-looping due to a missing env var → read the logs
 
 ### Tunnel URL changed
@@ -219,14 +219,14 @@ Common causes:
 Cloudflare quick tunnel generates a random URL. If `cloudflared` restarts (rare), the URL changes. To fetch the current one:
 
 ```bash
-yarn selfhosted:ssh -- 'grep -oE "https://[a-zA-Z0-9-]+\.trycloudflare\.com" /var/log/cloudflared.log | head -1'
+pnpm run selfhosted:ssh -- 'grep -oE "https://[a-zA-Z0-9-]+\.trycloudflare\.com" /var/log/cloudflared.log | head -1'
 ```
 
 For a stable URL you'd need Cloudflare Named Tunnel — outside the scope of this helper; configure manually if needed.
 
 ### `deploy` says "No instance named 'default'"
 
-`deploy` requires a `provision` to have run first. Run `yarn selfhosted:provision` to create the droplet, then `yarn selfhosted:deploy` to ship your code.
+`deploy` requires a `provision` to have run first. Run `pnpm run selfhosted:provision` to create the droplet, then `pnpm run selfhosted:deploy` to ship your code.
 
 ### I want to run an E2E matrix scenario against this instance
 
@@ -252,11 +252,11 @@ npm run scenario -- --scenario code-review-basic --target self-hosted --provider
 
 | Goal | Use |
 |---|---|
-| Test my unmerged branch end-to-end as self-hosted | `yarn selfhosted:provision` + `yarn selfhosted:deploy` (this) |
-| Reproduce a customer bug | `IMAGE_TAG=selfhosted-X.Y.Z yarn selfhosted:provision`, then poke (no deploy) |
-| Demo for internal team or customer | `yarn selfhosted:provision`, keep alive as long as you need |
+| Test my unmerged branch end-to-end as self-hosted | `pnpm run selfhosted:provision` + `pnpm run selfhosted:deploy` (this) |
+| Reproduce a customer bug | `IMAGE_TAG=selfhosted-X.Y.Z pnpm run selfhosted:provision`, then poke (no deploy) |
+| Demo for internal team or customer | `pnpm run selfhosted:provision`, keep alive as long as you need |
 | Automated pre-release QA | `tests/e2e/` + workflows (`e2e-self-hosted-matrix.yml`) |
-| Monorepo code development (cloud mode + hot reload) | `yarn docker:start` (not this helper) |
+| Monorepo code development (cloud mode + hot reload) | `pnpm run docker:start` (not this helper) |
 
 ## Limitations
 

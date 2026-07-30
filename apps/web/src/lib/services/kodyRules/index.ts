@@ -29,12 +29,13 @@ export const KODY_RULES_PATHS = {
     ),
     APPLY_PENDING_KODY_RULES: pathToApiUrl("/kody-rules/pending/apply"),
     DISCARD_PENDING_KODY_RULES: pathToApiUrl("/kody-rules/pending/discard"),
-    CONVERT_PENDING_UPDATES_TO_MEMORIES: pathToApiUrl(
-        "/kody-rules/pending/convert-updates-to-memories",
+    CONVERT_PENDING_UPDATES_TO_NEW: pathToApiUrl(
+        "/kody-rules/pending/convert-updates-to-new",
     ),
     GENERATE_KODY_RULES: pathToApiUrl("/kody-rules/generate-kody-rules"),
     SYNC_IDE_RULES: pathToApiUrl("/kody-rules/sync-ide-rules"),
     CHECK_SYNC_STATUS: pathToApiUrl("/kody-rules/check-sync-status"),
+    PAST_REVIEWERS: pathToApiUrl("/kody-rules/past-reviewers"),
     GET_INHERITED_RULES: pathToApiUrl("/kody-rules/inherited-rules"),
     GET_KODY_RULES_TOTAL_QUANTITY: pathToApiUrl("/kody-rules/limits"),
     GET_KODY_RULE_SUGGESTIONS: pathToApiUrl("/kody-rules/suggestions"),
@@ -43,4 +44,12 @@ export const KODY_RULES_PATHS = {
     ),
     MANAGE_IMPORTED_KODY_RULES: pathToApiUrl("/kody-rules/imported/manage"),
     COUNT_IMPORTED_KODY_RULES: pathToApiUrl("/kody-rules/imported/count"),
+    COUNTS_BY_REPOSITORY: pathToApiUrl("/kody-rules/counts-by-repository"),
+    GLOBAL_SOURCE_REPOSITORIES: pathToApiUrl(
+        "/kody-rules/global-source-repositories",
+    ),
+    GLOBAL_RULES_IMPORT_STATUS: pathToApiUrl(
+        "/kody-rules/global-source-repositories/import-status",
+    ),
+    RESYNC_GLOBAL_RULES: pathToApiUrl("/kody-rules/resync-global-rules"),
 } as const;

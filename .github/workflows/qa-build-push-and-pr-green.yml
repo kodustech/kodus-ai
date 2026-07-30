@@ -15,7 +15,7 @@ on:
             - "docker/Dockerfile"
             - "docker-bake.hcl"
             - "package.json"
-            - "yarn.lock"
+            - "pnpm-lock.yaml"
     workflow_dispatch:
         inputs:
             image_tag:
@@ -63,6 +63,8 @@ jobs:
             # Required by github/codeql-action/upload-sarif to publish
             # Trivy findings to the repo's Security tab.
             security-events: write
+            # Push the buildx layer cache to GHCR (images still go to ECR).
+            packages: write
 
         steps:
             - name: Checkout code
@@ -123,8 +125,25 @@ jobs:
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v4.0.0
 
+            # Cache push/pull target. Images go to ECR; the buildx layer
+            # cache lives in GHCR (durable, no 10GB GHA eviction).
+            - name: Login to GitHub Container Registry (build cache)
+              uses: docker/login-action@v4.1.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
             - name: Build, tag, and push (api/webhooks/worker)
               env:
+                  # Authenticates @vscode/ripgrep's postinstall download via
+                  # the bake-level `github_token` secret (anonymous GitHub
+                  # API calls from runner IPs are rate-limited → 403).
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # Durable registry build cache in GHCR (read by bake's
+                  # CACHE_TYPE/CACHE_REF — see docker-bake.hcl). arm64-only tag.
+                  CACHE_TYPE: registry
+                  CACHE_REF: ghcr.io/${{ github.repository_owner }}/kodus-ai-buildcache:qa-arm64
                   ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
                   API_TAGS: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API
                       }}:${{ env.IMAGE_TAG }}
@@ -138,8 +157,6 @@ jobs:
                   docker buildx bake -f docker-bake.hcl \
                     --set base.args.RELEASE_VERSION=${{ env.IMAGE_TAG }} \
                     --set base.args.API_CLOUD_MODE=true \
-                    --set base.cache-from=type=gha,scope=${{ env.BUILDX_CACHE_SCOPE }} \
-                    --set base.cache-to=type=gha,scope=${{ env.BUILDX_CACHE_SCOPE }},mode=max \
                     --set *.platform=${{ env.BUILDX_PLATFORMS }} \
                     --push \
                     api webhooks worker
@@ -263,3 +280,183 @@ jobs:
                       ```bash
                       atlantis apply -p aws-qa-app-services-ecs-ec2
                       ```
+
+    # ---- E2E matrix on QA cloud ---------------------------------------
+    # Fires AFTER the GitOps PR is opened + (auto-)applied. The matrix
+    # tests the QA cloud URL as a tenant, not the freshly-built image
+    # directly — so atlantis must finish first. cancel-in-progress on the
+    # called workflow collapses a rajada de merges into a single run, and
+    # the nightly cron there is the catch-all so a quiet day still gets
+    # one signal.
+    #
+    # Waits for the ECS rollout the infra PR triggers, BEFORE the matrix runs.
+    #
+    # This job replaces the assumption that used to live here: "in practice the
+    # matrix takes longer than the rollout, so by the time the cells reach
+    # review-trigger steps the new image is live." CloudWatch says otherwise —
+    # on 2026-07-15 the worker deployment ran 15:03:55→15:25:42 UTC while the
+    # matrix opened its first PR at 15:07 and enqueued another at 15:19. Both
+    # webhooks were accepted (`Webhook enqueued, pull_request`) and then sat
+    # ~10min waiting for a worker to come up. The scenarios give up at 600s, so
+    # the harness closed the PRs before any review could land, and every GitHub
+    # cell failed with "review pipeline likely never started".
+    #
+    # The existing readiness gate in e2e-cloud.yml can't catch this: it polls
+    # the API's /health, which reports `application` + `database` only — not the
+    # worker, not the queue. The API rolls first, the gate goes green, and the
+    # matrix starts firing at a fleet that isn't there yet.
+    #
+    # Why here and not in e2e-cloud.yml: the AWS role already lives in this
+    # workflow. The e2e job carries GitHub/GitLab/Bitbucket/Azure tokens and
+    # cloud tenant credentials — handing it an AWS role to answer "is the
+    # rollout done?" widens the blast radius of a leak for no reason.
+    wait_for_qa_rollout:
+        name: Wait for QA ECS rollout
+        needs: build_push_and_open_pr
+        if: needs.build_push_and_open_pr.result == 'success'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            id-token: write # OIDC for configure-aws-credentials
+        # Observed worst case ~22min end-to-end (atlantis apply + rolling
+        # replace of 2 tasks). 35 leaves headroom without letting a stuck
+        # rollout hold the pipeline all day.
+        timeout-minutes: 35
+        steps:
+            - name: Configure AWS Credentials (OIDC)
+              uses: aws-actions/configure-aws-credentials@v6.1.0
+              with:
+                  role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+
+            - name: Wait for every QA service to reach steady state
+              env:
+                  CLUSTER: kodus-qa-orchestrator
+              run: |
+                  set -uo pipefail
+                  # worker FIRST: it is the one the reviews actually need, and
+                  # the one that rolls last. api/webhook are cheap to confirm.
+                  SERVICES="kodus-qa-orchestrator-worker kodus-qa-orchestrator-api kodus-qa-orchestrator-webhook"
+                  DEADLINE=$(( $(date +%s) + 30 * 60 ))
+
+                  for SVC in $SERVICES; do
+                      echo "::group::$SVC"
+                      while :; do
+                          read -r STATE DESIRED RUNNING PENDING <<<"$(
+                              aws ecs describe-services --cluster "$CLUSTER" --services "$SVC" \
+                                  --query 'services[0].[deployments[?status==`PRIMARY`]|[0].rolloutState,desiredCount,runningCount,pendingCount]' \
+                                  --output text 2>/dev/null || echo "QUERY_FAILED - - -"
+                          )"
+                          echo "$(date -u +%H:%M:%S) $SVC rollout=$STATE desired=$DESIRED running=$RUNNING pending=$PENDING"
+
+                          # COMPLETED + no pending tasks = the fleet is actually serving.
+                          if [ "$STATE" = "COMPLETED" ] && [ "$PENDING" = "0" ] && [ "$RUNNING" = "$DESIRED" ]; then
+                              echo "$SVC is stable"; break
+                          fi
+                          if [ "$STATE" = "FAILED" ]; then
+                              echo "::error::$SVC rollout FAILED — not starting the matrix against a broken deploy"
+                              exit 1
+                          fi
+                          if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+                              # Don't fail the pipeline on a slow rollout: warn and
+                              # let the matrix run. A red matrix with a real digest
+                              # beats no signal at all — the whole point of this
+                              # change is that silence is the worst outcome.
+                              echo "::warning::$SVC did not stabilise within 30min (rollout=$STATE) — running the matrix anyway; expect deploy-race failures"
+                              break
+                          fi
+                          sleep 20
+                      done
+                      echo "::endgroup::"
+                  done
+
+    e2e-cloud:
+        name: E2E matrix on QA cloud
+        needs: [build_push_and_open_pr, wait_for_qa_rollout]
+        # BOTH results, explicitly: an `if:` overrides the default "skip when a
+        # need failed", so listing wait_for_qa_rollout under `needs` alone would
+        # NOT stop this job from running after a FAILED rollout — the exact case
+        # that job exists to catch. (A stalled rollout still succeeds-with-a-
+        # warning by design; only a FAILED one blocks here.)
+        if: >-
+            needs.build_push_and_open_pr.result == 'success' &&
+            needs.wait_for_qa_rollout.result == 'success'
+        permissions:
+            contents: read
+        uses: ./.github/workflows/e2e-cloud.yml
+        with:
+            image_tag: ${{ github.event.inputs.image_tag || github.sha }}
+            matrix_file: matrix/fast.yml
+        secrets: inherit
+
+    # ---- Tier-0 model benchmark (engine changes only) -----------------
+    # The model-quality benchmark used to be its own push-triggered workflow,
+    # but it raced this async deploy: it gated on /health reporting the pushed
+    # SHA within ~15min while the build+atlantis+ECS rollout takes far longer,
+    # so every engine merge aborted at the gate (measured nothing for weeks).
+    # Driving it from here — after the image is built and rolling out — means
+    # its settle gate only waits for the rollout. We keep the original "only on
+    # engine changes" scope via a paths-filter (the filter that used to live in
+    # the benchmark's `push.paths`); a backend change that doesn't touch the
+    # engine builds+deploys as usual but skips the $17 benchmark.
+    detect-engine-change:
+        name: Detect engine-path change
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        outputs:
+            engine: ${{ steps.filter.outputs.engine }}
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: dorny/paths-filter@v4.0.1
+              id: filter
+              with:
+                  filters: |
+                      engine:
+                        - 'libs/code-review/**'
+                        - 'libs/ee/codeBase/**'
+                        - 'libs/ee/codeReview/**'
+                        - 'libs/ee/kodyRules/**'
+                        - 'libs/kodyRules/**'
+                        - 'libs/sandbox/**'
+                        - 'libs/core/infrastructure/services/tokenTracking/**'
+                        - 'apps/web/src/features/ee/byok/_data/curated-models.json'
+                        - 'tests/e2e/benchmark/**'
+                        - 'scripts/benchmark/tier0-bench-prs.json'
+
+    benchmark-engine:
+        name: Tier-0 model benchmark
+        needs: [ build_push_and_open_pr, detect-engine-change ]
+        # DISABLED: superseded by the replay eval suite (code-review-evals.yml),
+        # which runs the same engine + tier-0 models via deterministic tool replay
+        # without a deploy. The live benchmark stays callable via workflow_dispatch
+        # as a fallback; this auto-trigger is gated off (set back to the condition
+        # below to re-enable).
+        # if: needs.build_push_and_open_pr.result == 'success' && needs.detect-engine-change.outputs.engine == 'true'
+        if: false
+        permissions:
+            contents: read
+        uses: ./.github/workflows/code-review-model-benchmark.yml
+        secrets: inherit
+
+    notify-build-failure:
+        # The actual build job has Trivy + AWS + Docker + GitOps steps;
+        # any of them failing leaves QA stuck on the previous image with
+        # no signal. Surface that to #qa-ci so the team notices before
+        # the next merge wonders why their changes never reached QA.
+        name: Notify Discord (build/deploy failure only)
+        needs: build_push_and_open_pr
+        if: always() && needs.build_push_and_open_pr.result == 'failure'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+        steps:
+            - uses: actions/checkout@v6.0.2
+            - uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "❌ QA backend build/deploy failed"
+                  description: |
+                      Image `${{ github.sha }}` did not roll out to QA.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

@@ -10,7 +10,24 @@ export interface PullRequestFilters {
     pullRequestNumber?: string;
     hasSentSuggestions?: boolean;
     authorPolicy?: "all" | "reviewable" | "excluded";
+    status?: PullRequestStatusFilter;
+    createdAtFrom?: string;
+    createdAtTo?: string;
+    severity?: PullRequestSeverityFilter;
+    category?: string;
+    needsAttention?: boolean;
+    author?: string;
 }
+
+export type PullRequestSeverityFilter = "critical" | "high" | "medium" | "low";
+
+export type PullRequestStatusFilter =
+    | "success"
+    | "error"
+    | "partial_error"
+    | "skipped"
+    | "in_progress"
+    | "pending";
 
 export const PULL_REQUEST_SSE = {
     EXECUTION_EVENTS: pathToApiUrl("/pull-requests/executions/events"),
@@ -39,27 +56,66 @@ export const PULL_REQUEST_API = {
         if (filters?.authorPolicy) {
             params.append("authorPolicy", filters.authorPolicy);
         }
+        if (filters?.status) {
+            params.append("status", filters.status);
+        }
+        if (filters?.createdAtFrom)
+            params.append("createdAtFrom", filters.createdAtFrom);
+        if (filters?.createdAtTo)
+            params.append("createdAtTo", filters.createdAtTo);
+        if (filters?.severity) {
+            params.append("severity", filters.severity);
+        }
+        if (filters?.category) {
+            params.append("category", filters.category);
+        }
+        if (filters?.needsAttention) {
+            params.append("needsAttention", "true");
+        }
+        if (filters?.author) {
+            params.append("author", filters.author);
+        }
 
         const queryString = params.toString();
         return pathToApiUrl(
             `/pull-requests/executions${queryString ? `?${queryString}` : ""}`,
         );
     },
-    GET_ONBOARDING_SIGNALS: (filters: {
-        teamId: string;
-        repositoryIds: string[];
-        limit?: number;
-    }) => {
+    GET_DAILY_DIGEST: (teamId?: string) => {
         const params = new URLSearchParams();
-        if (filters.teamId) params.append("teamId", filters.teamId);
-        (filters.repositoryIds || []).forEach((id) =>
-            params.append("repositoryIds", id),
-        );
-        if (filters.limit) params.append("limit", String(filters.limit));
-
+        if (teamId) params.append("teamId", teamId);
         const queryString = params.toString();
         return pathToApiUrl(
-            `/pull-requests/onboarding-signals${queryString ? `?${queryString}` : ""}`,
+            `/pull-requests/executions/summary${queryString ? `?${queryString}` : ""}`,
+        );
+    },
+    GET_FACETS: (teamId?: string, scope?: "mine" | "team") => {
+        const params = new URLSearchParams();
+        if (teamId) params.append("teamId", teamId);
+        // Only send the non-default scope so the "team" facet keeps a stable
+        // cache key / URL.
+        if (scope === "mine") params.append("scope", "mine");
+        const queryString = params.toString();
+        return pathToApiUrl(
+            `/pull-requests/executions/facets${queryString ? `?${queryString}` : ""}`,
+        );
+    },
+    GET_AWAITING: (teamId?: string) => {
+        const params = new URLSearchParams();
+        if (teamId) params.append("teamId", teamId);
+        const queryString = params.toString();
+        return pathToApiUrl(
+            `/pull-requests/awaiting${queryString ? `?${queryString}` : ""}`,
+        );
+    },
+    GET_AUTHORS: (teamId?: string, q?: string, limit?: number) => {
+        const params = new URLSearchParams();
+        if (teamId) params.append("teamId", teamId);
+        if (q?.trim()) params.append("q", q.trim());
+        if (limit) params.append("limit", String(limit));
+        const queryString = params.toString();
+        return pathToApiUrl(
+            `/pull-requests/authors${queryString ? `?${queryString}` : ""}`,
         );
     },
     GET_SUGGESTIONS: (params: {

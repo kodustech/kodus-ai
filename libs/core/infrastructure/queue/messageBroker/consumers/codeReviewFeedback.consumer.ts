@@ -2,7 +2,7 @@ import {
     RabbitSubscribe,
     MessageHandlerErrorBehavior,
 } from '@golevelup/nestjs-rabbitmq';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { ConsumeMessage } from 'amqplib';
 

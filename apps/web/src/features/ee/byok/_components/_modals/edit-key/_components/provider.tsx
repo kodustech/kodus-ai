@@ -121,6 +121,7 @@ export const ByokProviderSelect = ({
                                     value={r.id}
                                     onSelect={(v) => {
                                         form.reset({
+                                            ...form.getValues(),
                                             model: "",
                                             apiKey: "",
                                             provider: v,

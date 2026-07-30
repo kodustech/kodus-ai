@@ -1,0 +1,72 @@
+# syntax=docker/dockerfile:1.7
+# Multi-stage production build for kodus-try (try.kodus.io demo, Next.js).
+#
+# Build context: apps/try (same as the dev compose service), NOT the
+# monorepo root — unlike apps/web, the demo is self-contained and imports
+# nothing from libs/, so the smaller context keeps builds fast and the
+# image free of unrelated repo files.
+#
+# NEXT_PUBLIC_* values are inlined into the client bundle by `next build`,
+# so the API URL must arrive as build-args here — setting them as runtime
+# env on the container does nothing.
+
+# 1) Builder stage: install all deps and build
+FROM docker.io/library/node:22.22.2-slim AS builder
+WORKDIR /usr/src/app
+
+ARG RELEASE_VERSION=local
+ENV RELEASE_VERSION=${RELEASE_VERSION}
+
+# No trailing slash — src/lib/api.ts concatenates `${API_BASE}/cli/...`.
+ARG NEXT_PUBLIC_API_URL=https://api.kodus.io
+ARG NEXT_PUBLIC_HOME_REDIRECT=https://kodus.io
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_HOME_REDIRECT=${NEXT_PUBLIC_HOME_REDIRECT}
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Yarn1's default 30s tarball timeout is too tight for slow paths to
+# registry.npmjs.org from the GHA runners (see Dockerfile.web).
+RUN echo 'network-timeout 600000' > /root/.yarnrc
+
+COPY package.json yarn.lock ./
+
+RUN --mount=type=cache,target=/yarn-cache,sharing=private \
+    YARN_CACHE_FOLDER=/yarn-cache \
+    yarn install --frozen-lockfile --production=false
+
+COPY . .
+
+RUN yarn build
+
+# 2) Production stage: only the final artifacts
+FROM docker.io/library/node:22.22.2-slim AS production
+
+# curl for container/LB health checks against /health.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
+    --mount=type=cache,target=/var/lib/apt,sharing=private \
+    rm -f /etc/apt/apt.conf.d/docker-clean \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends curl
+
+WORKDIR /usr/src/app
+
+ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3002
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# `outputFileTracingRoot` is pinned to the app dir in next.config.mjs, so
+# the standalone bundle entry is at .next/standalone/server.js (flat, not
+# nested under a repo-relative path like the web image).
+# NOTE: no `public/` COPY — apps/try has no public dir today; add the COPY
+# back if one is ever created (next ignores a missing public dir, docker
+# COPY does not).
+COPY --from=builder --chown=1000:1000 /usr/src/app/.next/standalone ./
+COPY --from=builder --chown=1000:1000 /usr/src/app/.next/static ./.next/static
+
+USER 1000
+
+EXPOSE 3002
+
+CMD ["node", "server.js"]

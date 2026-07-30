@@ -10,7 +10,7 @@ const mockLogger = {
     debug: jest.fn(),
 };
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => mockLogger,
 }));
 
@@ -170,6 +170,7 @@ describe('TelemetryService', () => {
             platform: 'github',
             ownerId: 'owner-1',
             ownerEmail: 'owner@acme.com',
+            orgMemberCount: 23,
         };
 
         it('uses ownerId as distinctId when present, fires PostHog and n8n with hydrated payload, skips Resend', async () => {
@@ -187,6 +188,7 @@ describe('TelemetryService', () => {
                     repositoryName: 'api-service',
                     ownerEmail: 'owner@acme.com',
                     pullRequestNumber: 42,
+                    orgMemberCount: 23,
                 }),
                 {
                     organization: 'org-1',
@@ -202,6 +204,7 @@ describe('TelemetryService', () => {
                     repositoryName: 'api-service',
                     ownerEmail: 'owner@acme.com',
                     ownerId: 'owner-1',
+                    orgMemberCount: 23,
                 }),
             );
             expect(resend.send).not.toHaveBeenCalled();

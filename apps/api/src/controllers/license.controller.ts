@@ -22,8 +22,13 @@ import {
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { checkPermissions } from '@libs/identity/infrastructure/adapters/services/permissions/policy.handlers';
 import { CreateOrUpdateOrganizationParametersUseCase } from '@libs/organization/application/use-cases/organizationParameters/create-or-update.use-case';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
 import { SelfHostedLicenseService } from '@libs/ee/license/self-hosted-license.service';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
+import { TrialExtensionNotifierService } from '../services/trial-extension-notifier.service';
 
 @ApiTags('License')
 @ApiBearerAuth('jwt')
@@ -32,7 +37,10 @@ import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
 export class LicenseController {
     constructor(
         private readonly selfHostedLicenseService: SelfHostedLicenseService,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
         private readonly createOrUpdateOrganizationParametersUseCase: CreateOrUpdateOrganizationParametersUseCase,
+        private readonly trialExtensionNotifierService: TrialExtensionNotifierService,
 
         @Inject(REQUEST)
         private readonly request: UserRequest,
@@ -173,7 +181,8 @@ export class LicenseController {
     )
     @ApiOperation({
         summary: 'Get users with license',
-        description: 'Return users that have been assigned a license seat.',
+        description:
+            'Return all users who have ever been assigned a license seat (active and inactive).',
     })
     public async usersWithLicense() {
         const organizationId = this.request?.user?.organization?.uuid;
@@ -184,7 +193,7 @@ export class LicenseController {
             );
         }
 
-        return this.selfHostedLicenseService.getAllUsersWithLicense({
+        return this.licenseService.getAllUsersEverWithLicense({
             organizationId,
         });
     }
@@ -254,5 +263,33 @@ export class LicenseController {
         }
 
         return { successful, failed };
+    }
+
+    @Post('/trial-extension-request')
+    @UseGuards(PolicyGuard)
+    @ApiOperation({
+        summary: 'Request more trial PR reviews',
+        description:
+            'Forwards a trial extension request (team size + message) to our team channel. Available to any authenticated org member.',
+    })
+    public async requestTrialExtension(
+        @Body() body: { teamId?: string; teamSize?: number; message?: string },
+    ) {
+        const organization = this.request?.user?.organization;
+
+        if (!organization?.uuid) {
+            throw new BadRequestException(
+                'Organization ID is missing from request',
+            );
+        }
+
+        return this.trialExtensionNotifierService.notify({
+            organizationId: organization.uuid,
+            organizationName: organization.name,
+            teamId: body.teamId,
+            requestedByEmail: this.request?.user?.email,
+            teamSize: body.teamSize,
+            message: body.message,
+        });
     }
 }

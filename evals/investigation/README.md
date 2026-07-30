@@ -18,6 +18,70 @@ What is here now:
 - `promptfoo.yaml`: smoke suite config
 - `datasets/smoke.json`: minimal smoke case using replayed `readFile` and `listDir`
 
+## Finder-RECALL eval (`promptfoo-recall.yaml`)
+
+The base suite above only checks **tool-use behavior** (did the agent call the right
+tools). That can pass while the finder misses real bugs. The recall suite scores what
+actually matters: **does the finder's output name the golden bugs?**
+
+It runs the live `generalist` agent loop over benchmark-grounded cases with
+deterministic tool replay (no sandbox / droplet / GitHub), then a Sonnet judge matches
+the agent's findings against each PR's golden bugs. Per PR it reports:
+
+- **recall** — goldens covered by ≥1 finding (did we catch the real bugs?)
+- **precision** — findings that hit ≥1 golden (is what we post real, not noise?)
+- **F1**
+- **fair-recall** — recall with *replay artifacts* removed from the denominator. A
+  missed golden is an artifact if its code wasn't in the corpus the finder saw (the
+  replay never gave it the file), so it's not a real recognition miss.
+- **loop-fidelity** — % of the agent's tool calls the replay could serve. Low
+  fidelity = the agent explored beyond the recording and reflected on empty results →
+  that PR's number is unreliable, discard it.
+
+What this eval validates: changes to **how the finder/verify judge the code they
+already see** (prompt tweaks, sink checklists, few-shot, verify tuning, model, thinking
+effort). What it does NOT: exploration/navigation tool changes (replay can't serve novel
+exploration — loop-fidelity flags it), the downstream pipeline (cap/dedup/anchoring/
+delivery), or executable proof (needs a real sandbox).
+
+Files: `recall-assertion.js` (judge + recall/precision/fairness/fidelity),
+`recall-judge.js` (Sonnet matcher, same algo as `scripts/benchmark/scorecard.ts`),
+`recall-tests.js` (builds cases from the per-PR datasets), `promptfoo-recall.yaml`.
+
+Run (ALWAYS set `PROMPTFOO_DISABLE_TEMPLATING=1` — case diffs contain `#{}`/`{{}}` that
+nunjucks otherwise fails to render):
+
+```bash
+# one PR per repo (cheap smoke)
+env -u ANTHROPIC_API_KEY -u BYOK_ANTHROPIC_API_KEY \
+  API_GOOGLE_AI_API_KEY=$BYOK_GOOGLE_API_KEY \
+  PROMPTFOO_DISABLE_TEMPLATING=1 \
+  promptfoo eval -c promptfoo-recall.yaml --no-cache
+
+# every PR, a specific model
+env -u ANTHROPIC_API_KEY -u BYOK_ANTHROPIC_API_KEY \
+  API_GOOGLE_AI_API_KEY=$BYOK_GOOGLE_API_KEY \
+  PROMPTFOO_DISABLE_TEMPLATING=1 RECALL_ALL=1 RECALL_MODEL=gemini-3.5-flash \
+  promptfoo eval -c promptfoo-recall.yaml --no-cache --output /tmp/recall.json
+```
+
+Scope/model env: `RECALL_ALL=1` (all PRs) or `RECALL_CASES=id1,id2` (subset);
+`RECALL_MODEL=<id>` overrides the model from this one config.
+
+### Execution-based replays (`extract-replay-from-trace.js`)
+
+The per-PR datasets are built from **real finder executions**, not a fabricated diff
+dump. `extract-replay-from-trace.js` maps each benchmark PR to its Langfuse finder trace
+by changed-file overlap, then injects the cross-file files the finder actually read (with
+full content from the repo, so ranges/greps flex). It also audits, per PR, whether the
+golden files were read (fairness). Run after regenerating base skeletons with
+`extract-benchmark-case.js`:
+
+```bash
+node extract-replay-from-trace.js --env verify-gemini \
+  --from 2026-06-22T21:00:00Z --to 2026-06-23T00:30:00Z --write
+```
+
 What belongs here next:
 - `datasets/`: real cases derived from benchmark traces
 - `fixtures/`: replayed `readFile`, `grep`, `checkTypes`, and later `searchDocs` outputs
@@ -82,31 +146,31 @@ Suggested case shape:
 Smoke run:
 
 ```bash
-yarn eval:investigation
+pnpm run eval:investigation
 ```
 
 List available datasets:
 
 ```bash
-yarn eval:investigation --list-datasets
+pnpm run eval:investigation --list-datasets
 ```
 
 List available model presets:
 
 ```bash
-yarn eval:investigation --list-presets
+pnpm run eval:investigation --list-presets
 ```
 
 Run a specific dataset:
 
 ```bash
-yarn eval:investigation:no-cache --dataset authzservice-improve-authz-caching-grafana-codex.json
+pnpm run eval:investigation:no-cache --dataset authzservice-improve-authz-caching-grafana-codex.json
 ```
 
 Run a specific dataset with a preset model:
 
 ```bash
-yarn eval:investigation:no-cache \
+pnpm run eval:investigation:no-cache \
   --dataset authzservice-improve-authz-caching-grafana-codex.json \
   --preset gpt-5.4
 ```
@@ -114,13 +178,13 @@ yarn eval:investigation:no-cache \
 Run every dataset in `datasets/`:
 
 ```bash
-yarn eval:investigation:all:no-cache
+pnpm run eval:investigation:all:no-cache
 ```
 
 Run every dataset against multiple preset models in one shot:
 
 ```bash
-yarn eval:investigation:all:no-cache \
+pnpm run eval:investigation:all:no-cache \
   --preset gemini-3.1-pro \
   --preset gpt-5.4 \
   --preset kimi-k2.5
@@ -129,21 +193,21 @@ yarn eval:investigation:all:no-cache \
 Run Kimi directly against Moonshot's OpenAI-compatible API:
 
 ```bash
-yarn eval:investigation:all:no-cache \
+pnpm run eval:investigation:all:no-cache \
   --preset kimi-k2.5-moonshot
 ```
 
 Run Kimi through OpenRouter but force the Moonshot provider endpoint:
 
 ```bash
-yarn eval:investigation:all:no-cache \
+pnpm run eval:investigation:all:no-cache \
   --preset kimi-k2.5-openrouter-moonshot
 ```
 
 Run with a custom provider/model without editing `promptfoo.yaml`:
 
 ```bash
-yarn eval:investigation:no-cache \
+pnpm run eval:investigation:no-cache \
   --dataset smoke.json \
   --provider openai \
   --model gpt-5.4 \
@@ -171,7 +235,7 @@ Rules:
 Examples with custom routing:
 
 ```bash
-yarn eval:investigation:all:no-cache \
+pnpm run eval:investigation:all:no-cache \
   --provider openai-compatible \
   --model kimi-k2.5 \
   --api-key-env API_MOONSHOT_API_KEY \
@@ -180,7 +244,7 @@ yarn eval:investigation:all:no-cache \
 ```
 
 ```bash
-yarn eval:investigation:all:no-cache \
+pnpm run eval:investigation:all:no-cache \
   --provider openrouter \
   --model moonshotai/kimi-k2.5 \
   --provider-order moonshot \
@@ -231,19 +295,19 @@ Recommended workflow for a new real case:
 2. prune the changed-file set to the files that matter for the investigation
 3. add `grep` fixtures for the symbols you expect the agent to chase
 4. tighten `expected*` fields until the case fails for the right reason
-5. run `yarn eval:investigation:no-cache --dataset <case>.json`
+5. run `pnpm run eval:investigation:no-cache --dataset <case>.json`
 6. inspect `results/last-output.json` and `results/last-assertion.json`
 
 Select benchmark failures that are strong candidates for new planner cases:
 
 ```bash
-yarn eval:investigation:candidates
+pnpm run eval:investigation:candidates
 ```
 
 Compare specific runs and write the shortlist to JSON:
 
 ```bash
-yarn eval:investigation:candidates \
+pnpm run eval:investigation:candidates \
   --run gpt54-final-r01:severity \
   --run gemini31pro-planner:issue-critical \
   --run kimi25-moonshot:issue-critical \
@@ -254,19 +318,19 @@ yarn eval:investigation:candidates \
 Extract the whole shortlist into dataset seeds:
 
 ```bash
-yarn eval:investigation:extract:candidates --top 10
+pnpm run eval:investigation:extract:candidates --top 10
 ```
 
 Preview what will be extracted without hitting GitHub:
 
 ```bash
-yarn eval:investigation:extract:candidates --top 10 --dry-run
+pnpm run eval:investigation:extract:candidates --top 10 --dry-run
 ```
 
 Overwrite existing extracted seeds:
 
 ```bash
-yarn eval:investigation:extract:candidates --top 10 --overwrite
+pnpm run eval:investigation:extract:candidates --top 10 --overwrite
 ```
 
 Heuristics used by the selector:

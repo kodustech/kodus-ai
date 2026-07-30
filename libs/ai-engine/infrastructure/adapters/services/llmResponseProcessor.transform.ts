@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { tryParseJSONObject } from '@libs/common/utils/transforms/json';
 
 import {

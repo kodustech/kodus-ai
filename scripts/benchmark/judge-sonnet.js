@@ -60,7 +60,7 @@ async function buildMatchMatrix(client, golden, candidates) {
                         .replace("{candidate}", cand.issues[ci].comment);
 
                     const resp = await client.messages.create({
-                        model: "claude-sonnet-4-20250514",
+                        model: "claude-sonnet-4-6",
                         max_tokens: 200,
                         temperature: 0,
                         messages: [{ role: "user", content: prompt }],

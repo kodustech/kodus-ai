@@ -1,93 +1,107 @@
 "use client";
 
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import type {
-    PullRequestFile,
-    PullRequestSuggestion,
-} from "@services/pull-requests";
-import {
-    ChevronLeftIcon,
-    ChevronRightIcon,
-    ColumnsIcon,
-    FileIcon,
-    RowsIcon,
-} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { PullRequestFile } from "@services/pull-requests";
+import { ColumnsIcon, FileIcon, RowsIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { useReviewStore } from "./review-store";
-import { SuggestionCard } from "./suggestion-card";
-
-const PierrePatchDiff = lazy(() =>
-    import("./pierre-diff").then((m) => ({
-        default: m.PierrePatchDiffComponent,
-    })),
-);
+import { adaptForTryDiffViewer, buildPrInfo } from "./try-port/adapt";
+import { DiffViewer as TryDiffViewer } from "./try-port/DiffViewer";
 
 interface DiffViewerProps {
     patchFiles?: PullRequestFile[];
     patchesLoading?: boolean;
     patchesError?: Error | null;
+    prNumber?: number;
+    prUrl?: string;
+    repositoryName?: string;
+    highlightIssueId?: string;
 }
 
 export function DiffViewer({
     patchFiles,
     patchesLoading,
     patchesError,
+    prNumber,
+    prUrl,
+    repositoryName,
+    highlightIssueId,
 }: DiffViewerProps) {
-    const { state, dispatch, fileGroups, filePaths, navigateFile } =
-        useReviewStore();
-    const [diffStyle, setDiffStyle] = useState<"split" | "unified">("split");
+    const { state, dispatch, fileGroups, filePaths } = useReviewStore();
+    const [diffStyle, setDiffStyle] = useState<"split" | "unified">("unified");
 
-    const scrollRef = useRef<HTMLDivElement>(null);
+    // "Viewed" is shared with the file tree via the store; "collapsed" is
+    // purely a diff-pane affordance, so it stays local.
+    const viewed = state.viewedFiles;
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-    // Auto-select first file if none selected
-    useEffect(() => {
-        if (!state.selectedFilePath && filePaths.length > 0) {
-            dispatch({ type: "SELECT_FILE", path: filePaths[0] });
+    // Stable identities so the memoized FileBlocks below don't all re-render
+    // (and re-tokenize their diffs) every time this wrapper re-renders — e.g.
+    // on each jump-to-issue. dispatch/setCollapsed are stable across renders.
+    const handleToggleViewed = useCallback(
+        (path: string, v: boolean) =>
+            dispatch({ type: "SET_VIEWED", path, viewed: v }),
+        [dispatch],
+    );
+    const handleToggleCollapsed = useCallback(
+        (path: string) =>
+            setCollapsed((prev) => ({ ...prev, [path]: !prev[path] })),
+        [],
+    );
+
+    // Flatten every file's suggestions into one list, honoring the existing
+    // severity/category filters from the store so the summary-panel filters
+    // still drive what the center pane shows.
+    const allSuggestions = useMemo(() => {
+        const out: ReturnType<typeof fileGroups.get> = [];
+        for (const list of fileGroups.values()) {
+            for (const s of list ?? []) {
+                if (
+                    state.severityFilter &&
+                    s.severity?.toLowerCase() !==
+                        state.severityFilter.toLowerCase()
+                )
+                    continue;
+                if (
+                    state.categoryFilter &&
+                    s.label?.toLowerCase() !==
+                        state.categoryFilter.toLowerCase()
+                )
+                    continue;
+                out!.push(s);
+            }
         }
-    }, [state.selectedFilePath, filePaths, dispatch]);
+        return out ?? [];
+    }, [fileGroups, state.severityFilter, state.categoryFilter]);
 
-    // Scroll to top when file changes
+    const { files, rawDiff, issues } = useMemo(
+        () =>
+            adaptForTryDiffViewer({
+                patchFiles: patchFiles ?? [],
+                suggestions: allSuggestions,
+            }),
+        [patchFiles, allSuggestions],
+    );
+
+    const pr = useMemo(
+        () =>
+            prNumber != null
+                ? buildPrInfo({ prNumber, prUrl, repositoryName })
+                : undefined,
+        [prNumber, prUrl, repositoryName],
+    );
+
+    // When the store's selected file changes (file-tree click / j-k nav),
+    // scroll that file's block into view. The whole page scrolls (try
+    // model), so target the file anchor by id rather than a local ref.
     useEffect(() => {
-        scrollRef.current?.scrollTo(0, 0);
-    }, [state.selectedFilePath]);
-
-    const currentSuggestions = useMemo(() => {
-        if (!state.selectedFilePath) return [];
-        const suggestions = fileGroups.get(state.selectedFilePath) ?? [];
-        return suggestions.filter((s) => {
-            if (
-                state.severityFilter &&
-                s.severity?.toLowerCase() !== state.severityFilter.toLowerCase()
-            )
-                return false;
-            if (
-                state.categoryFilter &&
-                s.label?.toLowerCase() !== state.categoryFilter.toLowerCase()
-            )
-                return false;
-            return true;
-        });
-    }, [
-        state.selectedFilePath,
-        state.severityFilter,
-        state.categoryFilter,
-        fileGroups,
-    ]);
-
-    // Find the patch for current file
-    const currentPatch = useMemo(() => {
-        if (!state.selectedFilePath || !patchFiles) return null;
-        return patchFiles.find(
-            (f) =>
-                f.filename === state.selectedFilePath ||
-                f.filename.endsWith(state.selectedFilePath!),
+        if (!state.selectedFilePath) return;
+        const el = document.getElementById(
+            `file-${state.selectedFilePath}`,
         );
-    }, [state.selectedFilePath, patchFiles]);
-
-    const currentFileIndex = state.selectedFilePath
-        ? filePaths.indexOf(state.selectedFilePath)
-        : -1;
+        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, [state.selectedFilePath]);
 
     if (filePaths.length === 0 && (!patchFiles || patchFiles.length === 0)) {
         return (
@@ -103,87 +117,48 @@ export function DiffViewer({
     }
 
     return (
-        <div className="flex h-full flex-col">
-            {/* File header */}
-            <div className="border-card-lv2 bg-card-lv1 flex items-center gap-3 border-b px-4 py-2.5">
-                <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => navigateFile("prev")}
-                        className="text-text-tertiary hover:bg-card-lv3 hover:text-text-primary rounded p-1 transition-colors"
-                        title="Previous file (k)">
-                        <ChevronLeftIcon className="size-4" />
-                    </button>
-                    <button
-                        onClick={() => navigateFile("next")}
-                        className="text-text-tertiary hover:bg-card-lv3 hover:text-text-primary rounded p-1 transition-colors"
-                        title="Next file (j)">
-                        <ChevronRightIcon className="size-4" />
-                    </button>
-                </div>
-
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <FileIcon className="text-text-tertiary size-4 shrink-0" />
-                    <FileBreadcrumb path={state.selectedFilePath ?? ""} />
-                    {currentPatch && (
-                        <div className="ml-2 flex items-center gap-1.5 text-xs">
-                            <span className="text-success tabular-nums">
-                                +{currentPatch.additions}
-                            </span>
-                            <span className="text-danger tabular-nums">
-                                -{currentPatch.deletions}
-                            </span>
-                        </div>
+        <div>
+            {/* Slim toolbar — split / unified toggle */}
+            <div className="mb-3 flex items-center justify-end gap-1">
+                <button
+                    onClick={() => setDiffStyle("split")}
+                    className={cn(
+                        "rounded p-1.5 transition-colors",
+                        diffStyle === "split"
+                            ? "bg-[var(--bg-input)] text-[var(--text)]"
+                            : "text-[var(--text-dim)] hover:text-[var(--text)]",
                     )}
-                </div>
-
-                {/* View mode toggle */}
-                <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => setDiffStyle("split")}
-                        className={cn(
-                            "rounded p-1.5 transition-colors",
-                            diffStyle === "split"
-                                ? "bg-card-lv3 text-text-primary"
-                                : "text-text-tertiary hover:text-text-secondary",
-                        )}
-                        title="Split view">
-                        <ColumnsIcon className="size-3.5" />
-                    </button>
-                    <button
-                        onClick={() => setDiffStyle("unified")}
-                        className={cn(
-                            "rounded p-1.5 transition-colors",
-                            diffStyle === "unified"
-                                ? "bg-card-lv3 text-text-primary"
-                                : "text-text-tertiary hover:text-text-secondary",
-                        )}
-                        title="Unified view">
-                        <RowsIcon className="size-3.5" />
-                    </button>
-                </div>
-
-                <span className="text-text-tertiary shrink-0 text-xs tabular-nums">
-                    {currentFileIndex + 1} / {filePaths.length}
-                </span>
+                    title="Split view">
+                    <ColumnsIcon className="size-3.5" />
+                </button>
+                <button
+                    onClick={() => setDiffStyle("unified")}
+                    className={cn(
+                        "rounded p-1.5 transition-colors",
+                        diffStyle === "unified"
+                            ? "bg-[var(--bg-input)] text-[var(--text)]"
+                            : "text-[var(--text-dim)] hover:text-[var(--text)]",
+                    )}
+                    title="Unified view">
+                    <RowsIcon className="size-3.5" />
+                </button>
             </div>
 
-            {/* Content area */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto">
-                {/* Full file diff from Git provider */}
-                {currentPatch?.patch ? (
-                    <Suspense
-                        fallback={
-                            <div className="flex items-center justify-center py-12">
-                                <div className="border-text-tertiary/30 border-t-text-tertiary size-5 animate-spin rounded-full border-2" />
-                            </div>
-                        }>
-                        <PierrePatchDiff
-                            patch={currentPatch.patch}
-                            filename={currentPatch.filename}
-                            previousFilename={currentPatch.previous_filename}
-                            diffStyle={diffStyle}
-                        />
-                    </Suspense>
+            <div>
+                {files.length > 0 ? (
+                    <TryDiffViewer
+                        files={files}
+                        issues={issues}
+                        rawDiff={rawDiff}
+                        pr={pr}
+                        diffStyle={diffStyle}
+                        viewed={viewed}
+                        onToggleViewed={handleToggleViewed}
+                        collapsed={collapsed}
+                        onToggleCollapsed={handleToggleCollapsed}
+                        isReviewing={patchesLoading}
+                        highlightIssueId={highlightIssueId}
+                    />
                 ) : patchesLoading ? (
                     <div className="flex items-center justify-center py-12">
                         <div className="flex flex-col items-center gap-2">
@@ -204,55 +179,12 @@ export function DiffViewer({
                             </p>
                         </div>
                     </div>
-                ) : null}
-
-                {/* Suggestions for this file */}
-                {currentSuggestions.length > 0 && (
-                    <div className="border-card-lv2 border-t">
-                        <div className="flex items-center gap-2 px-4 py-2.5">
-                            <span className="text-text-tertiary text-xs font-semibold tracking-wider uppercase">
-                                Kody Suggestions
-                            </span>
-                            <span className="bg-card-lv3 text-text-tertiary rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums">
-                                {currentSuggestions.length}
-                            </span>
-                        </div>
-                        <div className="space-y-3 px-4 pb-4">
-                            {currentSuggestions.map((suggestion, idx) => (
-                                <SuggestionCard
-                                    key={suggestion.id ?? idx}
-                                    suggestion={suggestion}
-                                    compact
-                                    defaultExpanded={
-                                        currentSuggestions.length <= 3
-                                    }
-                                />
-                            ))}
-                        </div>
+                ) : (
+                    <div className="text-text-tertiary py-12 text-center text-sm">
+                        No diff available for this pull request.
                     </div>
                 )}
-
-                {!currentPatch?.patch &&
-                    !patchesLoading &&
-                    currentSuggestions.length === 0 && (
-                        <div className="text-text-tertiary py-12 text-center text-sm">
-                            No diff or suggestions available for this file.
-                        </div>
-                    )}
             </div>
         </div>
-    );
-}
-
-function FileBreadcrumb({ path }: { path: string }) {
-    const parts = path.split("/");
-    const fileName = parts.pop();
-    const dirPath = parts.join("/");
-
-    return (
-        <span className="truncate font-mono text-sm">
-            {dirPath && <span className="text-text-tertiary">{dirPath}/</span>}
-            <span className="text-text-primary font-medium">{fileName}</span>
-        </span>
     );
 }

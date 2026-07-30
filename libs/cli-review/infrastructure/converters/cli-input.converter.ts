@@ -9,7 +9,7 @@ import {
     CliReviewIssue,
 } from '@libs/cli-review/domain/types/cli-review.types';
 import { convertToUnifiedDiffWithLineNumbers } from '@libs/common/utils/patch';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import * as crypto from 'crypto';
 
 @Injectable()

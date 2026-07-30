@@ -1,0 +1,123 @@
+name: "Try: Build and Push Production Image"
+
+# Release routing:
+# - try: tags prefixed with try- (for automatic release builds)
+# - manual: workflow_dispatch with optional custom image_tag
+
+on:
+    release:
+        types: [ published ]
+    workflow_dispatch:
+        inputs:
+            image_tag:
+                description: "Docker image tag to build/push (default: github.sha)"
+                required: false
+
+jobs:
+    build-and-push:
+        name: Build and Push Try Docker Image for Production (Cloud)
+        runs-on: ubuntu-latest
+        environment: PRODUCTION
+        if: |
+            github.event_name == 'workflow_dispatch' ||
+            (github.event_name == 'release' &&
+             github.event.release.prerelease == false &&
+             startsWith(github.event.release.tag_name, 'try-'))
+        permissions:
+            contents: read
+            # Required by github/codeql-action/upload-sarif to publish
+            # Trivy findings to the repo's Security tab.
+            security-events: write
+
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v6.0.2
+
+            - name: Capture Release Version
+              run: |
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                    TAG="${{ github.event.inputs.image_tag }}"
+                    if [ -z "$TAG" ]; then
+                      TAG="${{ github.sha }}"
+                    fi
+                  else
+                    TAG="${{ github.event.release.tag_name }}"
+                  fi
+                  echo "RELEASE_VERSION=$TAG" >> $GITHUB_ENV
+
+            - name: Configure AWS Credentials
+              uses: aws-actions/configure-aws-credentials@v6.1.0
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+
+            - name: Login to Amazon ECR
+              id: login-ecr
+              uses: aws-actions/amazon-ecr-login@v2.1.4
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v4.0.0
+
+            # Unlike the web image there's no SSM .env step: the demo's only
+            # config is NEXT_PUBLIC_* values, which are inlined into the
+            # client bundle at build time via build-args.
+            - name: Build and Push Docker Image
+              env:
+                  ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+                  ECR_REPOSITORY: kodus-try-web-prod
+                  IMAGE_TAG_SHA: ${{ github.sha }}
+                  IMAGE_TAG_VERSION: ${{ env.RELEASE_VERSION }}
+              run: |
+                  docker build \
+                    --build-arg RELEASE_VERSION=$IMAGE_TAG_VERSION \
+                    --build-arg NEXT_PUBLIC_API_URL=https://api.kodus.io \
+                    --build-arg NEXT_PUBLIC_HOME_REDIRECT=https://kodus.io \
+                    -f docker/Dockerfile.try \
+                    -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA \
+                    -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION \
+                    apps/try
+
+                  docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA
+                  docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION
+
+            # ---- CVE scan -----------------------------------------------------
+            # See selfhosted-build-push.yml for flag rationale. Advisory-only
+            # (`exit-code: 0`) until backlog triage — flip to `1` to block.
+            - name: Trivy scan — kodus-try
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  image-ref: ${{ steps.login-ecr.outputs.registry }}/kodus-try-web-prod:${{
+                      env.RELEASE_VERSION }}
+                  format: "sarif"
+                  output: "trivy-try.sarif"
+                  severity: "CRITICAL,HIGH"
+                  ignore-unfixed: true
+                  exit-code: "0"
+
+            - name: Upload Trivy SARIF reports
+              uses: github/codeql-action/upload-sarif@v4
+              with:
+                  sarif_file: "trivy-try.sarif"
+                  category: "trivy-prod-try"
+
+            - name: Cleanup Docker Images
+              if: always()
+              run: |
+                  docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_SHA || true
+                  docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION || true
+                  docker image prune -f || true
+
+            - name: Notify Discord
+              if: always()
+              uses: sarisia/actions-status-discord@v1.16.0
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ job.status }}
+                  title: "Build and Push: kodus-try (Cloud Prod)"
+                  description: |
+                      Image: `${{ env.RELEASE_VERSION }}`
+                      SHA: `${{ github.sha }}`
+                      Triggered by: @${{ github.actor }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                  username: "GitHub Actions"

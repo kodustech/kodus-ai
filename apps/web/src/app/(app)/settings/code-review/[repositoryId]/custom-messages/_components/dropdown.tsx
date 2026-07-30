@@ -15,13 +15,25 @@ import {
 import { ChevronDownIcon } from "lucide-react";
 
 import { FormattedConfig } from "../../../_types";
-import { dropdownItems, VARIABLE_REGEX } from "./options";
+import { dropdownItems, END_ONLY_PLACEHOLDERS, VARIABLE_REGEX } from "./options";
 
 export const CustomMessagesOptionsDropdown = (props: {
     value: FormattedConfig<CustomMessageConfig["startReviewMessage"]>;
     onChange: (value: CustomMessageConfig["startReviewMessage"]) => void;
     canEdit: boolean;
+    messageType:
+        | "startReviewMessage"
+        | "endReviewMessage"
+        | "errorReviewMessage";
 }) => {
+    // Some placeholders (e.g. the consolidated LLM prompt) depend on data that
+    // only exists after the review runs, so they're offered on the End message
+    // only — never on the Start message.
+    const availableItems = Object.entries(dropdownItems).filter(
+        ([key]) =>
+            props.messageType === "endReviewMessage" ||
+            !END_ONLY_PLACEHOLDERS.has(key as keyof typeof dropdownItems),
+    );
     const allVariablesRegexSearch = useMemo(
         () => [...props.value.content.value.matchAll(VARIABLE_REGEX)],
         [props.value.content],
@@ -46,7 +58,7 @@ export const CustomMessagesOptionsDropdown = (props: {
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="start" sideOffset={0} className="w-60">
-                {Object.entries(dropdownItems).map(([key, item]) => (
+                {availableItems.map(([key, item]) => (
                     <DropdownMenuCheckboxItem
                         key={key}
                         className="min-h-auto px-4 py-2 text-xs"

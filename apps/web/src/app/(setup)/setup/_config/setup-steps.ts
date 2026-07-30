@@ -20,6 +20,10 @@ const BASE_SETUP_STEPS = [
         path: "/setup/choosing-repositories",
     },
     {
+        id: "select-reviewers",
+        path: "/setup/select-reviewers",
+    },
+    {
         id: "review-mode",
         path: "/setup/review-mode",
     },

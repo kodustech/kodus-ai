@@ -2,10 +2,10 @@
 # Tails docker compose logs on the remote self-hosted stack.
 #
 # Usage:
-#   yarn selfhosted:logs                          # all services
-#   yarn selfhosted:logs --name wellington
-#   yarn selfhosted:logs -- api worker            # specific services
-#   yarn selfhosted:logs --tail 200 -- api        # custom tail count
+#   pnpm run selfhosted:logs                          # all services
+#   pnpm run selfhosted:logs --name wellington
+#   pnpm run selfhosted:logs -- api worker            # specific services
+#   pnpm run selfhosted:logs --tail 200 -- api        # custom tail count
 
 set -euo pipefail
 
@@ -17,8 +17,8 @@ NAME_RAW="default"
 TAIL="50"
 SERVICES_ARR=()
 # Parse flags from anywhere on the line. Anything that isn't a flag becomes
-# a positional service name. This lets `yarn selfhosted:logs api worker
-# --tail 100` work — yarn 1 eats the leading `--` so flags can appear after
+# a positional service name. This lets `pnpm run selfhosted:logs api worker
+# --tail 100` work — the package manager may eat the leading `--` so flags can appear after
 # positionals.
 while [ $# -gt 0 ]; do
     case "$1" in

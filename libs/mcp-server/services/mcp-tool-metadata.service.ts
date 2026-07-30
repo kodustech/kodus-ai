@@ -1,11 +1,11 @@
 import {
     createMCPAdapter,
     type MCPServerConfig,
-    createLogger,
     normalizeProviderKey,
     normalizeToolKey,
     markProviderHasMetadata,
-} from '@kodus/flow';
+} from '../mcp-adapter';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';

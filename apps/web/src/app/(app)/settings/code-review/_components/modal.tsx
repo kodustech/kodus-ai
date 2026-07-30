@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Checkbox } from "@components/ui/checkbox";
 import { CodeInputSimple } from "@components/ui/code-input-simple";
@@ -46,6 +45,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
+import { KODY_RULES_PATHS } from "@services/kodyRules";
 import {
     createOrUpdateKodyRule,
     getRecommendedKodyRules,
@@ -78,6 +78,7 @@ import {
     XIcon,
 } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 
@@ -92,36 +93,36 @@ const severityOptions: {
     textColor: string;
     borderColor: string;
 }[] = [
-    {
-        value: "low",
-        label: "Low",
-        description: "Minor improvements and low-risk issues",
-        textColor: "text-info",
-        borderColor: "border-info",
-    },
-    {
-        value: "medium",
-        label: "Medium",
-        description: "Recommended fixes that improve correctness or quality",
-        textColor: "text-alert",
-        borderColor: "border-alert",
-    },
-    {
-        value: "high",
-        label: "High",
-        description: "Important problems that should be fixed in the PR",
-        textColor: "text-warning",
-        borderColor: "border-warning",
-    },
-    {
-        value: "critical",
-        label: "Critical",
-        description:
-            "Severe bugs, security vulnerabilities, or data loss risks",
-        textColor: "text-danger",
-        borderColor: "border-danger",
-    },
-];
+        {
+            value: "low",
+            label: "Low",
+            description: "Minor improvements and low-risk issues",
+            textColor: "text-info",
+            borderColor: "border-info",
+        },
+        {
+            value: "medium",
+            label: "Medium",
+            description: "Recommended fixes that improve correctness or quality",
+            textColor: "text-alert",
+            borderColor: "border-alert",
+        },
+        {
+            value: "high",
+            label: "High",
+            description: "Important problems that should be fixed in the PR",
+            textColor: "text-warning",
+            borderColor: "border-warning",
+        },
+        {
+            value: "critical",
+            label: "Critical",
+            description:
+                "Severe bugs, security vulnerabilities, or data loss risks",
+            textColor: "text-danger",
+            borderColor: "border-danger",
+        },
+    ];
 
 const severitySliderOptions = {
     low: { label: "Low", value: 0 },
@@ -180,19 +181,6 @@ const GOOD_EXAMPLE_PLACEHOLDER = `for (var i = 1; i <= 10; i += 2)  // Compliant
 {
   //...
 }`;
-
-const getDirectoryPathForReplace = (
-    directory: FormattedDirectoryCodeReviewConfig,
-) => `${(directory.folders?.[0]?.path ?? '').slice(1)}/`;
-const getKodyRulePathWithoutDirectoryPath = ({
-    directory,
-    rule,
-}: {
-    rule: KodyRule;
-    directory: FormattedDirectoryCodeReviewConfig;
-}) => rule.path.replace(getDirectoryPathForReplace(directory), "");
-
-const DEFAULT_PATH_FOR_DIRECTORIES = "**";
 
 const RULE_SUGGESTIONS = [
     {
@@ -349,6 +337,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
 }) => {
     const { toast } = useToast();
     const { teamId } = useSelectedTeamId();
+    const queryClient = useQueryClient();
 
     const initialScope = rule?.scope ?? "file";
 
@@ -379,25 +368,9 @@ export const KodyRuleAddOrUpdateItemModal = ({
         disabled: !canEdit || isInherited,
         defaultValues: {
             path:
-                initialScope === "pull-request"
+                initialScope === "pull-request" || directory
                     ? ""
-                    : rule
-                      ? !directory
-                          ? rule.path
-                          : (() => {
-                                const pathWithoutDirectory =
-                                    getKodyRulePathWithoutDirectoryPath({
-                                        directory,
-                                        rule,
-                                    });
-                                return (
-                                    pathWithoutDirectory ||
-                                    DEFAULT_PATH_FOR_DIRECTORIES
-                                );
-                            })()
-                      : directory
-                        ? DEFAULT_PATH_FOR_DIRECTORIES
-                        : "",
+                    : rule?.path ?? "",
             rule: rule?.rule ?? "",
             title: rule?.title ?? "",
             severity: rule ? resolveKodyRuleDisplaySeverity(rule) : "high",
@@ -408,7 +381,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
             goodExample:
                 rule?.examples?.find(({ isCorrect }) => isCorrect)?.snippet ??
                 "",
-            origin: rule?.origin ?? KodyRulesOrigin.USER,
+            origin: rule?.origin ?? KodyRulesOrigin.MANUAL,
             status: rule?.status ?? KodyRulesStatus.ACTIVE,
             type: rule?.type ?? ruleType,
             inheritable: rule?.inheritance?.inheritable ?? true,
@@ -431,12 +404,8 @@ export const KodyRuleAddOrUpdateItemModal = ({
                 examples.push({ isCorrect: true, snippet: config.goodExample });
 
             let newPath = "";
-            if (!isMemory && config.scope === "file") {
-                if (directory) {
-                    newPath = `${getDirectoryPathForReplace(directory)}${config.path}`;
-                } else {
-                    newPath = config.path;
-                }
+            if (!isMemory && config.scope === "file" && !directory) {
+                newPath = config.path;
             }
 
             const mutationResult = await createOrUpdateKodyRule(
@@ -448,7 +417,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                     scope: isMemory ? "file" : config.scope,
                     uuid: rule?.uuid,
                     examples: examples,
-                    origin: config.origin ?? KodyRulesOrigin.USER,
+                    origin: config.origin ?? KodyRulesOrigin.MANUAL,
                     status: config.status ?? KodyRulesStatus.ACTIVE,
                     type: config.type ?? ruleType,
                     centralizedConfig: rule?.centralizedConfig,
@@ -503,6 +472,8 @@ export const KodyRuleAddOrUpdateItemModal = ({
     const handleDisableInherited = async (val: boolean) => {
         magicModal.lock();
 
+        setIsInheritanceDisabled(val);
+
         const targetId = directory?.id || repositoryId;
 
         const excludeList = rule?.inheritance?.exclude
@@ -526,7 +497,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                     scope: rule?.scope,
                     uuid: rule?.uuid,
                     examples: rule?.examples,
-                    origin: rule?.origin ?? KodyRulesOrigin.USER,
+                    origin: rule?.origin ?? KodyRulesOrigin.MANUAL,
                     status: rule?.status ?? KodyRulesStatus.ACTIVE,
                     type: rule?.type ?? ruleType,
                     centralizedConfig: rule?.centralizedConfig,
@@ -545,6 +516,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
             );
 
             if (isCentralizedPrResponse(mutationResult)) {
+                setIsInheritanceDisabled(!val);
                 toast(
                     getCentralizedPrToastPayload(
                         mutationResult,
@@ -554,7 +526,13 @@ export const KodyRuleAddOrUpdateItemModal = ({
                 return;
             }
 
-            setIsInheritanceDisabled(val);
+            queryClient.invalidateQueries({
+                predicate: (query) =>
+                    query.queryKey[0] ===
+                        KODY_RULES_PATHS.FIND_BY_ORGANIZATION_ID_AND_FILTER ||
+                    query.queryKey[0] ===
+                        KODY_RULES_PATHS.GET_INHERITED_RULES,
+            });
 
             const toastData = {
                 title: val ? "Disabled inheritance" : "Enabled inheritance",
@@ -566,6 +544,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
 
             toast(toastData);
         } catch {
+            setIsInheritanceDisabled(!val);
             toast({
                 variant: "alert",
                 description:
@@ -705,7 +684,13 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                     openDelay={100}
                                                     closeDelay={200}>
                                                     <HoverCardTrigger asChild>
-                                                        <button type="button">
+                                                        {/* tabIndex -1: in view mode the rule-name input is
+                                                            disabled, so the dialog's open auto-focus would land
+                                                            on this button — and HoverCard opens on focus,
+                                                            covering the modal. Hover-only is fine for help. */}
+                                                        <button
+                                                            type="button"
+                                                            tabIndex={-1}>
                                                             <HelpCircle
                                                                 size={16}
                                                                 className="text-primary-light hover:text-primary-light/80 transition-colors"
@@ -812,26 +797,9 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                         field.onChange(value);
 
                                                     if (value === "file") {
-                                                        let newPath = "";
-
-                                                        if (directory) {
-                                                            if (rule) {
-                                                                newPath =
-                                                                    getKodyRulePathWithoutDirectoryPath(
-                                                                        {
-                                                                            directory,
-                                                                            rule,
-                                                                        },
-                                                                    );
-                                                            } else {
-                                                                newPath =
-                                                                    DEFAULT_PATH_FOR_DIRECTORIES;
-                                                            }
-                                                        }
-
                                                         form.setValue(
                                                             "path",
-                                                            newPath,
+                                                            "",
                                                             {
                                                                 shouldValidate: true,
                                                             },
@@ -870,7 +838,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                                     className={cn(
                                                                         "h-auto flex-1 items-start px-4 py-4",
                                                                         isSelected &&
-                                                                            "ring-primary-light ring-2",
+                                                                        "ring-primary-light ring-2",
                                                                     )}>
                                                                     <div className="flex w-full items-start justify-between gap-3">
                                                                         <div className="flex items-start gap-3">
@@ -939,12 +907,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                     <Controller
                         name="path"
                         control={form.control}
-                        rules={{
-                            required:
-                                !isMemory && directory && watchScope === "file"
-                                    ? "Path is required"
-                                    : undefined,
-                        }}
+                        rules={{}}
                         render={({ field, fieldState }) => {
                             if (isMemory) return <></>;
 
@@ -956,7 +919,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                             htmlFor={field.name}>
                                             Path
                                             <Tooltip>
-                                                <TooltipTrigger>
+                                                <TooltipTrigger tabIndex={-1}>
                                                     <HelpCircle
                                                         size={16}
                                                         className="text-primary-light"
@@ -1005,43 +968,24 @@ export const KodyRuleAddOrUpdateItemModal = ({
 
                                     <FormControl.Input>
                                         <div className="flex flex-col">
-                                            <div className="flex items-center">
-                                                {directory &&
-                                                    watchScope === "file" &&
-                                                    !isInherited && (
-                                                        <Badge
-                                                            size="md"
-                                                            variant="helper"
-                                                            className="text-text-primary pointer-events-none h-full rounded-r-none ring-1">
-                                                            {directory?.folders?.[0]?.path ?? ''}/
-                                                        </Badge>
-                                                    )}
-
-                                                <Input
-                                                    id={field.name}
-                                                    value={field.value}
-                                                    maxLength={600}
-                                                    placeholder="Example: **/*.js"
-                                                    error={fieldState.error}
-                                                    className={cn(
-                                                        directory &&
-                                                            !isInherited &&
-                                                            watchScope ===
-                                                                "file" &&
-                                                            "rounded-l-none",
-                                                    )}
-                                                    disabled={
-                                                        field.disabled ||
-                                                        watchScope ===
-                                                            "pull-request"
-                                                    }
-                                                    onChange={(e) =>
-                                                        field.onChange(
-                                                            e.target.value,
-                                                        )
-                                                    }
-                                                />
-                                            </div>
+                                            <Input
+                                                id={field.name}
+                                                value={field.value}
+                                                maxLength={600}
+                                                placeholder="Example: **/*.js"
+                                                error={fieldState.error}
+                                                disabled={
+                                                    field.disabled ||
+                                                    watchScope ===
+                                                    "pull-request" ||
+                                                    !!directory
+                                                }
+                                                onChange={(e) =>
+                                                    field.onChange(
+                                                        e.target.value,
+                                                    )
+                                                }
+                                            />
 
                                             <FormControl.Error>
                                                 {fieldState.error?.message}
@@ -1052,7 +996,43 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                     Path is not applicable for
                                                     pull request scope
                                                 </FormControl.Helper>
-                                            ) : directory ? null : (
+                                            ) : directory ? (
+                                                <FormControl.Helper>
+                                                    <span className="inline-flex items-center gap-1">
+                                                        This rule applies to all
+                                                        folders in this
+                                                        directory group.
+                                                        <Tooltip>
+                                                            <TooltipTrigger
+                                                                tabIndex={-1}>
+                                                                <Info
+                                                                    size={14}
+                                                                    className="text-primary-light cursor-help"
+                                                                />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent
+                                                                align="start"
+                                                                className="flex flex-col gap-0.5 font-mono text-xs">
+                                                                {(
+                                                                    directory.folders ??
+                                                                    []
+                                                                ).map(
+                                                                    (folder) => (
+                                                                        <span
+                                                                            key={
+                                                                                folder.id
+                                                                            }>
+                                                                            {
+                                                                                folder.path
+                                                                            }
+                                                                        </span>
+                                                                    ),
+                                                                )}
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </span>
+                                                </FormControl.Helper>
+                                            ) : (
                                                 <FormControl.Helper>
                                                     If empty, rule will be
                                                     applied to all files.
@@ -1096,7 +1076,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                         htmlFor={field.name}>
                                         Instructions
                                         <Tooltip>
-                                            <TooltipTrigger>
+                                            <TooltipTrigger tabIndex={-1}>
                                                 <HelpCircle
                                                     size={16}
                                                     className="text-primary-light"
@@ -1185,13 +1165,13 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                             <div className="flex flex-col gap-3">
                                                                 <span className="text-text-primary text-xs font-medium">
                                                                     {watchScope ===
-                                                                    "file"
+                                                                        "file"
                                                                         ? "File context"
                                                                         : "PR context"}
                                                                 </span>
                                                                 <div className="flex flex-wrap gap-1.5">
                                                                     {(watchScope ===
-                                                                    "file"
+                                                                        "file"
                                                                         ? FILE_CONTEXT_VARIABLES
                                                                         : PR_CONTEXT_VARIABLES
                                                                     ).map(
@@ -1279,7 +1259,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                             htmlFor={field.name}>
                                             Severity
                                             <Tooltip>
-                                                <TooltipTrigger>
+                                                <TooltipTrigger tabIndex={-1}>
                                                     <HelpCircle
                                                         size={16}
                                                         className="text-primary-light"
@@ -1358,7 +1338,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                     value={
                                                         severitySliderOptions[
                                                             field.value ??
-                                                                "high"
+                                                            "high"
                                                         ]?.value ?? 2
                                                     }
                                                     disabled={field.disabled}
@@ -1374,16 +1354,16 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                                         )
                                                     }
                                                     className={cn({
-                                                        "[--slider-marker-background-active:#119DE4]":
+                                                        "[--slider-marker-background-active:var(--color-info)]":
                                                             field.value ===
                                                             "low",
-                                                        "[--slider-marker-background-active:#115EE4]":
+                                                        "[--slider-marker-background-active:var(--color-alert)]":
                                                             field.value ===
                                                             "medium",
-                                                        "[--slider-marker-background-active:#6A57A4]":
+                                                        "[--slider-marker-background-active:var(--color-warning)]":
                                                             field.value ===
                                                             "high",
-                                                        "[--slider-marker-background-active:#EF4B4B]":
+                                                        "[--slider-marker-background-active:var(--color-danger)]":
                                                             field.value ===
                                                             "critical",
                                                     })}
@@ -1431,7 +1411,7 @@ export const KodyRuleAddOrUpdateItemModal = ({
                                             <FormControl.Label className="mb-0 flex flex-row gap-1">
                                                 Inheritable
                                                 <Tooltip>
-                                                    <TooltipTrigger>
+                                                    <TooltipTrigger tabIndex={-1}>
                                                         <HelpCircle
                                                             size={16}
                                                             className="text-primary-light"

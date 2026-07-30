@@ -15,8 +15,6 @@
 test/
 ├── 📂 e2e/
 │   └── mcp.e2e.spec.ts          # 🎯 MCP controller integration tests
-├── 📂 provider/
-│   └── composio.spec.ts         # 🔌 Composio provider unit tests
 ├── 📂 __mocks__/
 │   └── ...                     # 🎭 Test mocks
 ├── 🚀 run-e2e.sh               # 📜 Test execution script
@@ -60,7 +58,6 @@ The `yarn test` command automatically executes:
 ### 🎭 Mocks Used
 - **ProviderFactory**: Mock for provider management
 - **AuthMiddleware**: Mock for JWT authentication
-- **ComposioClient**: Mock for external Composio API
 
 ### 🗃️ Database
 - **Container**: Same PostgreSQL as development
@@ -76,7 +73,7 @@ The `yarn test` command automatically executes:
 |----------|-------|-------------|
 | `NODE_ENV` | `test` | Execution environment |
 | `JWT_SECRET` | `test-secret-key` | JWT key for tests |
-| `MCP_PROVIDERS` | `composio` | Enabled providers |
+| `MCP_PROVIDERS` | `kodusmcp,custom` | Enabled providers |
 | `DB_HOST` | `localhost` | PostgreSQL host |
 | `DB_PORT` | `5432` | PostgreSQL port |
 | `DB_USERNAME` | `kodus` | Database username |
@@ -92,14 +89,6 @@ The `yarn test` command automatically executes:
 - 🔗 Connections: listing, searching, updating
 - 🔌 Integrations: listing, details, parameters, tools
 - ⚠️ Error handling and validation
-
-### 🔌 Unit Tests (`composio.spec.ts`)
-- ✅ **20 tests** - Composio provider
-- 🏗️ Constructor and configuration
-- 📝 Status mapping
-- 🔄 Integration methods
-- 🛠️ Tools and connections
-- 🖥️ MCP servers
 
 ---
 

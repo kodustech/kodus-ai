@@ -15,7 +15,7 @@ import { AutomationType } from '@/automation/domain/automation/enum/automation-t
 import { PlatformType } from '@/core/domain/enums/platform-type.enum';
 
 // Mock logger to silence logs during tests
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

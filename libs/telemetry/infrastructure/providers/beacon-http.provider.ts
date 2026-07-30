@@ -1,8 +1,18 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 
-const ENDPOINT = 'https://telemetry.kodus.io/v1/heartbeat';
+const DEFAULT_ENDPOINT = 'https://telemetry.kodus.io/v1/heartbeat';
 const TIMEOUT_MS = 5_000;
+
+export const BEACON_HTTP_PROVIDER_TOKEN = Symbol.for('BeaconHttpProvider');
+
+export interface IBeaconHttpProvider {
+    isDisabled(): boolean;
+    send(
+        payload: Record<string, unknown>,
+        kodusVersion: string,
+    ): Promise<boolean>;
+}
 
 /**
  * Pure HTTP transport for the self-hosted beacon. One responsibility: POST a
@@ -14,7 +24,7 @@ const TIMEOUT_MS = 5_000;
  * flip it at runtime without restarting the worker.
  */
 @Injectable()
-export class BeaconHttpProvider {
+export class BeaconHttpProvider implements IBeaconHttpProvider {
     private readonly logger = createLogger(BeaconHttpProvider.name);
 
     isDisabled(): boolean {
@@ -33,7 +43,7 @@ export class BeaconHttpProvider {
         const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
         try {
-            const response = await fetch(ENDPOINT, {
+            const response = await fetch(this.endpoint(), {
                 body: JSON.stringify(payload),
                 headers: {
                     'Content-Type': 'application/json',
@@ -66,5 +76,9 @@ export class BeaconHttpProvider {
         } finally {
             clearTimeout(timer);
         }
+    }
+
+    private endpoint(): string {
+        return process.env.KODUS_TELEMETRY_ENDPOINT?.trim() || DEFAULT_ENDPOINT;
     }
 }

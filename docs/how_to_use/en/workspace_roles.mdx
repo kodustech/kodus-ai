@@ -38,11 +38,11 @@ Each role provides different levels of access and capabilities within the worksp
 
 ### Repository Admin
 
-**Repository management** access focused on managing code review configurations for repositories they own, with full access to issues, cockpit, and plugins.
+**Repository management** access. Sees all configurations, pull requests, issues, cockpit, and plugins across the whole organization (read-only), and can edit code review configurations and Kody Rules for the repositories assigned to them.
 
 ### Contributor
 
-**Basic access** for team members who need to view configurations for repositories they are assigned to. Limited to view-only access for most features.
+**Read-only access** to the whole organization. Contributors can view configurations, Kody Rules, pull requests, and issues across all repositories — no repository assignment needed — but cannot edit anything. Cockpit, token usage, billing, and user management stay admin-only.
 
 ## Role Permissions Matrix
 
@@ -73,8 +73,8 @@ Enable auto-join to allow users with matching email domains to join your workspa
 **How it works:**
 - Users who sign up with your email domain can choose to join your organization
 - They must confirm their email after choosing to join
-- All auto-join users enter as **Contributor** role with no repository access
-- As Owner, you need to assign them to repositories and adjust their role if needed
+- All auto-join users enter as **Contributor** role (read-only access to the whole organization)
+- As Owner, adjust their role if they need edit rights
 
 ### Changing Member Roles
 
@@ -124,8 +124,7 @@ Enable auto-join to allow users with matching email domains to join your workspa
 
   <Accordion title="A member can't access cockpit features">
     **Solutions:**
-    - Confirm the member has Repository Admin or Owner role
-    - Check if the member is assigned to repositories they want to access
+    - Confirm the member has Repository Admin or Owner role (cockpit is not visible to Contributors or Billing Managers)
     - Verify the member's role assignment is correct
   </Accordion>
 

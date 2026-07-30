@@ -1,3 +1,7 @@
+import {
+    is429Error,
+    isTransientFetchError,
+} from '@libs/core/infrastructure/http/rate-limit-retry';
 import { BadRequestException, Inject, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTwoFilesPatch } from 'diff';
@@ -46,7 +50,7 @@ import {
     ReactionsInComments,
 } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { hasKodyMarker } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import { getCodeReviewBadge } from '@libs/common/utils/codeManagement/codeReviewBadge';
 import { getLabelShield } from '@libs/common/utils/codeManagement/labels';
@@ -89,6 +93,10 @@ import {
     buildDefaultSourceBranchName,
     DEFAULT_COMMIT_MESSAGE,
     DEFAULT_PR_TITLE,
+    EMPTY_REPO_DEFAULT_BRANCH,
+    EMPTY_REPO_SEED_COMMIT_MESSAGE,
+    EMPTY_REPO_SEED_CONTENT,
+    EMPTY_REPO_SEED_PATH,
 } from '../code-management-defaults.constants';
 import { AzureReposRequestHelper } from './azure-repos-request-helper';
 
@@ -205,7 +213,8 @@ export class AzureReposService implements Omit<
                 (await this.getDefaultBranch({
                     organizationAndTeamData,
                     repository,
-                }));
+                })) ||
+                EMPTY_REPO_DEFAULT_BRANCH;
             const resolvedBaseBranch = baseBranch || resolvedTargetBranch;
 
             const { orgName, token } = await this.getAuthDetails(
@@ -216,6 +225,18 @@ export class AzureReposService implements Omit<
                 organizationAndTeamData,
                 repository.id,
             );
+
+            // An empty repository has no default-branch ref yet, so the PR
+            // below has no valid target. Seed an initial commit so the base
+            // branch exists. No-op when the branch is already there.
+            await this.ensureBaseBranchExists({
+                orgName,
+                token,
+                projectId,
+                repositoryId: repository.id,
+                baseBranch: resolvedBaseBranch,
+                author,
+            });
 
             const uploadResult = await this.uploadFiles({
                 organizationAndTeamData,
@@ -253,7 +274,8 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
-            return null;
+            // Propagate the real cause so the caller can surface it.
+            throw error;
         }
     }
 
@@ -404,6 +426,62 @@ export class AzureReposService implements Omit<
 
             return false;
         }
+    }
+
+    // Seeds an empty repository with an initial commit so the base branch
+    // exists for the PR flow. `uploadFilesToNewBranch` falls back to the zero
+    // object id (initial push) when the branch has no commits yet. A no-op
+    // when the branch already exists.
+    private async ensureBaseBranchExists(params: {
+        orgName: string;
+        token: string;
+        projectId: string;
+        repositoryId: string;
+        baseBranch: string;
+        author?: { name: string; email?: string };
+    }): Promise<void> {
+        const { orgName, token, projectId, repositoryId, baseBranch, author } =
+            params;
+
+        const exists = await this.azureReposRequestHelper.branchExists({
+            orgName,
+            token,
+            projectId,
+            repositoryId,
+            branchName: baseBranch,
+        });
+        if (exists) {
+            return;
+        }
+
+        await this.azureReposRequestHelper.uploadFilesToNewBranch({
+            orgName,
+            token,
+            projectId,
+            repositoryId,
+            branchName: baseBranch,
+            commitMessage: EMPTY_REPO_SEED_COMMIT_MESSAGE,
+            author: author?.name
+                ? {
+                      name: author.name,
+                      email: author.email || 'kody@kodus.io',
+                  }
+                : undefined,
+            changes: [
+                {
+                    changeType: 'add',
+                    filePath: `/${EMPTY_REPO_SEED_PATH}`,
+                    content: EMPTY_REPO_SEED_CONTENT,
+                },
+            ],
+        });
+
+        this.logger.log({
+            message:
+                'Seeded empty Azure repository with an initial commit for centralized config',
+            context: AzureReposService.name,
+            metadata: { repositoryId, baseBranch },
+        });
     }
 
     private async checkAzureFileExists(params: {
@@ -1774,6 +1852,15 @@ export class AzureReposService implements Omit<
                 error,
                 metadata: { params },
             });
+            // A 429 or a transport failure means "we couldn't fetch the
+            // commits", NOT "the PR has no commits" — swallowing it as null
+            // makes createLineComments anchor nothing and the review ships
+            // with zero inline comments while reporting success (same class
+            // observed live on the bitbucket path, 2026-07-29). Re-throw so
+            // callers can tell an empty list apart from a failed fetch.
+            if (is429Error(error) || isTransientFetchError(error)) {
+                throw error;
+            }
             return null;
         }
     }

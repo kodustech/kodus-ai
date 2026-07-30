@@ -46,7 +46,7 @@ app.${BASE} {
 }
 
 api.${BASE} {
-    reverse_proxy kodus-api:3001 {
+    reverse_proxy api:3001 {
         import proxy_common
     }
 }

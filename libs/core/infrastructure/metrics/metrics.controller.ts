@@ -1,7 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { MetricsEventModel } from './schemas/metrics-event.schema';
 import {
     ErrorRateResult,

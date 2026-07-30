@@ -44,6 +44,26 @@ services:
         environment:
             - API_CLOUD_MODE=false
             - COMPONENT_TYPE=worker
+            - WORKER_ROLE=code-review
+        depends_on:
+            db_postgres:
+                condition: service_healthy
+            db_mongodb:
+                condition: service_healthy
+        networks:
+            - kodus-backend-services
+
+    worker-analytics:
+        image: ghcr.io/kodustech/kodus-ai-worker:${KODUS_VERSION:-latest}
+        container_name: kodus_analytics_worker_prod
+        restart: unless-stopped
+        command: node dist/apps/worker/main.js
+        env_file:
+            - ${ENV_FILE:-.env.prod}
+        environment:
+            - API_CLOUD_MODE=false
+            - COMPONENT_TYPE=worker
+            - WORKER_ROLE=analytics
         depends_on:
             db_postgres:
                 condition: service_healthy

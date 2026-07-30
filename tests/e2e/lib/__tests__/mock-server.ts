@@ -164,7 +164,76 @@ export function kodusRoutes(opts: {
             pathRegex: /^\/code-management\/finish-onboarding$/,
             handler: (_req, res) => json(res, 200, {}),
         },
+        executionsRoute(),
+        healthRoute(),
     ];
+}
+
+/**
+ * The runner's post-failure reachability probe (isTargetReachable, added in
+ * #1494) GETs /health and reclassifies a genuine scenario failure as
+ * SKIP/inconclusive when it doesn't answer 200 — without this route, mock
+ * targets always look "unreachable" and the license-gate tests that assert
+ * a real `failed` outcome get `skipped` instead.
+ */
+export function healthRoute(): RouteHandler {
+    return {
+        method: "GET",
+        pathRegex: /^\/health(\?|$)/,
+        handler: (_req, res) => json(res, 200, { status: "ok" }),
+    };
+}
+
+/**
+ * Execution-health assert (assertHealthyExecution) polls this after every
+ * review. #1494 added the assert without teaching the mocks the route, which
+ * silently broke the whole hermetic integration layer on main (7 tests red
+ * from 2026-07-10). Exported separately because integration.test.ts and
+ * integration-license.test.ts carry their own inline route tables.
+ * Returns one settled execution (default "success") for any PR queried.
+ *
+ * The SAME trap fired again in #1547: assertPersistedSuggestions was added to
+ * code-review-basic and polls this route for `suggestionsCount.sent`, which the
+ * row did not carry — so it polled its full 120s, failed, and the runner's
+ * retry burned another 120s. That one test alone spent 260s of the job's 5min
+ * budget and turned main red (as a *timeout*, reported as "cancelled") from
+ * 2026-07-14. An assert that reads a field the mock never emits cannot pass:
+ * when adding one, extend this row in the same commit.
+ */
+export function executionsRoute(
+    status: string = "success",
+    suggestionsSent: number = 1,
+): RouteHandler {
+    return {
+        method: "GET",
+        pathRegex: /^\/pull-requests\/executions(\?|$)/,
+        handler: (req, res) => {
+            const url = new URL(req.url ?? "", "http://mock");
+            const prNumber = Number(
+                url.searchParams.get("pullRequestNumber") ?? 0,
+            );
+            // Mirror the REAL enriched-listing shape (verified against QA):
+            // the item's top-level `status` is the PULL REQUEST state
+            // ("open"), and the execution status lives nested under
+            // `automationExecution.status`. An idealized mock here is how
+            // the walker's PR-state-vs-execution-status bug slipped through.
+            json(res, 200, {
+                data: {
+                    data: [
+                        {
+                            prNumber,
+                            status: "open",
+                            executionId: "exec-1",
+                            automationExecution: { status },
+                            // Read back by assertPersistedSuggestions — the
+                            // store-side counterpart of the posted comments.
+                            suggestionsCount: { sent: suggestionsSent },
+                        },
+                    ],
+                },
+            });
+        },
+    };
 }
 
 /** Helper type used by every provider's review-window state. */

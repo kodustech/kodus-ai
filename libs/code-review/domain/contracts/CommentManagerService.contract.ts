@@ -40,6 +40,7 @@ export interface ICommentManagerService {
         codeReviewConfig?: CodeReviewConfig,
         language?: string,
         platformType?: PlatformType,
+        lineComments?: CommentResult[],
     ): Promise<string>;
 
     generateSummaryPR(
@@ -71,6 +72,7 @@ export interface ICommentManagerService {
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -148,5 +150,6 @@ export interface ICommentManagerService {
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
+        reviewErrorCustomMessage?: string,
     ): Promise<void>;
 }

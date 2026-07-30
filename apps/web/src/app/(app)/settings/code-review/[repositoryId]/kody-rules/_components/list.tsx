@@ -61,7 +61,6 @@ export const KodyRulesList = ({
                     <KodyRuleItem
                         key={rule.uuid}
                         rule={rule}
-                        tab={tab}
                         onAnyChange={onAnyChange}
                         showSuggestionsButton={tab === "review-rules"}
                         selection={selection}

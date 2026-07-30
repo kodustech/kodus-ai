@@ -1,9 +1,9 @@
-import { authorizedFetch } from "@services/fetch";
-import type { CentralizedPrResponse } from "@services/parameters/types";
-import { ProgrammingLanguage } from "src/core/enums/programming-language";
-import { axiosAuthorized } from "src/core/utils/axios";
+import { authorizedFetch } from '@services/fetch';
+import type { CentralizedPrResponse } from '@services/parameters/types';
+import { ProgrammingLanguage } from 'src/core/enums/programming-language';
+import { axiosAuthorized } from 'src/core/utils/axios';
 
-import { KODY_RULES_PATHS } from ".";
+import { KODY_RULES_PATHS } from '.';
 import type {
     KodyRule,
     KodyRuleBucket,
@@ -12,7 +12,7 @@ import type {
     KodyRuleSuggestion,
     LibraryRule,
     PaginatedResponse,
-} from "./types";
+} from './types';
 
 export type FastSyncIDERulesPayload = {
     teamId: string;
@@ -53,7 +53,7 @@ export const createOrUpdateKodyRule = async (
         { ...rule, repositoryId, directoryId, teamId },
     );
 
-    if (response && typeof response === "object" && "data" in response) {
+    if (response && typeof response === 'object' && 'data' in response) {
         return (response as { data?: KodyRuleMutationResponse })
             .data as KodyRuleMutationResponse;
     }
@@ -89,7 +89,7 @@ export const deleteKodyRule = async (
         { params: { ruleId, teamId } },
     );
 
-    if (response && typeof response === "object" && "data" in response) {
+    if (response && typeof response === 'object' && 'data' in response) {
         return (response as { data?: boolean | CentralizedPrResponse }).data as
             | boolean
             | CentralizedPrResponse;
@@ -107,9 +107,6 @@ export const getLibraryKodyRulesWithFeedback = async (params?: {
     tags?: string[];
     language?: keyof typeof ProgrammingLanguage;
     plug_and_play?: boolean;
-    needMCPS?: boolean;
-    requiredMcp?: string;
-    debugLabel?: string;
 }) => {
     // Build params object for authorizedFetch
     const fetchParams: Record<string, string | number | boolean | undefined> = {
@@ -122,8 +119,6 @@ export const getLibraryKodyRulesWithFeedback = async (params?: {
     if (params?.severity) fetchParams.severity = params.severity;
     if (params?.language) fetchParams.language = String(params.language);
     if (params?.plug_and_play) fetchParams.plug_and_play = true;
-    if (params?.needMCPS) fetchParams.needMCPS = true;
-    if (params?.requiredMcp) fetchParams.requiredMcp = params.requiredMcp;
 
     // For arrays, we need to handle them as multiple parameters with the same key
     // But since authorizedFetch doesn't handle array params well, we'll build the URL manually
@@ -138,47 +133,18 @@ export const getLibraryKodyRulesWithFeedback = async (params?: {
     // Add bucket filters as multiple parameters
     if (params?.buckets && params.buckets.length > 0) {
         params.buckets.forEach((bucket) => {
-            queryParams.append("buckets", bucket);
+            queryParams.append('buckets', bucket);
         });
     }
 
     // Add tag filters as multiple parameters
     if (params?.tags && params.tags.length > 0) {
         params.tags.forEach((tag) => {
-            queryParams.append("tags", tag);
+            queryParams.append('tags', tag);
         });
     }
 
     const url = `${KODY_RULES_PATHS.FIND_LIBRARY_KODY_RULES_WITH_FEEDBACK}?${queryParams.toString()}`;
-
-    const expectedNeedMCPS = Boolean(params?.needMCPS);
-    const expectedPlugAndPlay = Boolean(params?.plug_and_play);
-    const resolvedNeedMCPS = queryParams.get("needMCPS");
-    const resolvedPlugAndPlay = queryParams.get("plug_and_play");
-    const hasMismatch =
-        (expectedNeedMCPS && resolvedNeedMCPS !== "true") ||
-        (expectedPlugAndPlay && resolvedPlugAndPlay !== "true");
-
-    if (
-        process.env.NODE_ENV !== "production" &&
-        (params?.debugLabel ||
-            expectedNeedMCPS ||
-            expectedPlugAndPlay ||
-            hasMismatch)
-    ) {
-        // Use info to show up in DevTools (console.debug is often hidden under "Verbose")
-        console.info("[kodyRules] find-library-with-feedback params", {
-            label: params?.debugLabel,
-            params,
-            resolvedQuery: queryParams.toString(),
-            expectedNeedMCPS,
-            expectedPlugAndPlay,
-            resolvedNeedMCPS,
-            resolvedPlugAndPlay,
-            hasMismatch,
-            url,
-        });
-    }
 
     const response = await authorizedFetch<PaginatedResponse<LibraryRule>>(url);
     return response;
@@ -288,30 +254,35 @@ export const discardPendingKodyRules = async (
     return response.data as KodyRule[];
 };
 
-export const convertPendingUpdatesToMemories = async (
+export const convertPendingUpdatesToNew = async (
     teamId: string,
     ruleIds: string[],
 ) => {
     const response = await axiosAuthorized.post<any>(
-        KODY_RULES_PATHS.CONVERT_PENDING_UPDATES_TO_MEMORIES,
+        KODY_RULES_PATHS.CONVERT_PENDING_UPDATES_TO_NEW,
         { teamId, ruleIds },
     );
 
     return response.data as KodyRule[] | CentralizedPrResponse;
 };
 
-export const generateKodyRules = (
+export const generateKodyRules = async (
     teamId: string,
     months: number = 3,
     weeks?: number,
     days?: number,
 ) => {
-    axiosAuthorized.post(KODY_RULES_PATHS.GENERATE_KODY_RULES, {
-        teamId,
-        months,
-        weeks,
-        days,
-    });
+    const response = await axiosAuthorized.post<any>(
+        KODY_RULES_PATHS.GENERATE_KODY_RULES,
+        {
+            teamId,
+            months,
+            weeks,
+            days,
+        },
+    );
+
+    return response.data;
 };
 
 export const syncIDERules = (params: {
@@ -319,6 +290,42 @@ export const syncIDERules = (params: {
     repositoryId: string;
 }) => {
     axiosAuthorized.post(KODY_RULES_PATHS.SYNC_IDE_RULES, params);
+};
+
+export type GlobalRulesSourceRepository = {
+    id: string;
+    name: string;
+    fullName?: string;
+};
+
+export const getGlobalSourceRepositories = async (params: {
+    teamId: string;
+}): Promise<GlobalRulesSourceRepository[]> => {
+    const url = `${KODY_RULES_PATHS.GLOBAL_SOURCE_REPOSITORIES}?teamId=${encodeURIComponent(params.teamId)}`;
+    const result = await authorizedFetch<GlobalRulesSourceRepository[]>(url);
+    return result ?? [];
+};
+
+export const setGlobalSourceRepositories = async (params: {
+    teamId: string;
+    repositories: GlobalRulesSourceRepository[];
+}): Promise<GlobalRulesSourceRepository[]> => {
+    const response =
+        await axiosAuthorized.post<GlobalRulesSourceRepository[]>(
+            KODY_RULES_PATHS.GLOBAL_SOURCE_REPOSITORIES,
+            params,
+        );
+    return response;
+};
+
+export const resyncGlobalRules = async (params: {
+    teamId: string;
+}): Promise<{ repositories: number }> => {
+    const response = await axiosAuthorized.post<{ repositories: number }>(
+        KODY_RULES_PATHS.RESYNC_GLOBAL_RULES,
+        params,
+    );
+    return response;
 };
 
 export const reviewFastIDERules = async (
@@ -341,7 +348,7 @@ export const getKodyRuleSuggestions = async (ruleId: string) => {
 export const getRecommendedKodyRules = async (params?: { limit?: number }) => {
     const queryParams = new URLSearchParams();
     if (params?.limit) {
-        queryParams.append("limit", params.limit.toString());
+        queryParams.append('limit', params.limit.toString());
     }
 
     const url = queryParams.toString()
@@ -374,7 +381,7 @@ export const getImportedKodyRulesCount = async (params: {
     return result ?? { active: 0, paused: 0, deleted: 0, pinned: 0 };
 };
 
-export type ManageImportedKodyRulesAction = "pause" | "resume" | "delete";
+export type ManageImportedKodyRulesAction = 'pause' | 'resume' | 'delete';
 
 export const manageImportedKodyRules = async (params: {
     repositoryId: string;
@@ -388,4 +395,20 @@ export const manageImportedKodyRules = async (params: {
         counts: ImportedKodyRulesCounts;
     }>(KODY_RULES_PATHS.MANAGE_IMPORTED_KODY_RULES, params);
     return response;
+};
+
+export type PastReviewer = { id: string; name: string };
+
+// Candidate git reviewers a client can exclude from Kody Rules learning
+// (issue #1497): current members ∪ authors of PRs in the window.
+export const getPastReviewers = async (params: {
+    teamId: string;
+    repositoryId?: string;
+    months?: number;
+}): Promise<PastReviewer[]> => {
+    const result = await authorizedFetch<PastReviewer[]>(
+        KODY_RULES_PATHS.PAST_REVIEWERS,
+        { params },
+    );
+    return result ?? [];
 };

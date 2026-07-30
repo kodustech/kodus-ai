@@ -1,0 +1,4 @@
+{"eval":"format","model":"gpt-5.4-mini","engine":"new","config":{},"dataset":"smoke-3pr-8f","judge":"auto","runs":1,"metrics":{"auto_pass_rate":0.875,"ident_recall_mean":0.748,"parse_fail":0},"ts":"2026-07-09","notes":"live smoke"}
+{"eval":"format","model":"kimi-k2.7-code","engine":"new","config":{},"dataset":"smoke-3pr-8f","judge":"auto","runs":1,"metrics":{"auto_pass_rate":1.0,"ident_recall_mean":0.763,"parse_fail":0},"ts":"2026-07-09","notes":"live smoke"}
+{"eval":"format","model":"glm-5.2","engine":"new","config":{},"dataset":"smoke-3pr-8f","judge":"auto","runs":1,"metrics":{"auto_pass_rate":1.0,"ident_recall_mean":0.878,"parse_fail":0},"ts":"2026-07-09","notes":"live smoke"}
+{"eval":"format","model":"haiku-4.5","engine":"new","config":{},"dataset":"smoke-3pr-8f","judge":"auto","runs":1,"metrics":{"auto_pass_rate":1.0,"ident_recall_mean":0.716,"parse_fail":0},"ts":"2026-07-09","notes":"live smoke"}

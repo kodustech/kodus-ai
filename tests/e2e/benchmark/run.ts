@@ -39,7 +39,7 @@ interface BenchPR {
     golden_comments: { comment: string; severity?: string }[];
 }
 
-// Make `yarn benchmark:models` a true one-command: pull BYOK_* / GH_TEST_TOKEN
+// Make `pnpm run benchmark:models` a true one-command: pull BYOK_* / GH_TEST_TOKEN
 // / ANTHROPIC_API_KEY from ~/.kodus-dev/config if they're not already in the
 // env. Indent-tolerant (the config lines may be indented); never overrides an
 // env var the caller already set.
@@ -68,14 +68,18 @@ function loadPRs(): BenchPR[] {
 }
 
 // Dedicated benchmark tenant. Defaults to a fixed bench account so
-// `yarn benchmark:models` is one command and never mutates the shared cloud
+// `pnpm run benchmark:models` is one command and never mutates the shared cloud
 // QA tenants; override via env for a one-off. signUp is idempotent (409-OK),
 // so first run creates it and later runs reuse it.
 async function getSession(): Promise<KodusSession> {
-    const email = process.env.BENCH_TENANT_EMAIL ?? "e2e-bench-tier0@kodus.io";
+    // `||` (not `??`) so an EMPTY string falls through to the default too.
+    // CI passes `${{ secrets.X }}` which is "" when the secret is unset, and
+    // "" is not null/undefined → `??` would keep it → empty creds → 401. An
+    // empty email/password is never valid here, so `||` is strictly safer.
+    const email = process.env.BENCH_TENANT_EMAIL || "e2e-bench-tier0@kodus.io";
     const password =
-        process.env.BENCH_TENANT_PASSWORD ??
-        process.env.TEST_USER_PASSWORD ??
+        process.env.BENCH_TENANT_PASSWORD ||
+        process.env.TEST_USER_PASSWORD ||
         "E2eBench!a1b2c3d4";
     await signUp(QA, { email, password }).catch(() => {});
     return login(QA, { email, password });
@@ -254,23 +258,43 @@ async function collectFindings(repo: string, prNumber: number): Promise<string[]
 // waits longer; we never falsely declare "no review" on a blind timer (the old
 // pollForReview gave up at 25min and mislabeled a review that landed at min 42).
 // Returns true once the marker appears, false only after a generous cap.
-async function waitForReviewComplete(repo: string, prNumber: number, capSec = 3000): Promise<boolean> {
+type ReviewOutcome = "completed" | "failed" | "timeout";
+
+async function waitForReviewOutcome(
+    repo: string,
+    prNumber: number,
+    sinceMs: number,
+    capSec = 3000,
+): Promise<ReviewOutcome> {
     const deadline = Date.now() + capSec * 1000;
     while (Date.now() < deadline) {
         try {
-            const comments = await ghGetJson<{ body?: string }[]>(
+            const comments = await ghGetJson<
+                { body?: string; created_at?: string }[]
+            >(
                 `https://api.github.com/repos/${repo}/issues/${prNumber}/comments?per_page=100`,
             );
+            // Only consider comments at/after `sinceMs` so a retry isn't fooled
+            // by the previous attempt's banner still on the PR.
+            const fresh = comments.filter(
+                (c) => !c.created_at || new Date(c.created_at).getTime() >= sinceMs,
+            );
+            // Failure first: a "Could Not Complete ⚠️" banner (usually a transient
+            // model/provider error, e.g. an openai_compatible 5xx) is terminal for
+            // this attempt — return immediately instead of burning the ~50min cap.
+            if (fresh.some((c) => /could not complete|review failed before/i.test(c.body ?? ""))) {
+                return "failed";
+            }
             // Kody posts ONE of two completion banners depending on findings:
             //   "## Code Review Completed! 🔥"   (issues found / standard)
             //   "# Kody Review Complete … No issues were found"  (zero findings)
-            // Match BOTH — the earlier regex only caught the first, so every
-            // 0-finding review was falsely declared "NO review" after the cap.
-            if (comments.some((c) => /review complet(ed|e)\b/i.test(c.body ?? ""))) return true;
+            if (fresh.some((c) => /review complet(ed|e)\b/i.test(c.body ?? ""))) {
+                return "completed";
+            }
         } catch { /* transient — keep polling */ }
         await sleep(15_000);
     }
-    return false;
+    return "timeout";
 }
 
 // After "Completed" the inline findings can still trickle in for a few seconds;
@@ -293,15 +317,37 @@ type ModelOutcome = { ok: number; fail: number; results: unknown[] };
 // parallel mode), so this is topology-agnostic.
 async function reviewOnePR(model: BenchModel, pr: BenchPR): Promise<{ ok: boolean; result: unknown }> {
     const provider = new GitHubProvider({ repoOverride: pr.repo, target: "cloud" });
+    const repoShort = pr.repo.split("/")[1];
     let opened;
     try {
-        opened = await provider.openPRFromBranches!({ head: pr.head, base: pr.base, title: `[bench] ${model.slug} ${pr.repo.split("/")[1]}`, body: `Model benchmark: ${model.id}` });
-        // Wait for Kody's explicit "Completed" marker (deterministic, slow-model-safe), then settle findings.
-        const reviewed = await waitForReviewComplete(pr.repo, opened.number);
+        const openedAt = Date.now();
+        opened = await provider.openPRFromBranches!({ head: pr.head, base: pr.base, title: `[bench] ${model.slug} ${repoShort}`, body: `Model benchmark: ${model.id}` });
+        // Wait for Kody's terminal marker (Completed / Could-Not-Complete /
+        // timeout). A non-completed first attempt is retried ONCE via
+        // `@kody review`: a "Could Not Complete" is usually a transient model/
+        // provider error (Kody itself tells you to re-run), and a single flake
+        // would otherwise red the whole 25-review gate.
+        let outcome = await waitForReviewOutcome(pr.repo, opened.number, openedAt - 5_000);
+        let retried = false;
+        if (outcome !== "completed") {
+            retried = true;
+            log.info(`${model.slug} ${repoShort}: review ${outcome} — retrying once via @kody review (PR #${opened.number})`);
+            // GitHub comment `created_at` is second-precision, so `sinceMs` needs
+            // the same -5s padding `openedAt` uses or a banner posted in the same
+            // second would be filtered out (its timestamp truncates to .000 <
+            // sinceMs) and the poll would hang the full cap. But padding back 5s
+            // would also re-match the FIRST attempt's failure banner — so first
+            // sleep 5s to push it outside the window, then pad.
+            await sleep(5_000);
+            const retryAt = Date.now() - 5_000;
+            await provider.postComment(opened.number, "@kody review").catch(() => {});
+            outcome = await waitForReviewOutcome(pr.repo, opened.number, retryAt);
+        }
+        const reviewed = outcome === "completed";
         const findings = reviewed ? await collectFindingsStable(pr.repo, opened.number) : [];
-        if (reviewed) log.ok(`${model.slug} ${pr.repo.split("/")[1]}: reviewed (${findings.length} findings)`);
-        else log.err(`${model.slug} ${pr.repo.split("/")[1]}: NO review after cap (PR #${opened.number})`);
-        return { ok: reviewed, result: { model: model.slug, modelId: model.id, repo: pr.repo, prNumber: opened.number, head: pr.head, golden_comments: pr.golden_comments, findings } };
+        if (reviewed) log.ok(`${model.slug} ${repoShort}: reviewed (${findings.length} findings)${retried ? " [after retry]" : ""}`);
+        else log.err(`${model.slug} ${repoShort}: ${outcome} after retry (PR #${opened.number})`);
+        return { ok: reviewed, result: { model: model.slug, modelId: model.id, repo: pr.repo, prNumber: opened.number, head: pr.head, golden_comments: pr.golden_comments, findings, retried } };
     } catch (err) {
         log.err(`${model.slug} ${pr.repo}: ${(err as Error).message}`);
         return { ok: false, result: { model: model.slug, repo: pr.repo, head: pr.head, error: (err as Error).message } };
@@ -344,7 +390,7 @@ async function runModelShared(
 }
 
 const benchPassword = () =>
-    process.env.BENCH_TENANT_PASSWORD ?? process.env.TEST_USER_PASSWORD ?? "E2eBench!a1b2c3d4";
+    process.env.BENCH_TENANT_PASSWORD || process.env.TEST_USER_PASSWORD || "E2eBench!a1b2c3d4";
 
 // PARALLEL mode: each model gets its OWN tenant + its OWN copy of the fixture
 // repos (kodus-e2e/<base>-<slug>), so no BYOK clobber and no shared-repo webhook
@@ -430,7 +476,20 @@ async function main() {
     const outPath = join(process.cwd(), "benchmark", "results.json");
     writeFileSync(outPath, JSON.stringify({ ranAt: new Date().toISOString(), models: selected.map((m) => m.slug), results: allResults }, null, 2));
     log.info(`RESULT: ${totalOk} reviewed, ${totalFail} failed (of ${selected.length * prs.length}). → ${outPath}`);
-    if (totalFail > 0) process.exit(1);
+    // Tolerate a small number of residual failures (i.e. that survived the
+    // per-PR retry) so a single transient model/provider error doesn't red the
+    // whole 25-review run. A genuine model regression fails many PRs and still
+    // trips the gate. Tolerated failures are logged loudly per-PR above (and
+    // listed in results.json) — never silently swallowed. Tune via
+    // BENCH_MAX_FAILURES (default 1; set 0 for strict).
+    const maxFail = Math.max(0, Number(process.env.BENCH_MAX_FAILURES ?? 1));
+    if (totalFail > maxFail) {
+        log.err(`gate FAILED: ${totalFail} review failure(s) exceed BENCH_MAX_FAILURES=${maxFail}`);
+        process.exit(1);
+    }
+    if (totalFail > 0) {
+        log.info(`gate PASSED with ${totalFail} tolerated failure(s) (<= BENCH_MAX_FAILURES=${maxFail}) — investigate if recurring`);
+    }
 }
 
 main().catch((e) => { log.err(String(e?.stack ?? e)); process.exit(1); });

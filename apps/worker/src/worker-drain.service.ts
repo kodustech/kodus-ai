@@ -1,5 +1,5 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable, OnApplicationShutdown, Optional } from '@nestjs/common';
 
 const DEFAULT_DRAIN_TIMEOUT_MS = 25_000;

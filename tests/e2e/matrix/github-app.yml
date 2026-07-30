@@ -6,7 +6,7 @@ description: |
     folding the cell into the full nightly run.
 
     Use:
-        yarn e2e:matrix matrix/github-app.yml --target cloud -y
+        pnpm run e2e:matrix matrix/github-app.yml --target cloud -y
 
     The cell is auto-skipped if GH_APP_TEST_REPO or
     GH_APP_INSTALLATION_ID is missing — set both before running.

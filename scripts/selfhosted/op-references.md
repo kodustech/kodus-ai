@@ -40,7 +40,7 @@ These are not in 1Password — they're plain values with team defaults set in `s
 
 ## How to use
 
-1. Run `yarn selfhosted:setup`
+1. Run `pnpm run selfhosted:setup`
 2. For each prompt, paste the reference from the table above
 3. The setup will validate each ref against 1Password and warn if it doesn't resolve
 4. After setup, your `~/.kodus-dev/config` looks like:
@@ -53,7 +53,7 @@ These are not in 1Password — they're plain values with team defaults set in `s
    KODUS_INSTALLER_PATH=/Users/you/dev/kodus-installer
    ```
 
-5. `yarn selfhosted:provision`, `deploy`, `destroy` etc. resolve the refs on each invocation
+5. `pnpm run selfhosted:provision`, `deploy`, `destroy` etc. resolve the refs on each invocation
 
 ## Adding a new secret to the team vault
 

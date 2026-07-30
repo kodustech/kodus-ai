@@ -16,6 +16,14 @@ function writeJson(filePath, value) {
     fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
 }
 
+function shouldIncludeInBenchmarkEvaluation(suggestion) {
+    return (suggestion?.deliveryStatus || '').toLowerCase() === 'sent';
+}
+
+function classifyBenchmarkDeliveryStage(suggestion) {
+    return shouldIncludeInBenchmarkEvaluation(suggestion) ? 'sent' : 'discarded';
+}
+
 function runDockerExec(container, args, timeoutMs = 60000, attempts = 3) {
     let lastError;
 
@@ -319,5 +327,7 @@ module.exports = {
     psqlEval,
     resolvePullRequestMetadata,
     resolveResultsDir,
+    classifyBenchmarkDeliveryStage,
+    shouldIncludeInBenchmarkEvaluation,
     writeJson,
 };

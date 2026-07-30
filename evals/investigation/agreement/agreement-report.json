@@ -1,0 +1,100 @@
+{
+  "reference": "claude-sonnet-4-6",
+  "pairCount": 254,
+  "candidates": {
+    "gpt-5.4-mini": {
+      "pairs": 254,
+      "refMatchRate": 0.09055118110236221,
+      "candMatchRate": 0.10236220472440945,
+      "tp": 22,
+      "fp": 4,
+      "fn": 1,
+      "tn": 227,
+      "accuracy": 0.9803149606299213,
+      "precision": 0.8461538461538461,
+      "recall": 0.9565217391304348,
+      "f1": 0.8979591836734695,
+      "kappa": 0.8871111111111114,
+      "meanLatencyMs": 1385,
+      "disagreements": [
+        {
+          "id": "gpt-5.4::anonymous-add-configurable-device-limit-grafana-codex::g3::f1",
+          "ref": false,
+          "cand": true,
+          "golden": "Returning ErrDeviceLimitReached when no rows were updated is misleading; the device might ",
+          "candidate": "Existing devices older than 30 days but not yet cleaned up cannot be refreshed once the limit is full, causing rejected "
+        },
+        {
+          "id": "gpt-5.4::feat-ecosystem-implement-cross-system-issue-synchronization-sentry::g3::f0",
+          "ref": true,
+          "cand": false,
+          "golden": "to_dict() returns a datetime for queued; if this dict is passed in task kwargs (e.g., via ",
+          "candidate": "AssignmentSource deserialization does not round-trip the queued datetime across task payload serialization. — WHAT: `Ass"
+        },
+        {
+          "id": "claude-sonnet-4-6::anonymous-add-configurable-device-limit-grafana-codex::g1::f1",
+          "ref": false,
+          "cand": true,
+          "golden": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDevi",
+          "candidate": "updateDevice returns ErrDeviceLimitReached when device_id is not found (0 rows updated), which is the wrong semantic — t"
+        },
+        {
+          "id": "claude-sonnet-4-6::anonymous-add-configurable-device-limit-grafana-codex::g3::f4",
+          "ref": false,
+          "cand": true,
+          "golden": "Returning ErrDeviceLimitReached when no rows were updated is misleading; the device might ",
+          "candidate": "ErrDeviceLimitReached propagated from TagDevice causes Authenticate to deny anonymous access entirely instead of just sk"
+        },
+        {
+          "id": "claude-sonnet-4-6::anonymous-add-configurable-device-limit-grafana-codex::g4::f6",
+          "ref": false,
+          "cand": true,
+          "golden": "Time window calculation inconsistency: Using device.UpdatedAt.UTC().Add(-anonymousDeviceEx",
+          "candidate": "updateDevice returns ErrDeviceLimitReached when a known device's updated_at is outside the BETWEEN window, misclassifyin"
+        }
+      ]
+    },
+    "claude-haiku-4-5": {
+      "pairs": 254,
+      "refMatchRate": 0.09055118110236221,
+      "candMatchRate": 0.09448818897637795,
+      "tp": 22,
+      "fp": 2,
+      "fn": 1,
+      "tn": 229,
+      "accuracy": 0.9881889763779528,
+      "precision": 0.9166666666666666,
+      "recall": 0.9565217391304348,
+      "f1": 0.9361702127659574,
+      "kappa": 0.9296658667158946,
+      "meanLatencyMs": 1992,
+      "disagreements": [
+        {
+          "id": "claude-sonnet-4-6::add-html-sanitizer-for-translated-message-resources-keycloak::g2::f2",
+          "ref": true,
+          "cand": false,
+          "golden": "The anchor sanitization logic has a potential issue where it consumes English matcher grou",
+          "candidate": "santizeAnchors mutates `value` inside the loop but the Matcher still scans the original string, causing incorrect anchor"
+        },
+        {
+          "id": "claude-sonnet-4-6::anonymous-add-configurable-device-limit-grafana-codex::g1::f1",
+          "ref": false,
+          "cand": true,
+          "golden": "Anonymous authentication now fails entirely if anonDeviceService.TagDevice returns ErrDevi",
+          "candidate": "updateDevice returns ErrDeviceLimitReached when device_id is not found (0 rows updated), which is the wrong semantic — t"
+        },
+        {
+          "id": "claude-sonnet-4-6::oauth-credential-sync-and-app-integration-enhancements-cal-com::g2::f0",
+          "ref": false,
+          "cand": true,
+          "golden": "parseRefreshTokenResponse returns a Zod safeParse result ({ success, data, error }), not t",
+          "candidate": "Salesforce jsforce.Connection is initialized with the stale pre-refresh access token instead of the newly obtained one —"
+        }
+      ]
+    }
+  },
+  "referenceStats": {
+    "matchRate": 0.09055118110236221,
+    "meanLatencyMs": 3188
+  }
+}

@@ -27,6 +27,7 @@ describe('GithubChecksService', () => {
             checks: {
                 create: jest.fn(),
                 update: jest.fn(),
+                listForRef: jest.fn(),
             },
         };
 
@@ -52,6 +53,69 @@ describe('GithubChecksService', () => {
 
     it('should be defined', () => {
         expect(service).toBeDefined();
+    });
+
+    describe('findCheckRun', () => {
+        const findParams = {
+            organizationAndTeamData: mockOrganizationAndTeamData,
+            repository: mockRepository,
+            headSha: 'sha123',
+            name: 'Kody Code Review',
+        };
+
+        it('should return the id of an in-progress check run (reusable)', async () => {
+            mockOctokit.checks.listForRef.mockResolvedValue({
+                data: {
+                    check_runs: [{ id: 100, status: 'in_progress' }],
+                },
+            });
+
+            const result = await service.findCheckRun(findParams);
+
+            expect(mockOctokit.checks.listForRef).toHaveBeenCalledWith({
+                owner: 'kodus-ai',
+                repo: 'kodus',
+                ref: 'sha123',
+                check_name: 'Kody Code Review',
+                filter: 'latest',
+                per_page: 1,
+            });
+            expect(result).toBe(100);
+        });
+
+        it('should return null for a completed check run (cannot be reopened)', async () => {
+            mockOctokit.checks.listForRef.mockResolvedValue({
+                data: {
+                    check_runs: [
+                        { id: 100, status: 'completed', conclusion: 'failure' },
+                    ],
+                },
+            });
+
+            const result = await service.findCheckRun(findParams);
+
+            expect(result).toBeNull();
+        });
+
+        it('should return null when no check run exists', async () => {
+            mockOctokit.checks.listForRef.mockResolvedValue({
+                data: { check_runs: [] },
+            });
+
+            const result = await service.findCheckRun(findParams);
+
+            expect(result).toBeNull();
+        });
+
+        it('should return null on error', async () => {
+            mockOctokit.checks.listForRef.mockRejectedValue(
+                new Error('Failed'),
+            );
+
+            const result = await service.findCheckRun(findParams);
+
+            expect(result).toBeNull();
+        });
     });
 
     describe('createCheckRun', () => {

@@ -45,7 +45,7 @@ function startMockServer(): Promise<{ server: http.Server; port: number }> {
             }
             const rawBody = Buffer.concat(chunks).toString('utf-8');
 
-            let body: Record<string, unknown> = {};
+            let body: Record<string, unknown>;
             try {
                 body = JSON.parse(rawBody) as Record<string, unknown>;
             } catch {
@@ -95,13 +95,7 @@ async function runHook(
     return new Promise<RunResult>((resolve) => {
         const child = spawn(
             process.execPath,
-            [
-                cliEntryPoint,
-                'decisions',
-                'hooks',
-                agent,
-                hookName,
-            ],
+            [cliEntryPoint, 'decisions', 'hooks', agent, hookName],
             {
                 cwd,
                 stdio: ['pipe', 'pipe', 'pipe'],
@@ -122,17 +116,17 @@ async function runHook(
         const stdoutChunks: string[] = [];
         const stderrChunks: string[] = [];
 
-        child.stdout.on('data', (data: Buffer) => {
+        child.stdout!.on('data', (data: Buffer) => {
             stdoutChunks.push(data.toString());
         });
 
-        child.stderr.on('data', (data: Buffer) => {
+        child.stderr!.on('data', (data: Buffer) => {
             stderrChunks.push(data.toString());
         });
 
         const payloadStr = JSON.stringify(payload);
-        child.stdin.write(payloadStr);
-        child.stdin.end();
+        child.stdin!.write(payloadStr);
+        child.stdin!.end();
 
         child.on('close', (code) => {
             resolve({
@@ -156,10 +150,7 @@ async function runHook(
  * Wait until the mock server has received at least `count` requests,
  * or until `timeoutMs` elapses.
  */
-async function waitForRequests(
-    count: number,
-    timeoutMs = 5000,
-): Promise<void> {
+async function waitForRequests(count: number, timeoutMs = 5000): Promise<void> {
     const start = Date.now();
     while (capturedRequests.length < count && Date.now() - start < timeoutMs) {
         await new Promise((r) => setTimeout(r, 100));
@@ -174,12 +165,13 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
     beforeAll(async () => {
         // Resolve CLI entry point (compiled JS)
         const cliRoot = path.resolve(
-            import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname),
+            import.meta.dirname ??
+                path.dirname(new URL(import.meta.url).pathname),
             '../..',
         );
         cliEntryPoint = path.join(cliRoot, 'dist', 'index.js');
 
-        // Verify the entry point exists (requires `yarn build` beforehand)
+        // Verify the entry point exists (requires `pnpm build` beforehand)
         await fs.access(cliEntryPoint);
 
         // Create a temp directory that acts as HOME + git repo
@@ -217,11 +209,7 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
             git.on('close', (code) =>
                 code === 0
                     ? resolve()
-                    : reject(
-                          new Error(
-                              `git commit failed with code ${code}`,
-                          ),
-                      ),
+                    : reject(new Error(`git commit failed with code ${code}`)),
             );
             git.on('error', reject);
         });
@@ -244,7 +232,9 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
         }
 
         if (tmpDir) {
-            await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+            await fs
+                .rm(tmpDir, { recursive: true, force: true })
+                .catch(() => {});
         }
     });
 
@@ -268,11 +258,15 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
         expect(startResult.exitCode).toBe(0);
 
         // 2. user-prompt-submit (turn start)
-        const promptResult = await runHook('claude-code', 'user-prompt-submit', {
-            session_id: sessionId,
-            transcript_path: transcriptPath,
-            prompt: 'Fix the login bug in auth.ts',
-        });
+        const promptResult = await runHook(
+            'claude-code',
+            'user-prompt-submit',
+            {
+                session_id: sessionId,
+                transcript_path: transcriptPath,
+                prompt: 'Fix the login bug in auth.ts',
+            },
+        );
         expect(promptResult.exitCode).toBe(0);
 
         // 3. stop (turn end)
@@ -327,7 +321,9 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
             (r) => r.body.type === 'turn_start',
         );
         expect(turnStartEvent).toBeDefined();
-        expect(turnStartEvent!.body.prompt).toBe('Fix the login bug in auth.ts');
+        expect(turnStartEvent!.body.prompt).toBe(
+            'Fix the login bug in auth.ts',
+        );
         expect(turnStartEvent!.body.turnId).toBeTruthy();
 
         // Verify turn_end structure
@@ -481,9 +477,9 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
             );
             expect(eventRequests.length).toBe(0);
         } finally {
-            await fs.rm(nonGitDir, { recursive: true, force: true }).catch(
-                () => {},
-            );
+            await fs
+                .rm(nonGitDir, { recursive: true, force: true })
+                .catch(() => {});
         }
     });
 

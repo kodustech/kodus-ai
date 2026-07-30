@@ -1,23 +1,28 @@
 import {
     createMCPAdapter,
-    createOrchestration,
-    LLMAdapter,
     MCPAdapter,
     MCPServerConfig,
-    PlannerType,
-    Thread,
-} from '@kodus/flow';
-import { SDKOrchestrator } from '@kodus/flow/dist/orchestration';
+} from '@libs/mcp-server/mcp-adapter';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 
+import { BYOKConfig } from '@kodus/kodus-common/llm';
+
+import type { ToolRegistry } from '@libs/agent-harness/domain/contracts';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { createAgentRunContext } from '@libs/llm/agent-run-context';
+import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 
+import {
+    buildMcpAgentToolRegistry,
+    runMcpFetcherAgent,
+} from './runtime/ai-sdk-fetcher.adapter';
 import { BoundedMap } from './runtime/bounded-map';
 import {
-    AgentCallOptions,
+    AgentThread,
     SkillCapabilityRuntimeConfig,
     SkillFetcherRuntime,
     ToolCaller,
@@ -44,7 +49,7 @@ export interface SkillFetcherResult {
 
 export interface SkillRunInput {
     organizationAndTeamData: OrganizationAndTeamData;
-    thread?: Thread;
+    thread?: AgentThread;
     fetcherPrompt: string;
     analyzerPrompt: string;
 }
@@ -61,7 +66,11 @@ type ResolvedExecutionPolicy = Required<
         | 'fetcherMaxIterations'
         | 'analyzerMaxIterations'
     >
->;
+> &
+    // Optional (off by default): a skill opts into fetcher compression by
+    // declaring its model's real context window in SKILL.md, and/or into the
+    // analyzer verify gate.
+    Pick<SkillExecutionPolicy, 'contextWindowTokens' | 'verifyAnalyzerResult'>;
 
 export type SkillResolvedExecutionPolicy = ResolvedExecutionPolicy;
 
@@ -100,6 +109,7 @@ export class GenericSkillRunnerService {
         private readonly observabilityService: ObservabilityService,
         private readonly mcpManagerService?: MCPManagerService,
         @Optional() private readonly metricsCollector?: MetricsCollectorService,
+        @Optional() private readonly byokErrorCounter?: ByokErrorCounter,
     ) {}
 
     /**
@@ -108,7 +118,7 @@ export class GenericSkillRunnerService {
      */
     async createFetcherOrchestration(
         skillName: string,
-        llmAdapter: LLMAdapter,
+        byokConfig: BYOKConfig | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<SkillFetcherRuntime> {
         const startedAt = Date.now();
@@ -140,11 +150,15 @@ export class GenericSkillRunnerService {
             const requiredProviderHints = this.resolveRequiredProviderHints(
                 meta.requiredMcps,
             );
+            const requiredCategories = this.resolveRequiredCategories(
+                meta.requiredMcps,
+            );
 
             this.preflightRequiredMcps(
                 skillName,
                 meta.requiredMcps,
                 requiredProviderHints,
+                requiredCategories,
                 availableProviders,
                 mcpManagerServers,
             );
@@ -154,6 +168,7 @@ export class GenericSkillRunnerService {
                 requiredTools,
                 fetcherPolicy,
                 requiredProviderHints,
+                requiredCategories,
                 mcpManagerServers,
             );
             this.metricsCollector?.recordGauge(
@@ -187,23 +202,21 @@ export class GenericSkillRunnerService {
                 }
             }
 
-            const orchestration = await createOrchestration({
-                tenantId: `kodus-skill-fetcher-${skillName}`,
-                llmAdapter,
-                mcpAdapter,
-                observability:
-                    this.observabilityService.getAgentObservabilityConfig(
-                        `kodus-${skillName}-fetcher`,
-                    ),
-                storage: this.observabilityService.getStorageConfig(),
-            });
-
+            // Connect the local MCP adapter (transport/auth/retry stays in the
+            // local adapter, per the migration directive) and expose its tools as harness
+            // AgentTools. The agent loop now runs on the AI SDK via
+            // AiSdkAgentRunner — no flow-engine orchestration / REACT planner.
+            let toolRegistry: ToolRegistry = {
+                get: () => undefined,
+                list: () => [],
+            };
             if (mcpAdapter) {
                 try {
-                    await orchestration.connectMCP();
-                    await orchestration.registerMCPTools();
+                    await mcpAdapter.connect();
+                    toolRegistry =
+                        await buildMcpAgentToolRegistry(mcpAdapter);
 
-                    const registeredTools = orchestration.getRegisteredTools();
+                    const registeredTools = toolRegistry.list();
                     this.logger.log({
                         message: `[GenericSkillRunner] MCP tools registered for skill '${skillName}'`,
                         context: 'createFetcherOrchestration',
@@ -211,7 +224,7 @@ export class GenericSkillRunnerService {
                             skillName,
                             registeredToolCount: registeredTools.length,
                             registeredToolNames: registeredTools.map(
-                                (t: { name?: string }) => t.name,
+                                (t) => t.name,
                             ),
                         },
                     });
@@ -247,54 +260,118 @@ export class GenericSkillRunnerService {
                 }
             }
 
-            let fetcherAgentInitialized = false;
-            const ensureFetcherAgent = async (): Promise<void> => {
-                if (fetcherAgentInitialized) {
-                    return;
-                }
-                await orchestration.createAgent({
-                    name: `kodus-${skillName}-fetcher`,
-                    identity: {
-                        goal: `Fetch all relevant context for the ${skillName} skill using available tools. Return structured JSON with the gathered data.`,
-                        description: `Context fetcher for ${skillName}.`,
-                        language: 'en-US',
-                    },
-                    maxIterations: executionPolicy.fetcherMaxIterations,
-                    timeout: executionPolicy.fetcherTimeoutMs,
-                    plannerOptions: { type: PlannerType.REACT },
-                });
-                fetcherAgentInitialized = true;
-            };
+            const fetcherSystemPrompt =
+                `Context fetcher for ${skillName}.\n\n` +
+                `Goal: Fetch all relevant context for the ${skillName} skill ` +
+                `using available tools. Return structured JSON with the ` +
+                `gathered data.`;
 
             const toolCaller: ToolCaller = {
-                callTool: async (toolName, args) =>
-                    this.normalizeToolExecutionResponse(
-                        await orchestration.callTool(toolName, args),
-                    ),
-                callAgent: async (agentName, prompt, options) => {
-                    await ensureFetcherAgent();
+                // Deterministic capability fetches (PR diff/metadata) run through
+                // the SAME harness ToolRegistry/AgentTools as the agentic fetcher
+                // — no direct mcpAdapter bypass. The MCP AgentTool stringifies the
+                // raw adapter envelope into `output`; we parse it back so the
+                // shape reaching the extractors is identical to before.
+                callTool: async (toolName, args) => {
+                    const tool = toolRegistry.get(toolName);
+                    if (!tool) {
+                        return this.normalizeToolExecutionResponse(undefined);
+                    }
+                    const toolResult = await tool.execute(args, {
+                        runId: `${skillName}:deterministic`,
+                    });
+                    if (toolResult.isError) {
+                        return this.normalizeToolExecutionResponse(undefined);
+                    }
                     return this.normalizeToolExecutionResponse(
-                        await orchestration.callAgent(
-                            agentName,
-                            prompt,
-                            options as AgentCallOptions,
-                        ),
+                        this.parseAgentToolOutput(toolResult.output),
                     );
                 },
-                getRegisteredTools: () => orchestration.getRegisteredTools(),
-                getToolsForLLM: () => {
-                    const getter = (
-                        orchestration as unknown as {
-                            getToolsForLLM?: () => Array<{
-                                name?: string;
-                                parameters?: unknown;
-                            }>;
-                        }
-                    ).getToolsForLLM;
-                    return typeof getter === 'function'
-                        ? getter.call(orchestration)
-                        : [];
+                callAgent: async (agentName, prompt) => {
+                    // Standard run context: signal + hard timeout via the shared
+                    // helper — same guarantee as the code-review and conversation
+                    // agents (replaces the hand-rolled AbortController+setTimeout).
+                    // The per-skill `fetcherTimeoutMs` is kept as the ceiling, and
+                    // composeAbortSignal lets a parent cancellation propagate in.
+                    const { ctx, cleanup } = createAgentRunContext({
+                        runId: `${skillName}:${agentName}`,
+                        timeoutMs: executionPolicy.fetcherTimeoutMs,
+                    });
+                    try {
+                        // Wrapped in a billing span so token usage reaches the
+                        // Mongo `observability_telemetry` cost dataset (parity
+                        // with the legacy flow path).
+                        const result =
+                            await this.observabilityService.runAiSdkLLMInSpan({
+                                spanName: `SkillFetcher::${skillName}`,
+                                runName: `kodus-${skillName}-fetcher`,
+                                model: byokConfig?.main?.model,
+                                attrs: {
+                                    type: 'agent',
+                                    organizationId:
+                                        organizationAndTeamData?.organizationId,
+                                    teamId: organizationAndTeamData?.teamId,
+                                    skill: skillName,
+                                },
+                                exec: () =>
+                                    runMcpFetcherAgent({
+                                        byokConfig,
+                                        agentId: `kodus-${skillName}-fetcher`,
+                                        systemPrompt: fetcherSystemPrompt,
+                                        prompt,
+                                        tools: toolRegistry,
+                                        maxSteps:
+                                            executionPolicy.fetcherMaxIterations,
+                                        providerOptions: buildProviderOptions(
+                                            `kodus-${skillName}-fetcher`,
+                                            undefined,
+                                            {
+                                                // Effort tier from the org's
+                                                // BYOK config; 'low' fallback.
+                                                reasoningEffort:
+                                                    byokConfig?.main
+                                                        ?.reasoningEffort ??
+                                                    'low',
+                                                byokProvider:
+                                                    byokConfig?.main?.provider,
+                                                modelName:
+                                                    byokConfig?.main?.model,
+                                            },
+                                        ),
+                                        runId: ctx.runId,
+                                        signal: ctx.signal,
+                                        contextWindowTokens:
+                                            executionPolicy.contextWindowTokens,
+                                        reporter: this.byokErrorCounter
+                                            ? (e) =>
+                                                  void this.byokErrorCounter!.record(
+                                                      e,
+                                                  )
+                                            : undefined,
+                                        telemetry: {
+                                            functionId: `kodus-${skillName}-fetcher`,
+                                            organizationId:
+                                                organizationAndTeamData?.organizationId,
+                                            teamId: organizationAndTeamData?.teamId,
+                                            provider:
+                                                byokConfig?.main?.provider,
+                                        },
+                                    }),
+                            });
+                        return this.normalizeToolExecutionResponse(
+                            result.text,
+                        );
+                    } finally {
+                        cleanup();
+                    }
                 },
+                getRegisteredTools: () =>
+                    toolRegistry.list().map((t) => ({ name: t.name })),
+                getToolsForLLM: () =>
+                    toolRegistry.list().map((t) => ({
+                        name: t.name,
+                        parameters: t.inputSchema,
+                    })),
             };
 
             const capabilityRuntime = this.getCapabilityRuntimeConfig(
@@ -311,69 +388,6 @@ export class GenericSkillRunnerService {
             };
         } catch (error) {
             this.recordSetupMetric(skillName, 'fetcher', 'failed', startedAt);
-            throw error;
-        }
-    }
-
-    /**
-     * Creates a ready-to-use analyzer orchestration for a skill.
-     * Loads instructions from SKILL.md (body + references).
-     *
-     * @deprecated Use `getExecutionPolicy()` + direct LLM adapter calls instead.
-     * The production path (BusinessRulesValidationAgentProvider.runAnalyzer) no longer
-     * calls this method — it uses getExecutionPolicy() with withTimeout and retry.
-     * Kept for backward compatibility with existing tests.
-     */
-    async createAnalyzerOrchestration(
-        skillName: string,
-        llmAdapter: LLMAdapter,
-        options?: {
-            organizationAndTeamData?: OrganizationAndTeamData;
-            customInstructions?: string;
-        },
-    ): Promise<SDKOrchestrator> {
-        const startedAt = Date.now();
-        try {
-            const meta = this.getSkillMeta(skillName);
-            this.validateSkillSchema(meta, skillName);
-            const fetcherPolicy = this.resolveFetcherPolicy(meta.fetcherPolicy);
-            const executionPolicy = this.resolveExecutionPolicy(
-                meta.executionPolicy,
-                fetcherPolicy,
-            );
-            const instructions = this.getSkillInstructions(skillName, {
-                organizationId:
-                    options?.organizationAndTeamData?.organizationId,
-                teamId: options?.organizationAndTeamData?.teamId,
-                customInstructions: options?.customInstructions,
-            });
-
-            const orchestration = await createOrchestration({
-                tenantId: `kodus-skill-analyzer-${skillName}`,
-                llmAdapter,
-                observability:
-                    this.observabilityService.getAgentObservabilityConfig(
-                        `kodus-${skillName}-analyzer`,
-                    ),
-                storage: this.observabilityService.getStorageConfig(),
-            });
-
-            await orchestration.createAgent({
-                name: `kodus-${skillName}-analyzer`,
-                identity: {
-                    goal: instructions,
-                    description: `${skillName} analyzer. No tool access. Receives structured context. Returns analysis.`,
-                    language: 'en-US',
-                },
-                maxIterations: executionPolicy.analyzerMaxIterations,
-                timeout: executionPolicy.analyzerTimeoutMs,
-                plannerOptions: { type: PlannerType.REACT },
-            });
-
-            this.recordSetupMetric(skillName, 'analyzer', 'success', startedAt);
-            return orchestration;
-        } catch (error) {
-            this.recordSetupMetric(skillName, 'analyzer', 'failed', startedAt);
             throw error;
         }
     }
@@ -491,6 +505,7 @@ export class GenericSkillRunnerService {
         skillName: string,
         requiredMcps: SkillRequiredMcp[] | undefined,
         requiredProviderHints: string[],
+        requiredCategories: Set<string>,
         availableProviders: string[],
         mcpManagerServers: McpConnection[] | undefined,
     ): void {
@@ -531,8 +546,17 @@ export class GenericSkillRunnerService {
             return;
         }
 
+        // Prefer the canonical capability category stamped by the mcp-manager
+        // registry (drift-proof: doesn't depend on the connection's display
+        // name — "Git Issues" vs "Github Issues" no longer breaks the match).
+        // Fall back to display-name hints for connections without a category
+        // (external/custom MCPs the registry doesn't classify).
         const matchingExternalConnections = externalConnections.filter(
             (server) =>
+                this.serverMatchesRequiredCategory(
+                    server,
+                    requiredCategories,
+                ) ||
                 this.serverMatchesRequiredHints(server, requiredProviderHints),
         );
 
@@ -559,6 +583,7 @@ export class GenericSkillRunnerService {
         requiredTools: string[] | undefined,
         fetcherPolicy: Required<SkillFetcherPolicy>,
         requiredProviderHints: string[],
+        requiredCategories: Set<string>,
         mcpManagerServers: McpConnection[] | undefined,
     ): MCPAdapter | null {
         if (!mcpManagerServers?.length) {
@@ -601,12 +626,18 @@ export class GenericSkillRunnerService {
                     );
                 }
 
-                if (!requiredProviderHints.length) {
+                if (!requiredProviderHints.length && !requiredCategories.size) {
                     return true;
                 }
-                return this.serverMatchesRequiredHints(
-                    server,
-                    requiredProviderHints,
+                return (
+                    this.serverMatchesRequiredCategory(
+                        server,
+                        requiredCategories,
+                    ) ||
+                    this.serverMatchesRequiredHints(
+                        server,
+                        requiredProviderHints,
+                    )
                 );
             })
             .map((server) => {
@@ -712,6 +743,16 @@ export class GenericSkillRunnerService {
         return [...hints];
     }
 
+    private resolveRequiredCategories(
+        requiredMcps: SkillRequiredMcp[] | undefined,
+    ): Set<string> {
+        return new Set(
+            (requiredMcps ?? [])
+                .map((mcp) => mcp.category)
+                .filter((c): c is string => typeof c === 'string'),
+        );
+    }
+
     private providerMatchesRequiredHints(
         provider: unknown,
         requiredHints: string[],
@@ -729,6 +770,19 @@ export class GenericSkillRunnerService {
                 normalizedProvider === hint ||
                 normalizedProvider.includes(hint) ||
                 hint.includes(normalizedProvider),
+        );
+    }
+
+    private serverMatchesRequiredCategory(
+        server: McpConnection,
+        requiredCategories: Set<string>,
+    ): boolean {
+        if (!requiredCategories.size) {
+            return false;
+        }
+        return (
+            typeof server?.category === 'string' &&
+            requiredCategories.has(server.category)
         );
     }
 
@@ -841,6 +895,9 @@ export class GenericSkillRunnerService {
             analyzerTimeoutMs: policy?.analyzerTimeoutMs ?? 120_000,
             fetcherMaxIterations: policy?.fetcherMaxIterations ?? 4,
             analyzerMaxIterations: policy?.analyzerMaxIterations ?? 1,
+            // Optional, off by default — only present when the SKILL.md declares it.
+            contextWindowTokens: policy?.contextWindowTokens,
+            verifyAnalyzerResult: policy?.verifyAnalyzerResult,
         };
     }
 
@@ -862,6 +919,23 @@ export class GenericSkillRunnerService {
         }
 
         return [...new Set([...explicitTools, ...capabilityTools])];
+    }
+
+    /**
+     * The harness MCP AgentTool returns `{ output }` where `output` is the raw
+     * adapter response stringified (or a plain string). Parse JSON back to the
+     * object so `normalizeToolExecutionResponse` sees the same shape the direct
+     * adapter call used to produce; a non-JSON string is passed through as-is.
+     */
+    private parseAgentToolOutput(output: unknown): unknown {
+        if (typeof output !== 'string') {
+            return output;
+        }
+        try {
+            return JSON.parse(output);
+        } catch {
+            return output;
+        }
     }
 
     private normalizeToolExecutionResponse(

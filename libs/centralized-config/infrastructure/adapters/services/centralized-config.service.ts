@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     ICodeBaseConfigService,
@@ -36,6 +36,10 @@ import {
     PULL_REQUEST_MESSAGES_SERVICE_TOKEN,
 } from '@libs/code-review/domain/pullRequestMessages/contracts/pullRequestMessages.service.contract';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
+import {
+    buildGroupFolderName,
+    parseGroupFolderName,
+} from '@libs/centralized-config/utils/path-encoder';
 import { Inject, Injectable } from '@nestjs/common';
 import path from 'path';
 import { CustomMessageConfig } from 'apps/web/src/lib/services/pull-request-messages/types';
@@ -49,8 +53,8 @@ import {
     kodyRuleSchema,
     kodyRulesExampleSchema,
     kodyRulesInheritanceSchema,
-    KodyRulesOrigin,
     KodyRulesScope,
+    KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -209,17 +213,54 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     return null;
                 }
 
-                const relativeDirectoryPath = directorySegments
-                    .slice(1)
-                    .join('/');
+                const remainder = directorySegments.slice(1);
 
-                return {
-                    repositoryId: repoId,
-                    centralizedDirectoryPath: dirName,
-                    directoryPath: relativeDirectoryPath
-                        ? `/${relativeDirectoryPath}`
-                        : undefined,
-                };
+                // Repository root config: {repo}/kodus-config.yml
+                if (remainder.length === 0) {
+                    return {
+                        repositoryId: repoId,
+                        centralizedDirectoryPath: dirName,
+                    };
+                }
+
+                // Directory group: {repo}/{encoded-paths}/kodus-config.yml
+                // The encoded folder name is a single segment (paths joined by &).
+                if (remainder.length === 1) {
+                    const decoded = parseGroupFolderName(remainder[0]);
+                    if (!decoded) {
+                        this.logger.warn({
+                            message:
+                                'Skipping kodus-config.yml — folder name is not a valid directory group',
+                            context: CentralizedConfigService.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                repoName,
+                                folder: remainder[0],
+                            },
+                        });
+                        return null;
+                    }
+
+                    return {
+                        repositoryId: repoId,
+                        centralizedDirectoryPath: dirName,
+                        directoryPaths: decoded.map((p) =>
+                            p.startsWith('/') ? p : `/${p}`,
+                        ),
+                    };
+                }
+
+                this.logger.warn({
+                    message:
+                        'Skipping kodus-config.yml at unsupported nested path',
+                    context: CentralizedConfigService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        repoName,
+                        path: dirName,
+                    },
+                });
+                return null;
             },
         );
 
@@ -230,14 +271,17 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string; id: string };
         dir?: string;
+        directoryId?: string;
     }) {
-        const { organizationAndTeamData, repository, dir } = params;
+        const { organizationAndTeamData, repository, dir, directoryId } =
+            params;
 
         try {
             const file = await this.codeBaseConfigService.getKodusConfigFile({
                 organizationAndTeamData,
                 repository,
                 directoryPath: dir,
+                directoryId,
                 removeProperties: false,
             });
 
@@ -251,6 +295,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     organizationAndTeamData,
                     repository,
                     dir,
+                    directoryId,
                 },
                 error,
             });
@@ -302,6 +347,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         centralizedDirectoryPath,
                         repositoryId,
                         directoryPath,
+                        directoryPaths,
                     } = configFileMeta;
 
                     let configFile;
@@ -324,6 +370,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                                 centralizedDirectoryPath,
                                 repositoryId,
                                 directoryPath,
+                                directoryPaths,
                             },
                         });
                         continue;
@@ -348,20 +395,34 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                                 centralizedDirectoryPath,
                                 repositoryId,
                                 directoryPath,
+                                directoryPaths,
                             },
                         });
                     }
 
-                    await this.updateOrCreateCodeReviewParameterUseCase.execute(
-                        {
-                            actor,
-                            skipAuthorization: true,
-                            configValue: configToSave,
-                            organizationAndTeamData,
-                            repositoryId,
-                            directoryPath,
-                        },
-                    );
+                    if (directoryPaths && directoryPaths.length > 0) {
+                        await this.updateOrCreateCodeReviewParameterUseCase.execute(
+                            {
+                                actor,
+                                skipAuthorization: true,
+                                configValue: configToSave,
+                                organizationAndTeamData,
+                                repositoryId,
+                                directoryPaths,
+                            },
+                        );
+                    } else {
+                        await this.updateOrCreateCodeReviewParameterUseCase.execute(
+                            {
+                                actor,
+                                skipAuthorization: true,
+                                configValue: configToSave,
+                                organizationAndTeamData,
+                                repositoryId,
+                                directoryPath,
+                            },
+                        );
+                    }
 
                     const syncCustomMessagesResult =
                         await this.syncCustomMessages(
@@ -447,6 +508,25 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 };
             }
 
+            // #1518 guard: an empty discovery would reset the global config
+            // (default model / BYOK) to {}, delete every repository config, and
+            // wipe custom messages. An empty configFiles set almost always
+            // means a failed/empty read, not "the user removed everything" —
+            // refuse to reconcile-delete and surface it.
+            if (configFiles.length === 0) {
+                this.logger.warn({
+                    message:
+                        'Skipping stale config removal: discovery returned zero config files — refusing to reset global config / delete repo configs / wipe messages (likely a failed read)',
+                    context: CentralizedConfigService.name,
+                    metadata: { organizationAndTeamData },
+                });
+                return {
+                    success: true,
+                    message:
+                        'Skipped stale config removal (empty-discovery guard)',
+                };
+            }
+
             const desiredHasGlobalConfig = configFiles.some(
                 (meta) => !meta.repositoryId,
             );
@@ -462,25 +542,55 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 Set<string>
             >();
 
+            const desiredGroupFolderNamesByRepository = new Map<
+                string,
+                Set<string>
+            >();
+
             const repositoriesWithDeletedDirectories = new Set<string>();
 
             for (const meta of configFiles) {
-                if (!meta.repositoryId || !meta.directoryPath) {
+                if (!meta.repositoryId) {
                     continue;
                 }
 
-                if (
-                    !desiredDirectoryConfigsByRepository.has(meta.repositoryId)
-                ) {
-                    desiredDirectoryConfigsByRepository.set(
-                        meta.repositoryId,
-                        new Set<string>(),
-                    );
+                if (meta.directoryPaths && meta.directoryPaths.length > 0) {
+                    if (
+                        !desiredGroupFolderNamesByRepository.has(
+                            meta.repositoryId,
+                        )
+                    ) {
+                        desiredGroupFolderNamesByRepository.set(
+                            meta.repositoryId,
+                            new Set<string>(),
+                        );
+                    }
+
+                    try {
+                        desiredGroupFolderNamesByRepository
+                            .get(meta.repositoryId)
+                            ?.add(buildGroupFolderName(meta.directoryPaths));
+                    } catch {
+                        // Skip metas with invalid path sets.
+                    }
                 }
 
-                desiredDirectoryConfigsByRepository
-                    .get(meta.repositoryId)
-                    ?.add(meta.directoryPath);
+                if (meta.directoryPath) {
+                    if (
+                        !desiredDirectoryConfigsByRepository.has(
+                            meta.repositoryId,
+                        )
+                    ) {
+                        desiredDirectoryConfigsByRepository.set(
+                            meta.repositoryId,
+                            new Set<string>(),
+                        );
+                    }
+
+                    desiredDirectoryConfigsByRepository
+                        .get(meta.repositoryId)
+                        ?.add(meta.directoryPath);
+                }
             }
 
             // Reuse existing deletion logic for directory scope removals.
@@ -490,12 +600,38 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     desiredDirectoryConfigsByRepository.get(repository.id) ??
                     new Set<string>();
 
+                const desiredGroupFolderNames =
+                    desiredGroupFolderNamesByRepository.get(repository.id) ??
+                    new Set<string>();
+
                 const staleDirectories = (repository.directories ?? []).filter(
                     (directory) => {
                         const primaryPath =
                             directory.folders?.[0]?.path ??
                             (directory as any).path;
-                        return !primaryPath || !desiredDirectoryPaths.has(primaryPath);
+
+                        let dbGroupFolderName: string | null = null;
+                        if (
+                            directory.folders &&
+                            directory.folders.length > 0
+                        ) {
+                            try {
+                                dbGroupFolderName = buildGroupFolderName(
+                                    directory.folders.map((f) => f.path),
+                                );
+                            } catch {
+                                dbGroupFolderName = null;
+                            }
+                        }
+
+                        const isTrackedByGroup =
+                            dbGroupFolderName !== null &&
+                            desiredGroupFolderNames.has(dbGroupFolderName);
+                        const isTrackedByPath =
+                            primaryPath &&
+                            desiredDirectoryPaths.has(primaryPath);
+
+                        return !isTrackedByGroup && !isTrackedByPath;
                     },
                 );
 
@@ -718,6 +854,37 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         );
     }
 
+    private async resolveGroupIdByExactPaths(
+        organizationAndTeamData: OrganizationAndTeamData,
+        repositoryId: string,
+        paths: string[],
+    ): Promise<string | undefined> {
+        const param = await this.parametersService.findByKey(
+            ParametersKey.CODE_REVIEW_CONFIG,
+            organizationAndTeamData,
+        );
+        const configValue = param?.configValue as
+            | CodeReviewParameter
+            | undefined;
+        const repo = configValue?.repositories?.find(
+            (r) => String(r.id) === String(repositoryId),
+        );
+        if (!repo?.directories) return undefined;
+
+        const normalize = (p: string): string =>
+            p.startsWith('/') ? p : `/${p}`;
+        const want = [...paths].map(normalize).sort();
+
+        for (const dir of repo.directories) {
+            const folders = dir.folders ?? [];
+            if (folders.length !== want.length) continue;
+            const got = folders.map((f) => normalize(f.path)).sort();
+            const match = got.every((p, i) => p === want[i]);
+            if (match) return String(dir.id);
+        }
+        return undefined;
+    }
+
     //#region Custom Messages Sync Helpers
     private async syncCustomMessages(
         configFile: KodusConfigFile,
@@ -899,6 +1066,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 directoryId,
                 startReviewMessage: resolvedCustomMessages.startReviewMessage,
                 endReviewMessage: resolvedCustomMessages.endReviewMessage,
+                errorReviewMessage: resolvedCustomMessages.errorReviewMessage,
                 globalSettings: resolvedCustomMessages.globalSettings,
             };
 
@@ -1088,6 +1256,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         return {
             startReviewMessage: json?.startReviewMessage,
             endReviewMessage: json?.endReviewMessage,
+            errorReviewMessage: json?.errorReviewMessage,
             globalSettings: json?.globalSettings,
         };
     }
@@ -1105,6 +1274,9 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             if (override.endReviewMessage) {
                 merged.endReviewMessage = override.endReviewMessage;
             }
+            if (override.errorReviewMessage) {
+                merged.errorReviewMessage = override.errorReviewMessage;
+            }
             if (override.globalSettings) {
                 merged.globalSettings = {
                     ...merged.globalSettings,
@@ -1117,6 +1289,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         if (
             !merged.startReviewMessage ||
             !merged.endReviewMessage ||
+            !merged.errorReviewMessage ||
             !merged.globalSettings?.hideComments ||
             !merged.globalSettings?.suggestionCopyPrompt
         ) {
@@ -1142,6 +1315,9 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 merged.startReviewMessage || defaultConfigs?.startReviewMessage,
             endReviewMessage:
                 merged.endReviewMessage || defaultConfigs?.endReviewMessage,
+            errorReviewMessage:
+                merged.errorReviewMessage ||
+                defaultConfigs?.errorReviewMessage,
             globalSettings: {
                 hideComments:
                     merged.globalSettings?.hideComments ??
@@ -1337,6 +1513,17 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 } else if (dirName.includes('.kody-rules/review')) {
                     ruleType = KodyRulesType.STANDARD;
                 } else {
+                    if (dirName.includes('.kody-rules')) {
+                        this.logger.warn({
+                            message:
+                                'Skipping YAML under .kody-rules/ that is not inside review/ or memories/. Move the file into review/ for code review rules or memories/ for memories.',
+                            context: CentralizedConfigService.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                filePath: item.path,
+                            },
+                        });
+                    }
                     return null;
                 }
 
@@ -1352,13 +1539,16 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
                 let repositoryId: string | undefined;
                 let directoryPath: string | undefined;
+                let directoryPaths: string[] | undefined;
                 let centralizedDirectoryPath: string;
+                const rulesSubdir =
+                    ruleType === KodyRulesType.MEMORY ? 'memories' : 'review';
 
                 if (kodyRulesIndex === 0) {
                     // Global rules
-                    centralizedDirectoryPath = `.kody-rules/${ruleType === KodyRulesType.MEMORY ? 'memories' : 'review'}`;
+                    centralizedDirectoryPath = `.kody-rules/${rulesSubdir}`;
                 } else {
-                    // Repository/Directory rules
+                    // Repository/Directory-group rules
                     const repoName = pathSegments[0];
                     repositoryId = resolvedRepoIds.get(repoName.toLowerCase());
 
@@ -1375,11 +1565,44 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         1,
                         kodyRulesIndex,
                     );
-                    if (directorySegments.length > 0) {
-                        directoryPath = `/${directorySegments.join('/')}`;
-                        centralizedDirectoryPath = `${repoName}/${directorySegments.join('/')}/.kody-rules/${ruleType === KodyRulesType.MEMORY ? 'memories' : 'review'}`;
+
+                    if (directorySegments.length === 0) {
+                        centralizedDirectoryPath = `${repoName}/.kody-rules/${rulesSubdir}`;
+                    } else if (directorySegments.length === 1) {
+                        const decoded = parseGroupFolderName(
+                            directorySegments[0],
+                        );
+                        if (!decoded) {
+                            this.logger.warn({
+                                message:
+                                    'Skipping Kody rule — group folder is not a valid path encoding',
+                                context: CentralizedConfigService.name,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    repoName,
+                                    folder: directorySegments[0],
+                                },
+                            });
+                            return null;
+                        }
+
+                        directoryPaths = decoded.map((p) =>
+                            p.startsWith('/') ? p : `/${p}`,
+                        );
+                        directoryPath = directoryPaths[0];
+                        centralizedDirectoryPath = `${repoName}/${directorySegments[0]}/.kody-rules/${rulesSubdir}`;
                     } else {
-                        centralizedDirectoryPath = `${repoName}/.kody-rules/${ruleType === KodyRulesType.MEMORY ? 'memories' : 'review'}`;
+                        this.logger.warn({
+                            message:
+                                'Skipping Kody rule at unsupported nested path',
+                            context: CentralizedConfigService.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                repoName,
+                                path: dirName,
+                            },
+                        });
+                        return null;
                     }
                 }
 
@@ -1387,6 +1610,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     centralizedDirectoryPath,
                     repositoryId,
                     directoryPath,
+                    directoryPaths,
                     ruleType,
                     ruleFilePath: item.path,
                     path: item.path,
@@ -1545,7 +1769,12 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             const existingRuleBySourcePath = new Map<
                 string,
-                { uuid: string; status?: KodyRulesStatus; updatedAt?: Date }
+                {
+                    uuid: string;
+                    status?: KodyRulesStatus;
+                    origin?: KodyRulesOrigin;
+                    updatedAt?: Date;
+                }
             >();
 
             for (const existingRule of existingRulesEntity?.rules || []) {
@@ -1564,6 +1793,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     existingRuleBySourcePath.set(sourcePathKey, {
                         uuid: existingRule.uuid,
                         status: existingRule.status,
+                        origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
                     });
                     continue;
@@ -1579,6 +1809,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     existingRuleBySourcePath.set(sourcePathKey, {
                         uuid: existingRule.uuid,
                         status: existingRule.status,
+                        origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
                     });
                     continue;
@@ -1597,6 +1828,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     existingRuleBySourcePath.set(sourcePathKey, {
                         uuid: existingRule.uuid,
                         status: existingRule.status,
+                        origin: existingRule.origin,
                         updatedAt: existingRule.updatedAt,
                     });
                 }
@@ -1627,7 +1859,55 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     }
 
                     let directoryId: string | undefined;
+
+                    // Repo-first: when the rule lives under an encoded group
+                    // folder (multiple paths), ensure the corresponding group
+                    // exists in DB with the exact path set before resolving
+                    // its id. This is what creates groups for rule-only
+                    // folders (no kodus-config.yml at the group level).
                     if (
+                        ruleFileMeta.directoryPaths &&
+                        ruleFileMeta.directoryPaths.length > 0 &&
+                        ruleFileMeta.repositoryId
+                    ) {
+                        try {
+                            await this.updateOrCreateCodeReviewParameterUseCase.execute(
+                                {
+                                    actor,
+                                    skipAuthorization: true,
+                                    configValue: {},
+                                    organizationAndTeamData,
+                                    repositoryId: ruleFileMeta.repositoryId,
+                                    directoryPaths:
+                                        ruleFileMeta.directoryPaths,
+                                } as any,
+                            );
+
+                            directoryId =
+                                await this.resolveGroupIdByExactPaths(
+                                    organizationAndTeamData,
+                                    ruleFileMeta.repositoryId,
+                                    ruleFileMeta.directoryPaths,
+                                );
+                        } catch (error) {
+                            this.logger.warn({
+                                message:
+                                    'Failed to ensure directory group exists for rule; falling back to single-path lookup',
+                                context: CentralizedConfigService.name,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    repositoryId: ruleFileMeta.repositoryId,
+                                    directoryPaths:
+                                        ruleFileMeta.directoryPaths,
+                                    filePath: ruleFileMeta.ruleFilePath,
+                                },
+                                error,
+                            });
+                        }
+                    }
+
+                    if (
+                        !directoryId &&
                         ruleFileMeta.directoryPath &&
                         ruleFileMeta.repositoryId
                     ) {
@@ -1689,20 +1969,44 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         continue;
                     }
 
+                    const { enabled, ...ruleFields } = compliantRule;
+                    const existingMatch = existingRuleBySourcePath.get(
+                        getSourcePathLookupKey(ruleFileMeta.path),
+                    );
+
+                    // Sync mirrors content, not the approval lifecycle. Only
+                    // already-approved rules (ACTIVE/PAUSED) follow the YAML's
+                    // `enabled` flag. A rule in any other lifecycle state
+                    // (PENDING approval, REJECTED, ...) keeps its status, so
+                    // merging the centralized-config PR can't silently approve
+                    // a pending rule or resurrect a rejected one. Likewise,
+                    // keep an existing rule's origin instead of reclassifying
+                    // it as a repo-file sync.
+                    const existingStatus = existingMatch?.status;
+                    const isExistingApproved =
+                        existingStatus === KodyRulesStatus.ACTIVE ||
+                        existingStatus === KodyRulesStatus.PAUSED;
+                    const resolvedStatus =
+                        existingStatus && !isExistingApproved
+                            ? existingStatus
+                            : enabled === false
+                              ? KodyRulesStatus.PAUSED
+                              : KodyRulesStatus.ACTIVE;
+
                     const ruleDto = {
-                        ...compliantRule,
-                        uuid: existingRuleBySourcePath.get(
-                            getSourcePathLookupKey(ruleFileMeta.path),
-                        )?.uuid,
+                        ...ruleFields,
+                        uuid: existingMatch?.uuid,
                         type: ruleFileMeta.ruleType,
-                        status: KodyRulesStatus.ACTIVE,
+                        status: resolvedStatus,
                         repositoryId: ruleFileMeta.repositoryId || 'global',
                         directoryId,
                         centralizedConfig: {
                             path: ruleFileMeta.path,
                             status: KodyRuleCentralizedStatus.SYNCED,
                         },
-                        origin: KodyRulesOrigin.USER,
+                        origin:
+                            existingMatch?.origin ??
+                            KodyRulesOrigin.REPO_FILE_SYNC,
                     };
 
                     await this.createOrUpdateKodyRulesUseCase.execute(
@@ -1734,7 +2038,10 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 }
             }
 
-            const message = `Kody rules synchronized successfully. Synced: ${syncedCount}, Failed: ${failureDetails.length}`;
+            const hasFailures = failureDetails.length > 0;
+            const message = hasFailures
+                ? `Kody rules sync incomplete — synced ${syncedCount}, failed ${failureDetails.length}`
+                : `Kody rules synchronized successfully. Synced: ${syncedCount}, Failed: 0`;
 
             if (failureDetails.length > 0) {
                 this.logger.warn({
@@ -1759,11 +2066,14 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             }
 
             return {
-                success: true,
+                // #1518: a partial sync must NOT report success — the use-case
+                // surfaces this so the caller sees the real state (not a
+                // success-shaped result), and removeStale* does not run on an
+                // incomplete materialization.
+                success: !hasFailures,
                 message,
                 syncedRuleCount: syncedCount,
-                failureDetails:
-                    failureDetails.length > 0 ? failureDetails : undefined,
+                failureDetails: hasFailures ? failureDetails : undefined,
             };
         } catch (error) {
             this.logger.error({
@@ -1815,6 +2125,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     include: [],
                     exclude: [],
                 }),
+                enabled: z.boolean().default(true),
             })
             .safeParse(ruleContent);
 
@@ -1858,8 +2169,42 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             const existingRules = existingEntity?.toJson?.()?.rules || [];
 
+            // #1518 guard: an empty discovery (currentSourcePaths empty) while
+            // centralized rules exist would delete every synced rule. That is
+            // almost always a failed/empty read, not an intentional "delete
+            // all" — refuse to wipe and surface it.
+            const centralizedRuleCount = existingRules.filter(
+                (rule) => rule.centralizedConfig?.path,
+            ).length;
+            if (currentSourcePaths.size === 0 && centralizedRuleCount > 0) {
+                this.logger.warn({
+                    message:
+                        'Skipping stale Kody rule removal: discovery returned zero rule files but centralized rules exist — refusing to wipe (likely a failed read)',
+                    context: CentralizedConfigService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        centralizedRuleCount,
+                    },
+                });
+                return {
+                    success: true,
+                    message:
+                        'Skipped stale Kody rule removal (empty-discovery guard)',
+                    removedRuleCount: 0,
+                };
+            }
+
             for (const rule of existingRules) {
                 const sourcePath = rule.centralizedConfig?.path;
+
+                // Only rules that were actually synced from a centralized file
+                // can go stale. A rule without a path was never exported (e.g.
+                // a pending/rejected rule, or a manual rule created while the
+                // centralized PR is open) — deleting it here would wipe data
+                // the centralized config never owned.
+                if (!sourcePath) {
+                    continue;
+                }
 
                 if (!currentSourcePaths.has(sourcePath)) {
                     try {
@@ -1955,13 +2300,20 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             });
 
         if (!repositories || !Array.isArray(repositories)) {
-            this.logger.warn({
+            // A missing/failed repositories mapping is a READ FAILURE, not
+            // "zero files". Returning [] here made discovery indistinguishable
+            // from an empty repo, which then drove removeStale* to wipe every
+            // rule and reset the org's global config (issue #1518). Throw so
+            // the sync aborts before any deletion runs.
+            this.logger.error({
                 message:
-                    'No repositories found in integration config during tree scan',
+                    'Could not load repositories integration config during tree scan — aborting discovery to avoid a destructive empty result',
                 context: CentralizedConfigService.name,
                 metadata: { organizationAndTeamData },
             });
-            return [];
+            throw new Error(
+                'Centralized config discovery: repositories integration config unavailable',
+            );
         }
 
         const resolvedRepoIds = new Map(

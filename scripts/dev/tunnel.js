@@ -20,7 +20,7 @@ const updateEnvFile = (tunnelUrl) => {
     const envPath = path.join(process.cwd(), '.env');
     
     if (!fs.existsSync(envPath)) {
-        log(colors.red, '❌ .env file not found. Run "yarn setup" first.');
+        log(colors.red, '❌ .env file not found. Run "pnpm run setup" first.');
         process.exit(1);
     }
 

@@ -18,6 +18,10 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                         : `${repositoryFolder}/${relativePath}`,
                 ),
             sanitizeFileName: jest.fn().mockReturnValue('memory-rule'),
+            buildRuleFileName: jest.fn(
+                (_t?: string, u?: string) =>
+                    `memory-rule${u ? `-${String(u).slice(0, 8)}` : ''}.yml`,
+            ),
         };
 
         const useCase = new DeleteRepositoryCodeReviewParameterUseCase(
@@ -117,7 +121,7 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                     operation: 'delete',
                 }),
                 expect.objectContaining({
-                    path: 'repo-1-name/.kody-rules/memories/memory-rule.yml',
+                    path: 'repo-1-name/.kody-rules/memories/memory-rule-rule-2.yml',
                     operation: 'delete',
                 }),
             ]),
@@ -140,7 +144,28 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                         ? relativePath
                         : `${repositoryFolder}/${relativePath}`,
                 ),
+            buildDirectoryGroupConfigPath: jest
+                .fn()
+                .mockImplementation(
+                    (repositoryFolder: string, groupFolderName: string) =>
+                        `${repositoryFolder}/${groupFolderName}/kodus-config.yml`,
+                ),
+            buildDirectoryGroupRulesPath: jest
+                .fn()
+                .mockImplementation(
+                    (
+                        repositoryFolder: string,
+                        groupFolderName: string,
+                        rulesDirectory: string,
+                        fileName: string,
+                    ) =>
+                        `${repositoryFolder}/${groupFolderName}/.kody-rules/${rulesDirectory}/${fileName}`,
+                ),
             sanitizeFileName: jest.fn().mockReturnValue('fallback-rule'),
+            buildRuleFileName: jest.fn(
+                (_t?: string, u?: string) =>
+                    `fallback-rule${u ? `-${String(u).slice(0, 8)}` : ''}.yml`,
+            ),
         };
 
         const useCase = new DeleteRepositoryCodeReviewParameterUseCase(
@@ -193,9 +218,6 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
                                 title: 'Directory rule',
                                 repositoryId: 'repo-1',
                                 directoryId: 'dir-1',
-                                centralizedConfig: {
-                                    path: 'repo-1-name/src/api/.kody-rules/review/directory-rule.yml',
-                                },
                             },
                             {
                                 uuid: 'rule-dir-2',
@@ -259,12 +281,20 @@ describe('DeleteRepositoryCodeReviewParameterUseCase', () => {
         expect(files).toEqual(
             expect.arrayContaining([
                 expect.objectContaining({
-                    path: 'repo-1-name/src/api/kodus-config.yml',
+                    path: 'repo-1-name/src%2Fapi/kodus-config.yml',
                     operation: 'delete',
                 }),
                 expect.objectContaining({
-                    path: 'repo-1-name/src/api/.kody-rules/review/directory-rule.yml',
+                    path: 'repo-1-name/src%2Fapi/.kody-rules/review/fallback-rule-rule-dir.yml',
                     operation: 'delete',
+                }),
+            ]),
+        );
+
+        expect(files).not.toEqual(
+            expect.arrayContaining([
+                expect.objectContaining({
+                    path: expect.stringContaining('folders.yml'),
                 }),
             ]),
         );

@@ -1,4 +1,4 @@
-import { SimpleLogger } from '@kodus/flow/dist/observability/logger';
+import { SimpleLogger } from '@libs/core/log/logger';
 
 import type { IContextReferenceService } from '@libs/ai-engine/domain/contextReference/contracts/context-reference.service.contract';
 import type { ContextReferenceEntity } from '@libs/ai-engine/domain/contextReference/entities/context-reference.entity';
@@ -28,63 +28,76 @@ export async function enrichRulesWithContextReferences<
     contextReferenceService: IContextReferenceService,
     logger: SimpleLogger,
 ): Promise<Array<T & EnrichedFields>> {
-    return await Promise.all(
-        (rules || []).map(async (rule) => {
-            if (!rule.contextReferenceId) {
-                return {
-                    ...rule,
-                    referenceProcessingStatus: null,
-                    externalReferences: [],
-                    syncErrors: [],
-                };
-            }
+    const list = rules || [];
 
-            try {
-                const contextRef = await contextReferenceService.findById(
-                    rule.contextReferenceId,
-                );
-
-                if (!contextRef) {
-                    return {
-                        ...rule,
-                        referenceProcessingStatus: 'pending',
-                        externalReferences: [],
-                        syncErrors: [],
-                    };
-                }
-
-                const externalReferences =
-                    extractExternalReferences(contextRef);
-                const syncErrors = extractSyncErrors(contextRef);
-
-                return {
-                    ...rule,
-                    referenceProcessingStatus: contextRef.processingStatus,
-                    lastReferenceProcessedAt: contextRef.lastProcessedAt,
-                    externalReferences,
-                    syncErrors,
-                };
-            } catch (error) {
-                logger.warn({
-                    message:
-                        'Failed to fetch context reference for kody rule while enriching response',
-                    context: 'enrichRulesWithContextReferences',
-                    error,
-                    metadata: {
-                        ruleUuid: rule.uuid,
-                        contextReferenceId: rule.contextReferenceId,
-                    },
-                });
-
-                return {
-                    ...rule,
-                    referenceProcessingStatus: 'failed',
-                    externalReferences: [],
-                    syncErrors: [],
-                };
-            }
-        }),
+    // Batch-load every referenced context in ONE query (`uuid IN (...)`)
+    // instead of a findById per rule. This util runs once for the scope
+    // listing and once per inherited bucket (global / repo / directory) on
+    // every Kody Rules page load, so the per-rule round-trips added up to a
+    // page-wide N+1. De-dupe ids first — global rules are commonly shared.
+    const ids = Array.from(
+        new Set(
+            list
+                .map((rule) => rule.contextReferenceId)
+                .filter((id): id is string => Boolean(id)),
+        ),
     );
+
+    const byId = new Map<string, ContextReferenceEntity>();
+    let batchFailed = false;
+
+    if (ids.length > 0) {
+        try {
+            const refs = await contextReferenceService.findByIds(ids);
+            for (const ref of refs) {
+                if (ref?.uuid) {
+                    byId.set(ref.uuid, ref);
+                }
+            }
+        } catch (error) {
+            // Preserve the old per-rule semantics: a fetch error marks the
+            // referenced rules as 'failed' (vs 'pending' for a genuine
+            // not-found), so the UI can still tell the two apart.
+            batchFailed = true;
+            logger.warn({
+                message:
+                    'Failed to batch-fetch context references while enriching kody rules',
+                context: 'enrichRulesWithContextReferences',
+                error,
+                metadata: { contextReferenceIds: ids },
+            });
+        }
+    }
+
+    return list.map((rule) => {
+        if (!rule.contextReferenceId) {
+            return {
+                ...rule,
+                referenceProcessingStatus: null,
+                externalReferences: [],
+                syncErrors: [],
+            };
+        }
+
+        const contextRef = byId.get(rule.contextReferenceId);
+
+        if (!contextRef) {
+            return {
+                ...rule,
+                referenceProcessingStatus: batchFailed ? 'failed' : 'pending',
+                externalReferences: [],
+                syncErrors: [],
+            };
+        }
+
+        return {
+            ...rule,
+            referenceProcessingStatus: contextRef.processingStatus,
+            lastReferenceProcessedAt: contextRef.lastProcessedAt,
+            externalReferences: extractExternalReferences(contextRef),
+            syncErrors: extractSyncErrors(contextRef),
+        };
+    });
 }
 
 function extractExternalReferences(

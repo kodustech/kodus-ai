@@ -7,7 +7,7 @@ import { CliDeviceService } from '@libs/organization/infrastructure/adapters/ser
 import { CLI_DEVICE_REPOSITORY_TOKEN } from '@libs/organization/domain/cli-device/contracts/cli-device.repository.contract';
 import { CliDeviceEntity } from '@libs/organization/domain/cli-device/entities/cli-device.entity';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

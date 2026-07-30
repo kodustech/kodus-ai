@@ -3,7 +3,7 @@
 #  2. coverage — every process.env.X / env.X reference in code is declared
 #                in .env.schema (with an allowlist for CLI/test/false-positives)
 #
-# Runs in ~15s — no Docker, no LLM, just yarn.
+# Runs in ~15s — no Docker, no LLM, just pnpm.
 name: env-drift-check
 
 # Read-only — this workflow only fetches code and runs scripts; it does
@@ -23,7 +23,7 @@ on:
             - 'docs/_snippets/env-vars-generated.mdx'
             - 'scripts/env/**'
             - 'package.json'
-            - 'yarn.lock'
+            - 'pnpm-lock.yaml'
             - '**/*.ts'
             - '**/*.tsx'
             - '**/*.js'
@@ -33,22 +33,23 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+            - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v4
               with:
                   node-version: 22
-                  cache: yarn
-            - run: yarn install --frozen-lockfile
+                  cache: pnpm
+            - run: pnpm install --frozen-lockfile
 
             - name: Regenerate from schema and diff
-              run: yarn env:apply
+              run: pnpm run env:apply
             - name: Fail if anything drifted from schema
               run: |
                   if ! git diff --quiet; then
                       echo "::error::Generated outputs drifted from .env.schema."
-                      echo "Run \`yarn env:apply\` locally and commit the result."
+                      echo "Run \`pnpm run env:apply\` locally and commit the result."
                       git --no-pager diff
                       exit 1
                   fi
 
             - name: Check schema covers every env var used in code
-              run: yarn env:check:coverage
+              run: pnpm run env:check:coverage

@@ -49,9 +49,13 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
         title: 'Verify your SSO domain',
         body: `Verify your SSO domain: ${m.domain ?? ''}`,
     }),
-    [NotificationEvent.WEEKLY_RECAP]: () => ({
-        title: 'Weekly recap ready',
-        body: 'Your weekly engineering recap is ready.',
+    [NotificationEvent.ORG_REPORT]: () => ({
+        title: 'Your Kodus report is ready',
+        body: 'Your organization review report is ready.',
+    }),
+    [NotificationEvent.REPO_REPORT]: () => ({
+        title: 'Your Kodus repo digest is ready',
+        body: 'Your per-repo review digest is ready.',
     }),
 
     // ── New events (this PR) ───────────────────────────────────
@@ -70,7 +74,7 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
 
     [NotificationEvent.REVIEW_SKIPPED_NO_LICENSE]: (m) => ({
         title: 'Review skipped — license required',
-        body: `${m.repoName ?? 'A pull request'} was not reviewed because your organization lacks an active license. Contact ${m.ownerContact ?? 'your admin'} to enable reviews.`,
+        body: `PR by ${(m.authorUsername as string) || 'unknown user'} in ${m.repoName ?? 'a repository'} was not reviewed — this user doesn't have an active license. Contact ${m.ownerContact ?? 'your admin'} to enable reviews.`,
         ctaUrl: m.prUrl as string | undefined,
     }),
 
@@ -103,8 +107,8 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
     },
 
     [NotificationEvent.ORG_ROLE_CHANGED]: (m) => ({
-        title: 'Your role changed',
-        body: `Your role in ${m.organizationName ?? 'the organization'} changed from ${m.previousRole ?? 'unknown'} to ${m.newRole ?? 'unknown'}.`,
+        title: 'Member role changed',
+        body: `${m.affectedUserEmail ?? 'A member'}'s role in ${m.organizationName ?? 'the organization'} changed from ${m.previousRole ?? 'unknown'} to ${m.newRole ?? 'unknown'}${m.changedBy ? ` by ${m.changedBy}` : ''}.`,
     }),
 
     [NotificationEvent.BILLING_PAYMENT_FAILED]: (m) => {
@@ -139,6 +143,16 @@ export const IN_APP_TEMPLATE_REGISTRY: Partial<
     [NotificationEvent.BYOK_LLM_ERRORS_THRESHOLD]: (m) => ({
         title: 'BYOK LLM errors exceeded threshold',
         body: `Your ${m.provider ?? 'BYOK'} model returned ${m.errorCount ?? 0} errors in the recent window. Reviews may be impacted. Latest error: ${m.sampleError ?? 'n/a'}.`,
+    }),
+
+    [NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED]: (m) => ({
+        title: `BYOK spend at ${m.percentage ?? 0}% of your monthly limit`,
+        body: `Your BYOK model spend this month is $${m.spentUsd ?? 0} of your $${m.monthlyLimitUsd ?? 0} limit (${m.percentage ?? 0}%). This is an alert only — reviews keep running. Set a hard cap with your model provider to actually stop spend.`,
+    }),
+
+    [NotificationEvent.SPEND_LIMIT_EXCEEDED_FINAL]: (m) => ({
+        title: 'BYOK monthly spend limit exceeded',
+        body: `Your BYOK spend ($${m.spentUsd ?? 0}) has passed your $${m.monthlyLimitUsd ?? 0} monthly limit. We won't notify you again this month. Reviews continue to run — set a hard cap with your model provider if you need to stop spend.`,
     }),
 
     [NotificationEvent.RULE_FILE_REFERENCES_INVALID]: (m) => {

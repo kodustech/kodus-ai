@@ -34,15 +34,17 @@ import { NotificationModule } from '@libs/notifications/modules/notification.mod
 import { AnalyticsClassifierCron } from './cron/analytics-classifier.cron';
 import { AnalyticsIngestionCron } from './cron/analytics-ingestion.cron';
 import { SelfHostedBeaconCron } from './cron/self-hosted-beacon.cron';
-import { WeeklyRecapCron } from './cron/weekly-recap.cron';
+import { OrgReportCron } from './cron/org-report.cron';
+import { RepoReportCron } from './cron/repo-report.cron';
 import { resolveWorkerRole, type WorkerRole } from './worker-role';
 import { WorkerDrainService } from './worker-drain.service';
 import { WorkerHealthGuardService } from './worker-health-guard.service';
 
 /**
  * Worker boots code-review OR analytics — never both. See
- * `./worker-role.ts` for the contract. Cloud and self-hosted run both
- * replicas so the topology is identical across environments.
+ * `./worker-role.ts` for the contract. Self-hosted telemetry is wired to the
+ * code-review role because that is the mandatory worker in every deployment;
+ * analytics is optional for community installs.
  */
 @Module({})
 export class WorkerModule {
@@ -78,6 +80,7 @@ export class WorkerModule {
                     PlatformModule,
                     SandboxModule, // provides SANDBOX_LEASE_MANAGER_TOKEN for OutboxRelayService
                     NotificationModule,
+                    SelfHostedBeaconModule,
                 ],
                 providers: [
                     WorkerDrainService,
@@ -86,6 +89,7 @@ export class WorkerModule {
                     ErrorRateMonitorService,
                     ReviewResponseMonitorService,
                     WebhookFailureMonitorService,
+                    SelfHostedBeaconCron,
                     LangfuseShutdownProvider,
                 ] satisfies Provider[],
             };
@@ -101,7 +105,7 @@ export class WorkerModule {
                 LLMModule.forRoot({ logger: LoggerWrapperService }),
                 AnalyticsWarehouseModule.forRoot(),
                 // Postgres for cockpit warehouse queries used by the
-                // weekly-recap cron.
+                // repo/org report crons.
                 SharedPostgresModule.forRoot({ poolSize: 4 }),
                 // Wired with `enableConsumers: false` because the
                 // analytics role does NOT consume queue messages — but
@@ -115,22 +119,21 @@ export class WorkerModule {
                 // → PlatformModule edge is the cleaner long-term fix but
                 // is out of scope here.
                 RabbitMQWrapperModule.register({ enableConsumers: false }),
-                // Cockpit pulls in EmailModule + UserModule for the
-                // SendWeeklyRecapUseCase email rendering. OrganizationModule
-                // is imported separately because the WeeklyRecapCron itself
-                // injects ORGANIZATION_SERVICE_TOKEN to fan out across orgs,
-                // and CockpitModule doesn't re-export that token.
+                // Cockpit pulls in EmailModule + UserModule for the report
+                // email rendering. OrganizationModule is imported separately
+                // because the report crons inject ORGANIZATION_SERVICE_TOKEN
+                // to fan out across orgs, and CockpitModule doesn't re-export
+                // that token.
                 CockpitModule,
                 OrganizationModule,
-                SelfHostedBeaconModule,
             ],
             providers: [
                 WorkerDrainService,
                 WorkerHealthGuardService,
                 AnalyticsIngestionCron,
                 AnalyticsClassifierCron,
-                WeeklyRecapCron,
-                SelfHostedBeaconCron,
+                OrgReportCron,
+                RepoReportCron,
                 LangfuseShutdownProvider,
             ] satisfies Provider[],
         };

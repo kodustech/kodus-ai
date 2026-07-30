@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable } from '@nestjs/common';
 import { StageCompletedEvent } from '../domain/interfaces/stage-completed-event.interface';
 

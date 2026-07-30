@@ -51,6 +51,9 @@ export class PullRequestMessagesConfigDto {
 
     @ApiProperty({ type: PullRequestMessagesEntryDto })
     endReviewMessage: PullRequestMessagesEntryDto;
+
+    @ApiProperty({ type: PullRequestMessagesEntryDto })
+    errorReviewMessage: PullRequestMessagesEntryDto;
 }
 
 export class PullRequestMessagesResponseDto extends ApiResponseBaseDto {

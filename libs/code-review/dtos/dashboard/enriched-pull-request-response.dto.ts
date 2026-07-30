@@ -1,5 +1,5 @@
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
-import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/llm/review-warnings';
+import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 
 export interface CodeReviewExecutionTimeline {
     uuid: string;
@@ -20,6 +20,8 @@ export interface EnrichedPullRequestResponse {
     title: string;
     status: string;
     merged: boolean;
+    /** Whether the last review ran in HEAVY mode (resolved post feature-gate). */
+    heavy?: boolean;
     url: string;
     baseBranchRef: string;
     headBranchRef: string;
@@ -36,7 +38,15 @@ export interface EnrichedPullRequestResponse {
         name?: string;
     };
     isDraft: boolean;
-    suggestionsCount: { sent: number; filtered: number };
+    suggestionsCount: {
+        sent: number;
+        filtered: number;
+        // Breakdown of SENT suggestions by severity. Absent only when the
+        // aggregation failed and the in-memory fallback was used.
+        bySeverity?: Record<'critical' | 'high' | 'medium' | 'low', number>;
+        // Distinct categories (labels) among SENT suggestions.
+        categories?: string[];
+    };
     reviewedCommitSha?: string;
     reviewedCommitUrl?: string;
     compareUrl?: string;

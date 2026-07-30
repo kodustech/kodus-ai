@@ -17,7 +17,7 @@ SOURCE="${REPO_ROOT}/.env"
 DEST="${REPO_ROOT}/.tmp/sso-e2e-api.env"
 
 if [ ! -f "${SOURCE}" ]; then
-    echo "error: ${SOURCE} not found — run \`yarn env:apply\` first" >&2
+    echo "error: ${SOURCE} not found — run \`pnpm run env:apply\` first" >&2
     exit 1
 fi
 

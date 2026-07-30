@@ -1,5 +1,5 @@
 import Pyroscope from '@pyroscope/nodejs';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 const logger = createLogger('Pyroscope');
 

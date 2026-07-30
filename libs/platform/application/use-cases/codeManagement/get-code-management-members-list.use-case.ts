@@ -1,14 +1,12 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { Request } from 'express';
 
-import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CacheService } from '@libs/core/cache/cache.service';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { PullRequestHandlerService } from '@libs/code-review/infrastructure/adapters/services/pullRequestManager.service';
 
 @Injectable()
 export class GetCodeManagementMemberListUseCase implements IUseCase {
@@ -19,8 +17,6 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
 
     constructor(
         private readonly codeManagementService: CodeManagementService,
-        @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
-        private readonly pullRequestHandlerService: PullRequestHandlerService,
         private readonly cacheService: CacheService,
         @Inject(REQUEST)
         private readonly request: Request & {
@@ -54,14 +50,10 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
             // Cache miss or error, proceed with fetch
         }
 
-        const [platformMembers, prMembers] = await Promise.all([
-            this.fetchMembersFromCodeIntegration(organizationAndTeamData),
-            this.fetchMembersFromPullRequests(organizationAndTeamData),
-        ]);
-        const mergedMembers = this.normalizeMembers([
-            ...platformMembers,
-            ...prMembers,
-        ]);
+        const platformMembers = await this.fetchMembersFromCodeIntegration(
+            organizationAndTeamData,
+        );
+        const mergedMembers = this.normalizeMembers(platformMembers);
 
         if (mergedMembers.length > 0) {
             await this.cacheService
@@ -102,35 +94,6 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
         } catch (error) {
             this.logger.warn({
                 message: 'Unable to fetch members from code integration',
-                context: GetCodeManagementMemberListUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                },
-                error,
-            });
-
-            return [];
-        }
-    }
-
-    private async fetchMembersFromPullRequests(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<{ name: string; id: string | number; type?: string }[]> {
-        try {
-            const authors =
-                await this.pullRequestHandlerService.getPullRequestAuthorsWithCache(
-                    organizationAndTeamData,
-                );
-
-            const normalizedAuthors = (authors ?? []).map((author) => ({
-                id: author?.id,
-                name: author?.name,
-            }));
-
-            return this.normalizeMembers(normalizedAuthors);
-        } catch (error) {
-            this.logger.error({
-                message: 'Unable to fetch members from pull requests fallback',
                 context: GetCodeManagementMemberListUseCase.name,
                 metadata: {
                     organizationId: organizationAndTeamData.organizationId,

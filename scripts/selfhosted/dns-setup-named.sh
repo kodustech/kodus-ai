@@ -18,7 +18,7 @@
 #   3. Zone ID     (your zone, e.g. kodus.io → sidebar right)
 #
 # Usage:
-#   yarn selfhosted:dns-setup \
+#   pnpm run selfhosted:dns-setup \
 #       --token      <CF_API_TOKEN> \
 #       --account-id <CF_ACCOUNT_ID> \
 #       --zone-id    <CF_ZONE_ID>
@@ -78,7 +78,7 @@ done
 [ -n "$CF_ZONE_ID" ]    || { err "--zone-id is required"; exit 1; }
 
 NAME=$(normalize_name "$NAME_RAW")
-state_exists "$NAME" || { err "No selfhosted instance named '$NAME'. Run 'yarn selfhosted:provision' first."; exit 1; }
+state_exists "$NAME" || { err "No selfhosted instance named '$NAME'. Run 'pnpm run selfhosted:provision' first."; exit 1; }
 SERVER_IP=$(state_get "$NAME" .server_ip)
 
 # Generate a single random suffix and share it between web + webhook subs

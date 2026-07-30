@@ -34,4 +34,12 @@ if [ ! -d node_modules ]; then
 fi
 
 ok "Exec matrix runner"
-exec ./node_modules/.bin/tsx cli/run-matrix.ts "$MATRIX_FILE" --target cloud
+# --skip-missing-tokens matches `scripts/e2e/run.sh matrix` (the local
+# entry point): cells without the required provider token are SKIPPED
+# instead of failing the run. Keeps the CI workflow runnable when a token
+# is genuinely missing (e.g. paid-only provider in a community fork) and
+# matches the local validated behaviour. Override by exporting
+# E2E_NO_SKIP_MISSING_TOKENS=1.
+SKIP_FLAG="--skip-missing-tokens"
+[ "${E2E_NO_SKIP_MISSING_TOKENS:-}" = "1" ] && SKIP_FLAG=""
+exec ./node_modules/.bin/tsx cli/run-matrix.ts "$MATRIX_FILE" --target cloud $SKIP_FLAG

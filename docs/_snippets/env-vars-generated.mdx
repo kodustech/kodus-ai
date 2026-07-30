@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- |
 | `API_NODE_ENV` | – | enum(development,production,test) | ⚙️ Both | Runtime mode. In the kodus-ai dev tree this stays `development` (verbose logs, host-only auth cookies, dev-seed endpoints enabled). For self-hosted the installer ships `production` because every self-hosted deployment IS a production environment: with `development` the SSO handoff cookie is emitted without a Domain attribute and without the Secure flag (auth.controller.ts:287,292 + derive-sso-cookie-domain.ts:33), so the browser stores it host-only on the API origin and the front-end on a different subdomain can't read it — hard regression for any customer using SSO. Cloud envs are templated by infra-as-code, not this file. |
 | `API_DATABASE_ENV` | – | enum(development,production,test) | ⚙️ Both | Database environment selector — affects SSL defaults. |
-| `API_DATABASE_DISABLE_SSL` | – | boolean | ⚙️ Both | When DATABASE_ENV=production, set this to 'true' to disable SSL. Self-hosted ships a local Postgres container with no SSL, so the installer default flips this to true. Cloud (AWS RDS, etc) keeps SSL on. Covers ALL data sources (default + analytics) — individual API_PG_DB_SSL only flipped the primary connection, which is why the api still crashed on the analytics connection in the past. |
+| `API_DATABASE_DISABLE_SSL` | – | boolean | ⚙️ Both | Disable SSL on ALL Postgres connections (default + analytics warehouse). Local docker dev and self-hosted both run a Postgres container with no SSL, so the default is true. Cloud (AWS RDS, etc) requires SSL — its deploy env MUST set this to false explicitly. Covers ALL data sources — individual API_PG_DB_SSL only flipped the primary connection, which is why the api still crashed on the analytics connection (db_postgres is non-loopback, so SSL stayed on) in the past. |
 | `API_LOG_LEVEL` | – | enum(error,warn,info,debug) | ⚙️ Both | Log verbosity. Cloud runs at info; self-hosted defaults to error to keep disk usage and noise low for users without log aggregation. |
 | `API_LOG_PRETTY` | – | boolean | ⚙️ Both | Pretty-print logs (dev) vs JSON (prod). |
 | `API_CLOUD_MODE` | – | boolean | ☁️ Cloud | Cloud-only — billing + analytics. Self-hosted MUST keep false. |
@@ -14,6 +14,7 @@
 | `RELEASE_VERSION` | – | string | ☁️ Cloud | Released version tag, set by CI on prod builds. |
 | `KODUS_LICENSE_KEY` | – | secret | 🏢 Self-hosted Enterprise | Self-hosted license key. Unlocks enterprise features. EE-only — documented in the docs reference; does not appear in either default .env.example. |
 | `API_DEVELOPMENT_MODE` | – | boolean | ☁️ Cloud | Dev-only bypass of permission validation. Cloud devs only. |
+| `GLOBAL_RULES_IMPORT_TIER_OVERRIDE` | – | enum=free|trial|paid | ☁️ Cloud | Dev-only override for the global Kody Rules import tier so the free/trial/paid UI can be exercised locally (where an install usually has no license and would otherwise resolve to `free`). Only honored when API_DEVELOPMENT_MODE is true; ignored in production. Leave empty to resolve the tier from the org's license as usual. |
 | `RUN_MIGRATIONS` | – | boolean | ⚙️ Both | Run TypeORM migrations on container boot (OLTP + analytics warehouse + mcp-manager). Default true so a fresh install boots into a usable state without an extra step. Set to false to manage migrations manually (e.g. blue/green deploys where you run them out-of-band). |
 | `RUN_SEEDS` | – | boolean | ⚙️ Both | Run database seeds on container boot. Required for first-time setup (creates default org, admin role, etc). Idempotent — safe to leave on. |
 | `USE_LOCAL_DB` | – | boolean | 🏠 Self-hosted | When true, the installer's docker-compose spins up a local Postgres container. Set to false to point at an externally-managed Postgres (managed RDS/Supabase/Neon/Railway). Read by kodus-installer/scripts/ install.sh + doctor.sh; not consumed by kodus-ai itself. |
@@ -82,7 +83,7 @@
 
 | Variable | Required | Type | Scope | Description |
 | --- | --- | --- | --- | --- |
-| `WORKER_ROLE` | ✅ | enum(code-review,analytics) | ⚙️ Both | Selects which workload this worker container handles. The kodus-worker image refuses to boot without this — and the queues it owns (workflow.jobs.*) are created on its first connection, so if the worker dies on boot the api/webhooks fail with QueueBind 404 on every webhook event. Self-hosted deployments only run the code-review role; analytics is a cloud worker. |
+| `WORKER_ROLE` | ✅ | enum(code-review,analytics) | ⚙️ Both | Selects which workload this worker container handles. The kodus-worker image refuses to boot without this — and the queues it owns (workflow.jobs.*) are created on its first connection, so if the worker dies on boot the api/webhooks fail with QueueBind 404 on every webhook event. Every deployment runs code-review; analytics is a separate Cockpit worker when that feature is enabled. |
 | `WORKFLOW_QUEUE_WORKER_PREFETCH` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_PUBLISHER_PREFETCH` | – | number | ⚙️ Both |  |
 | `WORKFLOW_QUEUE_WEBHOOK_PREFETCH` | – | number | ⚙️ Both |  |
@@ -118,6 +119,7 @@
 | `API_VERTEX_AI_LOCATION` | – | string | ☁️ Cloud |  |
 | `API_GOOGLE_AI_PROVIDER` | – | enum(gemini,vertex) | ☁️ Cloud | Google AI provider: gemini (AI Studio) or vertex (Vertex AI). |
 | `API_NOVITA_AI_API_KEY` | – | secret | ☁️ Cloud |  |
+| `API_MOONSHOT_API_KEY` | – | secret | ☁️ Cloud | Moonshot AI (Kimi) — used by the public-demo trial flow in libs/code-review/infrastructure/agents/llm/byok-to-vercel.ts when the default model name matches /^kimi[-_.]/. Wires through the OpenAI- compatible adapter pointed at https://api.moonshot.ai/v1. The eval scripts (evals/{investigation,promotion}/run-eval.js) also reference this key by name. Cloud-only — self-hosted has no Moonshot demo path. |
 | `API_GROQ_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_GROQ_API_KEY` | – | secret | ☁️ Cloud |  |
 | `API_CEREBRAS_BASE_URL` | – | url | ☁️ Cloud |  |
@@ -141,15 +143,19 @@
 | `GLOBAL_GITLAB_REDIRECT_URL` | – | url | ☁️ Cloud |  |
 | `API_GITLAB_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
 | `GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
+| `BITBUCKET_RATE_GATE_MIN_INTERVAL_MS` | – | number | ⚙️ Both (opt-in) | Minimum interval (ms) between Bitbucket API calls per worker instance. In-memory rate gate to keep us under Bitbucket's per-minute throttle. Note: this is per-replica — with N workers the effective rate is N× whatever you set here. 400ms is safe for typical multi-replica setups; raise it if a customer's Bitbucket instance throttles aggressively. |
+| `BITBUCKET_RATE_GATE_429_MAX_RETRIES` | – | number | ⚙️ Both (opt-in) | How many times to retry a Bitbucket call that returns HTTP 429 (honouring Retry-After) before giving up. Reviews legitimately burst past Bitbucket Cloud's ~1000 req/hour ceiling; retrying keeps them alive instead of failing the review. 4 attempts covers the worst observed throttle windows. |
 | `GLOBAL_AZURE_REPOS_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
 | `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
 | `CODE_MANAGEMENT_SECRET` | ✅ | secret | ⚙️ Both | Shared secret used to sign internal webhook calls. |
 | `CODE_MANAGEMENT_WEBHOOK_TOKEN` | – | secret | ⚙️ Both |  |
+| `API_DISCORD_TRIAL_REQUEST_WEBHOOK_URL` | – | secret | ☁️ Cloud | Discord channel webhook used to deliver "Request more trial reviews" form submissions to our team. Optional — when unset the request fails honestly and the UI tells the user the channel is not configured. |
 
 ## Observability
 
 | Variable | Required | Type | Scope | Description |
 | --- | --- | --- | --- | --- |
+| `OBSERVABILITY_MONGO_ENABLED` | – | boolean | ⚙️ Both (opt-in) | Enables the MongoDB observability exporter used for logs/telemetry persistence. Set to false to disable Mongo observability writes without disabling the application's MongoDB connection itself. |
 | `LANGFUSE_TRACING` | – | boolean | ⚙️ Both (opt-in) | Langfuse tracing — opt-in for self-hosted (cloud Langfuse needs the user's own keys; default is to leave it off in self-hosted). |
 | `LANGFUSE_PUBLIC_KEY` | – | string | ⚙️ Both (opt-in) |  |
 | `LANGFUSE_SECRET_KEY` | – | secret | ⚙️ Both (opt-in) |  |
@@ -177,7 +183,9 @@
 | `API_CRON_SYNC_CODE_REVIEW_REACTIONS` | – | cron | ⚙️ Both | Daily at 00:00. |
 | `API_CRON_KODY_LEARNING` | – | cron | ⚙️ Both | Saturday at 00:00. |
 | `API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED` | – | cron | ⚙️ Both | Every 2 minutes. |
-| `API_CRON_WEEKLY_RECAP` | – | cron | ⚙️ Both | Friday at 09:00 UTC — weekly recap email. |
+| `API_CRON_ORG_REPORT` | – | cron | ⚙️ Both | 1st of each month at 09:00 UTC — org review report email. |
+| `API_CRON_REPO_REPORT` | – | cron | ⚙️ Both | 1st & 16th at 09:00 UTC — per-repo review digest email (biweekly). |
+| `API_CRON_SPEND_LIMIT_ALERT` | – | cron | ⚙️ Both | Every hour |
 
 ## Email (Resend — https://resend.com / SMTP)
 
@@ -185,6 +193,7 @@
 | --- | --- | --- | --- | --- |
 | `API_NOTIFICATION_EMAIL_PROVIDER` | – | enum(resend,smtp) | ⚙️ Both | Notifications email provider |
 | `RESEND_API_KEY` | – | secret | ⚙️ Both | Resend — Kodus-managed email sender. |
+| `RESEND_TEST_EMAIL` | – | email | ☁️ Cloud | Destination address used by scripts/dev/test-emails.ts when smoke- testing transactional email delivery. Dev-only utility — production code doesn't read this. Cloud-only because the test script targets the Kodus-managed Resend setup. |
 | `API_USER_INVITE_BASE_URL` | – | url | ⚙️ Both |  |
 | `API_SMTP_HOST` | – | string | 🏠 Self-hosted | SMTP host |
 | `API_SMTP_PORT` | – | number | 🏠 Self-hosted | SMTP port |
@@ -223,7 +232,7 @@
 | `WEB_SUPPORT_DOCS_URL` | – | url | ⚙️ Both |  |
 | `WEB_SUPPORT_DISCORD_INVITE_URL` | – | url | ⚙️ Both |  |
 | `WEB_SUPPORT_TALK_TO_FOUNDER_URL` | – | url | ☁️ Cloud |  |
-| `ANALYTICS_PG_DB_HOST` | – | string | 🏢 ☁️ Cloud | Connection to the analytics Postgres (separate from main OLTP). |
+| `ANALYTICS_PG_DB_HOST` | – | string | 🏢 ☁️ Cloud | Connection to the analytics Postgres. In cloud / self-hosted-enterprise this is a dedicated instance (deploy env overrides these). For local docker dev the defaults reuse the main OLTP container (db_postgres) — an empty value here would defeat the loader's `??` fallback and resolve to loopback, so we set the dev values explicitly. |
 | `ANALYTICS_PG_DB_PORT` | – | port | 🏢 ☁️ Cloud |  |
 | `ANALYTICS_PG_DB_USERNAME` | – | string | 🏢 ☁️ Cloud |  |
 | `ANALYTICS_PG_DB_PASSWORD` | – | secret | 🏢 ☁️ Cloud |  |
@@ -232,6 +241,7 @@
 | `ANALYTICS_PG_POOL_MAX` | – | string | 🏢 ☁️ Cloud | Upper bound on the analytics Postgres pool. |
 | `ANALYTICS_INGESTION_CRON` | – | cron | 🏢 ☁️ Cloud | Cron expression — analytics ingestion. Default = every 30 min. |
 | `ANALYTICS_INGESTION_DISABLED` | – | boolean | ☁️ Cloud | Kill switch for the ingestion cron regardless of role. |
+| `ANALYTICS_INGESTION_RUN_ON_BOOT` | – | boolean | 🏢 ☁️ Cloud | Run one ingestion pass on worker boot instead of waiting for the first scheduled cron tick (so a fresh install / restart catches up immediately). Opt-out only: set 'false' to skip the boot pass. Default = run on boot. |
 | `ANALYTICS_CLASSIFIER_CRON` | – | cron | 🏢 ☁️ Cloud | Cron — LLM-based PR type classifier (analytics worker role). |
 | `ANALYTICS_CLASSIFIER_DISABLED` | – | boolean | ☁️ Cloud | Kill switch for the classifier. |
 | `API_PG_ANALYTICS_HOST` | – | string | 🏢 ☁️ Cloud | Alternative naming used by some loaders. Verify if duplicate of ANALYTICS_PG_DB_*. |
@@ -307,9 +317,7 @@
 | `API_MCP_MANAGER_DATABASE_ENV` | – | string | 🏠 Self-hosted |  |
 | `API_MCP_MANAGER_CORS_ORIGINS` | – | string | 🏠 Self-hosted | Comma-separated allowed origins for the MCP Manager HTTP server. |
 | `API_MCP_MANAGER_JWT_SECRET` | – | secret | 🏠 Self-hosted | Generate with: openssl rand -base64 32 |
-| `API_MCP_MANAGER_COMPOSIO_BASE_URL` | – | url | 🏠 Self-hosted | Composio (third-party MCP marketplace) — optional, leave empty to disable. |
-| `API_MCP_MANAGER_COMPOSIO_API_KEY` | – | secret | 🏠 Self-hosted |  |
-| `API_MCP_MANAGER_MCP_PROVIDERS` | – | string | 🏠 Self-hosted | Comma-separated list of MCP providers to enable: kodusmcp,composio,custom. |
+| `API_MCP_MANAGER_MCP_PROVIDERS` | – | string | 🏠 Self-hosted | Comma-separated list of MCP providers to enable: kodusmcp,custom. |
 | `API_MCP_MANAGER_REDIRECT_URI` | – | url | 🏠 Self-hosted | OAuth redirect URI used by MCP Manager when wiring providers via the web UI. |
 | `API_MCP_MANAGER_PG_DB_SCHEMA` | – | string | 🏠 Self-hosted | Postgres schema name used by MCP Manager (shares the main DB). |
 | `API_MCP_MANAGER_ENCRYPTION_SECRET` | – | secret | ⚙️ Both | Symmetric key used by MCP Manager to encrypt tokens at rest. Generate with: openssl rand -base64 32 |
@@ -339,6 +347,9 @@
 | --- | --- | --- | --- | --- |
 | `API_CRON_CLASSIFY_ORPHANED_SESSIONS` | – | cron | ⚙️ Both | Reclassifies orphaned (no-PR) review sessions every 15 minutes. Cloud-only feature. |
 | `API_CRON_SSO_TEST_SESSION_CLEANUP` | – | cron | ☁️ Cloud | Daily cleanup of expired SSO test sessions (1 AM UTC). |
+| `API_CRON_STALE_REVIEW_WATCHDOG` | – | cron | ⚙️ Both | Reaps code review executions stuck IN_PROGRESS (process died mid-review) and finalizes their orphaned platform check runs. |
+| `WORKFLOW_STALE_JOB_REAPER_CRON` | – | cron | ⚙️ Both | Cadence of the workflow-jobs stale-PROCESSING reaper, which fails jobs left in PROCESSING when a worker was killed mid-processing (OOM/eviction). The eligibility threshold (WORKFLOW_STALE_JOB_TIMEOUT_MINUTES) still bounds what can be reaped, so cadence only affects how quickly orphans are caught. |
+| `WORKFLOW_STALE_JOB_TIMEOUT_MINUTES` | – | number | ⚙️ Both | Minutes a workflow job may sit in PROCESSING before the reaper marks it FAILED. Must exceed the longest legitimate run — the 105min job-abort timeout and the 150min inbox claim timeout — so live jobs are never reaped; 180 leaves margin. |
 | `WORKFLOW_QUEUE_CHECK_IMPLEMENTATION_PREFETCH` | – | number | ⚙️ Both (opt-in) | Per-handler prefetch (in-flight messages) for the check-implementation workflow handler. |
 | `WORKFLOW_QUEUE_CHECK_IMPLEMENTATION_TIMEOUT_MS` | – | number | ⚙️ Both (opt-in) | Hard timeout (ms) for a check-implementation handler invocation. |
 | `WORKFLOW_QUEUE_FEEDBACK_PREFETCH` | – | number | ⚙️ Both (opt-in) | Per-handler prefetch for the feedback workflow handler. |
@@ -364,7 +375,8 @@
 
 | Variable | Required | Type | Scope | Description |
 | --- | --- | --- | --- | --- |
-| `KODUS_TELEMETRY_DISABLED` | – | boolean | ⚙️ Both | Opt out of the daily anonymous heartbeat sent to telemetry.kodus.io. Cloud is unaffected — the cron skips when API_CLOUD_MODE=true regardless. Self-hosted operators flip this to "true" to disable. The payload is aggregated counters (active users, PRs reviewed, repos connected, etc.) plus runtime metadata (Node version, OS, deployment). It never includes emails, repo/branch/PR names, code, or any identifying data. Full schema published at https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md |
+| `KODUS_TELEMETRY_DISABLED` | – | boolean | ⚙️ Both | Opt out of the daily anonymous heartbeat sent to telemetry.kodus.io. Cloud is unaffected — the cron skips when API_CLOUD_MODE=true regardless. The heartbeat runs from the mandatory code-review worker, so community and enterprise self-hosted installs are covered. Self-hosted operators flip this to "true" to disable. The payload is aggregated counters (active users, PRs reviewed, repos connected, etc.) plus runtime metadata (Node version, OS, deployment). It never includes emails, repo/branch/PR names, code, or any identifying data. Full schema published at https://github.com/kodustech/kodus-beacon/blob/main/docs/api.md |
+| `KODUS_TELEMETRY_ENDPOINT` | – | url | ⚙️ Both | Optional receiver endpoint override for tests or controlled internal deployments. Leave empty in production to use https://telemetry.kodus.io/v1/heartbeat. |
 
 ## MCP — additional client config
 

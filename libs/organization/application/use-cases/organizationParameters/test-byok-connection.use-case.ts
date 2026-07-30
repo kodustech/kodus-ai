@@ -1,6 +1,9 @@
-import { BYOKProvider } from '@kodus/kodus-common/llm';
+import {
+    anthropicCompatibleRootURL,
+    BYOKProvider,
+} from '@kodus/kodus-common/llm';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
 import { lookup } from 'dns/promises';
@@ -34,7 +37,9 @@ function assertSafeRegion(region: string): void {
  * axios.get — acceptable for a one-shot test probe that doesn't leak
  * response bodies back to the user.
  */
-async function assertSafeOpenAICompatibleUrl(rawUrl: string): Promise<void> {
+export async function assertSafeOpenAICompatibleUrl(
+    rawUrl: string,
+): Promise<void> {
     let parsed: URL;
     try {
         parsed = new URL(rawUrl);
@@ -142,10 +147,14 @@ export class TestByokConnectionUseCase {
         if (byokProvider === BYOKProvider.GOOGLE_VERTEX) {
             if (!apiKey?.trim()) {
                 throw new BadRequestException(
-                    'apiKey (service account JSON, base64-encoded) is required for Google Vertex',
+                    'apiKey (service account JSON, raw or base64-encoded) is required for Google Vertex',
                 );
             }
-            return await this.testVertex(apiKey, input.vertexLocation);
+            return await this.testVertex(
+                apiKey,
+                input.vertexLocation,
+                input.model,
+            );
         }
 
         // Bedrock: prefer the bearer API key path (2025+ auth). Fall back
@@ -189,6 +198,24 @@ export class TestByokConnectionUseCase {
             );
         }
 
+        // Anthropic-compatible: probe the real /v1/messages endpoint with a
+        // 1-token request instead of /v1/models. Some vendors gate the two
+        // differently — Kimi Code's models list is open while chat is
+        // restricted — so a models-list probe can report "connection OK"
+        // for a key whose actual reviews would fail.
+        if (byokProvider === BYOKProvider.ANTHROPIC_COMPATIBLE) {
+            if (!baseURL?.trim()) {
+                throw new BadRequestException(
+                    'baseURL is required for anthropic_compatible',
+                );
+            }
+            return await this.testAnthropicCompatible(
+                apiKey,
+                baseURL,
+                input.model,
+            );
+        }
+
         const { url, headers } = this.buildProbeRequest(byokProvider, apiKey, baseURL);
 
         // SSRF guard: only openai_compatible consumes a user-provided
@@ -217,21 +244,86 @@ export class TestByokConnectionUseCase {
     }
 
     /**
-     * Validate Google Vertex credentials by parsing the SA JSON and asking
-     * google-auth-library for an access token. A failure here is almost
-     * always "key malformed" or "key revoked" — both actionable.
+     * Validate an Anthropic-compatible endpoint (Kimi Code, Z.ai, DeepSeek)
+     * by sending a minimal 1-token /v1/messages request — the same call the
+     * real review path makes. Falls back to GET /v1/models when no model is
+     * provided, accepting the weaker signal.
+     */
+    private async testAnthropicCompatible(
+        apiKey: string,
+        baseURL: string,
+        model?: string,
+    ): Promise<TestByokResult> {
+        const root = anthropicCompatibleRootURL(baseURL);
+
+        // SSRF guard: user-provided base URL, same rules as openai_compatible.
+        await assertSafeOpenAICompatibleUrl(root);
+
+        const headers = {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+        };
+
+        const start = Date.now();
+        try {
+            if (model?.trim()) {
+                await axios.post(
+                    `${root}/v1/messages`,
+                    {
+                        model: model.trim(),
+                        max_tokens: 1,
+                        messages: [{ role: 'user', content: 'ping' }],
+                    },
+                    {
+                        headers,
+                        timeout: TEST_TIMEOUT_MS,
+                        maxRedirects: 0,
+                    },
+                );
+            } else {
+                await axios.get(`${root}/v1/models`, {
+                    headers,
+                    timeout: TEST_TIMEOUT_MS,
+                    maxRedirects: 0,
+                });
+            }
+            return {
+                ok: true,
+                code: 'ok',
+                latencyMs: Date.now() - start,
+            };
+        } catch (err) {
+            return this.normalizeError(err, Date.now() - start);
+        }
+    }
+
+    /**
+     * Validate a Google Vertex BYOK config end-to-end: parse the SA JSON,
+     * exchange it for an access token, and — crucially — probe the *actual
+     * configured model* with a 1-token call on the same endpoint the review
+     * uses (claude-* → publishers/anthropic :rawPredict; otherwise
+     * publishers/google :generateContent). This surfaces "model not
+     * available in this region" at Test time instead of mid-review, which
+     * is the whole point of the Test button.
      */
     private async testVertex(
-        base64SaJson: string,
+        saJsonOrBase64: string,
         location?: string,
+        modelId?: string,
     ): Promise<TestByokResult> {
         const start = Date.now();
 
+        // Accept the SA key as raw JSON (pasted file contents) or as
+        // base64-encoded JSON. base64 of a JSON object always starts with
+        // `ey` (from `{"`); raw JSON starts with `{`, so the leading char
+        // disambiguates the two forms unambiguously.
         let credentials: { project_id?: string; client_email?: string };
         try {
-            const decoded = Buffer.from(base64SaJson, 'base64').toString(
-                'utf-8',
-            );
+            const trimmed = (saJsonOrBase64 || '').trim();
+            const decoded = trimmed.startsWith('{')
+                ? trimmed
+                : Buffer.from(trimmed, 'base64').toString('utf-8');
             credentials = JSON.parse(decoded);
         } catch {
             return {
@@ -239,7 +331,7 @@ export class TestByokConnectionUseCase {
                 code: 'bad_request',
                 latencyMs: Date.now() - start,
                 message:
-                    "The service account JSON isn't valid base64 or isn't valid JSON. Re-encode the key with `base64 -w 0 sa.json` and paste the result.",
+                    "The service account key isn't valid JSON (or base64-encoded JSON). Paste the contents of your service account JSON file.",
             };
         }
 
@@ -260,11 +352,13 @@ export class TestByokConnectionUseCase {
                 scopes: ['https://www.googleapis.com/auth/cloud-platform'],
             });
             const client = await auth.getClient();
-            const region = location?.trim() || 'us-central1';
+            // Default to the global endpoint — serves all Claude + Gemini
+            // models on Vertex, so users don't need to know per-model region
+            // availability (us-central1 doesn't serve Claude).
+            const region = location?.trim() || 'global';
             assertSafeRegion(region);
             // GCP project IDs: 6-30 chars, lowercase letters/digits/hyphens,
-            // must start with a letter. Prevents path traversal via the
-            // project_id segment of the URL.
+            // must start with a letter. Sanity-check the SA key's project.
             if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(credentials.project_id)) {
                 return {
                     ok: false,
@@ -274,18 +368,91 @@ export class TestByokConnectionUseCase {
                         'The service account JSON has an unusual project_id. Expected lowercase letters, digits, and hyphens.',
                 };
             }
-            const probeUrl = `https://${region}-aiplatform.googleapis.com/v1/projects/${credentials.project_id}/locations/${region}/publishers/google/models`;
-            const res = await client.request({
-                url: probeUrl,
-                method: 'GET',
-                timeout: TEST_TIMEOUT_MS,
-            });
-            return {
-                ok: true,
-                code: 'ok',
-                latencyMs: Date.now() - start,
-                httpStatus: res.status,
-            };
+            // Global endpoint has no region prefix; regional endpoints do.
+            const host =
+                region === 'global'
+                    ? 'aiplatform.googleapis.com'
+                    : `${region}-aiplatform.googleapis.com`;
+            const projectPath = `projects/${credentials.project_id}/locations/${region}`;
+            const model = (modelId || '').trim();
+
+            // No model to validate (shouldn't happen for BYOK) → fall back to
+            // a pure auth/API-enabled probe via ListModels.
+            if (!model) {
+                const res = await client.request({
+                    url: `https://${host}/v1/${projectPath}/models?pageSize=1`,
+                    method: 'GET',
+                    timeout: TEST_TIMEOUT_MS,
+                });
+                return {
+                    ok: true,
+                    code: 'ok',
+                    latencyMs: Date.now() - start,
+                    httpStatus: res.status,
+                };
+            }
+
+            // Guard the model id before putting it in the URL path.
+            if (!/^[a-zA-Z0-9][a-zA-Z0-9._@-]*$/.test(model)) {
+                return {
+                    ok: false,
+                    code: 'bad_request',
+                    latencyMs: Date.now() - start,
+                    message: `"${model}" doesn't look like a valid Vertex model id.`,
+                };
+            }
+
+            // Probe the REAL model with a 1-token call on the same endpoint
+            // the review uses, so an unavailable model/region fails here.
+            const isClaude = /^claude[-_]/i.test(model);
+            const publisher = isClaude ? 'anthropic' : 'google';
+            const verb = isClaude ? 'rawPredict' : 'generateContent';
+            const probeUrl = `https://${host}/v1/${projectPath}/publishers/${publisher}/models/${model}:${verb}`;
+            const data = isClaude
+                ? {
+                      anthropic_version: 'vertex-2023-10-16',
+                      messages: [{ role: 'user', content: 'ping' }],
+                      max_tokens: 1,
+                  }
+                : {
+                      contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
+                      generationConfig: { maxOutputTokens: 1 },
+                  };
+
+            try {
+                const res = await client.request({
+                    url: probeUrl,
+                    method: 'POST',
+                    data,
+                    timeout: TEST_TIMEOUT_MS,
+                });
+                return {
+                    ok: true,
+                    code: 'ok',
+                    latencyMs: Date.now() - start,
+                    httpStatus: res.status,
+                };
+            } catch (probeErr) {
+                const status =
+                    (probeErr as any)?.response?.status ??
+                    (probeErr as any)?.status ??
+                    (probeErr as any)?.code;
+                if (status === 404) {
+                    // Vertex returns 404 NOT_FOUND both when the model doesn't
+                    // exist in the region AND when the project hasn't enabled
+                    // it. The latter is the common case for Anthropic models
+                    // (each must be enabled in Model Garden first), so guide
+                    // the user there.
+                    const provider = isClaude ? 'Anthropic' : 'Google';
+                    return {
+                        ok: false,
+                        code: 'bad_request',
+                        latencyMs: Date.now() - start,
+                        message: `Your Google Cloud project doesn't have access to "${model}" in region "${region}". Enable it for the project in Vertex AI Model Garden (search "${provider}" → the model → "Enable"/accept terms), then test again. If it's already enabled, double-check the model id and region.`,
+                    };
+                }
+                throw probeErr; // 401/403/429/5xx → normalizeError below
+            }
         } catch (err) {
             return this.normalizeError(err, Date.now() - start);
         }

@@ -1,0 +1,39 @@
+name: Type-check Gate (libs)
+
+# Scoped, high-signal type gate: fails a PR on TS2304 ("Cannot find name")
+# errors under libs/ — the dangling-reference class that shipped the dedup
+# `googleKey` ReferenceError as a silent runtime degrade. The build transpiles
+# without type-checking, so nothing else catches this. NOT a full `tsc` green
+# (apps/web has a large pre-existing backlog); see scripts/typecheck-libs-gate.sh.
+
+on:
+    pull_request:
+        paths:
+            - "libs/**"
+            - "scripts/typecheck-libs-gate.sh"
+            - ".github/workflows/typecheck-gate.yml"
+            - "tsconfig*.json"
+
+permissions:
+    contents: read
+
+jobs:
+    libs-ts2304:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v6.0.2
+
+            - uses: pnpm/action-setup@v4
+
+            - name: Set up Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Fail on undeclared-name (TS2304) errors in libs/
+              run: pnpm run typecheck:libs-gate

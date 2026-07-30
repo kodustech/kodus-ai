@@ -1,4 +1,4 @@
-import { ContextPack } from '@kodus/flow';
+import { ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { CrossFileContextSnippet } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { LimitationType } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -1301,11 +1301,6 @@ Note: If no changes are necessary, omit the Original Code and Suggested Code sec
 };
 
 export const prompt_codereview_system_gemini = (payload: CodeReviewPayload) => {
-    const maxSuggestionsNote =
-        payload?.limitationType === 'file' && payload?.maxSuggestionsParams
-            ? `Note: Provide up to ${payload.maxSuggestionsParams} code suggestions.`
-            : 'Note: No limit on number of suggestions.';
-
     const languageNote = payload?.languageResultPrompt || 'en-US';
     const memoriesBlock = formatMemoriesSection(payload?.memories);
 
@@ -1479,13 +1474,6 @@ Your final output should be **ONLY** a JSON object with the following structure:
 // NOTE: v2 overrides are applied directly in prompt_codereview_system_gemini_v2
 
 export const prompt_codereview_user_gemini = (payload: CodeReviewPayload) => {
-    const maxSuggestionsNote =
-        payload?.limitationType === 'file' && payload?.maxSuggestionsParams
-            ? `Note: Provide up to ${payload.maxSuggestionsParams} code suggestions.`
-            : 'Note: No limit on number of suggestions.';
-
-    const languageNote = payload?.languageResultPrompt || 'en-US';
-
     return `## Code Under Review
 Below is the file information to analyze:
 

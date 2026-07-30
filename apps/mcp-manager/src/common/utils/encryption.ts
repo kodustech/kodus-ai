@@ -30,8 +30,7 @@ export class EncryptionUtils {
 
             return `${iv.toString('hex')}:${encrypted}`;
         } catch (error) {
-            console.error('Encryption failed:', error.message);
-            throw new Error('Encryption failed.');
+            throw new Error('Encryption failed.', { cause: error });
         }
     }
 
@@ -65,8 +64,7 @@ export class EncryptionUtils {
 
             return decrypted;
         } catch (error) {
-            console.error('Decryption failed:', error.message);
-            throw new Error('Decryption failed.');
+            throw new Error('Decryption failed.', { cause: error });
         }
     }
 }

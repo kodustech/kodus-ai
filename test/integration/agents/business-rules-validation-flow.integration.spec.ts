@@ -1,7 +1,6 @@
 import { BusinessRulesValidationAgentUseCase } from '@libs/agents/application/use-cases/business-rules-validation-agent.use-case';
-import { buildBusinessRulesAnalysisPrompt } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/analysis-prompt.builder';
-import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/businessRulesValidationAgent';
-import { BaseAgentProvider } from '@libs/agents/infrastructure/services/kodus-flow/base-agent.provider';
+import { buildBusinessRulesAnalysisPrompt } from '@libs/agents/infrastructure/services/agents/business-rules-validation/analysis-prompt.builder';
+import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 import {
     SkillCapabilityRuntimeConfig,
     ToolCaller,
@@ -166,10 +165,6 @@ describe('BusinessRulesValidation flow integration', () => {
             genericSkillRunner as any,
             metricsCollector as any,
         );
-        jest.spyOn(
-            BaseAgentProvider.prototype as any,
-            'createLLMAdapter',
-        ).mockReturnValue(analyzerAdapter);
 
         useCase = new BusinessRulesValidationAgentUseCase(provider);
     });
@@ -281,6 +276,14 @@ describe('BusinessRulesValidation flow integration', () => {
             capabilityRuntime: createCapabilityRuntime(),
         });
         const runLLMStepSpy = jest.spyOn(provider as any, 'runLLMStep');
+        // The limitation path localizes the user-facing message via an LLM
+        // (formatUserFacingMessage → callLLM) when userLanguage !== English.
+        // That LLM call is separate from the analyzer the test asserts is never
+        // run — stub it so the short-circuit assertion isn't a real LLM round-trip.
+        jest.spyOn(
+            provider as any,
+            'formatUserFacingMessage',
+        ).mockImplementation(async (msg: string) => msg);
 
         const result = await useCase.execute({
             organizationAndTeamData,

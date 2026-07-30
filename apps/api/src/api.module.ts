@@ -2,6 +2,7 @@ import { LLMModule } from '@kodus/kodus-common/llm';
 import { AgentsModule } from '@libs/agents/modules/agents.module';
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module';
 import { AnalyticsModule } from '@libs/analytics/modules/analytics.module';
+import { SpendLimitModule } from '@libs/analytics/modules/spend-limit.module';
 import { FeatureGateModule } from '@libs/feature-gate/modules/feature-gate.module';
 import { TelemetryModule } from '@libs/telemetry/modules/telemetry.module';
 import { AnalyticsWarehouseModule } from '@libs/ee/analytics-warehouse';
@@ -33,7 +34,7 @@ import { IntegrationConfigModule } from '@libs/integrations/modules/config.modul
 import { IntegrationModule } from '@libs/integrations/modules/integrations.module';
 import { IssuesModule } from '@libs/issues/issues.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
-import { GithubIssuesMcpModule } from '@libs/mcp-server/github-issues-mcp.module';
+import { KodusIssuesMcpModule } from '@libs/mcp-server/kodus-issues-mcp.module';
 import { McpModule } from '@libs/mcp-server/mcp.module';
 import { OrganizationOnboardingModule } from '@libs/organization/modules/organization-onboarding.module';
 import { OrganizationModule } from '@libs/organization/modules/organization.module';
@@ -60,13 +61,14 @@ import { CliReviewsController } from './controllers/cli-reviews.controller';
 import { CodeBaseController } from './controllers/codeBase.controller';
 import { CodeManagementController } from './controllers/codeManagement.controller';
 import { CodeReviewSettingLogController } from './controllers/codeReviewSettingLog.controller';
-import { DryRunController } from './controllers/dryRun.controller';
+import { GithubController } from './controllers/github.controller';
 import { IntegrationController } from './controllers/integration.controller';
 import { IntegrationConfigController } from './controllers/integrationConfig.controller';
 import { IssuesController } from './controllers/issues.controller';
 import { KodyRulesController } from './controllers/kodyRules.controller';
 import { LicenseController } from './controllers/license.controller';
 import { OrganizationController } from './controllers/organization.controller';
+import { TrialExtensionNotifierService } from './services/trial-extension-notifier.service';
 import { OrganizationParametersController } from './controllers/organizationParameters.controller';
 import { ParametersController } from './controllers/parameters.controller';
 import { PermissionsController } from './controllers/permissions.controller';
@@ -74,7 +76,7 @@ import {
     CockpitCodeHealthController,
     CockpitController,
     CockpitProductivityController,
-    CockpitWeeklyRecapController,
+    CockpitReviewAnalyticsController,
 } from './controllers/cockpit.controller';
 import { PullRequestController } from './controllers/pullRequest.controller';
 import { PullRequestMessagesController } from './controllers/pullRequestMessages.controller';
@@ -85,6 +87,7 @@ import { TeamCliKeyController } from './controllers/team-cli-key.controller';
 import { TeamController } from './controllers/team.controller';
 import { TeamMembersController } from './controllers/teamMembers.controller';
 import { TokenUsageController } from './controllers/tokenUsage.controller';
+import { SpendLimitController } from './controllers/spendLimit.controller';
 import { UsersController } from './controllers/user.controller';
 import { CronModule } from './cron/cron.module';
 import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
@@ -127,6 +130,7 @@ import { NotificationController } from './controllers/notification.controller';
         IntegrationConfigModule,
         DryRunModule,
         AnalyticsModule,
+        SpendLimitModule,
         AnalyticsWarehouseModule.forRoot(),
         TelemetryModule,
         FeatureGateModule,
@@ -140,7 +144,7 @@ import { NotificationController } from './controllers/notification.controller';
         PermissionValidationModule,
         LicenseModule,
         McpModule.forRoot(),
-        GithubIssuesMcpModule.forRoot(),
+        KodusIssuesMcpModule.forRoot(),
         HealthModule,
         CronModule,
         SSOModule,
@@ -150,7 +154,6 @@ import { NotificationController } from './controllers/notification.controller';
     ],
     controllers: [
         CodeManagementController,
-        DryRunController,
         CodeReviewSettingLogController,
         PullRequestMessagesController,
         CodeBaseController,
@@ -167,7 +170,9 @@ import { NotificationController } from './controllers/notification.controller';
         AgentController,
         AuthController,
         TokenUsageController,
+        SpendLimitController,
         PermissionsController,
+        GithubController,
         IntegrationController,
         IntegrationConfigController,
         PullRequestController,
@@ -184,9 +189,9 @@ import { NotificationController } from './controllers/notification.controller';
         CockpitController,
         CockpitCodeHealthController,
         CockpitProductivityController,
-        CockpitWeeklyRecapController,
+        CockpitReviewAnalyticsController,
         NotificationController,
     ],
-    providers: [LangfuseShutdownProvider],
+    providers: [LangfuseShutdownProvider, TrialExtensionNotifierService],
 })
 export class ApiModule {}

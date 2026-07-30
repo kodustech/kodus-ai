@@ -133,7 +133,7 @@ export const ssoCookieDomain: Scenario = {
             // landed, not just "tests passed".
             cookieDomain: passLine?.match(/Domain=([^,]+)/)?.[1]?.trim(),
             secureFlag: passLine?.includes("Secure=true") ?? false,
-            note: "Droplet kept alive for follow-up debugging. Tear down with `yarn sso-e2e:droplet:destroy --name sso-e2e`.",
+            note: "Droplet kept alive for follow-up debugging. Tear down with `pnpm run sso-e2e:droplet:destroy --name sso-e2e`.",
         };
     },
 };

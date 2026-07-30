@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { LibraryKodyRule } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
@@ -32,11 +32,6 @@ export class FindRecommendedKodyRulesUseCase implements IUseCase {
         limit: number = 10,
     ): Promise<LibraryKodyRule[]> {
         try {
-            const mcpRules =
-                await this.kodyRulesService.getRecommendedRulesByMCP(
-                    organizationAndTeamData,
-                );
-
             let repositories: any[] = [];
             try {
                 repositories =
@@ -83,7 +78,7 @@ export class FindRecommendedKodyRulesUseCase implements IUseCase {
             );
             const flattenedSuggestionRules = allSuggestionRules.flat();
 
-            const combinedRules = [...mcpRules, ...flattenedSuggestionRules];
+            const combinedRules = [...flattenedSuggestionRules];
 
             const uniqueRulesMap = new Map<string, LibraryKodyRule>();
             combinedRules.forEach((rule) => {
@@ -102,7 +97,6 @@ export class FindRecommendedKodyRulesUseCase implements IUseCase {
                 metadata: {
                     organizationId: organizationAndTeamData.organizationId,
                     repositoriesAnalyzed: selectedRepos.length,
-                    mcpRulesCount: mcpRules.length,
                     suggestionRulesCount: flattenedSuggestionRules.length,
                     totalUniqueRules: uniqueRules.length,
                     returnedRules: limitedRules.length,

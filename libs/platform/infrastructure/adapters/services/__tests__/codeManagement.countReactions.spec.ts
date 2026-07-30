@@ -3,7 +3,7 @@ import { PlatformIntegrationFactory } from '../platformIntegration.factory';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { ICodeManagementService } from '@libs/platform/domain/platformIntegrations/interfaces/code-management.interface';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

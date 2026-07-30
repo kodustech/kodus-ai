@@ -12,7 +12,7 @@ import { writeFileSync } from 'fs';
  * exits non-zero when ANY combination drifts above threshold.
  *
  * Usage:
- *   yarn analytics:parity-vs-bq \
+ *   pnpm run analytics:parity-vs-bq \
  *     --new https://api.staging.kodus.io \
  *     --legacy https://analytics.staging.kodus.io \
  *     --orgs org-1,org-2,org-3 \
@@ -29,9 +29,9 @@ import { writeFileSync } from 'fs';
  *   e.g. --orgs 0a3dd273-...=04bd288b-...:kodus-prod
  *
  * Smoke test (compares the new endpoint against itself — should be 100% MATCH):
- *   yarn analytics:parity-vs-bq \
+ *   pnpm run analytics:parity-vs-bq \
  *     --new http://localhost:3001 --legacy http://localhost:3001 \
- *     --orgs <org-uuid> --jwt-new $(yarn -s analytics:mint-dev-jwt --email ...)
+ *     --orgs <org-uuid> --jwt-new $(pnpm -s analytics:mint-dev-jwt --email ...)
  */
 
 interface OrgPair {

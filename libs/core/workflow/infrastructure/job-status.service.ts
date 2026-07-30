@@ -13,7 +13,7 @@ import {
 } from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
 
 import { WorkflowJobRepository } from './repositories/workflow-job.repository';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 @Injectable()
 export class JobStatusService implements IJobStatusService {

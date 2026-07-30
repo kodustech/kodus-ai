@@ -29,6 +29,7 @@
 // `[stripe-billing] FAIL sub-flow-N: …` on the first failure.
 
 import { chromium } from "playwright";
+import { applyWafBypass } from "./waf-bypass.mjs";
 import { writeFileSync } from "node:fs";
 
 const {
@@ -656,6 +657,7 @@ const browser = await chromium.launch({ headless });
 try {
     // Sub-flow #1: free → paid via Checkout (sets up sub-flow #3).
     const ctxFree = await browser.newContext();
+    await applyWafBypass(ctxFree);
     let freeDeps;
     try {
         freeDeps = await subFlow1Checkout(ctxFree, STRIPE_E2E_FREE_EMAIL, "1");
@@ -677,6 +679,7 @@ try {
 
     // Sub-flow #2: trial → paid via Checkout (sets up sub-flow #4).
     const ctxTrial = await browser.newContext();
+    await applyWafBypass(ctxTrial);
     let trialDeps;
     try {
         trialDeps = await subFlow1Checkout(ctxTrial, STRIPE_E2E_TRIAL_EMAIL, "2");

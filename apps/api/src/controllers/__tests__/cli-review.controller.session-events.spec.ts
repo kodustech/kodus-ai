@@ -22,6 +22,7 @@ jest.mock(
 
 import { UnauthorizedException } from '@nestjs/common';
 import { CliReviewController } from '../cli/cli-review.controller';
+import { ValidateCliKeyUseCase } from '@libs/cli-review/application/use-cases/validate-cli-key.use-case';
 
 describe('CliReviewController.ingestSessionEvent', () => {
     let controller: CliReviewController;
@@ -47,6 +48,18 @@ describe('CliReviewController.ingestSessionEvent', () => {
                 .mockResolvedValue({ allowed: true, remaining: 999 }),
         };
 
+        // Construct the real use case against the same mocked services
+        // so the auth flow inside ingestSessionEvent still resolves
+        // through `teamCliKeyService.validateKey` like before.
+        const validateCliKeyUseCase = new ValidateCliKeyUseCase(
+            teamCliKeyService as any,
+            {} as any, // teamService — JWT path not exercised here
+            {} as any, // authService
+            {} as any, // cliDeviceService
+            {} as any, // jwtService
+            { get: () => ({ secret: 'test' }) } as any,
+        );
+
         controller = new CliReviewController(
             {} as any, // executeCliReviewUseCase
             { execute: jest.fn() } as any, // enqueueCliReviewUseCase
@@ -56,6 +69,11 @@ describe('CliReviewController.ingestSessionEvent', () => {
             {} as any, // submitCliSessionCaptureUseCase
             {} as any, // trialRateLimiter
             authenticatedRateLimiter as any, // authenticatedRateLimiter
+            {} as any, // githubPublicPrService
+            {} as any, // publicPrReviewUseCase
+            {} as any, // listFeaturedPublicReviewsUseCase
+            {} as any, // getFeaturedPublicReviewUseCase
+            validateCliKeyUseCase as any, // validateCliKeyUseCase
             teamCliKeyService as any, // teamCliKeyService
             {} as any, // teamService
             {} as any, // authService

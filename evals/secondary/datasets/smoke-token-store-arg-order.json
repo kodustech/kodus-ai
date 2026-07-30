@@ -1,0 +1,42 @@
+{
+  "prId": "smoke-token-store-arg-order",
+  "goldenComments": [
+    "tokenStore.put is called with (userId, token, cacheTtlSeconds) but the store expects (key, ttlSeconds, value) — argument order is wrong and will store the TTL as the token value.",
+    "No size bound on the denial cache allows an attacker to exhaust memory with random resource names."
+  ],
+  "findings": [
+    {
+      "relevantFile": "src/auth/oauth-sync.ts",
+      "relevantLinesStart": 20,
+      "relevantLinesEnd": 20,
+      "severity": "high",
+      "label": "bug",
+      "oneSentenceSummary": "tokenStore.put argument order is wrong",
+      "suggestionContent": "WHAT: tokenStore.put is called with (userId, token, cacheTtlSeconds). WHY: The store signature is put(key, ttlSeconds, value), so the token is stored as the TTL and the real TTL becomes the value. HOW: Call tokenStore.put(userId, cacheTtlSeconds, token).",
+      "existingCode": "await tokenStore.put(userId, token, cacheTtlSeconds);",
+      "improvedCode": "await tokenStore.put(userId, cacheTtlSeconds, token);"
+    },
+    {
+      "relevantFile": "src/auth/oauth-sync.ts",
+      "relevantLinesStart": 20,
+      "relevantLinesEnd": 20,
+      "severity": "high",
+      "label": "bug",
+      "oneSentenceSummary": "Wrong argument order to tokenStore.put",
+      "suggestionContent": "WHAT: Arguments to tokenStore.put are in the wrong order. WHY: This corrupts the cache entry. HOW: Swap token and cacheTtlSeconds.",
+      "existingCode": "await tokenStore.put(userId, token, cacheTtlSeconds);",
+      "improvedCode": "await tokenStore.put(userId, cacheTtlSeconds, token);"
+    },
+    {
+      "relevantFile": "src/cache/token-store.ts",
+      "relevantLinesStart": 12,
+      "relevantLinesEnd": 18,
+      "severity": "low",
+      "label": "performance",
+      "oneSentenceSummary": "Missing log on cache write failure",
+      "suggestionContent": "WHAT: put() swallows redis errors. WHY: Operators cannot diagnose write failures. HOW: Log the error before rethrowing.",
+      "existingCode": "await redis.set(key, value, ttlSeconds);",
+      "improvedCode": "try { await redis.set(key, value, ttlSeconds); } catch (e) { logger.error(e); throw e; }"
+    }
+  ]
+}

@@ -1,5 +1,3 @@
-import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
-
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
     ByokErrorCounter,
@@ -11,7 +9,7 @@ import { NotificationEvent } from '../domain/catalog/events';
 import { NotificationRateLimiter } from './notification-rate-limiter.service';
 import { NotificationService } from './notification.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         warn: jest.fn(),
@@ -104,11 +102,14 @@ describe('ByokErrorCounter', () => {
     });
 
     it('does not emit while count is below threshold', async () => {
-        const existing = Array.from({ length: BYOK_ERROR_THRESHOLD - 2 }, () => ({
-            ts: NOW - 1_000,
-            provider: PROVIDER,
-            error: ERROR,
-        }));
+        const existing = Array.from(
+            { length: BYOK_ERROR_THRESHOLD - 2 },
+            () => ({
+                ts: NOW - 1_000,
+                provider: PROVIDER,
+                error: ERROR,
+            }),
+        );
         cache.getFromCache.mockResolvedValueOnce(existing);
 
         await counter.record({
@@ -121,11 +122,14 @@ describe('ByokErrorCounter', () => {
     });
 
     it('emits BYOK_LLM_ERRORS_THRESHOLD to OWNER once threshold is reached', async () => {
-        const existing = Array.from({ length: BYOK_ERROR_THRESHOLD - 1 }, () => ({
-            ts: NOW - 1_000,
-            provider: PROVIDER,
-            error: 'earlier',
-        }));
+        const existing = Array.from(
+            { length: BYOK_ERROR_THRESHOLD - 1 },
+            () => ({
+                ts: NOW - 1_000,
+                provider: PROVIDER,
+                error: 'earlier',
+            }),
+        );
         cache.getFromCache.mockResolvedValueOnce(existing);
 
         await counter.record({
@@ -151,17 +155,18 @@ describe('ByokErrorCounter', () => {
                 windowEnd: expect.any(String),
             }),
         );
-        expect(emitArg.recipients).toEqual([
-            { kind: 'role', role: Role.OWNER },
-        ]);
+        expect(emitArg.recipients).toBeUndefined();
     });
 
     it('resets the rolling list after firing so a second emit needs a fresh batch', async () => {
-        const existing = Array.from({ length: BYOK_ERROR_THRESHOLD - 1 }, () => ({
-            ts: NOW - 1_000,
-            provider: PROVIDER,
-            error: 'earlier',
-        }));
+        const existing = Array.from(
+            { length: BYOK_ERROR_THRESHOLD - 1 },
+            () => ({
+                ts: NOW - 1_000,
+                provider: PROVIDER,
+                error: 'earlier',
+            }),
+        );
         cache.getFromCache.mockResolvedValueOnce(existing);
 
         await counter.record({
@@ -176,11 +181,14 @@ describe('ByokErrorCounter', () => {
     });
 
     it('skips the emit when cooldown is still active', async () => {
-        const existing = Array.from({ length: BYOK_ERROR_THRESHOLD - 1 }, () => ({
-            ts: NOW - 1_000,
-            provider: PROVIDER,
-            error: 'earlier',
-        }));
+        const existing = Array.from(
+            { length: BYOK_ERROR_THRESHOLD - 1 },
+            () => ({
+                ts: NOW - 1_000,
+                provider: PROVIDER,
+                error: 'earlier',
+            }),
+        );
         cache.getFromCache.mockResolvedValueOnce(existing);
         rateLimiter.shouldEmit.mockResolvedValueOnce(false);
 
@@ -211,11 +219,14 @@ describe('ByokErrorCounter', () => {
     });
 
     it('never throws — emit failures must not surface to LLM call sites', async () => {
-        const existing = Array.from({ length: BYOK_ERROR_THRESHOLD - 1 }, () => ({
-            ts: NOW - 1_000,
-            provider: PROVIDER,
-            error: 'earlier',
-        }));
+        const existing = Array.from(
+            { length: BYOK_ERROR_THRESHOLD - 1 },
+            () => ({
+                ts: NOW - 1_000,
+                provider: PROVIDER,
+                error: 'earlier',
+            }),
+        );
         cache.getFromCache.mockResolvedValueOnce(existing);
         notifications.emit.mockRejectedValueOnce(new Error('broker down'));
 

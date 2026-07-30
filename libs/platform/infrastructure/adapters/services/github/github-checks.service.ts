@@ -1,8 +1,9 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     CheckConclusion,
     CheckStatus,
     CreateCheckRunParams,
+    FindCheckRunParams,
     IChecksAdapter,
     UpdateCheckRunParams,
 } from '@libs/core/infrastructure/pipeline/interfaces/checks-adapter.interface';
@@ -44,6 +45,62 @@ export class GithubChecksService implements IChecksAdapter {
     private readonly logger = createLogger(GithubChecksService.name);
 
     constructor(private readonly gitHubService: GithubService) {}
+
+    async findCheckRun(params: FindCheckRunParams): Promise<number | null> {
+        const { organizationAndTeamData, repository, headSha, name } = params;
+
+        try {
+            const authDetails = await this.gitHubService.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+
+            if (authDetails.authMode === AuthMode.TOKEN) {
+                return null;
+            }
+
+            const octokit = await this.gitHubService.getAuthenticatedOctokit(
+                organizationAndTeamData,
+            );
+
+            const response = await octokit.checks.listForRef({
+                owner: repository.owner,
+                repo: repository.name,
+                ref: headSha,
+                check_name: name,
+                filter: 'latest',
+                per_page: 1,
+            });
+
+            const checkRun = response.data.check_runs?.[0];
+
+            if (!checkRun) {
+                return null;
+            }
+
+            // A completed check run cannot be reopened: PATCHing status back
+            // to in_progress returns 200 but GitHub silently keeps
+            // status=completed/conclusion. Only queued/in_progress runs are
+            // reusable — for completed ones the caller creates a fresh run
+            // with the same name, which the PR UI surfaces as the latest.
+            if (checkRun.status === GithubCheckStatus.COMPLETED) {
+                return null;
+            }
+
+            return checkRun.id;
+        } catch (error) {
+            this.logger.warn({
+                message: `Failed to look up existing GitHub Check Run`,
+                context: GithubChecksService.name,
+                error,
+                metadata: {
+                    repository: repository.name,
+                    headSha,
+                    name,
+                },
+            });
+            return null;
+        }
+    }
 
     async createCheckRun(params: CreateCheckRunParams): Promise<number | null> {
         const {

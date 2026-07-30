@@ -24,9 +24,6 @@ reviewOptions:
     performance: true
     cross_file: true
 suggestionControl:
-    groupingMode: 'full'
-    limitationType: 'pr'
-    maxSuggestions: 9
     severityLevelFilter: 'medium'
 ignoredTitleKeywords: []
 automatedReviewActive: true

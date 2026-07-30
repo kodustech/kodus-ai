@@ -13,8 +13,8 @@ import { useCodeReviewConfig } from "src/app/(app)/settings/_components/context"
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { cn } from "src/core/utils/components";
 
-import { useCodeReviewRouteParams } from "../../../../_hooks";
 import { ReviewCadenceType } from "../../../_types";
+import { useCodeReviewRouteParams } from "../../../../_hooks";
 
 /* Match @variable-name, @variable_name, @variableName */
 export const VARIABLE_REGEX = /\@((?:\w(?:[-_]?))+)/g;
@@ -41,7 +41,7 @@ const REVIEW_CADENCE_COPY: Record<
     [ReviewCadenceType.AUTO_PAUSE]: {
         label: "⏸️ Auto-Pause Mode",
         description:
-            "Kody reviews the first push automatically, then pauses if you make 3+ pushes in 15 minutes. Use @kody resume to continue.",
+            "Kody reviews the first push automatically, then pauses if you make 3+ pushes in 15 minutes. Use @kody start-review to continue.",
     },
     [ReviewCadenceType.MANUAL]: {
         label: "✋ Manual Review",
@@ -57,7 +57,7 @@ const ReviewCadencePreview = () => {
         automationEnabled === false
             ? ReviewCadenceType.MANUAL
             : (config?.reviewCadence?.type?.value ??
-              ReviewCadenceType.AUTOMATIC);
+                ReviewCadenceType.AUTOMATIC);
     const cadenceCopy =
         REVIEW_CADENCE_COPY[cadenceType] ??
         REVIEW_CADENCE_COPY[ReviewCadenceType.AUTOMATIC];
@@ -95,9 +95,7 @@ const ReviewScopePreview = () => {
     const repository = configValue?.repositories?.find(
         (r) => r.id === repositoryId,
     );
-    const group = repository?.directories?.find(
-        (d) => d.id === directoryId,
-    );
+    const group = repository?.directories?.find((d) => d.id === directoryId);
     const folders = (group as any)?.folders ?? [];
     const primaryPath = folders[0]?.path ?? "/src/example";
     const remaining = folders.length - 1;
@@ -313,6 +311,64 @@ export const dropdownItems = {
             "Shows which configuration level was used to review this PR",
         example: <ReviewScopePreview />,
     },
+    agentPrompt: {
+        label: "Agent Prompt",
+        description:
+            "All review suggestions consolidated into a single prompt block for AI agents",
+        example: (
+            <div className="text-sm">
+                <p className="mb-2 font-semibold">
+                    🛠️ Kody Code Review — 2 suggested fixes.
+                </p>
+                <p className="text-text-secondary mb-2">
+                    Paste the prompt below to your agent and all review fixed at
+                    once!
+                </p>
+                <details className="border-border bg-card-lv1 rounded-md border">
+                    <summary className="bg-card-lv2 hover:bg-card-lv3 cursor-pointer px-3 py-2 font-medium">
+                        🛠️ Open Agent Prompt
+                    </summary>
+                    <div className="border-border border-t p-3">
+                        <div className="overflow-x-auto rounded-md bg-black/90 p-3 font-mono text-xs text-green-400">
+                            <p className="mb-2 text-white">
+                                A code review identified the following issues in
+                                this pull request. Each section describes what
+                                was found and includes a reference
+                                implementation where available.
+                            </p>
+                            <p className="mb-2 font-semibold text-white">
+                                Files involved:
+                            </p>
+                            <p className="mb-2 text-white">
+                                - src/utils/dateUtils.ts:8
+                            </p>
+                            <p className="mb-2 text-white">
+                                - apps/frontend/vite.config.ts:13
+                            </p>
+                            <hr className="my-2 border-white/20" />
+                            <p className="mb-2 font-semibold text-yellow-400">
+                                ### [1/2] src/utils/dateUtils.ts:8
+                            </p>
+                            <p className="mb-2 text-white">
+                                Issue identified during code review:
+                            </p>
+                            <p className="mb-2 text-white">
+                                Incomplete string literal in
+                                `formatDistanceToNow`...
+                            </p>
+                            <hr className="my-2 border-white/20" />
+                            <p className="text-white/80">
+                                Review each issue in context, use the reference
+                                implementations as guidance, and apply fixes
+                                that are consistent with the surrounding
+                                codebase.
+                            </p>
+                        </div>
+                    </div>
+                </details>
+            </div>
+        ),
+    },
 } satisfies Record<
     string,
     {
@@ -321,3 +377,12 @@ export const dropdownItems = {
         example: React.JSX.Element;
     }
 >;
+
+/**
+ * Placeholders that only make sense on the END review message — they depend on
+ * data produced during the review (e.g. line comments). Hidden from the Start
+ * message's "Add context" list, where that data doesn't exist yet.
+ */
+export const END_ONLY_PLACEHOLDERS = new Set<keyof typeof dropdownItems>([
+    "agentPrompt",
+]);

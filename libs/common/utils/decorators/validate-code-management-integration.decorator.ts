@@ -1,4 +1,4 @@
-import { SimpleLogger } from '@kodus/flow/dist/observability/logger';
+import { SimpleLogger } from '@libs/core/log/logger';
 
 import { ConfigurationMissingException } from '@libs/core/infrastructure/filters/configuration-missing.exception';
 import {

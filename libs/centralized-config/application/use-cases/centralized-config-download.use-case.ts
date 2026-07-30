@@ -1,11 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { promises as fsPromises } from 'fs';
 import * as yaml from 'js-yaml';
 
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
 import { CentralizedConfigPrService } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import { buildGroupFolderName } from '@libs/centralized-config/utils/path-encoder';
+import { formatRuleToYaml } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
 import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-rules-in-organization-by-filter.use-case';
 import { CreateOrUpdateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/create-or-update.use-case';
 import {
@@ -173,15 +175,25 @@ export class CentralizedConfigDownloadUseCase {
                                     },
                                 );
 
-                            const dirPath = this.normalizeDirectoryPath(
-                                dir.folders?.[0]?.path ?? (dir as any).path,
-                            );
+                            const hasFolders =
+                                Array.isArray(dir.folders) &&
+                                dir.folders.length > 0;
 
-                            if (!dirPath) {
+                            if (!hasFolders) {
                                 return null;
                             }
 
-                            const entryName = `${repoFolderName}/${dirPath}/kodus-config.yml`;
+                            let groupFolderName: string;
+                            try {
+                                groupFolderName = buildGroupFolderName(
+                                    dir.folders.map((f) => f.path),
+                                );
+                            } catch {
+                                return null;
+                            }
+
+                            const groupBasePath = `${repoFolderName}/${groupFolderName}`;
+                            const configEntryName = `${groupBasePath}/kodus-config.yml`;
 
                             const customMessages = customMessagesByScope.get(
                                 this.getCustomMessagesScopeKeyDirectory(
@@ -190,11 +202,14 @@ export class CentralizedConfigDownloadUseCase {
                                 ),
                             );
 
-                            return this.createConfigEntryWithCustomMessages(
-                                entryName,
-                                res.yamlString,
-                                customMessages,
-                            );
+                            const configEntry =
+                                this.createConfigEntryWithCustomMessages(
+                                    configEntryName,
+                                    res.yamlString,
+                                    customMessages,
+                                );
+
+                            return configEntry ? [configEntry] : null;
                         } catch (error) {
                             this.logger.error({
                                 message:
@@ -212,9 +227,11 @@ export class CentralizedConfigDownloadUseCase {
                     });
 
                 const dirResults = await Promise.all(dirPromises);
-                repoEntries.push(
-                    ...(dirResults.filter(Boolean) as FileEntry[]),
-                );
+                const flattenedDirResults = dirResults
+                    .filter(Boolean)
+                    .flat()
+                    .filter(Boolean) as FileEntry[];
+                repoEntries.push(...flattenedDirResults);
 
                 return repoEntries;
             });
@@ -311,11 +328,16 @@ export class CentralizedConfigDownloadUseCase {
 
         const repositoryMapping = new Map<
             string,
-            { repoFolderName: string; directoriesById: Map<string, string> }
+            {
+                repoFolderName: string;
+                directoriesById: Map<string, string>;
+                groupFolderNamesById: Map<string, string>;
+            }
         >();
 
         for (const repo of codeReview?.configValue?.repositories ?? []) {
             const directoriesById = new Map<string, string>();
+            const groupFolderNamesById = new Map<string, string>();
 
             for (const dir of repo.directories ?? []) {
                 directoriesById.set(
@@ -324,21 +346,45 @@ export class CentralizedConfigDownloadUseCase {
                         dir.folders?.[0]?.path ?? (dir as any).path,
                     ),
                 );
+
+                if (dir.folders && dir.folders.length > 0) {
+                    try {
+                        groupFolderNamesById.set(
+                            String(dir.id),
+                            buildGroupFolderName(
+                                dir.folders.map((f) => f.path),
+                            ),
+                        );
+                    } catch {
+                        // Skip directories with invalid path sets — they cannot
+                        // be reached on disk and shouldn't host rule entries.
+                    }
+                }
             }
 
             repositoryMapping.set(String(repo.id), {
                 repoFolderName: repo.name || repo.id,
                 directoriesById,
+                groupFolderNamesById,
             });
         }
 
-        const rules =
+        const fetchedRules =
             (await this.findRulesInOrganizationByRuleFilterKodyRulesUseCase.execute(
                 organizationId,
                 options.markRulesAsPendingWithSourcePath
                     ? {}
                     : { status: KodyRulesStatus.ACTIVE },
             )) as IKodyRule[];
+
+        // Only approved rules belong in the centralized config: exporting a
+        // PENDING (awaiting approval) or REJECTED rule would resurrect it as
+        // ACTIVE when the PR is merged and synced back.
+        const rules = fetchedRules.filter(
+            (rule) =>
+                rule.status === KodyRulesStatus.ACTIVE ||
+                rule.status === KodyRulesStatus.PAUSED,
+        );
 
         if (rules.length === 0) {
             this.logger.log({
@@ -356,7 +402,9 @@ export class CentralizedConfigDownloadUseCase {
                 rule,
                 repositoryMapping,
             );
-            const entryPath = this.getUniquePath(baseEntryPath, entryPaths);
+            const entryPath = baseEntryPath
+                ? this.getUniquePath(baseEntryPath, entryPaths)
+                : null;
 
             if (!entryPath) {
                 this.logger.warn({
@@ -386,25 +434,11 @@ export class CentralizedConfigDownloadUseCase {
 
             entries.push({
                 path: entryPath,
-                content: this.formatRuleToYaml(rule),
+                content: formatRuleToYaml(rule),
             });
         }
 
         return entries;
-    }
-
-    private formatRuleToYaml(rule: IKodyRule): string {
-        const ruleForYaml = {
-            title: rule.title,
-            rule: rule.rule,
-            severity: rule.severity,
-            scope: rule.scope,
-            path: rule.path,
-            examples: rule.examples,
-            inheritance: rule.inheritance,
-        };
-
-        return yaml.dump(ruleForYaml);
     }
 
     private async ensureRulePendingWithSourcePath(
@@ -438,8 +472,11 @@ export class CentralizedConfigDownloadUseCase {
             } as any,
             organizationId,
             {
-                userId: user.uuid || 'kody-system',
-                userEmail: user.email || 'kody@kodus.io',
+                // Use the internal sync actor so the centralized PR flow is
+                // bypassed. The init PR already contains all Kody Rule files,
+                // so we must not create separate PRs for each rule here.
+                userId: 'kody',
+                userEmail: 'kody@kodus.io',
             },
             skipAuthorization,
         );
@@ -616,6 +653,16 @@ export class CentralizedConfigDownloadUseCase {
         }
 
         if (
+            message.errorReviewMessage &&
+            this.hasDefinedValues(message.errorReviewMessage)
+        ) {
+            customMessages.errorReviewMessage = {
+                content: message.errorReviewMessage.content,
+                status: message.errorReviewMessage.status,
+            };
+        }
+
+        if (
             message.globalSettings &&
             this.hasDefinedValues(message.globalSettings)
         ) {
@@ -640,6 +687,10 @@ export class CentralizedConfigDownloadUseCase {
 
         if (customMessages?.endReviewMessage) {
             normalized.endReviewMessage = customMessages.endReviewMessage;
+        }
+
+        if (customMessages?.errorReviewMessage) {
+            normalized.errorReviewMessage = customMessages.errorReviewMessage;
         }
 
         if (customMessages?.globalSettings) {
@@ -824,22 +875,37 @@ export class CentralizedConfigDownloadUseCase {
     }
 
     private getRuleFileName(rule: IKodyRule): string {
-        const preferredName =
-            this.centralizedConfigPrService.sanitizeFileName(
-                rule.title,
-                'rule',
-            ) + (rule.uuid ? `-${rule.uuid.slice(0, 8)}` : '');
-
-        return `${preferredName}.yml`;
+        return this.centralizedConfigPrService.buildRuleFileName(
+            rule.title,
+            rule.uuid,
+        );
     }
 
     private getRuleEntryPath(
         rule: IKodyRule,
         repositoryMapping: Map<
             string,
-            { repoFolderName: string; directoriesById: Map<string, string> }
+            {
+                repoFolderName: string;
+                directoriesById: Map<string, string>;
+                groupFolderNamesById: Map<string, string>;
+            }
         >,
-    ): string {
+    ): string | null {
+        // Reuse the rule's existing centralized path so re-exporting an
+        // already-synced rule keeps the same file. Otherwise a rule that was
+        // created via a mutation (title-only name) would be re-exported under
+        // a different (title+uuid) name, orphaning the old file and creating a
+        // duplicate on the next sync.
+        const existingPath = rule.centralizedConfig?.path?.trim();
+        if (
+            existingPath &&
+            !existingPath.startsWith('/') &&
+            !existingPath.includes('..')
+        ) {
+            return existingPath;
+        }
+
         const rulesDirectory =
             rule.type === KodyRulesType.MEMORY ? 'memories' : 'review';
         const fileName = this.getRuleFileName(rule);
@@ -852,16 +918,18 @@ export class CentralizedConfigDownloadUseCase {
         const repoFolderName = repoScope?.repoFolderName || rule.repositoryId;
 
         if (rule.directoryId) {
-            const directoryPath = repoScope?.directoriesById.get(
+            const groupFolderName = repoScope?.groupFolderNamesById.get(
                 String(rule.directoryId),
             );
-
-            if (directoryPath) {
-                return this.centralizedConfigPrService.buildCentralizedPath({
-                    repositoryFolder: repoFolderName,
-                    relativePath: `${directoryPath}/.kody-rules/${rulesDirectory}/${fileName}`,
-                });
+            if (!groupFolderName) {
+                return null;
             }
+            return this.centralizedConfigPrService.buildDirectoryGroupRulesPath(
+                repoFolderName,
+                groupFolderName,
+                rulesDirectory,
+                fileName,
+            );
         }
 
         return this.centralizedConfigPrService.buildCentralizedPath({

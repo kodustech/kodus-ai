@@ -15,7 +15,7 @@ import {
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -120,7 +120,7 @@ describe('ApplyPendingKodyRulesUseCase', () => {
                 repositoryId: 'repo-1',
                 status: KodyRulesStatus.PENDING,
                 type: KodyRulesType.MEMORY,
-                requestType: KodyRuleRequestType.MEMORY_UPDATE,
+                requestType: KodyRuleRequestType.UPDATE,
                 targetRuleUuid: 'target-1',
             },
         ]);
@@ -159,7 +159,7 @@ describe('ApplyPendingKodyRulesUseCase', () => {
                 repositoryId: 'repo-1',
                 status: KodyRulesStatus.PENDING,
                 type: KodyRulesType.MEMORY,
-                requestType: KodyRuleRequestType.MEMORY_UPDATE,
+                requestType: KodyRuleRequestType.UPDATE,
                 targetRuleUuid: 'target-1',
             },
         ]);

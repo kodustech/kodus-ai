@@ -56,6 +56,15 @@ export interface CliReviewConfig {
      * where feedback latency matters more than maximum finding coverage.
      */
     fast?: boolean;
+    /**
+     * Free-text steering directive (the CLI equivalent of
+     * `@kody review focus on X`). When set, the finder concentrates its deepest
+     * analysis on the named area. Sanitized + capped via normalizeReviewDirective
+     * before it reaches the prompt.
+     */
+    focus?: string;
+    /** Heavy mode — extra critic pass in the finder for more recall. */
+    heavy?: boolean;
     files?: CliFileInput[];
 }
 

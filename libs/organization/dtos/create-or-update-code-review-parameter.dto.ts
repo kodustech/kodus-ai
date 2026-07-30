@@ -304,6 +304,20 @@ class CustomMessagesEndReviewMessageDto {
     content?: string;
 }
 
+class CustomMessagesErrorReviewMessageDto {
+    @IsOptional()
+    @IsEnum(PullRequestMessageStatus)
+    @ApiPropertyOptional({
+        enum: PullRequestMessageStatus,
+        enumName: 'PullRequestMessageStatus',
+    })
+    status?: PullRequestMessageStatus;
+
+    @IsOptional()
+    @IsString()
+    content?: string;
+}
+
 class CustomMessagesDto {
     @IsOptional()
     @ValidateNested()
@@ -319,6 +333,16 @@ class CustomMessagesDto {
     @ValidateNested()
     @Type(() => CustomMessagesEndReviewMessageDto)
     endReviewMessage?: CustomMessagesEndReviewMessageDto;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => CustomMessagesErrorReviewMessageDto)
+    errorReviewMessage?: CustomMessagesErrorReviewMessageDto;
+}
+
+class KodyKnowledgeApprovalDto {
+    @IsBoolean()
+    enabled: boolean;
 }
 
 class CodeReviewConfigWithoutLLMProviderDto {
@@ -405,8 +429,14 @@ class CodeReviewConfigWithoutLLMProviderDto {
     kodyRulesGeneratorEnabled?: boolean;
 
     @IsOptional()
-    @IsBoolean()
-    llmGeneratedMemoriesRequireApproval?: boolean;
+    @IsArray()
+    @IsString({ each: true })
+    kodyLearningExcludedReviewers?: string[];
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => KodyKnowledgeApprovalDto)
+    kodyKnowledgeApproval?: KodyKnowledgeApprovalDto;
 
     @IsOptional()
     @ValidateNested()

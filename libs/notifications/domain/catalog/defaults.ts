@@ -45,6 +45,15 @@ export interface EventDefaults {
      * declared — set explicitly for actionable critical events.
      */
     readonly actionLabel?: string;
+    /**
+     * The role(s) this event is actually delivered to, for events that fan
+     * out purely by role (their emitter uses `kind: 'role'` recipients).
+     * Drives the settings UI so it only offers per-role routing for roles
+     * that can receive the event. Omit for events directed at a specific
+     * user/email, or whose audience can be any role (e.g. a PR author) — the
+     * UI shows all roles for those.
+     */
+    readonly defaultRoles?: readonly Role[];
 }
 
 export const EVENT_DEFAULTS: Readonly<
@@ -88,10 +97,17 @@ export const EVENT_DEFAULTS: Readonly<
         defaultChannels: new Set([NotificationChannel.EMAIL]),
         icon: 'shield-alert',
     },
-    [NotificationEvent.WEEKLY_RECAP]: {
+    [NotificationEvent.REPO_REPORT]: {
         criticality: Criticality.INFORMATIONAL,
         category: 'cockpit',
-        label: 'Weekly Recap',
+        label: 'Repo Report',
+        defaultChannels: new Set([NotificationChannel.EMAIL]),
+        icon: 'info',
+    },
+    [NotificationEvent.ORG_REPORT]: {
+        criticality: Criticality.INFORMATIONAL,
+        category: 'cockpit',
+        label: 'Org Report',
         defaultChannels: new Set([NotificationChannel.EMAIL]),
         icon: 'info',
     },
@@ -115,8 +131,14 @@ export const EVENT_DEFAULTS: Readonly<
         criticality: Criticality.INFORMATIONAL,
         category: 'team',
         label: 'Role Changed',
-        defaultChannels: new Set([NotificationChannel.IN_APP]),
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
         icon: 'zap',
+        // Pure role-fanout: the audience is the org owners, derived from
+        // config rather than hardcoded at the call site.
+        defaultRoles: [Role.OWNER],
     },
 
     // ── IDE rule sync ──────────────────────────────────────────
@@ -125,7 +147,10 @@ export const EVENT_DEFAULTS: Readonly<
         criticality: Criticality.INFORMATIONAL,
         category: 'kody_rules',
         label: 'IDE Rules Synced',
-        defaultChannels: new Set([NotificationChannel.IN_APP]),
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
         icon: 'bell',
     },
     [NotificationEvent.IDE_RULES_SYNC_FAILED]: {
@@ -137,6 +162,9 @@ export const EVENT_DEFAULTS: Readonly<
             NotificationChannel.IN_APP,
         ]),
         icon: 'shield-alert',
+        // Mixed event: the sync initiator is notified directly (emit
+        // recipient); the owner audience is config-driven.
+        defaultRoles: [Role.OWNER],
     },
 
     // ── Code review ────────────────────────────────────────────
@@ -145,7 +173,10 @@ export const EVENT_DEFAULTS: Readonly<
         criticality: Criticality.INFORMATIONAL,
         category: 'review',
         label: 'Pull Request Auto-Approved',
-        defaultChannels: new Set([NotificationChannel.IN_APP]),
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
         icon: 'bell',
     },
     [NotificationEvent.REVIEW_FAILED]: {
@@ -157,12 +188,18 @@ export const EVENT_DEFAULTS: Readonly<
             NotificationChannel.IN_APP,
         ]),
         icon: 'shield-alert',
+        // Mixed event: the PR author is notified directly (emit recipient);
+        // the owner audience is config-driven.
+        defaultRoles: [Role.OWNER],
     },
     [NotificationEvent.REVIEW_SKIPPED_NO_LICENSE]: {
         criticality: Criticality.INFORMATIONAL,
         category: 'review',
         label: 'Review Skipped (No License)',
-        defaultChannels: new Set([NotificationChannel.IN_APP]),
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
         icon: 'info',
     },
 
@@ -179,6 +216,7 @@ export const EVENT_DEFAULTS: Readonly<
         icon: 'credit-card',
         pageSeverity: true,
         actionLabel: 'Update payment',
+        defaultRoles: [Role.OWNER, Role.BILLING_MANAGER],
     },
     [NotificationEvent.BILLING_TRIAL_EXPIRING]: {
         criticality: Criticality.TRANSACTIONAL,
@@ -190,6 +228,7 @@ export const EVENT_DEFAULTS: Readonly<
         ]),
         icon: 'credit-card',
         actionLabel: 'Upgrade plan',
+        defaultRoles: [Role.OWNER, Role.BILLING_MANAGER],
     },
 
     // ── BYOK ───────────────────────────────────────────────────
@@ -204,6 +243,34 @@ export const EVENT_DEFAULTS: Readonly<
         ]),
         icon: 'shield-alert',
         pageSeverity: true,
+        defaultRoles: [Role.OWNER],
+    },
+
+    // ── Spend limit ────────────────────────────────────────────
+
+    [NotificationEvent.SPEND_LIMIT_THRESHOLD_REACHED]: {
+        criticality: Criticality.INFORMATIONAL,
+        category: 'spend_limit',
+        label: 'Monthly Spend Limit Threshold Reached',
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
+        icon: 'credit-card',
+        defaultRoles: [Role.OWNER],
+    },
+
+    [NotificationEvent.SPEND_LIMIT_EXCEEDED_FINAL]: {
+        criticality: Criticality.CRITICAL,
+        category: 'spend_limit',
+        label: 'Monthly Spend Limit Exceeded',
+        defaultChannels: new Set([
+            NotificationChannel.EMAIL,
+            NotificationChannel.IN_APP,
+        ]),
+        icon: 'credit-card',
+        pageSeverity: true,
+        defaultRoles: [Role.OWNER],
     },
 
     // ── Kody Rules (file reference validation) ────────────────
@@ -256,6 +323,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
     billing: 'Billing',
     review: 'Code Review',
     byok: 'BYOK',
+    spend_limit: 'Spend Limit',
 };
 
 /**

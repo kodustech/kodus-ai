@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { CliReviewPipelineContext } from '../context/cli-review-pipeline.context';
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 
 /**
  * Pipeline stage to prepare and validate CLI files for review

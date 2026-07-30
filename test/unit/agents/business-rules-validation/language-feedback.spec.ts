@@ -1,8 +1,8 @@
-import { buildBusinessRulesContractViolationFeedback } from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/contract-feedback.builder';
+import { buildBusinessRulesContractViolationFeedback } from '@libs/agents/infrastructure/services/agents/business-rules-validation/contract-feedback.builder';
 import {
     buildMcpConnectionFailureFeedback,
     buildRequiredMcpFeedback,
-} from '@libs/agents/infrastructure/services/kodus-flow/business-rules-validation/required-mcp-feedback';
+} from '@libs/agents/infrastructure/services/agents/business-rules-validation/required-mcp-feedback';
 
 describe('business-rules language feedback', () => {
     it('keeps required MCP feedback as a language-neutral internal message', () => {

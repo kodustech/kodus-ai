@@ -10,7 +10,7 @@
 # override; alive ones don't, which is what this script handles).
 #
 # Usage:
-#   yarn selfhosted:deploy-all
+#   pnpm run selfhosted:deploy-all
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,7 +24,7 @@ done < <(list_instances | grep -E '^matrix(-|$)' || true)
 
 if [ "${#INSTANCES[@]}" -eq 0 ]; then
     err "No matrix* droplets alive. Provision first:"
-    err "  yarn e2e:matrix matrix/full.yml --target self-hosted --auto-provision-per-provider -y"
+    err "  pnpm run e2e:matrix matrix/full.yml --target self-hosted --auto-provision-per-provider -y"
     exit 1
 fi
 

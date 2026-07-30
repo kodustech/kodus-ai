@@ -38,7 +38,7 @@ const MOCK_DEFAULTS = {
     ignoredTitleKeywords: [],
     baseBranches: [],
     kodyRulesGeneratorEnabled: false,
-    llmGeneratedMemoriesRequireApproval: false,
+    kodyKnowledgeApproval: { enabled: false },
     enableCommittableSuggestions: false,
     automatedReviewActive: false,
     reviewCadence: { type: 'every_push' },
@@ -232,17 +232,15 @@ describe('CodeReviewConfigLogHandler', () => {
             expect(data[0].description).toContain('Kody Rules Generator');
         });
 
-        it('detects llmGeneratedMemoriesRequireApproval toggle', async () => {
+        it('detects kodyKnowledgeApproval toggle', async () => {
             await callHandler(
-                { llmGeneratedMemoriesRequireApproval: false },
-                { llmGeneratedMemoriesRequireApproval: true },
+                { kodyKnowledgeApproval: { enabled: false } },
+                { kodyKnowledgeApproval: { enabled: true } },
             );
 
             const data = extractChangedData(mockUnified.saveLogEntry);
             expect(data).toHaveLength(1);
-            expect(data[0].description).toContain(
-                'LLM Generated Memories Require Approval',
-            );
+            expect(data[0].description).toContain('Kody Knowledge Approval');
         });
 
         it('detects enableCommittableSuggestions toggle', async () => {

@@ -17,10 +17,13 @@ import {
     ICockpitDeveloperProductivityService,
     CockpitHealthService,
     CockpitRangeQuery,
+    COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN,
+    ICockpitReviewAnalyticsService,
     CockpitSourceResolver,
     CockpitValidationService,
+    SuggestionsExplorerQuery,
 } from '@libs/cockpit';
-import { SendWeeklyRecapUseCase } from '@libs/cockpit/application/use-cases/send-weekly-recap.use-case';
+import { GetKodyRulesHealthUseCase } from '@libs/cockpit/application/use-cases/get-kody-rules-health.use-case';
 import { CockpitTierGuard } from '@libs/cockpit/infrastructure/guards/cockpit-tier.guard';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import {
@@ -181,6 +184,137 @@ export class CockpitCodeHealthController {
 }
 
 // -------------------------------------------------------------------------
+// /review-analytics/*  — "Kodus Review" tab of the cockpit revamp:
+// metrics about Kodus's own review effectiveness (implementation rate
+// breakdowns, ignored criticals, repository health, suggestions explorer).
+// -------------------------------------------------------------------------
+
+@ApiTags('Cockpit · Review Analytics')
+@ApiBearerAuth('jwt')
+@UseGuards(PolicyGuard, CockpitTierGuard)
+@CheckPolicies(canReadCockpit)
+@Controller('review-analytics')
+export class CockpitReviewAnalyticsController {
+    constructor(
+        @Inject(COCKPIT_REVIEW_ANALYTICS_SERVICE_TOKEN)
+        private readonly reviewAnalytics: ICockpitReviewAnalyticsService,
+        private readonly kodyRulesHealth: GetKodyRulesHealthUseCase,
+    ) {}
+
+    @Get('/charts/implementation-rate-weekly')
+    @ApiOperation({
+        summary: 'Weekly implementation rate (overall + per severity)',
+    })
+    implementationRateWeekly(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getImplementationRateWeekly(q);
+    }
+
+    @Get('/charts/implementation-rate-by-category')
+    @ApiOperation({ summary: 'Implementation rate per suggestion category' })
+    implementationRateByCategory(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getImplementationRateByCategory(q);
+    }
+
+    @Get('/charts/implementation-rate-by-severity')
+    @ApiOperation({ summary: 'Implementation rate per severity level' })
+    implementationRateBySeverity(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getImplementationRateBySeverity(q);
+    }
+
+    @Get('/charts/negative-feedback-by-category')
+    @ApiOperation({ summary: 'Thumbs up/down per suggestion category' })
+    negativeFeedbackByCategory(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getNegativeFeedbackByCategory(q);
+    }
+
+    @Get('/charts/negative-feedback-weekly')
+    @ApiOperation({ summary: 'Weekly thumbs up/down trend' })
+    negativeFeedbackWeekly(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getNegativeFeedbackWeekly(q);
+    }
+
+    @Get('/highlights/negative-vote-rate')
+    @ApiOperation({
+        summary: 'Negative vote rate current vs previous period',
+    })
+    negativeVoteRate(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getNegativeVoteRateHighlight(q);
+    }
+
+    @Get('/highlights/operational-metrics')
+    @ApiOperation({
+        summary:
+            'PRs processed, reviews processed and terminal review status rates current vs previous period',
+    })
+    operationalMetrics(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getReviewOperationalMetrics(q);
+    }
+
+    @Get('/charts/operational-outcomes-weekly')
+    @ApiOperation({
+        summary: 'Weekly review processing outcomes by terminal status',
+    })
+    operationalOutcomesWeekly(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getReviewOperationalMetricsWeekly(q);
+    }
+
+    @Get('/highlights/ignored-criticals')
+    @ApiOperation({
+        summary:
+            'Critical suggestions left unimplemented on merged/closed PRs',
+    })
+    ignoredCriticals(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getIgnoredCriticals(q);
+    }
+
+    @Get('/tables/repositories-health')
+    @ApiOperation({
+        summary:
+            'Per-repository review health (impl rate + weakest category)',
+    })
+    repositoriesHealth(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.reviewAnalytics.getRepositoriesHealth(q);
+    }
+
+    @Get('/tables/kody-rules-health')
+    @ApiOperation({
+        summary:
+            'Per-rule health: triggers, implementation rate and state (healthy/ignored/stale)',
+    })
+    kodyRulesHealthTable(@Query() q: CockpitRangeQuery) {
+        requireRange(q);
+        return this.kodyRulesHealth.execute(q);
+    }
+
+    @Get('/suggestions')
+    @ApiOperation({
+        summary: 'Suggestions explorer — filterable, paginated list',
+    })
+    suggestions(@Query() q: SuggestionsExplorerQuery) {
+        if (!q.organizationId || !q.startDate || !q.endDate) {
+            throw new BadRequestException(
+                'Missing required parameters: organizationId, startDate, endDate',
+            );
+        }
+        return this.reviewAnalytics.searchSuggestions({
+            ...q,
+            page: q.page ? Number(q.page) : undefined,
+            pageSize: q.pageSize ? Number(q.pageSize) : undefined,
+        });
+    }
+}
+
+// -------------------------------------------------------------------------
 // /productivity/*
 // -------------------------------------------------------------------------
 
@@ -280,40 +414,9 @@ export class CockpitProductivityController {
     }
 }
 
-// -------------------------------------------------------------------------
-// /cockpit/weekly-recap  — admin-triggered weekly summary email
-// Replaces the legacy n8n flow that called Customer.io. Sends one email
-// per ACTIVE owner of the org with metrics from the cockpit warehouse.
-// -------------------------------------------------------------------------
-
-type SendWeeklyRecapBody = {
-    organizationId: string;
-    startDate: string;
-    endDate: string;
-};
-
-@ApiTags('Cockpit')
-@ApiBearerAuth('jwt')
-@UseGuards(CockpitTierGuard)
-@Controller('cockpit/weekly-recap')
-export class CockpitWeeklyRecapController {
-    constructor(private readonly useCase: SendWeeklyRecapUseCase) {}
-
-    @Post('/')
-    @ApiOperation({
-        summary:
-            'Send the weekly recap email to ACTIVE owners of an organization. Skips orgs with zero PRs in the window.',
-    })
-    send(@Body() body: SendWeeklyRecapBody) {
-        if (!body?.organizationId || !body?.startDate || !body?.endDate) {
-            throw new BadRequestException(
-                'Missing required fields: organizationId, startDate, endDate',
-            );
-        }
-        return this.useCase.execute({
-            organizationId: body.organizationId,
-            startDate: body.startDate,
-            endDate: body.endDate,
-        });
-    }
-}
+// The org/repo report emails are driven entirely by their scheduled crons
+// (service identity, no end-user caller). There is intentionally no HTTP
+// trigger endpoint: a user-facing "send report for org X" action takes an
+// arbitrary organizationId and would be an email-DoS / cross-tenant surface,
+// and the codebase has no super-admin guard to gate it cleanly. Manual/ops
+// re-sends are done out-of-band (the cron, or a one-off script).

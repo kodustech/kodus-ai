@@ -51,6 +51,7 @@ import {
     AutomationCodeReviewConfigProvider,
     CodeReviewModelDataProvider,
     DefaultCodeReviewConfigProvider,
+    InitialParametersProvider,
     PlatformConfigProvider,
     ScopedCodeReviewConfigProvider,
     type CodeReviewModelData,
@@ -89,6 +90,7 @@ type SettingsLayoutProps = React.PropsWithChildren<{
     initialConfigValue: FormattedGlobalCodeReviewConfig;
     initialDefaultConfig: InitialDefaultConfig;
     initialPlatformConfig: InitialPlatformConfig;
+    initialParameters: Partial<Record<string, { uuid: string; configKey: string; configValue: string } | null>>;
     initialModelData: CodeReviewModelData;
 }>;
 
@@ -98,6 +100,7 @@ export const SettingsLayout = ({
     initialConfigValue,
     initialDefaultConfig,
     initialPlatformConfig,
+    initialParameters,
     initialModelData,
 }: SettingsLayoutProps) => {
     const { teamId } = useSelectedTeamId();
@@ -145,14 +148,16 @@ export const SettingsLayout = ({
 
     return (
         <CodeReviewModelDataProvider value={initialModelData}>
-            <SettingsLayoutShell
-                teamId={effectiveTeamId}
-                configValue={liveShellQuery?.configValue ?? initialConfigValue}
-                defaultConfig={defaultConfig ?? initialDefaultConfig}
-                platformConfig={platformConfig ?? initialPlatformConfig}
-                isMCPAvailable={isMCPAvailable}>
-                {children}
-            </SettingsLayoutShell>
+            <InitialParametersProvider value={{ initialTeamId, parameters: initialParameters }}>
+                <SettingsLayoutShell
+                    teamId={effectiveTeamId}
+                    configValue={liveShellQuery?.configValue ?? initialConfigValue}
+                    defaultConfig={defaultConfig ?? initialDefaultConfig}
+                    platformConfig={platformConfig ?? initialPlatformConfig}
+                    isMCPAvailable={isMCPAvailable}>
+                    {children}
+                </SettingsLayoutShell>
+            </InitialParametersProvider>
         </CodeReviewModelDataProvider>
     );
 };

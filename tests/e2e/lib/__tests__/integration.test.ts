@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { runMatrix } from "../runner.js";
 import { resolveScenarios } from "../../scenarios/index.js";
 import {
+    executionsRoute,
+    healthRoute,
     json,
     makeFakeJwt,
     startMockServer,
@@ -83,6 +85,10 @@ test("integration: code-review-basic runs end-to-end against mocked Kodus + GitH
                 json(res, 200, {});
             },
         },
+        // assertHealthyExecution polls executions; the runner's post-failure
+        // probe GETs /health — both added in #1494 without mock coverage.
+        executionsRoute(),
+        healthRoute(),
     ]);
 
     // Routes ordered specific → generic. Patterns use [^/]+ instead of .+
@@ -118,6 +124,38 @@ test("integration: code-review-basic runs end-to-end against mocked Kodus + GitH
             handler: (_req, res) => {
                 json(res, 200, {});
             },
+        },
+        // openPRFromBranches opens each PR from a UNIQUE throwaway branch
+        // (empty commit on the fixture tip) to dodge GitHub's 100-PRs-per-
+        // head_sha cap — mock the git dance. ref/heads patterns use `.+`
+        // because branch names carry slashes (feature/add-stats).
+        {
+            method: "GET",
+            pathRegex: /^\/repos\/[^/]+\/[^/]+\/git\/ref\/heads\/.+$/,
+            handler: (_req, res) =>
+                json(res, 200, { object: { sha: "fixturetip0000000000000000000000000000000" } }),
+        },
+        {
+            method: "GET",
+            pathRegex: /^\/repos\/[^/]+\/[^/]+\/git\/commits\/[^/]+$/,
+            handler: (_req, res) =>
+                json(res, 200, { tree: { sha: "fixturetree000000000000000000000000000000" } }),
+        },
+        {
+            method: "POST",
+            pathRegex: /^\/repos\/[^/]+\/[^/]+\/git\/commits$/,
+            handler: (_req, res) =>
+                json(res, 201, { sha: "throwaway00000000000000000000000000000000" }),
+        },
+        {
+            method: "POST",
+            pathRegex: /^\/repos\/[^/]+\/[^/]+\/git\/refs$/,
+            handler: (_req, res) => json(res, 201, {}),
+        },
+        {
+            method: "DELETE",
+            pathRegex: /^\/repos\/[^/]+\/[^/]+\/git\/refs\/heads\/.+$/,
+            handler: (_req, res) => json(res, 204, {}),
         },
         {
             method: "POST",
@@ -200,6 +238,11 @@ test("integration: code-review-basic runs end-to-end against mocked Kodus + GitH
         process.env.TARGET_TUNNEL_URL = "https://dummy.trycloudflare.com";
         process.env.SH_TENANT_EMAIL = "test@kodus.test";
         process.env.SH_TENANT_PASSWORD = "secret123";
+        // Mocks answer instantly — collapse the production polls and settles
+        // rather than sleeping through them. See providers/base.ts settle().
+        process.env.E2E_POLL_INTERVAL_OVERRIDE_SEC = "0.05";
+        process.env.E2E_POLL_TIMEOUT_OVERRIDE_SEC = "3";
+        process.env.E2E_SETTLE_OVERRIDE_SEC = "0";
         process.env.GH_TEST_TOKEN = "fake-token";
         process.env.GH_TEST_REPO = TEST_REPO;
         process.env.GH_TEST_PR_NUMBER = String(TEST_PR_NUMBER);
@@ -421,6 +464,11 @@ test("integration: scenario fails clearly when Kody does NOT respond", async () 
         process.env.TARGET_TUNNEL_URL = "https://dummy.trycloudflare.com";
         process.env.SH_TENANT_EMAIL = "test@kodus.test";
         process.env.SH_TENANT_PASSWORD = "secret123";
+        // Mocks answer instantly — collapse the production polls and settles
+        // rather than sleeping through them. See providers/base.ts settle().
+        process.env.E2E_POLL_INTERVAL_OVERRIDE_SEC = "0.05";
+        process.env.E2E_POLL_TIMEOUT_OVERRIDE_SEC = "3";
+        process.env.E2E_SETTLE_OVERRIDE_SEC = "0";
         process.env.GH_TEST_TOKEN = "fake-token";
         process.env.GH_TEST_REPO = TEST_REPO;
         process.env.GH_TEST_PR_NUMBER = String(TEST_PR_NUMBER);

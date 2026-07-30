@@ -5,12 +5,22 @@ import { UncategorizedComment } from '@libs/code-review/domain/types/commentAnal
 import { LibraryKodyRule } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
 import {
     IKodyRule,
-    kodyRuleSchema,
+    kodyRulesExampleSchema,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
+// LLM output schema — intentionally NOT derived from kodyRuleSchema: that is
+// the DB-entity schema and carries z.date() fields (createdAt/updatedAt/...),
+// which cannot be represented when the structured-output path converts the
+// schema to JSON Schema for the provider. Only fields the model actually
+// produces belong here; the use case fills in entity fields on persist.
 export const kodyRulesGeneratorSchema = z.object({
     rules: z.array(
-        kodyRuleSchema.partial().extend({
+        z.object({
+            uuid: z.string().optional(),
+            title: z.string(),
+            rule: z.string(),
+            severity: z.string(),
+            examples: z.array(kodyRulesExampleSchema).optional(),
             tags: z.array(z.string()).optional(),
         }),
     ),

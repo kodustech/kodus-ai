@@ -82,9 +82,7 @@ describe('CentralizedConfigPrService', () => {
 
         // ModuleRef mock that resolves CentralizedConfigSyncUseCase lazily.
         const moduleRef = {
-            resolve: jest
-                .fn()
-                .mockResolvedValue(centralizedConfigSyncUseCase),
+            resolve: jest.fn().mockResolvedValue(centralizedConfigSyncUseCase),
         };
 
         const service = new CentralizedConfigPrService(
@@ -252,5 +250,174 @@ describe('CentralizedConfigPrService', () => {
             }),
             organizationAndTeamData,
         );
+    });
+
+    describe('getCentralizedConfigWithValidatedPullRequest', () => {
+        it('returns config unchanged when there is no active pull request', async () => {
+            const { service, parametersService, codeManagementService } =
+                buildService({
+                    pullRequestState: PullRequestState.OPENED,
+                    centralizedConfigOverride: {
+                        enabled: true,
+                        repository: centralizedRepository,
+                        activePullRequest: null,
+                    },
+                });
+
+            const result =
+                await service.getCentralizedConfigWithValidatedPullRequest(
+                    organizationAndTeamData,
+                );
+
+            expect(result).toEqual({
+                enabled: true,
+                repository: centralizedRepository,
+                activePullRequest: null,
+            });
+            expect(codeManagementService.getPullRequest).not.toHaveBeenCalled();
+            expect(
+                parametersService.createOrUpdateConfig,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('returns config unchanged when active pull request is still open', async () => {
+            const { service, parametersService, codeManagementService } =
+                buildService({
+                    pullRequestState: PullRequestState.OPENED,
+                });
+
+            const result =
+                await service.getCentralizedConfigWithValidatedPullRequest(
+                    organizationAndTeamData,
+                );
+
+            expect(result).toEqual(centralizedConfig);
+            expect(codeManagementService.getPullRequest).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: activePullRequest.prNumber,
+                }),
+            );
+            expect(
+                parametersService.createOrUpdateConfig,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('clears active pull request when it has been merged', async () => {
+            const { service, parametersService, codeManagementService } =
+                buildService({
+                    pullRequestState: PullRequestState.MERGED,
+                });
+
+            const result =
+                await service.getCentralizedConfigWithValidatedPullRequest(
+                    organizationAndTeamData,
+                );
+
+            expect(result).toEqual({
+                enabled: true,
+                repository: centralizedRepository,
+                activePullRequest: null,
+            });
+            expect(codeManagementService.getPullRequest).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: activePullRequest.prNumber,
+                }),
+            );
+            expect(parametersService.createOrUpdateConfig).toHaveBeenCalledWith(
+                'centralized_config',
+                expect.objectContaining({
+                    activePullRequest: null,
+                }),
+                organizationAndTeamData,
+            );
+        });
+
+        it('clears active pull request when it has been closed without merging', async () => {
+            const { service, parametersService, codeManagementService } =
+                buildService({
+                    pullRequestState: PullRequestState.CLOSED,
+                });
+
+            const result =
+                await service.getCentralizedConfigWithValidatedPullRequest(
+                    organizationAndTeamData,
+                );
+
+            expect(result).toEqual({
+                enabled: true,
+                repository: centralizedRepository,
+                activePullRequest: null,
+            });
+            expect(codeManagementService.getPullRequest).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    prNumber: activePullRequest.prNumber,
+                }),
+            );
+            expect(parametersService.createOrUpdateConfig).toHaveBeenCalledWith(
+                'centralized_config',
+                expect.objectContaining({
+                    activePullRequest: null,
+                }),
+                organizationAndTeamData,
+            );
+        });
+
+        it('clears active pull request when tracked repository does not match centralized repository', async () => {
+            const { service, parametersService, codeManagementService } =
+                buildService({
+                    pullRequestState: PullRequestState.OPENED,
+                    centralizedConfigOverride: {
+                        enabled: true,
+                        repository: centralizedRepository,
+                        activePullRequest: {
+                            ...activePullRequest,
+                            repository: {
+                                id: 'other-repo',
+                                name: 'other-repo',
+                            },
+                        },
+                    },
+                });
+
+            const result =
+                await service.getCentralizedConfigWithValidatedPullRequest(
+                    organizationAndTeamData,
+                );
+
+            expect(result).toEqual({
+                enabled: true,
+                repository: centralizedRepository,
+                activePullRequest: null,
+            });
+            expect(codeManagementService.getPullRequest).not.toHaveBeenCalled();
+            expect(parametersService.createOrUpdateConfig).toHaveBeenCalledWith(
+                'centralized_config',
+                expect.objectContaining({
+                    activePullRequest: null,
+                }),
+                organizationAndTeamData,
+            );
+        });
+
+        it('returns config unchanged when pull request state cannot be fetched', async () => {
+            const { service, parametersService, codeManagementService } =
+                buildService({
+                    pullRequestState: PullRequestState.OPENED,
+                });
+
+            codeManagementService.getPullRequest.mockRejectedValue(
+                new Error('API failure'),
+            );
+
+            const result =
+                await service.getCentralizedConfigWithValidatedPullRequest(
+                    organizationAndTeamData,
+                );
+
+            expect(result).toEqual(centralizedConfig);
+            expect(
+                parametersService.createOrUpdateConfig,
+            ).not.toHaveBeenCalled();
+        });
     });
 });

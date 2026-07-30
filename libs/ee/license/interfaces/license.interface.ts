@@ -32,10 +32,37 @@ export type OrganizationLicenseValidationResult = {
     numberOfLicenses?: number;
     planType?: string;
     expiresAt?: string;
+    byok?: boolean;
+    trialReviewCreditsTotal?: number;
+    trialReviewCreditsUsed?: number;
+    trialReviewCreditsRemaining?: number;
+    trialCreditTier?: string;
+    trialUnlocks?: TrialUnlock[];
 };
 
 export type UserWithLicense = {
     git_id: string;
+    status?: 'active' | 'inactive';
+};
+
+export type TrialUnlock = {
+    key: string;
+    status: 'locked' | 'available' | 'completed' | 'claimed' | string;
+    rewardCredits?: number;
+    title?: string;
+    description?: string;
+    completedAt?: string;
+};
+
+export type ConsumeTrialReviewCreditResult = {
+    allowed: boolean;
+    reason?: string;
+    alreadyConsumed?: boolean;
+    trialReviewCreditsTotal?: number;
+    trialReviewCreditsUsed?: number;
+    trialReviewCreditsRemaining?: number;
+    trialCreditTier?: string;
+    trialUnlocks?: TrialUnlock[];
 };
 
 export const LICENSE_SERVICE_TOKEN = Symbol.for('LicenseService');
@@ -62,6 +89,16 @@ export interface ILicenseService {
     ): Promise<UserWithLicense[]>;
 
     /**
+     * Get all users ever assigned a license (including inactive).
+     *
+     * @param params Organization ID and team ID.
+     * @returns Promise with array of all users ever assigned a license.
+     */
+    getAllUsersEverWithLicense(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<UserWithLicense[]>;
+
+    /**
      * Assign license to a user.
      *
      * @param organizationAndTeamData Organization ID and team ID.
@@ -73,5 +110,32 @@ export interface ILicenseService {
         organizationAndTeamData: OrganizationAndTeamData,
         userGitId: string,
         provider: string,
+    ): Promise<boolean>;
+
+    /**
+     * Atomically consume one Kodus-funded trial review credit.
+     *
+     * @param organizationAndTeamData Organization ID and team ID.
+     * @param usageKey Optional idempotency key for the reviewed PR.
+     */
+    consumeTrialReviewCredit(
+        organizationAndTeamData: OrganizationAndTeamData,
+        usageKey?: string,
+    ): Promise<ConsumeTrialReviewCreditResult>;
+
+    /**
+     * Provision a Kodus-managed trial for the organization.
+     *
+     * Idempotent: the billing service returns 409 when a license already
+     * exists, which is treated as success. Returns true when a trial is in
+     * place after the call (created now or already present), false when it
+     * could not be provisioned. Trials are a cloud-only concept.
+     *
+     * @param organizationAndTeamData Organization ID and team ID.
+     * @param byok Whether the org connected its own AI key during onboarding.
+     */
+    startTrial(
+        organizationAndTeamData: OrganizationAndTeamData,
+        byok: boolean,
     ): Promise<boolean>;
 }

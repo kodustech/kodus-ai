@@ -7,7 +7,7 @@
 #
 # Prerequisites:
 #   1. The dev stack must already be running (postgres, mongo, rabbit):
-#        yarn docker:start
+#        pnpm run docker:start
 #   2. The prod images of API + Web must be built:
 #        WEB_TAGS=kodus-web:sso-e2e RELEASE_VERSION=sso-e2e \
 #          docker buildx bake -f docker-bake.hcl web
@@ -56,7 +56,7 @@ done
 # 0.1 Sanity: are postgres/mongo/rabbit up?
 for c in db_postgres mongodb rabbitmq; do
     if ! docker ps --format '{{.Names}}' | grep -q "^${c}$"; then
-        echo "error: container ${c} is not running. Start the dev stack first: yarn docker:start" >&2
+        echo "error: container ${c} is not running. Start the dev stack first: pnpm run docker:start" >&2
         exit 1
     fi
 done

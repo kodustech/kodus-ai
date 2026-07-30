@@ -9,7 +9,12 @@ import { SSOConfig, SSOProtocol } from "src/lib/auth/types";
 import { ClientSsoOrganizationSettingsPage } from "./_page-component";
 
 export default async function SsoOrganizationSettingsPage() {
-    const teamId = await getGlobalSelectedTeamId();
+    // auth() is independent of the team id, so resolve both in parallel; the
+    // license still depends on teamId and runs next.
+    const [teamId, jwtPayload] = await Promise.all([
+        getGlobalSelectedTeamId(),
+        auth(),
+    ]);
     const license = await validateOrganizationLicense({ teamId }).catch(
         () => null,
     );
@@ -23,7 +28,6 @@ export default async function SsoOrganizationSettingsPage() {
         redirect("/organization/general");
     }
 
-    const jwtPayload = await auth();
     const email = jwtPayload?.user?.email ?? "";
 
     let ssoConfig: SSOConfig<SSOProtocol.SAML> = {

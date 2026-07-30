@@ -7,7 +7,6 @@ import StarterKit from "@tiptap/starter-kit";
 import { cn } from "src/core/utils/components";
 
 import { CodeBlock } from "./code-block-extension";
-import { MCPMention } from "./mcp-mention-extension";
 import { MentionTrigger } from "./mention-trigger-extension";
 import { RichTextEditorSearch } from "./rich-text-editor-search";
 import { RichTextEditorToolbar } from "./rich-text-editor-toolbar";
@@ -35,11 +34,26 @@ type RichTextEditorProps = {
     toolbarExtraActions?: React.ReactNode;
 };
 
-const TOKEN_REGEX = /@?mcp\s*<([a-z0-9_-]+)\s*\|\s*([a-z0-9_-]+)>/gi;
+// Legacy `@mcp<app|tool>` mentions used to render as a styled `mcpMention`
+// node. That feature was removed — flatten any such node back to plain
+// `@mcp<app|tool>` text so saved docs render as plain text without the
+// (deleted) extension, instead of being dropped by Tiptap as an unknown node.
+function flattenMcpMentionNodes(node: any): any {
+    if (!node || typeof node !== "object") return node;
+    if (node.type === "mcpMention") {
+        const app = node.attrs?.app ?? "";
+        const tool = node.attrs?.tool ?? "";
+        return { type: "text", text: `@mcp<${app}|${tool}>` };
+    }
+    if (Array.isArray(node.content)) {
+        return { ...node, content: node.content.map(flattenMcpMentionNodes) };
+    }
+    return node;
+}
 
 function parseValueToTiptapContent(
     value: string | object,
-    enableMentions: boolean,
+    _enableMentions: boolean,
 ) {
     if (
         typeof value === "object" &&
@@ -47,65 +61,17 @@ function parseValueToTiptapContent(
         "type" in value &&
         value.type === "doc"
     ) {
-        return value;
+        return flattenMcpMentionNodes(value);
     }
 
     const text = typeof value === "string" ? value : "";
-
-    if (!enableMentions) {
-        return {
-            type: "doc",
-            content: [
-                {
-                    type: "paragraph",
-                    content: [{ type: "text", text: text || "" }],
-                },
-            ],
-        };
-    }
-
-    const nodes: any[] = [];
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-
-    TOKEN_REGEX.lastIndex = 0;
-    while ((match = TOKEN_REGEX.exec(text)) !== null) {
-        const before = text.slice(lastIndex, match.index);
-        if (before) {
-            nodes.push({
-                type: "text",
-                text: before,
-            });
-        }
-
-        const app = match[1];
-        const tool = match[2];
-        nodes.push({
-            type: "mcpMention",
-            attrs: {
-                app,
-                tool,
-            },
-        });
-
-        lastIndex = match.index + match[0].length;
-    }
-
-    const remaining = text.slice(lastIndex);
-    if (remaining) {
-        nodes.push({
-            type: "text",
-            text: remaining,
-        });
-    }
 
     return {
         type: "doc",
         content: [
             {
                 type: "paragraph",
-                content:
-                    nodes.length > 0 ? nodes : [{ type: "text", text: "" }],
+                content: [{ type: "text", text: text || "" }],
             },
         ],
     };
@@ -273,7 +239,6 @@ export function RichTextEditor(props: RichTextEditorProps) {
 
         if (enableMentions) {
             base.push(
-                MCPMention,
                 MentionTrigger.configure({
                     onTrigger: handleTriggerMemoized,
                 }),

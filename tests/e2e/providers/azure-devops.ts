@@ -32,6 +32,10 @@ interface AzureComment {
     content: string;
     publishedDate: string;
     author?: { displayName: string };
+    // "text" = a real human/Kody comment; "system" = Azure-generated activity
+    // ("X restored the source branch", "updated the source branch", vote
+    // changes, status updates). Kody only ever posts "text".
+    commentType?: string;
 }
 
 export class AzureDevOpsProvider extends BaseProvider {
@@ -404,6 +408,13 @@ export class AzureDevOpsProvider extends BaseProvider {
                     for (const c of thread.comments ?? []) {
                         if (c.publishedDate <= opts.sinceIso) continue;
                         if (opts.triggerId && String(c.id) === opts.triggerId)
+                            continue;
+                        // Azure system activity ("restored/updated the source
+                        // branch", vote/status changes) is NOT review activity.
+                        // Counting it broke per-seat's "expected NO review"
+                        // assertion when the scenario restored a throwaway
+                        // fixture branch. Kody only posts commentType "text".
+                        if ((c.commentType ?? "").toLowerCase() === "system")
                             continue;
                         const text = c.content ?? "";
                         if (text.toLowerCase().startsWith("@kody")) continue;

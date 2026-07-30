@@ -19,7 +19,7 @@ import { useReactQueryInvalidateQueries } from "@hooks/use-invalidate-queries";
 import { createCodeManagementIntegration } from "@services/codeManagement/fetch";
 import { SETUP_PATHS } from "@services/setup";
 import { useGetGithubOrganizationName } from "@services/setup/hooks";
-import { deleteCookie, getCookie } from "cookies-next";
+import { deleteCookie, getCookie } from "cookies-next/client";
 import { SaveIcon } from "lucide-react";
 import { useAuth } from "src/core/providers/auth.provider";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";

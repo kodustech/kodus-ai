@@ -2,7 +2,7 @@
   "description": "Tier-0 model benchmark subset: 1 PR per repo (5), diverse size/complexity. Fixed set \u2014 must stay identical across runs.",
   "prs": [
     {
-      "repo": "ai-code-review-benchmark/grafana-codex",
+      "repo": "kodus-e2e/grafana-codex",
       "head": "asset-loading-optimized",
       "base": "asset-loading-baseline",
       "title": "Frontend Asset Optimization",
@@ -19,7 +19,7 @@
       ]
     },
     {
-      "repo": "ai-code-review-benchmark/sentry",
+      "repo": "kodus-e2e/sentry",
       "head": "span-flusher-multiprocess",
       "base": "span-flusher-stable",
       "title": "Span Buffer Multiprocess Enhancement with Health Monitoring",
@@ -48,7 +48,7 @@
       ]
     },
     {
-      "repo": "ai-code-review-benchmark/cal.com",
+      "repo": "kodus-e2e/cal.com",
       "head": "oauth-security-enhanced",
       "base": "oauth-security-base",
       "title": "OAuth credential sync and app integration enhancements",
@@ -77,7 +77,7 @@
       ]
     },
     {
-      "repo": "ai-code-review-benchmark/discourse-cursor",
+      "repo": "kodus-e2e/discourse-cursor",
       "head": "embed-url-handling-post",
       "base": "embed-url-handling-pre",
       "title": "Enhance embed URL handling and validation system",
@@ -110,7 +110,7 @@
       ]
     },
     {
-      "repo": "ai-code-review-benchmark/keycloak",
+      "repo": "kodus-e2e/keycloak",
       "head": "feature-html-sanitizer-implementation",
       "base": "feature-html-sanitizer-baseline",
       "title": "Add HTML sanitizer for translated message resources",

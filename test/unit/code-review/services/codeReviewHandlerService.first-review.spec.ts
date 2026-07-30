@@ -8,7 +8,7 @@ const mockLogger = {
     debug: jest.fn(),
 };
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => mockLogger,
 }));
 
@@ -23,7 +23,9 @@ jest.mock('@kodus/flow', () => ({
  * private methods on services.
  */
 describe('CodeReviewHandlerService.captureFirstReviewIfNeeded', () => {
-    const buildService = (overrides: { org?: any; owner?: any } = {}) => {
+    const buildService = (
+        overrides: { org?: any; owner?: any; members?: any } = {},
+    ) => {
         const orgParams = {
             findByKey: jest.fn(),
             createOrUpdateConfig: jest.fn().mockResolvedValue(true),
@@ -42,15 +44,30 @@ describe('CodeReviewHandlerService.captureFirstReviewIfNeeded', () => {
                 },
             ),
         };
+        // Real engineering team size — a 3-member org by default.
+        const codeManagement = {
+            getListMembers: jest
+                .fn()
+                .mockResolvedValue(
+                    overrides.members ?? [{ id: 1 }, { id: 2 }, { id: 3 }],
+                ),
+        };
         const service = new CodeReviewHandlerService(
             {} as any,
-            {} as any,
+            codeManagement as any,
             orgParams as any,
             telemetry as any,
             orgService as any,
             usersService as any,
         );
-        return { service, orgParams, telemetry, orgService, usersService };
+        return {
+            service,
+            orgParams,
+            telemetry,
+            orgService,
+            usersService,
+            codeManagement,
+        };
     };
 
     const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' };
@@ -93,7 +110,29 @@ describe('CodeReviewHandlerService.captureFirstReviewIfNeeded', () => {
                 platform: 'github',
                 ownerId: 'owner-1',
                 ownerEmail: 'owner@acme.com',
+                orgMemberCount: 3,
             });
+        });
+
+        it('still fires telemetry (member count undefined) when the git member lookup fails', async () => {
+            const { service, orgParams, telemetry, codeManagement } =
+                buildService();
+            orgParams.findByKey.mockResolvedValueOnce(undefined);
+            codeManagement.getListMembers.mockRejectedValueOnce(
+                new Error('git down'),
+            );
+
+            await (service as any).captureFirstReviewIfNeeded(
+                orgAndTeam,
+                repository,
+                42,
+                'github',
+            );
+
+            expect(telemetry.firstReviewCompleted).toHaveBeenCalledTimes(1);
+            const arg = telemetry.firstReviewCompleted.mock.calls[0][0];
+            expect(arg.organizationName).toBe('Acme Corp');
+            expect(arg.orgMemberCount).toBeUndefined();
         });
 
         it('still fires telemetry with undefined names when hydration lookups fail', async () => {

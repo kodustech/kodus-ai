@@ -141,6 +141,10 @@ export type OrganizationParametersAutoAssignConfig = {
 };
 
 export interface CockpitMetricsVisibility {
+    tabs: {
+        kodusReview: boolean;
+        productivity: boolean;
+    };
     summary: {
         deployFrequency: boolean;
         prCycleTime: boolean;

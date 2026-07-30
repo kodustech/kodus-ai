@@ -6,7 +6,7 @@ const startTime = Date.now();
 
 console.log('[pre-push] Running test suite before push...');
 
-const child = spawn('yarn', ['test'], {
+const child = spawn('pnpm', ['run', 'test'], {
     stdio: 'inherit',
     shell: process.platform === 'win32',
 });

@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject } from '@nestjs/common';
 
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';

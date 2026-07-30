@@ -20,7 +20,7 @@ import {
     TooltipTrigger,
 } from "@components/ui/tooltip";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { LockIcon, RotateCcwIcon, Save, Undo2 } from "lucide-react";
+import { RotateCcwIcon, Save, Undo2 } from "lucide-react";
 import {
     Controller,
     FormProvider,
@@ -72,6 +72,18 @@ type FormValues = {
 const toFormKey = (event: string) => event.replaceAll(".", "__");
 const fromFormKey = (key: string) => key.replaceAll("__", ".");
 
+/**
+ * Whether a role gets the event's catalog defaults when there is no stored
+ * rule for it (and no wildcard row). Mirrors the dispatcher's fallback: a
+ * declared default role (or an event with no declared roles) defaults on;
+ * every other role defaults off. Once a "*" or role row exists it takes over —
+ * any role is freely configurable.
+ */
+const isDefaultRole = (ev: EventDef, roleValue: string) =>
+    roleValue === "*" ||
+    !ev.defaultRoles ||
+    ev.defaultRoles.includes(roleValue);
+
 const buildDefaults = (
     rules: RoutingRule[],
     configurableEvents: EventDef[],
@@ -89,18 +101,19 @@ const buildDefaults = (
         const roleEntry: EventMap = {};
         for (const ev of configurableEvents) {
             const eventRules = byEvent[ev.event] ?? {};
-            // Lookup order:
-            //   1. Role-specific stored rule
-            //   2. Wildcard ('*') stored rule
-            //   3. Catalog default (the same fallback the dispatcher uses
-            //      at runtime when no rule exists).
+            // Lookup order, mirroring the dispatcher's runtime resolution:
+            //   1. Role-specific stored rule wins.
+            //   2. The wildcard ('*') rule — a literal baseline for every role.
+            //   3. No rule: catalog default for a default role, else off.
             const source =
                 eventRules[role.value] ??
                 eventRules["*"] ??
-                ev.defaultChannels;
+                (isDefaultRole(ev, role.value)
+                    ? ev.defaultChannels
+                    : undefined);
             const channelValues: ChannelMap = {};
             for (const ch of channels) {
-                channelValues[ch.value] = source[ch.value] ?? false;
+                channelValues[ch.value] = source?.[ch.value] ?? false;
             }
             roleEntry[toFormKey(ev.event)] = channelValues;
         }
@@ -493,7 +506,6 @@ function EventRow({
     event: EventDef;
     criticalityLabels: Record<EventCriticality, string>;
 }) {
-    const isCritical = event.criticality === "critical";
     const badgeLabel =
         criticalityLabels[event.criticality] ?? event.criticality;
     const badgeClass = CRITICALITY_BADGE_CLASS[event.criticality];
@@ -520,26 +532,9 @@ function EventRow({
 
             {channels.map((ch) => (
                 <div key={ch.value} className="flex justify-center">
-                    {isCritical ? (
-                        <LockedChannelIndicator />
-                    ) : (
-                        <ChannelToggle
-                            role={role}
-                            event={event}
-                            channel={ch}
-                        />
-                    )}
+                    <ChannelToggle role={role} event={event} channel={ch} />
                 </div>
             ))}
-        </div>
-    );
-}
-
-function LockedChannelIndicator() {
-    return (
-        <div className="text-text-tertiary flex items-center gap-1 text-xs">
-            <LockIcon className="size-3" />
-            <span>On</span>
         </div>
     );
 }

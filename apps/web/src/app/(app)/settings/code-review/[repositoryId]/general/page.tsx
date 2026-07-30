@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@components/ui/button";
+import { ConfirmModal } from "@components/ui/confirm-modal";
+import { magicModal } from "@components/ui/magic-modal";
 import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
 import { createOrUpdateParameter } from "@services/parameters/fetch";
@@ -14,7 +16,7 @@ import {
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { RotateCcwIcon, SaveIcon, Settings2Icon } from "lucide-react";
-import { FormProvider, useFormContext } from "react-hook-form";
+import { FormProvider, useFormContext, useFormState } from "react-hook-form";
 import { AsyncBoundary } from "src/core/components/async-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { unformatConfig } from "src/core/utils/helpers";
@@ -26,7 +28,10 @@ import { CodeReviewSaveButton } from "../../_components/save-button";
 import { useCodeReviewSettingsMutation } from "../../_hooks/use-code-review-settings-mutation";
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../_types";
 import { getCentralizedPrToastPayload } from "../../_utils/centralized-pr-feedback";
-import { usePlatformConfig } from "../../../_components/context";
+import {
+    useCodeReviewModelData,
+    usePlatformConfig,
+} from "../../../_components/context";
 import {
     useCodeReviewRouteParams,
     useCurrentConfigLevel,
@@ -45,8 +50,36 @@ import { PullRequestApprovalActive } from "./_components/pull-request-approval-a
 import { RunOnDraft } from "./_components/run-on-draft";
 import { ShowStatusFeedback } from "./_components/show-status-feedback";
 
+/**
+ * Speed-bump before saving a `byokModel` override that isn't in the provider's
+ * known-models list — we can't verify it, and a wrong id makes reviews fail (or
+ * fall back). Preserves the escape hatch for legit custom/proxy model ids.
+ */
+const confirmOffCatalogModelSave = (model: string): Promise<boolean> =>
+    new Promise((resolve) => {
+        magicModal.show(() => (
+            <ConfirmModal
+                open
+                title="Save an unverified model id?"
+                description={`"${model}" isn't in your BYOK provider's model list, so we can't verify it. If the id is wrong, reviews on this scope will fail (or fall back to your BYOK fallback model). Tip: use "Test model" to check it against your provider first.`}
+                confirmText="Save anyway"
+                cancelText="Go back"
+                variant="primary-dark"
+                onConfirm={() => {
+                    resolve(true);
+                    magicModal.hide();
+                }}
+                onCancel={() => {
+                    resolve(false);
+                    magicModal.hide();
+                }}
+            />
+        ));
+    });
+
 export default function General() {
     const platformConfig = usePlatformConfig();
+    const { byokModels } = useCodeReviewModelData();
     const form = useFormContext<CodeReviewFormType>();
     const { teamId } = useSelectedTeamId();
     const { repositoryId, directoryId } = useCodeReviewRouteParams();
@@ -86,6 +119,20 @@ export default function General() {
         currentLevel === FormattedConfigLevel.GLOBAL;
 
     const handleSubmit = form.handleSubmit(async (formData) => {
+        // Gate an off-catalog byokModel override behind an explicit confirm so
+        // a mistyped id can't be saved by skimming past the warning. Only when
+        // we HAVE a catalog to judge against — an unlistable provider (empty
+        // catalog) is left to the "Test model" check, no false prompts.
+        const byokModelValue = (formData.byokModel?.value ?? "").trim();
+        const isOffCatalog =
+            byokModelValue.length > 0 &&
+            byokModels.length > 0 &&
+            !byokModels.some((m) => m.id === byokModelValue);
+        if (isOffCatalog) {
+            const confirmed = await confirmOffCatalogModelSave(byokModelValue);
+            if (!confirmed) return;
+        }
+
         const { language, ...config } = formData;
 
         // Remove reviewCadence when automation is disabled
@@ -145,7 +192,7 @@ export default function General() {
         isDirty: formIsDirty,
         isValid: formIsValid,
         isSubmitting: formIsSubmitting,
-    } = form.formState;
+    } = useFormState({ control: form.control });
 
     if (
         platformConfig.kodyLearningStatus ===

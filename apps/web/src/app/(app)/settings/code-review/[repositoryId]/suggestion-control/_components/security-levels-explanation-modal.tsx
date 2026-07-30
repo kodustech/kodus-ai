@@ -23,7 +23,7 @@ export const SeverityLevelsExplanationModal = () => {
                 <div className="flex flex-col gap-4 overflow-y-auto text-sm *:gap-0.5">
                     <Section.Root>
                         <Section.Header className="justify-start gap-2">
-                            <SeverityLevelsBadge className="bg-[#119DE4]" />
+                            <SeverityLevelsBadge className="bg-[var(--color-info)]" />
                             <Section.Title>Low Level</Section.Title>
                         </Section.Header>
 
@@ -37,7 +37,7 @@ export const SeverityLevelsExplanationModal = () => {
 
                     <Section.Root>
                         <Section.Header className="justify-start gap-2">
-                            <SeverityLevelsBadge className="bg-[#115EE4]" />
+                            <SeverityLevelsBadge className="bg-[var(--color-alert)]" />
                             <Section.Title>Medium Level</Section.Title>
                         </Section.Header>
 
@@ -51,7 +51,7 @@ export const SeverityLevelsExplanationModal = () => {
 
                     <Section.Root>
                         <Section.Header className="justify-start gap-2">
-                            <SeverityLevelsBadge className="bg-[#6A57A4]" />
+                            <SeverityLevelsBadge className="bg-[var(--color-warning)]" />
                             <Section.Title>High Level</Section.Title>
                         </Section.Header>
 
@@ -66,7 +66,7 @@ export const SeverityLevelsExplanationModal = () => {
 
                     <Section.Root>
                         <Section.Header className="justify-start gap-2">
-                            <SeverityLevelsBadge className="bg-[#EF4B4B]" />
+                            <SeverityLevelsBadge className="bg-[var(--color-danger)]" />
                             <Section.Title>Critical Level</Section.Title>
                         </Section.Header>
 

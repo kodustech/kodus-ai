@@ -2,7 +2,6 @@ import { typedFetch } from "@services/fetch";
 import { auth } from "src/core/config/auth";
 import { createUrl } from "src/core/utils/helpers";
 import { isServerSide } from "src/core/utils/server-side";
-import { getJWTToken } from "src/core/utils/session";
 
 import { MCPServiceUnavailableError } from "./errors";
 
@@ -45,7 +44,9 @@ export const mcpManagerFetch = async <Data>(
         const port = process.env.WEB_PORT_MCP_MANAGER;
         url = createUrl(hostName, port, _url.toString(), { internal: true });
     } else {
-        authorization = await getJWTToken();
+        // Client calls route through /api/proxy/mcp, which injects the Bearer
+        // from the httpOnly session cookie server-side — so the browser never
+        // fetches /api/auth/session or attaches a token itself.
         const path = _url.toString();
         const normalized = path.startsWith("/") ? path : `/${path}`;
         url = `/api/proxy/mcp${normalized}`;
@@ -56,7 +57,11 @@ export const mcpManagerFetch = async <Data>(
             ...config,
             headers: {
                 ...config?.headers,
-                Authorization: `Bearer ${authorization}`,
+                // Only server-side direct calls need the token; the proxy
+                // injects it for client calls.
+                ...(authorization
+                    ? { Authorization: `Bearer ${authorization}` }
+                    : {}),
             },
         });
     } catch (error) {

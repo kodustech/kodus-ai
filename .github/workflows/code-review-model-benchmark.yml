@@ -1,0 +1,288 @@
+name: "Benchmark: tier-0 model code review"
+
+# Per-model code-review benchmark against the QA cloud. For each recommended
+# model in the BYOK catalog (curated-models.json, tier="recommended") it points
+# ONE QA benchmark tenant's BYOK at the model and opens the fixed 5-PR set on the
+# shared kodus-e2e benchmark repos, waiting for Kody to review each.
+#
+# Gate (mechanical): `benchmark:models` exits non-zero if any review fails to
+# complete — that is the pass/fail. The precision/recall scorecard
+# (`benchmark:scorecard`, judged by Sonnet vs golden_comments) is uploaded as an
+# ARTIFACT for regression tracking against main — it is NOT a gate.
+#
+# Triggers (locked spec 2026-05-28, revised 2026-06-26):
+#   - workflow_call from qa-build-push-and-pr-green.yml AFTER the QA GitOps
+#     deploy of the engine image → FULL run (5 models, 5 PRs each = 25
+#     reviews, ~$17, ~40min). Notify-only. That workflow guards the call
+#     behind an engine-paths filter, so it still only runs when the engine
+#     actually changes.
+#   - workflow_dispatch → manual: pin one model (only_model).
+# WHY NOT push (the old trigger, removed 2026-06-26): the benchmark used to
+# fire on the SAME push that kicks off the QA deploy, then wait ≤15min for
+# /health to report the pushed SHA. But the QA deploy is async and slow
+# (arm64 build + atlantis apply + ECS blue/green ≫ 15min), so the version
+# NEVER landed in the window and EVERY engine merge aborted at the settle
+# gate — the benchmark silently measured nothing for weeks. Driving it from
+# the deploy workflow means the image is already built when we start, so the
+# gate only waits for the rollout. (See settle step + the deploy workflow.)
+# NO pull_request trigger: the benchmark drives reviews on qa.web.kodus.io,
+# which runs main's image — a PR-time LIGHT run would benchmark MAIN's
+# engine quality (not the PR's), defeating the purpose. The right signal
+# at PR-time is the kody rule "engine sem benchmark" reminding the dev to
+# update the dataset; the FULL run after deploy measures the actual change.
+# NO nightly cron: full FULL run only when the engine actually changes,
+# to keep cost bounded. Opus is dropped at the driver level
+# (tests/e2e/benchmark/run.ts DEFAULT_EXCLUDED) — ~$23/run extra and not
+# worth the CI spend. Run ad-hoc via dispatch with only_model="opus-4-7"
+# if you ever need it.
+#
+# Required secrets (add in repo settings — only GH_TEST_TOKEN exists today):
+#   GH_TEST_TOKEN            PAT that can see + write the kodus-e2e/* bench repos
+#   BYOK_ANTHROPIC_API_KEY   Claude (sonnet-4-6, opus-4-7)
+#   BYOK_OPENAI_API_KEY      gpt-5.4
+#   BYOK_GOOGLE_API_KEY      gemini-3.1-pro
+#   BYOK_MOONSHOT_API_KEY    kimi-k2.7-code (openai_compatible)
+#   BYOK_ZHIPU_API_KEY       glm-5.2 (openai_compatible)
+#   ANTHROPIC_API_KEY        the scorecard judge (Sonnet)
+# Optional: BENCH_TENANT_EMAIL / BENCH_TENANT_PASSWORD for a dedicated tenant.
+
+permissions:
+    contents: read
+
+on:
+    workflow_dispatch:
+        inputs:
+            only_model:
+                description: "Restrict to one model slug (e.g. sonnet-4-6, or opus-4-7 to run the otherwise-excluded model)"
+                required: false
+                default: ""
+                type: string
+    # Called by the QA GitOps deploy once the engine image is built + rolling
+    # out. The engine-paths filter that used to live in `push.paths` now lives
+    # in the caller (qa-build-push-and-pr-green.yml → detect-engine-change), so
+    # this still only runs when review-output-affecting code changes.
+    workflow_call:
+        inputs:
+            only_model:
+                description: "Restrict to one model slug; empty = full run"
+                required: false
+                default: ""
+                type: string
+
+concurrency:
+    # Single benchmark tenant + shared repos → never run two at once.
+    # cancel-in-progress: rapid successive engine merges collapse into one
+    # full run instead of queueing $17×N jobs. The latest commit's result is
+    # what matters; intermediate runs would just spend money.
+    group: code-review-model-benchmark
+    cancel-in-progress: true
+
+jobs:
+    benchmark:
+        name: tier-0 model benchmark
+        runs-on: ubuntu-latest
+        # QA environment: home of QA_WAF_BYPASS_HEADER (the WAF Allow-rule
+        # header — runner IPs intermittently land on the QA WAF's block
+        # rules and every login 403s, the exact symptom described below).
+        # All triggers run from main, which the QA branch policy allows.
+        environment: QA
+        # 6 models x 5 PRs, each review polled up to 25 min. Full runs are long;
+        # GitHub's job ceiling is 6h. PR (light) runs are ~1 model.
+        timeout-minutes: 350
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            - name: Decide scope (no model pinned = full, else restrict)
+              id: scope
+              # `inputs.only_model` is populated for BOTH workflow_call (the
+              # deploy passes nothing → full) and workflow_dispatch (a dev may
+              # pin one model, e.g. "opus-4-7" to opt into the excluded model).
+              # Keying on the input — not the event — keeps both paths correct.
+              run: |
+                  set -euo pipefail
+                  ONLY_MODEL_INPUT="${{ inputs.only_model }}"
+
+                  if [ -n "$ONLY_MODEL_INPUT" ]; then
+                      echo "only_model=$ONLY_MODEL_INPUT" >> "$GITHUB_OUTPUT"
+                      echo "Restricted run: only_model='$ONLY_MODEL_INPUT'"
+                  else
+                      # FULL: all recommended models EXCEPT the ones excluded at
+                      # the driver level (Opus, see run.ts DEFAULT_EXCLUDED) —
+                      # 5 models, ~$17.
+                      echo "only_model=" >> "$GITHUB_OUTPUT"
+                      echo "Full run: 5 models (Opus excluded by driver)"
+                  fi
+
+            - name: Wait for QA backend to settle on this build (avoid deploy-race)
+              env:
+                  CLOUD_WEB_BASE_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://qa.web.kodus.io' }}
+                  QA_WAF_BYPASS_HEADER: ${{ secrets.QA_WAF_BYPASS_HEADER }}
+                  # When called from the QA deploy (caller event = push), the
+                  # engine image for github.sha was just built and is rolling out
+                  # via atlantis/ECS. Gate on /health reporting this SHA so the
+                  # benchmark BLOCKS until that rollout has fully landed — and
+                  # stays settled — before opening 25 PRs. Empty on a direct
+                  # workflow_dispatch (no deploy in flight) → pure readiness probe.
+                  EXPECTED_VERSION: ${{ github.event_name == 'push' && github.sha || '' }}
+              run: |
+                  set -uo pipefail
+                  BASE="${CLOUD_WEB_BASE_URL%/}/api/proxy/api"
+                  WAF_HDR=()
+                  if [ -n "${QA_WAF_BYPASS_HEADER:-}" ]; then
+                      WAF_HDR=(-H "x-kodus-e2e: ${QA_WAF_BYPASS_HEADER}")
+                  fi
+                  # This runs after the deploy job built+pushed the image and
+                  # opened the infra PR, so it hits the backend mid-rollout: the
+                  # gateway answers 403/5xx/000, OR the API answers app-level for a
+                  # moment and then restarts again as the rollout rolls across
+                  # replicas — and a single momentary 200 is exactly how the review
+                  # WORKER ends up not-yet-consuming when the 25 reviews fire (every
+                  # model × repo then "review timeout", the 2026-06-12 red). So we do
+                  # NOT proceed on the first healthy probe: we require the backend to
+                  # stay app-ready AND on THIS build for several CONSECUTIVE checks,
+                  # proving the rollout has settled. Budget covers the atlantis apply
+                  # + ECS blue/green rollout (the build itself already finished in the
+                  # deploy job) — 180×10s = ~30min.
+                  echo "Probing $BASE/auth/login for app-level readiness (settle gate)…"
+                  NEED_OK=3          # consecutive clean probes required to proceed
+                  SETTLE_SLEEP=10    # spacing between probes (s)
+                  MAX_TRIES=180      # ~30min ceiling for the rollout to land + settle
+                  ok_streak=0
+                  for i in $(seq 1 "$MAX_TRIES"); do
+                      code=$(curl -sS -o /dev/null -w '%{http_code}' \
+                          -X POST "$BASE/auth/login" \
+                          "${WAF_HDR[@]}" \
+                          -H 'Content-Type: application/json' \
+                          -d '{"email":"readiness-probe@invalid.kodus","password":"x"}' \
+                          2>/dev/null || echo 000)
+                      # If we know the target build, the live version must ALSO still
+                      # match on each probe — a flip back to the prior build means a
+                      # replica is mid-restart, so the rollout hasn't settled. Stays
+                      # best-effort: an empty/'unknown' version can't be gated on, so
+                      # it never blocks here.
+                      ver_ok=1
+                      if [ -n "${EXPECTED_VERSION:-}" ]; then
+                          ver=$(curl -sS "${WAF_HDR[@]}" "$BASE/health" 2>/dev/null \
+                              | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{console.log(JSON.parse(s).version||'')}catch{console.log('')}})" \
+                              2>/dev/null || echo "")
+                          case "$ver" in
+                              ""|unknown) ver_ok=1 ;;
+                              *"$EXPECTED_VERSION"*|*"${EXPECTED_VERSION:0:7}"*) ver_ok=1 ;;
+                              *) ver_ok=0 ;;
+                          esac
+                      fi
+                      case "$code" in
+                          200|201|400|401|404|422)
+                              if [ "$ver_ok" = 1 ]; then
+                                  ok_streak=$((ok_streak + 1))
+                                  echo "attempt $i/$MAX_TRIES: app-ready (HTTP $code), settle streak $ok_streak/$NEED_OK"
+                                  if [ "$ok_streak" -ge "$NEED_OK" ]; then
+                                      echo "QA settled on this build — proceeding with the benchmark."
+                                      exit 0
+                                  fi
+                              else
+                                  echo "attempt $i/$MAX_TRIES: app-ready (HTTP $code) but version='$ver' (rollout still moving) — resetting streak"
+                                  ok_streak=0
+                              fi
+                              sleep "$SETTLE_SLEEP" ;;
+                          *)
+                              echo "attempt $i/$MAX_TRIES: HTTP $code (gateway/rollout) — resetting streak, waiting ${SETTLE_SLEEP}s…"
+                              ok_streak=0
+                              sleep "$SETTLE_SLEEP" ;;
+                      esac
+                  done
+                  echo "::error::QA backend never settled (app-ready + this build, $NEED_OK consecutive) in ~30min — aborting before the benchmark to avoid deploy-race false failures."
+                  exit 1
+
+            - name: Run benchmark (mechanical gate — fails if any review fails)
+              working-directory: tests/e2e
+              env:
+                  CLOUD_WEB_BASE_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://qa.web.kodus.io' }}
+                  BENCH_ONLY_MODEL: ${{ steps.scope.outputs.only_model }}
+                  BENCH_TENANT_EMAIL: ${{ secrets.BENCH_TENANT_EMAIL }}
+                  BENCH_TENANT_PASSWORD: ${{ secrets.BENCH_TENANT_PASSWORD }}
+                  # WAF Allow-rule header — lib/http.ts injects it on every
+                  # qa.*.kodus.io request (see e2e-cloud.yml for rationale).
+                  QA_WAF_BYPASS_HEADER: ${{ secrets.QA_WAF_BYPASS_HEADER }}
+                  GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  BYOK_ANTHROPIC_API_KEY: ${{ secrets.BYOK_ANTHROPIC_API_KEY }}
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
+                  BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
+                  BYOK_ZHIPU_API_KEY: ${{ secrets.BYOK_ZHIPU_API_KEY }}
+              run: npm run benchmark:models
+
+            - name: Re-collect settled findings (repair late-posted findings)
+              if: always()
+              working-directory: tests/e2e
+              env:
+                  GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+              run: npm run benchmark:recollect || echo "recollect step failed (non-gating)"
+
+            - name: Scorecard (artifact, not a gate)
+              id: scorecard
+              if: always()
+              working-directory: tests/e2e
+              env:
+                  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+              # Never fail the job on the quality scorecard — the gate is the
+              # mechanical "all reviews completed" step above. Capture the printed
+              # table into a step output so the success notification can post it.
+              run: |
+                  npm run benchmark:scorecard 2>&1 | tee /tmp/scorecard.txt || echo "scorecard step failed (non-gating)"
+                  {
+                      echo 'table<<SCORECARD_EOF'
+                      grep -vE '^> |^npm |^$' /tmp/scorecard.txt | tail -n 40 || echo '(scorecard unavailable)'
+                      echo 'SCORECARD_EOF'
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Upload results + scorecard
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: tier0-benchmark-${{ github.run_id }}
+                  path: |
+                      tests/e2e/benchmark/results.json
+                      tests/e2e/benchmark/scorecard.json
+                  if-no-files-found: warn
+                  retention-days: 30
+
+            - name: Notify Discord on failure
+              if: failure()
+              uses: ./.github/actions/discord-notify
+              with:
+                  # Bench has its own audience (model quality watchers, not
+                  # infra). Falls back to general so missing channel doesn't
+                  # silence regressions.
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "❌ Model code-review benchmark failed"
+                  description: |
+                      Engine code merged to main but the per-model benchmark didn't complete.
+                      Scope: ${{ steps.scope.outputs.only_model != '' && format('only_model={0}', steps.scope.outputs.only_model) || 'FULL (5 models)' }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                      Trigger: ${{ github.event_name }}
+
+            - name: Notify Discord on success (scorecard)
+              if: success()
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: success
+                  title: "✅ Model code-review benchmark — scorecard"
+                  description: |
+                      Scope: ${{ steps.scope.outputs.only_model != '' && format('only_model={0}', steps.scope.outputs.only_model) || 'FULL (5 models)' }}
+                      ```
+                      ${{ steps.scorecard.outputs.table }}
+                      ```
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

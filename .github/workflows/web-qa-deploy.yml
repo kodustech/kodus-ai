@@ -154,10 +154,14 @@ jobs:
               if: always()
 
             - name: Discord Notification
+              if: always()
               uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
                   status: ${{ job.status }}
-                  content: ":clap: Build successful!"
                   title: "Deploy QA: kodus-web"
+                  description: |
+                      SHA: `${{ github.sha }}`
+                      Triggered by: @${{ github.actor }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   username: GitHub Actions

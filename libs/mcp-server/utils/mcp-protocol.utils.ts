@@ -1,4 +1,4 @@
-import { SimpleLogger } from '@kodus/flow/dist/observability/logger';
+import { SimpleLogger } from '@libs/core/log/logger';
 import { z } from 'zod';
 
 import { JsonRpcCode } from './errors'; // ← novo

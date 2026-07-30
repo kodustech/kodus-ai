@@ -2,8 +2,8 @@
 # Destroys a persistent self-hosted dev stack provisioned via provision.sh.
 #
 # Usage:
-#   yarn selfhosted:destroy                   # destroys default instance
-#   yarn selfhosted:destroy --name wellington # named instance
+#   pnpm run selfhosted:destroy                   # destroys default instance
+#   pnpm run selfhosted:destroy --name wellington # named instance
 
 set -euo pipefail
 
@@ -68,9 +68,9 @@ require_provider_token() {
     err ""
     err "Fix options:"
     err "  1) Save it once in your global config:"
-    err "       yarn selfhosted:setup"
+    err "       pnpm run selfhosted:setup"
     err "  2) Or pass it inline for this run:"
-    err "       $var=<your-token> yarn selfhosted:destroy${NAME:+ --name $NAME}"
+    err "       $var=<your-token> pnpm run selfhosted:destroy${NAME:+ --name $NAME}"
     err ""
     err "The droplet (id=$SERVER_ID, ip=$SERVER_IP) is still alive."
     err "You can also delete it manually at the provider's console."
@@ -151,6 +151,14 @@ if [ -n "$SSH_KEY_ID" ]; then
                 || warn "Could not remove SSH key — clean up at hetzner.cloud/ssh-keys"
             ;;
     esac
+fi
+
+# ---------- named tunnel cleanup (best effort) ----------
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/cf-tunnel.sh"
+if cf_named_tunnel_available; then
+    cf_tunnel_destroy "$NAME" && ok "Removed named Cloudflare tunnel + DNS for '$NAME'" \
+        || warn "Could not remove the named tunnel — clean up in the Cloudflare dashboard"
 fi
 
 # ---------- local cleanup ----------

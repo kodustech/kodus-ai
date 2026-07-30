@@ -8,7 +8,7 @@ export const PRCycleTimeAnalyticsHeader = ({
     return (
         <CardHeader>
             <div className="flex justify-between gap-4">
-                <CardTitle className="text-sm">
+                <CardTitle className="text-text-secondary text-xs font-semibold">
                     PR Cycle Time
                     <small className="text-text-secondary ml-1">(p75)</small>
                 </CardTitle>

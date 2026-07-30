@@ -2,9 +2,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { resolveScenarios } from "../scenarios/index.js";
+import { allScenarios, resolveScenarios } from "../scenarios/index.js";
 import { runMatrix } from "../lib/runner.js";
 import { summarize, writeAll } from "../lib/evidence.js";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { logger } from "../lib/log.js";
 import type { MatrixCell, ScenarioResult, Target } from "../lib/types.js";
 
@@ -99,6 +101,7 @@ function missingEnvFor(provider: string): string[] {
 interface ScenarioRequirement {
     files?: string[]; // absolute paths; presence required
     envOrFiles?: Array<{ env: string; defaultFile: string }>; // satisfied if either present
+    env?: string[]; // env vars whose non-empty presence is required
 }
 
 function resolveHome(p: string): string {
@@ -116,6 +119,14 @@ const SCENARIO_REQUIRED: Record<string, ScenarioRequirement> = {
             },
         ],
     },
+    // Mints a throwaway repo per run, which needs org Administration on
+    // kodus-e2e (create + delete). The regular fine-grained GH_TEST_TOKEN
+    // lacks that by design, so without the admin token the scenario would
+    // 403 at repo creation — skip it instead. In CI the token is the QA
+    // environment secret GH_REPO_ADMIN_TOKEN; set it locally to opt in.
+    "trial-managed-review": {
+        env: ["GH_REPO_ADMIN_TOKEN"],
+    },
 };
 
 function missingScenarioRequirements(scenarioId: string): string[] {
@@ -131,6 +142,9 @@ function missingScenarioRequirements(scenarioId: string): string[] {
         if (!existsSync(path)) {
             missing.push(`${env} (or file ${defaultFile})`);
         }
+    }
+    for (const env of req.env ?? []) {
+        if (!process.env[env]) missing.push(`env:${env}`);
     }
     return missing;
 }
@@ -298,9 +312,103 @@ async function main() {
     );
     log.info(`Evidence: ${artifactDir}`);
 
-    if (summary.failed > 0 || summary.blocked > 0 || targetCrashed) {
+    // ---- Tiered gating ---------------------------------------------------
+    // Only P0 scenarios FAIL the run. P1/P2 failures (and quarantined
+    // cells) are ADVISORY: the run stays green and they're reported as
+    // warnings — in the log here and in the Discord summary built from
+    // notify.json. This is what makes the matrix's red trustworthy: red
+    // means a release gate broke, not that a P1 demo endpoint hiccuped.
+    const failedResults = allResults.filter((r) => r.status === "failed");
+    const gating = failedResults.filter(
+        (r) => priorityOf(r.scenarioId) === "P0" && !isQuarantined(r),
+    );
+    const gatingSet = new Set(gating);
+    const advisory = failedResults.filter((r) => !gatingSet.has(r));
+
+    for (const r of advisory) {
+        const why = isQuarantined(r)
+            ? "quarantined"
+            : `priority ${priorityOf(r.scenarioId)}`;
+        log.info(
+            `ADVISORY (non-gating, ${why}): ${describeCell(r)} — ${firstLine(r.errorMessage)}`,
+        );
+    }
+
+    // Machine-readable digest for the CI notify step (Discord message with
+    // real numbers instead of a binary "failed"). Lives NEXT TO result.json;
+    // the workflow reads evidence/<latest>/notify.json.
+    // Only cells that PASSED on their second attempt — i.e. genuine flakes
+    // the retry absorbed. A cell that failed twice shows up in gating/
+    // advisory instead.
+    const retried = allResults.filter(
+        (r) =>
+            r.status === "passed" &&
+            (r.evidence as Record<string, unknown>)?.retriedAfter,
+    );
+    const notify = {
+        runId,
+        total: summary.total,
+        passed: summary.passed,
+        failed: summary.failed,
+        skipped: summary.skipped,
+        blocked: summary.blocked,
+        preSkippedCells: preSkipped.length,
+        targetCrashed,
+        gatingFailures: gating.map((r) => ({
+            cell: describeCell(r),
+            error: firstLine(r.errorMessage),
+        })),
+        advisoryFailures: advisory.map((r) => ({
+            cell: describeCell(r),
+            priority: priorityOf(r.scenarioId),
+            quarantined: isQuarantined(r),
+            error: firstLine(r.errorMessage),
+        })),
+        retriedCells: retried.map((r) => describeCell(r)),
+    };
+    writeFileSync(
+        join(artifactDir, "notify.json"),
+        JSON.stringify(notify, null, 2),
+    );
+
+    if (gating.length > 0 || summary.blocked > 0 || targetCrashed) {
         process.exit(1);
     }
+    if (advisory.length > 0) {
+        log.info(
+            `Run is GREEN with ${advisory.length} advisory (non-gating) failure(s) — see notify.json / Discord summary.`,
+        );
+    }
+}
+
+// Cells under investigation: they still RUN and REPORT (advisory) but never
+// gate the release. Format: "scenario-id" (all cells) or
+// "scenario-id×provider×license" (one cell). Keep entries SHORT-LIVED —
+// every entry must have an open issue; quarantine is a parking lot, not a
+// graveyard.
+const QUARANTINED: string[] = [];
+
+function isQuarantined(r: ScenarioResult): boolean {
+    return (
+        QUARANTINED.includes(r.scenarioId) ||
+        QUARANTINED.includes(
+            `${r.scenarioId}×${r.cell.provider}×${r.cell.license}`,
+        )
+    );
+}
+
+// Priority lookup from the scenario registry. Unknown id → P0
+// (conservative: an unregistered scenario should gate, not slip through).
+function priorityOf(scenarioId: string): string {
+    return allScenarios[scenarioId]?.priority ?? "P0";
+}
+
+function describeCell(r: ScenarioResult): string {
+    return `${r.scenarioId} × ${r.cell.target} × ${r.cell.provider} × ${r.cell.license}`;
+}
+
+function firstLine(message?: string): string {
+    return (message ?? "").split("\n")[0].slice(0, 300);
 }
 
 main().catch((err) => {

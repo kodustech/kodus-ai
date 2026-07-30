@@ -28,10 +28,17 @@
  *   GEMINI_API_KEY                Google AI API key for headline copy
  *                                 (or API_GOOGLE_AI_API_KEY — script
  *                                 picks whichever is set).
- *   DISCORD_WEBHOOK_SELFHOSTED    release announcement channel.
+ *   DISCORD_WEBHOOK_COMMUNITY     customer-facing #releases
+ *                                 channel in the Kodus community
+ *                                 Discord. Falls back to
+ *                                 DISCORD_WEBHOOK_SELFHOSTED (historical
+ *                                 channel that received this content
+ *                                 before) and DISCORD_WEBHOOK (legacy
+ *                                 general). The script picks the first
+ *                                 that's set.
  *
  * Usage:
- *   yarn feature-gate:changelog --tag <release-tag>
+ *   pnpm run feature-gate:changelog --tag <release-tag>
  *
  *   --tag <name>   The release tag this run is publishing for. Workflow
  *                  passes `selfhosted-*` only; running locally with
@@ -901,23 +908,32 @@ async function postDiscord(
     tag: string,
     content: string,
 ): Promise<void> {
-    // The workflow only fires on self-hosted tags, but the script
-    // accepts ad-hoc tags for local testing. We post to the
-    // self-hosted Discord channel for any train — there's only one
-    // public release-notes channel by design.
+    // Pick the first webhook that's set, in order of canonical → legacy.
+    // Lets ops migrate to #releases by just creating the new secret —
+    // until then this transparently keeps using the historical SH
+    // channel or the legacy general one. Same fallback shape every
+    // workflow uses.
     //
     // Strips whitespace defensively: pasting a long webhook URL into a
     // shell argument can wrap and embed a literal newline, which breaks
     // Discord auth without an obvious error.
-    const rawWebhook = process.env.DISCORD_WEBHOOK_SELFHOSTED ?? '';
+    const candidates: Array<[string, string]> = [
+        ['DISCORD_WEBHOOK_COMMUNITY', process.env.DISCORD_WEBHOOK_COMMUNITY ?? ''],
+        ['DISCORD_WEBHOOK_SELFHOSTED', process.env.DISCORD_WEBHOOK_SELFHOSTED ?? ''],
+        ['DISCORD_WEBHOOK', process.env.DISCORD_WEBHOOK ?? ''],
+    ];
+    const picked = candidates.find(([, v]) => v.replace(/\s/g, '') !== '');
+    const rawWebhook = picked ? picked[1] : '';
+    const sourceName = picked ? picked[0] : 'DISCORD_WEBHOOK_COMMUNITY';
     const webhook = rawWebhook.replace(/\s/g, '');
 
     if (!webhook) {
         console.warn(
-            `DISCORD_WEBHOOK_SELFHOSTED not configured, skipping post for ${tag}.`,
+            `No Discord webhook configured (tried DISCORD_WEBHOOK_COMMUNITY, DISCORD_WEBHOOK_SELFHOSTED, DISCORD_WEBHOOK), skipping post for ${tag}.`,
         );
         return;
     }
+    console.log(`Discord channel source: ${sourceName}`);
 
     // Diagnostic info without leaking the URL — helps debug 401s caused
     // by accidental whitespace, mis-pasted secrets, or revoked webhooks.

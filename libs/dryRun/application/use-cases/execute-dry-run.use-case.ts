@@ -1,4 +1,5 @@
-import { IdGenerator, createLogger } from '@kodus/flow';
+import { IdGenerator } from '@libs/core/utils/id-generator';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 

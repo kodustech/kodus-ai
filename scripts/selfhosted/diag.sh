@@ -12,14 +12,14 @@
 #   - MongoDB pullRequests collection (last 5 rows)
 #
 # Usage:
-#   yarn selfhosted:diag                  # full sweep
-#   yarn selfhosted:diag pg               # only Postgres
-#   yarn selfhosted:diag mongo            # only Mongo
-#   yarn selfhosted:diag rmq              # only RabbitMQ
-#   yarn selfhosted:diag tunnel           # only tunnel + recent webhook POSTs
-#   yarn selfhosted:diag pipeline         # tail recent azure_pipeline logs
-#   yarn selfhosted:diag unlock-outbox    # release orphan PROCESSING locks
-#   yarn selfhosted:diag reset-failed     # PROCESSING/PENDING with no recent activity → READY/PENDING
+#   pnpm run selfhosted:diag                  # full sweep
+#   pnpm run selfhosted:diag pg               # only Postgres
+#   pnpm run selfhosted:diag mongo            # only Mongo
+#   pnpm run selfhosted:diag rmq              # only RabbitMQ
+#   pnpm run selfhosted:diag tunnel           # only tunnel + recent webhook POSTs
+#   pnpm run selfhosted:diag pipeline         # tail recent azure_pipeline logs
+#   pnpm run selfhosted:diag unlock-outbox    # release orphan PROCESSING locks
+#   pnpm run selfhosted:diag reset-failed     # PROCESSING/PENDING with no recent activity → READY/PENDING
 
 set -euo pipefail
 
@@ -112,7 +112,7 @@ fi
 # poll only `claimBatch`-es rows with status='READY'; rows held in
 # 'PROCESSING' by a worker that died mid-publish stay invisible to the new
 # worker forever (no built-in lock-expiry visitor today). Run after a deploy
-# or container restart if `yarn selfhosted:diag pg` shows lingering
+# or container restart if `pnpm run selfhosted:diag pg` shows lingering
 # PROCESSING outbox rows from a previous instance.
 if [ "$WHAT" = "unlock-outbox" ]; then
   log_step "Releasing orphan PROCESSING outbox locks back to READY"

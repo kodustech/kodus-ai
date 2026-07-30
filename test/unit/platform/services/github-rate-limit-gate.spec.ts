@@ -20,7 +20,7 @@ import { GithubService } from '@libs/platform/infrastructure/adapters/services/g
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),

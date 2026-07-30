@@ -178,7 +178,8 @@ export function ByokManualPageClient({
         // makes the backend reject with "apiKey is required", which nudges
         // the user to paste credentials to authorize the URL change.
         const urlChanged =
-            data.provider === "openai_compatible" &&
+            (data.provider === "openai_compatible" ||
+                data.provider === "anthropic_compatible") &&
             (data.baseURL ?? undefined) !== existingConfig?.baseURL;
 
         if (!hasNewCredentials && !urlChanged) {

@@ -1,6 +1,7 @@
 import type { RunContext, Scenario } from "../lib/types.js";
 import { http } from "../lib/http.js";
 import { ensureLicenseSeat } from "../lib/onboarding.js";
+import { assertHealthyExecution } from "../lib/execution-health.js";
 
 // Same fixture branches as code-review-basic. The diff doesn't matter
 // for the command-review path — what's under test is whether posting
@@ -27,7 +28,11 @@ export const commandReview: Scenario = {
     appliesTo: {
         target: ["cloud", "self-hosted"],
         provider: ["github", "github-app", "gitlab", "bitbucket", "azure-devops"],
-        license: ["paid", "trial", "license-paid"],
+        // `trial` dropped here for the same reason as code-review-basic: a
+        // standing trial expires after 14 days. Trial is covered by the
+        // fresh-org scenarios `trial-entitlement-gate` + `trial-managed-review`;
+        // `paid` covers the command review path.
+        license: ["paid", "license-paid"],
     },
     // Same envelope as code-review-basic: needs room for onboarding +
     // disable-auto-review setup + open PR + post-comment +
@@ -138,12 +143,22 @@ export const commandReview: Scenario = {
                 `No review findings on PR/MR #${pr.number} within ${reviewLatencySec}s after posting "@kody review". pre-command findings count was ${preCount}.`,
             );
 
+            // Execution HEALTH, not just output: a command-triggered review can
+            // post findings while an agent/stage crashed (partial_error).
+            // Assert the execution settled `success`.
+            const executionStatus = await assertHealthyExecution(
+                ctx,
+                session,
+                pr.number,
+            );
+
             return {
                 prNumber: pr.number,
                 prUrl: pr.url,
                 fixture,
                 preCommandFindings: preCount,
                 reviewLatencySec,
+                executionStatus,
                 command: "@kody review",
             };
         } finally {

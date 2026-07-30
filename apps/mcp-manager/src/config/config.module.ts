@@ -7,7 +7,8 @@ import configuration from './configuration';
         ConfigModule.forRoot({
             isGlobal: true,
             load: [configuration],
-            envFilePath: ['.env', '.env.test'],
+            // Cascade: .env.local wins, then .env, then .env.test fallback.
+            envFilePath: ['.env.local', '.env', '.env.test'],
         }),
     ],
 })

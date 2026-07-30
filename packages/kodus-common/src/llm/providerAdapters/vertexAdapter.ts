@@ -10,21 +10,32 @@ interface VertexCredentials {
 
 export class VertexAdapter implements ProviderAdapter {
     build(params: AdapterBuildParams): ChatVertexAI {
-        const { model, options } = params;
+        const { model, apiKey, vertexLocation, options } = params;
         const resolved = resolveModelOptions(model, {
             temperature: options?.temperature,
             maxTokens: options?.maxTokens,
         });
 
-        const encoded = process.env.API_VERTEX_AI_API_KEY || '';
-        if (!encoded) {
+        // Prefer the BYOK service-account key (so a user's own key works on
+        // cloud AND self-hosted); fall back to the env var only for the
+        // legacy env-mode deployment. Accept the SA key as raw JSON (pasted
+        // file contents) or base64-encoded JSON — base64 of a JSON object
+        // always starts with `ey`, raw JSON starts with `{`.
+        const raw =
+            (apiKey || '').trim() || process.env.API_VERTEX_AI_API_KEY || '';
+        if (!raw) {
             throw new Error(
-                'Vertex adapter requires API_VERTEX_AI_API_KEY (base64 credentials) env var',
+                'Google Vertex requires a service account key (BYOK apiKey or API_VERTEX_AI_API_KEY env var)',
             );
         }
-        const credentials = Buffer.from(encoded, 'base64').toString('utf-8');
+        const credentials = raw.startsWith('{')
+            ? raw
+            : Buffer.from(raw, 'base64').toString('utf-8');
         const parsedCredentials = JSON.parse(credentials) as VertexCredentials;
-        const location = process.env.API_VERTEX_AI_LOCATION || 'us-central1';
+        const location =
+            vertexLocation?.trim() ||
+            process.env.API_VERTEX_AI_LOCATION ||
+            'global';
 
         const payload: ConstructorParameters<typeof ChatVertexAI>[0] = {
             model,

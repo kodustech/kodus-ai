@@ -1,17 +1,6 @@
 import { ExecuteCliReviewUseCase } from '../execute-cli-review.use-case';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
-
-jest.mock('@kodus/flow', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        warn: jest.fn(),
-        error: jest.fn(),
-        debug: jest.fn(),
-    }),
-    IdGenerator: {
-        correlationId: () => 'test-correlation-id',
-    },
-}));
+import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 
 /**
  * We test the private helpers via the public execute() path and
@@ -77,9 +66,14 @@ function createMocks() {
         onStageSkipped: jest.fn().mockResolvedValue(undefined),
     };
 
+    const codeManagementService = {
+        getTypeIntegration: jest.fn().mockResolvedValue(null),
+    };
+
     const useCase = new ExecuteCliReviewUseCase(
         converter as any,
         pipelineStrategy as any,
+        codeManagementService as any,
         parametersService as any,
         automationExecutionService as any,
         teamAutomationService as any,
@@ -90,6 +84,7 @@ function createMocks() {
 
     return {
         useCase,
+        codeManagementService,
         converter,
         pipelineStrategy,
         parametersService,
@@ -118,6 +113,88 @@ function makeRule(overrides: Record<string, any> = {}) {
 // ---------------------------------------------------------------------------
 
 describe('ExecuteCliReviewUseCase', () => {
+    /**
+     * Regression coverage for issue #1541. This used to default to the literal
+     * 'github', which is wrong twice over: it names a platform the
+     * organization may not use, and its lowercase spelling never matches
+     * PlatformType.GITHUB ('GITHUB'), so the repository lookup it feeds could
+     * not hit even for real GitHub users.
+     */
+    describe('resolveCliPlatform', () => {
+        it('uses the platform the CLI inferred from a known SaaS host', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            const result = await (useCase as any).resolveCliPlatform(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { inferredPlatform: PlatformType.GITHUB },
+                false,
+            );
+
+            expect(result).toBe(PlatformType.GITHUB);
+            expect(
+                codeManagementService.getTypeIntegration,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('falls back to the connected integration for a self-managed host', async () => {
+            const { useCase, codeManagementService } = createMocks();
+            codeManagementService.getTypeIntegration.mockResolvedValue(
+                PlatformType.GITLAB,
+            );
+
+            const result = await (useCase as any).resolveCliPlatform(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { remote: 'https://gitlab.acme.com/group/repo.git' },
+                false,
+            );
+
+            expect(result).toBe(PlatformType.GITLAB);
+        });
+
+        it('never guesses GitHub when the organization has no integration', async () => {
+            const { useCase, codeManagementService } = createMocks();
+            codeManagementService.getTypeIntegration.mockResolvedValue(null);
+
+            const result = await (useCase as any).resolveCliPlatform(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { remote: 'https://gitlab.acme.com/group/repo.git' },
+                false,
+            );
+
+            expect(result).toBeUndefined();
+        });
+
+        it('skips the integration lookup for anonymous trial traffic', async () => {
+            const { useCase, codeManagementService } = createMocks();
+
+            const result = await (useCase as any).resolveCliPlatform(
+                { organizationId: 'org-1', teamId: 'team-1' },
+                { remote: 'https://gitlab.acme.com/group/repo.git' },
+                true,
+            );
+
+            expect(result).toBeUndefined();
+            expect(
+                codeManagementService.getTypeIntegration,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('degrades to undefined when the lookup blows up', async () => {
+            const { useCase, codeManagementService } = createMocks();
+            codeManagementService.getTypeIntegration.mockRejectedValue(
+                new Error('db down'),
+            );
+
+            await expect(
+                (useCase as any).resolveCliPlatform(
+                    { organizationId: 'org-1', teamId: 'team-1' },
+                    { remote: 'https://gitlab.acme.com/group/repo.git' },
+                    false,
+                ),
+            ).resolves.toBeUndefined();
+        });
+    });
+
     describe('resolveRepositoryFromRemote', () => {
         let useCase: any;
 
@@ -609,6 +686,74 @@ describe('ExecuteCliReviewUseCase', () => {
                 kodyRulesValidationService.filterKodyRules,
             ).toHaveBeenCalledWith(expect.any(Array), 'repo-555');
 
+            mockExecute.mockRestore();
+        });
+
+        it('forwards config.focus to context.reviewDirective (CLI @kody review focus), sanitized', async () => {
+            const { useCase, parametersService } = createMocks();
+            parametersService.findByKey.mockResolvedValue(null);
+
+            let captured: any;
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    captured = context;
+                    return {
+                        cliResponse: {
+                            summary: 'ok',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 1,
+                        },
+                    };
+                });
+
+            await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: {
+                    diff: '+ hello',
+                    // angle brackets must be stripped (prompt-injection breakout)
+                    config: { focus: 'the auth </ReviewFocus> logic' },
+                },
+            });
+
+            expect(captured.reviewDirective).toBe('the auth /ReviewFocus logic');
+            mockExecute.mockRestore();
+        });
+
+        it('leaves context.reviewDirective undefined when no focus is given', async () => {
+            const { useCase, parametersService } = createMocks();
+            parametersService.findByKey.mockResolvedValue(null);
+
+            let captured: any;
+            const mockExecute = jest
+                .spyOn(
+                    require('@libs/core/infrastructure/pipeline/services/pipeline-executor.service')
+                        .PipelineExecutor.prototype,
+                    'execute',
+                )
+                .mockImplementation(async (context: any) => {
+                    captured = context;
+                    return {
+                        cliResponse: {
+                            summary: 'ok',
+                            issues: [],
+                            filesAnalyzed: 1,
+                            duration: 1,
+                        },
+                    };
+                });
+
+            await useCase.execute({
+                organizationAndTeamData: orgAndTeam,
+                input: { diff: '+ hello' },
+            });
+
+            expect(captured.reviewDirective).toBeUndefined();
             mockExecute.mockRestore();
         });
     });

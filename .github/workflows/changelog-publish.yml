@@ -75,7 +75,11 @@ jobs:
         needs: validate
         if: needs.validate.outputs.should_publish == 'true'
         runs-on: ubuntu-latest
-        environment: production
+        # Uses `ci` env (no reviewer) — scoped access to RELEASE_BOT_TOKEN
+        # without the human-approval friction that `production` would
+        # add. The image-publishing gate lives at `promote` in
+        # selfhosted-build-push.yml, not here.
+        environment: ci
         steps:
             - name: Checkout (full history for tag-range diff)
               uses: actions/checkout@v6.0.2
@@ -89,17 +93,19 @@ jobs:
                   # whose owner is an OrganizationAdmin bypass actor.
                   token: ${{ secrets.RELEASE_BOT_TOKEN }}
 
+            - uses: pnpm/action-setup@v4
+
             - name: Set up Node
               uses: actions/setup-node@v4
               with:
                   node-version: "22"
-                  cache: "yarn"
+                  cache: "pnpm"
 
             - name: Install dependencies
-              run: yarn install --frozen-lockfile
+              run: pnpm install --frozen-lockfile
 
             - name: Verify snapshot is in sync
-              run: yarn feature-gate:snapshot:check
+              run: pnpm run feature-gate:snapshot:check
 
             - name: Draft and publish promotions for this release
               env:
@@ -109,11 +115,18 @@ jobs:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
                   GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3-flash-preview' }}
+                  # Routing: prefer the new community channel; fall back to
+                  # the historical SH-specific one; finally to the legacy
+                  # general webhook. publish-changelog.ts picks the first
+                  # that is set. The community channel is the customer-
+                  # facing #releases announcements channel (cloud + SH
+                  # share the same image, same announcement).
+                  DISCORD_WEBHOOK_COMMUNITY: ${{ secrets.DISCORD_WEBHOOK_COMMUNITY }}
                   DISCORD_WEBHOOK_SELFHOSTED: ${{ secrets.DISCORD_WEBHOOK_SELFHOSTED }}
+                  DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
                   RELEASE_TAG: ${{ needs.validate.outputs.tag }}
               run: |
-                  yarn ts-node scripts/feature-gate/publish-changelog.ts \
-                      --tag "$RELEASE_TAG"
+                  pnpm run feature-gate:changelog -- --tag "$RELEASE_TAG"
 
             - name: Commit changelog entry (if any)
               env:

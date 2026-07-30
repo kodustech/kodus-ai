@@ -29,7 +29,7 @@ Cada archivo de regla debe seguir exactamente esta estructura de plantilla:
 ```markdown
 ---
 title: "<nombre de la regla>"
-scope: "file"            # "file" o "pull_request"
+scope: "file"            # "file" o "pull-request"
 path: []                 # lista de globs. ejemplo: ["**/*.ts", "apps/web/**"]
 severity_min: "high"     # "low", "medium", "high", "critical"
 languages: []            # opcional. ej: ["jsts", "go", "php", "ruby", "java", "csharp", "dart", "kotlin", "rust"]
@@ -63,7 +63,7 @@ Describe qué revisar y cómo decidir. Sé directo y objetivo.
 | Campo | Descripción | Valores |
 |-------|-------------|---------|
 | `title` | Nombre de la regla mostrado en la interfaz | Cualquier cadena descriptiva |
-| `scope` | Alcance del análisis de la regla | `"file"` o `"pull_request"` |
+| `scope` | Alcance del análisis de la regla | `"file"` o `"pull-request"` |
 | `path` | Rutas de archivos donde aplica la regla | Array de patrones glob |
 | `severity_min` | Nivel mínimo de severidad | `"low"`, `"medium"`, `"high"`, `"critical"` |
 
@@ -112,7 +112,7 @@ function processUser(user: User) {
 ```markdown
 ---
 title: "New API endpoints must have tests"
-scope: "pull_request"
+scope: "pull-request"
 path: ["**/*"]
 severity_min: "high"
 buckets: ["testing"]

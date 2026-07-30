@@ -5,7 +5,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import pLimit from 'p-limit';
 import { v4 as uuidv4 } from 'uuid';
 
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import {
     ISuggestionService,
     SUGGESTION_SERVICE_TOKEN,

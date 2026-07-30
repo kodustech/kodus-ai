@@ -1,30 +1,110 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import NextLink from "next/link";
-import { Spinner } from "@components/ui/spinner";
+import { useSearchParams } from "next/navigation";
+import { Skeleton } from "@components/ui/skeleton";
 import {
     useInfinitePullRequestExecutions,
     usePullRequestFiles,
     usePullRequestSuggestions,
+    type PullRequestCommit,
+    type PullRequestExecution,
     type PullRequestFile,
 } from "@services/pull-requests";
-import {
-    ArrowLeftIcon,
-    ExternalLinkIcon,
-    GitBranchIcon,
-    PanelLeftCloseIcon,
-    PanelLeftOpenIcon,
-    PanelRightCloseIcon,
-    PanelRightOpenIcon,
-} from "lucide-react";
+import { ArrowLeftIcon } from "lucide-react";
+// Review screen — ported from the `try` app: a max-w page that scrolls as a
+// whole, with sticky left (file tree) and right (issues/metadata) rails and a
+// center column carrying the PR header + diff.
+import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
-import { cn } from "src/core/utils/components";
 
 import { DiffViewer } from "./diff-viewer";
-import { FileTree } from "./file-tree";
 import { ReviewStateProvider, useReviewStore } from "./review-store";
-import { SummaryPanel } from "./summary-panel";
+import { adaptForTryDiffViewer, buildHeaderPrInfo } from "./try-port/adapt";
+import { CommitsList } from "./try-port/CommitsList";
+import { FileTree, type FileTreeMode } from "./try-port/FileTree";
+import { PrHeader, type PrTab } from "./try-port/PrHeader";
+import { RightSidebar } from "./try-port/RightSidebar";
+import type { ReviewIssue } from "./try-port/types";
+
+// Web only carries data for these two tabs (Kody doesn't store the PR body
+// or comment threads), so we render a narrower tab bar than try's four.
+const WEB_TABS: PrTab[] = ["review", "commits"];
+const FILE_TREE_MODE_KEY = "kodus:pr-file-tree-mode";
+
+function PanelError({ error }: FallbackProps) {
+    const message =
+        error instanceof Error ? error.message : String(error ?? "");
+    return (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-2)]/70 p-6 text-center text-sm">
+            <p className="font-semibold text-[var(--red)]">
+                This panel crashed
+            </p>
+            <p className="max-w-md font-mono text-xs break-words text-[var(--text-dim)]">
+                {message}
+            </p>
+        </div>
+    );
+}
+
+/**
+ * Slim bar above the diff: signal hierarchy on the left (what needs attention
+ * vs. what's minor) and review progress on the right (files viewed / total).
+ * Gives the reviewer an overview and a sense of "where am I" before the diff —
+ * the two things GitHub's raw file list never answers.
+ */
+function ReviewProgressBar({
+    viewed,
+    total,
+    attention,
+    minor,
+}: {
+    viewed: number;
+    total: number;
+    attention: number;
+    minor: number;
+}) {
+    const pct = total > 0 ? Math.round((100 * viewed) / total) : 0;
+    return (
+        <div className="mt-3 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 px-4 py-2.5">
+            <div className="flex items-center gap-2.5 text-sm">
+                {attention > 0 ? (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-[var(--warn)]">
+                        <span className="size-1.5 rounded-full bg-[var(--warn)]" />
+                        {attention} need attention
+                    </span>
+                ) : (
+                    <span className="inline-flex items-center gap-1.5 font-medium text-[var(--green)]">
+                        <span className="size-1.5 rounded-full bg-[var(--green)]" />
+                        nothing critical
+                    </span>
+                )}
+                {minor > 0 && (
+                    <span className="text-[var(--text-dim)]">
+                        · {minor} minor
+                    </span>
+                )}
+            </div>
+            <div className="flex items-center gap-2.5">
+                <span className="font-mono text-xs text-[var(--text-muted)] tabular-nums">
+                    {viewed} / {total} viewed
+                </span>
+                <span
+                    className="h-1.5 w-24 overflow-hidden rounded-full bg-[var(--bg-4)]"
+                    role="progressbar"
+                    aria-valuenow={pct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}>
+                    <span
+                        className="block h-full rounded-full bg-[var(--accent)] transition-[width] duration-300"
+                        style={{ width: `${pct}%` }}
+                    />
+                </span>
+            </div>
+        </div>
+    );
+}
 
 interface ReviewPageClientProps {
     repositoryId: string;
@@ -44,15 +124,14 @@ export function ReviewPageClient({
     } = usePullRequestSuggestions(repositoryId, prNumber);
 
     // Get PR metadata from executions
-    const { items: executions, isLoading: executionsLoading } =
-        useInfinitePullRequestExecutions(
-            {
-                teamId,
-                repositoryId,
-                pullRequestNumber: prNumber.toString(),
-            },
-            { pageSize: 1 },
-        );
+    const { items: executions } = useInfinitePullRequestExecutions(
+        {
+            teamId,
+            repositoryId,
+            pullRequestNumber: prNumber.toString(),
+        },
+        { pageSize: 1 },
+    );
 
     const prExecution = useMemo(
         () => executions.find((e) => e.prNumber === prNumber),
@@ -74,26 +153,35 @@ export function ReviewPageClient({
         error: filesError,
     } = usePullRequestFiles(repositoryId, prNumber, teamId, repoName);
 
-    const fileSuggestions = suggestionsData?.data?.suggestions?.files ?? [];
-    const prLevelSuggestions =
-        suggestionsData?.data?.suggestions?.prLevel ?? [];
-    const patchFiles: PullRequestFile[] = filesData?.data?.files ?? [];
+    // Derive these through useMemo so their reference is stable across renders
+    // while the underlying query data is unchanged. Without it, `?? []` (and
+    // the optional-chain miss during loading) hands a fresh array to every
+    // downstream memo — adaptForTryDiffViewer, buildTree, buildCohorts — on
+    // each render, defeating their memoization on a screen whose diffs are the
+    // expensive part to recompute.
+    const fileSuggestions = useMemo(
+        () => suggestionsData?.data?.suggestions?.files ?? [],
+        [suggestionsData],
+    );
+    const prLevelSuggestions = useMemo(
+        () => suggestionsData?.data?.suggestions?.prLevel ?? [],
+        [suggestionsData],
+    );
+    const patchFiles: PullRequestFile[] = useMemo(
+        () => filesData?.data?.files ?? [],
+        [filesData],
+    );
+    const commits: PullRequestCommit[] = useMemo(
+        () => filesData?.data?.commits ?? [],
+        [filesData],
+    );
     const patchFilenames = useMemo(
         () => patchFiles.map((f) => f.filename),
         [patchFiles],
     );
 
     if (suggestionsLoading) {
-        return (
-            <div className="flex h-full items-center justify-center">
-                <div className="flex flex-col items-center gap-3">
-                    <Spinner className="size-6" />
-                    <p className="text-text-tertiary text-sm">
-                        Loading suggestions...
-                    </p>
-                </div>
-            </div>
-        );
+        return <ReviewPageSkeleton />;
     }
 
     if (suggestionsError) {
@@ -116,16 +204,15 @@ export function ReviewPageClient({
             suggestions={fileSuggestions}
             patchFilenames={patchFilenames}>
             <ReviewLayout
+                execution={prExecution}
                 fileSuggestions={fileSuggestions}
                 prLevelSuggestions={prLevelSuggestions}
                 patchFiles={patchFiles}
+                commits={commits}
                 patchesLoading={filesLoading}
                 patchesError={filesError}
-                prTitle={prExecution?.title}
                 prNumber={prNumber}
                 prUrl={prExecution?.url}
-                baseBranch={prExecution?.baseBranchRef}
-                headBranch={prExecution?.headBranchRef}
                 repositoryName={
                     suggestionsData?.data?.repositoryFullName ??
                     prExecution?.repositoryName
@@ -135,32 +222,172 @@ export function ReviewPageClient({
     );
 }
 
+// Mirrors ReviewLayout's shell (max-w-[1600px] + file-tree / diff / sidebar
+// grid) so the page paints its structure immediately instead of a centered
+// spinner while suggestions load.
+function ReviewPageSkeleton() {
+    return (
+        <div className="kodus-scroll h-full overflow-y-auto bg-[var(--bg)]">
+            <section className="px-6 py-6">
+                <div className="mx-auto max-w-[1600px]">
+                    <Skeleton className="mb-4 h-4 w-28" />
+                    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[280px_minmax(0,1fr)_300px]">
+                        <div className="hidden flex-col gap-2 lg:flex">
+                            {Array.from({ length: 9 }).map((_, i) => (
+                                <Skeleton key={i} className="h-6 w-full" />
+                            ))}
+                        </div>
+                        <div className="flex min-w-0 flex-col gap-4">
+                            <Skeleton className="h-16 w-full rounded-xl" />
+                            <Skeleton className="h-[60vh] w-full rounded-xl" />
+                        </div>
+                        <div className="hidden flex-col gap-3 lg:flex">
+                            <Skeleton className="h-32 w-full rounded-xl" />
+                            <Skeleton className="h-48 w-full rounded-xl" />
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    );
+}
+
 function ReviewLayout({
+    execution,
     fileSuggestions,
     prLevelSuggestions,
     patchFiles,
+    commits,
     patchesLoading,
     patchesError,
-    prTitle,
     prNumber,
     prUrl,
-    baseBranch,
-    headBranch,
     repositoryName,
 }: {
+    execution?: PullRequestExecution;
     fileSuggestions: any[];
     prLevelSuggestions: any[];
     patchFiles: PullRequestFile[];
+    commits: PullRequestCommit[];
     patchesLoading: boolean;
     patchesError?: Error | null;
-    prTitle?: string;
     prNumber: number;
     prUrl?: string;
-    baseBranch?: string;
-    headBranch?: string;
     repositoryName?: string;
 }) {
     const { state, dispatch, navigateFile } = useReviewStore();
+    const [activeTab, setActiveTab] = useState<PrTab>("review");
+    // Folder tree vs. role-grouped cohorts. Persisted so the choice sticks
+    // across PRs. Applied AFTER mount (not in the initializer) so the server
+    // and the first client render agree on the "tree" default — reading
+    // localStorage in the initializer would diverge and trip a hydration
+    // mismatch. This one-time sync of a client-only preference is the case the
+    // set-state-in-effect heuristic doesn't cover, hence the scoped disable.
+    const [treeMode, setTreeMode] = useState<FileTreeMode>("tree");
+    useEffect(() => {
+        const saved = window.localStorage.getItem(FILE_TREE_MODE_KEY);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (saved === "grouped" || saved === "tree") setTreeMode(saved);
+    }, []);
+    const toggleTreeMode = () =>
+        setTreeMode((m) => {
+            const next = m === "tree" ? "grouped" : "tree";
+            window.localStorage.setItem(FILE_TREE_MODE_KEY, next);
+            return next;
+        });
+
+    // Deep link: /pull-requests/<repo>/<num>?file=<path>&suggestion=<id>
+    // Lands the user on the exact finding — scrolls to it and lights it up.
+    const searchParams = useSearchParams();
+    const deepLinkFile = searchParams.get("file");
+    const deepLinkIssue = searchParams.get("suggestion");
+
+    const pr = useMemo(
+        () =>
+            buildHeaderPrInfo({
+                execution,
+                patchFiles,
+                prNumber,
+                repositoryName,
+                commitsCount: commits.length,
+            }),
+        [execution, patchFiles, prNumber, repositoryName, commits.length],
+    );
+
+    // File tree + right-sidebar both want the diff-file metadata and a flat
+    // issue list. Use the unfiltered suggestions so badges/counts reflect
+    // every finding, not the current severity filter.
+    const { files: treeFiles, issues: treeIssues } = useMemo(
+        () =>
+            adaptForTryDiffViewer({
+                patchFiles,
+                suggestions: fileSuggestions,
+            }),
+        [patchFiles, fileSuggestions],
+    );
+
+    const suggestionCount = fileSuggestions.length + prLevelSuggestions.length;
+
+    // Orientation + signal hierarchy for the review header: how far the
+    // reviewer has gotten, and how many findings actually need attention vs.
+    // are minor. Bucketed case-insensitively so it survives severity casing.
+    const viewedCount = useMemo(
+        () => treeFiles.filter((f) => state.viewedFiles[f.path]).length,
+        [treeFiles, state.viewedFiles],
+    );
+    // Count critical/high across BOTH file-level and PR-level findings so the
+    // "needs attention" figure — and the derived "minor" count below — line up
+    // with suggestionCount, which also includes prLevelSuggestions. Counting
+    // only treeIssues here let PR-level criticals leak into the "minor" tally.
+    const attentionCount = useMemo(() => {
+        const isAttention = (severity?: string) =>
+            ["critical", "high"].includes((severity ?? "").toLowerCase());
+        const fromFiles = treeIssues.filter((i) =>
+            isAttention(i.severity),
+        ).length;
+        const fromPrLevel = prLevelSuggestions.filter((s) =>
+            isAttention(s?.severity),
+        ).length;
+        return fromFiles + fromPrLevel;
+    }, [treeIssues, prLevelSuggestions]);
+
+    const jumpToFile = (path: string) =>
+        dispatch({ type: "SELECT_FILE", path });
+
+    // Click on a sidebar finding → land ON that suggestion (not the file top)
+    // and pulse it. Targets the `suggestion-<id>` anchor, which is keyed on the
+    // finding's own id, so it works even when the finding's file path doesn't
+    // match the diff's — the reason clicking used to do nothing. Retries a few
+    // frames while the diff finishes mounting.
+    const [activeIssueId, setActiveIssueId] = useState<string | null>(null);
+    const jumpToIssue = (issue: ReviewIssue) => {
+        if (issue.file) dispatch({ type: "SELECT_FILE", path: issue.file });
+        const targetId = issue.id
+            ? `suggestion-${issue.id}`
+            : issue.file
+              ? `file-${issue.file}`
+              : null;
+        if (issue.id) setActiveIssueId(issue.id);
+        if (!targetId) return;
+        let tries = 0;
+        const tryScroll = () => {
+            const el = document.getElementById(targetId);
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+            }
+            if (tries++ < 60) requestAnimationFrame(tryScroll);
+        };
+        requestAnimationFrame(tryScroll);
+    };
+
+    // Keep the highlight in sync with the URL: navigating to (or away from) a
+    // deep-linked finding overrides a stale activeIssueId left by a prior
+    // sidebar click, so back/forward doesn't light up the wrong card.
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setActiveIssueId(deepLinkIssue ?? null);
+    }, [deepLinkIssue]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -184,10 +411,6 @@ function ReviewLayout({
                     e.preventDefault();
                     dispatch({ type: "TOGGLE_SIDEBAR" });
                     break;
-                case "i":
-                    e.preventDefault();
-                    dispatch({ type: "TOGGLE_SUMMARY" });
-                    break;
                 case "Escape":
                     dispatch({ type: "SELECT_FILE", path: null });
                     break;
@@ -198,138 +421,197 @@ function ReviewLayout({
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [dispatch, navigateFile]);
 
+    // Deep-link landing: scroll to the target suggestion card (or file) once
+    // it mounts. The diff loads async, so poll a few frames until the anchor
+    // exists. For a file-only link we also mark it active in the tree.
+    useEffect(() => {
+        if (!deepLinkFile && !deepLinkIssue) return;
+        if (deepLinkFile && !deepLinkIssue) {
+            dispatch({ type: "SELECT_FILE", path: deepLinkFile });
+        }
+        const issueTarget = deepLinkIssue
+            ? `suggestion-${deepLinkIssue}`
+            : null;
+        const fileTarget = deepLinkFile ? `file-${deepLinkFile}` : null;
+        let raf = 0;
+        let tries = 0;
+        const tryScroll = () => {
+            const el = issueTarget
+                ? document.getElementById(issueTarget)
+                : fileTarget
+                  ? document.getElementById(fileTarget)
+                  : null;
+            if (el) {
+                el.scrollIntoView({
+                    behavior: "smooth",
+                    block: issueTarget ? "center" : "start",
+                });
+                return;
+            }
+            // ~3s of frames — enough for the provider/diff fetch to land.
+            if (tries++ < 180) {
+                raf = requestAnimationFrame(tryScroll);
+                return;
+            }
+            // The suggestion card never showed (id drift / filtered out) —
+            // fall back to at least landing on the file.
+            if (issueTarget && fileTarget) {
+                document
+                    .getElementById(fileTarget)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+        };
+        raf = requestAnimationFrame(tryScroll);
+        return () => cancelAnimationFrame(raf);
+    }, [deepLinkFile, deepLinkIssue, dispatch]);
+
+    const stickyAside =
+        "lg:sticky lg:top-4 lg:self-start lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto kodus-scroll";
+
     return (
-        <div className="flex h-full flex-col overflow-hidden">
-            {/* Top bar */}
-            <div className="border-card-lv2 bg-card-lv1 flex items-center gap-4 border-b px-4 py-2.5">
-                <NextLink
-                    href="/pull-requests"
-                    className="text-text-tertiary hover:bg-card-lv3 hover:text-text-primary rounded p-1 transition-colors">
-                    <ArrowLeftIcon className="size-4" />
-                </NextLink>
+        <div className="kodus-scroll h-full overflow-y-auto bg-[var(--bg)]">
+            <section className="px-6 py-6">
+                <div className="mx-auto max-w-[1600px]">
+                    <NextLink
+                        href="/pull-requests"
+                        className="mb-4 inline-flex items-center gap-1.5 text-xs text-[var(--text-dim)] transition-colors hover:text-[var(--text-muted)]">
+                        <ArrowLeftIcon className="size-3.5" />
+                        Pull requests
+                    </NextLink>
 
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                    <h1 className="text-text-primary truncate text-sm font-medium">
-                        {prTitle ?? `PR #${prNumber}`}
-                    </h1>
-                    <span className="text-text-tertiary shrink-0 text-xs">
-                        #{prNumber}
-                    </span>
-                </div>
-
-                {(baseBranch || headBranch) && (
-                    <div className="text-text-tertiary hidden items-center gap-1.5 text-xs md:flex">
-                        <GitBranchIcon className="size-3" />
-                        <span className="font-mono">{headBranch ?? "?"}</span>
-                        <span className="text-text-tertiary/50">→</span>
-                        <span className="font-mono">{baseBranch ?? "?"}</span>
-                    </div>
-                )}
-
-                <div className="flex items-center gap-1">
-                    <button
-                        onClick={() => dispatch({ type: "TOGGLE_SIDEBAR" })}
-                        className={cn(
-                            "rounded p-1.5 transition-colors",
+                    <div
+                        className={`grid grid-cols-1 gap-5 transition-[grid-template-columns] duration-200 ease-out ${
                             state.sidebarOpen
-                                ? "text-text-secondary hover:text-text-primary"
-                                : "text-text-tertiary hover:text-text-primary",
-                        )}
-                        title="Toggle file tree (b)">
-                        {state.sidebarOpen ? (
-                            <PanelLeftCloseIcon className="size-4" />
-                        ) : (
-                            <PanelLeftOpenIcon className="size-4" />
-                        )}
-                    </button>
-                    <button
-                        onClick={() => dispatch({ type: "TOGGLE_SUMMARY" })}
-                        className={cn(
-                            "rounded p-1.5 transition-colors",
-                            state.summaryPanelOpen
-                                ? "text-text-secondary hover:text-text-primary"
-                                : "text-text-tertiary hover:text-text-primary",
-                        )}
-                        title="Toggle summary (i)">
-                        {state.summaryPanelOpen ? (
-                            <PanelRightCloseIcon className="size-4" />
-                        ) : (
-                            <PanelRightOpenIcon className="size-4" />
-                        )}
-                    </button>
+                                ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]"
+                                : "lg:grid-cols-[40px_minmax(0,1fr)_300px]"
+                        }`}>
+                        {/* LEFT — file tree / collapsed rail */}
+                        <aside className={stickyAside}>
+                            {state.sidebarOpen ? (
+                                <FileTree
+                                    files={treeFiles}
+                                    issues={treeIssues}
+                                    activePath={state.selectedFilePath}
+                                    viewed={state.viewedFiles}
+                                    onPick={jumpToFile}
+                                    prRef={`PR #${prNumber}`}
+                                    mode={treeMode}
+                                    onToggleMode={toggleTreeMode}
+                                    onHide={() =>
+                                        dispatch({ type: "TOGGLE_SIDEBAR" })
+                                    }
+                                />
+                            ) : (
+                                <FileTreeRail
+                                    fileCount={treeFiles.length}
+                                    onShow={() =>
+                                        dispatch({ type: "TOGGLE_SIDEBAR" })
+                                    }
+                                />
+                            )}
+                        </aside>
 
-                    {prUrl && (
-                        <a
-                            href={prUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-text-tertiary hover:text-text-primary rounded p-1.5 transition-colors"
-                            title="Open in provider">
-                            <ExternalLinkIcon className="size-4" />
-                        </a>
-                    )}
-                </div>
-            </div>
-
-            {/* Three-panel layout */}
-            <div className="flex min-h-0 flex-1">
-                {/* File tree sidebar */}
-                {state.sidebarOpen && (
-                    <>
-                        <div className="border-card-lv2 bg-card-lv1 w-64 shrink-0 overflow-hidden border-r">
-                            <FileTree />
-                        </div>
-                    </>
-                )}
-
-                {/* Main diff viewer */}
-                <div className="min-w-0 flex-1">
-                    <DiffViewer
-                        patchFiles={patchFiles}
-                        patchesLoading={patchesLoading}
-                        patchesError={patchesError}
-                    />
-                </div>
-
-                {/* Summary panel */}
-                {state.summaryPanelOpen && (
-                    <>
-                        <div className="border-card-lv2 bg-card-lv1 w-80 shrink-0 overflow-hidden border-l">
-                            <SummaryPanel
-                                fileSuggestions={fileSuggestions}
-                                prLevelSuggestions={prLevelSuggestions}
-                                prTitle={prTitle}
-                                prNumber={prNumber}
-                                repositoryName={repositoryName}
+                        {/* CENTER — header + diff */}
+                        <div className="min-w-0">
+                            <PrHeader
+                                pr={pr}
+                                suggestionCount={suggestionCount}
+                                activeTab={activeTab}
+                                onTabChange={setActiveTab}
+                                tabs={WEB_TABS}
                             />
-                        </div>
-                    </>
-                )}
-            </div>
 
-            {/* Keyboard shortcuts hint */}
-            <div className="border-card-lv2 bg-card-lv1 flex items-center gap-4 border-t px-4 py-1.5">
-                <ShortcutHint keys={["j", "k"]} label="navigate files" />
-                <ShortcutHint keys={["b"]} label="toggle sidebar" />
-                <ShortcutHint keys={["i"]} label="toggle summary" />
-            </div>
+                            {activeTab === "review" && (
+                                <ReviewProgressBar
+                                    viewed={viewedCount}
+                                    total={treeFiles.length}
+                                    attention={attentionCount}
+                                    minor={Math.max(
+                                        0,
+                                        suggestionCount - attentionCount,
+                                    )}
+                                />
+                            )}
+
+                            {activeTab === "review" && (
+                                <ErrorBoundary FallbackComponent={PanelError}>
+                                    <DiffViewer
+                                        patchFiles={patchFiles}
+                                        patchesLoading={patchesLoading}
+                                        patchesError={patchesError}
+                                        prNumber={prNumber}
+                                        prUrl={prUrl}
+                                        repositoryName={repositoryName}
+                                        highlightIssueId={
+                                            activeIssueId ??
+                                            deepLinkIssue ??
+                                            undefined
+                                        }
+                                    />
+                                </ErrorBoundary>
+                            )}
+
+                            {activeTab === "commits" && (
+                                <CommitsList commits={commits} />
+                            )}
+                        </div>
+
+                        {/* RIGHT — issues + PR metadata */}
+                        <aside className={stickyAside}>
+                            <ErrorBoundary FallbackComponent={PanelError}>
+                                <RightSidebar
+                                    pr={pr}
+                                    issues={treeIssues}
+                                    isCompleted
+                                    onJumpToIssue={jumpToIssue}
+                                />
+                            </ErrorBoundary>
+                        </aside>
+                    </div>
+                </div>
+            </section>
         </div>
     );
 }
 
-function ShortcutHint({ keys, label }: { keys: string[]; label: string }) {
+function FileTreeRail({
+    fileCount,
+    onShow,
+}: {
+    fileCount: number;
+    onShow: () => void;
+}) {
     return (
-        <div className="text-text-tertiary flex items-center gap-1.5 text-[10px]">
-            <div className="flex gap-0.5">
-                {keys.map((key) => (
-                    <kbd
-                        key={key}
-                        className="border-card-lv3 bg-card-lv2 rounded border px-1.5 py-0.5 font-mono text-[10px]">
-                        {key}
-                    </kbd>
-                ))}
-            </div>
-            <span>{label}</span>
-        </div>
+        <button
+            type="button"
+            onClick={onShow}
+            aria-label="Show file tree"
+            title="Show file tree (b)"
+            className="group flex w-full flex-col items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 py-3 transition-colors hover:border-[var(--border-strong)] hover:bg-[var(--bg-3)]">
+            <span className="inline-flex size-6 items-center justify-center rounded text-[var(--text-muted)] transition-colors group-hover:text-[var(--text)]">
+                <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden>
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                    <line x1="9" y1="3" x2="9" y2="21" />
+                    <polyline points="14 9 17 12 14 15" />
+                </svg>
+            </span>
+            <span
+                className="font-mono text-[10px] tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
+                style={{
+                    writingMode: "vertical-rl",
+                    transform: "rotate(180deg)",
+                }}>
+                {fileCount} file{fileCount === 1 ? "" : "s"}
+            </span>
+        </button>
     );
 }

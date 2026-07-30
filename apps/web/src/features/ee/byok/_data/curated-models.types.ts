@@ -10,6 +10,10 @@ export type ModelVariant = {
     baseURL: string;
     apiKeyUrl?: string;
     maxConcurrentRequests?: number;
+    /** Overrides the model-level provider for this variant (e.g. the Kimi
+     *  Code Plan speaks the Anthropic protocol while the Developer API is
+     *  OpenAI-compatible). */
+    provider?: string;
 };
 
 export type CuratedModel = {

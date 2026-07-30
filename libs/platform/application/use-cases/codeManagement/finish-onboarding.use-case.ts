@@ -1,9 +1,8 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 import { FinishOnboardingDTO } from '@libs/platform/dtos/finish-onboarding.dto';
 
-import { retryWithBackoff } from '@libs/common/utils/polling';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import {
     IParametersService,
@@ -13,15 +12,23 @@ import {
     ITeamService,
     TEAM_SERVICE_TOKEN,
 } from '@libs/organization/domain/team/contracts/team.service.contract';
+import {
+    IOrganizationService,
+    ORGANIZATION_SERVICE_TOKEN,
+} from '@libs/organization/domain/organization/contracts/organization.service.contract';
 
 import { CreatePRCodeReviewUseCase } from './create-prs-code-review.use-case';
-import { GenerateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-kody-rules.use-case';
-import { FindRulesInOrganizationByRuleFilterKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/find-rules-in-organization-by-filter.use-case';
-import { ChangeStatusKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/change-status-kody-rules.use-case';
 import { SyncSelectedRepositoriesKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/sync-selected-repositories.use-case';
-import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import { GenerateKodyRulesUseCase } from '@libs/kodyRules/application/use-cases/generate-kody-rules.use-case';
 import { CreateOrUpdateParametersUseCase } from '@libs/organization/application/use-cases/parameters/create-or-update-use-case';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { environment } from '@libs/ee/configs/environment';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
 @Injectable()
 export class FinishOnboardingUseCase {
@@ -31,10 +38,9 @@ export class FinishOnboardingUseCase {
         private readonly parametersService: IParametersService,
         @Inject(TEAM_SERVICE_TOKEN)
         private readonly teamService: ITeamService,
+        @Inject(ORGANIZATION_SERVICE_TOKEN)
+        private readonly organizationService: IOrganizationService,
         private readonly reviewPRUseCase: CreatePRCodeReviewUseCase,
-        private readonly generateKodyRulesUseCase: GenerateKodyRulesUseCase,
-        private readonly findKodyRulesUseCase: FindRulesInOrganizationByRuleFilterKodyRulesUseCase,
-        private readonly changeStatusKodyRulesUseCase: ChangeStatusKodyRulesUseCase,
         @Inject(REQUEST)
         private readonly request: Request & {
             user: {
@@ -46,6 +52,11 @@ export class FinishOnboardingUseCase {
         private readonly syncSelectedReposKodyRulesUseCase: SyncSelectedRepositoriesKodyRulesUseCase,
         private readonly createOrUpdateParametersUseCase: CreateOrUpdateParametersUseCase,
         private readonly telemetry: TelemetryService,
+        private readonly codeManagement: CodeManagementService,
+        private readonly generateKodyRulesUseCase: GenerateKodyRulesUseCase,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {}
 
     async execute(params: FinishOnboardingDTO) {
@@ -67,13 +78,10 @@ export class FinishOnboardingUseCase {
             const organizationId = this.request.user.organization.uuid;
 
             // [TIMING:onboarding] Provider-comparative instrumentation —
-            // bitbucket finish-onboarding was observed at 70-112s on the
-            // 2026-05-22 self-hosted matrix vs. 1-4s for github/gitlab.
-            // We need a per-step breakdown to confirm whether the slow
-            // path is `generateKodyRulesUseCase` (LLM + provider PR
-            // fetch) or `syncSelectedReposKodyRulesUseCase` (provider
-            // tree read) or something else entirely. Logs land in the
-            // api container so a single tail can isolate the answer.
+            // bitbucket finish-onboarding was observed far slower than
+            // github/gitlab; the per-step breakdown isolates the slow path
+            // (now `syncSelectedReposKodyRulesUseCase` provider tree reads).
+            // Logs land in the api container so a single tail can isolate it.
             const __onboardingT0 = Date.now();
             const __mark = (
                 label: string,
@@ -117,32 +125,64 @@ export class FinishOnboardingUseCase {
             );
             __mark('createOrUpdate:PLATFORM_CONFIGS', __t);
 
-            // Rule generation makes dozens of provider API calls and can
-            // take tens of seconds, and on Bitbucket Cloud the per-endpoint
-            // burst limits (x-envoy-ratelimited=true) blow past even
-            // sequential calls with exponential-backoff 429 retry inside a
-            // single HTTP request. The previous synchronous block here
-            // (await generateKodyRulesUseCase + findKodyRules + activate)
-            // surfaced as `finishOnboarding HTTP 500` on the 2026-05-23
-            // self-hosted matrix because GenerateKodyRulesUseCase exhausted
-            // its retries on Atlassian Edge throttling (and measured
-            // 70–112s on Bitbucket vs 1–4s for GitHub/GitLab on the
-            // 2026-05-22 run). The same work runs inside
-            // `generateKodyRulesInBackground` below, which already does
-            // generate → find → activate with retry-with-backoff wrapping
-            // the whole pipeline and owns the kodyLearningStatus lifecycle
-            // (GENERATING_RULES → ENABLED) so the frontend poll resolves
-            // regardless. Detaching it lets finishOnboarding return
-            // immediately instead of holding the HTTP request open for the
-            // duration of rule generation.
-            setImmediate(() => {
-                void this.generateKodyRulesInBackground(organizationId, teamId);
-            });
-
-            // Trigger immediate Kody Rules sync from repo files for all selected repositories
+            // Provision the trial server-side, right after onboarding is
+            // committed and before the (slow) PR review runs — so this review
+            // and every one after it has a valid license. This used to be a
+            // best-effort call from the browser at the very end of onboarding;
+            // when it didn't run (tab closed, network drop) or failed silently,
+            // the org was stranded without a license. Best-effort and idempotent
+            // (billing returns 409 if a license already exists); a failure never
+            // blocks onboarding and is caught again by the review-time safety net.
             __t = Date.now();
-            await this.syncSelectedReposKodyRulesUseCase.execute({ teamId });
-            __mark('syncSelectedReposKodyRules', __t);
+            await this.provisionTrial({ organizationId, teamId });
+            __mark('provisionTrial', __t);
+
+            // Repo-file rule import + past-reviews rule generation both run
+            // DETACHED after the onboarding response is sent. The repo-file sync
+            // used to be awaited here on the assumption it was "fast, no LLM",
+            // but it now converts rule files via the LLM (fast-batch + per-file
+            // fallback) and takes minutes — long enough to blow past the gateway
+            // timeout and 504 the finish-onboarding request. Detaching keeps
+            // onboarding snappy; the KodyLearning cron's staleness recovery
+            // covers runs that die mid-flight, and generated rules go through the
+            // unified approval policy. Sync runs first (generation is chained off
+            // its .finally) so generation sees the imported rules — preserving
+            // the previous sequential ordering, just off the request path.
+            setImmediate(() => {
+                this.syncSelectedReposKodyRulesUseCase
+                    // Pass organizationId explicitly: this runs after the HTTP
+                    // response, so the sync use-case can no longer resolve it
+                    // from the (possibly disposed) request scope.
+                    .execute({ teamId, organizationId })
+                    .catch((error) => {
+                        this.logger.error({
+                            message:
+                                'Background Kody Rules sync from repo files failed after onboarding',
+                            context: FinishOnboardingUseCase.name,
+                            error:
+                                error instanceof Error
+                                    ? error
+                                    : new Error(String(error)),
+                            metadata: { organizationId, teamId },
+                        });
+                    })
+                    .finally(() => {
+                        this.generateKodyRulesUseCase
+                            .execute({ teamId, months: 3 }, organizationId)
+                            .catch((error) => {
+                                this.logger.error({
+                                    message:
+                                        'Background Kody Rules generation failed after onboarding',
+                                    context: FinishOnboardingUseCase.name,
+                                    error:
+                                        error instanceof Error
+                                            ? error
+                                            : new Error(String(error)),
+                                    metadata: { organizationId, teamId },
+                                });
+                            });
+                    });
+            });
 
             __mark('TOTAL', __onboardingT0);
 
@@ -188,6 +228,67 @@ export class FinishOnboardingUseCase {
                     });
                 }
 
+                // Real engineering team size from the just-connected git org.
+                // Best-effort lead-scoring signal for the onboarding Discord
+                // card — never blocks onboarding if the git lookup fails.
+                //
+                // MUST be time-bounded: the try/catch only covers rejections,
+                // not hangs. When the git provider is rate-limited, octokit's
+                // throttling plugin parks the request until the quota resets
+                // (up to ~1h) — and this await held the entire
+                // finish-onboarding response hostage to a Discord-card member
+                // count (observed live: client retried the POST 6× at ~6min
+                // each while the server "worked" on telemetry). 10s is
+                // generous for a healthy member list; past that, ship the
+                // telemetry without the count.
+                let orgMemberCount: number | undefined;
+                try {
+                    let timeoutHandle: NodeJS.Timeout | undefined;
+                    const members = await Promise.race([
+                        this.codeManagement.getListMembers({
+                            organizationAndTeamData: { organizationId, teamId },
+                        }),
+                        new Promise<never>((_, reject) => {
+                            timeoutHandle = setTimeout(
+                                () =>
+                                    reject(
+                                        new Error(
+                                            'getListMembers timed out after 10s (time-bounded telemetry; likely provider rate-limit throttling)',
+                                        ),
+                                    ),
+                                10_000,
+                            );
+                            timeoutHandle.unref?.();
+                        }),
+                    ]).finally(() => clearTimeout(timeoutHandle));
+                    orgMemberCount = Array.isArray(members)
+                        ? members.length
+                        : undefined;
+
+                    if (orgMemberCount !== undefined) {
+                        await this.organizationService.update(
+                            { uuid: organizationId },
+                            {
+                                codeHostMemberCount: orgMemberCount,
+                                codeHostMemberCountUpdatedAt: new Date(),
+                            },
+                        );
+                    }
+                } catch (error) {
+                    this.logger.warn({
+                        message:
+                            'Failed to resolve or persist org member count during onboarding',
+                        context: FinishOnboardingUseCase.name,
+                        metadata: {
+                            teamId,
+                            error:
+                                error instanceof Error
+                                    ? error.message
+                                    : String(error),
+                        },
+                    });
+                }
+
                 void this.telemetry.onboardingCompleted({
                     userId,
                     email: userEmail,
@@ -196,6 +297,7 @@ export class FinishOnboardingUseCase {
                     teamId,
                     teamName,
                     reviewedPR: !!reviewPR,
+                    orgMemberCount,
                 });
 
                 if (reviewPR) {
@@ -228,62 +330,47 @@ export class FinishOnboardingUseCase {
     }
 
     /**
-     * Generate Kody rules from PR history and activate them.
-     *
-     * Runs detached from the HTTP request (fired via `setImmediate` in
-     * `execute`), so it must not read `this.request` — org/team come in as
-     * arguments. Best-effort: it retries with backoff and, on final
-     * failure, logs and returns. `GenerateKodyRulesUseCase` manages the
-     * `kodyLearningStatus` lifecycle (GENERATING_RULES → ENABLED) itself,
-     * including on error, so the frontend poll always resolves.
+     * Best-effort, idempotent trial provisioning for the org that just
+     * finished onboarding. Cloud-only (self-hosted is licensed via keys).
+     * Never throws — onboarding must not hard-fail on a billing hiccup; the
+     * review-time safety net re-provisions if this doesn't land.
      */
-    private async generateKodyRulesInBackground(
-        organizationId: string,
-        teamId: string,
-    ): Promise<void> {
+    private async provisionTrial({
+        organizationId,
+        teamId,
+    }: {
+        organizationId: string;
+        teamId: string;
+    }): Promise<void> {
+        if (!environment.API_CLOUD_MODE) {
+            return;
+        }
+
         try {
-            await retryWithBackoff(
-                () =>
-                    this.generateKodyRulesUseCase.execute(
-                        { teamId, months: 3 },
-                        organizationId,
-                    ),
-                {
-                    maxAttempts: 3,
-                    onRetry: ({ error, attempt, delayMs }) => {
-                        this.logger.warn({
-                            message: `Kody rules generation failed (attempt ${attempt}); retrying in ${delayMs}ms`,
-                            context: FinishOnboardingUseCase.name,
-                            error:
-                                error instanceof Error
-                                    ? error
-                                    : new Error(String(error)),
-                            metadata: { organizationId, teamId },
-                        });
-                    },
-                },
+            const byokConfig =
+                await this.permissionValidationService.getBYOKConfig({
+                    organizationId,
+                    teamId,
+                });
+
+            const provisioned = await this.licenseService.startTrial(
+                { organizationId, teamId },
+                Boolean(byokConfig?.main),
             );
 
-            // Enable all freshly generated rules.
-            const rules = await this.findKodyRulesUseCase.execute(
-                organizationId,
-                {},
-            );
-
-            if (rules && rules.length > 0) {
-                const ruleIds = rules.map((rule) => rule.uuid);
-                await this.changeStatusKodyRulesUseCase.execute({
-                    ruleIds,
-                    status: KodyRulesStatus.ACTIVE,
+            if (!provisioned) {
+                this.logger.warn({
+                    message:
+                        'Trial provisioning during onboarding did not succeed; review-time safety net will retry',
+                    context: FinishOnboardingUseCase.name,
+                    metadata: { organizationId, teamId },
                 });
             }
         } catch (error) {
             this.logger.error({
-                message:
-                    'Kody rules generation failed after retries; onboarding already completed',
+                message: 'Failed to provision trial during onboarding',
                 context: FinishOnboardingUseCase.name,
-                error:
-                    error instanceof Error ? error : new Error(String(error)),
+                error,
                 metadata: { organizationId, teamId },
             });
         }

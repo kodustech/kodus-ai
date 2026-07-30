@@ -2,148 +2,161 @@
 title: "Pricing Deep Dive"
 ---
 
-Here's everything you need to know about our pricing to help you make the best decision for your organization. For the latest plan details and live pricing, see [kodus.io/pricing](https://kodus.io/pricing).
+Everything you need to choose the right plan. For live pricing, see [kodus.io/pricing](https://kodus.io/pricing).
+
+<Note>
+  **Reviews are unlimited on every plan** — they run on your own AI key (BYOK).
+  Plans differ by **features**, not by how many PRs Kody can review. Every plan
+  includes unlimited users and unlimited pull requests, with no per-seat minimum.
+</Note>
 
 ## Plans at a glance
 
-- **Community** — free. BYOK. Self-hosted or cloud.
-- **Teams** — $10/dev/month + token costs (BYOK). Cloud only. **14-day free trial, no credit card.** 20% off when billed annually.
-- **Enterprise** — custom pricing. Self-hosted or cloud. Choose **BYOK** or **Kodus AI Tokens API key**.
+<CardGroup cols={3}>
+  <Card title="Community" icon="github">
+    **Free, forever.** BYOK. Self-hosted or cloud.
 
-All plans include unlimited users, unlimited pull requests, and no per-seat minimum.
+    For indie devs, students, OSS maintainers, and small teams.
+  </Card>
+  <Card title="Teams" icon="users">
+    **$10/dev/month** + token costs (BYOK). Cloud only.
 
-## Community vs. Teams vs. Enterprise
+    14-day free trial, no credit card. 20% off annually.
+  </Card>
+  <Card title="Enterprise" icon="building">
+    **Custom pricing.** Self-hosted or cloud.
 
-Kodus is available in three versions:
+    Hardened security, governance, and hands-on onboarding.
+  </Card>
+</CardGroup>
 
-- **Community:** Free to use and modify. Available for both self-hosted and cloud deployments.
+## The free trial (Teams)
 
-  - Bring your own API keys (BYOK)
-  - Unlimited code reviews and unlimited users
-  - Unlimited issues on Quality Radar
-  - Kody Learnings and Memory
-  - Kodus MCP
-  - Up to 10 Kody Rules
-  - Up to 3 plugins / MCPs (includes the default Kodus MCP)
-  - ❌ No Cockpit (Teams and Enterprise only)
-  - Community support via Discord
+A Teams trial runs on **two separate, independent clocks** — the 14 days govern Team **features**, never your ability to review PRs:
 
-- **Teams:** Cloud-only paid version. $10/dev/month + token costs (BYOK).
+<CardGroup cols={2}>
+  <Card title="14 days of Team features" icon="calendar">
+    Cockpit, unlimited Kody Rules and plugins, priority queue, and more.
+  </Card>
+  <Card title="Your first 5 PR reviews on us" icon="gift">
+    We cover the AI tokens, so you can try Kody with **zero setup — no API key
+    needed.** (Earn a few more by completing onboarding steps.)
+  </Card>
+</CardGroup>
 
-  - Everything in Community, plus:
-  - Unlimited Kody Rules (no 10-rule limit)
-  - Unlimited plugins / MCPs (no 3-plugin limit)
-  - **Priority queue for Kody Agents**
-  - **Kodus Cockpit** (engineering metrics)
-  - Email + Discord support
-  - Automatic updates and maintenance
-  - **14-day free trial** — no credit card required
-  - **20% discount** when billed annually
+**To keep reviewing past the 5 trial reviews — or to go unlimited right away — [connect your AI key](/how_to_use/en/byok).** Reviews then run on your key: unlimited, on any plan, even after the 14 days end. Trial reviews run on a model Kodus picks for you; with your own key you can run frontier models for the best quality.
 
-- **Enterprise:** Customized version for enterprise use. Available self-hosted or cloud.
+If trial reviews run out before you connect a key, Kody pauses reviews and posts a comment with a one-click link to add your key.
 
-  - Everything in Teams, plus:
-  - SSO / SAML
-  - **RBAC, audit logs, and analytics**
-  - **SOC 2 compliance in progress**
-  - Choice of token model: **BYOK** or **Kodus AI Tokens API key** (managed tokens billed by Kodus)
-  - Dedicated instance
-  - Custom SLAs
-  - Up to **5 hours/month** of dedicated support
-  - Private Discord channel
-  - Advanced security features
-  - Training and onboarding assistance
-  - Customization options
+## What's included
 
-## How Pricing Works
+| Feature | Community | Teams | Enterprise |
+| --- | --- | --- | --- |
+| **Price** | Free | $10/dev/mo | Custom |
+| **Deployment** | Self-hosted or cloud | Cloud | Self-hosted or cloud |
+| **Code reviews** | Unlimited | Unlimited | Unlimited |
+| **Users** | Unlimited | Unlimited | Unlimited |
+| **Kody Rules** | Up to 10 | Unlimited | Unlimited |
+| **Plugins / MCPs** | Up to 3 | Unlimited | Unlimited |
+| **Quality Radar issues** | Unlimited | Unlimited | Unlimited |
+| **Kody Learnings & Memory** | ✓ | ✓ | ✓ |
+| **Priority queue** | — | ✓ | ✓ |
+| **Kodus Cockpit (metrics)** | — | ✓ | ✓ |
+| **SSO / SAML** | — | — | ✓ |
+| **RBAC + audit logs** | — | — | ✓ |
+| **SOC 2 compliant** | — | — | ✓ |
+| **Dedicated instance & SLAs** | — | — | ✓ |
+| **Support** | Discord | Email + Discord | Private Discord + up to 5h/mo dedicated |
 
-Our pricing is per developer who actively creates pull requests in your team. This keeps billing aligned with value as your team evolves:
+## How pricing works
 
-- **Pay per active developer:** only developers who contribute PRs count toward your seat.
-- **Adjustable at any time:** change the number of active developers through your account settings. No minimums, no annual lock-in on seat count.
+<CardGroup cols={2}>
+  <Card title="Pay per active developer" icon="user-check">
+    Only developers who open PRs count toward a seat. No minimums, no seat
+    lock-in.
+  </Card>
+  <Card title="Adjust anytime" icon="sliders">
+    Change your active-developer count in account settings whenever your team
+    changes.
+  </Card>
+</CardGroup>
 
-## BYOK is the default across all plans
+## BYOK: the default across all plans
 
-Kodus does **not** sell LLM tokens by default. Community, Teams, and Enterprise all run on **Bring Your Own Key** (BYOK): you connect your own provider account — OpenAI, Anthropic, Gemini, or any OpenAI-compatible provider — and tokens are billed directly by that provider on their dashboard. Kodus never marks up tokens.
+Kodus does **not** sell LLM tokens by default. Community, Teams, and Enterprise all run on **Bring Your Own Key** — you connect your own provider (OpenAI, Anthropic, Gemini, or any OpenAI-compatible), and tokens are billed directly by that provider. Kodus never marks up tokens.
 
-The price difference between plans is **what Kodus charges on top of your token spend**, not the token model itself:
+| Plan | What you pay Kodus | Tokens |
+| --- | --- | --- |
+| **Community** | $0 | You pay your provider (BYOK) |
+| **Teams** | $10/active dev/mo | You pay your provider (BYOK) |
+| **Enterprise** | Custom | You pay your provider (BYOK) |
 
-| Plan | What you pay Kodus | How tokens are billed |
-| ---- | ------------------ | --------------------- |
-| **Community** | $0 | You pay your LLM provider directly (BYOK) |
-| **Teams** | $10/active dev/month | You pay your LLM provider directly (BYOK) |
-| **Enterprise** | Custom (contract) | BYOK, **or** let Kodus manage tokens via **Kodus AI Tokens API key** and receive a single invoice |
+See the [BYOK overview](/how_to_use/en/byok) for supported providers and setup.
 
-See the [BYOK overview](/how_to_use/en/byok) for the supported providers and setup flow. Everything below is about the **Kodus-side fee**.
+## Teams pricing — $10/active dev/month
 
-## Teams Pricing
+In addition to your provider's token cost (no Kodus markup).
 
-### $10 per active developer per month
+<CardGroup cols={2}>
+  <Card title="What the $10/dev covers" icon="box">
+    - Managed cloud hosting + automatic updates
+    - Priority queue for Kody Agents
+    - Kodus Cockpit (engineering metrics)
+    - Unlimited Kody Rules & plugins/MCPs
+    - Email + Discord support
+  </Card>
+  <Card title="What tokens cover" icon="coins">
+    - Every LLM call Kody makes during a review
+    - Billed by your provider; switch anytime
+    - You pick the model — cost-effective (Gemini Flash, GPT-5-mini) or frontier (Claude 4.5 Sonnet, GPT-5)
+  </Card>
+</CardGroup>
 
-The Teams subscription is **$10 per active developer per month**, in addition to whatever you pay your LLM provider for tokens. No Kodus markup on tokens.
+**Billing:** monthly, or **20% off** annually · 14-day free trial, no card · cancel anytime (effective end of cycle).
 
-What the $10/dev/month covers:
+## Enterprise pricing
 
-- **Cloud hosting** — fully managed by Kodus, with automatic updates and maintenance.
-- **Priority queue for Kody Agents** — Teams traffic is reviewed before free-tier traffic.
-- **Kodus Cockpit** — engineering metrics and reporting.
-- **Unlimited Kody Rules and plugins/MCPs** (no 10-rule / 3-plugin caps).
-- **Email + Discord support**.
+Custom-priced via contract. Like every plan, Enterprise is **BYOK** — Kodus bills only the per-seat fee and you pay your LLM provider directly.
 
-What the token cost covers:
-
-- Every API call Kodus makes to your chosen LLM provider during a review.
-- Billed directly by the provider; you can switch providers at any time.
-- You choose the model — cost-effective (e.g. Gemini Flash, GPT-5-mini) or frontier (Claude 4.5 Sonnet, GPT-5).
-
-### Billing cadence
-
-- **Monthly:** $10/dev/month, billed month-to-month.
-- **Annually:** 20% off when billed once a year.
-- **Free trial:** 14 days on Teams, no credit card required.
-- **Cancel anytime:** changes take effect at the end of the current billing cycle.
-
-## Enterprise Pricing
-
-Enterprise is custom-priced and signed via contract. You pick the token model that fits your ops:
-
-- **BYOK** — same as Community and Teams, you bring your own LLM keys. Kodus bills only the per-seat fee.
-- **Kodus AI Tokens API key** — Kodus supplies a managed API key and bills tokens along with the seat fee. Good for teams that want a single vendor, a single invoice, and no direct relationship with the LLM provider.
-
-Enterprise-only features include SSO / SAML, RBAC with audit logs and analytics, dedicated instance option, custom SLAs, up to **5 hours/month** of dedicated support, and a private Discord channel. SOC 2 compliance is in progress.
+Enterprise adds SSO / SAML, RBAC with audit logs and analytics, a dedicated instance, custom SLAs, up to **5 hours/month** of dedicated support, and a private Discord channel. Kodus is **SOC 2 compliant**.
 
 [Contact sales](https://kodus.io/pricing) for a quote tailored to your organization.
 
-## Unlimited Pull Requests
+## Unlimited pull requests
 
-Your team can submit as many pull requests as they want — there's no PR limit on any plan. The only hard limit is on **very large pull requests**: we do not review PRs with more than **200 changed files**. Git-provider-side rate limits may also apply.
+No PR limit on any plan. The only hard limit: we don't review PRs with more than **200 changed files**. Git-provider-side rate limits may also apply.
 
 ## Kody Pilot Program
 
-We subsidize Kodus for teams that move the industry forward and for teams that couldn't otherwise afford it. The **Kody Pilot Program** offers **30–100% discounts** for:
+We subsidize Kodus with **30–100% discounts** for teams that move the industry forward or couldn't otherwise afford it:
 
-- **Early-stage startups**
-- **Open-source projects** with active development
-- **Teams in economically disadvantaged regions**
-- **Non-profit organizations**
+- Early-stage startups
+- Open-source projects with active development
+- Teams in economically disadvantaged regions
+- Non-profit organizations
 
-### How to apply
+<Steps>
+  <Step title="Join our Discord">
+    Hop into the [community](https://discord.gg/TFZBRk9fT6).
+  </Step>
+  <Step title="Tell us about you">
+    Share your org name, website, and a brief description of your work.
+  </Step>
+  <Step title="Show eligibility">
+    Startup stage/funding, OSS repo links, region context, or proof of
+    non-profit status.
+  </Step>
+  <Step title="Hear back in 3 business days">
+    We review your application and follow up.
+  </Step>
+</Steps>
 
-1. Join our Discord community at [discord.gg/TFZBRk9fT6](https://discord.gg/TFZBRk9fT6).
-2. Share your organization name, website, and a brief description of your work.
-3. Provide proof of eligibility:
-   - Startups: stage and funding round (if any).
-   - Open source: links to public repositories.
-   - Disadvantaged regions: country and context.
-   - Non-profits: proof of non-profit status.
-4. We'll review your application within 3 business days.
+## Payments & billing
 
-## Payments and Billing
-
-- **Powered by Stripe:** payments are processed securely using Stripe, a globally trusted platform.
-- **Cancel anytime:** you can cancel your plan at any point; changes take effect at the end of your billing cycle (monthly or annual).
-- **Invoices and Brazilian Nota Fiscal:** for Brazilian customers 🇧🇷, we provide invoices and issue a Nota Fiscal (tax receipt) for every transaction.
+- **Powered by Stripe** — secure, globally trusted payment processing.
+- **Cancel anytime** — changes take effect at the end of your billing cycle.
+- **Invoices & Nota Fiscal** — for Brazilian customers 🇧🇷, we provide invoices and issue a Nota Fiscal for every transaction.
 
 ---
 
-Questions? Join our [Discord community](https://discord.gg/TFZBRk9fT6), or check the latest plan details at [kodus.io/pricing](https://kodus.io/pricing).
+Questions? Join our [Discord community](https://discord.gg/TFZBRk9fT6), or see the latest plan details at [kodus.io/pricing](https://kodus.io/pricing).

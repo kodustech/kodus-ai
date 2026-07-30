@@ -30,14 +30,14 @@ import {
  *                 users running inside a container that injects envs).
  *
  * Usage:
- *   yarn analytics:clone-from-prod \
+ *   pnpm run analytics:clone-from-prod \
  *     --source-org 11111111-1111-1111-1111-111111111111 \
  *     --target-org analytics-test-kodus
  *
  *   # two-phase watermark test (dump up to T, then delta from T onward)
- *   yarn analytics:clone-from-prod --source-org <src> --target-org <dst> \
+ *   pnpm run analytics:clone-from-prod --source-org <src> --target-org <dst> \
  *     --until 2026-04-20T00:00:00Z --reset-target
- *   yarn analytics:clone-from-prod --source-org <src> --target-org <dst> \
+ *   pnpm run analytics:clone-from-prod --source-org <src> --target-org <dst> \
  *     --since 2026-04-20T00:00:00Z
  *
  * Safety rails:
@@ -46,7 +46,29 @@ import {
  *   - aborts if `--source-org == --target-org`.
  */
 
-const COLLECTION = 'pullRequests';
+/**
+ * Collections the cockpit pipeline reads from Mongo:
+ *  - pullRequests        → suggestions_mv / pull_requests_opt (ingestion)
+ *  - codeReviewFeedback  → suggestion_feedback (thumbs up/down)
+ *  - kodyRules           → rule titles/states for the rules-health table
+ *
+ * `kodyRules` is one doc per org. CAUTION: cloning it adds a SECOND doc
+ * for the target org unless `--reset-target` removes the existing one —
+ * which also wipes any locally created rules for that org.
+ */
+const CLONABLE_COLLECTIONS = [
+    'pullRequests',
+    'codeReviewFeedback',
+    'kodyRules',
+] as const;
+type ClonableCollection = (typeof CLONABLE_COLLECTIONS)[number];
+
+/** Collections whose docs carry usable `updatedAt` for window filters. */
+const WINDOWED_COLLECTIONS: ReadonlySet<string> = new Set([
+    'pullRequests',
+    'codeReviewFeedback',
+]);
+
 const DEFAULT_DB = 'kodus_db';
 const DEFAULT_BATCH = 200;
 const PROD_ENV_PATH = '.env.prod';
@@ -60,6 +82,7 @@ interface CliArgs {
     batch: number;
     dryRun: boolean;
     resetTarget: boolean;
+    collections: ClonableCollection[];
     sourceMongoUri?: string;
     destMongoUri?: string;
     destMongoHost?: string;
@@ -70,6 +93,7 @@ function parseArgs(): CliArgs {
         batch: DEFAULT_BATCH,
         dryRun: false,
         resetTarget: false,
+        collections: [...CLONABLE_COLLECTIONS],
     };
     const argv = process.argv.slice(2);
     for (let i = 0; i < argv.length; i += 1) {
@@ -105,6 +129,26 @@ function parseArgs(): CliArgs {
             case '--reset-target':
                 out.resetTarget = true;
                 break;
+            case '--collections': {
+                const list = (next ?? '')
+                    .split(',')
+                    .map((c) => c.trim())
+                    .filter(Boolean);
+                for (const c of list) {
+                    if (
+                        !CLONABLE_COLLECTIONS.includes(
+                            c as ClonableCollection,
+                        )
+                    ) {
+                        throw new Error(
+                            `--collections got "${c}"; valid: ${CLONABLE_COLLECTIONS.join(', ')}`,
+                        );
+                    }
+                }
+                out.collections = list as ClonableCollection[];
+                i += 1;
+                break;
+            }
             case '--source-mongo-uri':
                 out.sourceMongoUri = next;
                 i += 1;
@@ -221,9 +265,10 @@ function formatDuration(ms: number): string {
     return `${m}m${rem.toFixed(0).padStart(2, '0')}s`;
 }
 
-function buildFilter(args: CliArgs): Document {
+function buildFilter(args: CliArgs, collection?: string): Document {
     const filter: Document = { organizationId: args.sourceOrg };
-    if (args.since || args.until) {
+    const windowed = !collection || WINDOWED_COLLECTIONS.has(collection);
+    if (windowed && (args.since || args.until)) {
         const range: Document = {};
         if (args.since) range.$gte = args.since;
         if (args.until) range.$lte = args.until;
@@ -297,120 +342,146 @@ async function main() {
     console.log(`  batch size  : ${args.batch}`);
     console.log(`  dry-run     : ${args.dryRun}`);
     console.log(`  reset-target: ${args.resetTarget}`);
+    console.log(`  collections : ${args.collections.join(', ')}`);
 
     const sourceClient = new MongoClient(source.uri);
     const destClient = new MongoClient(dest.uri);
 
-    let scanned = 0;
-    let upserted = 0;
-    let deletedBefore = 0;
     const startedAt = Date.now();
-    let newestUpdatedAt: Date | null = null;
+    let totalScanned = 0;
+    let totalUpserted = 0;
 
     try {
         await Promise.all([sourceClient.connect(), destClient.connect()]);
 
-        const sourceColl = sourceClient
-            .db(source.db)
-            .collection<Document>(COLLECTION);
-        const destColl = destClient
-            .db(dest.db)
-            .collection<Document>(COLLECTION);
-
-        const filter = buildFilter(args);
-        const totalToScan = await sourceColl.countDocuments(filter);
-        console.log(`\n${totalToScan} source docs match the filter`);
-
-        if (args.dryRun) {
-            console.log('dry-run: not writing. done.');
-            return;
-        }
-        if (totalToScan === 0) {
-            console.log('nothing to copy. done.');
-            return;
-        }
-
-        if (args.resetTarget) {
-            const res = await destColl.deleteMany({
-                organizationId: args.targetOrg,
+        for (const collection of args.collections) {
+            const stats = await cloneCollection({
+                sourceClient,
+                destClient,
+                source,
+                dest,
+                args,
+                collection,
             });
-            deletedBefore = res.deletedCount ?? 0;
-            console.log(
-                `reset-target: deleted ${deletedBefore} existing docs on dest for org ${args.targetOrg}`,
-            );
+            totalScanned += stats.scanned;
+            totalUpserted += stats.upserted;
         }
-
-        const cursor = sourceColl
-            .find(filter)
-            .sort({ updatedAt: 1, _id: 1 })
-            .batchSize(args.batch)
-            .addCursorFlag('noCursorTimeout', true);
-
-        const buffer: AnyBulkWriteOperation<Document>[] = [];
-        let lastLoggedAt = Date.now();
-
-        const flush = async () => {
-            if (!buffer.length) return;
-            const res = await destColl.bulkWrite(buffer, { ordered: false });
-            upserted +=
-                (res.upsertedCount ?? 0) + (res.modifiedCount ?? 0);
-            buffer.length = 0;
-        };
-
-        for await (const raw of cursor) {
-            const doc = raw as WithId<Document>;
-            scanned += 1;
-
-            const u = doc.updatedAt;
-            if (u instanceof Date) {
-                if (!newestUpdatedAt || u > newestUpdatedAt) {
-                    newestUpdatedAt = u;
-                }
-            }
-
-            const rewritten: Document = {
-                ...doc,
-                organizationId: args.targetOrg,
-            };
-            buffer.push({
-                replaceOne: {
-                    filter: { _id: doc._id },
-                    replacement: rewritten,
-                    upsert: true,
-                },
-            });
-
-            if (buffer.length >= args.batch) {
-                await flush();
-            }
-
-            if (Date.now() - lastLoggedAt > 2000) {
-                const pct = ((scanned / totalToScan) * 100).toFixed(1);
-                console.log(
-                    `  … ${scanned}/${totalToScan} (${pct}%) scanned, ${upserted} written`,
-                );
-                lastLoggedAt = Date.now();
-            }
-        }
-
-        await flush();
     } finally {
         await Promise.allSettled([sourceClient.close(), destClient.close()]);
     }
 
     const elapsed = Date.now() - startedAt;
-    console.log('\ndone.');
-    console.log(`  scanned       : ${scanned}`);
-    console.log(`  upserted      : ${upserted}`);
-    if (args.resetTarget) {
-        console.log(`  deleted before: ${deletedBefore}`);
-    }
-    console.log(
-        `  newest updatedAt (source): ${
-            newestUpdatedAt ? newestUpdatedAt.toISOString() : 'n/a'
-        }`,
-    );
+    console.log('\nall done.');
+    console.log(`  total scanned : ${totalScanned}`);
+    console.log(`  total upserted: ${totalUpserted}`);
     console.log(`  elapsed       : ${formatDuration(elapsed)}`);
+}
+
+async function cloneCollection({
+    sourceClient,
+    destClient,
+    source,
+    dest,
+    args,
+    collection,
+}: {
+    sourceClient: MongoClient;
+    destClient: MongoClient;
+    source: { uri: string; db: string };
+    dest: { uri: string; db: string };
+    args: CliArgs;
+    collection: ClonableCollection;
+}): Promise<{ scanned: number; upserted: number }> {
+    const sourceColl = sourceClient
+        .db(source.db)
+        .collection<Document>(collection);
+    const destColl = destClient.db(dest.db).collection<Document>(collection);
+
+    let scanned = 0;
+    let upserted = 0;
+    let newestUpdatedAt: Date | null = null;
+
+    const filter = buildFilter(args, collection);
+    const totalToScan = await sourceColl.countDocuments(filter);
+    console.log(`\n[${collection}] ${totalToScan} source docs match`);
+
+    if (args.dryRun) {
+        console.log(`[${collection}] dry-run: not writing.`);
+        return { scanned: 0, upserted: 0 };
+    }
+    if (totalToScan === 0) {
+        return { scanned: 0, upserted: 0 };
+    }
+
+    if (args.resetTarget) {
+        const res = await destColl.deleteMany({
+            organizationId: args.targetOrg,
+        });
+        console.log(
+            `[${collection}] reset-target: deleted ${res.deletedCount ?? 0} existing docs for org ${args.targetOrg}`,
+        );
+    }
+
+    const windowed = WINDOWED_COLLECTIONS.has(collection);
+    const cursor = sourceColl
+        .find(filter)
+        .sort(windowed ? { updatedAt: 1, _id: 1 } : { _id: 1 })
+        .batchSize(args.batch)
+        .addCursorFlag('noCursorTimeout', true);
+
+    const buffer: AnyBulkWriteOperation<Document>[] = [];
+    let lastLoggedAt = Date.now();
+
+    const flush = async () => {
+        if (!buffer.length) return;
+        const res = await destColl.bulkWrite(buffer, { ordered: false });
+        upserted += (res.upsertedCount ?? 0) + (res.modifiedCount ?? 0);
+        buffer.length = 0;
+    };
+
+    for await (const raw of cursor) {
+        const doc = raw as WithId<Document>;
+        scanned += 1;
+
+        const u = doc.updatedAt;
+        if (u instanceof Date) {
+            if (!newestUpdatedAt || u > newestUpdatedAt) {
+                newestUpdatedAt = u;
+            }
+        }
+
+        const rewritten: Document = {
+            ...doc,
+            organizationId: args.targetOrg,
+        };
+        buffer.push({
+            replaceOne: {
+                filter: { _id: doc._id },
+                replacement: rewritten,
+                upsert: true,
+            },
+        });
+
+        if (buffer.length >= args.batch) {
+            await flush();
+        }
+
+        if (Date.now() - lastLoggedAt > 2000) {
+            const pct = ((scanned / totalToScan) * 100).toFixed(1);
+            console.log(
+                `[${collection}]   … ${scanned}/${totalToScan} (${pct}%) scanned, ${upserted} written`,
+            );
+            lastLoggedAt = Date.now();
+        }
+    }
+
+    await flush();
+
+    console.log(
+        `[${collection}] done: scanned=${scanned} upserted=${upserted} ` +
+            `newest updatedAt=${newestUpdatedAt ? newestUpdatedAt.toISOString() : 'n/a'}`,
+    );
+    return { scanned, upserted };
 }
 
 main().catch((err) => {

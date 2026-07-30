@@ -37,17 +37,18 @@ jobs:
                   # so the build, test, publish, and release all match
                   # the artifact we're cutting.
                   ref: ${{ inputs.tag || github.ref }}
+            - uses: pnpm/action-setup@v4
             - uses: actions/setup-node@v6.4.0
               with:
                   node-version: "24"
-                  cache: yarn
-                  cache-dependency-path: apps/cli/yarn.lock
+                  cache: pnpm
+                  cache-dependency-path: apps/cli/pnpm-lock.yaml
             - run: npm --version
-            - run: yarn install --frozen-lockfile
-            - run: yarn skills:validate
-            - run: yarn skills:prompt > /dev/null
-            - run: yarn build
-            - run: yarn test
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm skills:validate
+            - run: pnpm skills:prompt > /dev/null
+            - run: pnpm build
+            - run: pnpm test
             - run: npm publish --provenance --access public
 
             - name: Create GitHub Release

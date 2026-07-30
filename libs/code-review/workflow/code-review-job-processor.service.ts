@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Injectable, Inject, Optional } from '@nestjs/common';
 
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
@@ -15,7 +15,6 @@ import { NotificationService } from '@libs/notifications/application/notificatio
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
 import { NotificationRecipient } from '@libs/notifications/domain/recipient';
-import { Role } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { ByokConcurrencyGateService } from './byok-concurrency-gate.service';
 import { DistributedLock } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
@@ -293,9 +292,9 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             const authorLogin: string | undefined =
                 author?.login ?? author?.username ?? author?.nickname;
 
-            const recipients: NotificationRecipient[] = [
-                { kind: 'role', role: Role.OWNER },
-            ];
+            // Owners are the config-driven audience (defaultRoles in the
+            // catalog); only the PR author is passed as a directed recipient.
+            const recipients: NotificationRecipient[] = [];
             if (authorEmail) {
                 const prAuthor =
                     await this.prAuthorRecipientResolver.resolve(
@@ -305,12 +304,19 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 if (prAuthor) recipients.push(prAuthor);
             }
 
+            const isAIEmptyBodyError =
+                error?.message?.includes('Last error: <none>');
+
+            const reason = isAIEmptyBodyError
+                ? `The configured AI provider returned empty responses for several requests in a row. This is usually a transient provider issue. You can re-run the review or switch to a different model in Settings → AI Provider. (${error?.message || ''})`
+                : error?.message ?? 'unknown error';
+
             await this.notificationService.emit({
                 event: NotificationEvent.REVIEW_FAILED,
                 payload: {
                     prUrl,
                     repoName,
-                    reason: error?.message ?? 'unknown error',
+                    reason,
                     correlationId,
                 },
                 organizationId,

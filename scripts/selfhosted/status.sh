@@ -2,8 +2,8 @@
 # Lists active self-hosted dev instances and reports health.
 #
 # Usage:
-#   yarn selfhosted:status                  # lists all
-#   yarn selfhosted:status --name wellington # detail for one
+#   pnpm run selfhosted:status                  # lists all
+#   pnpm run selfhosted:status --name wellington # detail for one
 
 set -euo pipefail
 
@@ -74,7 +74,7 @@ if [ -n "$NAME_RAW" ]; then
 else
     INSTANCES=$(list_instances)
     if [ -z "$INSTANCES" ]; then
-        dim "No active instances. Run 'yarn selfhosted:provision' to provision one."
+        dim "No active instances. Run 'pnpm run selfhosted:provision' to provision one."
         exit 0
     fi
     log "Active instances:"

@@ -29,7 +29,7 @@ expected `Domain=` and the `/sso-callback` page consumes it cleanly.
 
 1. Dev backing services running (postgres, mongo, rabbit):
     ```sh
-    yarn docker:start
+    pnpm run docker:start
     ```
 2. Production images of API + Web built locally:
     ```sh

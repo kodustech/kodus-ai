@@ -1,12 +1,6 @@
-import { ContextDependency } from '@kodus/flow';
-import { createLogger } from '@kodus/flow';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { ContextDependency } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { createLogger } from '@libs/core/log/logger';
+import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { Injectable } from '@nestjs/common';
 
 import {
@@ -14,8 +8,11 @@ import {
     IFileReference,
 } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { ObservabilityService } from '@libs/core/log/observability.service';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
+
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import {
     prompt_detect_external_references_system,
     prompt_detect_external_references_user,
@@ -25,6 +22,64 @@ import {
     prompt_kodyrules_detect_references_user,
 } from '@libs/common/utils/langchainCommon/prompts/kodyRulesExternalReferences';
 import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
+import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
+import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
+
+// Trial-only override: while the org is in the 14-day subscription trial
+// and hasn't wired a BYOK key, route reference detection through Moonshot's
+// Kimi K2.6 so we don't burn the expensive production default on Kodus's
+// dime. Off-trial callers get no override, so byokToVercelModel falls back
+// to the production default (cloud) or API_LLM_PROVIDER_MODEL (self-hosted).
+// Any BYOK config takes precedence over this in every case.
+const TRIAL_MODEL_OVERRIDE = 'kimi-k2.6';
+
+/**
+ * Kodus control markers are instructions to the sync engine, never file
+ * references. They must be filtered from EVERY detection path — both the
+ * regex marker extraction and the LLM-based detector (which happily
+ * returns "@kody-sync" as a file); the miss on the LLM path kept stamping
+ * spurious 'file not found: @kody-sync' sync errors on every rule synced
+ * via the marker.
+ */
+const KODUS_CONTROL_MARKERS = new Set(['@kody-sync', '@kody-ignore']);
+
+/**
+ * Escapes every RegExp metacharacter so an arbitrary string can be embedded in
+ * a `new RegExp(...)` as a literal. The previous inline version escaped only
+ * `-`, `/` and `@` — none of which are special outside a character class —
+ * while leaving the real metacharacters (`.`, `*`, `(`, `)`, `?`, …)
+ * unescaped (CodeQL js/incomplete-sanitization). Harmless for the current
+ * markers, but a foot-gun the moment a marker contains a metacharacter.
+ */
+export function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Removes Kody control markers (@kody-sync/@kody-ignore) from free text so the
+ * reference detector never sees them as content. Case-insensitive, every
+ * occurrence, and safe for markers containing regex metacharacters.
+ */
+export function stripControlMarkers(text: string): string {
+    return [...KODUS_CONTROL_MARKERS].reduce(
+        (acc, marker) =>
+            acc.replace(new RegExp(escapeRegExp(marker), 'gi'), ''),
+        text,
+    );
+}
+
+function isControlMarker(value: unknown): boolean {
+    if (typeof value !== 'string') return false;
+    // Compare the BASENAME: the LLM detector emits the marker with a
+    // fabricated repo prefix ("kody-sync/@kody-sync" — observed in
+    // production sync errors), so an exact-string check misses it.
+    const normalized = value.trim().toLowerCase().replace(/[.]+$/, '');
+    const basename = normalized.split('/').pop() ?? normalized;
+    return (
+        KODUS_CONTROL_MARKERS.has(normalized) ||
+        KODUS_CONTROL_MARKERS.has(basename)
+    );
+}
 
 export interface DetectReferencesParams {
     requirementId: string;
@@ -33,16 +88,12 @@ export interface DetectReferencesParams {
     context?: 'rule' | 'instruction' | 'prompt';
     detectionMode?: 'rule' | 'prompt';
     byokConfig?: BYOKConfig;
+    subscriptionStatus?: string;
 }
 
 @Injectable()
 export class ReferenceDetectorService {
     private readonly logger = createLogger(ReferenceDetectorService.name);
-
-    constructor(
-        private readonly promptRunnerService: PromptRunnerService,
-        private readonly observabilityService: ObservabilityService,
-    ) {}
 
     hasLikelyExternalReferences(promptText: string): boolean {
         const patterns = [
@@ -63,73 +114,87 @@ export class ReferenceDetectorService {
     async detectReferences(
         params: DetectReferencesParams,
     ): Promise<IDetectedReference[]> {
-        const mainProvider = LLMModelProvider.GEMINI_2_5_FLASH;
-        const fallbackProvider = LLMModelProvider.GEMINI_2_5_PRO;
-        const runName = 'detectExternalReferences';
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            mainProvider,
-            fallbackProvider,
-            params.byokConfig,
-        );
-
         const { organizationAndTeamData } = params;
 
-        const { result: raw } = await this.observabilityService.runLLMInSpan({
-            spanName: `${ReferenceDetectorService.name}::${runName}`,
-            runName,
-            attrs: {
-                organizationId: organizationAndTeamData.organizationId,
-                type: promptRunner.executeMode,
-                fallback: false,
-                context: params.context || 'unknown',
-            },
-            byokConfig: params.byokConfig,
-            exec: async (callbacks) => {
-                const isRuleMode = params.detectionMode === 'rule';
-                const systemPrompt = isRuleMode
-                    ? prompt_kodyrules_detect_references_system()
-                    : prompt_detect_external_references_system();
-                const userPrompt = isRuleMode
-                    ? prompt_kodyrules_detect_references_user({
-                          rule: params.promptText,
-                      })
-                    : prompt_detect_external_references_user({
-                          text: params.promptText,
-                          context: params.context,
-                      });
+        const defaultModelOverride =
+            params.subscriptionStatus === 'trial'
+                ? TRIAL_MODEL_OVERRIDE
+                : undefined;
 
-                return await promptRunner
-                    .builder()
-                    .setParser(ParserType.STRING)
-                    .setPayload({
-                        text: params.promptText,
-                        context: params.context,
-                    })
-                    .addPrompt({
-                        role: PromptRole.SYSTEM,
-                        prompt: systemPrompt,
-                    })
-                    .addPrompt({
-                        role: PromptRole.USER,
-                        prompt: userPrompt,
-                    })
-                    .addCallbacks(callbacks)
-                    .addMetadata({ runName })
-                    .setRunName(runName)
-                    .execute();
+        const model = byokToVercelModel(
+            params.byokConfig,
+            'main',
+            {},
+            defaultModelOverride,
+        );
+
+        const resolvedModelName = getModelName(
+            params.byokConfig,
+            defaultModelOverride,
+        );
+        this.logger.log({
+            message: `[REF-DETECTOR-DEBUG] Resolved model: ${resolvedModelName}`,
+            context: ReferenceDetectorService.name,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                requirementId: params.requirementId,
+                subscriptionStatus: params.subscriptionStatus,
+                hasByok: !!params.byokConfig,
+                byokMainProvider: params.byokConfig?.main?.provider,
+                byokMainModel: params.byokConfig?.main?.model,
+                defaultModelOverride,
+                resolvedModelName,
             },
         });
 
+        // Strip control markers from the text the model sees: with
+        // "@kody-sync" in the rule body, the detector not only returned the
+        // marker as a file but also CONTAMINATED real references with a
+        // fabricated "kody-sync/" repo prefix (observed live:
+        // "kody-sync/docs/contratos-de-api.md" in the UI error detail).
+        const sanitizedPromptText = stripControlMarkers(params.promptText);
+
+        const isRuleMode = params.detectionMode === 'rule';
+        const systemPrompt = isRuleMode
+            ? prompt_kodyrules_detect_references_system()
+            : prompt_detect_external_references_system();
+        const userPrompt = isRuleMode
+            ? prompt_kodyrules_detect_references_user({
+                  rule: sanitizedPromptText,
+              })
+            : prompt_detect_external_references_user({
+                  text: sanitizedPromptText,
+                  context: params.context,
+              });
+
+        const result = await generateText({
+            model,
+            system: systemPrompt,
+            prompt: userPrompt,
+            ...toAiSdkTelemetryArgs(
+                buildLangfuseTelemetry('detectExternalReferences', {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                }),
+            ),
+        });
+
+        const raw = result.text;
         if (!raw) {
             return [];
         }
 
-        const parsed = extractJsonFromResponse(raw);
-        if (!parsed || !Array.isArray(parsed)) {
+        const parsedRaw = extractJsonFromResponse(raw);
+        if (!parsedRaw || !Array.isArray(parsedRaw)) {
             return [];
         }
+        const parsed = parsedRaw.filter(
+            (ref: any) =>
+                !isControlMarker(ref?.filePath) &&
+                !isControlMarker(ref?.fileName) &&
+                !isControlMarker(ref?.originalText),
+        );
 
         this.logger.debug({
             message: 'Detected external references',
@@ -156,7 +221,9 @@ export class ReferenceDetectorService {
         const fileRegex = /@[A-Za-z0-9/_\-.]+/g;
         const fileMatches = promptText.match(fileRegex);
         if (fileMatches) {
-            fileMatches.forEach((match) => markers.add(match));
+            fileMatches
+                .filter((match) => !isControlMarker(match))
+                .forEach((match) => markers.add(match));
         }
 
         // Detect MCP markers: @mcp<app|tool>

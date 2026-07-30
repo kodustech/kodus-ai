@@ -1,5 +1,6 @@
 import {
     compareRules,
+    isOrphanAutoSyncRule,
     matchesOriginFilter,
     matchesSeverityFilter,
     matchesTextQuery,
@@ -12,6 +13,43 @@ const buildRule = (overrides: any = {}) => ({
     rule: "do something",
     severity: "medium",
     ...overrides,
+});
+
+describe("isOrphanAutoSyncRule", () => {
+    // .cursorrules is an IDE-rule source → inferRuleOrigin === "Auto-sync".
+    const autoSync = { sourcePath: ".cursorrules", origin: "user" };
+
+    it("flags a scope-local, non-pinned auto-synced rule", () => {
+        expect(isOrphanAutoSyncRule(autoSync)).toBe(true);
+    });
+
+    it("excludes pinnedSync rules (still synced via @kody-sync)", () => {
+        expect(isOrphanAutoSyncRule({ ...autoSync, pinnedSync: true })).toBe(
+            false,
+        );
+    });
+
+    it("INCLUDES inherited orphans (they affect this repo's reviews)", () => {
+        // Inherited global/parent orphans count toward this repo's chip — the
+        // count, the quick-filter, and the per-card "Orphan" badge must all
+        // agree (the "3 badges but chip says 2" regression came from the chip
+        // excluding inherited while the badge included them).
+        expect(
+            isOrphanAutoSyncRule({ ...autoSync, inherited: "repository" }),
+        ).toBe(true);
+        expect(
+            isOrphanAutoSyncRule({ ...autoSync, inherited: "global" }),
+        ).toBe(true);
+    });
+
+    it("excludes non auto-sync origins", () => {
+        expect(isOrphanAutoSyncRule({ origin: "user" })).toBe(false); // manual (no sourcePath)
+        expect(isOrphanAutoSyncRule({ origin: "library" })).toBe(false);
+        expect(isOrphanAutoSyncRule({ origin: "generated" })).toBe(false);
+        expect(
+            isOrphanAutoSyncRule({ sourcePath: "package.json", origin: "user" }),
+        ).toBe(false); // onboard (non-IDE source)
+    });
 });
 
 describe("matchesOriginFilter", () => {
@@ -65,7 +103,7 @@ describe("matchesOriginFilter", () => {
 
     it("treats multiple origin selections as union (OR within section)", () => {
         const filter: ListFilters = {
-            origins: new Set(["Auto-sync", "Onboard"]),
+            origins: new Set(["Auto-sync", "Onboarding"]),
             severities: new Set(),
             withSyncErrors: false,
             pausedOnly: false,

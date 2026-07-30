@@ -269,43 +269,53 @@ export function ExternalReferencesDisplay({
                         <div className="text-text-secondary hover:text-text-primary flex cursor-help items-center gap-1 text-xs transition-colors">
                             <AlertTriangle className="h-3 w-3 text-orange-500" />
                             <span>
-                                {syncErrors.length} sync error
+                                {syncErrors.length} reference sync error
                                 {syncErrors.length > 1 ? "s" : ""}
+                            </span>
+                            <span className="text-text-tertiary underline decoration-dotted">
+                                details
                             </span>
                         </div>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-md">
                         <div className="space-y-2">
-                            <p className="text-xs font-medium">Sync Errors:</p>
-                            {syncErrors.slice(0, 3).map((error, idx) => {
-                                const isObject =
-                                    typeof error === "object" && error !== null;
-                                return (
-                                    <div
-                                        key={idx}
-                                        className="space-y-0.5 text-xs">
-                                        <p className="text-text-primary font-medium">
-                                            {getErrorMessage(error)}
-                                        </p>
-                                        {isObject &&
-                                            (error as any).attemptedPaths &&
-                                            (error as any).attemptedPaths
-                                                .length > 0 && (
-                                                <p className="text-text-secondary text-[10px]">
-                                                    Attempted:{" "}
-                                                    {(
-                                                        error as any
-                                                    ).attemptedPaths.join(", ")}
-                                                </p>
-                                            )}
-                                    </div>
-                                );
-                            })}
-                            {syncErrors.length > 3 && (
-                                <p className="text-text-secondary text-xs italic">
-                                    +{syncErrors.length - 3} more...
-                                </p>
-                            )}
+                            <p className="text-xs font-medium">
+                                Reference sync errors
+                            </p>
+                            <p className="text-text-secondary text-[10px]">
+                                Kody couldn't fetch files mentioned in this
+                                rule's text (used as extra review context).
+                                The rule itself still runs in code reviews.
+                            </p>
+                            <div className="max-h-48 space-y-2 overflow-y-auto">
+                                {syncErrors.map((error, idx) => {
+                                    const isObject =
+                                        typeof error === "object" &&
+                                        error !== null;
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className="space-y-0.5 text-xs">
+                                            <p className="text-text-primary font-medium">
+                                                {getErrorMessage(error)}
+                                            </p>
+                                            {isObject &&
+                                                (error as any).attemptedPaths &&
+                                                (error as any).attemptedPaths
+                                                    .length > 0 && (
+                                                    <p className="text-text-secondary text-[10px]">
+                                                        Attempted:{" "}
+                                                        {(
+                                                            error as any
+                                                        ).attemptedPaths.join(
+                                                            ", ",
+                                                        )}
+                                                    </p>
+                                                )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </TooltipContent>
                 </Tooltip>

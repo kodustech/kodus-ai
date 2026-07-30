@@ -7,7 +7,7 @@ import { useAsyncAction } from "@hooks/use-async-action";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
 import { getConnectionsOnClient } from "@services/setup/fetch";
-import { deleteCookie, setCookie } from "cookies-next";
+import { deleteCookie, setCookie } from "cookies-next/client";
 import { useFeatureFlags } from "src/app/(app)/settings/_components/context";
 import integrationFactory from "src/core/integrations/integrationFactory";
 import { useAllTeams } from "src/core/providers/all-teams-context";

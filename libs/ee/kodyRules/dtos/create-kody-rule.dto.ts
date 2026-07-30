@@ -6,8 +6,8 @@ import {
     IKodyRulesExample,
     KodyRuleProcessingStatus,
     KodyRuleRequestType,
-    KodyRulesOrigin,
     KodyRulesScope,
+    KodyRulesOrigin,
     KodyRulesStatus,
     KodyRulesType,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
@@ -177,12 +177,34 @@ export class CreateKodyRuleDto {
 
     @IsOptional()
     @IsString()
+    @ApiPropertyOptional({
+        description:
+            'For global rules synced from a source repository, the id of that repository. Undefined for every other kind of rule.',
+        example: '1135722979',
+    })
+    sourceRepositoryId?: string;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description:
+            'Git blob SHA of the source file at last sync; used to short-circuit unchanged files on resync.',
+    })
+    lastContentHash?: string;
+
+    @IsOptional()
+    @IsString()
     @ApiPropertyOptional({ example: 'src/services' })
     directoryId?: string;
 
+    @IsOptional()
     @IsEnum(KodyRulesOrigin)
-    @ApiProperty({ enum: KodyRulesOrigin, enumName: 'KodyRulesOrigin' })
-    origin: KodyRulesOrigin;
+    @ApiPropertyOptional({
+        enum: KodyRulesOrigin,
+        enumName: 'KodyRulesOrigin',
+        description: 'Where the rule came from. Defaults to manual when omitted.',
+    })
+    origin?: KodyRulesOrigin;
 
     @IsEnum(KodyRulesStatus)
     @IsOptional()

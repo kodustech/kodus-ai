@@ -22,8 +22,40 @@ scenarios:
     # and posts the comment, so the review under test can only come
     # from the command. Covers all 4 providers.
     - command-review
+    # @kody review <directive> — the focus-steering path. Same command
+    # flow as command-review but with trailing free-text after the
+    # command; guards that the directive parsing/forwarding (added across
+    # all 5 webhook handlers) doesn't break command detection on any
+    # platform, and that the review still fires. Full-tier only — it's a
+    # second real review per cell, too heavy for the PR-check fast tier.
+    - command-review-focus
     - kody-rules-create-and-apply
+    # Repo-file rule sync (customer case): .kody/rules template imported
+    # verbatim + multi-glob path enforced on a file matching the 2nd glob.
+    # github-only (needs mergePR).
+    - kody-rules-file-sync
+    - kody-rules-lifecycle
+    # Detection semantics (no review step, cheap): root AGENTS.md,
+    # nested CLAUDE.md scoped to its subdir, lowercase claude.md.
+    - rule-file-detection
+    # Cross-process event delivery: execution updates emitted in the worker
+    # must reach the API's SSE stream (CrossProcessEventsBridge).
+    - pr-execution-sse
+    # Multi-site coverage guard for the sharded kody-rules rewrite (#1449):
+    # a rule violated at several sites in one PR must be flagged at every
+    # site, not just one (the failure mode of the old agentic agent).
+    - kody-rules-coverage
+    # Centralized config (config-as-code) init→sync→disable on a throwaway org.
+    # github × {paid, license-paid}; skipped unless CENTRALIZED_CONFIG_TEST_REPO is set.
+    - centralized-config-sync
     - license-attribution
+    # Trial coverage (cloud × github × trial): fresh org per run (14-day
+    # window never lapses). entitlement-gate = fast API check;
+    # managed-review = throwaway repo + real managed-LLM review (the only
+    # cell on Kodus-managed keys). See fast.yml for the full rationale.
+    - trial-entitlement-gate
+    - trial-credits-consume
+    - trial-managed-review
     # Per-seat gate: appliesTo restricts to self-hosted × github × license-paid
     # (one cell). Skipped automatically when SH_LICENSE_KEY_PATH (default
     # ~/.kodus-dev/license-seats1.jwt) isn't available — see run-matrix.ts.
@@ -50,6 +82,33 @@ scenarios:
     # RBAC authorization matrix (also in fast.yml). Signs up a throwaway org,
     # provisions one user per role, asserts 200/403 across API endpoints.
     - rbac-authorization
+    # RBAC frontend route guard (also in fast.yml): per role, next-auth HTTP
+    # sign-in + asserts the middleware /forbidden redirects per the route
+    # manifest.
+    - rbac-frontend-routes
+    # RBAC UI render (real browser, full-only like stripe-billing): drives
+    # Chromium per role and asserts the Token Usage menu item + /token-usage
+    # screen actually RENDER, and denied roles get a rendered /forbidden page.
+    - rbac-ui-render
+    # Cockpit analytics availability (real browser): warehouse-up API probe +
+    # /cockpit page not gated behind the vestigial WEB_ANALYTICS_SECRET. Runs
+    # on cloud (paid/trial) and self-hosted (license-paid) github cells via
+    # appliesTo; browser layer self-skips on non-cockpit tiers.
+    - cockpit-analytics
+    # Public PR-review demo API (also in fast.yml). Anonymous, cloud-only;
+    # appliesTo pins it to one cell (cloud × github × paid).
+    - public-pr-demo
+    # Claude-on-Vertex BYOK on BOTH engines (self-hosted × github only).
+    # Full-tier, not fast: needs a GCP service account + a Model-Garden-enabled
+    # Claude model (real LLM cost). Each SKIPS (not fails) when its secret is
+    # absent, so runners without Vertex wired stay green.
+    #   * code-review-vertex-byok: the v5 (Vercel SDK) review path. Needs
+    #     VERTEX_SA_JSON (+ optional VERTEX_REGION/VERTEX_MODEL).
+    #   * conversation-vertex-byok: the v2 (langchain) path via the legacy
+    #     conversation agent — @kody mention. Also needs CONVERSATION_USER_TOKEN
+    #     (a non-"kody/kodus" GitHub account with PR R/W on the fixture repo).
+    - code-review-vertex-byok
+    - conversation-vertex-byok
 
 cells:
     # ---------- self-hosted (mirrors fast.yml) ----------

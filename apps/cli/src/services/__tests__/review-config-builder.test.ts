@@ -30,6 +30,26 @@ describe('buildReviewConfig', () => {
         expect(filterFiles).not.toHaveBeenCalled();
     });
 
+    it('forwards the --focus directive into the review config', async () => {
+        const config = await buildReviewConfig({
+            fast: true,
+            options: { focus: 'the auth and session logic' },
+            getFullFileContents: vi.fn(),
+            filterFiles: vi.fn(),
+        });
+        expect(config.focus).toBe('the auth and session logic');
+    });
+
+    it('leaves focus unset when --focus is not passed', async () => {
+        const config = await buildReviewConfig({
+            fast: true,
+            options: {},
+            getFullFileContents: vi.fn(),
+            filterFiles: vi.fn(),
+        });
+        expect(config.focus).toBeUndefined();
+    });
+
     it('loads and filters files for working-tree reviews (no branch/commit)', async () => {
         const files: FileContent[] = [
             {

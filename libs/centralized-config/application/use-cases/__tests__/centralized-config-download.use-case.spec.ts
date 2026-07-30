@@ -25,7 +25,7 @@ describe('CentralizedConfigDownloadUseCase', () => {
 
     const centralizedConfigPrServiceMock: Pick<
         CentralizedConfigPrService,
-        'sanitizeFileName' | 'buildCentralizedPath'
+        'sanitizeFileName' | 'buildCentralizedPath' | 'buildRuleFileName'
     > = {
         sanitizeFileName: ((
             name?: string,
@@ -41,6 +41,11 @@ describe('CentralizedConfigDownloadUseCase', () => {
 
             return normalized || fallback;
         }) as CentralizedConfigPrService['sanitizeFileName'],
+        buildRuleFileName: ((title?: string, uuid?: string) => {
+            const base =
+                centralizedConfigPrServiceMock.sanitizeFileName(title, 'rule');
+            return `${base}${uuid ? `-${uuid.slice(0, 8)}` : ''}.yml`;
+        }) as CentralizedConfigPrService['buildRuleFileName'],
         buildCentralizedPath: ((params: {
             repositoryFolder: string;
             relativePath: string;
@@ -67,6 +72,7 @@ describe('CentralizedConfigDownloadUseCase', () => {
                                     id: 'dir-1',
                                     path: '/src',
                                     isSelected: true,
+                                    folders: [{ path: '/src' }],
                                 },
                             ],
                         },
@@ -167,17 +173,20 @@ describe('CentralizedConfigDownloadUseCase', () => {
         const repoEntry = entries.find(
             (e) => e.path === 'repo-one/kodus-config.yml',
         );
-        const dirEntry = entries.find(
+        const dirConfigEntry = entries.find(
             (e) => e.path === 'repo-one/src/kodus-config.yml',
         );
 
         expect(globalEntry).toBeDefined();
         expect(repoEntry).toBeDefined();
-        expect(dirEntry).toBeDefined();
+        expect(dirConfigEntry).toBeDefined();
+        expect(
+            entries.some((e) => e.path.includes('folders.yml')),
+        ).toBe(false);
 
         const globalConfig = yaml.load(globalEntry.content) as any;
         const repoConfig = yaml.load(repoEntry.content) as any;
-        const dirConfig = yaml.load(dirEntry.content) as any;
+        const dirConfig = yaml.load(dirConfigEntry.content) as any;
 
         expect(globalConfig.customMessages.startReviewMessage.content).toBe(
             'global-start',
@@ -290,11 +299,13 @@ describe('CentralizedConfigDownloadUseCase', () => {
                                     id: 'dir-parent',
                                     path: '/src',
                                     isSelected: true,
+                                    folders: [{ path: '/src' }],
                                 },
                                 {
                                     id: 'dir-child',
                                     path: '/src/app',
                                     isSelected: true,
+                                    folders: [{ path: '/src/app' }],
                                 },
                             ],
                         },
@@ -391,20 +402,23 @@ describe('CentralizedConfigDownloadUseCase', () => {
         const repoEntry = entries.find(
             (entry) => entry.path === 'repo-one/kodus-config.yml',
         );
-        const parentDirEntry = entries.find(
+        const parentDirConfigEntry = entries.find(
             (entry) => entry.path === 'repo-one/src/kodus-config.yml',
         );
-        const childDirEntry = entries.find(
-            (entry) => entry.path === 'repo-one/src/app/kodus-config.yml',
+        const childDirConfigEntry = entries.find(
+            (entry) => entry.path === 'repo-one/src%2Fapp/kodus-config.yml',
         );
 
         expect(globalEntry).toBeDefined();
-        expect(parentDirEntry).toBeDefined();
+        expect(parentDirConfigEntry).toBeDefined();
         expect(repoEntry).toBeUndefined();
-        expect(childDirEntry).toBeUndefined();
+        expect(childDirConfigEntry).toBeUndefined();
+        expect(
+            entries.some((e) => e.path.includes('folders.yml')),
+        ).toBe(false);
 
         const globalConfig = yaml.load(globalEntry.content) as any;
-        const parentDirConfig = yaml.load(parentDirEntry.content) as any;
+        const parentDirConfig = yaml.load(parentDirConfigEntry.content) as any;
 
         expect(globalConfig.customMessages.startReviewMessage.content).toBe(
             'global-custom',
@@ -495,7 +509,7 @@ describe('CentralizedConfigDownloadUseCase', () => {
             }),
             'org-1',
             {
-                userId: 'user-1',
+                userId: 'kody',
                 userEmail: 'kody@kodus.io',
             },
             true,
@@ -504,5 +518,103 @@ describe('CentralizedConfigDownloadUseCase', () => {
         const exportedRule = yaml.load(ruleEntry!.content) as any;
         expect(exportedRule.status).toBeUndefined();
         expect(exportedRule.sourcePath).toBeUndefined();
+    });
+
+    it('exports only approved rules — never PENDING or REJECTED', async () => {
+        const getCodeReviewParameterUseCase = {
+            execute: jest.fn().mockResolvedValue({
+                configValue: {
+                    repositories: [
+                        {
+                            id: 'repo-1',
+                            name: 'repo-one',
+                            isSelected: true,
+                            directories: [],
+                        },
+                    ],
+                },
+            }),
+        };
+
+        const generateKodusConfigFileUseCase = {
+            execute: jest.fn().mockResolvedValue({
+                yamlString: 'languageResultPrompt: english\n',
+            }),
+        };
+
+        const baseRule = {
+            severity: 'medium',
+            type: 'standard',
+            scope: 'file',
+            path: '**/*',
+            examples: [],
+            inheritance: { inheritable: true, include: [], exclude: [] },
+            repositoryId: 'repo-1',
+        };
+
+        const findRulesInOrganizationByRuleFilterKodyRulesUseCase = {
+            execute: jest.fn().mockResolvedValue([
+                {
+                    ...baseRule,
+                    uuid: 'active-rule',
+                    title: 'Active rule',
+                    rule: 'Approved',
+                    status: 'active',
+                },
+                {
+                    ...baseRule,
+                    uuid: 'pending-rule',
+                    title: 'Pending rule',
+                    rule: 'Awaiting approval',
+                    status: 'pending',
+                },
+                {
+                    ...baseRule,
+                    uuid: 'rejected-rule',
+                    title: 'Rejected rule',
+                    rule: 'Should stay hidden',
+                    status: 'rejected',
+                },
+            ]),
+        };
+
+        const createOrUpdateKodyRulesUseCase = {
+            execute: jest.fn().mockResolvedValue({ uuid: 'active-rule' }),
+        };
+
+        const pullRequestMessagesService = {
+            find: jest.fn().mockResolvedValue([]),
+        };
+
+        const useCase = new CentralizedConfigDownloadUseCase(
+            getCodeReviewParameterUseCase as any,
+            generateKodusConfigFileUseCase as any,
+            findRulesInOrganizationByRuleFilterKodyRulesUseCase as any,
+            createOrUpdateKodyRulesUseCase as any,
+            pullRequestMessagesService as any,
+            centralizedConfigPrServiceMock as CentralizedConfigPrService,
+        );
+
+        const entries = await useCase.execute(user, teamId, {
+            skipAuthorization: true,
+            markRulesAsPendingWithSourcePath: true,
+        });
+
+        const ruleEntries = entries.filter((entry) =>
+            entry.path.startsWith('repo-one/.kody-rules/review/'),
+        );
+
+        // Only the approved (active) rule is exported.
+        expect(ruleEntries).toHaveLength(1);
+        const exported = yaml.load(ruleEntries[0].content) as any;
+        expect(exported.title).toBe('Active rule');
+
+        // The pending/rejected rules are never marked into the centralized PR.
+        const markedUuids = createOrUpdateKodyRulesUseCase.execute.mock.calls.map(
+            (call) => call[0]?.uuid,
+        );
+        expect(markedUuids).toContain('active-rule');
+        expect(markedUuids).not.toContain('pending-rule');
+        expect(markedUuids).not.toContain('rejected-rule');
     });
 });

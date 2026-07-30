@@ -22,59 +22,59 @@ ENV NODE_ENV=development
 ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 RUN corepack disable \
- && npm i -g yarn@1.22.22
+ && npm i -g pnpm@11.7.0
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+# sharing=private (not locked): the dev images build sequentially, so there is
+# never legitimate concurrent apt access. With sharing=locked, a build killed
+# mid-apt (Ctrl-C/OOM) leaves the cache lock held in buildkitd, and the next
+# build blocks forever waiting for it. private gives each build its own cache
+# instance and sidesteps that deadlock entirely.
+RUN --mount=type=cache,target=/var/cache/apt,sharing=private \
+    --mount=type=cache,target=/var/lib/apt,sharing=private \
     rm -f /etc/apt/apt.conf.d/docker-clean \
   && apt-get update \
   && apt-get install -y --no-install-recommends \
       ca-certificates python3 make g++ procps git ripgrep
 
 # Copy the bun binary from the official image and install kodus-graph globally.
+ARG KODUS_GRAPH_VERSION=0.3.0
 COPY --from=bun-source /usr/local/bin/bun /usr/local/bin/bun
-RUN bun install -g @kodus/kodus-graph
+RUN bun install -g @kodus/kodus-graph@${KODUS_GRAPH_VERSION}
 
 RUN npm i -g yalc nodemon @ast-grep/cli
 
-COPY package.json yarn.lock ./
+COPY package.json pnpm-lock.yaml .npmrc ./
 COPY nest-cli.json tsconfig*.json ./
 
 COPY packages/kodus-common ./packages/kodus-common
-COPY packages/kodus-flow ./packages/kodus-flow
 
-# Build local packages first. Shared yarn cache mount survives across
+# Build local packages first. Shared pnpm store mount survives across
 # rebuilds so dependency changes don't trigger a full re-download.
 #
-# `sharing=shared` (vs the historical `sharing=locked`) lets the parallel
-# service builds (api/worker/webhooks/worker-analytics/mcp-manager) all
-# read the cache concurrently — observed `yarn install` ballooning past
-# 30min during cold-cache rebuilds purely from lock waits when the mount
-# was `sharing=locked`.
-#
-# Yarn 1's cache is content-addressable and writes via atomic rename, so
-# concurrent extracts of the same tarball across services are safe in
-# practice. A previous attempt to use `--mutex file:/yarn-cache/.yarn-mutex`
-# made the failure mode worse: with 5 services × 3 install steps all
-# contending for one file lock, holders routinely exceeded
-# proper-lockfile's ~30s stale threshold and crashed peers with
-# ECOMPROMISED.
-RUN --mount=type=cache,target=/yarn-cache,sharing=shared \
+# `sharing=shared` lets the parallel service builds
+# (api/worker/webhooks/worker-analytics/mcp-manager) all use the store
+# concurrently — pnpm's content-addressable store is designed for
+# concurrent access (atomic writes), unlike yarn1's cache which needed
+# careful lock handling here historically.
+RUN --mount=type=cache,target=/pnpm-store,sharing=shared \
     cd packages/kodus-common \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn prepack
-RUN --mount=type=cache,target=/yarn-cache,sharing=shared \
-    cd packages/kodus-flow \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn install \
-  && YARN_CACHE_FOLDER=/yarn-cache yarn build
+  && pnpm install --store-dir /pnpm-store \
+  && pnpm run prepack
 
-# Install dependencies and link local packages
-RUN --mount=type=cache,target=/yarn-cache,sharing=shared \
-    YARN_CACHE_FOLDER=/yarn-cache yarn install --frozen-lockfile
+# Install dependencies and link local packages.
+# pnpm-workspace.yaml is copied HERE (not with the manifests above) so the
+# kodus-common sub-build doesn't see /usr/src/app as a workspace
+# root and install into it (`../..`). Only the root install below needs it —
+# it carries the `overrides` that must match the lockfile under --frozen-lockfile.
+COPY pnpm-workspace.yaml ./
+RUN --mount=type=cache,target=/pnpm-store,sharing=shared \
+    pnpm install --frozen-lockfile --store-dir /pnpm-store
 RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
-RUN rm -rf node_modules/@kodus/flow && cp -r packages/kodus-flow node_modules/@kodus/flow
 
 COPY --chmod=0755 docker/dev-entrypoint.sh /usr/local/bin/dev-entrypoint
 
 ENTRYPOINT ["/usr/local/bin/dev-entrypoint"]
-CMD ["yarn", "start:dev"]
+# Fallback only — each service in docker-compose.dev.yml overrides this with
+# its own `command:` (start:dev:api / :worker / :webhooks). There is no root
+# `start:dev` script; `start:dev:all` runs the three apps via concurrently.
+CMD ["pnpm", "run", "start:dev:all"]

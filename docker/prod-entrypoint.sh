@@ -55,7 +55,7 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
   echo "▶ Running OLTP migrations (PROD)..."
   # Use node with compiled migrations in prod
   if [ -f "dist/libs/core/infrastructure/database/typeorm/ormconfig.js" ]; then
-      yarn migration:run:prod
+      npm run migration:run:prod
   else
       echo "⚠️ Migration config not found at dist/libs/core/infrastructure/database/typeorm/ormconfig.js. Skipping."
   fi
@@ -63,14 +63,14 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
   echo "▶ Ensuring analytics schema exists (PROD)..."
   # See dev-entrypoint.sh for rationale. Idempotent.
   if [ -f "dist/scripts/analytics/ensure-schema.cli.js" ]; then
-      yarn analytics:ensure-schema:prod
+      npm run analytics:ensure-schema:prod
   else
       echo "⚠️ ensure-schema CLI not found in dist/. Skipping (migration may fail on first boot)."
   fi
 
   echo "▶ Running analytics warehouse migrations (PROD)..."
   if [ -f "dist/libs/ee/analytics-warehouse/infrastructure/ormconfig.js" ]; then
-      yarn analytics:migration:run:prod
+      npm run analytics:migration:run:prod
   else
       echo "⚠️ Analytics ormconfig not found at dist/libs/ee/analytics-warehouse/infrastructure/ormconfig.js. Skipping."
   fi
@@ -84,7 +84,7 @@ fi
 if [ "$RUN_SEEDS" = "true" ]; then
   echo "▶ Running Seeds (PROD)..."
   # Seeds might also need a prod version if they rely on TS
-  yarn seed:prod
+  npm run seed:prod
 else
   echo "▶ Skipping seeds (RUN_SEEDS=$RUN_SEEDS)"
 fi

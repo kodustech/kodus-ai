@@ -1,0 +1,11 @@
+diff --git a/src/utils/format.ts b/src/utils/format.ts
+index 1111111..2222222 100644
+--- a/src/utils/format.ts
++++ b/src/utils/format.ts
+@@ -5,3 +5,8 @@ export function formatCurrency(value: number): string {
+     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+ }
++
++export function formatPercent(value: number): string {
++    return new Intl.NumberFormat('en-US', { style: 'percent' }).format(value);
++}

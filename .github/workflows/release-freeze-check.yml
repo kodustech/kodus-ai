@@ -1,0 +1,112 @@
+name: Release freeze eligibility
+
+# Posts a `release-freeze-eligible` commit status based on the PR title's
+# Conventional Commits type. The `release-freeze` repository ruleset
+# requires this status check, so it determines which PRs can merge while
+# the Friday release is in flight.
+#
+# Eligible types (status = success — PR may merge during freeze):
+#   chore, ci, docs, build, test, style
+#       → "not user-facing, hidden from changelog" per pr-title-check.yml
+#         + don't touch runtime paths in practice, so they can't poison
+#         an RC build that already started.
+#
+# Ineligible types (status = failure — blocked during freeze):
+#   feat, fix, perf, refactor
+#       → user-facing OR touches runtime code. `refactor` is conservatively
+#         blocked even though it's hidden from changelog, because it can
+#         change behavior in libs/code-review etc.
+#
+# When the freeze ruleset is disabled (most of the time) this check posts
+# `success` and stays quiet — it does NOT red-flag every feat/fix PR
+# year-round, which was pure noise (a permanent ❌ trains everyone to
+# ignore the check, so the one week it matters nobody looks). The
+# ineligible verdict is only computed while the freeze is actually
+# active. Enforcement stays race-free because the release workflow's
+# freeze-on step re-posts this status on all open PRs the moment it
+# enables the ruleset, so a PR that was quietly `success` off-freeze gets
+# re-evaluated to `failure` when the freeze turns on.
+#
+# Bypass: repo admins can still "Bypass and merge" any PR while the
+# freeze is active; this check only changes the default path.
+
+on:
+    pull_request:
+        types: [opened, edited, reopened, synchronize]
+
+permissions:
+    pull-requests: read
+    statuses: write
+
+jobs:
+    eligibility:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Decide eligibility from PR title
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  REPO: ${{ github.repository }}
+                  SHA: ${{ github.event.pull_request.head.sha }}
+                  TITLE: ${{ github.event.pull_request.title }}
+                  # Set to "true" by the release workflow's freeze-on step and
+                  # back to "false"/unset by unfreeze. GITHUB_TOKEN cannot read
+                  # rulesets (no such permission scope), so this repo variable
+                  # is the freeze signal the check can see without a PAT.
+                  FREEZE_ACTIVE: ${{ vars.RELEASE_FREEZE_ACTIVE }}
+              run: |
+                  set -euo pipefail
+
+                  # Off-freeze (the common case) post success and stay quiet:
+                  # an ineligible verdict only matters while the freeze is on.
+                  # Without this the check red-flagged every feat/fix PR all
+                  # year — noise that trains everyone to ignore it. The freeze
+                  # workflow re-posts the real verdict on open PRs the moment it
+                  # flips the variable on, so enforcement is not weakened.
+                  if [ "${FREEZE_ACTIVE:-false}" != "true" ]; then
+                      gh api -X POST "repos/${REPO}/statuses/${SHA}" \
+                          -f state="success" \
+                          -f context="release-freeze-eligible" \
+                          -f description="release-freeze not active — advisory only" \
+                          -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                          >/dev/null
+                      echo "::notice::release-freeze not active → posted success (no noise)"
+                      exit 0
+                  fi
+
+                  # Match the Conventional Commits prefix at the very start
+                  # of the title — same shape pr-title-check.yml enforces.
+                  TYPE=$(printf '%s' "$TITLE" | grep -oE '^(feat|fix|perf|refactor|docs|style|test|chore|ci|build)' || true)
+
+                  case "$TYPE" in
+                      chore|ci|docs|build|test|style)
+                          STATE=success
+                          DESC="$TYPE: PR exempt from release-freeze (not user-facing, no runtime impact)"
+                          ;;
+                      feat|fix|perf|refactor)
+                          STATE=failure
+                          DESC="$TYPE: PR blocked while release-freeze is active (touches runtime). Admins can Bypass and merge."
+                          ;;
+                      "")
+                          # pr-title-check.yml will already fail this PR, but
+                          # we don't want unknown titles to silently merge
+                          # during freeze either.
+                          STATE=failure
+                          DESC="PR title doesn't match Conventional Commits — fix the title to unblock."
+                          ;;
+                      *)
+                          STATE=failure
+                          DESC="Unknown type '$TYPE' — fix the title to unblock."
+                          ;;
+                  esac
+
+                  echo "title=$TITLE"
+                  echo "type=$TYPE  state=$STATE"
+
+                  gh api -X POST "repos/${REPO}/statuses/${SHA}" \
+                      -f state="$STATE" \
+                      -f context="release-freeze-eligible" \
+                      -f description="$DESC" \
+                      -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                      >/dev/null
+
+                  echo "::notice::Posted release-freeze-eligible = $STATE (type=$TYPE)"

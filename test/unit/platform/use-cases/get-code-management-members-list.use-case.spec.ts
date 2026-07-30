@@ -2,10 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { REQUEST } from '@nestjs/core';
 import { GetCodeManagementMemberListUseCase } from '@libs/platform/application/use-cases/codeManagement/get-code-management-members-list.use-case';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/PullRequestManagerService.contract';
 import { CacheService } from '@libs/core/cache/cache.service';
 
-jest.mock('@kodus/flow', () => ({
+jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
         log: jest.fn(),
         error: jest.fn(),
@@ -18,7 +17,6 @@ jest.mock('@kodus/flow', () => ({
 describe('GetCodeManagementMemberListUseCase', () => {
     let useCase: GetCodeManagementMemberListUseCase;
     let mockCodeManagementService: any;
-    let mockPullRequestHandlerService: any;
     let mockCacheService: any;
     let mockRequest: any;
 
@@ -31,10 +29,6 @@ describe('GetCodeManagementMemberListUseCase', () => {
     beforeEach(async () => {
         mockCodeManagementService = {
             getListMembers: jest.fn(),
-        };
-
-        mockPullRequestHandlerService = {
-            getPullRequestAuthorsWithCache: jest.fn(),
         };
 
         mockCacheService = {
@@ -56,10 +50,6 @@ describe('GetCodeManagementMemberListUseCase', () => {
                 {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
-                },
-                {
-                    provide: PULL_REQUEST_MANAGER_SERVICE_TOKEN,
-                    useValue: mockPullRequestHandlerService,
                 },
                 {
                     provide: CacheService,
@@ -161,66 +151,10 @@ describe('GetCodeManagementMemberListUseCase', () => {
         it('should not cache empty results to avoid caching transient errors', async () => {
             mockCacheService.getFromCache.mockResolvedValue(null);
             mockCodeManagementService.getListMembers.mockResolvedValue([]);
-            mockPullRequestHandlerService.getPullRequestAuthorsWithCache.mockResolvedValue(
-                [],
-            );
 
             await useCase.execute();
 
             expect(mockCacheService.addToCache).not.toHaveBeenCalled();
-        });
-    });
-
-    describe('fallback to pull request authors', () => {
-        it('should fall back to PR authors when code integration returns empty', async () => {
-            const prAuthors = [
-                { id: 10, name: 'PR Author 1' },
-                { id: 11, name: 'PR Author 2' },
-            ];
-
-            mockCodeManagementService.getListMembers.mockResolvedValue([]);
-            mockPullRequestHandlerService.getPullRequestAuthorsWithCache.mockResolvedValue(
-                prAuthors,
-            );
-
-            const result = await useCase.execute();
-
-            expect(result).toEqual(prAuthors);
-            expect(
-                mockPullRequestHandlerService.getPullRequestAuthorsWithCache,
-            ).toHaveBeenCalled();
-        });
-
-        it('should fall back to PR authors when code integration throws', async () => {
-            const prAuthors = [{ id: 10, name: 'PR Author 1' }];
-
-            mockCodeManagementService.getListMembers.mockRejectedValue(
-                new Error('GitLab API error'),
-            );
-            mockPullRequestHandlerService.getPullRequestAuthorsWithCache.mockResolvedValue(
-                prAuthors,
-            );
-
-            const result = await useCase.execute();
-
-            expect(result).toEqual(prAuthors);
-        });
-
-        it('should cache PR author results', async () => {
-            const prAuthors = [{ id: 10, name: 'PR Author 1' }];
-
-            mockCodeManagementService.getListMembers.mockResolvedValue([]);
-            mockPullRequestHandlerService.getPullRequestAuthorsWithCache.mockResolvedValue(
-                prAuthors,
-            );
-
-            await useCase.execute();
-
-            expect(mockCacheService.addToCache).toHaveBeenCalledWith(
-                'org_members_org-uuid-123',
-                prAuthors,
-                30 * 60 * 1000,
-            );
         });
     });
 

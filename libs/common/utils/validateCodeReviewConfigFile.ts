@@ -5,6 +5,7 @@ import * as yaml from 'js-yaml';
 
 import codereviewConfigSchema from '@libs/common/schemas/codereview.json';
 import { KodusConfigFile } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { CodeReviewParameter } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 
 interface IValidateKodusConfigFileReturn {
     isValidConfigFile: boolean;
@@ -91,6 +92,26 @@ export function getDefaultKodusConfigFile(): Omit<KodusConfigFile, 'version'> {
     const { version, ...kodusDefaultConfigFile } = kodusConfigYMLfile;
 
     return kodusDefaultConfigFile;
+}
+
+/**
+ * Builds the default global `code_review_config` row for a brand-new team.
+ *
+ * Mirrors what UpdateOrCreateCodeReviewParameterUseCase.createNewGlobalConfig
+ * persists for the empty-input case: an empty delta over the shipped defaults
+ * (so every setting resolves to its default at merge time) with no
+ * repositories attached yet. Kept as a pure builder so it can be reused by the
+ * backend guarantees (team creation, review-time self-heal, repository sync)
+ * without duplicating the shape or drifting from the default config.
+ */
+export function buildDefaultGlobalCodeReviewConfig(): CodeReviewParameter {
+    return {
+        id: 'global',
+        name: 'Global',
+        isSelected: true,
+        configs: {},
+        repositories: [],
+    };
 }
 
 function formatValidationErrors(errors: ErrorObject[]): string {

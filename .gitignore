@@ -3,6 +3,15 @@
 apps/*/dist
 /node_modules
 
+# pnpm's content-addressable store — should live in the global store
+# (~/Library/pnpm/store). A local copy here is an orphan from a stray
+# `pnpm install --store-dir .pnpm-store`; never commit it. The nested pattern
+# covers stores leaked into workspace packages (e.g. apps/web/.pnpm-store via
+# the dev container bind-mount).
+/.pnpm-store/
+**/.pnpm-store/
+apps/web/.pnpm-store/
+
 # selfhosted dev VM state (scripts/selfhosted/*.sh)
 .kodus-dev/
 # direnv config (optional, written by 'yarn selfhosted:setup')
@@ -11,6 +20,8 @@ apps/*/dist
 # TypeScript compiled files (should NOT be in src/ or packages/)
 # These should only exist in dist/ directories
 *.d.ts
+# ...except hand-written type augmentations, which are source, not build output.
+!apps/web/src/types/*.d.ts
 *.js.map
 
 # Ignore compiled .js files in src/ and packages/ (they should be in dist/)
@@ -33,6 +44,10 @@ packages/**/*.js
 .env.qa
 .env.prod
 .env.local
+.env.reconciled
+.env.bak.*
+.env.err.*
+.env.work.*
 
 # E2B sandbox secrets
 e2b-sandbox/config.json
@@ -120,7 +135,6 @@ yalc.lock
 docker-compose.prod-local.yml
 # packages
 # .packages
-#packages/kodus-flow/
 .test.json
 
 # Temporary JSON files
@@ -152,8 +166,13 @@ skills-lock.json
 evals/promptfoo/results/
 evals/promptfoo-safeguard/results/
 scripts/benchmark/results/
+scripts/benchmark/node_modules/
 scripts/benchmark/*-trace-metrics.json
 evals/investigation/evals/
+
+# kodus-flow workspace package build artifacts
+packages/kodus-flow/node_modules/
+packages/kodus-flow/dist/
 
 # ESLint Cache
 .eslintcache
@@ -217,3 +236,18 @@ parity-report.json
 
 # IDE - Zed
 .zed/
+
+opus-diagnosis-ptbr/
+scripts/benchmark/node_modules/
+
+# Benchmark recall experiments — analysis outputs + session tooling (regenerated, not product code)
+docs-internal/agent-execucao/
+scripts/benchmark/process-run.sh
+scripts/benchmark/funnel-extract.js
+scripts/benchmark/funnel-report.py
+scripts/benchmark/langfuse-enrich.py
+scripts/benchmark/execucao-detalhada.py
+scripts/benchmark/golden-context.py
+scripts/benchmark/golden-context.py.bak
+evals/kody-rules/prod-rules.json
+.grok/settings.json

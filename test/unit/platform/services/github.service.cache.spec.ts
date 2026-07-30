@@ -14,19 +14,6 @@
  *   3. getCommitsForPullRequestForCodeReview (opt-in, same shape)
  */
 
-jest.mock('@kodus/flow', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        info: jest.fn(),
-    }),
-    getObservability: () => ({
-        getContext: () => ({}),
-    }),
-}));
-
 import { GithubService } from '@libs/platform/infrastructure/adapters/services/github/github.service';
 import { CacheService } from '@libs/core/cache/cache.service';
 

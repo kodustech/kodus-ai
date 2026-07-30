@@ -5,6 +5,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { analyticsPostgresConfigLoader } from '@libs/core/infrastructure/config/loaders/analytics-postgres.config.loader';
 import {
+    CodeReviewFeedbackModel,
+    CodeReviewFeedbackSchema,
+} from '@libs/code-review/infrastructure/adapters/repositories/schemas/mongoose/codeReviewFeedback.model';
+import {
     PullRequestsModel,
     PullRequestsSchema,
 } from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
@@ -12,7 +16,9 @@ import {
 import { PullRequestClassifierService } from '../classification/pull-request-classifier.service';
 import { ANALYTICS_ENTITIES } from '../entities';
 import { BackfillOrchestratorService } from '../ingestion/backfill-orchestrator.service';
+import { FeedbackIngestionService } from '../ingestion/feedback-ingestion.service';
 import { PullRequestIngestionService } from '../ingestion/pull-request-ingestion.service';
+import { ReviewOperationalIngestionService } from '../ingestion/review-operational-ingestion.service';
 import { AnalyticsTypeORMFactory } from '../infrastructure/typeORM.factory';
 import { ANALYTICS_DATA_SOURCE } from '../schema.constant';
 
@@ -53,16 +59,68 @@ export class AnalyticsWarehouseModule {
                         name: PullRequestsModel.name,
                         schema: PullRequestsSchema,
                     },
+                    {
+                        name: CodeReviewFeedbackModel.name,
+                        schema: CodeReviewFeedbackSchema,
+                    },
                 ]),
             ],
             providers: [
                 PullRequestIngestionService,
+                FeedbackIngestionService,
+                ReviewOperationalIngestionService,
                 BackfillOrchestratorService,
                 PullRequestClassifierService,
             ],
             exports: [
                 TypeOrmModule,
                 PullRequestIngestionService,
+                FeedbackIngestionService,
+                ReviewOperationalIngestionService,
+                BackfillOrchestratorService,
+                PullRequestClassifierService,
+            ],
+        };
+    }
+
+    /**
+     * Feature-level registration for modules that run UNDER a root which has
+     * already established the analytics DataSource (e.g. CockpitModule under
+     * ApiModule). Same providers/exports as forRoot() but WITHOUT
+     * TypeOrmModule.forRootAsync — registering the named "analytics" connection
+     * a second time throws DuplicateDataSourceException in @nestjs/typeorm.
+     */
+    static forFeature(): DynamicModule {
+        return {
+            module: AnalyticsWarehouseModule,
+            imports: [
+                TypeOrmModule.forFeature(
+                    ANALYTICS_ENTITIES,
+                    ANALYTICS_DATA_SOURCE,
+                ),
+                MongooseModule.forFeature([
+                    {
+                        name: PullRequestsModel.name,
+                        schema: PullRequestsSchema,
+                    },
+                    {
+                        name: CodeReviewFeedbackModel.name,
+                        schema: CodeReviewFeedbackSchema,
+                    },
+                ]),
+            ],
+            providers: [
+                PullRequestIngestionService,
+                FeedbackIngestionService,
+                ReviewOperationalIngestionService,
+                BackfillOrchestratorService,
+                PullRequestClassifierService,
+            ],
+            exports: [
+                TypeOrmModule,
+                PullRequestIngestionService,
+                FeedbackIngestionService,
+                ReviewOperationalIngestionService,
                 BackfillOrchestratorService,
                 PullRequestClassifierService,
             ],

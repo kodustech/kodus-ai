@@ -14,6 +14,7 @@ import {
     ReviewCadenceType,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { CommentResult } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ConfigLevel } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 
 export interface PlaceholderContext {
@@ -23,7 +24,19 @@ export interface PlaceholderContext {
     platformType?: PlatformType;
     organizationAndTeamData?: OrganizationAndTeamData;
     prNumber?: number;
+    lineComments?: CommentResult[];
 }
+
+/**
+ * One review suggestion distilled into the fields the consolidated agent-prompt
+ * block renders (see MessageTemplateProcessor.getConsolidatedLLMPromptBody).
+ */
+type ConsolidatedPromptEntry = {
+    file: string;
+    line?: number;
+    prompt: string;
+    improvedCode?: string;
+};
 
 export type PlaceholderHandler = (
     context: PlaceholderContext,
@@ -32,6 +45,16 @@ export type PlaceholderHandler = (
 @Injectable()
 export class MessageTemplateProcessor {
     private handlers = new Map<string, PlaceholderHandler>();
+
+    // Deprecated placeholder names kept resolvable for backward-compat with
+    // custom message templates saved before a rename. Aliases resolve to the
+    // current handler but are intentionally NOT advertised by
+    // getAvailablePlaceholders() so the UI only offers the current name.
+    private aliases = new Map<string, string>([
+        // @consolidatedLLMPrompt was renamed to @agentPrompt; old saved
+        // templates must still render the consolidated block, not the literal.
+        ['consolidatedLLMPrompt', 'agentPrompt'],
+    ]);
 
     constructor() {
         this.registerDefaultHandlers();
@@ -42,6 +65,14 @@ export class MessageTemplateProcessor {
         this.handlers.set('changeSummary', this.generateChangeSummary);
         this.handlers.set('reviewOptions', this.generateReviewOptionsAccordion);
         this.handlers.set('reviewCadence', this.generateReviewCadenceInfo);
+        this.handlers.set(
+            'agentPrompt',
+            async (context: PlaceholderContext) => {
+                return this.getConsolidatedLLMPromptBody(
+                    context.lineComments || [],
+                );
+            },
+        );
         this.handlers.set('reviewScope', this.generateReviewScope);
     }
 
@@ -53,6 +84,8 @@ export class MessageTemplateProcessor {
      * @changeSummary - requires: context.changedFiles, context.language
      * @reviewOptions - requires: context.codeReviewConfig, context.language
      * @reviewCadence - requires: context.codeReviewConfig, context.language
+     * @reviewScope - requires: context.codeReviewConfig
+     * @agentPrompt - requires: context.lineComments
      *
      * @param template Template with @placeholders
      * @param context Context for the handlers
@@ -69,7 +102,10 @@ export class MessageTemplateProcessor {
 
         for (const match of matches) {
             const placeholder = match[1];
-            const handler = this.handlers.get(placeholder);
+            const aliasTarget = this.aliases.get(placeholder);
+            const handler =
+                this.handlers.get(placeholder) ??
+                (aliasTarget ? this.handlers.get(aliasTarget) : undefined);
 
             if (handler) {
                 const replacement = await handler(context);
@@ -260,7 +296,7 @@ ${reviewOptionsMarkdown}
                     translation.autoPauseDesc
                         ?.replace('{timeWindow}', String(timeWindow))
                         ?.replace('{pushes}', String(pushes)) ||
-                    `Kody reviews the first push automatically, then pauses if you make ${pushes}+ pushes in ${timeWindow} minutes. Use @kody resume to continue.`;
+                    `Kody reviews the first push automatically, then pauses if you make ${pushes}+ pushes in ${timeWindow} minutes. Use @kody start-review to continue.`;
                 break;
             }
 
@@ -320,5 +356,108 @@ ${reviewOptionsMarkdown}
             (language as LanguageValue) ?? LanguageValue.ENGLISH,
             TranslationsCategory.PullRequestSummaryMarkdown,
         );
+    }
+
+    private extractPromptsFromComments(
+        lineComments: CommentResult[],
+    ): ConsolidatedPromptEntry[] {
+        if (!lineComments?.length) return [];
+
+        return lineComments.reduce<ConsolidatedPromptEntry[]>(
+            (acc, { comment }) => {
+                if (comment?.suggestion?.llmPrompt) {
+                    acc.push({
+                        file: comment.path,
+                        line: comment.line,
+                        prompt: comment.suggestion.llmPrompt,
+                        improvedCode: comment.suggestion.improvedCode,
+                    });
+                }
+                return acc;
+            },
+            [],
+        );
+    }
+
+    private buildConsolidatedCommentBody(
+        prompts: ConsolidatedPromptEntry[],
+    ): string {
+        const taskList = prompts
+            .map(
+                ({ file, line }) =>
+                    `- ${file}${line != null ? `:${line}` : ''}`,
+            )
+            .join('\n');
+
+        const tasks = prompts
+            .map(({ file, line, prompt, improvedCode }, index) => {
+                const location = `${file}${line != null ? `:${line}` : ''}`;
+
+                const referenceSection = improvedCode
+                    ? [
+                          `Reference implementation (from code review):`,
+                          ``,
+                          `// ${location}`,
+                          improvedCode.trim(),
+                      ].join('\n')
+                    : '';
+
+                return [
+                    `### [${index + 1}/${prompts.length}] ${location}`,
+                    ``,
+                    `Issue identified during code review:`,
+                    prompt.trim(),
+                    ``,
+                    referenceSection,
+                ]
+                    .filter(Boolean)
+                    .join('\n');
+            })
+            .join('\n\n---\n\n');
+
+        const agentBlock = [
+            `A code review identified the following issues in this pull request.`,
+            `Each section describes what was found and includes a reference implementation where available.`,
+            ``,
+            `Files involved:`,
+            taskList,
+            ``,
+            `---`,
+            ``,
+            tasks,
+            ``,
+            `---`,
+            ``,
+            `Review each issue in context, use the reference implementations as guidance, and apply fixes that are consistent with the surrounding codebase.`,
+        ].join('\n');
+
+        // The block is fenced so the user can copy it verbatim. improvedCode /
+        // llmPrompt may themselves contain ``` fences; pick a backtick run
+        // longer than any inside the content so the outer fence can't be closed
+        // early (CommonMark fenced-code rule).
+        const longestBacktickRun = Math.max(
+            0,
+            ...(agentBlock.match(/`+/g) ?? []).map((run) => run.length),
+        );
+        const fence = '`'.repeat(Math.max(3, longestBacktickRun + 1));
+
+        return [
+            `**Kody Code Review** — ${prompts.length} suggested fix${prompts.length > 1 ? 'es' : ''}.`,
+            `Paste the prompt below to your agent and all review fixed at once!\n`,
+            `<details>`,
+            `<summary>🛠️ Open Agent Prompt</summary>`,
+            ``,
+            fence,
+            agentBlock,
+            fence,
+            ``,
+            `</details>`,
+        ].join('\n');
+    }
+
+    public getConsolidatedLLMPromptBody(lineComments: CommentResult[]): string {
+        const prompts = this.extractPromptsFromComments(lineComments);
+        if (prompts.length === 0) return '';
+        return this.buildConsolidatedCommentBody(prompts);
     }
 }

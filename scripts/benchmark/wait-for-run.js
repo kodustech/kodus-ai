@@ -3,6 +3,7 @@
 const {
     attachPullRequestMetadata,
     getProcessedPairs,
+    getLatestExecutionStageRows,
     loadManifest,
     makeRepositoryPrKey,
     resolvePullRequestMetadata,
@@ -47,11 +48,28 @@ function buildStatus(entries) {
     const processedPairs = new Set(
         getProcessedPairs(enriched).map((item) => makeRepositoryPrKey(item)),
     );
+    // A PR is "settled" once its pipeline reaches the "Kody Review Finished"
+    // stage — success OR error. Errored PRs (e.g. agent hit step limit) never
+    // become "processed" (success-only), so without this the waiter would
+    // block until timeout on a PR that is already terminal.
+    const settledPairs = new Set(
+        getLatestExecutionStageRows(enriched)
+            .filter((row) => row.stageName === 'Kody Review Finished')
+            .map((row) =>
+                makeRepositoryPrKey({
+                    repositoryId: row.repositoryId,
+                    prNumber: row.prNumber,
+                }),
+            ),
+    );
 
     const statuses = enriched.map((entry) => ({
         ...entry,
         processed: entry.repositoryId
             ? processedPairs.has(makeRepositoryPrKey(entry))
+            : false,
+        settled: entry.repositoryId
+            ? settledPairs.has(makeRepositoryPrKey(entry))
             : false,
         mappedInManifest: Boolean(entry.prNumber),
         resolvedInMongo: Boolean(entry.repositoryId),
@@ -60,6 +78,7 @@ function buildStatus(entries) {
     const mapped = statuses.filter((entry) => entry.mappedInManifest);
     const resolved = mapped.filter((entry) => entry.resolvedInMongo);
     const processed = mapped.filter((entry) => entry.processed);
+    const settled = mapped.filter((entry) => entry.settled);
 
     return {
         statuses,
@@ -68,6 +87,7 @@ function buildStatus(entries) {
             mapped: mapped.length,
             resolved: resolved.length,
             processed: processed.length,
+            settled: settled.length,
             pending: mapped.length - processed.length,
         },
     };
@@ -138,11 +158,13 @@ async function main() {
 
         if (
             status.summary.mapped > 0 &&
-            status.summary.processed === status.summary.mapped
+            status.summary.settled === status.summary.mapped
         ) {
+            const errored =
+                status.summary.settled - status.summary.processed;
             if (!args.quiet) {
                 process.stdout.write(
-                    `[benchmark:${runName}] completed: all ${status.summary.mapped} mapped PRs reached "Kody Review Finished = success".\n`,
+                    `[benchmark:${runName}] completed: all ${status.summary.mapped} mapped PRs reached "Kody Review Finished" (${status.summary.processed} success, ${errored} error).\n`,
                 );
             }
             process.exit(0);

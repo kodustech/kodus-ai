@@ -6,6 +6,8 @@ import { MCPConnectionEntity } from '../modules/mcp/entities/mcp-connection.enti
 import { MCPIntegrationEntity } from '../modules/integrations/entities/mcp-integration.entity';
 import { MCPIntegrationOAuthEntity } from '../modules/integrations/entities/mcp-integration-oauth.entity';
 
+// Cascade: .env.local (per-dev) wins, .env (team baseline) fills the rest.
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
 const requiredEnvVars = [

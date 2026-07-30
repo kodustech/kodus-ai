@@ -1,4 +1,3 @@
-import { Avatar, AvatarImage } from "@components/ui/avatar";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
@@ -9,18 +8,30 @@ import {
 } from "@components/ui/card";
 import { Link } from "@components/ui/link";
 import { Page } from "@components/ui/page";
-import { getMCPPlugins } from "@services/mcp-manager/fetch";
+import { getMCPConnections, getMCPPlugins } from "@services/mcp-manager/fetch";
 import { MCP_CONNECTION_STATUS } from "@services/mcp-manager/types";
-import { CheckIcon, ImageOff } from "lucide-react";
 import type { AwaitedReturnType } from "src/core/types";
+
+import { PluginsGrid } from "./_components/plugins-grid";
 
 export default async function PluginsPage() {
     let plugins: AwaitedReturnType<typeof getMCPPlugins> = [];
+    let orderedActiveIntegrationIds: string[] = [];
     let hasMCPError = false;
     let mcpErrorMessage = "";
 
     try {
-        plugins = await getMCPPlugins();
+        const [pluginsResult, connectionsResult] = await Promise.all([
+            getMCPPlugins(),
+            // Connections come back oldest-first — the same order the
+            // backend uses when capping runnable plugins on free plans.
+            getMCPConnections().catch(() => null),
+        ]);
+
+        plugins = pluginsResult;
+        orderedActiveIntegrationIds = (connectionsResult?.items ?? [])
+            .filter((c) => c.status === MCP_CONNECTION_STATUS.ACTIVE)
+            .map((c) => c.integrationId);
     } catch (error) {
         hasMCPError = true;
         mcpErrorMessage =
@@ -35,8 +46,6 @@ export default async function PluginsPage() {
         if (aIsComposio !== bIsComposio) return aIsComposio ? 1 : -1;
         return a.name > b.name ? 1 : -1;
     });
-
-    console.log(sortedPlugins);
 
     return (
         <Page.Root>
@@ -66,77 +75,12 @@ export default async function PluginsPage() {
                         </p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                        {sortedPlugins.map((item) => (
-                            <Link
-                                key={item.id}
-                                className="w-full"
-                                href={`/settings/plugins/${item.provider}/${item.id}`}>
-                                <Button
-                                    size="lg"
-                                    decorative
-                                    variant="helper"
-                                    className="h-full w-full items-start gap-0 px-0 py-0">
-                                    <Card className="flex w-full gap-0 bg-transparent shadow-none">
-                                        <CardHeader className="gap-4">
-                                            <div className="flex h-fit flex-row items-center gap-5">
-                                                <Avatar className="bg-card-lv3 group-disabled/link:bg-card-lv3/50 size-10 rounded-lg p-1">
-                                                    {item.logo ? (
-                                                        <AvatarImage
-                                                            src={item.logo}
-                                                            alt={`${item.appName} logo`}
-                                                            className="object-contain"
-                                                        />
-                                                    ) : (
-                                                        <ImageOff className="text-text-tertiary m-auto h-6 w-6" />
-                                                    )}
-                                                </Avatar>
-
-                                                <div className="flex-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <CardTitle className="text-text-primary capitalize">
-                                                            {item.appName}
-                                                        </CardTitle>
-                                                        {item.provider ===
-                                                            "composio" && (
-                                                            <Badge className="bg-red-500/10 text-red-500 border-red-500/20 pointer-events-none text-[10px]">
-                                                                Deprecated
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-
-                                                    <span className="text-text-tertiary text-xs">
-                                                        @{item.provider}
-                                                    </span>
-                                                </div>
-
-                                                {item.isConnected &&
-                                                    item.connectionStatus ===
-                                                        MCP_CONNECTION_STATUS.ACTIVE && (
-                                                        <Badge
-                                                            variant="tertiary"
-                                                            leftIcon={
-                                                                <CheckIcon />
-                                                            }
-                                                            className="bg-success! text-card-lv2! pointer-events-none">
-                                                            {item.isDefault
-                                                                ? "Default"
-                                                                : "Installed"}
-                                                        </Badge>
-                                                    )}
-                                            </div>
-
-                                            {item.description && (
-                                                <CardDescription className="text-sm">
-                                                    {item.description}
-                                                </CardDescription>
-                                            )}
-                                        </CardHeader>
-                                    </Card>
-                                </Button>
-                            </Link>
-                        ))}
-                    </div>
+                    <PluginsGrid
+                        plugins={sortedPlugins}
+                        orderedActiveIntegrationIds={
+                            orderedActiveIntegrationIds
+                        }
+                    />
                 )}
                 <Card className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 p-6">
                     <CardHeader className="text-center">

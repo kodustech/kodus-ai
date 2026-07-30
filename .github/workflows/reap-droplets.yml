@@ -1,0 +1,55 @@
+name: "Reap stale test droplets"
+
+# =============================================================================
+# Cloud-side reaper for leaked DigitalOcean test droplets — runs on GitHub's
+# infra (NOT a developer Mac), so it fires regardless of who's online.
+#
+# Reconciles against the DigitalOcean API (source of truth): destroys any
+# `kodus-selfhosted-*` droplet older than the TTL. Prod (kodus-web-new) never
+# matches the prefix, so it's never touched. On a CI runner there are no local
+# state files, so every match goes through reap.sh's fail-closed orphan path
+# (re-confirm prefix, then API DELETE).
+#
+# Requires repo secret DIGITALOCEAN_TOKEN.
+# =============================================================================
+
+permissions:
+    contents: read
+
+on:
+    schedule:
+        # Every 3 hours. With a 6h TTL, a forgotten droplet dies within ~3-9h.
+        - cron: "0 */3 * * *"
+    workflow_dispatch:
+        inputs:
+            ttl_hours:
+                description: "Reap droplets older than this many hours"
+                required: false
+                default: "6"
+            dry_run:
+                description: "Dry run (list only, delete nothing)"
+                type: boolean
+                required: false
+                default: false
+
+jobs:
+    reap:
+        name: Reap kodus-selfhosted-* droplets
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Reap
+              env:
+                  DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+              run: |
+                  if [ -z "$DIGITALOCEAN_TOKEN" ]; then
+                      echo "::error::DIGITALOCEAN_TOKEN secret is not set"
+                      exit 1
+                  fi
+                  TTL="${{ github.event.inputs.ttl_hours || '6' }}"
+                  ARGS=(--ttl "$TTL" -y)
+                  if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+                      ARGS+=(--dry-run)
+                  fi
+                  bash scripts/selfhosted/reap.sh "${ARGS[@]}"

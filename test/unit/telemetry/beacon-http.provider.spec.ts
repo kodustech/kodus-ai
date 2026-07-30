@@ -57,6 +57,24 @@ describe('BeaconHttpProvider', () => {
             );
         });
 
+        it('uses KODUS_TELEMETRY_ENDPOINT when set', async () => {
+            process.env.KODUS_TELEMETRY_ENDPOINT =
+                'http://127.0.0.1:43111/test-heartbeat';
+            global.fetch = jest
+                .fn()
+                .mockResolvedValue({ status: 204 }) as unknown as typeof fetch;
+
+            const ok = await new BeaconHttpProvider().send({ a: 1 }, '1.0.0');
+
+            expect(ok).toBe(true);
+            expect(global.fetch).toHaveBeenCalledWith(
+                'http://127.0.0.1:43111/test-heartbeat',
+                expect.objectContaining({
+                    method: 'POST',
+                }),
+            );
+        });
+
         it('returns false on non-204 (e.g. 400)', async () => {
             global.fetch = jest
                 .fn()

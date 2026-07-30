@@ -22,8 +22,14 @@ export interface IRateLimitGateService {
      * is below the configured threshold, throws RateLimitError carrying
      * the bucket's `resetAt`. Otherwise resolves silently.
      */
+    /**
+     * `platformType` is optional: callers that cannot determine it (the CLI
+     * cannot infer a platform from a self-managed host) must be able to say so
+     * rather than name a platform the organization may not even use. An
+     * unknown platform is treated like any non-GitHub one — pass through.
+     */
     check(
         organizationAndTeamData: OrganizationAndTeamData,
-        platformType: PlatformType,
+        platformType?: PlatformType,
     ): Promise<void>;
 }

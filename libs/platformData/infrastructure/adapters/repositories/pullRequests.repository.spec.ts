@@ -37,6 +37,53 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         repo = new PullRequestsRepository(model as any);
     });
 
+    describe('findNumbersByRepositoryId (token-usage repo filter)', () => {
+        const mockFind = (docs: Array<{ number: number }>) => {
+            const findExec = jest.fn().mockResolvedValue(docs);
+            const lean = jest.fn().mockReturnValue({ exec: findExec });
+            const limit = jest.fn().mockReturnValue({ lean });
+            const sort = jest.fn().mockReturnValue({ limit });
+            model.find = jest.fn().mockReturnValue({ sort });
+            return { find: model.find as jest.Mock, sort, limit };
+        };
+
+        it('filters by org + repository.id, projects only the number, and caps the result', async () => {
+            const { find, sort, limit } = mockFind([
+                { number: 7 },
+                { number: 9 },
+            ]);
+
+            const numbers = await repo.findNumbersByRepositoryId(
+                'org-A',
+                'repo-alpha',
+            );
+
+            expect(numbers).toEqual([7, 9]);
+            const [filter, projection] = find.mock.calls[0];
+            expect(filter).toEqual({
+                organizationId: 'org-A',
+                'repository.id': 'repo-alpha',
+            });
+            expect(projection).toEqual({ number: 1 });
+            // Newest first, bounded so a huge repo can't blow up the $in.
+            expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+            expect(limit).toHaveBeenCalledWith(10_000);
+        });
+
+        it('bounds by createdAt when an `until` date is given', async () => {
+            const { find } = mockFind([]);
+            const until = new Date('2026-06-30');
+
+            await repo.findNumbersByRepositoryId('org-A', 'r', until);
+
+            expect(find.mock.calls[0][0]).toEqual({
+                organizationId: 'org-A',
+                'repository.id': 'r',
+                createdAt: { $lte: until },
+            });
+        });
+    });
+
     describe('addFileToPullRequest', () => {
         it('includes organizationId in the Mongo filter', async () => {
             await repo.addFileToPullRequest(

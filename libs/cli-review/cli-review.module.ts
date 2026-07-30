@@ -12,6 +12,10 @@ import { CliReviewPipelineStrategy } from './pipeline/strategy/cli-review-pipeli
 import { ClassifyCliSessionCaptureUseCase } from './application/use-cases/classify-cli-session-capture.use-case';
 import { ClassifySessionUseCase } from './application/use-cases/classify-session.use-case';
 import { EnqueueCliReviewUseCase } from './application/use-cases/enqueue-cli-review.use-case';
+import { PublicPrReviewUseCase } from './application/use-cases/public-pr-review.use-case';
+import { ListFeaturedPublicReviewsUseCase } from './application/use-cases/list-featured-public-reviews.use-case';
+import { GetFeaturedPublicReviewUseCase } from './application/use-cases/get-featured-public-review.use-case';
+import { ValidateCliKeyUseCase } from './application/use-cases/validate-cli-key.use-case';
 import { ExecuteCliReviewUseCase } from './application/use-cases/execute-cli-review.use-case';
 import { GetCliReviewByIdUseCase } from './application/use-cases/dashboard/get-cli-review-by-id.use-case';
 import { GetCliReviewsUseCase } from './application/use-cases/dashboard/get-cli-reviews.use-case';
@@ -25,6 +29,7 @@ import { CliReviewJobProcessorService } from './workflow/cli-review-job-processo
 import { GitHubRateLimitGateService } from '@libs/platform/infrastructure/adapters/services/github/github-rate-limit-gate.service';
 import { RATE_LIMIT_GATE_SERVICE_TOKEN } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
 import { GithubModule } from '@libs/platform/modules/github.module';
+import { PlatformCoreModule } from '@libs/platform/modules/platform-core.module';
 
 // Services
 import { CliInputConverter } from './infrastructure/converters/cli-input.converter';
@@ -33,12 +38,26 @@ import {
     CliSessionCaptureModel,
     CliSessionCaptureSchema,
 } from './infrastructure/repositories/schemas/cli-session-capture.model';
+import {
+    FeaturedPublicReviewModel,
+    FeaturedPublicReviewSchema,
+} from './infrastructure/repositories/schemas/featured-public-review.model';
+import { FeaturedPublicReviewRepository } from './infrastructure/repositories/featured-public-review.repository';
 import { SessionEventModel } from './infrastructure/repositories/schemas/session-event.model';
 import { SessionEventRepository } from './infrastructure/repositories/session-event.repository';
 import { AuthenticatedRateLimiterService } from './infrastructure/services/authenticated-rate-limiter.service';
+import { GitHubPublicPrService } from './infrastructure/services/github-public-pr.service';
+import { PublicPrAiSummaryService } from './infrastructure/services/public-pr-ai-summary.service';
+import { PublicPrGroupingService } from './infrastructure/services/public-pr-grouping.service';
 import { TrialRateLimiterService } from './infrastructure/services/trial-rate-limiter.service';
+
+// Contracts (DI tokens)
 import { TRIAL_RATE_LIMITER_SERVICE_TOKEN } from './domain/contracts/trial-rate-limiter.service.contract';
 import { AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN } from './domain/contracts/authenticated-rate-limiter.service.contract';
+import { GITHUB_PUBLIC_PR_SERVICE_TOKEN } from './domain/contracts/github-public-pr.service.contract';
+import { FEATURED_PUBLIC_REVIEW_REPOSITORY_TOKEN } from './domain/contracts/featured-public-review.repository.contract';
+import { PUBLIC_PR_AI_SUMMARY_SERVICE_TOKEN } from './domain/contracts/public-pr-ai-summary.service.contract';
+import { PUBLIC_PR_GROUPING_SERVICE_TOKEN } from './domain/contracts/public-pr-grouping.service.contract';
 
 // External dependencies
 import { AutomationModule } from '@libs/automation/modules/automation.module';
@@ -49,6 +68,9 @@ import { LicenseModule } from '@libs/ee/license/license.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
 import { ParametersModule } from '@libs/organization/modules/parameters.module';
 import { TeamModule } from '@libs/organization/modules/team.module';
+// Needed by ValidateCliKeyUseCase — exports AUTH_SERVICE_TOKEN +
+// re-exports JwtModule (so JwtService resolves transitively).
+import { AuthModule } from '@libs/identity/modules/auth.module';
 
 // Workflow infra (provided locally to avoid an ESM circular import with
 // WorkflowModule, which itself imports CliReviewModule on the worker side).
@@ -75,6 +97,10 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
                 name: CliSessionCaptureModel.name,
                 schema: CliSessionCaptureSchema,
             },
+            {
+                name: FeaturedPublicReviewModel.name,
+                schema: FeaturedPublicReviewSchema,
+            },
         ]),
         TypeOrmModule.forFeature([
             SessionEventModel,
@@ -85,11 +111,13 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
         forwardRef(() => CodeReviewCoreModule), // For CODE_REVIEW_EXECUTION_SERVICE
         forwardRef(() => ParametersModule), // For config loading
         forwardRef(() => TeamModule), // For Team CLI Key validation
+        forwardRef(() => AuthModule), // For ValidateCliKeyUseCase (AUTH_SERVICE_TOKEN + JwtService)
         forwardRef(() => GlobalCacheModule), // For rate limiting
         forwardRef(() => AutomationModule), // For tracking executions
         forwardRef(() => LicenseModule), // For license validation and auto-assign
         forwardRef(() => KodyRulesModule), // For loading kody rules in CLI review
         forwardRef(() => GithubModule), // For GitHubRateLimitGateService dependency
+        forwardRef(() => PlatformCoreModule), // For CodeManagementService (platform resolution)
     ],
     providers: [
         // Strategy
@@ -102,6 +130,10 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
         // Use Cases
         EnqueueCliReviewUseCase,
         ExecuteCliReviewUseCase,
+        PublicPrReviewUseCase,
+        ListFeaturedPublicReviewsUseCase,
+        GetFeaturedPublicReviewUseCase,
+        ValidateCliKeyUseCase,
         GetCliReviewByIdUseCase,
         GetCliReviewsUseCase,
         GetCliReviewJobStatusUseCase,
@@ -138,8 +170,10 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
 
         // Services
         CliInputConverter,
-        // Rate limiters are injected by interface via DI tokens (see the
-        // domain contracts). Bind the token → concrete class here.
+        CliSessionCaptureRepository,
+        SessionEventRepository,
+        // Services + repos that must be consumed via DI tokens
+        // (Kody rule: don't inject services/repos by concrete class).
         {
             provide: TRIAL_RATE_LIMITER_SERVICE_TOKEN,
             useClass: TrialRateLimiterService,
@@ -148,13 +182,31 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
             provide: AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN,
             useClass: AuthenticatedRateLimiterService,
         },
-        CliSessionCaptureRepository,
-        SessionEventRepository,
+        {
+            provide: GITHUB_PUBLIC_PR_SERVICE_TOKEN,
+            useClass: GitHubPublicPrService,
+        },
+        {
+            provide: FEATURED_PUBLIC_REVIEW_REPOSITORY_TOKEN,
+            useClass: FeaturedPublicReviewRepository,
+        },
+        {
+            provide: PUBLIC_PR_AI_SUMMARY_SERVICE_TOKEN,
+            useClass: PublicPrAiSummaryService,
+        },
+        {
+            provide: PUBLIC_PR_GROUPING_SERVICE_TOKEN,
+            useClass: PublicPrGroupingService,
+        },
     ],
     exports: [
         // Export use case and services for controllers
         EnqueueCliReviewUseCase,
         ExecuteCliReviewUseCase,
+        PublicPrReviewUseCase,
+        ListFeaturedPublicReviewsUseCase,
+        GetFeaturedPublicReviewUseCase,
+        ValidateCliKeyUseCase,
         GetCliReviewByIdUseCase,
         GetCliReviewsUseCase,
         GetCliReviewJobStatusUseCase,
@@ -164,11 +216,14 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
         ClassifySessionUseCase,
         CliReviewJobProcessorService,
         SessionEventRepository,
-        TRIAL_RATE_LIMITER_SERVICE_TOKEN,
-        AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN,
-        SessionEventRepository,
         ClassifySessionUseCase,
         JOB_QUEUE_SERVICE_TOKEN,
+        TRIAL_RATE_LIMITER_SERVICE_TOKEN,
+        AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN,
+        GITHUB_PUBLIC_PR_SERVICE_TOKEN,
+        FEATURED_PUBLIC_REVIEW_REPOSITORY_TOKEN,
+        PUBLIC_PR_AI_SUMMARY_SERVICE_TOKEN,
+        PUBLIC_PR_GROUPING_SERVICE_TOKEN,
     ],
 })
 export class CliReviewModule {}

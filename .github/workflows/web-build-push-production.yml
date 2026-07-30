@@ -154,24 +154,16 @@ jobs:
                   docker rmi $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG_VERSION || true
                   docker image prune -f || true
 
-            - name: Notify Discord on Success
-              if: success()
+            - name: Notify Discord
+              if: always()
               uses: sarisia/actions-status-discord@v1.16.0
               with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
-                  content: ":tada: Docker image `${{ env.RELEASE_VERSION }}` was built and pushed
-                      to Amazon ECR."
-                  title: "Build and Push: kodus-web (Cloud)"
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: ${{ job.status }}
+                  title: "Build and Push: kodus-web (Cloud Prod)"
+                  description: |
+                      Image: `${{ env.RELEASE_VERSION }}`
+                      SHA: `${{ github.sha }}`
+                      Triggered by: @${{ github.actor }}
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   username: "GitHub Actions"
-                  color: 0xff00
-
-            - name: Notify Discord on Failure
-              if: failure()
-              uses: sarisia/actions-status-discord@v1.16.0
-              with:
-                  webhook: ${{ secrets.DISCORD_WEBHOOK }}
-                  content: ":x: Failed to build or push Docker image `${{ env.RELEASE_VERSION }}`
-                      to Amazon ECR. Check logs for details."
-                  title: "Build and Push: kodus-web (Cloud)"
-                  username: "GitHub Actions"
-                  color: 0xff0000

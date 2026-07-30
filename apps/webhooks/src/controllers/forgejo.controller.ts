@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Controller, HttpStatus, Post, Req, Res } from '@nestjs/common';
 import { Request, Response } from 'express';
 
@@ -36,6 +36,7 @@ export class ForgejoController {
             WebhookForgejoEvent.PULL_REQUEST,
             WebhookForgejoEvent.ISSUE_COMMENT,
             WebhookForgejoEvent.PULL_REQUEST_REVIEW_COMMENT,
+            WebhookForgejoEvent.PUSH,
         ];
 
         if (!supportedEvents.includes(event)) {

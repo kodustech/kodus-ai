@@ -16,6 +16,7 @@ import {
     SuggestionCategoryCount,
     SuggestionsImplementationRate,
 } from '../../domain/types';
+import { ICockpitCodeHealthService } from '../../domain/contracts/cockpit-code-health.service.contract';
 
 /**
  * Postgres port of `kodus-service-analytics/src/services/analytics/code-health.service.ts`.
@@ -29,7 +30,7 @@ import {
  *    behavior for orgs without classification.
  */
 @Injectable()
-export class CockpitCodeHealthService {
+export class CockpitCodeHealthService implements ICockpitCodeHealthService {
     constructor(
         @InjectDataSource(ANALYTICS_DATA_SOURCE)
         private readonly ds: DataSource,

@@ -1,4 +1,4 @@
-import { createLogger } from '@kodus/flow';
+import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 
 import {
@@ -72,10 +72,17 @@ export class GetInheritedRulesKodyRulesUseCase {
             };
         }
 
-        const allRules =
-            existing.rules?.filter(
-                (r) => r.status === KodyRulesStatus.ACTIVE,
-            ) || [];
+        // severity is lower-cased to match the scope-local listing path
+        // (`KodyRulesService.find()` normalizes on read). Without this the
+        // same rule reaches the page lower-cased via one endpoint and
+        // raw-cased via the other, so a strict severity compare (sort /
+        // "High" filter) treats the inherited copy as a different value.
+        const allRules = (existing.rules || [])
+            .filter((r) => r.status === KodyRulesStatus.ACTIVE)
+            .map((rule) => ({
+                ...rule,
+                severity: rule.severity?.toLowerCase() as IKodyRule['severity'],
+            }));
 
         const parameter = await this.parametersService.findByKey(
             ParametersKey.CODE_REVIEW_CONFIG,

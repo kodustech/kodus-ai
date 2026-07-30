@@ -7,21 +7,21 @@
         "type": "git",
         "url": "https://github.com/kodustech/kodus-common"
     },
-    "version": "1.3.19",
+    "version": "1.3.20",
     "publishConfig": {
         "access": "public",
         "registry": "https://us-central1-npm.pkg.dev/$GAR_PROJECT_ID/kodus-pkg/"
     },
     "license": "AGPL-3.0-only",
     "scripts": {
-        "prepack": "rm -rf dist && yarn generate-barrels && yarn types",
-        "prepack:watch": "yarn generate-barrels && tsc -b --watch tsconfig.build.json",
+        "prepack": "rm -rf dist && pnpm run generate-barrels && pnpm run types",
+        "prepack:watch": "pnpm run generate-barrels && tsc -b --watch tsconfig.build.json",
         "generate-barrels": "barrelsby --delete -c barrelsby.json",
         "types": "tsc -b --force tsconfig.build.json && tsc-alias tsconfig.build.json",
         "test": "jest --runInBand --detectOpenHandles --forceExit",
         "publish:gar": "source scripts/refresh-token.sh && npm publish --registry=https://us-central1-npm.pkg.dev/$GAR_PROJECT_ID/kodus-pkg/ --access public",
         "refresh-token": "source scripts/refresh-token.sh",
-        "publish:quick": "source scripts/refresh-token.sh && yarn prepack && yarn publish:gar"
+        "publish:quick": "source scripts/refresh-token.sh && pnpm run prepack && pnpm run publish:gar"
     },
     "files": [
         "dist/**/*"
@@ -51,6 +51,7 @@
     },
     "dependencies": {},
     "devDependencies": {
+        "@anthropic-ai/sdk": "^0.91.1",
         "@eslint/eslintrc": "^3.3.5",
         "@eslint/js": "^10.0.1",
         "@langchain/anthropic": "^1.3.29",
@@ -65,6 +66,7 @@
         "eslint": "^10.4.0",
         "eslint-config-prettier": "^10.1.8",
         "eslint-plugin-prettier": "^5.5.5",
+        "google-auth-library": "^9.15.1",
         "jest": "^30.4.2",
         "prettier": "^3.8.3",
         "reflect-metadata": "^0.2.2",
@@ -78,6 +80,7 @@
         "zod-to-json-schema": "^3.25.2"
     },
     "peerDependencies": {
+        "@anthropic-ai/sdk": "^0.91.1",
         "@langchain/anthropic": "^1.3.29",
         "@langchain/community": "^1.1.28",
         "@langchain/core": "^1.1.46",
@@ -86,6 +89,7 @@
         "@langchain/openai": "^1.4.5",
         "@nestjs/common": "^11.1.21",
         "@nestjs/core": "^11.1.21",
+        "google-auth-library": "^9.15.1",
         "reflect-metadata": "^0.2.2",
         "rxjs": "^7.8.2",
         "tslib": "^2.8.1",
@@ -122,8 +126,10 @@
         "coverageDirectory": "../coverage",
         "testEnvironment": "node"
     },
-    "resolutions": {
-        "flatted": "^3.4.2",
-        "minimatch": "^10.2.4"
+    "pnpm": {
+        "overrides": {
+            "flatted": "^3.4.2",
+            "minimatch": "^10.2.4"
+        }
     }
 }
