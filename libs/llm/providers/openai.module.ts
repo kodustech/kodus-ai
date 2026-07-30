@@ -15,7 +15,10 @@ import type { LanguageModel } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import { shouldEnableJsonSchema } from '@libs/llm/structured-output-gate';
+import {
+    shouldEnableJsonSchema,
+    isNeverDowngradeModel,
+} from '@libs/llm/structured-output-gate';
 import { registerProvider } from './registry';
 import type {
     ModelCapabilities,
@@ -43,18 +46,10 @@ function isNativeOpenAiModel(model: string): boolean {
     return isOpenAiReasoner(model) || /^(gpt|chatgpt|o[0-9])/i.test(model);
 }
 
-/**
- * Kimi / Moonshot (incl. `moonshotai/…`) must NEVER be downgraded to
- * `json_object`: measured to lose ~50% of structured outputs when forced off
- * native `json_schema` (Phase 0 D-00b, Pitfall 2). This is encoded as a
- * provider-module capability the build() honors, so `shouldEnableJsonSchema`
- * stays the fallback baseURL heuristic for genuinely-unknown upstreams — we do
- * NOT add api.moonshot.ai to that gate.
- */
-function isNeverDowngradeModel(model: string): boolean {
-    const m = model.toLowerCase();
-    return m.includes('kimi') || m.includes('moonshot');
-}
+// The Kimi / Moonshot never-downgrade policy (`isNeverDowngradeModel`) now lives
+// in the shared structured-output-gate leaf so the moonshot module shares the
+// SAME policy — see the import above. build() still honors it as an ADDITIVE
+// override on top of `shouldEnableJsonSchema` (D-00b, Pitfall 2).
 
 export const openaiModule: ProviderModule = {
     id: 'openai',

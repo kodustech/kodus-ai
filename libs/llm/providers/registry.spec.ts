@@ -20,6 +20,7 @@ import { vertexModule } from './vertex.module';
 import { openRouterModule } from './openrouter.module';
 import { bedrockModule } from './bedrock.module';
 import { novitaModule } from './novita.module';
+import { moonshotModule } from './moonshot.module';
 // D-05 registry-wide sweep (03-13): drive each module's real normalize boundary
 // through the 03-01 conformance harness against its committed fixture.
 import { runConformance, type ProviderFixture } from './conformance';
@@ -31,8 +32,9 @@ import vertexPlainFixture from './__fixtures__/vertex/plain.json';
 import openRouterReasoningFixture from './__fixtures__/openrouter/reasoning.json';
 import bedrockPlainFixture from './__fixtures__/bedrock/plain.json';
 import novitaPlainFixture from './__fixtures__/novita/plain.json';
+import moonshotPlainFixture from './__fixtures__/moonshot/plain.json';
 
-/** The nine BYOKProvider ids the registry must fully cover after 01-02. */
+/** The ten BYOKProvider ids the registry must fully cover (moonshot added). */
 const ALL_IDS = [
     'openai',
     'openai_compatible',
@@ -43,6 +45,7 @@ const ALL_IDS = [
     'open_router',
     'amazon_bedrock',
     'novita',
+    'moonshot',
 ];
 
 const EFFORTS: ReasoningEffort[] = ['none', 'low', 'medium', 'high'];
@@ -189,6 +192,11 @@ describe('01-02 ported modules — static conformance', () => {
         model: 'qwen/qwen-2.5-coder-32b-instruct',
         baseURL: 'https://api.novita.ai/v3/openai',
     });
+    runStaticConformance(moonshotModule, {
+        provider: 'moonshot',
+        model: 'kimi-k2.7-code',
+        baseURL: 'https://api.moonshot.ai/v1',
+    });
     // bedrock authenticates via aws* fields, not apiKey — give it a bearer token.
     runStaticConformance(bedrockModule, {
         provider: 'amazon_bedrock',
@@ -196,15 +204,15 @@ describe('01-02 ported modules — static conformance', () => {
     });
 });
 
-describe('registry covers all nine BYOKProvider ids (01-02 done)', () => {
+describe('registry covers all ten BYOKProvider ids', () => {
     it('every id resolves to a registered module', () => {
         for (const id of ALL_IDS) {
             expect(REGISTRY.has(id)).toBe(true);
             expect(REGISTRY.get(id)).toBeDefined();
         }
     });
-    it('registers exactly 7 distinct module objects for the 9 ids', () => {
-        expect(REGISTRY.all().length).toBe(7);
+    it('registers exactly 8 distinct module objects for the 10 ids', () => {
+        expect(REGISTRY.all().length).toBe(8);
         expect(new Set(REGISTRY.ids())).toEqual(new Set(ALL_IDS));
     });
 });
@@ -270,6 +278,10 @@ const CONFORMANCE_SAMPLES: Record<
         cfg: sampleConfig('novita', 'meta-llama/llama-3.1-70b-instruct'),
         fixture: novitaPlainFixture as ProviderFixture,
     },
+    moonshot: {
+        cfg: sampleConfig('moonshot', 'kimi-k2.7-code'),
+        fixture: moonshotPlainFixture as ProviderFixture,
+    },
 };
 
 describe('registry-wide conformance sweep (D-05): no module regresses to the zero stub', () => {
@@ -281,8 +293,8 @@ describe('registry-wide conformance sweep (D-05): no module regresses to the zer
         }
     });
 
-    it('covers all 7 distinct registered modules', () => {
-        expect(modules.length).toBe(7);
+    it('covers all 8 distinct registered modules', () => {
+        expect(modules.length).toBe(8);
     });
 
     for (const module of modules) {

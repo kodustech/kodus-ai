@@ -26,6 +26,7 @@ export enum BYOKProvider {
     ANTHROPIC_COMPATIBLE = 'anthropic_compatible',
     OPEN_ROUTER = 'open_router',
     NOVITA = 'novita',
+    MOONSHOT = 'moonshot',
 }
 
 export enum LLMModelProvider {

@@ -26,6 +26,7 @@ import { vertexModule } from './vertex.module';
 import { openRouterModule } from './openrouter.module';
 import { bedrockModule } from './bedrock.module';
 import { novitaModule } from './novita.module';
+import { moonshotModule } from './moonshot.module';
 
 import openaiPlain from './__fixtures__/openai/plain.json';
 import openaiReasoning from './__fixtures__/openai/reasoning.json';
@@ -35,6 +36,7 @@ import vertexPlain from './__fixtures__/vertex/plain.json';
 import openrouterReasoning from './__fixtures__/openrouter/reasoning.json';
 import bedrockPlain from './__fixtures__/bedrock/plain.json';
 import novitaPlain from './__fixtures__/novita/plain.json';
+import moonshotPlain from './__fixtures__/moonshot/plain.json';
 
 interface ProviderCase {
     module: ProviderModule;
@@ -91,6 +93,11 @@ const CASES: ProviderCase[] = [
         module: novitaModule,
         model: 'meta-llama/llama-3.1-70b-instruct',
         fixtures: [{ name: 'plain', fixture: novitaPlain as ProviderFixture }],
+    },
+    {
+        module: moonshotModule,
+        model: 'kimi-k2.7-code',
+        fixtures: [{ name: 'plain', fixture: moonshotPlain as ProviderFixture }],
     },
 ];
 

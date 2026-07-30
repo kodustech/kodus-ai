@@ -59,3 +59,19 @@ export function shouldEnableJsonSchema(
     // Unknown / fallback openai-compatible: same.
     return false;
 }
+
+/**
+ * Kimi / Moonshot (incl. `moonshotai/…`) must NEVER be downgraded to
+ * `json_object`: measured to lose ~50% of structured outputs when forced off
+ * native `json_schema` (Phase 0 D-00b, Pitfall 2). Provider modules honor this
+ * in `build()` as an ADDITIVE override on top of `shouldEnableJsonSchema` — so
+ * a direct-Moonshot upstream (api.moonshot.ai) keeps json_schema ON even though
+ * the baseURL heuristic alone would reject it, WITHOUT adding api.moonshot.ai to
+ * the gate. Lives here (the shared dependency-free leaf) so the openai module
+ * (kimi served over `openai_compatible`) and the moonshot module share ONE
+ * policy — no fork.
+ */
+export function isNeverDowngradeModel(model: string): boolean {
+    const m = model.toLowerCase();
+    return m.includes('kimi') || m.includes('moonshot');
+}

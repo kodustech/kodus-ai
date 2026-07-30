@@ -109,9 +109,8 @@ export type ByokModelOptions = {
  *     provider module reproduces the exact factory call the inline code made.
  *   - `kind: 'inline'` — a LanguageModel that `resolveManagedSlot` built itself
  *     because the provider module CANNOT reproduce this managed case without
- *     changing its own BYOK behavior. There are exactly two such documented
- *     exceptions (see below): the self-hosted OpenAI-compatible default and the
- *     kimi/moonshot trial default.
+ *     changing its own BYOK behavior. There is exactly one such documented
+ *     exception (see below): the self-hosted OpenAI-compatible default.
  */
 type ManagedResolution =
     | { kind: 'slot'; slot: NormalizedModel }
@@ -136,9 +135,10 @@ function managedSlot(
  * `API_LLM_PROVIDER_MODEL` (or the default model) picks the SDK/auth/protocol:
  *   gemini-*  → google_gemini (AI Studio key) / google_vertex (SA JSON key)
  *   claude-*  → anthropic (native key) / google_vertex (Claude-on-Vertex SA JSON)
- *   any other → OpenAI-compatible (self-hosted) — INLINE exception
- * Cloud (managed/trial) falls back to the kimi/moonshot trial default (INLINE)
- * or the bundled Gemini default (INLINE — see the tail comment for why).
+ *   any other → OpenAI-compatible (self-hosted) — the one INLINE exception
+ * Cloud (managed/trial) falls back to the kimi/moonshot trial default (the
+ * `moonshot` provider module) or the bundled Gemini default (`google_gemini`) —
+ * both routed through the registry, not inline.
  *
  * Do NOT change this logic — it MUST stay behaviorally identical to the old
  * inline env-default branch (the env-default characterization tests pin it).
@@ -234,22 +234,17 @@ export function resolveManagedSlot(
         // the API call instead of here).
     }
 
-    // Kimi (Moonshot AI) — the public-demo trial flow. INLINE EXCEPTION: the
-    // openai_compatible module can't reproduce `name:'moonshot'` with NO
-    // `supportsStructuredOutputs` field, so it stays inline.
+    // Kimi (Moonshot AI) — the public-demo trial flow. Now a FIRST-CLASS registry
+    // provider (moonshot.module): the managed default routes through the module,
+    // which reproduces the exact `createOpenAICompatible({name:'moonshot', apiKey,
+    // baseURL})` factory call the old inline exception made (no
+    // `supportsStructuredOutputs` field on the un-opted-in default path).
     if (/^kimi[-_.]/i.test(defaultModel)) {
         const moonshotKey =
             process.env.API_MOONSHOT_API_KEY ||
             process.env.MOONSHOT_API_KEY ||
             '';
-        return {
-            kind: 'inline',
-            model: createOpenAICompatible({
-                name: 'moonshot',
-                apiKey: moonshotKey,
-                baseURL: 'https://api.moonshot.ai/v1',
-            })(defaultModel),
-        };
+        return managedSlot(BYOKProvider.MOONSHOT, moonshotKey, defaultModel);
     }
 
     // Cloud default (gemini) — routes through the google_gemini module like any
