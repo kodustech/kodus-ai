@@ -189,11 +189,14 @@ export const crossRepoConfig: Scenario = {
             `Could not clear linkedRepositories: HTTP ${clearConfig.status}`,
         );
 
-        // Final assertion doubles as the success log for matrix output.
-        ctx.assert(
-            true,
-            `cross-repo-config OK: saved+read linkedRepositories on repo ${declaring.name} → ${targetFullName}`,
-        );
+        // Evidence object — the Scenario contract requires run() to return
+        // a record the matrix report can attach.
+        return {
+            declaringRepo: declaring.name,
+            linkedRepository: targetFullName,
+            savedAndReadBack: true,
+            clearedAfterTest: true,
+        };
     },
 };
 
