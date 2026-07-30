@@ -74,9 +74,13 @@ export async function runAgentLoopViaCore(
 
     const { registry: tools, cache: toolCache } = buildFinderToolRegistry({
         remoteCommands: secrets.remoteCommands,
+        gitHubToken: secrets.gitHubToken,
         repositoryFullName: input.repositoryFullName,
+        documentationSearchService: secrets.documentationSearchService,
+        documentationSearchOptions: secrets.documentationSearchOptions,
         callGraph: input.callGraph,
         outlineFirst: input.outlineFirst,
+        linkedRepoAccess: secrets.linkedRepoAccess,
     });
 
     const coverageLedger = new DiffCoverageLedger({

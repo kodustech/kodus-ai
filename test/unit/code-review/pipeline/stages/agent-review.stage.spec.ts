@@ -8,6 +8,7 @@ import { GraphContextService } from '@/code-review/infrastructure/adapters/servi
 import { FeatureGateService } from '@libs/feature-gate';
 import { ORGANIZATION_SERVICE_TOKEN } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import { REPOSITORY_SERVICE_TOKEN } from '@/code-review/domain/contracts/RepositoryService.contract';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@/core/domain/enums';
 import { CodeReviewVersion } from '@/core/domain/enums/code-review.enum';
@@ -199,6 +200,15 @@ describe('AgentReviewStage', () => {
                     provide: ORGANIZATION_SERVICE_TOKEN,
                     useValue: {
                         getReleaseTrack: jest.fn().mockResolvedValue('beta'),
+                    },
+                },
+                {
+                    // Cross-repo context (#1576): linkedRepositories resolution.
+                    // Default empty list → feature stays off for these unit tests.
+                    provide: CodeManagementService,
+                    useValue: {
+                        getRepositories: jest.fn().mockResolvedValue([]),
+                        getCloneParams: jest.fn().mockResolvedValue(null),
                     },
                 },
             ],

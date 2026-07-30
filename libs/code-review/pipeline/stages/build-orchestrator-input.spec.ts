@@ -20,6 +20,7 @@ const computed: OrchestratorInputComputed = {
     gitHubToken: undefined,
     callGraph: '',
     adaptiveProfile: { skipHeavyPasses: false } as any,
+    linkedRepoAccess: undefined,
 };
 
 const makeContext = (

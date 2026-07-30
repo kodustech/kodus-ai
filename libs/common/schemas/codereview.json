@@ -253,6 +253,32 @@
             "type": "boolean",
             "default": true,
             "description": "Indicates whether the review should run on draft pull requests."
+        },
+        "linkedRepositories": {
+            "type": "array",
+            "default": [],
+            "maxItems": 10,
+            "description": "Sibling repositories the agent may consult during review for cross-repo contract/boundary checks. Only repos connected to the same organization are accepted. Soft cap of 3 at review time. Empty = feature off.",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "repository": {
+                        "type": "string",
+                        "minLength": 1,
+                        "description": "Full repository name (e.g. \"org/backend-api\")."
+                    },
+                    "instructions": {
+                        "type": "string",
+                        "description": "Optional hint for the agent about what this link is for."
+                    },
+                    "ref": {
+                        "type": "string",
+                        "description": "Optional ref pin. When omitted, cascade uses the PR head branch if it exists on the linked repo, otherwise the default branch."
+                    }
+                },
+                "required": ["repository"],
+                "additionalProperties": false
+            }
         }
     },
     "required": [

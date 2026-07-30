@@ -46,6 +46,24 @@ import {
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import {
+    LazyLinkedRepoAccess,
+    evaluateCrossRepoBoundaryGate,
+    findOverrideForRepo,
+    parsePrDescriptionOverrides,
+    prHeadRefspecForPlatform,
+    resolveLinkedRepositories,
+    type CrossRepoGateMetadata,
+    type LinkedRepoAccess,
+    type LinkedRepositoriesReviewMetadata,
+} from '@libs/ee/linked-repositories';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
+import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 
 import { GraphContextService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-context.service';
 import {
@@ -258,10 +276,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         private readonly featureGate: FeatureGateService,
         @Inject(ORGANIZATION_SERVICE_TOKEN)
         private readonly organizationService: IOrganizationService,
+        private readonly codeManagementService: CodeManagementService,
         // Optional: specs construct the stage manually; when absent the
         // review simply runs on the full rule texts.
         @Optional()
         private readonly kodyRuleSummaryService?: KodyRuleSummaryService,
+        // Optional so unit tests that don't care about plan tier still compile.
+        // Production always wires LicenseService; missing service ⇒ linked
+        // repos stay off (fail-closed for the paid feature).
+        @Optional()
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService?: ILicenseService,
     ) {
         super();
     }
@@ -578,6 +603,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 draft.heavy = resolvedHeavy;
             });
 
+            // Deterministic boundary gate (#1576): only arm linked-repo tools
+            // + prompt when the diff touches boundary surface. Config alone is
+            // not enough — pure internal refactors stay single-repo.
+            const { linkedRepoAccess, gateMetadata } =
+                await this.resolveLinkedRepoAccessWithGate(
+                    context,
+                    changedFiles,
+                );
+
             const result = await this.reviewOrchestrator.execute(
                 buildOrchestratorInput(context, {
                     changedFiles,
@@ -590,8 +624,30 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     adaptiveProfile,
                     heavy: resolvedHeavy,
                     kodyRules: await this.prepareKodyRulesForReview(context),
+                    linkedRepoAccess,
                 }),
             );
+
+            // Snapshot linked-repo metadata after the review so clone status
+            // (ready/failed) reflects what the agent actually used. When the
+            // gate skips the pass we still record the decision for telemetry.
+            if (linkedRepoAccess || gateMetadata) {
+                const metadata: LinkedRepositoriesReviewMetadata =
+                    linkedRepoAccess?.getMetadata() ?? {
+                        configured:
+                            context.codeReviewConfig?.linkedRepositories
+                                ?.length ?? 0,
+                        resolved: 0,
+                        cloned: 0,
+                        failed: 0,
+                        warnings: [],
+                        gate: gateMetadata,
+                        repositories: [],
+                    };
+                context = this.updateContext(context, (draft) => {
+                    draft.linkedRepositoriesMetadata = metadata;
+                });
+            }
 
             // Emit profile-driven warnings up here at the stage so they
             // surface even when the agent's overhead preflight throws
@@ -2191,6 +2247,396 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // Best effort — tool just won't be available
         }
         return undefined;
+    }
+
+    /**
+     * Whether the org may use linked repositories (Teams / Enterprise / trial).
+     * Fail-closed: missing license service or validation errors deny the feature
+     * without failing the rest of the review.
+     */
+    private async isLinkedRepositoriesPlanAllowed(
+        organizationAndTeamData: CodeReviewPipelineContext['organizationAndTeamData'],
+    ): Promise<boolean> {
+        if (!this.licenseService) {
+            return false;
+        }
+        try {
+            const license =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+            return isTeamsOrEnterpriseTierAllowed(license);
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'linkedRepositories plan check failed — treating as not allowed',
+                context: this.stageName,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+            return false;
+        }
+    }
+
+    /**
+     * Run the deterministic boundary gate, then (only if it fires) build
+     * lazy linked-repo access. Gate-off still returns metadata so the
+     * review can record "configured but skipped".
+     */
+    private async resolveLinkedRepoAccessWithGate(
+        context: CodeReviewPipelineContext,
+        changedFiles: CodeReviewPipelineContext['changedFiles'],
+    ): Promise<{
+        linkedRepoAccess: LinkedRepoAccess | undefined;
+        gateMetadata: CrossRepoGateMetadata | undefined;
+    }> {
+        const configured = context.codeReviewConfig?.linkedRepositories;
+        if (!configured?.length) {
+            return { linkedRepoAccess: undefined, gateMetadata: undefined };
+        }
+
+        // Teams / Enterprise (and trial) only — free / CE self-hosted never
+        // arm cross-repo context even if config still has links.
+        const planAllowed = await this.isLinkedRepositoriesPlanAllowed(
+            context.organizationAndTeamData,
+        );
+        if (!planAllowed) {
+            this.logger.log({
+                message:
+                    'linkedRepositories configured but plan is not Teams/Enterprise — cross-repo context disabled',
+                context: this.stageName,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    configuredCount: configured.length,
+                },
+            });
+            return {
+                linkedRepoAccess: undefined,
+                gateMetadata: {
+                    activate: false,
+                    reasons: ['plan_not_allowed'],
+                    signalKinds: [],
+                    signalCount: 0,
+                },
+            };
+        }
+
+        const gate = evaluateCrossRepoBoundaryGate(changedFiles);
+        const gateMetadata: CrossRepoGateMetadata = {
+            activate: gate.activate,
+            reasons: gate.reasons,
+            signalKinds: [...new Set(gate.signals.map((s) => s.kind))],
+            signalCount: gate.signals.length,
+        };
+
+        if (!gate.activate) {
+            this.logger.log({
+                message:
+                    'Cross-repo boundary gate OFF — linked repos configured but diff has no boundary surface; skipping linked-repo pass',
+                context: this.stageName,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                    configuredCount: configured.length,
+                    reasons: gate.reasons,
+                },
+            });
+            return { linkedRepoAccess: undefined, gateMetadata };
+        }
+
+        this.logger.log({
+            message: `Cross-repo boundary gate ON — ${gate.signals.length} signal(s): ${gate.reasons.join(', ')}`,
+            context: this.stageName,
+            metadata: {
+                prNumber: context.pullRequest?.number,
+                signalKinds: gateMetadata.signalKinds,
+            },
+        });
+
+        const linkedRepoAccess = await this.buildLinkedRepoAccess(
+            context,
+            gateMetadata,
+        );
+        return { linkedRepoAccess, gateMetadata };
+    }
+
+    /**
+     * Build lazy linked-repo access for cross-repo agent tools (#1576).
+     * Returns undefined when the feature is off (no sandbox).
+     * Caller must already have passed the boundary gate.
+     *
+     * Ref cascade (decision 1):
+     *  1. PR-description override (`owner/repo#123` / URL / `@branch`)
+     *  2. Config `ref` pin
+     *  3. Open PR on matching head branch (prefer PR head)
+     *  4. Head branch name
+     *  5. Default branch (+ main/master fallbacks)
+     *
+     * Validation against the org's connected repos drops invalid entries
+     * with warnings (never silently).
+     */
+    private async buildLinkedRepoAccess(
+        context: CodeReviewPipelineContext,
+        gateMetadata?: CrossRepoGateMetadata,
+    ): Promise<LinkedRepoAccess | undefined> {
+        const configured = context.codeReviewConfig?.linkedRepositories;
+        if (!configured?.length) {
+            return undefined;
+        }
+        if (!context.sandboxHandle?.run || !context.sandboxHandle?.repoDir) {
+            this.logger.warn({
+                message:
+                    'linkedRepositories configured but no sandbox available — cross-repo context disabled for this review',
+                context: this.stageName,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                    configuredCount: configured.length,
+                },
+            });
+            return undefined;
+        }
+
+        try {
+            const organizationAndTeamData = context.organizationAndTeamData;
+            const platformType = context.platformType;
+            const prHeadBranch =
+                context.pullRequest?.head?.ref || context.branch;
+            const prDescription = [
+                context.pullRequest?.title,
+                context.pullRequest?.body,
+            ]
+                .filter(Boolean)
+                .join('\n\n');
+
+            const connected =
+                (await this.codeManagementService.getRepositories({
+                    organizationAndTeamData,
+                })) || [];
+
+            const connectedMapped = connected.map((r) => ({
+                id: String(r.id),
+                name: r.name,
+                full_name: r.full_name,
+                default_branch: r.default_branch,
+            }));
+
+            // Pre-resolve description #N and open-PR-on-head-branch via API
+            // so the cascade can prefer concrete heads over bare branch names.
+            const descriptionOverrides =
+                parsePrDescriptionOverrides(prDescription);
+            const descriptionPrHeads = new Map<
+                string,
+                { prNumber: number; headRef: string; headSha?: string }
+            >();
+            const openPrOnHeadBranch = new Map<
+                string,
+                { prNumber: number; headRef: string; headSha?: string }
+            >();
+
+            // First pass: identify which configured repos are valid so we
+            // only spend API calls on them.
+            const firstPass = resolveLinkedRepositories({
+                configured,
+                connectedRepositories: connectedMapped,
+                sandboxRepoDir: context.sandboxHandle.repoDir,
+                prHeadBranch,
+                prDescription,
+                resolvePrHeadRefspec: (n) =>
+                    prHeadRefspecForPlatform(String(platformType), n),
+            });
+
+            await Promise.all(
+                firstPass.resolved.map(async (repo) => {
+                    const override = findOverrideForRepo(
+                        descriptionOverrides,
+                        repo.fullName,
+                    );
+
+                    // Description #N / URL → resolve PR head via API
+                    if (override?.kind === 'pr') {
+                        try {
+                            const pr =
+                                await this.codeManagementService.getPullRequest(
+                                    {
+                                        organizationAndTeamData,
+                                        repository: {
+                                            id: repo.id,
+                                            name: repo.name,
+                                            fullName: repo.fullName,
+                                        } as any,
+                                        prNumber: override.prNumber,
+                                    },
+                                    platformType,
+                                );
+                            if (pr?.head?.ref || pr?.head?.sha) {
+                                descriptionPrHeads.set(
+                                    repo.fullName.toLowerCase(),
+                                    {
+                                        prNumber: override.prNumber,
+                                        headRef: pr.head.ref || pr.head.sha!,
+                                        headSha: pr.head.sha,
+                                    },
+                                );
+                            }
+                        } catch (err) {
+                            this.logger.warn({
+                                message: `Failed to resolve description PR #${override.prNumber} for linked repo ${repo.fullName}`,
+                                context: this.stageName,
+                                error: err,
+                            });
+                        }
+                        return; // description override wins — skip open-PR lookup
+                    }
+
+                    if (!prHeadBranch) return;
+
+                    try {
+                        const openPrs =
+                            await this.codeManagementService.getPullRequests(
+                                {
+                                    organizationAndTeamData,
+                                    repository: {
+                                        id: repo.id,
+                                        name: repo.name,
+                                    },
+                                    filters: {
+                                        state: PullRequestState.OPENED,
+                                        branch: prHeadBranch,
+                                    },
+                                },
+                                platformType,
+                            );
+                        const match = (openPrs || []).find((pr) => {
+                            const headRef =
+                                pr?.head?.ref || pr?.sourceRefName || '';
+                            return (
+                                headRef === prHeadBranch ||
+                                headRef.endsWith(`/${prHeadBranch}`)
+                            );
+                        });
+                        if (match) {
+                            const prNumber =
+                                match.number || match.pull_number;
+                            if (prNumber) {
+                                openPrOnHeadBranch.set(
+                                    repo.fullName.toLowerCase(),
+                                    {
+                                        prNumber: Number(prNumber),
+                                        headRef:
+                                            match.head?.ref ||
+                                            match.sourceRefName ||
+                                            prHeadBranch,
+                                        headSha: match.head?.sha,
+                                    },
+                                );
+                            }
+                        }
+                    } catch (err) {
+                        this.logger.warn({
+                            message: `Failed to look up open PR on ${prHeadBranch} for linked repo ${repo.fullName}`,
+                            context: this.stageName,
+                            error: err,
+                        });
+                    }
+                }),
+            );
+
+            const { resolved, warnings } = resolveLinkedRepositories({
+                configured,
+                connectedRepositories: connectedMapped,
+                sandboxRepoDir: context.sandboxHandle.repoDir,
+                prHeadBranch,
+                prDescription,
+                descriptionPrHeads,
+                openPrOnHeadBranch,
+                resolvePrHeadRefspec: (n) =>
+                    prHeadRefspecForPlatform(String(platformType), n),
+            });
+
+            for (const w of warnings) {
+                this.logger.warn({
+                    message: w,
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: context.pullRequest?.number,
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                    },
+                });
+            }
+
+            if (!resolved.length) {
+                return undefined;
+            }
+
+            this.logger.log({
+                message: `Linked repos ready for review: ${resolved
+                    .map(
+                        (r) =>
+                            `${r.fullName}→${r.preferredRef}(${r.refCandidates[0]?.source || '?'})`,
+                    )
+                    .join(', ')}`,
+                context: this.stageName,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                    descriptionOverrideCount: descriptionOverrides.size,
+                    openPrMatchCount: openPrOnHeadBranch.size,
+                },
+            });
+
+            return new LazyLinkedRepoAccess({
+                sandbox: context.sandboxHandle,
+                resolved,
+                warnings,
+                gate: gateMetadata,
+                getCloneParams: async (repo) => {
+                    try {
+                        const params =
+                            await this.codeManagementService.getCloneParams(
+                                {
+                                    repository: {
+                                        id: repo.id,
+                                        name: repo.name,
+                                        fullName: repo.fullName,
+                                        defaultBranch: repo.defaultBranch,
+                                    },
+                                    organizationAndTeamData,
+                                },
+                                platformType,
+                            );
+                        if (!params?.url) return null;
+                        return {
+                            url: params.url,
+                            authToken: params.auth?.token || '',
+                            authUsername: params.auth?.username,
+                            platform: platformType,
+                        };
+                    } catch (err) {
+                        this.logger.warn({
+                            message: `Failed to resolve clone params for linked repo ${repo.fullName}`,
+                            context: this.stageName,
+                            error: err,
+                        });
+                        return null;
+                    }
+                },
+            });
+        } catch (err) {
+            this.logger.warn({
+                message:
+                    'Failed to set up linkedRepositories — continuing without cross-repo context',
+                context: this.stageName,
+                error: err,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+            return undefined;
+        }
     }
 
     private summarizeToolCalls(

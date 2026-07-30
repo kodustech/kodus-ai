@@ -2,6 +2,8 @@ import { jsonSchema } from 'ai';
 import * as path from 'node:path';
 import { createLogger } from '@libs/core/log/logger';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
+import { shSingleQuote } from '@libs/code-review/infrastructure/adapters/services/shell-quote';
 
 const logger = createLogger('AgentTools');
 
@@ -133,6 +135,11 @@ function filterDiagnosticsToTarget(
  * When `remoteCommands` is undefined (e.g. trial mode or sandbox
  * unavailable), returns an empty tool set. The agent loop detects the
  * empty case and switches to a self-contained analysis variant.
+ *
+ * When `linkedRepoAccess` is provided, grep/readFile/listDir accept an
+ * optional `repo` param that hops into a pre-configured sibling repository
+ * (lazy clone on first access). Path traversal outside the linked root is
+ * rejected.
  */
 export function buildAgentTools(
     remoteCommands: RemoteCommands | undefined,
@@ -141,10 +148,71 @@ export function buildAgentTools(
     documentationSearchService?: DocumentationSearchAdapter,
     documentationSearchOptions?: Record<string, unknown>,
     callGraph?: string,
+    linkedRepoAccess?: LinkedRepoAccess,
 ): Record<string, any> {
     if (!remoteCommands) {
         return {};
     }
+
+    const linkedReposHint = linkedRepoAccess?.list()?.length
+        ? ` Optional repo="<fullName>" searches a linked repository (${linkedRepoAccess
+              .list()
+              .map((r) => r.repository)
+              .join(', ')}).`
+        : '';
+
+    /** Resolve optional repo= param to an absolute root, or null for PR repo. */
+    const resolveLinkedRoot = async (
+        repoArg: unknown,
+    ): Promise<
+        | { ok: true; rootPath: string | null; repository?: string }
+        | { ok: false; error: string }
+    > => {
+        if (!repoArg || typeof repoArg !== 'string' || !repoArg.trim()) {
+            return { ok: true, rootPath: null };
+        }
+        if (!linkedRepoAccess) {
+            return {
+                ok: false,
+                error: 'No linked repositories configured for this review. Omit the repo parameter to search the PR repository.',
+            };
+        }
+        const cloned = await linkedRepoAccess.ensureCloned(repoArg.trim());
+        if (!cloned.ok) {
+            return { ok: false, error: cloned.error };
+        }
+        return {
+            ok: true,
+            rootPath: cloned.rootPath,
+            repository: cloned.repository,
+        };
+    };
+
+    /**
+     * Join a user-supplied relative path under a linked root, rejecting
+     * absolute paths and `..` traversal.
+     */
+    const safeLinkedPath = (
+        rootPath: string,
+        relativePath: string,
+    ): { ok: true; abs: string } | { ok: false; error: string } => {
+        const rel = (relativePath || '.').replace(/^\/+/, '') || '.';
+        if (rel.includes('..')) {
+            return {
+                ok: false,
+                error: 'Path traversal using ".." is not allowed',
+            };
+        }
+        if (rel.startsWith('/')) {
+            return { ok: false, error: 'Absolute paths are not allowed' };
+        }
+        const abs =
+            rel === '.'
+                ? rootPath
+                : `${rootPath.replace(/\/+$/, '')}/${rel}`;
+        return { ok: true, abs };
+    };
+
     const tools: Record<string, any> = {
         grep: mkTool(
             'DISCOVERY tool: search the repo for a pattern. Returns "file:line:content" with context. ' +
@@ -153,7 +221,8 @@ export function buildAgentTools(
                 'grep("if.*err.*!=.*nil") to check error handling, grep("lock\\|mutex\\|synchronized") to check concurrency. ' +
                 'After finding a match, use readFile(file, startLine=line-15, endLine=line+30) for surgical context. ' +
                 'Use namesOnly=true for blast-radius (which files are affected). ' +
-                'Use excludeTests=true to focus on production code.',
+                'Use excludeTests=true to focus on production code.' +
+                linkedReposHint,
             {
                 type: 'object',
                 properties: {
@@ -181,6 +250,15 @@ export function buildAgentTools(
                         description:
                             'Exclude test and spec files from results. Use this when tracing production callers to avoid noise from test fixtures.',
                     },
+                    ...(linkedRepoAccess
+                        ? {
+                              repo: {
+                                  type: 'string',
+                                  description:
+                                      'Optional linked repository fullName to search instead of the PR repo (e.g. "org/backend-api").',
+                              },
+                          }
+                        : {}),
                 },
                 required: ['pattern'],
             },
@@ -196,6 +274,71 @@ export function buildAgentTools(
                 const excludeTests = args.excludeTests ?? false;
                 if (!pattern) {
                     return 'Error: pattern is required';
+                }
+
+                const linked = await resolveLinkedRoot(args.repo);
+                if (!linked.ok) return `Error: ${linked.error}`;
+
+                // Linked-repo hop: run rg under the cloned root.
+                if (linked.rootPath) {
+                    if (!remoteCommands.exec) {
+                        return 'Error: sandbox exec unavailable for linked-repo search';
+                    }
+                    if (searchPath.includes('..')) {
+                        return 'Error: Path traversal using ".." is not allowed';
+                    }
+                    try {
+                        const safePattern = pattern.replace(/'/g, "'\\''");
+                        const safeGlob = glob
+                            ? glob.replace(/'/g, "'\\''")
+                            : '';
+                        const globArg = safeGlob
+                            ? ` --glob '${safeGlob}'`
+                            : '';
+                        const excludeTestsArgs = excludeTests
+                            ? ` --glob '!*test*' --glob '!*Test*' --glob '!*spec*' --glob '!*Spec*' --glob '!*__tests__*'`
+                            : '';
+                        const modeArg = namesOnly ? ' -l' : ' -n -C 2';
+                        const relForCd =
+                            searchPath === '.' ? '.' : searchPath;
+                        const cdCmd = `cd ${shSingleQuote(linked.rootPath)} && rg '${safePattern}'${globArg}${excludeTestsArgs}${modeArg} ${shSingleQuote(relForCd)}`;
+                        const { stdout, exitCode } =
+                            await remoteCommands.exec(cdCmd);
+                        if (exitCode >= 2) {
+                            return `Error searching linked repo ${linked.repository} for "${pattern}"`;
+                        }
+                        if (exitCode === 1 || !stdout.trim()) {
+                            return `No matches found in linked repo ${linked.repository}.`;
+                        }
+                        const raw = stdout.trim();
+                        // Tag paths so the agent knows which repo they came from.
+                        const tagged = raw
+                            .split('\n')
+                            .map((line) =>
+                                line && !line.startsWith('--')
+                                    ? `[${linked.repository}] ${line}`
+                                    : line,
+                            )
+                            .join('\n');
+                        if (namesOnly) {
+                            return tagged
+                                .split('\n')
+                                .slice(0, MAX_GREP_MATCHES)
+                                .join('\n');
+                        }
+                        const groups = tagged.split(/\n--\n/);
+                        if (groups.length > MAX_GREP_GROUPS) {
+                            return (
+                                groups
+                                    .slice(0, MAX_GREP_GROUPS)
+                                    .join('\n--\n') +
+                                `\n... (${groups.length - MAX_GREP_GROUPS} more matches hidden — narrow with a more specific regex)`
+                            );
+                        }
+                        return tagged;
+                    } catch (err) {
+                        return `Error searching linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
+                    }
                 }
 
                 // Use rg directly in sandbox for richer output (-n, -C 5)
@@ -296,7 +439,8 @@ export function buildAgentTools(
                 'Rule of thumb: readFile(file, startLine=grepLine-20, endLine=grepLine+30) gives enough context to understand a caller. ' +
                 'Only read the full file when it is small (<150 lines). Never read a whole file to find a method — grep first. ' +
                 'Before each read, know the exact unanswered question this range will answer. ' +
-                'Do not reread highly overlapping ranges of the same file just to gain confidence; only do it when a new symbol, caller/callee, or branch requires one more targeted read.',
+                'Do not reread highly overlapping ranges of the same file just to gain confidence; only do it when a new symbol, caller/callee, or branch requires one more targeted read.' +
+                linkedReposHint,
             {
                 type: 'object',
                 properties: {
@@ -313,6 +457,15 @@ export function buildAgentTools(
                         type: 'number',
                         description: 'End line (1-based)',
                     },
+                    ...(linkedRepoAccess
+                        ? {
+                              repo: {
+                                  type: 'string',
+                                  description:
+                                      'Optional linked repository fullName to read from instead of the PR repo.',
+                              },
+                          }
+                        : {}),
                 },
                 required: ['path'],
             },
@@ -327,6 +480,54 @@ export function buildAgentTools(
                 if (!filePath) {
                     return 'Error: path is required';
                 }
+
+                const linked = await resolveLinkedRoot(args.repo);
+                if (!linked.ok) return `Error: ${linked.error}`;
+
+                // Linked-repo hop: cat/sed under the cloned root via exec.
+                if (linked.rootPath) {
+                    if (!remoteCommands.exec) {
+                        return 'Error: sandbox exec unavailable for linked-repo read';
+                    }
+                    const target = safeLinkedPath(linked.rootPath, filePath);
+                    if (!target.ok) return `Error: ${target.error}`;
+                    try {
+                        const cmd =
+                            startLine === 0 && endLine === 0
+                                ? `cat ${shSingleQuote(target.abs)}`
+                                : `sed -n '${startLine < 1 ? 1 : startLine},${endLine}p' ${shSingleQuote(target.abs)}`;
+                        const { stdout, stderr, exitCode } =
+                            await remoteCommands.exec(cmd);
+                        if (!stdout && (stderr || exitCode !== 0)) {
+                            return `Error reading ${filePath} from linked repo ${linked.repository}: ${(stderr || `exit ${exitCode}`).trim()}`;
+                        }
+                        if (!stdout) {
+                            return startLine > 0
+                                ? `readFile: no content in [${linked.repository}] ${filePath} for the requested range`
+                                : `readFile: [${linked.repository}] ${filePath} is empty (0 bytes).`;
+                        }
+                        const baseLineNumber = startLine > 0 ? startLine : 1;
+                        const numbered = addLineNumbers(stdout, baseLineNumber);
+                        const header = `[linked repo: ${linked.repository} — evidence only; do NOT set relevantFile to this path]\n`;
+                        if (numbered.length > MAX_READ_LENGTH) {
+                            const head = numbered.slice(0, MAX_READ_LENGTH);
+                            const lastNewline = head.lastIndexOf('\n');
+                            const shown =
+                                lastNewline > 0
+                                    ? head.slice(0, lastNewline)
+                                    : head;
+                            return (
+                                header +
+                                shown +
+                                `\n... (truncated — call readFile with a narrower range)`
+                            );
+                        }
+                        return header + numbered;
+                    } catch (err) {
+                        return `Error reading ${filePath} from linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
+                    }
+                }
+
                 let result: string;
                 try {
                     result = await remoteCommands.read(
@@ -401,7 +602,8 @@ export function buildAgentTools(
         ),
 
         listDir: mkTool(
-            'List files and directories. Use maxDepth to control recursion (default 2).',
+            'List files and directories. Use maxDepth to control recursion (default 2).' +
+                linkedReposHint,
             {
                 type: 'object',
                 properties: {
@@ -413,6 +615,15 @@ export function buildAgentTools(
                         type: 'number',
                         description: 'Max recursion depth (default: 2, max: 4)',
                     },
+                    ...(linkedRepoAccess
+                        ? {
+                              repo: {
+                                  type: 'string',
+                                  description:
+                                      'Optional linked repository fullName to list instead of the PR repo.',
+                              },
+                          }
+                        : {}),
                 },
             },
             async (args: any) => {
@@ -422,6 +633,61 @@ export function buildAgentTools(
                         '',
                     ) || '.';
                 const depth = Math.min(args.maxDepth || args.max_depth || 2, 4);
+
+                const linked = await resolveLinkedRoot(args.repo);
+                if (!linked.ok) return `Error: ${linked.error}`;
+
+                if (linked.rootPath) {
+                    if (!remoteCommands.exec) {
+                        return 'Error: sandbox exec unavailable for linked-repo listDir';
+                    }
+                    const target = safeLinkedPath(linked.rootPath, dirPath);
+                    if (!target.ok) return `Error: ${target.error}`;
+                    try {
+                        const { stdout } = await remoteCommands.exec(
+                            `find ${shSingleQuote(target.abs)} -maxdepth ${depth} -type f`,
+                        );
+                        let result = stdout || '';
+                        const IGNORE_DIRS = [
+                            'node_modules',
+                            '.git',
+                            'dist',
+                            'build',
+                            '.next',
+                            '__pycache__',
+                            'coverage',
+                            '.turbo',
+                            'vendor',
+                            '.cache',
+                        ];
+                        result = result
+                            .split('\n')
+                            .filter(
+                                (line) =>
+                                    !IGNORE_DIRS.some((dir) =>
+                                        line.includes(dir),
+                                    ),
+                            )
+                            .map((line) =>
+                                line
+                                    ? `[${linked.repository}] ${line.replace(
+                                          linked.rootPath! + '/',
+                                          '',
+                                      )}`
+                                    : line,
+                            )
+                            .join('\n');
+                        if (result.length > MAX_LIST_LENGTH) {
+                            result =
+                                result.substring(0, MAX_LIST_LENGTH) +
+                                `\n... (truncated)`;
+                        }
+                        return result || `(empty) linked repo ${linked.repository}`;
+                    } catch (err) {
+                        return `Error listing linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
+                    }
+                }
+
                 let result = await remoteCommands.listDir(dirPath, depth);
                 // Filter out common noise directories
                 const IGNORE_DIRS = [

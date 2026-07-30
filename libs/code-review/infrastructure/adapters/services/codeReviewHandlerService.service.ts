@@ -321,6 +321,8 @@ export class CodeReviewHandlerService {
                 statusInfo: finalStatus,
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 reviewWarnings: result?.reviewWarnings,
+                linkedRepositoriesMetadata:
+                    result?.linkedRepositoriesMetadata,
             };
         } catch (error) {
             if (initialContext) {

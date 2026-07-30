@@ -189,6 +189,26 @@ export class CodeReviewConfigDataDto {
         additionalProperties: true,
     })
     v2PromptOverrides: Record<string, unknown>;
+
+    @ApiProperty({
+        type: 'array',
+        required: false,
+        description:
+            'Sibling repositories Kody may consult during review (cross-repo context).',
+        items: {
+            type: 'object',
+            properties: {
+                repository: { type: 'string' },
+                instructions: { type: 'string' },
+                ref: { type: 'string' },
+            },
+        },
+    })
+    linkedRepositories?: Array<{
+        repository: string;
+        instructions?: string;
+        ref?: string;
+    }>;
 }
 
 export class CodeReviewConfigResponseDto extends ApiResponseBaseDto {

@@ -1,0 +1,135 @@
+---
+title: "Como usar repositórios vinculados para contexto entre repos na revisão de código"
+description: "Vincule repositórios irmãos para o Kody ler contratos e APIs entre serviços quando um PR toca uma superfície de fronteira."
+---
+
+Quando o produto está dividido em vários repositórios — por exemplo um frontend que chama uma API de backend, ou um serviço que depende de um pacote de contratos compartilhados — a revisão de um único repo pode deixar passar quebras na fronteira. **Repositórios vinculados** (*linked repositories*) dão ao Kody contexto opcional e sob demanda desses codebases irmãos durante a revisão de código.
+
+> **Requisito de plano:** Repositórios vinculados estão disponíveis nos planos **Teams** e **Enterprise** (trial incluído como preview). Planos Free não incluem contexto entre repositórios.
+
+Isso é diferente de [compartilhar padrões de codificação entre repositórios](/knowledge_base/pt-br/how-to-share-standards-across-repositories) (regras e herança no nível da organização). Repositórios vinculados compartilham **contexto de código** para a revisão, não regras de revisão.
+
+## O que faz
+
+Para o repositório em revisão, você declara até **3 repositórios vinculados** na mesma organização. Durante a revisão:
+
+1. O Kody analisa o diff do PR com um **gate determinístico de fronteira** (sem LLM).
+2. Se o diff parece tocar uma **superfície de contrato** (DTOs, exports, literais de string, chaves de status, caminhos no formato de API e similares), as ferramentas entre repositórios são habilitadas.
+3. Os repos vinculados são **clonados de forma lazy** só quando o Kody realmente precisa ler ou buscar neles.
+4. Os achados continuam **ancorados apenas em linhas do PR em revisão** — o código vinculado é evidência, não um segundo alvo de review.
+
+Se nenhum vínculo estiver configurado, o recurso fica totalmente desligado (custo extra zero).
+
+## Configurar no dashboard
+
+Repositórios vinculados são **por repositório**, não globais. A relação é direcional: vínculos em `frontend` valem só ao revisar PRs em `frontend`.
+
+1. Abra **Configurações de Revisão de Código**.
+2. Selecione um **repositório específico** (não Global).
+3. Abra a página **Linked Repositories** no menu desse repositório.
+4. Adicione repos irmãos já conectados à sua organização.
+5. Opcionalmente defina:
+   - **Instructions** — dica em texto livre para o Kody (ex.: “API REST que este frontend consome”).
+   - **Ref** — pin opcional de branch/tag. Deixe vazio para usar a cascata automática de refs (abaixo).
+6. Salve.
+
+Você pode vincular no máximo **3** repositórios. Só repos já conectados à mesma organização são aceitos.
+
+## Configurar no `kodus-config.yml`
+
+Você também pode declarar vínculos no arquivo de configuração do repositório:
+
+```yaml
+linkedRepositories:
+  - repository: "org/backend-api"
+    instructions: "REST API this frontend consumes"
+    ref: main   # pin opcional; omita para cascata same-branch
+```
+
+- `repository` (obrigatório): nome completo de um repo conectado à organização (`owner/repo`).
+- `instructions` (opcional): descrição curta do porquê do vínculo.
+- `ref` (opcional): fixa branch, tag ou commit. Quando omitido, o Kody usa a cascata de refs.
+
+`linkedRepositories: []` vazio significa que o recurso está desligado.
+
+## Como a ref é escolhida
+
+Para cada repositório vinculado, o Kody tenta refs nesta ordem e usa a primeira que clonar com sucesso:
+
+1. **Override na descrição do PR** para aquele repo (veja abaixo)
+2. **Pin de `ref` na config** (se definido)
+3. **PR aberto** no repo vinculado cuja head branch coincide com a head branch do PR
+4. O **nome da head branch do PR** no repo vinculado
+5. A **branch padrão** do repo vinculado
+6. Fallbacks: `main`, depois `master`
+
+Isso alinha trabalho multi-repo quando o mesmo nome de branch existe entre serviços, e ainda faz fallback seguro em PRs comuns.
+
+## Sobrescrever a ref pela descrição do PR
+
+Para uma revisão pontual (por exemplo, revisar contra um PR específico do backend), mencione o repo vinculado no **título ou descrição** do PR em revisão. Overrides só se aplicam a repositórios **já vinculados** na config.
+
+Formas suportadas:
+
+| Forma | Significado |
+| --- | --- |
+| `owner/repo#123` | Usar o head do PR/MR `#123` nesse repo |
+| URL de PR/MR | Idem (GitHub, GitLab, Bitbucket, Azure DevOps) |
+| `owner/repo@branch` | Fixar essa branch no repo vinculado |
+
+Exemplos:
+
+```text
+Depends on org/backend-api#842
+Also needs org/shared-contracts@feature/new-events
+```
+
+Menções posteriores do mesmo repositório vencem. Menções de repos **não** vinculados são ignoradas (não criam novos vínculos).
+
+## Quando o contexto entre repos ativa (boundary gate)
+
+Mesmo com vínculos configurados, o Kody **não** abre sempre os repos irmãos. Um gate barato e determinístico varre **linhas adicionadas** no diff do PR e só ativa quando encontra **superfície de fronteira**, como:
+
+- Literais de string (segmentos de path, códigos, nomes de eventos, etc.)
+- Exports (`export function`, types, classes, …)
+- Enums / types / interfaces
+- Chaves de objeto ou de payload
+- Identificadores de status / state / error-code
+- Caminhos com cara de contrato (`dto`, `schema`, `api`, `client`, `openapi`, `proto`, …)
+
+Refactors internos que só movem ou reformatam código sem superfície de fronteira em geral mantêm o gate desligado — clones e o prompt de fronteira ficam ociosos.
+
+## O que o Kody pode e não pode fazer com repos vinculados
+
+**Pode:**
+
+- Buscar e ler arquivos nos repositórios vinculados quando o gate está ativo
+- Usar suas **instructions** para entender a relação
+- Citar código vinculado como evidência de suporte em um achado no PR atual
+
+**Não pode / não faz:**
+
+- Publicar comentários de review em arquivos que existem só no repositório vinculado
+- Revisar o repo vinculado inteiro como se fosse o PR
+- Vincular repositórios fora da organização ou não conectados ao Kodus
+- Ultrapassar o limite soft de 3 repositórios vinculados por repo em revisão
+
+## Transparência ao final da revisão
+
+Quando repositórios vinculados fizeram parte da execução, os metadados da revisão registram quais repos estavam configurados, quais refs foram resolvidas (e de qual fonte: descrição, pin, PR aberto, head branch ou default) e se o boundary gate ativou. Vínculos com falha ou ignorados aparecem como avisos, sem falhar a revisão inteira.
+
+## Setups recomendados
+
+| Cenário | Vincular de | Instructions típicas |
+| --- | --- | --- |
+| Frontend ↔ backend | Frontend → repo da API | “Contratos HTTP/REST dos quais esta UI depende” |
+| Serviço ↔ contratos compartilhados | Serviço → repo de contracts/package | “Eventos, DTOs e protobufs compartilhados” |
+| BFF ↔ vários backends | BFF → até 3 repos de backend | Uma linha curta por fronteira de serviço |
+
+Prefira vínculos **estreitos e direcionais** (o consumidor aponta para o produtor) em vez de ligar todos os repos entre si.
+
+## Guias relacionados
+
+- [Como compartilhar padrões de codificação entre repositórios](/knowledge_base/pt-br/how-to-share-standards-across-repositories) — regras e herança no nível da org (não contexto de código)
+- [Como revisar PRs com contexto específico do projeto](/knowledge_base/pt-br/how-to-review-prs-with-project-context) — memórias, referências a arquivos, custom prompts, MCP
+- [Como reduzir ruído na revisão de código](/knowledge_base/pt-br/how-to-reduce-code-review-noise) — manter reviews focadas ao adicionar mais contexto

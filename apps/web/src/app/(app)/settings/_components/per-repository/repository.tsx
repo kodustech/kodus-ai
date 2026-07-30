@@ -197,7 +197,14 @@ const RepositoryCollapsibleItem = ({
                                 key={group.id}
                                 group={group}
                                 repository={repository}
-                                routes={routes}
+                                // Linked repositories is repo-scoped (#1576);
+                                // directory-level saves for it would be wrong.
+                                routes={routes.filter(
+                                    (r) =>
+                                        !("repoOnly" in r &&
+                                            (r as { repoOnly?: boolean })
+                                                .repoOnly),
+                                )}
                                 configs={group.configs}
                                 customMessagesOverrideCount={
                                     directoryCustomMessageCounts.get(
