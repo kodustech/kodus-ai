@@ -63,6 +63,153 @@ rss: true
 
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">July 30, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-ux-interface filter-billing-licenses">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Global Rules Sync from Repositories</div>
+                    <p className="kodus-changelog-copy">Organizations on the Teams plan can now configure repositories as sources for Global Rules. This allows teams to keep their review rules version-controlled directly in Git, alongside the project's technical context, while Kody automatically syncs those rules for use during reviews.</p>
+                    <p className="kodus-changelog-copy">This release also introduces a new interface under Code Review settings where users can select, save, and manage source repositories, monitor import status, and manually trigger a new sync when needed.</p>
+                    <p className="kodus-changelog-copy">In practice, this makes it easier to adopt shared standards across teams and repositories. Instead of manually creating rules in each configuration, organizations can centralize conventions, best practices, and internal policies in dedicated repositories, with greater visibility and control over when those rules were last synced.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="/videos/global-rules-for-repository.mp4" type="video/mp4" />
+                    </video>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-ai-engine filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Kody Rules with Structured Summaries</div>
+                    <p className="kodus-changelog-copy">We now run a preliminary analysis on every Kody Rule to better understand its intent before it is used in a review.</p>
+                    <p className="kodus-changelog-copy">When a rule is too broad or covers multiple behaviors, it can be broken down into atomic rules: smaller, more specific rules that can either be validated deterministically with regex or evaluated by an LLM when contextual interpretation is required.</p>
+                    <p className="kodus-changelog-copy">In practice, this helps Kody apply complex rules more accurately. Instead of treating a long rule as a single block, the agent works with smaller validation units, reducing ambiguity while better preserving the rule's original intent.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Better PR Scope for Kody Rules</div>
+                    <p className="kodus-changelog-copy">The agent now uses the full PR diff when applying Kody Rules instead of relying only on file names. This gives Kody more meaningful context about the actual changes being reviewed.</p>
+                    <p className="kodus-changelog-copy">With this improvement, rules that depend on modified content have a stronger basis for evaluation. This is especially relevant for rules that verify implementation patterns, contract changes, internal API usage, or sensitive changes in specific parts of the code.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Reviews Now Skip Global Rules Source Repositories</div>
+                    <p className="kodus-changelog-copy">When a repository is used exclusively as a source for Global Rules, Kody now skips reviews in that repository. This prevents repositories created solely to store rules from generating unnecessary reviews.</p>
+                    <p className="kodus-changelog-copy">In addition to reducing noise for the team, this also avoids consuming resources on a workflow that provides no practical value. The source repository can now serve its purpose as a configuration source without being treated like a regular product repository.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Better Token and Context Management in the Agent Loop</div>
+                    <p className="kodus-changelog-copy">The agent's token and context management has been strengthened with stricter per-request limits, a real tokenizer, and more accurate overhead accounting. This makes the agent's behavior more predictable on large PRs or when a significant amount of context has accumulated.</p>
+                    <p className="kodus-changelog-copy">In practice, this reduces the risk of context overflow and makes executions more stable. The agent can operate within more reliable limits, improving both review quality and the rate of intermittent failures.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-byok filter-ai-engine filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Clearer LLM and BYOK Error Messages</div>
+                    <p className="kodus-changelog-copy">We improved the messages displayed when failures occur involving LLMs or BYOK keys. Instead of returning generic errors, the system now makes it clearer whether the issue is related to configuration, quota, billing, or communication with the provider.</p>
+                    <p className="kodus-changelog-copy">This makes troubleshooting easier for administrators and technical users. In BYOK environments, where the provider key and account are managed by the customer, clearer messages reduce investigation time and help teams resolve issues without relying on trial and error.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Langfuse Telemetry Compatible with AI SDK 7</div>
+                    <p className="kodus-changelog-copy">Langfuse telemetry has been updated to work correctly with AI SDK 7, including improved handling of cache, reasoning, and token usage fields.</p>
+                    <p className="kodus-changelog-copy">This improvement increases the accuracy of observability data for AI calls. With more reliable metrics, it becomes easier to monitor costs, model behavior, and the impact of changes to the review pipeline.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-git-provider filter-ux-interface filter-performance">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Improved Pagination for Bitbucket and Repository Lists</div>
+                    <p className="kodus-changelog-copy">Pagination has been improved across Bitbucket flows and repository lists in the frontend. This makes the experience more robust for organizations with a large number of repositories or paginated responses from the integration.</p>
+                    <p className="kodus-changelog-copy">With this improvement, the system can handle larger volumes of data more reliably, preventing incomplete lists and reducing failures during onboarding or integration setup.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-security">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Safer Centralized Config</div>
+                    <p className="kodus-changelog-copy">Centralized Config sync now avoids deleting configurations when discovery fails or returns an empty result. Previously, a failure during the discovery process could create a risk of incorrect reconciliation.</p>
+                    <p className="kodus-changelog-copy">With this safeguard, the system now handles partial failures more conservatively. This reduces the risk of accidentally losing rules or configurations and improves the reliability of a sensitive workflow for organizations that depend on centralized configuration.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed GitLab Suggestions:</strong> we fixed suggestion creation in GitLab so comments are only added to newly added lines, preventing phantom suggestions.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Support for Draft/WIP Merge Requests in GitLab:</strong> we now correctly respect Merge Requests marked as draft or work in progress in GitLab.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Custom Bot Usernames in GitLab:</strong> we fixed support for review commands when the GitLab bot uses a custom username.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed <code className="kodus-changelog-code">getCommits</code> Timeouts:</strong> transient <code className="kodus-changelog-code">getCommits</code> failures, such as Undici timeouts, are now handled correctly and rethrown when necessary.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed the Needs Attention State:</strong> we fixed an issue that could leave a review stuck in the needs attention state.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed Onboarding and Member Telemetry:</strong> the onboarding flow received fixes to prevent it from getting stuck during member lookups and telemetry processing, especially in scenarios involving suspended users or slow API responses.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed the Invitation Flow:</strong> the invitation page and flow were updated to prevent failures when new users join.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed GitHub Webhook Creation:</strong> webhook creation and listing now correctly use the repository owner, preventing failures when the repository owner differs from the primary account.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed Repository-Level Configuration:</strong> we fixed the function used to delete repository-specific configurations.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed Rule Creation and Import:</strong> the logic for adding global or repository-level rules was fixed, along with improvements to the search field.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed the BYOK Switching Button:</strong> the model and provider switching experience in BYOK was updated to prevent confusion during editing.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed Language Flash in Settings:</strong> we fixed the visual language flash that appeared on settings pages after a reload.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed Progress Bar Text:</strong> we updated the text displayed in the progress bar to improve interface clarity.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fixed API Errors for Invalid Parameters:</strong> Postgres <code className="kodus-changelog-code">22P02</code> errors, such as invalid UUIDs or integers, now return a 400 error instead of a 500.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Sandbox Lease Fixes:</strong> we fixed race conditions and <code className="kodus-changelog-code">leaseCount</code> leaks in sandbox management, including cleanup, invalidation, and superseded lease scenarios.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-self-hosted filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">RabbitMQ and Workflow Queue Fixes:</strong> workflow queues now use centralized arguments and are correctly declared and bound with a DLX, reducing inconsistencies during initialization.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">July 20, 2026</span>
         </div>
 
@@ -721,6 +868,130 @@ rss: true
 </div>
 
 <div className="kodus-changelog-rss-source" aria-hidden="true">
+    <Update label="July 30, 2026 - Global Rules Sync from Repositories" tags={["Kody Rules", "UX & Interface", "Billing & Licenses"]}>
+        Organizations on the Teams plan can now configure repositories as sources for Global Rules. This allows teams to keep their review rules version-controlled directly in Git, alongside the project's technical context, while Kody automatically syncs those rules for use during reviews.
+
+        This release also introduces a new interface under Code Review settings where users can select, save, and manage source repositories, monitor import status, and manually trigger a new sync when needed.
+
+        In practice, this makes it easier to adopt shared standards across teams and repositories. Instead of manually creating rules in each configuration, organizations can centralize conventions, best practices, and internal policies in dedicated repositories, with greater visibility and control over when those rules were last synced.
+
+        Video: /videos/global-rules-for-repository.mp4
+    </Update>
+
+    <Update label="July 30, 2026 - Kody Rules with Structured Summaries" tags={["Kody Rules", "AI Engine", "Performance"]}>
+        We now run a preliminary analysis on every Kody Rule to better understand its intent before it is used in a review.
+
+        When a rule is too broad or covers multiple behaviors, it can be broken down into atomic rules: smaller, more specific rules that can either be validated deterministically with regex or evaluated by an LLM when contextual interpretation is required.
+
+        In practice, this helps Kody apply complex rules more accurately. Instead of treating a long rule as a single block, the agent works with smaller validation units, reducing ambiguity while better preserving the rule's original intent.
+    </Update>
+
+    <Update label="July 30, 2026 - Better PR Scope for Kody Rules" tags={["Kody Rules", "AI Engine"]}>
+        The agent now uses the full PR diff when applying Kody Rules instead of relying only on file names. This gives Kody more meaningful context about the actual changes being reviewed.
+
+        With this improvement, rules that depend on modified content have a stronger basis for evaluation. This is especially relevant for rules that verify implementation patterns, contract changes, internal API usage, or sensitive changes in specific parts of the code.
+    </Update>
+
+    <Update label="July 30, 2026 - Reviews Now Skip Global Rules Source Repositories" tags={["Kody Rules", "Performance"]}>
+        When a repository is used exclusively as a source for Global Rules, Kody now skips reviews in that repository. This prevents repositories created solely to store rules from generating unnecessary reviews.
+
+        In addition to reducing noise for the team, this also avoids consuming resources on a workflow that provides no practical value. The source repository can now serve its purpose as a configuration source without being treated like a regular product repository.
+    </Update>
+
+    <Update label="July 30, 2026 - Better Token and Context Management in the Agent Loop" tags={["AI Engine", "Performance"]}>
+        The agent's token and context management has been strengthened with stricter per-request limits, a real tokenizer, and more accurate overhead accounting. This makes the agent's behavior more predictable on large PRs or when a significant amount of context has accumulated.
+
+        In practice, this reduces the risk of context overflow and makes executions more stable. The agent can operate within more reliable limits, improving both review quality and the rate of intermittent failures.
+    </Update>
+
+    <Update label="July 30, 2026 - Clearer LLM and BYOK Error Messages" tags={["BYOK", "AI Engine", "UX & Interface"]}>
+        We improved the messages displayed when failures occur involving LLMs or BYOK keys. Instead of returning generic errors, the system now makes it clearer whether the issue is related to configuration, quota, billing, or communication with the provider.
+
+        This makes troubleshooting easier for administrators and technical users. In BYOK environments, where the provider key and account are managed by the customer, clearer messages reduce investigation time and help teams resolve issues without relying on trial and error.
+    </Update>
+
+    <Update label="July 30, 2026 - Langfuse Telemetry Compatible with AI SDK 7" tags={["AI Engine", "Performance"]}>
+        Langfuse telemetry has been updated to work correctly with AI SDK 7, including improved handling of cache, reasoning, and token usage fields.
+
+        This improvement increases the accuracy of observability data for AI calls. With more reliable metrics, it becomes easier to monitor costs, model behavior, and the impact of changes to the review pipeline.
+    </Update>
+
+    <Update label="July 30, 2026 - Improved Pagination for Bitbucket and Repository Lists" tags={["GIT Provider", "UX & Interface", "Performance"]}>
+        Pagination has been improved across Bitbucket flows and repository lists in the frontend. This makes the experience more robust for organizations with a large number of repositories or paginated responses from the integration.
+
+        With this improvement, the system can handle larger volumes of data more reliably, preventing incomplete lists and reducing failures during onboarding or integration setup.
+    </Update>
+
+    <Update label="July 30, 2026 - Safer Centralized Config" tags={["Kody Rules", "Security"]}>
+        Centralized Config sync now avoids deleting configurations when discovery fails or returns an empty result. Previously, a failure during the discovery process could create a risk of incorrect reconciliation.
+
+        With this safeguard, the system now handles partial failures more conservatively. This reduces the risk of accidentally losing rules or configurations and improves the reliability of a sensitive workflow for organizations that depend on centralized configuration.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed GitLab Suggestions" tags={["GIT Provider", "AI Engine"]}>
+        We fixed suggestion creation in GitLab so comments are only added to newly added lines, preventing phantom suggestions.
+    </Update>
+
+    <Update label="July 30, 2026 - Support for Draft/WIP Merge Requests in GitLab" tags={["GIT Provider"]}>
+        We now correctly respect Merge Requests marked as draft or work in progress in GitLab.
+    </Update>
+
+    <Update label="July 30, 2026 - Custom Bot Usernames in GitLab" tags={["GIT Provider", "UX & Interface"]}>
+        We fixed support for review commands when the GitLab bot uses a custom username.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed getCommits Timeouts" tags={["GIT Provider", "Performance"]}>
+        Transient getCommits failures, such as Undici timeouts, are now handled correctly and rethrown when necessary.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed the Needs Attention State" tags={["AI Engine", "UX & Interface"]}>
+        We fixed an issue that could leave a review stuck in the needs attention state.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed Onboarding and Member Telemetry" tags={["GIT Provider", "UX & Interface"]}>
+        The onboarding flow received fixes to prevent it from getting stuck during member lookups and telemetry processing, especially in scenarios involving suspended users or slow API responses.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed the Invitation Flow" tags={["UX & Interface"]}>
+        The invitation page and flow were updated to prevent failures when new users join.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed GitHub Webhook Creation" tags={["GIT Provider"]}>
+        Webhook creation and listing now correctly use the repository owner, preventing failures when the repository owner differs from the primary account.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed Repository-Level Configuration" tags={["UX & Interface", "Kody Rules"]}>
+        We fixed the function used to delete repository-specific configurations.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed Rule Creation and Import" tags={["Kody Rules", "UX & Interface"]}>
+        The logic for adding global or repository-level rules was fixed, along with improvements to the search field.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed the BYOK Switching Button" tags={["BYOK", "UX & Interface"]}>
+        The model and provider switching experience in BYOK was updated to prevent confusion during editing.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed Language Flash in Settings" tags={["UX & Interface"]}>
+        We fixed the visual language flash that appeared on settings pages after a reload.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed Progress Bar Text" tags={["UX & Interface"]}>
+        We updated the text displayed in the progress bar to improve interface clarity.
+    </Update>
+
+    <Update label="July 30, 2026 - Fixed API Errors for Invalid Parameters" tags={["Performance"]}>
+        Postgres 22P02 errors, such as invalid UUIDs or integers, now return a 400 error instead of a 500.
+    </Update>
+
+    <Update label="July 30, 2026 - Sandbox Lease Fixes" tags={["Self-hosted", "Performance"]}>
+        We fixed race conditions and leaseCount leaks in sandbox management, including cleanup, invalidation, and superseded lease scenarios.
+    </Update>
+
+    <Update label="July 30, 2026 - RabbitMQ and Workflow Queue Fixes" tags={["Self-hosted", "Performance"]}>
+        Workflow queues now use centralized arguments and are correctly declared and bound with a DLX, reducing inconsistencies during initialization.
+    </Update>
+
     <Update label="July 13, 2026 - New Token Usage Experience" tags={["UX & Interface", "BYOK"]}>
         The Token Usage page has been redesigned to provide a more complete view of consumption.
 
