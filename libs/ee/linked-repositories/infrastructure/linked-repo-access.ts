@@ -276,6 +276,13 @@ export class LazyLinkedRepoAccess implements LinkedRepoAccess {
             this.warnings.push(
                 `linkedRepositories: exception cloning ${repo.fullName}: ${message}`,
             );
+            // Kody rule: exceptions must reach the logs, not only the
+            // in-review warning list (which operators never see).
+            logger.error({
+                message: `[LINKED-REPO] exception cloning ${repo.fullName}: ${message}`,
+                context: 'LinkedRepoAccess',
+                error: err,
+            });
             return {
                 ok: false as const,
                 error: `Failed to clone ${repo.fullName}: ${message}`,

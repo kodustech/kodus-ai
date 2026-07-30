@@ -337,6 +337,13 @@ export function buildAgentTools(
                         }
                         return tagged;
                     } catch (err) {
+                        // Kody rule: never swallow — the agent sees the string,
+                        // operators need the log (repo + pattern for tracing).
+                        logger.warn({
+                            message: `[LINKED-REPO] grep failed in ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`,
+                            context: 'agent-tools.grep',
+                            error: err,
+                        });
                         return `Error searching linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
                     }
                 }
@@ -524,6 +531,11 @@ export function buildAgentTools(
                         }
                         return header + numbered;
                     } catch (err) {
+                        logger.warn({
+                            message: `[LINKED-REPO] readFile failed for ${filePath} in ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`,
+                            context: 'agent-tools.readFile',
+                            error: err,
+                        });
                         return `Error reading ${filePath} from linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
                     }
                 }
