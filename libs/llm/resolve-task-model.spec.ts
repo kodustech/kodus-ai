@@ -157,10 +157,13 @@ describe('resolveTaskModel', () => {
 
             expect(res.slot).toBeNull();
             expect(res.verdict).toBeNull();
-            expect((res.model as any).__sentinel).toBe('env-google');
+            // The cloud managed default routes through the google_gemini provider
+            // module (same registry build() as BYOK), carrying the default model.
+            expect(registryBuild).toHaveBeenCalledTimes(1);
+            expect(registryBuild.mock.calls[0][0].provider).toBe('google_gemini');
+            expect(registryBuild.mock.calls[0][0].model).toBe('gemini-2.5-flash');
             expect((res.model as any).modelId).toBe('gemini-2.5-flash');
             expect(res.modelName).toBe('gemini-2.5-flash');
-            expect(registryBuild).not.toHaveBeenCalled();
         });
 
         it('a BLOCKED verdict (managed credential) degrades to the env default', () => {
@@ -175,10 +178,10 @@ describe('resolveTaskModel', () => {
             );
 
             // managed credential → StaticTaskStrategy skips → BLOCKED (modelId null)
-            // → null slot → env default. Never throws.
+            // → null slot → managed cloud default (google_gemini). Never throws.
             expect(res.verdict?.modelId).toBeNull();
             expect(res.slot).toBeNull();
-            expect((res.model as any).__sentinel).toBe('env-google');
+            expect((res.model as any).provider).toBe('google_gemini');
         });
     });
 
