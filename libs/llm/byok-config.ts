@@ -1,15 +1,11 @@
 /**
- * BYOK config — v2 shape + the internal normalized shape (Phase 2, plan 02-01).
+ * BYOK config — the v2 persisted shape + the internal normalized shape.
  *
- * The v2 shape (credentials + models + routing) is the persisted format going
- * forward. `normalizeByokConfig` (02-01 Task 2) maps BOTH v2 AND the legacy
- * `{main,fallback}` shape to `NormalizedByokConfig` — the internal shape the
- * resolver family (byok-to-vercel.ts) consumes. That internal shape mirrors the
- * legacy `{main,fallback}` with an ENCRYPTED apiKey, so byok-to-vercel's existing
- * `decrypt()` + `.main`/`.fallback` logic works unchanged for both shapes.
- *
- * Types live in libs/llm (not kodus-common) — no runtime kodus-common dependency
- * (REQ-NOLC-01). Provider ids are plain strings matching BYOKProvider values.
+ * `BYOKConfigV2` (credentials + models + routing) is the stored format.
+ * `normalizeByokConfig` resolves it to `NormalizedByokConfig` — the internal
+ * `{main,fallback}` shape the resolver family (byok-to-vercel.ts) consumes, with
+ * the apiKey kept as ENCRYPTED ciphertext so decryption happens once, downstream.
+ * Provider ids are plain strings matching BYOKProvider values.
  */
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { ReasoningEffort } from './providers/types';
@@ -145,11 +141,9 @@ export interface NormalizedByokConfig {
 }
 
 /**
- * Canonical BYOK carrier type. This is the v2-native replacement for the legacy
- * `BYOKConfig` that used to be imported from the former shared kodus-common `llm` package: it is the
- * SAME `{main,fallback}` shape the resolver family passes around, but built from
- * our own `NormalizedModel` and owned here, so nothing outside this repo defines
- * the carrier anymore. Consumers import `BYOKConfig` from `@libs/llm/byok-config`.
+ * Canonical BYOK carrier type: the resolved `{main,fallback}` slot pair the
+ * resolver family passes to byok-to-vercel, built from our own `NormalizedModel`.
+ * Consumers import `BYOKConfig` from `@libs/llm/byok-config`.
  */
 export type BYOKConfig = NormalizedByokConfig;
 
