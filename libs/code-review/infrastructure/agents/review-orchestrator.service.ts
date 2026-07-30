@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import { Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import {
     CodeSuggestion,
@@ -10,12 +10,8 @@ import { BugAgentProvider } from '@libs/code-review/infrastructure/agents/provid
 import { SecurityAgentProvider } from '@libs/code-review/infrastructure/agents/providers/security-agent.provider';
 import { PerformanceAgentProvider } from '@libs/code-review/infrastructure/agents/providers/performance-agent.provider';
 import { GeneralistAgentProvider } from '@libs/code-review/infrastructure/agents/providers/generalist-agent.provider';
-import { DuplicateLogicAgentProvider } from './duplicate-logic-agent.provider';
-import { KodyRulesAgentProvider } from '@libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider';
-import {
-    ReviewAgentInput,
-    ReviewAgentOutput,
-} from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import { DUPLICATE_LOGIC_AGENT_TOKEN, ReviewAgentInput, ReviewAgentOutput } from './review-agent.contract';
+import { BaseCodeReviewAgentProvider } from './providers/base-code-review-agent.provider';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -93,7 +89,8 @@ export class ReviewOrchestratorService {
         private readonly securityAgent: SecurityAgentProvider,
         private readonly performanceAgent: PerformanceAgentProvider,
         private readonly generalistAgent: GeneralistAgentProvider,
-        private readonly duplicateLogicAgent: DuplicateLogicAgentProvider,
+        @Inject(DUPLICATE_LOGIC_AGENT_TOKEN)
+        private readonly duplicateLogicAgent: BaseCodeReviewAgentProvider,
         @Optional()
         private readonly kodyRulesAgent?: KodyRulesAgentProvider,
     ) {}

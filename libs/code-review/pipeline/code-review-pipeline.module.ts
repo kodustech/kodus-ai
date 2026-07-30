@@ -79,6 +79,7 @@ import { SecurityAgentProvider } from '../infrastructure/agents/providers/securi
 import { PerformanceAgentProvider } from '../infrastructure/agents/providers/performance-agent.provider';
 import { GeneralistAgentProvider } from '../infrastructure/agents/providers/generalist-agent.provider';
 import { DuplicateLogicAgentProvider } from '../infrastructure/agents/duplicate-logic-agent.provider';
+import { DUPLICATE_LOGIC_AGENT_TOKEN } from '../infrastructure/agents/review-agent.contract';
 import { KodyRulesAgentProvider } from '../infrastructure/agents/providers/kody-rules-agent.provider';
 // ReflectionAgentProvider removed — verify/discover was hurting recall
 import { ReviewOrchestratorService } from '../infrastructure/agents/review-orchestrator.service';
@@ -175,6 +176,10 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         PerformanceAgentProvider,
         GeneralistAgentProvider,
         DuplicateLogicAgentProvider,
+        {
+            provide: DUPLICATE_LOGIC_AGENT_TOKEN,
+            useExisting: DuplicateLogicAgentProvider,
+        },
         KodyRulesAgentProvider,
         // ReflectionAgentProvider removed
         ReviewOrchestratorService,

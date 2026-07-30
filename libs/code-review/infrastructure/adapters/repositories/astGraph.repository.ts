@@ -424,12 +424,15 @@ export class AstGraphRepository {
                 SELECT * FROM sibling_edges
             ),
             duplicate_candidates AS (
-                SELECT n.qualified_name AS qn
+                SELECT DISTINCT n.qualified_name AS qn
                 FROM ast_nodes n
-                JOIN changed_nodes c ON n.repo_id = $1
-                WHERE n.kind IN ('Function', 'Method', 'function', 'method')
-                  AND n.qualified_name != c.qualified_name
-                  AND similarity(n.name, c.name) > 0.15
+                WHERE n.repo_id = $1
+                  AND n.kind IN ('Function', 'Method', 'function', 'method')
+                  AND EXISTS (
+                      SELECT 1 FROM changed_nodes c
+                      WHERE n.qualified_name != c.qualified_name
+                        AND similarity(n.name, c.name) > 0.15
+                  )
             ),
             neighbor_qnames AS (
                 SELECT DISTINCT source_qualified AS qn FROM all_edges

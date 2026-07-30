@@ -126,7 +126,13 @@ export class GraphContextService {
                             }
                             prompt += '  </DuplicateCandidates>\n</CallGraph>';
                         } else {
-                            console.log(`[DEBUG-DUPLICATE] No twins found. Node is_duplicate values: ${JSON.stringify(allNodes.map((n: any) => ({ name: n.name, is_duplicate: n.is_duplicate })))}`);
+                            this.logger.log({
+                                message: '[DEBUG-DUPLICATE] No twins found',
+                                context: GraphContextService.name,
+                                metadata: {
+                                    nodeIsDuplicateValues: allNodes.map((n: any) => ({ name: n.name, is_duplicate: n.is_duplicate }))
+                                }
+                            });
                         }
                     }
                 } catch (error) {

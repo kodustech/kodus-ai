@@ -35,6 +35,9 @@ import type { FindingsOutput } from '@libs/code-review/infrastructure/agents/cor
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
+/** DI token for the duplicate-logic agent provider. */
+export const DUPLICATE_LOGIC_AGENT_TOKEN = Symbol.for('DuplicateLogicAgentProvider');
+
 /**
  * Category-specific agent configuration provided by each concrete subclass.
  */

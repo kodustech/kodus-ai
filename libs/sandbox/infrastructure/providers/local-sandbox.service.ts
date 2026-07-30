@@ -978,22 +978,18 @@ export class LocalSandboxService implements ISandboxProvider {
         };
 
         const sandboxReadFile = async (path: string): Promise<string> => {
-            const fullPath = isAbsolute(path)
-                ? path
-                : join(capturedRepoDir, path);
-            return readFile(fullPath, 'utf-8');
+            const safePath = await this.resolveSafePath(capturedRepoDir, path);
+            return readFile(safePath, 'utf-8');
         };
 
         const sandboxWriteFile = async (
             path: string,
             content: string,
         ): Promise<void> => {
-            const fullPath = isAbsolute(path)
-                ? path
-                : join(capturedRepoDir, path);
-            const dir = join(fullPath, '..');
+            const safePath = await this.resolveSafeWritePath(capturedRepoDir, path);
+            const dir = join(safePath, '..');
             await mkdir(dir, { recursive: true });
-            await writeFile(fullPath, content, 'utf-8');
+            await writeFile(safePath, content, 'utf-8');
         };
 
         return {
