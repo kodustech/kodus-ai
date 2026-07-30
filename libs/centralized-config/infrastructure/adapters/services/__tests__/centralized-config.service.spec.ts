@@ -749,9 +749,16 @@ describe('CentralizedConfigService', () => {
             expect(mockPullRequestMessagesService.delete).toHaveBeenCalledWith(
                 'global-message-1',
             );
+            // The code review config itself must not be rewritten. Sync does
+            // record its managed-repository baseline (#1579), but that lives
+            // under CENTRALIZED_CONFIG — a different key.
             expect(
                 mockCreateOrUpdateParametersUseCase.execute,
-            ).not.toHaveBeenCalled();
+            ).not.toHaveBeenCalledWith(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                expect.anything(),
+                expect.anything(),
+            );
         });
     });
 
