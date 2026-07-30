@@ -9,9 +9,16 @@ import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
+    DEDUP_EMBEDDING_LOW,
+    DEDUP_EMBEDDING_HIGH,
+    DEDUP_TIEBREAK_SCHEMA,
     buildDedupPrompt,
+    buildTiebreakPrompt,
     contentSimilarity,
+    cosineSimilarity,
+    dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
+import { getOpenAIEmbedding } from '@libs/common/utils/langchainCommon/document';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -1489,6 +1496,90 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return result;
     }
 
+    /** Embed a suggestion's description once per dedup run (memoized by index).
+     * Fail-soft: no platform embedding key or any error → null, so the caller
+     * falls back to the pre-#1527 lexical behavior (veto) instead of crashing. */
+    private async embedDedupSuggestion(
+        suggestion: Partial<CodeSuggestion>,
+        index: number,
+        cache: Map<number, number[] | null>,
+    ): Promise<number[] | null> {
+        if (cache.has(index)) {
+            return cache.get(index) ?? null;
+        }
+        let vector: number[] | null = null;
+        try {
+            const text = dedupEmbeddingText(suggestion as any);
+            if (text) {
+                const res = await getOpenAIEmbedding(text);
+                vector = res?.data?.[0]?.embedding ?? null;
+            }
+        } catch (err) {
+            this.logger.warn({
+                message: `[DEDUP-GUARD] embedding unavailable, falling back to lexical veto`,
+                context: this.stageName,
+                error: err,
+            });
+            vector = null;
+        }
+        cache.set(index, vector);
+        return vector;
+    }
+
+    /**
+     * Tiered dedup guard (PR #1527): decide whether to honor a merge the dedup
+     * model proposed.
+     *   1. lexical overlap ≥ threshold → honor (cheap, obvious duplicates);
+     *   2. else semantic cosine of the two descriptions:
+     *        ≥ HIGH → honor, < LOW → veto, in-between → LLM tiebreak (full text).
+     * Every external failure (no embed key, embedding/LLM error) falls back to a
+     * veto — the exact pre-#1527 behavior — so a low-overlap merge is never
+     * honored blindly. Only ever turns a would-be veto into an honor; merges the
+     * lexical tier already accepts are untouched.
+     */
+    private async resolveDedupMerge(
+        dup: Partial<CodeSuggestion>,
+        keep: Partial<CodeSuggestion>,
+        dupIdx: number,
+        keepIdx: number,
+        embedCache: Map<number, number[] | null>,
+        tiebreak: (
+            a: Partial<CodeSuggestion>,
+            b: Partial<CodeSuggestion>,
+        ) => Promise<boolean | null>,
+    ): Promise<{ honor: boolean; reason: string; score: number }> {
+        const lexical = contentSimilarity(dup, keep);
+        if (lexical >= DEDUP_CONTENT_THRESHOLD) {
+            return { honor: true, reason: 'lexical', score: lexical };
+        }
+
+        const [vecDup, vecKeep] = await Promise.all([
+            this.embedDedupSuggestion(dup, dupIdx, embedCache),
+            this.embedDedupSuggestion(keep, keepIdx, embedCache),
+        ]);
+        if (!vecDup || !vecKeep) {
+            return { honor: false, reason: 'lexical-veto (no-embed)', score: lexical };
+        }
+
+        const cos = cosineSimilarity(vecDup, vecKeep);
+        if (cos >= DEDUP_EMBEDDING_HIGH) {
+            return { honor: true, reason: 'embedding-high', score: cos };
+        }
+        if (cos < DEDUP_EMBEDDING_LOW) {
+            return { honor: false, reason: 'embedding-low', score: cos };
+        }
+
+        const sameBug = await tiebreak(dup, keep);
+        if (sameBug === null) {
+            return { honor: false, reason: 'tiebreak-error-veto', score: cos };
+        }
+        return {
+            honor: sameBug,
+            reason: `llm-tiebreak=${sameBug}`,
+            score: cos,
+        };
+    }
+
     /**
      * Deduplicate suggestions that describe the same issue using LLM.
      * Groups by file, then asks Gemini Flash which suggestions are duplicates.
@@ -1639,6 +1730,57 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }> = dedupOutput?.groups || [];
             const unique: number[] = dedupOutput?.unique || [];
 
+            // Semantic tier of the content guard (PR #1527): when lexical overlap
+            // is inconclusive we compare description embeddings, and only escalate
+            // the ambiguous band to a focused LLM tiebreak. Embeddings are memoized
+            // per suggestion index for this dedup run.
+            const embedCache = new Map<number, number[] | null>();
+            const runTiebreak = async (
+                a: Partial<CodeSuggestion>,
+                b: Partial<CodeSuggestion>,
+            ): Promise<boolean | null> => {
+                try {
+                    const call = (model: any) =>
+                        tracedGenerateText({
+                            model: model as any,
+                            ...toAiSdkTelemetryArgs(
+                                buildLangfuseTelemetry(
+                                    'dedup-tiebreak',
+                                    telemetryMeta,
+                                ),
+                            ),
+                            output: Output.object({
+                                schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA as any),
+                            }) as any,
+                            prompt: buildTiebreakPrompt(a as any, b as any),
+                        });
+                    const tiebreakByok = secondaryByok
+                        ? byokConfig?.main
+                            ? { main: byokConfig.main }
+                            : byokConfig
+                        : byokConfig;
+                    const res = await withStructuredOutputFallback(
+                        {
+                            byokConfig: tiebreakByok,
+                            organizationId: telemetryMeta?.organizationId,
+                            label: 'dedup-tiebreak',
+                        },
+                        call,
+                    );
+                    const out = (res as any).object ?? (res as any).output;
+                    return typeof out?.sameBug === 'boolean'
+                        ? out.sameBug
+                        : null;
+                } catch (err) {
+                    this.logger.warn({
+                        message: `[DEDUP-GUARD] PR#${prNumber}: tiebreak failed, vetoing merge`,
+                        context: this.stageName,
+                        error: err,
+                    });
+                    return null;
+                }
+            };
+
             // Safety: if LLM returns nothing useful, keep all
             if (groups.length === 0 && unique.length === 0) {
                 this.logger.warn({
@@ -1783,12 +1925,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     // findings actually describe the same thing. A low word-overlap
                     // "duplicate" is a DIFFERENT bug the model over-merged (distinct
                     // issues on overlapping lines) — keep it instead of dropping.
-                    if (
-                        contentSimilarity(
-                            suggestions[dupIdx],
-                            suggestions[keepIdx],
-                        ) < DEDUP_CONTENT_THRESHOLD
-                    ) {
+                    const decision = await this.resolveDedupMerge(
+                        suggestions[dupIdx],
+                        suggestions[keepIdx],
+                        dupIdx,
+                        keepIdx,
+                        embedCache,
+                        runTiebreak,
+                    );
+                    if (!decision.honor) {
+                        // The model grouped these as duplicates but the guard is
+                        // not confident they are the same bug, so we keep both.
+                        // Log it — otherwise this veto is invisible in production
+                        // (the silent-degradation family from PR #1527).
+                        this.logger.log({
+                            message: `[DEDUP-GUARD] PR#${prNumber}: merge of idx ${dupIdx} into ${keepIdx} rejected (${decision.reason}, score=${decision.score.toFixed(3)})`,
+                            context: this.stageName,
+                        });
                         classifiedIndices.add(dupIdx);
                         if (!addedIndices.has(dupIdx)) {
                             addedIndices.add(dupIdx);

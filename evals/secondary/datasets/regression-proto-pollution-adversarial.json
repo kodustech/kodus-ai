@@ -1,0 +1,31 @@
+{
+    "prId": "regression-proto-pollution-adversarial",
+    "goldenComments": [
+        "The key-copy loop in stripNullProps does not exclude __proto__/constructor/prototype, allowing prototype pollution from untrusted wire input.",
+        "strip() is recomputed for every key inside the loop, causing quadratic time on large or deeply-nested payloads."
+    ],
+    "findings": [
+        {
+            "relevantFile": "libs/llm/strict-wire-schema.ts",
+            "relevantLinesStart": 89,
+            "relevantLinesEnd": 95,
+            "severity": "high",
+            "label": "security",
+            "oneSentenceSummary": "Prototype pollution via __proto__ in the key-copy loop",
+            "suggestionContent": "WHAT: The key-copy loop assigns every key from untrusted input without excluding __proto__/constructor/prototype. WHY: A malicious payload with a __proto__ key mutates Object.prototype for the whole process. HOW: Guard against the dangerous keys before assigning them.",
+            "existingCode": "for (const key of Object.keys(obj)) { out[key] = strip(obj[key]); }",
+            "improvedCode": "for (const key of Object.keys(obj)) { if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue; out[key] = strip(obj[key]); }"
+        },
+        {
+            "relevantFile": "libs/llm/strict-wire-schema.ts",
+            "relevantLinesStart": 89,
+            "relevantLinesEnd": 95,
+            "severity": "medium",
+            "label": "performance",
+            "oneSentenceSummary": "strip() is recomputed per key, giving quadratic time on large payloads",
+            "suggestionContent": "WHAT: strip() is called again for every key inside the copy loop. WHY: On large or deeply-nested objects this recomputes shared work and turns the pass into O(n^2). HOW: Hoist or memoize the strip result outside the loop so each subtree is processed once.",
+            "existingCode": "for (const key of Object.keys(obj)) { out[key] = strip(obj[key]); }",
+            "improvedCode": "const stripped = memoizeStrip(obj); for (const key of Object.keys(obj)) { out[key] = stripped[key]; }"
+        }
+    ]
+}
