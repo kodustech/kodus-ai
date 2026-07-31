@@ -510,6 +510,40 @@
                 "existingCode": "createdAt: new Date().toString()",
                 "improvedCode": "createdAt: new Date().toISOString()"
             }
+        },
+        {
+            "id": "gym78-authorize-suggestion-vs-kodyrule",
+            "shouldMerge": true,
+            "note": "REAL cross-stream case from gym#78 line 11: a Security AI-suggestion and a Kody Rule both flag the missing [Authorize] on AparelhoController. Same bug, different streams — the cross-stream dedup must merge them (and keep the Kody Rule).",
+            "a": {
+                "oneSentenceSummary": "AparelhoController is missing an [Authorize] attribute",
+                "suggestionContent": "AparelhoController exposes create/read/update/delete endpoints without an [Authorize] attribute, leaving them publicly accessible while sibling controllers require authentication. Add [Authorize] at the controller level or limit [AllowAnonymous] to specifically intended public actions.",
+                "existingCode": "[ApiController]\n[Route(\"api/[controller]\")]\npublic class AparelhoController : ControllerBase",
+                "improvedCode": "[Authorize]\n[ApiController]\n[Route(\"api/[controller]\")]\npublic class AparelhoController : ControllerBase"
+            },
+            "b": {
+                "oneSentenceSummary": "AparelhoController exposes endpoints without [Authorize] (rule violation)",
+                "suggestionContent": "AparelhoController exposes GET/POST/PUT/DELETE endpoints without [Authorize], allowing any unauthenticated client to list, create, update, or logically delete gym equipment records. Add [Authorize] at the class level and restrict the most sensitive actions with [Authorize(Roles = \"...\")] to match the project's API security policy.",
+                "existingCode": "public class AparelhoController : ControllerBase",
+                "improvedCode": ""
+            }
+        },
+        {
+            "id": "gym78-kodyrule-authorize-vs-pagination",
+            "shouldMerge": false,
+            "note": "REAL from gym#78: the [Authorize] Kody Rule vs a Performance suggestion (missing pagination) on the SAME file. Different bugs — the cross-stream dedup must NOT let the rule absorb an unrelated same-file suggestion.",
+            "a": {
+                "oneSentenceSummary": "AparelhoController exposes endpoints without [Authorize] (rule violation)",
+                "suggestionContent": "AparelhoController exposes GET/POST/PUT/DELETE endpoints without [Authorize], allowing any unauthenticated client to list, create, update, or logically delete gym equipment records. Add [Authorize] at the class level.",
+                "existingCode": "public class AparelhoController : ControllerBase",
+                "improvedCode": ""
+            },
+            "b": {
+                "oneSentenceSummary": "GetAparelhos loads the full result set without pagination",
+                "suggestionContent": "GetAparelhos materializes the entire filtered result set with ToListAsync before mapping, causing response size and memory use to grow linearly with the number of aparelhos. Add skip/take parameters with a default page size of 20 to return a paged result.",
+                "existingCode": "var aparelhos = await query.OrderBy(a => a.Nome).ToListAsync();",
+                "improvedCode": "var aparelhos = await query.OrderBy(a => a.Nome).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();"
+            }
         }
     ]
 }
