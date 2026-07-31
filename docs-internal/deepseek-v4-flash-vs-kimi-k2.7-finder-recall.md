@@ -80,12 +80,20 @@ default should wait for the repeat runs described in caveat 2.
 
 ```bash
 cd evals/investigation
+export BYOK_DEEPSEEK_API_KEY=...   # see below — NOT read from ~/.kodus-dev/config
 env -u ANTHROPIC_API_KEY -u BYOK_ANTHROPIC_API_KEY \
   PROMPTFOO_DISABLE_TEMPLATING=1 RECALL_ALL=1 \
   promptfoo eval -c promptfoo-recall-deepseek.yaml --no-cache
 ```
 
-Requires `BYOK_DEEPSEEK_API_KEY` in `~/.kodus-dev/config`. Note that `resolveKeyEnv` in
+`BYOK_DEEPSEEK_API_KEY` must be **exported in the shell or present in `.env.local` / `.env`**.
+The finder reads its key from the environment: `agent-provider.js` dotenv-loads only
+`.env` and `.env.local` and then reads `process.env[apiKeyEnv]`, so a key that lives only
+in `~/.kodus-dev/config` fails immediately with
+`Missing API key for openai-compatible in BYOK_DEEPSEEK_API_KEY`. That file is consulted
+only by the judge path (`recall-judge.js`), for the Anthropic key.
+
+Note that `resolveKeyEnv` in
 `tests/e2e/benchmark/models.ts` does not yet map `api.deepseek.com` — that mapping, the
 context-window override, and the BYOK catalog entry are intentionally **not** part of this
 PR (see below).
