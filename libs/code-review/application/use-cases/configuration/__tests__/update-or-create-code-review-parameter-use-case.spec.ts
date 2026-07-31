@@ -48,6 +48,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -142,6 +151,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         const result = await useCase.execute({
@@ -230,6 +248,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -316,6 +343,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -418,6 +454,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await expect(
@@ -506,6 +551,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await expect(
@@ -581,6 +635,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await expect(
@@ -674,6 +737,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -770,6 +842,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -860,6 +941,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -948,6 +1038,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         const result = await useCase.execute({
@@ -1044,6 +1143,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         const result = await useCase.execute({
@@ -1133,6 +1241,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         const dtoShapedEmptyPayload = {
@@ -1239,6 +1356,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         const result = await useCase.execute({
@@ -1318,6 +1444,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -1394,6 +1529,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -1456,6 +1600,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({
@@ -1525,6 +1678,15 @@ describe('UpdateOrCreateCodeReviewParameterUseCase', () => {
                 getSubscriptionStatus: jest.fn(),
             } as any,
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
+            // Teams/Enterprise gate for linkedRepositories — allow by default
+            // so existing config tests stay green.
+            {
+                validateOrganizationLicense: jest.fn().mockResolvedValue({
+                    valid: true,
+                    subscriptionStatus: 'active',
+                    planType: 'teams_byok',
+                }),
+            } as any,
         );
 
         await useCase.execute({

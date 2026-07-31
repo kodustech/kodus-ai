@@ -51,6 +51,34 @@ export const isEnterprisePlan = (license: OrganizationLicense): boolean => {
     }
 };
 
+/**
+ * Mirror of `isTeamsOrEnterpriseTierAllowed` in
+ * `libs/ee/license/tier/teams-or-enterprise-tier-policy.ts` — keep aligned.
+ *
+ * Used by paid-team features such as linked repositories (cross-repo
+ * context) and cockpit analytics.
+ */
+export const isTeamsOrEnterprisePlan = (
+    license: OrganizationLicense,
+): boolean => {
+    if (!license.valid) return false;
+    const plan = license.planType ?? "";
+    const isTeams = plan.startsWith("teams_");
+    const isEnterprise =
+        plan.startsWith("enterprise_") || plan === "enterprise";
+
+    switch (license.subscriptionStatus) {
+        case "active":
+            return isTeams || isEnterprise;
+        case "licensed-self-hosted":
+            return isEnterprise;
+        case "trial":
+            return true;
+        default:
+            return false;
+    }
+};
+
 export const shouldShowBYOKMissingKeyTopbar = (params: {
     license: OrganizationLicense | null;
     llmConfigStatus: LLMConfigStatus | null | undefined;

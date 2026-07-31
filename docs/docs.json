@@ -56,7 +56,8 @@
                                             "how_to_use/en/code_review/configs/suggestion_control",
                                             "how_to_use/en/code_review/configs/pr_summary",
                                             "how_to_use/en/code_review/configs/custom_messages",
-                                            "how_to_use/en/code_review/configs/custom_prompts"
+                                            "how_to_use/en/code_review/configs/custom_prompts",
+                                            "how_to_use/en/code_review/configs/linked_repositories"
                                         ]
                                     },
                                     {
@@ -257,7 +258,8 @@
                                     "knowledge_base/en/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/en/how-to-generate-rules-automatically",
                                     "knowledge_base/en/how-to-share-standards-across-repositories",
-                                    "knowledge_base/en/how-to-review-prs-with-project-context"
+                                    "knowledge_base/en/how-to-review-prs-with-project-context",
+                                    "knowledge_base/en/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -565,7 +567,8 @@
                                     "knowledge_base/es/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/es/how-to-generate-rules-automatically",
                                     "knowledge_base/es/how-to-share-standards-across-repositories",
-                                    "knowledge_base/es/how-to-review-prs-with-project-context"
+                                    "knowledge_base/es/how-to-review-prs-with-project-context",
+                                    "knowledge_base/es/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -873,7 +876,8 @@
                                     "knowledge_base/pt-br/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/pt-br/how-to-generate-rules-automatically",
                                     "knowledge_base/pt-br/how-to-share-standards-across-repositories",
-                                    "knowledge_base/pt-br/how-to-review-prs-with-project-context"
+                                    "knowledge_base/pt-br/how-to-review-prs-with-project-context",
+                                    "knowledge_base/pt-br/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -1181,7 +1185,8 @@
                                     "knowledge_base/ja/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/ja/how-to-generate-rules-automatically",
                                     "knowledge_base/ja/how-to-share-standards-across-repositories",
-                                    "knowledge_base/ja/how-to-review-prs-with-project-context"
+                                    "knowledge_base/ja/how-to-review-prs-with-project-context",
+                                    "knowledge_base/ja/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -1489,7 +1494,8 @@
                                     "knowledge_base/zh/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/zh/how-to-generate-rules-automatically",
                                     "knowledge_base/zh/how-to-share-standards-across-repositories",
-                                    "knowledge_base/zh/how-to-review-prs-with-project-context"
+                                    "knowledge_base/zh/how-to-review-prs-with-project-context",
+                                    "knowledge_base/zh/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {

@@ -47,7 +47,10 @@ const GIT_ENV = {
  * self-managed host.
  */
 describe('CLI sandbox clone against a self-managed git host', () => {
-    jest.setTimeout(60_000);
+    // 120s: the clone itself takes <1s in isolation, but under the full
+    // parallel pre-push suite this worker gets starved and 60s flakes
+    // (observed blocking unrelated pushes three times in a row).
+    jest.setTimeout(120_000);
 
     let server: Server;
     let port: number;
