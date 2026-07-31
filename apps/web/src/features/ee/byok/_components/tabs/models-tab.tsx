@@ -33,12 +33,13 @@ import {
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
 } from "../byok-v2-write";
-import { CuratedCatalog } from "../catalog/catalog";
 import { CuratedConnectPanel } from "../catalog/connect-panel";
 import { PROVIDER_LABELS } from "../catalog/model-card";
+import { ConnectProviderFlow } from "../connect-provider-flow";
 import { FirstRunCard } from "../first-run-card";
 import { ModelRow } from "../model-row";
 import { ProviderGroupHeader } from "../provider-group-header";
+import { SpendLimitSection } from "../spend-limit-section";
 
 type ModelsTabProps = {
     config: BYOKConfigV2 | null | undefined;
@@ -63,7 +64,9 @@ const displayNameFor = (modelId: string): string =>
 
 type View =
     | { mode: "list" }
-    | { mode: "add" }
+    // `provider` set ⇒ scoped "Add a model to {provider}" (key reused);
+    // absent ⇒ "Add another provider" (provider grid first).
+    | { mode: "add"; provider?: string }
     | { mode: "rotate"; credential: BYOKCredential }
     | { mode: "edit"; model: BYOKModelConfig; credential: BYOKCredential };
 
@@ -76,6 +79,7 @@ type View =
 export const ModelsTab = ({
     config,
     costByModelId,
+    teamId,
     periodLabel,
     costRangeQuery,
 }: ModelsTabProps) => {
@@ -165,12 +169,14 @@ export const ModelsTab = ({
         router.refresh();
     };
 
-    // ── view: add model / add provider (inline catalog) ───────────────────────
+    // ── view: add model (provider-scoped) / add another provider (grid) ───────
+    // Both use the shared PROVIDER-FIRST flow: with `lockedProvider` it skips the
+    // grid and reuses the stored key; without it, the provider grid comes first.
     if (view.mode === "add") {
         return (
-            <CuratedCatalog
-                slot="main"
+            <ConnectProviderFlow
                 existingKeyByProvider={connectedKeyByProvider}
+                lockedProvider={view.provider}
                 onSave={saveAdd}
                 onCancel={() => setView({ mode: "list" })}
             />
@@ -241,8 +247,20 @@ export const ModelsTab = ({
     }
 
     // ── view: steady-state provider-grouped pool ──────────────────────────────
+    const totalModels = groups.reduce((sum, g) => sum + g.models.length, 0);
+
     return (
         <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between gap-3">
+                <h2 className="text-text-primary text-sm font-semibold">
+                    Connected providers
+                </h2>
+                <span className="text-text-tertiary text-xs tabular-nums">
+                    {totalModels} {totalModels === 1 ? "model" : "models"}{" "}
+                    enabled
+                </span>
+            </div>
+
             {groups.map(({ credential, models }) => (
                 <ProviderGroupHeader
                     key={credential.id}
@@ -268,7 +286,12 @@ export const ModelsTab = ({
                                 size="xs"
                                 variant="helper"
                                 leftIcon={<PlusIcon />}
-                                onClick={() => setView({ mode: "add" })}>
+                                onClick={() =>
+                                    setView({
+                                        mode: "add",
+                                        provider: credential.provider,
+                                    })
+                                }>
                                 Add model
                             </Button>
                         </div>
@@ -292,6 +315,10 @@ export const ModelsTab = ({
                     Configure manually
                 </Button>
             </div>
+
+            {/* Spend limit lives at the foot of the Providers tab (the Budget tab
+                was folded in): alert-only, you pay providers directly. */}
+            <SpendLimitSection teamId={teamId} />
         </div>
     );
 };

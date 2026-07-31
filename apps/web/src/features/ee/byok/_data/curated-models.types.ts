@@ -22,6 +22,10 @@ export type CuratedModel = {
     provider: string;
     providerDisplayName?: string;
     tier: ModelTier;
+    /** Optional recommendation label rendered as a colored tier badge on the
+     *  recommended card (e.g. "Best balance", "Highest quality", "Most
+     *  affordable"). Present only on the curated hero picks. */
+    recommendationLabel?: string;
     benchmarkScore: number;
     description: string;
     speed: SpeedRating;

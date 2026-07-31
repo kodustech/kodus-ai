@@ -22,6 +22,7 @@ import {
 import { AlertTriangleIcon, ChevronsUpDownIcon } from "lucide-react";
 
 import type { LlmTask } from "../../_types";
+import { TASK_LABELS } from "../../_utils";
 import { capabilityGate, type SurfacedCapabilities } from "./capability-gate";
 
 /** One selectable model in the connected pool (a BYOKModelConfig projected for
@@ -149,11 +150,9 @@ export const ModelCombobox = ({
     );
 };
 
-const TASK_ROWS: { task: LlmTask; label: string }[] = [
-    { task: "codeReview", label: "Code review" },
-    { task: "prSummary", label: "PR summary" },
-    { task: "conversation", label: "Conversation" },
-];
+const TASK_ROWS: { task: LlmTask; label: string }[] = (
+    ["codeReview", "prSummary", "conversation"] as LlmTask[]
+).map((task) => ({ task, label: TASK_LABELS[task] }));
 
 /**
  * The 3-row per-task override grid (codeReview / prSummary / conversation). Each

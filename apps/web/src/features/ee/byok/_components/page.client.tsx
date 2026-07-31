@@ -1,16 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
+import { Badge } from "@components/ui/badge";
 import { Page } from "@components/ui/page";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from "@components/ui/tooltip";
 import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
-import { ExternalLinkIcon, InfoIcon } from "lucide-react";
+import {
+    ExternalLinkIcon,
+    GitBranchIcon,
+    InfoIcon,
+    PackageIcon,
+} from "lucide-react";
 import {
     Tabs,
     TabsContent,
@@ -19,9 +20,8 @@ import {
 } from "src/core/components/ui/tabs";
 
 import type { BYOKConfigV2 } from "../_types";
-import { hasVisibleModels } from "../_utils";
+import { groupModelsByProvider, hasVisibleModels } from "../_utils";
 import { ModelOverridesBanner } from "./model-overrides-banner";
-import { BudgetTab } from "./tabs/budget-tab";
 import { ModelsTab } from "./tabs/models-tab";
 import { RoutingTab } from "./tabs/routing-tab";
 
@@ -112,39 +112,6 @@ const EnvConfigNotice = ({ env }: { env: LLMConfigStatus["env"] }) => {
     );
 };
 
-/**
- * A tab trigger that, when `disabled` (first-run), shows a "Connect a model
- * first." tooltip explaining why it's locked (D-UI-FIRSTRUN). A disabled Radix
- * trigger swallows pointer events, so the tooltip is anchored on a wrapping
- * span that still receives hover/focus.
- */
-const GatedTabTrigger = ({
-    value,
-    disabled,
-    children,
-}: {
-    value: string;
-    disabled?: boolean;
-    children: React.ReactNode;
-}) => {
-    if (!disabled) {
-        return <TabsTrigger value={value}>{children}</TabsTrigger>;
-    }
-
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <span className="inline-flex" tabIndex={0}>
-                    <TabsTrigger value={value} disabled>
-                        {children}
-                    </TabsTrigger>
-                </span>
-            </TooltipTrigger>
-            <TooltipContent>Connect a model first.</TooltipContent>
-        </Tooltip>
-    );
-};
-
 export const ByokPageClient = ({
     config,
     llmConfigStatus,
@@ -161,11 +128,22 @@ export const ByokPageClient = ({
     costRangeQuery?: string;
 }) => {
     // First-run (D-UI-FIRSTRUN): no non-managed credential carries a model yet.
-    // Only the Models tab is interactive until the org connects its own key.
+    // Both tabs stay reachable — Routing shows its own "connect a provider
+    // first" affordance rather than being locked.
     const firstRun = !hasVisibleModels(config);
+
+    // Count of connected providers (non-managed credentials carrying ≥1 model)
+    // — drives the Providers tab count badge.
+    const providersCount = groupModelsByProvider(config).filter(
+        (group) => group.models.length > 0,
+    ).length;
 
     // Nag about an env-based LLM only when no BYOK model is configured at all.
     const showEnvNotice = !!llmConfigStatus?.env.configured && firstRun;
+
+    // Controlled tab value so cross-tab affordances (e.g. Routing's empty-state
+    // "Go to Providers") can switch tabs via a callback — no DOM scraping.
+    const [tab, setTab] = useState("providers");
 
     return (
         <Page.Root>
@@ -176,8 +154,9 @@ export const ByokPageClient = ({
                     </Page.Title>
                     <Page.Description className="flex flex-wrap items-center gap-x-2 gap-y-1 text-pretty">
                         <span>
-                            Pick a model for code review. You pay your
-                            provider directly — Kodus never sees your key.
+                            Connect the providers your team uses, then choose
+                            which model reviews each thing. You pay your provider
+                            directly — Kodus never sees your key.
                         </span>
                         <a
                             href="https://docs.kodus.io/how_to_use/en/byok"
@@ -198,20 +177,29 @@ export const ByokPageClient = ({
 
                 <ModelOverridesBanner teamId={teamId} />
 
-                <Tabs defaultValue="models">
-                    <TooltipProvider>
-                        <TabsList>
-                            <TabsTrigger value="models">Models</TabsTrigger>
-                            <GatedTabTrigger value="routing" disabled={firstRun}>
+                <Tabs value={tab} onValueChange={setTab}>
+                    <TabsList>
+                        <TabsTrigger value="providers">
+                            <span className="flex items-center gap-2">
+                                <PackageIcon size={15} />
+                                Providers
+                                <Badge
+                                    variant="helper"
+                                    size="xs"
+                                    className="min-w-5 justify-center px-1.5 tabular-nums">
+                                    {providersCount}
+                                </Badge>
+                            </span>
+                        </TabsTrigger>
+                        <TabsTrigger value="routing">
+                            <span className="flex items-center gap-2">
+                                <GitBranchIcon size={15} />
                                 Routing
-                            </GatedTabTrigger>
-                            <GatedTabTrigger value="budget" disabled={firstRun}>
-                                Budget & alerts
-                            </GatedTabTrigger>
-                        </TabsList>
-                    </TooltipProvider>
+                            </span>
+                        </TabsTrigger>
+                    </TabsList>
 
-                    <TabsContent value="models">
+                    <TabsContent value="providers">
                         <ModelsTab
                             config={config}
                             costByModelId={costByModelId}
@@ -226,11 +214,8 @@ export const ByokPageClient = ({
                         <RoutingTab
                             config={config}
                             llmConfigStatus={llmConfigStatus}
+                            onGoToProviders={() => setTab("providers")}
                         />
-                    </TabsContent>
-
-                    <TabsContent value="budget">
-                        <BudgetTab config={config} teamId={teamId} />
                     </TabsContent>
                 </Tabs>
             </Page.Content>

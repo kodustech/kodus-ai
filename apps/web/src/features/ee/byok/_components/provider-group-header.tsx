@@ -9,9 +9,10 @@ import {
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
 import { KeyRoundIcon, RotateCwIcon } from "lucide-react";
+import { cn } from "src/core/utils/components";
 
 import type { BYOKCredential } from "../_types";
-import { maskKey } from "../_utils";
+import { maskKey, providerAvatarTint } from "../_utils";
 import { PROVIDER_LABELS } from "./catalog/model-card";
 
 /**
@@ -50,12 +51,29 @@ export function ProviderGroupHeader({
                             type="button"
                             className="group/trigger flex min-w-0 flex-1 items-center gap-3 text-left">
                             <CollapsibleIndicator />
-                            <span className="text-text-primary text-sm font-semibold text-balance">
-                                {providerLabel}
+                            <span
+                                aria-hidden
+                                className={cn(
+                                    "flex size-9 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-semibold uppercase",
+                                    providerAvatarTint(credential.provider),
+                                )}>
+                                {providerLabel.charAt(0)}
                             </span>
-                            <span className="text-text-tertiary flex items-center gap-1.5 font-mono text-xs">
-                                <KeyRoundIcon size={12} />
-                                {maskKey(credential.apiKey)}
+                            <span className="flex min-w-0 flex-col gap-0.5">
+                                <span className="text-text-primary text-sm font-semibold text-balance">
+                                    {providerLabel}
+                                </span>
+                                <span className="text-text-tertiary flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                                    <span className="flex items-center gap-1.5 font-mono">
+                                        <KeyRoundIcon size={12} />
+                                        {maskKey(credential.apiKey)}
+                                    </span>
+                                    <span aria-hidden>·</span>
+                                    <span className="tabular-nums">
+                                        {modelCount}{" "}
+                                        {modelCount === 1 ? "model" : "models"}
+                                    </span>
+                                </span>
                             </span>
                         </button>
                     </CollapsibleTrigger>
@@ -66,7 +84,7 @@ export function ProviderGroupHeader({
                             variant="helper"
                             leftIcon={<RotateCwIcon />}
                             onClick={onRotate}>
-                            Rotate
+                            Edit key
                         </Button>
                     )}
                 </div>

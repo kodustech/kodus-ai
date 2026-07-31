@@ -25,9 +25,9 @@ jest.mock("@services/organizationParameters/fetch", () => ({
     clearModelOverrides: jest.fn(),
 }));
 
-// SpendLimitSection (wrapped by BudgetTab) transitively imports @services/fetch
-// → next-auth, which is ESM-only and Jest cannot parse. Stub it — the budget
-// tab is out of scope for this v2-read tracer spec.
+// SpendLimitSection (now a section at the foot of the Providers tab) transitively
+// imports @services/fetch → next-auth, which is ESM-only and Jest cannot parse.
+// Stub it — the spend section is out of scope for this v2-read tracer spec.
 jest.mock("./spend-limit-section", () => ({
     SpendLimitSection: () => <div data-testid="spend-limit-section" />,
 }));
@@ -64,7 +64,7 @@ const llmConfigStatus = {
 } as never;
 
 describe("ByokPageClient — v2 read path", () => {
-    it("renders config.models[] grouped by provider (managed excluded) and enables Routing/Budget", () => {
+    it("renders config.models[] grouped by provider (managed excluded) and enables Routing", () => {
         const config: BYOKConfigV2 = {
             version: 2,
             credentials: [
@@ -87,8 +87,9 @@ describe("ByokPageClient — v2 read path", () => {
         );
 
         // Both models on the non-managed credential appear, grouped under the
-        // provider header.
-        expect(screen.getByText("OpenAI")).toBeInTheDocument();
+        // provider header. The provider label now also renders under each model
+        // row (redesign: provider shown per row), so it appears more than once.
+        expect(screen.getAllByText("OpenAI").length).toBeGreaterThan(0);
         expect(screen.getByText("test-model-alpha")).toBeInTheDocument();
         expect(screen.getByText("test-model-beta")).toBeInTheDocument();
 
@@ -102,27 +103,27 @@ describe("ByokPageClient — v2 read path", () => {
             screen.queryByText("sk-abcd1234wxyz"),
         ).not.toBeInTheDocument();
 
-        // With a connected model, Routing + Budget are interactive.
+        // With a connected model, Routing is interactive. (Budget & alerts is
+        // now a section at the foot of the Providers tab, not a separate tab.)
         expect(
             screen.getByRole("tab", { name: /Routing/ }),
         ).not.toBeDisabled();
-        expect(
-            screen.getByRole("tab", { name: /Budget/ }),
-        ).not.toBeDisabled();
     });
 
-    it("disables Routing + Budget on first run and shows the single-decision card", () => {
+    it("shows the provider-first empty state and keeps Routing reachable", () => {
         renderPage(
             <ByokPageClient config={null} llmConfigStatus={llmConfigStatus} />,
         );
 
-        // 04-08: first-run now renders the D-UI-FIRSTRUN single-decision card
-        // (recommended model + key + Connect), replacing the read-only tracer's
-        // "No model connected yet" placeholder.
+        // First-run renders the provider-first empty state: pick a provider,
+        // then one of its models, then paste the key.
         expect(
-            screen.getByText("Recommended for code review"),
+            screen.getByText("Connect your first provider"),
         ).toBeInTheDocument();
-        expect(screen.getByRole("tab", { name: /Routing/ })).toBeDisabled();
-        expect(screen.getByRole("tab", { name: /Budget/ })).toBeDisabled();
+        // Routing is no longer gated — it opens its own "connect a provider
+        // first" affordance instead of being locked on first run.
+        expect(
+            screen.getByRole("tab", { name: /Routing/ }),
+        ).not.toBeDisabled();
     });
 });

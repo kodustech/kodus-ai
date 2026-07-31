@@ -1,24 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
-import { Card, CardContent, CardHeader } from "@components/ui/card";
-import { FormControl } from "@components/ui/form-control";
-import { Textarea } from "@components/ui/textarea";
+import { Image } from "@components/ui/image";
 import { toast } from "@components/ui/toaster/use-toast";
-import {
-    createOrUpdateOrganizationParameter,
-    testBYOK,
-    type TestBYOKResult,
-} from "@services/organizationParameters/fetch";
+import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
-import {
-    CheckCircle2Icon,
-    LockIcon,
-    PlugIcon,
-    XCircleIcon,
-} from "lucide-react";
+import { ExternalLinkIcon, PlusIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
@@ -31,23 +19,16 @@ import {
     modelFieldsFromConfig,
 } from "./byok-v2-write";
 import { CuratedCatalog } from "./catalog/catalog";
-import { CuratedModelCard, PROVIDER_LABELS } from "./catalog/model-card";
+import { ConnectProviderFlow } from "./connect-provider-flow";
 
-const TRUST_LINE =
-    "Encrypted at rest. Sent only to your provider — Kodus never stores or sees it in plaintext.";
-
-/** The single recommended model: highest benchmarkScore among tier "recommended". */
-const pickRecommended = (): CuratedModel | undefined =>
-    [...(curatedCatalog.models as CuratedModel[])]
-        .filter((m) => m.tier === "recommended")
-        .sort((a, b) => b.benchmarkScore - a.benchmarkScore)[0];
+const BYOK_DOCS_URL = "https://docs.kodus.io/how_to_use/en/byok";
 
 /**
- * D-UI-FIRSTRUN "1 decision" card. A no-model org sees ONE curated pick (the
- * top-scored recommended model) pre-selected, a key field + [Connect] — no
- * routing/budget. "Choose a different model" expands the existing CuratedCatalog
- * verbatim. Every write goes through buildV2Blob (blank-key keep rule) → the
- * untyped create-or-update endpoint, with routing.defaultModelId → the new model.
+ * D-UI-FIRSTRUN empty state. A no-model org sees the 🐶 hero + copy above the
+ * shared PROVIDER-FIRST flow (pick a provider → one of its models → paste the
+ * key). "Browse all models" still opens the full CuratedCatalog escape hatch.
+ * Every write goes through buildV2Blob (blank-key keep rule) → the
+ * create-or-update endpoint, with routing.defaultModelId → the new model.
  */
 export function FirstRunCard({
     existing,
@@ -55,16 +36,7 @@ export function FirstRunCard({
     existing: BYOKConfigV2 | null | undefined;
 }) {
     const router = useRouter();
-    const recommended = pickRecommended();
-
     const [showCatalog, setShowCatalog] = useState(false);
-    const [apiKey, setApiKey] = useState("");
-    const [isSaving, setIsSaving] = useState(false);
-    const [testState, setTestState] = useState<
-        | { status: "idle" }
-        | { status: "testing" }
-        | { status: "error"; result: TestBYOKResult }
-    >({ status: "idle" });
 
     const persist = async (blob: BYOKConfigV2, modelName: string) => {
         await createOrUpdateOrganizationParameter(
@@ -79,7 +51,7 @@ export function FirstRunCard({
         router.refresh();
     };
 
-    /** Adapter for the catalog path: convert its legacy BYOKConfig into a v2 blob. */
+    /** Adapter for the connect path: convert its BYOKConfig into a v2 blob. */
     const saveFromCatalog = async (cfg: BYOKConfig) => {
         const blob = buildV2Blob(existing, {
             kind: "connect",
@@ -97,63 +69,7 @@ export function FirstRunCard({
         await persist(blob, name);
     };
 
-    const handleConnect = async () => {
-        if (!recommended || !apiKey.trim()) return;
-
-        setTestState({ status: "testing" });
-        let result: TestBYOKResult;
-        try {
-            result = await testBYOK({
-                provider: recommended.provider,
-                apiKey: apiKey.trim(),
-                baseURL: recommended.defaults.baseURL,
-                model: recommended.id,
-            });
-        } catch {
-            result = {
-                ok: false,
-                code: "unknown",
-                latencyMs: 0,
-                message: "Couldn't reach Kodus. Try again in a moment.",
-            };
-        }
-
-        if (!result.ok) {
-            setTestState({ status: "error", result });
-            return;
-        }
-
-        setTestState({ status: "idle" });
-        setIsSaving(true);
-        try {
-            const blob = buildV2Blob(existing, {
-                kind: "connect",
-                newCredential: {
-                    provider: recommended.provider,
-                    apiKey: apiKey.trim(),
-                    settings: recommended.defaults.baseURL
-                        ? { baseURL: recommended.defaults.baseURL }
-                        : undefined,
-                },
-                model: {
-                    model: recommended.id,
-                    reasoningEffort: recommended.defaults.reasoningEffort,
-                    temperature: recommended.defaults.temperature,
-                    maxOutputTokens: recommended.defaults.maxOutputTokens,
-                },
-            });
-            await persist(blob, recommended.displayName);
-        } catch {
-            toast({
-                variant: "danger",
-                title: "Couldn't connect the model",
-                description: "Something went wrong saving your key. Try again.",
-            });
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
+    // Browse-all-models: the full curated catalog (recommended grid + manual).
     if (showCatalog) {
         return (
             <CuratedCatalog
@@ -165,132 +81,52 @@ export function FirstRunCard({
         );
     }
 
-    if (!recommended) {
-        // Defensive: no curated recommended model in the catalog. Fall back to
-        // the full catalog rather than a dead card.
-        return (
-            <CuratedCatalog slot="main" onSave={saveFromCatalog} />
-        );
-    }
-
-    const providerLabel =
-        recommended.providerDisplayName ??
-        PROVIDER_LABELS[recommended.provider] ??
-        recommended.provider;
-    const testing = testState.status === "testing";
-
+    // The provider-first picker, wrapped with the first-run hero + escape hatches.
     return (
-        <Card color="lv1" className="ring-primary-light/40 ring-1">
-            <CardHeader>
-                <h3 className="text-text-primary text-base font-semibold text-balance">
-                    Recommended for code review
-                </h3>
-                <p className="text-text-secondary text-sm text-pretty">
-                    Pick a model, paste your key, and every review, PR summary,
-                    and conversation uses it — until you tell Kodus otherwise.
-                </p>
-            </CardHeader>
-
-            <CardContent className="flex flex-col gap-5">
-                <CuratedModelCard model={recommended} isSelected />
-
-                <FormControl.Root>
-                    <FormControl.Label htmlFor="first-run-key">
-                        {providerLabel} API key
-                    </FormControl.Label>
-                    <FormControl.Input>
-                        <Textarea
-                            id="first-run-key"
-                            value={apiKey}
-                            onChange={(e) => {
-                                setApiKey(e.target.value);
-                                if (testState.status !== "idle")
-                                    setTestState({ status: "idle" });
-                            }}
-                            className="max-h-40 min-h-24"
-                            placeholder={`Paste your ${providerLabel} API key`}
+        <ConnectProviderFlow
+            existingKeyByProvider={{}}
+            onSave={saveFromCatalog}
+            hero={
+                <>
+                    <span aria-hidden className="w-20">
+                        <Image
+                            src="/assets/images/kody/look-left-with-paws.png"
+                            alt="Kody"
                         />
-                    </FormControl.Input>
-                    <FormControl.Helper>
-                        <span className="text-text-tertiary flex items-center gap-1.5">
-                            <LockIcon size={12} />
-                            {TRUST_LINE}
-                        </span>
-                    </FormControl.Helper>
-                </FormControl.Root>
-
-                {testState.status === "error" && (
-                    <TestErrorBanner result={testState.result} />
-                )}
-
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                    <Button
-                        type="button"
-                        size="md"
-                        variant="cancel"
-                        onClick={() => setShowCatalog(true)}>
-                        Choose a different model
-                    </Button>
-                    <Button
-                        type="button"
-                        size="md"
-                        variant="primary"
-                        leftIcon={<PlugIcon />}
-                        loading={testing || isSaving}
-                        disabled={!apiKey.trim() || testing || isSaving}
-                        onClick={() => void handleConnect()}>
-                        Connect
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
-function TestErrorBanner({ result }: { result: TestBYOKResult }) {
-    const headline = (() => {
-        switch (result.code) {
-            case "auth":
-                return "Invalid API key";
-            case "not_found":
-                return "Endpoint not found";
-            case "bad_request":
-                return "Request rejected by provider";
-            case "payment":
-                return "Insufficient balance or inactive billing";
-            case "rate_limit":
-                return "Rate limited";
-            case "server_error":
-                return "Provider is having issues";
-            case "network":
-                return "Couldn't reach the provider";
-            default:
-                return "Connection failed";
-        }
-    })();
-
-    return (
-        <Alert variant="danger">
-            <XCircleIcon />
-            <AlertDescription className="flex flex-col gap-2 text-pretty">
-                <span className="text-text-primary font-semibold">
-                    {headline}
-                    {result.httpStatus ? (
-                        <span className="text-text-secondary ml-2 font-normal tabular-nums">
-                            · HTTP {result.httpStatus}
-                        </span>
-                    ) : null}
-                </span>
-                {result.message && <span>{result.message}</span>}
-                {result.providerMessage && (
-                    <span className="bg-card-lv2 text-text-secondary block rounded-md px-2.5 py-1.5 font-mono text-xs break-words">
-                        <span className="text-text-tertiary mr-1">
-                            Provider said:
-                        </span>
-                        {result.providerMessage}
                     </span>
-                )}
-            </AlertDescription>
-        </Alert>
+
+                    <div className="flex max-w-md flex-col gap-2">
+                        <h3 className="text-text-primary text-lg font-semibold text-balance">
+                            Connect your first provider
+                        </h3>
+                        <p className="text-text-secondary text-sm text-pretty">
+                            Add your key once — then enable as many of that
+                            provider’s models as you want. You pay your provider
+                            directly, and Kodus never sees your key.
+                        </p>
+                    </div>
+                </>
+            }
+            footer={
+                <>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="helper"
+                        leftIcon={<PlusIcon />}
+                        onClick={() => setShowCatalog(true)}>
+                        Browse all models
+                    </Button>
+                    <a
+                        href={BYOK_DOCS_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-text-secondary hover:text-text-primary inline-flex items-center gap-1 text-xs hover:underline">
+                        How BYOK works
+                        <ExternalLinkIcon size={12} />
+                    </a>
+                </>
+            }
+        />
     );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@components/ui/badge";
+import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
 import {
     Tooltip,
@@ -13,14 +14,33 @@ import {
     AlertTriangleIcon,
     CheckCircleIcon,
     ClockIcon,
-    CoinsIcon,
+    DollarSignIcon,
     FileTextIcon,
     GaugeIcon,
-    TrophyIcon,
+    PlugIcon,
+    StarIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import type { CuratedModel } from "../../_data/curated-models.types";
+
+/**
+ * A recommendation label ("Best balance", "Highest quality", "Most affordable")
+ * maps to a colored tier badge. The Badge/Button DS has success (green) and
+ * in-progress (blue) tinted variants; there is no amber variant, so "Best
+ * balance" uses an inline warning tint built from the --color-warning token.
+ */
+const TIER_BADGE: Record<
+    string,
+    { variant?: React.ComponentProps<typeof Button>["variant"]; className?: string }
+> = {
+    "Best balance": {
+        className:
+            "[--button-background:#2a1d10] [--button-foreground:var(--color-warning)]",
+    },
+    "Highest quality": { variant: "success" },
+    "Most affordable": { variant: "in-progress" },
+};
 
 const SPEED_LABELS: Record<string, string> = {
     fast: "Fast",
@@ -73,29 +93,63 @@ export function CuratedModelCard({
     model,
     isSelected,
     compact = false,
+    showConnect = false,
     onSelect,
 }: {
     model: CuratedModel;
     isSelected?: boolean;
     compact?: boolean;
+    /** Render a full-width "Connect" button at the card foot (recommended-card
+     *  usage). The button drives the same onSelect connect flow. */
+    showConnect?: boolean;
     onSelect?: () => void;
 }) {
     const latency = formatLatency(model.latencyP50Ms);
     const errorRate =
         model.errorRatePct != null ? `${model.errorRatePct}%` : null;
+    const tierBadge = model.recommendationLabel
+        ? TIER_BADGE[model.recommendationLabel]
+        : undefined;
+    // With a dedicated Connect button, the whole-card click is redundant.
+    const cardClickable = !!onSelect && !showConnect;
 
     return (
         <Card
             color="lv1"
             className={cn(
-                "h-full cursor-pointer transition-all",
+                "h-full transition-all",
+                cardClickable
+                    ? "focus-visible:ring-primary-light cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
+                    : "cursor-default",
                 isSelected
                     ? "ring-primary-light ring-2"
                     : "hover:ring-border-secondary hover:ring-1",
-                !onSelect && "cursor-default",
             )}
-            onClick={onSelect}>
+            role={cardClickable ? "button" : undefined}
+            tabIndex={cardClickable ? 0 : undefined}
+            onClick={cardClickable ? onSelect : undefined}
+            onKeyDown={
+                cardClickable
+                    ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onSelect?.();
+                          }
+                      }
+                    : undefined
+            }>
             <CardContent className="flex h-full flex-col gap-3 p-4">
+                {model.recommendationLabel && (
+                    <div>
+                        <Badge
+                            size="xs"
+                            variant={tierBadge?.variant}
+                            className={tierBadge?.className}>
+                            {model.recommendationLabel}
+                        </Badge>
+                    </div>
+                )}
+
                 <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-col gap-1">
                         <span className="text-sm font-semibold leading-tight">
@@ -112,7 +166,7 @@ export function CuratedModelCard({
                         <TooltipTrigger asChild>
                             <span>
                                 <Badge variant="secondary" size="xs">
-                                    <TrophyIcon size={10} className="mr-1" />
+                                    <StarIcon size={10} className="mr-1" />
                                     <span className="tabular-nums">
                                         {model.benchmarkScore}
                                     </span>
@@ -160,7 +214,7 @@ export function CuratedModelCard({
                         tooltip="Maximum input size per request (context window)"
                     />
                     <MetricTag
-                        icon={<CoinsIcon size={10} className="mr-1" />}
+                        icon={<DollarSignIcon size={10} className="mr-1" />}
                         label={model.costTier}
                         tooltip="Relative cost per 1M tokens (input/output)"
                     />
@@ -196,6 +250,18 @@ export function CuratedModelCard({
                             </li>
                         ))}
                     </ul>
+                )}
+
+                {showConnect && (
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="primary"
+                        leftIcon={<PlugIcon />}
+                        className="mt-1 w-full justify-center"
+                        onClick={onSelect}>
+                        Connect
+                    </Button>
                 )}
             </CardContent>
         </Card>

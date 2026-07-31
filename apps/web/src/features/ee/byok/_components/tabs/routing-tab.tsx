@@ -34,6 +34,9 @@ import {
 type RoutingTabProps = {
     config: BYOKConfigV2 | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
+    /** Switch the parent BYOK Tabs to the Providers panel (empty-state
+     *  affordance). Supplied by the controlled Tabs in page.client. */
+    onGoToProviders: () => void;
 };
 
 const AUTO_TOOLTIP =
@@ -56,14 +59,6 @@ const cleanOverrides = (
     return out;
 };
 
-/** Switch the parent BYOK Tabs to the Models panel (empty-state affordance). */
-const goToModelsTab = () => {
-    const tabs = Array.from(
-        document.querySelectorAll<HTMLElement>('[role="tab"]'),
-    );
-    tabs.find((el) => el.textContent?.trim() === "Models")?.click();
-};
-
 /**
  * The Routing tab (04-10) — a POLICY chooser (D-UI-ROUTING): Manual (active) /
  * Auto (disabled "Coming soon"). Auto is a no-op; routing.mode is always written
@@ -72,7 +67,11 @@ const goToModelsTab = () => {
  * a LIVE capability warning (incompatible cells disabled with a tooltip before
  * save). Model capabilities arrive via the already-fetched llm-config/status.
  */
-export const RoutingTab = ({ config, llmConfigStatus }: RoutingTabProps) => {
+export const RoutingTab = ({
+    config,
+    llmConfigStatus,
+    onGoToProviders,
+}: RoutingTabProps) => {
     const router = useRouter();
 
     // The connected pool, each model joined to its surfaced capabilities from the
@@ -108,18 +107,22 @@ export const RoutingTab = ({ config, llmConfigStatus }: RoutingTabProps) => {
     const labelFor = (id?: string) =>
         pool.find((m) => m.id === id)?.label ?? id;
 
-    // Empty state — reachable only via deep-link (the tab is disabled at
-    // first-run). Routing needs at least one model to route to.
+    // Empty state — the Routing tab stays reachable at first-run, so this shows
+    // whenever no model is connected yet. Routing needs at least one model to
+    // route to; the button hands control back to the Providers tab.
     if (pool.length === 0) {
         return (
             <Card color="lv1">
                 <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
                     <p className="text-text-secondary text-sm text-balance">
-                        Connect a model first — routing needs at least one model
-                        to route to.
+                        Connect a provider first — routing needs at least one
+                        model to route to.
                     </p>
-                    <Button variant="primary" size="md" onClick={goToModelsTab}>
-                        Go to Models
+                    <Button
+                        variant="primary"
+                        size="md"
+                        onClick={onGoToProviders}>
+                        Go to Providers
                     </Button>
                 </CardContent>
             </Card>
@@ -289,7 +292,7 @@ export const RoutingTab = ({ config, llmConfigStatus }: RoutingTabProps) => {
                 {/* ── Per-task override grid (live capability warning) ── */}
                 <div className="flex flex-col gap-2">
                     <span className="text-text-primary text-sm font-medium">
-                        Per-task models
+                        Per-agent models
                     </span>
                     <TaskOverrideGrid
                         models={pool}

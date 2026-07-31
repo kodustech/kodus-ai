@@ -12,7 +12,19 @@ import type {
     BYOKConfigV2,
     BYOKCredential,
     BYOKModelConfig,
+    LlmTask,
 } from "./_types";
+
+/**
+ * The single source of truth for how the three routing tasks are labeled in the
+ * UI. Both the model row's "USED IN" chips and the routing tab's per-task
+ * override grid render these, so the labels must never drift apart.
+ */
+export const TASK_LABELS: Record<LlmTask, string> = {
+    codeReview: "Code Review",
+    prSummary: "PR Summary",
+    conversation: "Chat",
+};
 
 /** Narrow an unknown blob to the v2 shape by its `version` discriminant. */
 const isV2Config = (
@@ -145,3 +157,22 @@ export const maskKey = (key?: string): string => {
     if (key.length <= 8) return "•••• ••••";
     return `${key.slice(0, 4)}•••••${key.slice(-4)}`;
 };
+
+/**
+ * Provider-tinted avatar classes (a subtle bg tint + a readable foreground),
+ * keyed by BYOKProvider. Shared by the model row and the provider group header
+ * so the same provider reads with the same colour everywhere on the screen.
+ */
+export const PROVIDER_AVATAR: Record<string, string> = {
+    anthropic: "bg-pink-500/15 text-pink-300",
+    anthropic_compatible: "bg-pink-500/15 text-pink-300",
+    openai: "bg-emerald-500/15 text-emerald-300",
+    openai_compatible: "bg-amber-500/15 text-amber-300",
+    moonshot: "bg-purple-500/15 text-purple-300",
+    google_gemini: "bg-violet-500/15 text-violet-300",
+    google_vertex: "bg-violet-500/15 text-violet-300",
+};
+
+/** Avatar tint for a provider, falling back to a neutral card tint. */
+export const providerAvatarTint = (provider?: string): string =>
+    (provider && PROVIDER_AVATAR[provider]) ?? "bg-card-lv2 text-text-secondary";
