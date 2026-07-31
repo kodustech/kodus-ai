@@ -537,6 +537,57 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     .map((meta) => meta.repositoryId as string),
             );
 
+            // #1579 guard: a repository with no `{repo}/kodus-config.yml` is
+            // inheriting the global config, NOT asking to be unconfigured.
+            // Deriving "stale" from the current discovery alone conflates the
+            // two and wipes every repo the config repo simply doesn't mention.
+            // Only a repository a previous sync recorded as managed can go
+            // stale. With no baseline recorded yet, absence proves nothing:
+            // reconcile nothing this round and record the state for the next.
+            const centralizedConfigParameter =
+                await this.parametersService.findByKey(
+                    ParametersKey.CENTRALIZED_CONFIG,
+                    organizationAndTeamData,
+                );
+
+            const managedBaseline =
+                centralizedConfigParameter?.configValue?.managedRepositoryIds;
+
+            const hasManagedBaseline = Array.isArray(managedBaseline);
+
+            const managedRepositoryIds = new Set<string>(
+                hasManagedBaseline ? managedBaseline : [],
+            );
+
+            const discoveredRepositoryIds = new Set<string>(
+                configFiles
+                    .filter((meta) => meta.repositoryId)
+                    .map((meta) => meta.repositoryId as string),
+            );
+
+            /** Is this repository owned by the centralized config at all? */
+            const isManagedRepository = (repositoryId: string) =>
+                discoveredRepositoryIds.has(repositoryId) ||
+                managedRepositoryIds.has(repositoryId);
+
+            /** Owned before, gone now — a genuine removal. */
+            const isStaleRepository = (repositoryId: string) =>
+                hasManagedBaseline &&
+                managedRepositoryIds.has(repositoryId) &&
+                !desiredRepositoryConfigs.has(repositoryId);
+
+            if (!hasManagedBaseline) {
+                this.logger.log({
+                    message:
+                        'No managed-repository baseline recorded yet — skipping stale reconciliation and recording the current set',
+                    context: CentralizedConfigService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        discoveredRepositories: discoveredRepositoryIds.size,
+                    },
+                });
+            }
+
             const desiredDirectoryConfigsByRepository = new Map<
                 string,
                 Set<string>
@@ -596,6 +647,12 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             // Reuse existing deletion logic for directory scope removals.
             for (const repository of codeReviewConfig.configValue
                 .repositories ?? []) {
+                // #1579: never reconcile directories of a repository the
+                // centralized config does not own.
+                if (!isManagedRepository(repository.id)) {
+                    continue;
+                }
+
                 const desiredDirectoryPaths =
                     desiredDirectoryConfigsByRepository.get(repository.id) ??
                     new Set<string>();
@@ -665,11 +722,10 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             for (const repository of refreshedCodeReviewConfig.configValue
                 .repositories ?? []) {
-                const shouldKeepRepositoryConfig = desiredRepositoryConfigs.has(
-                    repository.id,
-                );
-
-                if (shouldKeepRepositoryConfig) {
+                // #1579: only a repository that was managed before and is
+                // absent now is a genuine removal. Everything else is either
+                // still configured or was never ours to unconfigure.
+                if (!isStaleRepository(repository.id)) {
                     continue;
                 }
 
@@ -716,16 +772,26 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             let hasChanges = false;
 
+            // #1579: same rule for the global config — only reset it if a
+            // previous sync owned a global `kodus-config.yml` that is now gone.
+            const globalWasManaged =
+                centralizedConfigParameter?.configValue?.managedGlobalConfig ===
+                true;
+
+            const shouldKeepGlobalConfig =
+                desiredHasGlobalConfig || !globalWasManaged;
+
             const reconciledConfig: CodeReviewParameter = {
                 ...refreshedCodeReviewConfig.configValue,
-                configs: desiredHasGlobalConfig
+                configs: shouldKeepGlobalConfig
                     ? refreshedCodeReviewConfig.configValue.configs
                     : {},
                 repositories: (
                     refreshedCodeReviewConfig.configValue.repositories ?? []
                 ).map((repository) => {
                     const shouldKeepRepositoryConfig =
-                        desiredRepositoryConfigs.has(repository.id);
+                        desiredRepositoryConfigs.has(repository.id) ||
+                        !isStaleRepository(repository.id);
 
                     const nextRepository = {
                         ...repository,
@@ -775,6 +841,20 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     },
                 });
             }
+
+            // #1579: record what this sync owns so the NEXT one can tell a
+            // deleted `kodus-config.yml` from one that never existed. Written
+            // even when nothing changed — the baseline is what makes the very
+            // first run safe and every later run precise.
+            await this.createOrUpdateParametersUseCase.execute(
+                ParametersKey.CENTRALIZED_CONFIG,
+                {
+                    ...(centralizedConfigParameter?.configValue ?? {}),
+                    managedRepositoryIds: Array.from(desiredRepositoryConfigs),
+                    managedGlobalConfig: desiredHasGlobalConfig,
+                },
+                organizationAndTeamData,
+            );
 
             if (!hasChanges) {
                 return {
