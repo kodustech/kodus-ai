@@ -343,6 +343,10 @@ export function buildAgentTools(
                             message: `[LINKED-REPO] grep failed in ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`,
                             context: 'agent-tools.grep',
                             error: err,
+                            metadata: {
+                                repository: linked.repository,
+                                pattern,
+                            },
                         });
                         return `Error searching linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
                     }
@@ -535,6 +539,10 @@ export function buildAgentTools(
                             message: `[LINKED-REPO] readFile failed for ${filePath} in ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`,
                             context: 'agent-tools.readFile',
                             error: err,
+                            metadata: {
+                                repository: linked.repository,
+                                filePath,
+                            },
                         });
                         return `Error reading ${filePath} from linked repo ${linked.repository}: ${err instanceof Error ? err.message : String(err)}`;
                     }

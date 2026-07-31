@@ -282,6 +282,11 @@ export class LazyLinkedRepoAccess implements LinkedRepoAccess {
                 message: `[LINKED-REPO] exception cloning ${repo.fullName}: ${message}`,
                 context: 'LinkedRepoAccess',
                 error: err,
+                metadata: {
+                    repository: repo.fullName,
+                    preferredRef: repo.preferredRef,
+                    rootPath: repo.rootPath,
+                },
             });
             return {
                 ok: false as const,
