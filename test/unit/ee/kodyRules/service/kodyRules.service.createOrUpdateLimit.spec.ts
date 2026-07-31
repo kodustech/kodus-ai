@@ -1,5 +1,6 @@
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { KodyRulesService } from '@libs/ee/kodyRules/service/kodyRules.service';
+import { KodyRulesEntity } from '@libs/kodyRules/domain/entities/kodyRules.entity';
 import {
     KodyRulesScope,
     KodyRulesStatus,
@@ -385,5 +386,133 @@ describe('KodyRulesService.createOrUpdate severity normalization on update (P3)'
 
         const [, , updateData] = updateRule.mock.calls[0];
         expect(updateData.severity).toBe('critical');
+    });
+});
+
+describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () => {
+    const organizationAndTeamData: OrganizationAndTeamData = {
+        organizationId: 'org-1',
+        teamId: 'team-1',
+    };
+
+    it('triggers syncRulesWithPlanLimit from find() when stale PAUSED+lockedByPlan rules exist on a paid org', async () => {
+        const existingRules = [
+            {
+                uuid: 'r1',
+                title: 'Stale locked rule 1',
+                status: KodyRulesStatus.PAUSED,
+                lockedByPlan: true,
+            },
+            {
+                uuid: 'r2',
+                title: 'Stale locked rule 2',
+                status: KodyRulesStatus.PAUSED,
+                lockedByPlan: true,
+            },
+        ];
+
+        let currentEntity = KodyRulesEntity.create({ uuid: 'kr-1', organizationId: 'org-1', rules: existingRules });
+
+        const repositoryMock = {
+            find: jest.fn().mockImplementation(() => Promise.resolve([currentEntity])),
+            findByOrganizationId: jest.fn().mockImplementation(() => Promise.resolve(currentEntity)),
+            update: jest.fn().mockImplementation((_uuid, updateData) => {
+                currentEntity = KodyRulesEntity.create({ ...currentEntity.toObject(), ...updateData });
+                return Promise.resolve(currentEntity);
+            }),
+        };
+
+        const permissionValidationServiceMock = {
+            shouldLimitResources: jest.fn().mockResolvedValue(false), // Paid plan!
+        };
+
+        const service = new KodyRulesService(
+            repositoryMock as any,
+            { emit: jest.fn() } as any,
+            {} as any,
+            {} as any,
+            { validateRulesLimit: jest.fn() } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            permissionValidationServiceMock as any,
+            {} as any,
+            {} as any,
+        );
+
+        // find() triggers background sync, but the returned entity has severity-normalized rules
+        const results = await service.find({ organizationId: 'org-1' });
+        expect(results).toHaveLength(1);
+
+        // Wait briefly for the background syncRulesWithPlanLimit to complete
+        await new Promise((r) => setTimeout(r, 100));
+
+        // Check that repository.update was called to persist updated active rules to MongoDB
+        expect(repositoryMock.update).toHaveBeenCalled();
+        const [, updatedData] = repositoryMock.update.mock.calls[0];
+
+        // r1 and r2 flipped to ACTIVE & lockedByPlan: false
+        expect(updatedData.rules[0].status).toBe(KodyRulesStatus.ACTIVE);
+        expect(updatedData.rules[0].lockedByPlan).toBe(false);
+        expect(updatedData.rules[1].status).toBe(KodyRulesStatus.ACTIVE);
+        expect(updatedData.rules[1].lockedByPlan).toBe(false);
+    });
+
+    it('enforces 10-rule ceiling on syncRulesWithPlanLimit when org is on Free plan', async () => {
+        // 12 ACTIVE rules on a Free plan
+        const existingRules = Array.from({ length: 12 }, (_, i) => ({
+            uuid: `r${i + 1}`,
+            title: `Rule ${i + 1}`,
+            status: KodyRulesStatus.ACTIVE,
+            lockedByPlan: false,
+        }));
+
+        let currentEntity = KodyRulesEntity.create({ uuid: 'kr-1', organizationId: 'org-1', rules: existingRules });
+
+        const repositoryMock = {
+            findByOrganizationId: jest.fn().mockImplementation(() => Promise.resolve(currentEntity)),
+            update: jest.fn().mockImplementation((_uuid, updateData) => {
+                currentEntity = KodyRulesEntity.create({ ...currentEntity.toObject(), ...updateData });
+                return Promise.resolve(currentEntity);
+            }),
+        };
+
+        const validationServiceMock = {
+            MAX_KODY_RULES: 10,
+        };
+
+        const permissionValidationServiceMock = {
+            shouldLimitResources: jest.fn().mockResolvedValue(true), // Free plan!
+        };
+
+        const service = new KodyRulesService(
+            repositoryMock as any,
+            { emit: jest.fn() } as any,
+            {} as any,
+            {} as any,
+            validationServiceMock as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            permissionValidationServiceMock as any,
+            {} as any,
+            {} as any,
+        );
+
+        await service.syncRulesWithPlanLimit(organizationAndTeamData);
+
+        expect(repositoryMock.update).toHaveBeenCalled();
+        const [, updatedData] = repositoryMock.update.mock.calls[0];
+
+        // First 10 remain ACTIVE
+        for (let i = 0; i < 10; i++) {
+            expect(updatedData.rules[i].status).toBe(KodyRulesStatus.ACTIVE);
+        }
+
+        // Rules #11 and #12 are set to PAUSED + lockedByPlan: true
+        expect(updatedData.rules[10].status).toBe(KodyRulesStatus.PAUSED);
+        expect(updatedData.rules[10].lockedByPlan).toBe(true);
+        expect(updatedData.rules[11].status).toBe(KodyRulesStatus.PAUSED);
+        expect(updatedData.rules[11].lockedByPlan).toBe(true);
     });
 });

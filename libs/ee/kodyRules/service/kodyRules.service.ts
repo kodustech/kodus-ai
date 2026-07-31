@@ -225,20 +225,137 @@ export class KodyRulesService implements IKodyRulesService {
     async find(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity[]> {
         const entities = await this.kodyRulesRepository.find(filter);
 
-        return entities?.map((entity) => {
-            const normalized = entity.toObject();
-            normalized.rules = normalized.rules.map((rule) => ({
-                ...rule,
-                severity: rule.severity?.toLowerCase(),
-            }));
-            return KodyRulesEntity.create(normalized);
-        });
+        if (!entities?.length) return entities;
+
+        // If any entity has stale PAUSED+lockedByPlan rules, sync plan limits
+        // (updates MongoDB) then re-fetch so the UI returns corrected rules.
+        const hasStale = entities.some((entity) =>
+            entity
+                ?.toObject()
+                ?.rules?.some(
+                    (r) => r.status === KodyRulesStatus.PAUSED && r.lockedByPlan,
+                ),
+        );
+
+        if (hasStale) {
+            try {
+                await this.syncRulesWithPlanLimit({
+                    organizationId: filter?.organizationId,
+                });
+                return await this.kodyRulesRepository.find(filter);
+            } catch (error) {
+                this.logger.warn({
+                    message: 'Failed self-healing stale rules in find()',
+                    context: KodyRulesService.name,
+                    error,
+                });
+            }
+        }
+
+        return entities;
     }
 
     async findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null> {
         return this.kodyRulesRepository.findByOrganizationId(organizationId);
+    }
+
+    /**
+     * Synchronizes an organization's stored Kody Rules in MongoDB with its
+     * current plan resource limits (#1626).
+     *
+     * - On Paid plans (not limited): clears `lockedByPlan` and flips `PAUSED` → `ACTIVE`
+     *   for any rules that were previously locked by plan limits.
+     * - On Free plans (limited): enforces the 10-rule cap on active rules, stamping any
+     *   overflow rules as `PAUSED` with `lockedByPlan: true`.
+     */
+    async syncRulesWithPlanLimit(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<KodyRulesEntity | null> {
+        const organizationId = organizationAndTeamData.organizationId;
+        if (!organizationId) return null;
+
+        const entity =
+            await this.kodyRulesRepository.findByOrganizationId(
+                organizationId,
+            );
+        const existingRules = entity?.toObject()?.rules || [];
+
+        if (!existingRules?.length) return entity;
+
+        let isLimited = false;
+        try {
+            isLimited =
+                await this.permissionValidationService.shouldLimitResources(
+                    organizationAndTeamData,
+                    KodyRulesService.name,
+                );
+        } catch (error) {
+            this.logger.error({
+                message: 'Error checking resource limits for rules sync',
+                context: KodyRulesService.name,
+                error,
+            });
+            return entity;
+        }
+
+        let mutated = false;
+        const updatedRules = [...existingRules];
+
+        if (!isLimited) {
+            // Paid plan: unpause any rule that was auto-locked by a plan limit
+            for (let i = 0; i < updatedRules.length; i++) {
+                const r = updatedRules[i];
+                if (r.status === KodyRulesStatus.PAUSED && r.lockedByPlan) {
+                    updatedRules[i] = {
+                        ...r,
+                        status: KodyRulesStatus.ACTIVE,
+                        lockedByPlan: false,
+                        updatedAt: new Date(),
+                    };
+                    mutated = true;
+                }
+            }
+        } else {
+            // Free plan: enforce MAX_KODY_RULES (10) active ceiling
+            const MAX = this.kodyRulesValidationService.MAX_KODY_RULES;
+            let activeCount = 0;
+
+            for (let i = 0; i < updatedRules.length; i++) {
+                const r = updatedRules[i];
+                if (r.status === KodyRulesStatus.ACTIVE) {
+                    activeCount++;
+                    if (activeCount > MAX) {
+                        updatedRules[i] = {
+                            ...r,
+                            status: KodyRulesStatus.PAUSED,
+                            lockedByPlan: true,
+                            updatedAt: new Date(),
+                        };
+                        mutated = true;
+                    }
+                }
+            }
+        }
+
+        if (!mutated) return entity;
+
+        const updated = await this.kodyRulesRepository.update(entity.uuid, {
+            rules: updatedRules,
+        });
+
+        this.logger.log({
+            message: 'Synchronized Kody Rules with current plan limits in MongoDB',
+            context: KodyRulesService.name,
+            metadata: {
+                organizationId,
+                isLimited,
+                totalRules: updatedRules.length,
+            },
+        });
+
+        return updated;
     }
 
     async findOrganizationIdsWithRules(): Promise<string[]> {

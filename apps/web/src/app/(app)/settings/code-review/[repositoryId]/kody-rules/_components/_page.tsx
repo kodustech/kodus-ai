@@ -33,6 +33,7 @@ import { PlusIcon } from "lucide-react";
 import { PageBoundary } from "src/core/components/page-boundary";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { captureGateHit } from "src/core/utils/gate-hit";
+import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 import {
     compareRules,
     EMPTY_LIST_FILTERS,
@@ -130,6 +131,8 @@ const KodyRulesPageContent = () => {
         ResourceType.KodyRules,
         repositoryId,
     );
+    const subscription = useSubscriptionStatus();
+    const isFreePlan = subscription.status === "free";
 
     // Scope rules and inherited rules are loaded in parallel (single
     // suspense boundary, both requests fired at once) to avoid the waterfall
@@ -903,7 +906,7 @@ const KodyRulesPageContent = () => {
             <Page.Content>
                 <CentralizedConfigReadOnlyAlert />
 
-                {lockedRulesCount > 0 && (
+                {lockedRulesCount > 0 && isFreePlan && (
                     <Card
                         color="lv1"
                         className="flex flex-row items-center justify-between gap-6 p-5">
