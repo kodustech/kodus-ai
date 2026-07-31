@@ -365,14 +365,27 @@ export class KodyRulesService implements IKodyRulesService {
 
         if (!changedRules.length) return entity;
 
-        // Targeted per-rule updates: prevents whole-array overwrite race conditions (#1626)
-        for (const { ruleId, patch } of changedRules) {
-            await this.kodyRulesRepository.updateRule(
-                entity.uuid,
-                ruleId,
-                patch,
-            );
-        }
+        // Targeted per-rule updates in parallel: prevents whole-array overwrite race conditions (#1626)
+        const updateResults = await Promise.allSettled(
+            changedRules.map(({ ruleId, patch }) =>
+                this.kodyRulesRepository.updateRule(
+                    entity.uuid,
+                    ruleId,
+                    patch,
+                ),
+            ),
+        );
+
+        updateResults.forEach((res, i) => {
+            if (res.status === 'rejected') {
+                this.logger.error({
+                    message: 'Failed per-rule update in syncRulesWithPlanLimit',
+                    context: KodyRulesService.name,
+                    error: res.reason,
+                    metadata: { organizationId, ruleId: changedRules[i].ruleId },
+                });
+            }
+        });
 
         this.logger.log({
             message: 'Synchronized Kody Rules with current plan limits in MongoDB',
