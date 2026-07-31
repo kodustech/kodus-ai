@@ -227,29 +227,44 @@ export class KodyRulesService implements IKodyRulesService {
 
         if (!entities?.length) return entities;
 
-        // If any entity has stale PAUSED+lockedByPlan rules, sync plan limits
-        // (updates MongoDB) then re-fetch so the UI returns corrected rules.
-        const hasStale = entities.some((entity) =>
-            entity
-                ?.toObject()
-                ?.rules?.some(
-                    (r) => r.status === KodyRulesStatus.PAUSED && r.lockedByPlan,
-                ),
+        const toObject = (e: any) =>
+            typeof e?.toObject === 'function' ? e.toObject() : e;
+
+        const staleOrgIds = new Set<string>();
+        entities.forEach((e) => {
+            const obj = toObject(e);
+            if (
+                obj?.rules?.some(
+                    (r: any) =>
+                        r.status === KodyRulesStatus.PAUSED && r.lockedByPlan,
+                ) &&
+                obj?.organizationId
+            ) {
+                staleOrgIds.add(obj.organizationId);
+            }
+        });
+
+        const orgIdArray = [...staleOrgIds];
+        const syncResults = await Promise.allSettled(
+            orgIdArray.map((orgId) =>
+                this.syncRulesWithPlanLimit({ organizationId: orgId }),
+            ),
         );
 
-        if (hasStale) {
-            try {
-                await this.syncRulesWithPlanLimit({
-                    organizationId: filter?.organizationId,
-                });
-                return await this.kodyRulesRepository.find(filter);
-            } catch (error) {
-                this.logger.warn({
+        syncResults.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                const orgId = orgIdArray[index];
+                this.logger.error({
                     message: 'Failed self-healing stale rules in find()',
                     context: KodyRulesService.name,
-                    error,
+                    error: result.reason,
+                    metadata: { organizationId: orgId },
                 });
             }
+        });
+
+        if (staleOrgIds.size > 0) {
+            return await this.kodyRulesRepository.find(filter);
         }
 
         return entities;
