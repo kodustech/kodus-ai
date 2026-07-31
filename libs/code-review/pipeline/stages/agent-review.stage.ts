@@ -18,7 +18,7 @@ import {
     cosineSimilarity,
     dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
-import { getOpenAIEmbedding } from '@libs/common/utils/langchainCommon/document';
+import { OpenAIEmbeddings } from '@langchain/openai';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -1521,6 +1521,30 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
     /** Embed a suggestion's description once per dedup run (memoized by index).
      * Fail-soft: no platform embedding key or any error → null, so the caller
      * falls back to the pre-#1527 lexical behavior (veto) instead of crashing. */
+    /**
+     * Embedder for the dedup semantic tier. HARDCODED to OpenAI: text-embedding
+     * models are OpenAI's, so this must NEVER go through the client's BYOK
+     * provider nor inherit a forced base URL (e.g. a Moonshot/OpenAI-compatible
+     * override in the env) — those don't serve text-embedding-3-small. The
+     * base URL is pinned explicitly; only the platform key comes from the env.
+     * (The tiebreak LLM that runs AFTER the embedding still uses BYOK.)
+     */
+    private dedupEmbedder: OpenAIEmbeddings | null | undefined;
+    private getDedupEmbedder(): OpenAIEmbeddings | null {
+        if (this.dedupEmbedder !== undefined) {
+            return this.dedupEmbedder;
+        }
+        const apiKey = process.env.API_OPEN_AI_API_KEY;
+        this.dedupEmbedder = apiKey
+            ? new OpenAIEmbeddings({
+                  apiKey,
+                  model: 'text-embedding-3-small',
+                  configuration: { baseURL: 'https://api.openai.com/v1' },
+              })
+            : null;
+        return this.dedupEmbedder;
+    }
+
     private async embedDedupSuggestion(
         suggestion: Partial<CodeSuggestion>,
         key: string,
@@ -1532,9 +1556,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         let vector: number[] | null = null;
         try {
             const text = dedupEmbeddingText(suggestion as any);
-            if (text) {
-                const res = await getOpenAIEmbedding(text);
-                vector = res?.data?.[0]?.embedding ?? null;
+            const embedder = this.getDedupEmbedder();
+            if (text && embedder) {
+                vector = await embedder.embedQuery(text);
             }
         } catch (err) {
             this.logger.warn({
