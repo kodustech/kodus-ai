@@ -72,6 +72,8 @@ const WORKFLOW_JOB_QUEUES: QueueBinding[] = [
 @Injectable()
 export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
     private readonly logger = createLogger(RabbitMQDLQInitializer.name);
+    /** True once delayed-exchanges / DLQ queues were asserted successfully. */
+    private dlqReady = false;
 
     constructor(@Optional() private readonly amqpConnection?: AmqpConnection) {}
 
@@ -143,10 +145,12 @@ export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
                 await this.declareDLQQueues(setupChannel);
                 await this.bindQueuesToDelayedExchange(setupChannel);
 
+                this.dlqReady = true;
                 this.logger.log({
                     message:
                         'DLQ queues/bindings and delayed exchanges asserted',
                     context: RabbitMQDLQInitializer.name,
+                    metadata: { dlqReady: this.dlqReady },
                 });
             } catch (err) {
                 // amqp-connection-manager silently swallows setup errors. When
@@ -154,6 +158,7 @@ export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
                 // handlers after this setup never register their consumers —
                 // producing "channel connected, consumers=0" zombies. Root
                 // cause of the 2026-04-24 incident.
+                this.dlqReady = false;
                 this.logger.error({
                     message:
                         'DLQ setup failed during (re)connect — consumers may NOT re-register',
@@ -162,9 +167,14 @@ export class RabbitMQDLQInitializer implements OnApplicationBootstrap {
                     metadata: {
                         errorMessage:
                             err instanceof Error ? err.message : String(err),
+                        dlqReady: this.dlqReady,
                     },
                 });
-                throw err;
+                // Deliberately do NOT re-throw: an unhandledRejection here
+                // aborts bootstrap before the HTTP server installs, turning a
+                // recoverable DLQ-setup failure into a hard crash loop. The
+                // dlqReady flag + error log above preserve visibility; the
+                // next connection re-establishment retries the setup.
             }
         });
 
