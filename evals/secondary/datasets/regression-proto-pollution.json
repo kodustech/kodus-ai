@@ -1,0 +1,30 @@
+{
+    "prId": "regression-proto-pollution",
+    "goldenComments": [
+        "stripNullProps recursively copies keys from wire input without guarding __proto__/constructor/prototype, allowing prototype pollution from attacker-controlled data."
+    ],
+    "findings": [
+        {
+            "relevantFile": "libs/llm/strict-wire-schema.ts",
+            "relevantLinesStart": 89,
+            "relevantLinesEnd": 95,
+            "severity": "high",
+            "label": "security",
+            "oneSentenceSummary": "stripNullProps is vulnerable to __proto__ prototype pollution",
+            "suggestionContent": "WHAT: stripNullProps copies every enumerable key of the incoming object into the accumulator without excluding __proto__/constructor/prototype. WHY: A malicious wire payload carrying a __proto__ key pollutes Object.prototype for the whole process. HOW: Skip the dangerous keys before assigning them.",
+            "existingCode": "for (const key of Object.keys(obj)) { out[key] = strip(obj[key]); }",
+            "improvedCode": "for (const key of Object.keys(obj)) { if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue; out[key] = strip(obj[key]); }"
+        },
+        {
+            "relevantFile": "libs/llm/strict-wire-schema.ts",
+            "relevantLinesStart": 87,
+            "relevantLinesEnd": 98,
+            "severity": "medium",
+            "label": "security",
+            "oneSentenceSummary": "Unsafe recursive clone lets untrusted input mutate Object.prototype",
+            "suggestionContent": "WHAT: The recursive clone helper writes attacker-supplied field names straight onto a plain object accumulator. WHY: When the decoded response includes a reserved field name, the write reaches the shared prototype chain and changes global behaviour. HOW: Build the accumulator with a null prototype and only accept own enumerable fields via a hasOwnProperty check.",
+            "existingCode": "const out = {}; Object.assign(out, mapped);",
+            "improvedCode": "const out = Object.create(null); for (const key in mapped) { if (Object.prototype.hasOwnProperty.call(mapped, key)) out[key] = mapped[key]; }"
+        }
+    ]
+}

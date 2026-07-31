@@ -1,0 +1,549 @@
+{
+    "_doc": "Layer-1 guard validation: labeled pairs tested in ISOLATION from the LLM. Each pair is a merge decision the guard must get right on its own. `shouldMerge` is the ground truth. The runner computes lexical contentSimilarity and embedding cosine per pair and sweeps thresholds — a good guard/threshold honors every shouldMerge=true and vetoes every shouldMerge=false. The set deliberately includes hard cases: HIGH-lexical/different-bug (must KEEP) and LOW-lexical/same-bug (must MERGE), which is where lexical Jaccard fails and the semantic signal must hold. Content is synthetic (no customer data).",
+    "pairs": [
+        {
+            "id": "proto-same-bug-divergent",
+            "shouldMerge": true,
+            "note": "Same __proto__ prototype-pollution bug, different wording AND different fix. The live PR #1526 guard-veto: LLM groups it, lexical guard wrongly vetoes.",
+            "a": {
+                "oneSentenceSummary": "stripNullProps is vulnerable to __proto__ prototype pollution",
+                "suggestionContent": "stripNullProps copies every enumerable key of the incoming object into the accumulator without excluding __proto__/constructor/prototype. A malicious wire payload carrying a __proto__ key pollutes Object.prototype for the whole process. Skip the dangerous keys before assigning them.",
+                "existingCode": "for (const key of Object.keys(obj)) { out[key] = strip(obj[key]); }",
+                "improvedCode": "for (const key of Object.keys(obj)) { if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue; out[key] = strip(obj[key]); }"
+            },
+            "b": {
+                "oneSentenceSummary": "Unsafe recursive clone lets untrusted input mutate Object.prototype",
+                "suggestionContent": "The recursive clone helper writes attacker-supplied field names straight onto a plain object accumulator. When the decoded response includes a reserved field name, the write reaches the shared prototype chain and changes global behaviour. Build the accumulator with a null prototype and only accept own enumerable fields.",
+                "existingCode": "const out = {}; Object.assign(out, mapped);",
+                "improvedCode": "const out = Object.create(null); for (const key in mapped) { if (Object.prototype.hasOwnProperty.call(mapped, key)) out[key] = mapped[key]; }"
+            }
+        },
+        {
+            "id": "proto-adversarial-same-lines",
+            "shouldMerge": false,
+            "note": "DIFFERENT bugs (security vs performance) on the SAME lines with the SAME existingCode. Over-merge trap: identical location, distinct findings.",
+            "a": {
+                "oneSentenceSummary": "Prototype pollution via __proto__ in the key-copy loop",
+                "suggestionContent": "The key-copy loop assigns every key from untrusted input without excluding __proto__/constructor/prototype. A malicious payload with a __proto__ key mutates Object.prototype for the whole process. Guard against the dangerous keys before assigning them.",
+                "existingCode": "for (const key of Object.keys(obj)) { out[key] = strip(obj[key]); }",
+                "improvedCode": "for (const key of Object.keys(obj)) { if (key === '__proto__') continue; out[key] = strip(obj[key]); }"
+            },
+            "b": {
+                "oneSentenceSummary": "strip() is recomputed per key, giving quadratic time on large payloads",
+                "suggestionContent": "strip() is called again for every key inside the copy loop. On large or deeply-nested objects this recomputes shared work and turns the pass into O(n^2). Hoist or memoize the strip result outside the loop so each subtree is processed once.",
+                "existingCode": "for (const key of Object.keys(obj)) { out[key] = strip(obj[key]); }",
+                "improvedCode": "const stripped = memoizeStrip(obj); for (const key of Object.keys(obj)) { out[key] = stripped[key]; }"
+            }
+        },
+        {
+            "id": "async-foreach-near-identical",
+            "shouldMerge": true,
+            "note": "Same fire-and-forget async forEach bug, near-identical wording. Easy duplicate.",
+            "a": {
+                "oneSentenceSummary": "forEach with async callback is not awaited",
+                "suggestionContent": "Array.prototype.forEach is used with an async callback for calendar deletions. Promises run detached; unhandled rejections and incomplete cleanup. Replace with for...of or Promise.all(map).",
+                "existingCode": "attendees.forEach(async (a) => { await deleteCalendar(a); });",
+                "improvedCode": "for (const a of attendees) { await deleteCalendar(a); }"
+            },
+            "b": {
+                "oneSentenceSummary": "Async forEach fire-and-forget on cancel path",
+                "suggestionContent": "Calendar deletion uses forEach(async ...). Outer function returns before deletions finish. Use await Promise.all(attendees.map(async a => deleteCalendar(a))).",
+                "existingCode": "attendees.forEach(async (a) => { await deleteCalendar(a); });",
+                "improvedCode": "await Promise.all(attendees.map(async (a) => deleteCalendar(a)));"
+            }
+        },
+        {
+            "id": "unrelated-different-files",
+            "shouldMerge": false,
+            "note": "Two clearly unrelated bugs in different files. Easy non-duplicate.",
+            "a": {
+                "oneSentenceSummary": "Missing await on sendCancelEmail",
+                "suggestionContent": "sendCancelEmail is called without await, so email failures are swallowed and the caller returns before the mail is sent.",
+                "existingCode": "sendCancelEmail(booking);",
+                "improvedCode": "await sendCancelEmail(booking);"
+            },
+            "b": {
+                "oneSentenceSummary": "SQL query built by string concatenation is injectable",
+                "suggestionContent": "The user id is concatenated directly into the SQL string, allowing SQL injection. Use a parameterized query instead.",
+                "existingCode": "db.query(`SELECT * FROM users WHERE id = ${userId}`);",
+                "improvedCode": "db.query('SELECT * FROM users WHERE id = $1', [userId]);"
+            }
+        },
+        {
+            "id": "nullcheck-same-bug-paraphrase",
+            "shouldMerge": true,
+            "note": "Same missing-null-check bug, moderate paraphrase, same location.",
+            "a": {
+                "oneSentenceSummary": "user.profile accessed without a null check",
+                "suggestionContent": "getProfile reads user.profile.avatar but user.profile can be undefined for new accounts, throwing a TypeError. Add a guard before dereferencing.",
+                "existingCode": "return user.profile.avatar;",
+                "improvedCode": "return user.profile?.avatar ?? null;"
+            },
+            "b": {
+                "oneSentenceSummary": "Possible TypeError reading avatar on missing profile",
+                "suggestionContent": "When the account has no profile yet, user.profile is undefined and reading .avatar crashes the request. Use optional chaining or an early return.",
+                "existingCode": "return user.profile.avatar;",
+                "improvedCode": "if (!user.profile) return null; return user.profile.avatar;"
+            }
+        },
+        {
+            "id": "sqlinj-same-bug-divergent",
+            "shouldMerge": true,
+            "note": "Same SQL injection bug, quite different wording.",
+            "a": {
+                "oneSentenceSummary": "Login query interpolates the email directly, allowing SQL injection",
+                "suggestionContent": "The email value from the request is placed straight into the query string, so a crafted email can inject SQL. Bind it as a parameter.",
+                "existingCode": "`SELECT * FROM users WHERE email = '${email}'`",
+                "improvedCode": "'SELECT * FROM users WHERE email = $1', [email]"
+            },
+            "b": {
+                "oneSentenceSummary": "Unsanitized user input reaches the database driver",
+                "suggestionContent": "Because the credential field is concatenated into the statement rather than bound, an attacker can terminate the string and append arbitrary clauses. Use a prepared statement.",
+                "existingCode": "conn.exec(\"... WHERE email = '\" + email + \"'\")",
+                "improvedCode": "conn.exec('... WHERE email = ?', email)"
+            }
+        },
+        {
+            "id": "nplusone-divergent",
+            "shouldMerge": true,
+            "note": "Same N+1 query bug, very different vocabulary (low lexical overlap on purpose).",
+            "a": {
+                "oneSentenceSummary": "getPosts triggers an N+1 query loading each author separately",
+                "suggestionContent": "For every post the code fetches its author in a separate call, so a list of posts fans out into one query per row. Eager-load the authors in a single join.",
+                "existingCode": "posts.map(p => ({ ...p, author: db.author(p.authorId) }))",
+                "improvedCode": "const authors = db.authorsByIds(posts.map(p => p.authorId));"
+            },
+            "b": {
+                "oneSentenceSummary": "Render loop issues one SELECT per iteration",
+                "suggestionContent": "Inside the loop that builds the table, each iteration hits the database for the user record, so a page with fifty rows makes fifty-one round trips. Batch the lookups up front.",
+                "existingCode": "for (const row of rows) { row.user = repo.findUser(row.userId); }",
+                "improvedCode": "const users = repo.findUsersByIds(rows.map(r => r.userId));"
+            }
+        },
+        {
+            "id": "memleak-divergent",
+            "shouldMerge": true,
+            "note": "Same unbounded-cache memory leak, different wording.",
+            "a": {
+                "oneSentenceSummary": "Session cache grows without eviction and will OOM",
+                "suggestionContent": "Entries are added to the sessions map but never removed, so under sustained traffic the map grows unbounded until the process runs out of memory. Add a TTL or LRU bound.",
+                "existingCode": "sessions.set(id, data);",
+                "improvedCode": "lru.set(id, data); // bounded cache"
+            },
+            "b": {
+                "oneSentenceSummary": "The map is never cleared, memory climbs until the process crashes",
+                "suggestionContent": "Because nothing ever deletes keys from this object, its footprint keeps rising for the lifetime of the server and eventually exhausts the heap. Introduce an eviction policy.",
+                "existingCode": "cache[key] = value;",
+                "improvedCode": "boundedCache.put(key, value);"
+            }
+        },
+        {
+            "id": "race-toctou-divergent",
+            "shouldMerge": true,
+            "note": "Same check-then-act race, different framing.",
+            "a": {
+                "oneSentenceSummary": "Balance check and debit are not atomic, enabling double-spend",
+                "suggestionContent": "The code checks the balance and then debits in two steps, so two concurrent requests can both pass the check and overdraw the account. Use an atomic conditional update.",
+                "existingCode": "if (acc.balance >= amt) { acc.balance -= amt; save(acc); }",
+                "improvedCode": "update accounts set balance = balance - amt where id = ? and balance >= amt"
+            },
+            "b": {
+                "oneSentenceSummary": "TOCTOU between reading funds and applying the withdrawal",
+                "suggestionContent": "There is a window between validating available funds and writing the new value; interleaved calls can each observe the old balance and both succeed. Move the guard into a single transactional statement.",
+                "existingCode": "const ok = await hasFunds(id, amt); if (ok) await withdraw(id, amt);",
+                "improvedCode": "await withdrawIfFunded(id, amt); // single atomic op"
+            }
+        },
+        {
+            "id": "validateuser-highlexical-diffbug",
+            "shouldMerge": false,
+            "note": "HIGH lexical overlap (same function, same fields named) but DIFFERENT bugs: a null-deref crash vs inverted authorization logic. The case that breaks lexical guards.",
+            "a": {
+                "oneSentenceSummary": "validateUser reads user.role and user.permissions without a null check on user",
+                "suggestionContent": "validateUser dereferences user.role and user.permissions, but user can be null for anonymous sessions, so validateUser throws a TypeError before any check runs. Guard user first.",
+                "existingCode": "const role = user.role; const perms = user.permissions;",
+                "improvedCode": "if (!user) return false; const role = user.role; const perms = user.permissions;"
+            },
+            "b": {
+                "oneSentenceSummary": "validateUser inverts the role hierarchy, granting admin to normal users",
+                "suggestionContent": "validateUser compares user.role and user.permissions with the hierarchy check backwards, so a normal user.role passes as admin while admins are rejected. Fix the comparison direction.",
+                "existingCode": "return user.role <= requiredRole;",
+                "improvedCode": "return user.role >= requiredRole;"
+            }
+        },
+        {
+            "id": "samequery-inj-vs-perf",
+            "shouldMerge": false,
+            "note": "Same SQL query line, but one finding is injection (security) and the other is a full table scan (performance). Same location, different bug.",
+            "a": {
+                "oneSentenceSummary": "Search query interpolates the term, allowing SQL injection",
+                "suggestionContent": "The search term is concatenated into the WHERE clause, so a crafted term injects SQL. Bind the term as a parameter.",
+                "existingCode": "`SELECT * FROM products WHERE name LIKE '%${term}%'`",
+                "improvedCode": "'SELECT * FROM products WHERE name LIKE $1', [`%${term}%`]"
+            },
+            "b": {
+                "oneSentenceSummary": "Leading-wildcard LIKE forces a full table scan",
+                "suggestionContent": "The LIKE pattern starts with a wildcard, so no index can be used and the query scans the entire products table, which is slow at scale. Use a trigram index or full-text search.",
+                "existingCode": "`SELECT * FROM products WHERE name LIKE '%${term}%'`",
+                "improvedCode": "-- add a GIN trigram index on products.name"
+            }
+        },
+        {
+            "id": "similar-sounding-diff-root",
+            "shouldMerge": false,
+            "note": "Sound similar ('fix the field access') but different root cause: a typo'd field name vs a missing null guard. Distinct bugs.",
+            "a": {
+                "oneSentenceSummary": "Typo in field name: order.totalPrice should be order.total_price",
+                "suggestionContent": "The code reads order.totalPrice, but the model field is total_price, so the value is always undefined and the invoice shows zero. Rename the property access.",
+                "existingCode": "const amount = order.totalPrice;",
+                "improvedCode": "const amount = order.total_price;"
+            },
+            "b": {
+                "oneSentenceSummary": "order may be null when the cart is empty",
+                "suggestionContent": "When the cart has no order yet, order is null and reading any field throws. Add a null guard before accessing order.",
+                "existingCode": "const amount = order.total_price;",
+                "improvedCode": "const amount = order?.total_price ?? 0;"
+            }
+        },
+        {
+            "id": "hardcoded-secret-divergent",
+            "shouldMerge": true,
+            "note": "Same hardcoded-credential bug, different wording.",
+            "a": {
+                "oneSentenceSummary": "API key is hardcoded in the source",
+                "suggestionContent": "A literal API key is committed in the client initializer, so anyone with repo access has the credential and it cannot be rotated without a deploy. Read it from the environment.",
+                "existingCode": "const client = new Client('sk_live_abc123');",
+                "improvedCode": "const client = new Client(process.env.API_KEY);"
+            },
+            "b": {
+                "oneSentenceSummary": "Secret committed to the repository instead of injected at runtime",
+                "suggestionContent": "The token sits in plaintext in version control, exposing it to everyone with history access and preventing rotation. Move it to a secret manager or env var.",
+                "existingCode": "AUTH_TOKEN = \"ghp_hardcodedtoken\"",
+                "improvedCode": "AUTH_TOKEN = os.environ['AUTH_TOKEN']"
+            }
+        },
+        {
+            "id": "samehandler-diff-validation",
+            "shouldMerge": false,
+            "note": "Same request handler, two DIFFERENT validation gaps: missing rate limit vs missing input length cap. Distinct findings.",
+            "a": {
+                "oneSentenceSummary": "signup endpoint has no rate limiting, enabling abuse",
+                "suggestionContent": "The signup handler accepts unlimited requests per IP, so it can be hammered to create accounts or brute-force. Add a rate limiter middleware.",
+                "existingCode": "router.post('/signup', signupHandler);",
+                "improvedCode": "router.post('/signup', rateLimit(), signupHandler);"
+            },
+            "b": {
+                "oneSentenceSummary": "signup accepts an unbounded username length",
+                "suggestionContent": "The username field has no maximum length, so a multi-megabyte value is stored and can bloat the table or break downstream renders. Cap the length in validation.",
+                "existingCode": "const { username } = req.body;",
+                "improvedCode": "if (username.length > 64) return res.status(400).end();"
+            }
+        },
+        {
+            "id": "path-traversal-divergent",
+            "shouldMerge": true,
+            "note": "Same path-traversal bug, different wording.",
+            "a": {
+                "oneSentenceSummary": "User-supplied filename is joined to the base dir without sanitization",
+                "suggestionContent": "The download handler joins the request's filename onto the uploads directory, so a value like ../../etc/passwd escapes the intended folder. Resolve and verify the path stays inside the base directory.",
+                "existingCode": "fs.readFile(path.join(UPLOAD_DIR, req.query.name))",
+                "improvedCode": "const p = path.resolve(UPLOAD_DIR, req.query.name); if (!p.startsWith(UPLOAD_DIR)) throw new Error('bad path');"
+            },
+            "b": {
+                "oneSentenceSummary": "Directory traversal via unchecked relative segments in the file path",
+                "suggestionContent": "Because the requested path is used as-is, dot-dot segments let a caller read files outside the served root. Normalize the path and reject anything that resolves above the root.",
+                "existingCode": "return sendFile(root + '/' + userPath);",
+                "improvedCode": "const norm = path.normalize(userPath); if (norm.includes('..')) return res.sendStatus(400);"
+            }
+        },
+        {
+            "id": "logging-pii-divergent",
+            "shouldMerge": true,
+            "note": "Same sensitive-data-in-logs bug, different framing.",
+            "a": {
+                "oneSentenceSummary": "Full request body including the password is written to the log",
+                "suggestionContent": "The handler logs the entire request body on error, which includes the plaintext password, leaking credentials into log storage. Redact sensitive fields before logging.",
+                "existingCode": "logger.error('login failed', req.body);",
+                "improvedCode": "logger.error('login failed', { email: req.body.email });"
+            },
+            "b": {
+                "oneSentenceSummary": "Credentials end up in log output on the auth path",
+                "suggestionContent": "Because the whole payload is dumped to the logger, secret fields such as the password are persisted in cleartext wherever logs are shipped. Strip or mask them first.",
+                "existingCode": "console.log('payload', payload);",
+                "improvedCode": "console.log('payload', omit(payload, ['password', 'token']));"
+            }
+        },
+        {
+            "id": "deadlock-divergent",
+            "shouldMerge": true,
+            "note": "Same lock-ordering deadlock, different wording.",
+            "a": {
+                "oneSentenceSummary": "Inconsistent lock acquisition order can deadlock transfers",
+                "suggestionContent": "transfer() locks the source account then the destination, while refund() locks destination then source, so two concurrent operations can each hold one lock and wait for the other. Always acquire locks in a fixed global order.",
+                "existingCode": "lock(from); lock(to);",
+                "improvedCode": "const [a, b] = [from, to].sort(); lock(a); lock(b);"
+            },
+            "b": {
+                "oneSentenceSummary": "Two mutexes taken in opposite orders create a deadlock window",
+                "suggestionContent": "One code path grabs mutex A before B and another grabs B before A; under concurrency this circular wait freezes both threads. Impose a single canonical ordering for the two locks.",
+                "existingCode": "mtxB.lock(); mtxA.lock();",
+                "improvedCode": "acquireInOrder(mtxA, mtxB);"
+            }
+        },
+        {
+            "id": "jwt-verify-highlexical-diffbug",
+            "shouldMerge": false,
+            "note": "Same JWT verification code, HIGH lexical overlap, but DIFFERENT bugs: 'alg:none' acceptance vs missing expiry check.",
+            "a": {
+                "oneSentenceSummary": "verifyToken accepts the 'none' algorithm, allowing forged tokens",
+                "suggestionContent": "verifyToken passes the algorithm from the token header, so an attacker can set alg to none and submit an unsigned token that is accepted. Pin the allowed algorithm to HS256.",
+                "existingCode": "jwt.verify(token, secret, { algorithms: [header.alg] });",
+                "improvedCode": "jwt.verify(token, secret, { algorithms: ['HS256'] });"
+            },
+            "b": {
+                "oneSentenceSummary": "verifyToken does not check token expiry, so stale tokens stay valid",
+                "suggestionContent": "verifyToken validates the signature but ignores the exp claim, so a leaked token works forever. Enforce expiration during verification.",
+                "existingCode": "jwt.verify(token, secret, { ignoreExpiration: true });",
+                "improvedCode": "jwt.verify(token, secret, { ignoreExpiration: false });"
+            }
+        },
+        {
+            "id": "retry-highlexical-diffbug",
+            "shouldMerge": false,
+            "note": "Same retry loop, HIGH lexical overlap, but DIFFERENT bugs: no backoff (thundering herd) vs retrying a non-idempotent POST (double charge).",
+            "a": {
+                "oneSentenceSummary": "Retry loop has no backoff, causing a thundering herd on the dependency",
+                "suggestionContent": "The retry loop reissues the request immediately on failure with no delay, so during an outage all clients hammer the failing service in tight loops. Add exponential backoff with jitter.",
+                "existingCode": "while (!ok) { ok = await call(); }",
+                "improvedCode": "for (let i=0;i<5;i++){ if(await call()) break; await sleep(2**i*100); }"
+            },
+            "b": {
+                "oneSentenceSummary": "Retry loop re-sends a non-idempotent charge, risking double billing",
+                "suggestionContent": "The same retry loop wraps a POST that creates a charge; on a timeout-then-success the customer can be billed twice. Use an idempotency key so retries are safe.",
+                "existingCode": "while (!ok) { ok = await charge(card); }",
+                "improvedCode": "await charge(card, { idempotencyKey: reqId });"
+            }
+        },
+        {
+            "id": "config-two-diff-bugs-same-block",
+            "shouldMerge": false,
+            "note": "Same config-loading block, two DIFFERENT bugs: missing default vs wrong type coercion.",
+            "a": {
+                "oneSentenceSummary": "PORT has no default, crashing when the env var is unset",
+                "suggestionContent": "config reads process.env.PORT with no fallback, so the app throws on startup in environments that don't set it. Provide a sensible default.",
+                "existingCode": "const port = process.env.PORT;",
+                "improvedCode": "const port = process.env.PORT ?? '3000';"
+            },
+            "b": {
+                "oneSentenceSummary": "TIMEOUT is used as a string, breaking numeric comparisons",
+                "suggestionContent": "config passes process.env.TIMEOUT straight into setTimeout without parsing, so the string is coerced unpredictably and comparisons against it fail. Parse it to a number.",
+                "existingCode": "const timeout = process.env.TIMEOUT;",
+                "improvedCode": "const timeout = Number(process.env.TIMEOUT ?? 30000);"
+            }
+        },
+        {
+            "id": "email-regex-highlexical-diffbug",
+            "shouldMerge": false,
+            "note": "Same email-validation regex line, HIGH lexical overlap, but DIFFERENT bugs: it lets an XSS payload through vs it is catastrophic-backtracking ReDoS.",
+            "a": {
+                "oneSentenceSummary": "Email regex is too permissive and lets an XSS payload validate",
+                "suggestionContent": "The email validation regex accepts angle brackets and quotes, so a value like a@b.com<script> passes validation and is later rendered unescaped. Tighten the pattern to reject markup characters.",
+                "existingCode": "if (/^.+@.+\\..+$/.test(email)) accept(email);",
+                "improvedCode": "if (/^[\\w.+-]+@[\\w-]+\\.[\\w.-]+$/.test(email)) accept(email);"
+            },
+            "b": {
+                "oneSentenceSummary": "Email regex is vulnerable to catastrophic backtracking (ReDoS)",
+                "suggestionContent": "The nested quantifiers in the email regex make a crafted input take exponential time to match, letting a single request pin a CPU core. Replace it with a linear-time pattern or a validator library.",
+                "existingCode": "if (/^(a+)+@.+$/.test(email)) accept(email);",
+                "improvedCode": "if (isEmail(email)) accept(email); // linear-time validator"
+            }
+        },
+        {
+            "id": "obvious-dup-await",
+            "shouldMerge": true,
+            "note": "OBVIOUS dup — near-identical wording. Expect cosine >= 0.7 → auto-merge, no LLM.",
+            "a": {
+                "oneSentenceSummary": "saveUser is called without await",
+                "suggestionContent": "The call to saveUser is not awaited, so the function returns before the user is persisted and errors are lost. Add await.",
+                "existingCode": "saveUser(user);",
+                "improvedCode": "await saveUser(user);"
+            },
+            "b": {
+                "oneSentenceSummary": "Missing await on the saveUser call",
+                "suggestionContent": "saveUser is invoked without awaiting it, so execution continues before the save completes and failures are swallowed. Await the call.",
+                "existingCode": "saveUser(user);",
+                "improvedCode": "await saveUser(user);"
+            }
+        },
+        {
+            "id": "obvious-dup-nullcheck",
+            "shouldMerge": true,
+            "note": "OBVIOUS dup — near-identical wording. Expect cosine >= 0.7 → auto-merge.",
+            "a": {
+                "oneSentenceSummary": "response.data is read without a null check",
+                "suggestionContent": "The code reads response.data.items but response.data can be null on error responses, throwing a TypeError. Add a null check.",
+                "existingCode": "return response.data.items;",
+                "improvedCode": "return response.data?.items ?? [];"
+            },
+            "b": {
+                "oneSentenceSummary": "No null check before accessing response.data",
+                "suggestionContent": "response.data.items is accessed without verifying response.data is present, so an error payload with null data crashes the handler. Guard it.",
+                "existingCode": "return response.data.items;",
+                "improvedCode": "return response.data?.items ?? [];"
+            }
+        },
+        {
+            "id": "obvious-dup-sqlinj",
+            "shouldMerge": true,
+            "note": "OBVIOUS dup — near-identical wording. Expect cosine >= 0.7 → auto-merge.",
+            "a": {
+                "oneSentenceSummary": "SQL injection: userId is concatenated into the query",
+                "suggestionContent": "The userId is concatenated directly into the SQL string, allowing SQL injection. Use a parameterized query.",
+                "existingCode": "query(`SELECT * FROM t WHERE id = ${userId}`)",
+                "improvedCode": "query('SELECT * FROM t WHERE id = $1', [userId])"
+            },
+            "b": {
+                "oneSentenceSummary": "SQL injection from concatenating userId into the query",
+                "suggestionContent": "Because userId is concatenated straight into the SQL statement, an attacker can inject SQL. Switch to a parameterized query.",
+                "existingCode": "query(`SELECT * FROM t WHERE id = ${userId}`)",
+                "improvedCode": "query('SELECT * FROM t WHERE id = $1', [userId])"
+            }
+        },
+        {
+            "id": "obvious-dup-hardcoded",
+            "shouldMerge": true,
+            "note": "OBVIOUS dup — near-identical wording. Expect cosine >= 0.7 → auto-merge.",
+            "a": {
+                "oneSentenceSummary": "Hardcoded database password in the source",
+                "suggestionContent": "The database password is hardcoded as a string literal in the connection config, exposing it to anyone with repo access. Read it from an environment variable.",
+                "existingCode": "const pass = 'p@ssw0rd';",
+                "improvedCode": "const pass = process.env.DB_PASSWORD;"
+            },
+            "b": {
+                "oneSentenceSummary": "Database password is hardcoded in the connection config",
+                "suggestionContent": "A literal database password sits in the source connection config, so everyone with repo access sees it and it cannot be rotated. Move it to an env var.",
+                "existingCode": "const pass = 'p@ssw0rd';",
+                "improvedCode": "const pass = process.env.DB_PASSWORD;"
+            }
+        },
+        {
+            "id": "obvious-nondup-css-vs-dbpool",
+            "shouldMerge": false,
+            "note": "OBVIOUS non-dup — unrelated domains (CSS vs DB). Expect cosine < 0.4 → auto-separate, no LLM.",
+            "a": {
+                "oneSentenceSummary": "Modal renders behind the overlay due to a wrong z-index",
+                "suggestionContent": "The modal's z-index is lower than the overlay's, so it appears behind the dimmed background and is unclickable. Raise the modal z-index.",
+                "existingCode": ".modal { z-index: 10; }",
+                "improvedCode": ".modal { z-index: 1000; }"
+            },
+            "b": {
+                "oneSentenceSummary": "Database connection pool is exhausted under load",
+                "suggestionContent": "The pool max is set too low, so under concurrent traffic requests queue and time out waiting for a connection. Increase the pool size or release connections sooner.",
+                "existingCode": "pool({ max: 2 })",
+                "improvedCode": "pool({ max: 20 })"
+            }
+        },
+        {
+            "id": "obvious-nondup-typo-vs-overflow",
+            "shouldMerge": false,
+            "note": "OBVIOUS non-dup — unrelated. Expect cosine < 0.4 → auto-separate.",
+            "a": {
+                "oneSentenceSummary": "Typo in the error log message",
+                "suggestionContent": "The log string says 'recieved' instead of 'received', a cosmetic typo in the error path. Fix the spelling.",
+                "existingCode": "logger.error('recieved bad input');",
+                "improvedCode": "logger.error('received bad input');"
+            },
+            "b": {
+                "oneSentenceSummary": "Integer overflow in the price calculation",
+                "suggestionContent": "Multiplying quantity by unit price in 32-bit arithmetic overflows for large carts, producing a negative total. Use a 64-bit or decimal type.",
+                "existingCode": "int total = qty * price;",
+                "improvedCode": "long total = (long) qty * price;"
+            }
+        },
+        {
+            "id": "obvious-nondup-import-vs-csrf",
+            "shouldMerge": false,
+            "note": "OBVIOUS non-dup — unrelated. Expect cosine < 0.4 → auto-separate.",
+            "a": {
+                "oneSentenceSummary": "Unused import increases the bundle size",
+                "suggestionContent": "The lodash import is never used in this module, so it needlessly ships in the bundle. Remove the unused import.",
+                "existingCode": "import _ from 'lodash';",
+                "improvedCode": "// removed unused import"
+            },
+            "b": {
+                "oneSentenceSummary": "Form submission is missing a CSRF token",
+                "suggestionContent": "The state-changing POST form does not include a CSRF token, so it is vulnerable to cross-site request forgery. Add and validate a token.",
+                "existingCode": "<form method=\"post\" action=\"/transfer\">",
+                "improvedCode": "<form method=\"post\"><input type=\"hidden\" name=\"_csrf\" value={token} />"
+            }
+        },
+        {
+            "id": "obvious-nondup-pagination-vs-leak",
+            "shouldMerge": false,
+            "note": "OBVIOUS non-dup — unrelated. Expect cosine < 0.4 → auto-separate.",
+            "a": {
+                "oneSentenceSummary": "Off-by-one in the pagination offset",
+                "suggestionContent": "The offset is computed as page * size instead of (page - 1) * size, so the first item of each page is skipped. Fix the offset formula.",
+                "existingCode": "const offset = page * size;",
+                "improvedCode": "const offset = (page - 1) * size;"
+            },
+            "b": {
+                "oneSentenceSummary": "WebSocket event listener is never removed, leaking memory",
+                "suggestionContent": "The component subscribes to the socket on mount but never unsubscribes on unmount, so listeners accumulate across navigations and leak memory. Remove the listener in cleanup.",
+                "existingCode": "socket.on('msg', handler);",
+                "improvedCode": "return () => socket.off('msg', handler);"
+            }
+        },
+        {
+            "id": "obvious-nondup-aria-vs-timezone",
+            "shouldMerge": false,
+            "note": "OBVIOUS non-dup — unrelated (a11y vs data modeling). Expect cosine < 0.4 → auto-separate.",
+            "a": {
+                "oneSentenceSummary": "Icon button is missing an aria-label",
+                "suggestionContent": "The icon-only button has no accessible name, so screen readers announce nothing. Add an aria-label.",
+                "existingCode": "<button><TrashIcon /></button>",
+                "improvedCode": "<button aria-label=\"Delete\"><TrashIcon /></button>"
+            },
+            "b": {
+                "oneSentenceSummary": "Timestamp is stored without a timezone",
+                "suggestionContent": "createdAt is saved as a naive local datetime with no timezone, so values are ambiguous across regions and DST. Store it as UTC with timezone info.",
+                "existingCode": "createdAt: new Date().toString()",
+                "improvedCode": "createdAt: new Date().toISOString()"
+            }
+        },
+        {
+            "id": "gym78-authorize-suggestion-vs-kodyrule",
+            "shouldMerge": true,
+            "note": "REAL cross-stream case from gym#78 line 11: a Security AI-suggestion and a Kody Rule both flag the missing [Authorize] on AparelhoController. Same bug, different streams — the cross-stream dedup must merge them (and keep the Kody Rule).",
+            "a": {
+                "oneSentenceSummary": "AparelhoController is missing an [Authorize] attribute",
+                "suggestionContent": "AparelhoController exposes create/read/update/delete endpoints without an [Authorize] attribute, leaving them publicly accessible while sibling controllers require authentication. Add [Authorize] at the controller level or limit [AllowAnonymous] to specifically intended public actions.",
+                "existingCode": "[ApiController]\n[Route(\"api/[controller]\")]\npublic class AparelhoController : ControllerBase",
+                "improvedCode": "[Authorize]\n[ApiController]\n[Route(\"api/[controller]\")]\npublic class AparelhoController : ControllerBase"
+            },
+            "b": {
+                "oneSentenceSummary": "AparelhoController exposes endpoints without [Authorize] (rule violation)",
+                "suggestionContent": "AparelhoController exposes GET/POST/PUT/DELETE endpoints without [Authorize], allowing any unauthenticated client to list, create, update, or logically delete gym equipment records. Add [Authorize] at the class level and restrict the most sensitive actions with [Authorize(Roles = \"...\")] to match the project's API security policy.",
+                "existingCode": "public class AparelhoController : ControllerBase",
+                "improvedCode": ""
+            }
+        },
+        {
+            "id": "gym78-kodyrule-authorize-vs-pagination",
+            "shouldMerge": false,
+            "note": "REAL from gym#78: the [Authorize] Kody Rule vs a Performance suggestion (missing pagination) on the SAME file. Different bugs — the cross-stream dedup must NOT let the rule absorb an unrelated same-file suggestion.",
+            "a": {
+                "oneSentenceSummary": "AparelhoController exposes endpoints without [Authorize] (rule violation)",
+                "suggestionContent": "AparelhoController exposes GET/POST/PUT/DELETE endpoints without [Authorize], allowing any unauthenticated client to list, create, update, or logically delete gym equipment records. Add [Authorize] at the class level.",
+                "existingCode": "public class AparelhoController : ControllerBase",
+                "improvedCode": ""
+            },
+            "b": {
+                "oneSentenceSummary": "GetAparelhos loads the full result set without pagination",
+                "suggestionContent": "GetAparelhos materializes the entire filtered result set with ToListAsync before mapping, causing response size and memory use to grow linearly with the number of aparelhos. Add skip/take parameters with a default page size of 20 to return a paged result.",
+                "existingCode": "var aparelhos = await query.OrderBy(a => a.Nome).ToListAsync();",
+                "improvedCode": "var aparelhos = await query.OrderBy(a => a.Nome).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();"
+            }
+        }
+    ]
+}

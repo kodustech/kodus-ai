@@ -9,9 +9,16 @@ import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
+    DEDUP_EMBEDDING_LOW,
+    DEDUP_EMBEDDING_HIGH,
+    DEDUP_TIEBREAK_SCHEMA,
     buildDedupPrompt,
+    buildTiebreakPrompt,
     contentSimilarity,
+    cosineSimilarity,
+    dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
+import { OpenAIEmbeddings } from '@langchain/openai';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -1046,6 +1053,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 };
             }
 
+            // Cross-stream dedup (PR #1527 follow-up): a file-scope Kody Rule and
+            // an AI suggestion can flag the same issue on the same file. They are
+            // deduped in separate streams above, so both survive. Absorb the
+            // suggestion into the Kody Rule when they describe the same bug (the
+            // rule wins — it's user-configured and carries the violation link).
+            try {
+                dedupedNonRules =
+                    await this.crossDedupSuggestionsAgainstKodyRules(
+                        dedupedNonRules,
+                        kodyRulesForDedup,
+                        prNumber,
+                        context.codeReviewConfig?.byokConfig,
+                        telemetryMeta,
+                    );
+            } catch (crossErr) {
+                this.logger.warn({
+                    message: `[DEDUP-CROSS] PR#${prNumber}: cross-stream dedup failed, keeping all`,
+                    context: this.stageName,
+                    error: crossErr,
+                });
+            }
+
             let deduped = [...dedupedNonRules, ...kodyRulesForDedup];
 
             // NOTE: Kody Rule link enrichment happens AFTER the content
@@ -1545,6 +1574,245 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return result;
     }
 
+    /** Embed a suggestion's description once per dedup run (memoized by index).
+     * Fail-soft: no platform embedding key or any error → null, so the caller
+     * falls back to the pre-#1527 lexical behavior (veto) instead of crashing. */
+    /**
+     * Embedder for the dedup semantic tier. HARDCODED to OpenAI: text-embedding
+     * models are OpenAI's, so this must NEVER go through the client's BYOK
+     * provider nor inherit a forced base URL (e.g. a Moonshot/OpenAI-compatible
+     * override in the env) — those don't serve text-embedding-3-small. The
+     * base URL is pinned explicitly; only the platform key comes from the env.
+     * (The tiebreak LLM that runs AFTER the embedding still uses BYOK.)
+     */
+    private dedupEmbedder: OpenAIEmbeddings | null | undefined;
+    private getDedupEmbedder(): OpenAIEmbeddings | null {
+        if (this.dedupEmbedder !== undefined) {
+            return this.dedupEmbedder;
+        }
+        const apiKey = process.env.API_OPEN_AI_API_KEY;
+        this.dedupEmbedder = apiKey
+            ? new OpenAIEmbeddings({
+                  apiKey,
+                  model: 'text-embedding-3-small',
+                  configuration: { baseURL: 'https://api.openai.com/v1' },
+              })
+            : null;
+        return this.dedupEmbedder;
+    }
+
+    private async embedDedupSuggestion(
+        suggestion: Partial<CodeSuggestion>,
+        key: string,
+        cache: Map<string, number[] | null>,
+    ): Promise<number[] | null> {
+        if (cache.has(key)) {
+            return cache.get(key) ?? null;
+        }
+        let vector: number[] | null = null;
+        try {
+            const text = dedupEmbeddingText(suggestion as any);
+            const embedder = this.getDedupEmbedder();
+            if (text && embedder) {
+                vector = await embedder.embedQuery(text);
+            }
+        } catch (err) {
+            this.logger.warn({
+                message: `[DEDUP-GUARD] embedding unavailable, falling back to lexical veto`,
+                context: this.stageName,
+                error: err,
+            });
+            vector = null;
+        }
+        cache.set(key, vector);
+        return vector;
+    }
+
+    /**
+     * Tiered dedup guard (PR #1527): decide whether to honor a merge.
+     *   1. lexical overlap ≥ threshold → honor (cheap, obvious duplicates);
+     *   2. else semantic cosine of the two descriptions:
+     *        ≥ HIGH → honor, < LOW → veto, in-between → LLM tiebreak (full text).
+     * Every external failure (no embed key, embedding/LLM error) falls back to a
+     * veto — the exact pre-#1527 behavior — so a low-overlap merge is never
+     * honored blindly.
+     *
+     * `crossStream` mode (Kody-Rule vs suggestion): there is NO prior LLM
+     * grouping to corroborate a match, so the cheap lexical-honor shortcut is
+     * skipped — only a strong semantic signal (embedding-high or a tiebreak yes)
+     * may absorb a suggestion into a rule, keeping false absorptions near zero.
+     */
+    private async resolveDedupMerge(
+        dup: Partial<CodeSuggestion>,
+        keep: Partial<CodeSuggestion>,
+        dupKey: string,
+        keepKey: string,
+        embedCache: Map<string, number[] | null>,
+        tiebreak: (
+            a: Partial<CodeSuggestion>,
+            b: Partial<CodeSuggestion>,
+        ) => Promise<boolean | null>,
+        opts?: { crossStream?: boolean },
+    ): Promise<{ honor: boolean; reason: string; score: number }> {
+        const lexical = contentSimilarity(dup, keep);
+        if (!opts?.crossStream && lexical >= DEDUP_CONTENT_THRESHOLD) {
+            return { honor: true, reason: 'lexical', score: lexical };
+        }
+
+        const [vecDup, vecKeep] = await Promise.all([
+            this.embedDedupSuggestion(dup, dupKey, embedCache),
+            this.embedDedupSuggestion(keep, keepKey, embedCache),
+        ]);
+        if (!vecDup || !vecKeep) {
+            return { honor: false, reason: 'lexical-veto (no-embed)', score: lexical };
+        }
+
+        const cos = cosineSimilarity(vecDup, vecKeep);
+        if (cos >= DEDUP_EMBEDDING_HIGH) {
+            return { honor: true, reason: 'embedding-high', score: cos };
+        }
+        if (cos < DEDUP_EMBEDDING_LOW) {
+            return { honor: false, reason: 'embedding-low', score: cos };
+        }
+
+        const sameBug = await tiebreak(dup, keep);
+        if (sameBug === null) {
+            return { honor: false, reason: 'tiebreak-error-veto', score: cos };
+        }
+        return {
+            honor: sameBug,
+            reason: `llm-tiebreak=${sameBug}`,
+            score: cos,
+        };
+    }
+
+    /**
+     * Build the pairwise "same bug?" tiebreak used by both the within-stream
+     * dedup guard and the cross-stream (Kody-Rule vs suggestion) dedup. Resolves
+     * the secondary model the same way the batch dedup does; any failure returns
+     * null so the caller vetoes (keeps both).
+     */
+    private buildDedupTiebreak(
+        byokConfig: any,
+        telemetryMeta: LangfuseTelemetryMetadata | undefined,
+        prNumber: number,
+    ): (
+        a: Partial<CodeSuggestion>,
+        b: Partial<CodeSuggestion>,
+    ) => Promise<boolean | null> {
+        const secondaryByok = isSecondaryByok(byokConfig);
+        return async (a, b) => {
+            try {
+                const call = (model: any) =>
+                    tracedGenerateText({
+                        model: model as any,
+                        ...toAiSdkTelemetryArgs(
+                            buildLangfuseTelemetry(
+                                'dedup-tiebreak',
+                                telemetryMeta,
+                            ),
+                        ),
+                        output: Output.object({
+                            schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA as any),
+                        }) as any,
+                        prompt: buildTiebreakPrompt(a as any, b as any),
+                    });
+                const tiebreakByok = secondaryByok
+                    ? byokConfig?.main
+                        ? { main: byokConfig.main }
+                        : byokConfig
+                    : byokConfig;
+                const res = await withStructuredOutputFallback(
+                    {
+                        byokConfig: tiebreakByok,
+                        organizationId: telemetryMeta?.organizationId,
+                        label: 'dedup-tiebreak',
+                    },
+                    call,
+                );
+                const out = (res as any).object ?? (res as any).output;
+                return typeof out?.sameBug === 'boolean' ? out.sameBug : null;
+            } catch (err) {
+                this.logger.warn({
+                    message: `[DEDUP-GUARD] PR#${prNumber}: tiebreak failed, vetoing merge`,
+                    context: this.stageName,
+                    error: err,
+                });
+                return null;
+            }
+        };
+    }
+
+    /**
+     * Cross-stream dedup (PR #1527 follow-up): a Kody Rule and an AI suggestion
+     * can flag the SAME issue on the same file, but they are deduped in separate
+     * streams so both survive. Here we cross-compare FILE-scope Kody Rules
+     * against the already-deduped suggestions; when they describe the same bug we
+     * drop the suggestion and keep the Kody Rule (it is user-configured and
+     * carries the rule-violation link). PR-scope rules (no relevantFile) are
+     * excluded — they are not tied to a file/line. Fail-soft: any error keeps the
+     * suggestion (pre-change behavior).
+     */
+    private async crossDedupSuggestionsAgainstKodyRules(
+        suggestions: Partial<CodeSuggestion>[],
+        kodyRules: Partial<CodeSuggestion>[],
+        prNumber: number,
+        byokConfig?: any,
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<Partial<CodeSuggestion>[]> {
+        const fileScopedRules = kodyRules.filter((r) => !!r.relevantFile);
+        if (!suggestions.length || !fileScopedRules.length) {
+            return suggestions;
+        }
+
+        const embedCache = new Map<string, number[] | null>();
+        const tiebreak = this.buildDedupTiebreak(
+            byokConfig,
+            telemetryMeta,
+            prNumber,
+        );
+
+        const kept: Partial<CodeSuggestion>[] = [];
+        for (let si = 0; si < suggestions.length; si++) {
+            const s = suggestions[si];
+            let absorbedBy: { ri: number; reason: string; score: number } | null =
+                null;
+            for (let ri = 0; ri < fileScopedRules.length; ri++) {
+                const rule = fileScopedRules[ri];
+                // A suggestion can only duplicate a rule on the SAME file.
+                if (rule.relevantFile !== s.relevantFile) {
+                    continue;
+                }
+                const decision = await this.resolveDedupMerge(
+                    s,
+                    rule,
+                    `s${si}`,
+                    `r${ri}`,
+                    embedCache,
+                    tiebreak,
+                    { crossStream: true },
+                );
+                if (decision.honor) {
+                    absorbedBy = {
+                        ri,
+                        reason: decision.reason,
+                        score: decision.score,
+                    };
+                    break;
+                }
+            }
+            if (absorbedBy) {
+                this.logger.log({
+                    message: `[DEDUP-CROSS] PR#${prNumber}: suggestion ${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label}] absorbed by kody rule (${absorbedBy.reason}, score=${absorbedBy.score.toFixed(3)})`,
+                    context: this.stageName,
+                });
+            } else {
+                kept.push(s);
+            }
+        }
+        return kept;
+    }
+
     /**
      * Deduplicate suggestions that describe the same issue using LLM.
      * Groups by file, then asks Gemini Flash which suggestions are duplicates.
@@ -1695,6 +1963,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }> = dedupOutput?.groups || [];
             const unique: number[] = dedupOutput?.unique || [];
 
+            // Semantic tier of the content guard (PR #1527): when lexical overlap
+            // is inconclusive we compare description embeddings, and only escalate
+            // the ambiguous band to a focused LLM tiebreak. Embeddings are memoized
+            // per suggestion for this dedup run.
+            const embedCache = new Map<string, number[] | null>();
+            const runTiebreak = this.buildDedupTiebreak(
+                byokConfig,
+                telemetryMeta,
+                prNumber,
+            );
+
             // Safety: if LLM returns nothing useful, keep all
             if (groups.length === 0 && unique.length === 0) {
                 this.logger.warn({
@@ -1839,12 +2118,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     // findings actually describe the same thing. A low word-overlap
                     // "duplicate" is a DIFFERENT bug the model over-merged (distinct
                     // issues on overlapping lines) — keep it instead of dropping.
-                    if (
-                        contentSimilarity(
-                            suggestions[dupIdx],
-                            suggestions[keepIdx],
-                        ) < DEDUP_CONTENT_THRESHOLD
-                    ) {
+                    const decision = await this.resolveDedupMerge(
+                        suggestions[dupIdx],
+                        suggestions[keepIdx],
+                        `n${dupIdx}`,
+                        `n${keepIdx}`,
+                        embedCache,
+                        runTiebreak,
+                    );
+                    if (!decision.honor) {
+                        // The model grouped these as duplicates but the guard is
+                        // not confident they are the same bug, so we keep both.
+                        // Log it — otherwise this veto is invisible in production
+                        // (the silent-degradation family from PR #1527).
+                        this.logger.log({
+                            message: `[DEDUP-GUARD] PR#${prNumber}: merge of idx ${dupIdx} into ${keepIdx} rejected (${decision.reason}, score=${decision.score.toFixed(3)})`,
+                            context: this.stageName,
+                        });
                         classifiedIndices.add(dupIdx);
                         if (!addedIndices.has(dupIdx)) {
                             addedIndices.add(dupIdx);
