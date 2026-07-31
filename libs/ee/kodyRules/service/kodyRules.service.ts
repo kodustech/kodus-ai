@@ -262,12 +262,21 @@ export class KodyRulesService implements IKodyRulesService {
                 });
             }
         });
+        const normalized = (entitiesResult: KodyRulesEntity[]) =>
+            entitiesResult?.map((entity) => {
+                const normalized = toObject(entity);
+                normalized.rules = normalized.rules.map((rule) => ({
+                    ...rule,
+                    severity: rule.severity?.toLowerCase(),
+                }));
+                return KodyRulesEntity.create(normalized);
+            });
 
         if (staleOrgIds.size > 0) {
-            return await this.kodyRulesRepository.find(filter);
+            return normalized(await this.kodyRulesRepository.find(filter));
         }
 
-        return entities;
+        return normalized(entities);
     }
 
     async findByOrganizationId(
@@ -311,25 +320,25 @@ export class KodyRulesService implements IKodyRulesService {
                 message: 'Error checking resource limits for rules sync',
                 context: KodyRulesService.name,
                 error,
+                metadata: { organizationAndTeamData },
             });
             return entity;
         }
 
-        let mutated = false;
-        const updatedRules = [...existingRules];
+        const changedRules: Array<{ ruleId: string; patch: Partial<IKodyRule> }> = [];
 
         if (!isLimited) {
             // Paid plan: unpause any rule that was auto-locked by a plan limit
-            for (let i = 0; i < updatedRules.length; i++) {
-                const r = updatedRules[i];
-                if (r.status === KodyRulesStatus.PAUSED && r.lockedByPlan) {
-                    updatedRules[i] = {
-                        ...r,
-                        status: KodyRulesStatus.ACTIVE,
-                        lockedByPlan: false,
-                        updatedAt: new Date(),
-                    };
-                    mutated = true;
+            for (const r of existingRules) {
+                if (r.uuid && r.status === KodyRulesStatus.PAUSED && r.lockedByPlan) {
+                    changedRules.push({
+                        ruleId: r.uuid,
+                        patch: {
+                            status: KodyRulesStatus.ACTIVE,
+                            lockedByPlan: false,
+                            updatedAt: new Date(),
+                        },
+                    });
                 }
             }
         } else {
@@ -337,28 +346,33 @@ export class KodyRulesService implements IKodyRulesService {
             const MAX = this.kodyRulesValidationService.MAX_KODY_RULES;
             let activeCount = 0;
 
-            for (let i = 0; i < updatedRules.length; i++) {
-                const r = updatedRules[i];
+            for (const r of existingRules) {
                 if (r.status === KodyRulesStatus.ACTIVE) {
                     activeCount++;
-                    if (activeCount > MAX) {
-                        updatedRules[i] = {
-                            ...r,
-                            status: KodyRulesStatus.PAUSED,
-                            lockedByPlan: true,
-                            updatedAt: new Date(),
-                        };
-                        mutated = true;
+                    if (activeCount > MAX && r.uuid) {
+                        changedRules.push({
+                            ruleId: r.uuid,
+                            patch: {
+                                status: KodyRulesStatus.PAUSED,
+                                lockedByPlan: true,
+                                updatedAt: new Date(),
+                            },
+                        });
                     }
                 }
             }
         }
 
-        if (!mutated) return entity;
+        if (!changedRules.length) return entity;
 
-        const updated = await this.kodyRulesRepository.update(entity.uuid, {
-            rules: updatedRules,
-        });
+        // Targeted per-rule updates: prevents whole-array overwrite race conditions (#1626)
+        for (const { ruleId, patch } of changedRules) {
+            await this.kodyRulesRepository.updateRule(
+                entity.uuid,
+                ruleId,
+                patch,
+            );
+        }
 
         this.logger.log({
             message: 'Synchronized Kody Rules with current plan limits in MongoDB',
@@ -366,11 +380,11 @@ export class KodyRulesService implements IKodyRulesService {
             metadata: {
                 organizationId,
                 isLimited,
-                totalRules: updatedRules.length,
+                updatedRuleCount: changedRules.length,
             },
         });
 
-        return updated;
+        return this.kodyRulesRepository.findByOrganizationId(organizationId);
     }
 
     async findOrganizationIdsWithRules(): Promise<string[]> {

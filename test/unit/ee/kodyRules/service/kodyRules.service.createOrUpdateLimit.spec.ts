@@ -420,6 +420,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
                 currentEntity = KodyRulesEntity.create({ ...currentEntity.toObject(), ...updateData });
                 return Promise.resolve(currentEntity);
             }),
+            updateRule: jest.fn().mockImplementation((_uuid, ruleId, patch) => {
+                const rules = currentEntity.toObject().rules.map((r) =>
+                    r.uuid === ruleId ? { ...r, ...patch } : r,
+                );
+                currentEntity = KodyRulesEntity.create({
+                    ...currentEntity.toObject(),
+                    rules,
+                });
+                return Promise.resolve(currentEntity);
+            }),
         };
 
         const permissionValidationServiceMock = {
@@ -447,15 +457,15 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
         // Wait briefly for the background syncRulesWithPlanLimit to complete
         await new Promise((r) => setTimeout(r, 100));
 
-        // Check that repository.update was called to persist updated active rules to MongoDB
-        expect(repositoryMock.update).toHaveBeenCalled();
-        const [, updatedData] = repositoryMock.update.mock.calls[0];
+        // Check that repository.updateRule was called to persist updated active rules to MongoDB
+        expect(repositoryMock.updateRule).toHaveBeenCalled();
+        const updatedRules = currentEntity.toObject().rules;
 
         // r1 and r2 flipped to ACTIVE & lockedByPlan: false
-        expect(updatedData.rules[0].status).toBe(KodyRulesStatus.ACTIVE);
-        expect(updatedData.rules[0].lockedByPlan).toBe(false);
-        expect(updatedData.rules[1].status).toBe(KodyRulesStatus.ACTIVE);
-        expect(updatedData.rules[1].lockedByPlan).toBe(false);
+        expect(updatedRules[0].status).toBe(KodyRulesStatus.ACTIVE);
+        expect(updatedRules[0].lockedByPlan).toBe(false);
+        expect(updatedRules[1].status).toBe(KodyRulesStatus.ACTIVE);
+        expect(updatedRules[1].lockedByPlan).toBe(false);
     });
 
     it('enforces 10-rule ceiling on syncRulesWithPlanLimit when org is on Free plan', async () => {
@@ -473,6 +483,16 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
             findByOrganizationId: jest.fn().mockImplementation(() => Promise.resolve(currentEntity)),
             update: jest.fn().mockImplementation((_uuid, updateData) => {
                 currentEntity = KodyRulesEntity.create({ ...currentEntity.toObject(), ...updateData });
+                return Promise.resolve(currentEntity);
+            }),
+            updateRule: jest.fn().mockImplementation((_uuid, ruleId, patch) => {
+                const rules = currentEntity.toObject().rules.map((r) =>
+                    r.uuid === ruleId ? { ...r, ...patch } : r,
+                );
+                currentEntity = KodyRulesEntity.create({
+                    ...currentEntity.toObject(),
+                    rules,
+                });
                 return Promise.resolve(currentEntity);
             }),
         };
@@ -501,18 +521,18 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
 
         await service.syncRulesWithPlanLimit(organizationAndTeamData);
 
-        expect(repositoryMock.update).toHaveBeenCalled();
-        const [, updatedData] = repositoryMock.update.mock.calls[0];
+        expect(repositoryMock.updateRule).toHaveBeenCalled();
+        const updatedRules = currentEntity.toObject().rules;
 
         // First 10 remain ACTIVE
         for (let i = 0; i < 10; i++) {
-            expect(updatedData.rules[i].status).toBe(KodyRulesStatus.ACTIVE);
+            expect(updatedRules[i].status).toBe(KodyRulesStatus.ACTIVE);
         }
 
         // Rules #11 and #12 are set to PAUSED + lockedByPlan: true
-        expect(updatedData.rules[10].status).toBe(KodyRulesStatus.PAUSED);
-        expect(updatedData.rules[10].lockedByPlan).toBe(true);
-        expect(updatedData.rules[11].status).toBe(KodyRulesStatus.PAUSED);
-        expect(updatedData.rules[11].lockedByPlan).toBe(true);
+        expect(updatedRules[10].status).toBe(KodyRulesStatus.PAUSED);
+        expect(updatedRules[10].lockedByPlan).toBe(true);
+        expect(updatedRules[11].status).toBe(KodyRulesStatus.PAUSED);
+        expect(updatedRules[11].lockedByPlan).toBe(true);
     });
 });
