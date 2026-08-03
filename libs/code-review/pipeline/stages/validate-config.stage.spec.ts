@@ -301,12 +301,14 @@ describe('ValidateConfigStage — v2 routing', () => {
 
     it('degrades to the env/managed default (byokConfig undefined) on a BLOCKED verdict', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue({
-            // Only an anthropic model (structuredOutput none) — ineligible for
-            // codeReview — and no fallback → BLOCKED.
+            // Model on an UNREGISTERED provider → no candidate qualifies →
+            // BLOCKED. (The capability gate no longer blocks anything for
+            // codeReview since every provider does native tool calling, so an
+            // unregistered provider is the stable way to exercise the degrade.)
             configValue: v2(
-                { defaultModelId: 'm-ANT' },
-                [{ id: 'm-ANT', credentialId: 'c-an', model: 'claude-3-5' }],
-                [{ id: 'c-an', provider: 'anthropic', apiKey: 'enc-an' }],
+                { defaultModelId: 'm-X' },
+                [{ id: 'm-X', credentialId: 'c-x', model: 'some-model' }],
+                [{ id: 'c-x', provider: 'not_a_real_provider', apiKey: 'enc-x' }],
             ),
         });
 

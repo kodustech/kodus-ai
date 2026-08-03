@@ -11,6 +11,9 @@
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
+    // structured-review-call's error path checks the per-slot limiter cooldown;
+    // no limiter in unit tests → undefined (not in cooldown) so the error propagates.
+    getLimiterForSlot: jest.fn(() => undefined),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({
     wrapByokModel: jest.fn((model: any) => model),
