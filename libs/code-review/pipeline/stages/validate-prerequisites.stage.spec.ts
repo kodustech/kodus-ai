@@ -563,7 +563,7 @@ describe('ValidatePrerequisitesStage', () => {
             expect(body).not.toContain('trial has ended');
         });
 
-        it('posts the generic "trial ended" comment (not credits) when a trial plan-limit is NOT genuine exhaustion (transient billing failure)', async () => {
+        it('posts a "subscription check unavailable" message (not credits, not trial-ended) on a transient billing failure', async () => {
             const context = makeContext();
 
             mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
@@ -586,8 +586,12 @@ describe('ValidatePrerequisitesStage', () => {
             const body =
                 mockCodeManagementService.createIssueComment.mock.calls[0][0]
                     .body;
+            expect(body).toContain('Subscription check unavailable');
             expect(body).not.toContain('Kodus-paid PR reviews');
-            expect(result.statusInfo?.message).toContain('Plan Limit Exceeded');
+            expect(body).not.toContain('trial has ended');
+            expect(result.statusInfo?.message).toContain(
+                'Subscription Check Unavailable',
+            );
             expect(result.statusInfo?.message).not.toContain(
                 'Trial Reviews Used Up',
             );

@@ -66,6 +66,7 @@ type NoActiveSubscriptionType =
     | 'general'
     | 'byok_required'
     | 'trial_credits_exhausted'
+    | 'license_unavailable'
     | 'no_error';
 
 const ERROR_TO_MESSAGE_TYPE: Record<
@@ -404,15 +405,17 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             case ValidationErrorType.BYOK_REQUIRED:
                 return PipelineReasons.PREREQUISITES.BYOK_MISSING;
             case ValidationErrorType.PLAN_LIMIT_EXCEEDED:
-                // A trial that genuinely ran out of Kodus-funded review credits
-                // is not a paid-plan limit — the trial is still active and BYOK
-                // keeps reviews running. Steer there instead of "upgrade your
-                // plan". Only when credits are actually exhausted, though: a
-                // transient billing failure also surfaces as PLAN_LIMIT_EXCEEDED
-                // and must not claim the reviews were used up.
-                return subscriptionStatus === 'trial' && trialCreditsExhausted
-                    ? PipelineReasons.PREREQUISITES.TRIAL_CREDITS_EXHAUSTED
-                    : PipelineReasons.PREREQUISITES.PLAN_LIMIT;
+                // PLAN_LIMIT_EXCEEDED is only ever raised for a trial. It splits
+                // two ways: credits genuinely exhausted (steer to BYOK — the
+                // trial is still active), or the license service couldn't
+                // confirm the credit (transient billing failure) — which must
+                // not claim the reviews were used up, just ask to retry.
+                if (subscriptionStatus === 'trial') {
+                    return trialCreditsExhausted
+                        ? PipelineReasons.PREREQUISITES.TRIAL_CREDITS_EXHAUSTED
+                        : PipelineReasons.PREREQUISITES.LICENSE_UNAVAILABLE;
+                }
+                return PipelineReasons.PREREQUISITES.PLAN_LIMIT;
             case ValidationErrorType.USER_NOT_LICENSED:
                 return PipelineReasons.PREREQUISITES.USER_NO_LICENSE;
             case ValidationErrorType.INVALID_LICENSE:
@@ -499,19 +502,20 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     ? ERROR_TO_MESSAGE_TYPE[validationResult.errorType]
                     : 'general';
 
-            // Running out of Kodus-paid trial reviews is a plan limit, but the
-            // trial itself (features/time) is still active — and BYOK keeps
-            // reviews running for free. Steer there instead of "trial ended".
-            // Only when credits are genuinely exhausted: a transient billing
-            // failure also surfaces as PLAN_LIMIT_EXCEEDED and must not claim
-            // the reviews were used up.
+            // PLAN_LIMIT_EXCEEDED on a trial is one of two things: the
+            // Kodus-paid reviews are genuinely used up (trial still active —
+            // steer to BYOK, not "trial ended"), or the license service
+            // couldn't confirm the credit (transient billing failure — say so
+            // and ask to retry, never "used up" or "trial ended").
             if (
                 validationResult.errorType ===
                     ValidationErrorType.PLAN_LIMIT_EXCEEDED &&
-                validationResult.subscriptionStatus === 'trial' &&
-                validationResult.metadata?.trialCreditsExhausted === true
+                validationResult.subscriptionStatus === 'trial'
             ) {
-                noActiveSubscriptionType = 'trial_credits_exhausted';
+                noActiveSubscriptionType =
+                    validationResult.metadata?.trialCreditsExhausted === true
+                        ? 'trial_credits_exhausted'
+                        : 'license_unavailable';
             }
 
             if (showStatusFeedback) {
@@ -905,6 +909,8 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             params.noActiveSubscriptionType === 'trial_credits_exhausted'
         ) {
             message = await this.trialCreditsExhaustedMessage();
+        } else if (params.noActiveSubscriptionType === 'license_unavailable') {
+            message = await this.licenseUnavailableMessage();
         }
 
         await this.codeManagementService.createIssueComment({
@@ -943,6 +949,18 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             'to keep Kody reviewing — unlimited reviews, on any plan (Free included).\n\n' +
             'Want more trial reviews to finish evaluating before adding a key? ' +
             '[Talk to our founders](https://cal.com/gabrielmalinosqui/30min). 😎\n\n' +
+            '<!-- kody-codereview -->'
+        );
+    }
+
+    private async licenseUnavailableMessage(): Promise<string> {
+        return (
+            "## Subscription check unavailable ⏳\n\n" +
+            "We couldn't confirm your subscription right now — the license " +
+            'service is temporarily unreachable. Your trial is still active; ' +
+            'this is not a limit on your account.\n\n' +
+            'Please re-run the review in a few minutes (or push a new commit) ' +
+            "and Kody will pick it up.\n\n" +
             '<!-- kody-codereview -->'
         );
     }

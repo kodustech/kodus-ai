@@ -75,6 +75,10 @@ export const PipelineReasons = {
             message: 'Trial Reviews Used Up',
             action: 'Connect your own AI key to keep reviewing (unlimited, any plan)',
         } as PipelineReason,
+        LICENSE_UNAVAILABLE: {
+            message: 'Subscription Check Unavailable',
+            action: 'The license service is temporarily unreachable — re-run the review in a few minutes',
+        } as PipelineReason,
         USER_NO_LICENSE: {
             message: 'User Not Licensed',
             action: 'Assign seat to user',

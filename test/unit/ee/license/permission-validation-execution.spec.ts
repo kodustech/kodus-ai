@@ -258,6 +258,41 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         expect(result.metadata?.trialCreditsExhausted).toBe(false);
     });
 
+    it('does NOT flag exhaustion for a non-credit billing denial (e.g. trial expired mid-request)', async () => {
+        // Exhaustion is matched positively (reason === TRIAL_REVIEW_CREDITS_
+        // EXHAUSTED); any other denial (TRIAL_EXPIRED, LICENSE_NOT_FOUND, ...)
+        // must not be mislabeled as "reviews used up".
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 2,
+            trialReviewCreditsRemaining: 3,
+        });
+        licenseService.consumeTrialReviewCredit.mockResolvedValue({
+            allowed: false,
+            reason: 'TRIAL_EXPIRED',
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            {
+                consumeTrialReviewCredit: true,
+                trialReviewCreditUsageKey: 'repo-1:123',
+            },
+        );
+
+        expect(result.allowed).toBe(false);
+        expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+        expect(result.metadata?.trialCreditsExhausted).toBe(false);
+    });
+
     it('should deny managed trial when review credits are exhausted', async () => {
         const service = createService(
             createMockLicenseService({

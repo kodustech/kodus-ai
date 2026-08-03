@@ -296,13 +296,15 @@ export class PermissionValidationService {
                             metadata: {
                                 validation,
                                 consumeResult,
-                                // A billing denial for actually-gone credits is
-                                // exhaustion; a transport failure reaching
-                                // billing is NOT. Don't claim "reviews used up"
-                                // when billing was merely unreachable.
+                                // Only a billing denial for actually-gone
+                                // credits is exhaustion. Match it positively:
+                                // billing has other denial reasons (TRIAL_EXPIRED,
+                                // LICENSE_NOT_FOUND) and a transport failure
+                                // (CONSUME_TRIAL_REVIEW_CREDIT_FAILED), none of
+                                // which mean "reviews used up".
                                 trialCreditsExhausted:
-                                    consumeResult.reason !==
-                                    'CONSUME_TRIAL_REVIEW_CREDIT_FAILED',
+                                    consumeResult.reason ===
+                                    'TRIAL_REVIEW_CREDITS_EXHAUSTED',
                             },
                             subscriptionStatus: validation.subscriptionStatus,
                         };
