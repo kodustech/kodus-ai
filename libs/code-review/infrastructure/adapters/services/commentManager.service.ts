@@ -42,7 +42,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import {
     attachClassification,
     classifyLLMError,
@@ -219,7 +219,7 @@ export class CommentManagerService implements ICommentManagerService {
                 await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
-            byokConfigValue = resolveTaskByokConfig(rawV2, 'prSummary') ?? null;
+            byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'prSummary').slot) ?? null;
         } catch {
             byokConfigValue = null;
         }

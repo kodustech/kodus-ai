@@ -14,7 +14,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
-import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -64,7 +64,7 @@ export class KodyRuleDetectorCompilerService
                 await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
-            const taskByok = resolveTaskByokConfig(rawV2, 'codeReview');
+            const taskByok = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
 
             // Local (Vercel) stack via runStructuredReviewCall — the org's
             // resolved BYOK model or our managed default (kimi-k2.7-code via

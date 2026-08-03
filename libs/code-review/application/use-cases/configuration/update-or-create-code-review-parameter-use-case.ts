@@ -65,7 +65,7 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -1231,7 +1231,7 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             ),
         ]);
         // v2-native carrier for the reference-detection chain (codeReview task).
-        const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview');
+        const byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
 
         const contextReferenceId =
             await this.contextReferenceDetectionService.detectAndSaveReferences(

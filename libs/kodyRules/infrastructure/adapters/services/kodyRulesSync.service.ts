@@ -47,7 +47,7 @@ import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interfac
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
 import {
-    resolveTaskByokConfig,
+    resolveTaskSlot,
 } from '@libs/llm/resolve-task-model';
 import { hasNonManagedCredential } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
@@ -2102,7 +2102,7 @@ export class KodyRulesSyncService {
         ]);
         // v2-native carrier for the codeReview task (runStructuredReviewCall +
         // the raw-JSON fallback build); non-v2/managed/BLOCKED → env default.
-        const byokConfigValue = resolveTaskByokConfig(rawV2, 'codeReview');
+        const byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
 
         const effectiveDefaultStatus =
             options?.defaultStatus ??
@@ -2435,7 +2435,7 @@ export class KodyRulesSyncService {
             await this.permissionValidationService.getBYOKConfigV2Raw(
                 params.organizationAndTeamData,
             );
-        const byokConfigValue = resolveTaskByokConfig(rawV2, 'codeReview');
+        const byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
 
         const mainRun = 'kodyRulesFilesToRulesFastBatch';
 
@@ -2564,7 +2564,7 @@ export class KodyRulesSyncService {
             await this.permissionValidationService.getBYOKConfigV2Raw(
                 params.organizationAndTeamData,
             );
-        const byokConfigValue = resolveTaskByokConfig(rawV2, 'codeReview');
+        const byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
 
         const mainRun = 'kodyRulesManifestsToRulesFastBatch';
 
@@ -2814,7 +2814,7 @@ export class KodyRulesSyncService {
             ),
         ]);
         // v2-native carrier for the reference-detection chain (codeReview task).
-        const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview');
+        const byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
 
         try {
             const contextReferenceId =

@@ -1,5 +1,5 @@
 import type { BYOKConfig } from '@libs/llm/byok-config';
-import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { isV2Config, type BYOKConfigV2 } from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
 
@@ -737,7 +737,7 @@ export class PermissionValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<BYOKConfig | null> {
         const rawV2 = await this.getBYOKConfigV2Raw(organizationAndTeamData);
-        return resolveTaskByokConfig(rawV2, 'codeReview') ?? null;
+        return ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot) ?? null;
     }
 
     /**

@@ -24,7 +24,7 @@ import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { resolveAgentModel } from '@libs/llm/agent-model';
-import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -455,7 +455,7 @@ export class ConversationAgentProvider {
             await this.permissionValidationService.getBYOKConfigV2Raw(
                 organizationAndTeamData,
             );
-        return resolveTaskByokConfig(rawV2, 'conversation');
+        return ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'conversation').slot);
     }
 
     /**

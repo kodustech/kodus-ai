@@ -4,7 +4,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
-import { resolveTaskByokConfig } from '@libs/llm/resolve-task-model';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import {
     tracedGenerateText,
     timeoutSignal,
@@ -231,9 +231,9 @@ export class KodyRuleSummaryService {
             // Model policy = the review's: resolve the customer's v2 config for
             // the codeReview task (BYOK main when configured; managed default
             // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
-            const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview', {
+            const byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview', {
                 ctx: {},
-            });
+            }).slot);
 
             const hasByok = !!byokConfig?.main;
             if (
@@ -469,9 +469,9 @@ export class KodyRuleSummaryService {
             // Model policy = the review's: resolve the customer's v2 config for
             // the codeReview task (BYOK main when configured; managed default
             // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
-            const byokConfig = resolveTaskByokConfig(rawV2, 'codeReview', {
+            const byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview', {
                 ctx: {},
-            });
+            }).slot);
             const hasByok = !!byokConfig?.main;
             // The carrier's resolved main slot, read at this consumer boundary.
             const mainSlot = byokConfig?.main;
