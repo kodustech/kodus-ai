@@ -23,6 +23,9 @@ jest.mock("@services/organizationParameters/fetch", () => ({
         .fn()
         .mockResolvedValue({ overrides: [], mismatchedCount: 0 }),
     clearModelOverrides: jest.fn(),
+    // The provider-first connect flow now fetches the registry-driven provider
+    // list; return [] so it falls back to the curated-derived grid.
+    listByokProviders: jest.fn().mockResolvedValue([]),
 }));
 
 // SpendLimitSection (now a section at the foot of the Providers tab) transitively

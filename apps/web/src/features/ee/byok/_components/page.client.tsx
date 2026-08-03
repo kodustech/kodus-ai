@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
+import { Image } from "@components/ui/image";
 import { Page } from "@components/ui/page";
 import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
@@ -152,20 +153,34 @@ export const ByokPageClient = ({
                     <Page.Title className="text-balance">
                         Bring your own key
                     </Page.Title>
-                    <Page.Description className="flex flex-wrap items-center gap-x-2 gap-y-1 text-pretty">
+                    <Page.Description className="flex flex-col gap-2 text-pretty">
                         <span>
                             Connect the providers your team uses, then choose
-                            which model reviews each thing. You pay your provider
-                            directly — Kodus never sees your key.
+                            which model reviews each thing.
                         </span>
-                        <a
-                            href="https://docs.kodus.io/how_to_use/en/byok"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary-light inline-flex items-center gap-1 text-xs hover:underline">
-                            Learn more
-                            <ExternalLinkIcon size={12} />
-                        </a>
+                        <span className="flex items-center gap-2">
+                            <span className="w-9 shrink-0">
+                                <Image
+                                    src="/assets/images/kody_safety.png"
+                                    alt="Kody guarding your key"
+                                />
+                            </span>
+                            <span>
+                                You pay your provider directly —{" "}
+                                <strong className="text-text-primary font-medium">
+                                    Kodus never sees your key
+                                </strong>
+                                .
+                                <a
+                                    href="https://docs.kodus.io/how_to_use/en/byok"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary-light ml-2 inline-flex items-center gap-1 text-xs hover:underline">
+                                    Learn more
+                                    <ExternalLinkIcon size={12} />
+                                </a>
+                            </span>
+                        </span>
                     </Page.Description>
                 </Page.TitleContainer>
             </Page.Header>
