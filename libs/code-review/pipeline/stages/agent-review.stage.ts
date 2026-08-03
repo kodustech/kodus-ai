@@ -18,7 +18,7 @@ import {
     cosineSimilarity,
     dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
-import { createOpenAI } from '@ai-sdk/openai';
+import { buildPlatformEmbedder } from '@libs/common/utils/document';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -1597,13 +1597,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         if (this.dedupEmbedder !== undefined) {
             return this.dedupEmbedder;
         }
-        const apiKey = process.env.API_OPEN_AI_API_KEY;
-        this.dedupEmbedder = apiKey
-            ? createOpenAI({
-                  apiKey,
-                  baseURL: 'https://api.openai.com/v1',
-              }).embedding('text-embedding-3-small')
-            : null;
+        // Single platform-embedder seam (libs/common/utils/document): pinned to
+        // OpenAI text-embedding, never BYOK, null when no platform key.
+        this.dedupEmbedder = buildPlatformEmbedder();
         return this.dedupEmbedder;
     }
 

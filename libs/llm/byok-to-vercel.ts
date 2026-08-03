@@ -357,6 +357,25 @@ export function getModelName(
  * 2. Self-hosted configured provider
  * 3. Cloud: OpenAI GPT-5-mini (best at structured output) → Gemini 2.5 Flash
  */
+/**
+ * Build a PLATFORM (Kodus-funded) chat model by explicit id — the managed path
+ * for callers that need a SPECIFIC platform model rather than the default
+ * managed model (e.g. the secondary-pass `gpt-5.4-mini`). Honors a forced base
+ * URL (self-hosted/proxy) and returns null when no platform key is set, so the
+ * caller fails soft. Keeps `createOpenAI` inside libs/llm — no consumer builds
+ * a model directly.
+ */
+export function buildPlatformModel(modelId: string): LanguageModel | null {
+    const openaiKey = process.env.API_OPEN_AI_API_KEY;
+    if (!openaiKey) return null;
+    return createOpenAI({
+        apiKey: openaiKey,
+        ...(process.env.API_OPENAI_FORCE_BASE_URL
+            ? { baseURL: process.env.API_OPENAI_FORCE_BASE_URL }
+            : {}),
+    })(modelId);
+}
+
 export function getInternalModel(
     slot?: NormalizedModel,
     options: ByokModelOptions = {},

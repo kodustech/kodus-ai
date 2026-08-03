@@ -1,18 +1,16 @@
 /**
  * Unit tests for secondary-pass model resolution (BYOK-default policy).
+ *
+ * The platform seam is `buildPlatformModel` (libs/llm) — no inline createOpenAI
+ * here — so the tests mock that seam and assert the orchestration order:
+ * BYOK slot → platform model → getInternalModel.
  */
-const createOpenAIMock = jest.fn(() => {
-    const factory = jest.fn((id: string) => ({ __platform: id }));
-    return factory;
-});
-
-jest.mock('@ai-sdk/openai', () => ({
-    createOpenAI: (opts: any) => createOpenAIMock(opts),
-}));
-
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn(
         (slot: any) => ({ __byok: true, model: slot?.model }) as any,
+    ),
+    buildPlatformModel: jest.fn(
+        (id: string) => ({ __platform: id }) as any,
     ),
     getInternalModel: jest.fn(() => ({ __internal: true })),
 }));
@@ -22,7 +20,11 @@ import {
     resolveSecondaryPassModel,
     SECONDARY_PASS_MODEL_ID,
 } from './secondary-pass-model';
-import { buildModelFromSlot, getInternalModel } from '@libs/llm/byok-to-vercel';
+import {
+    buildModelFromSlot,
+    buildPlatformModel,
+    getInternalModel,
+} from '@libs/llm/byok-to-vercel';
 
 const byok = {
     main: {
@@ -60,7 +62,7 @@ describe('resolveSecondaryPassModel — BYOK default', () => {
         expect(model).toEqual(
             expect.objectContaining({ __byok: true, model: 'gpt-client' }),
         );
-        expect(createOpenAIMock).not.toHaveBeenCalled();
+        expect(buildPlatformModel).not.toHaveBeenCalled();
         expect(isSecondaryByok(byok as any)).toBe(true);
     });
 
@@ -76,13 +78,14 @@ describe('resolveSecondaryPassModel — BYOK default', () => {
 
     it('uses platform gpt-5.4-mini when no BYOK (trial path)', () => {
         const model = resolveSecondaryPassModel(undefined);
-        expect(createOpenAIMock).toHaveBeenCalled();
+        expect(buildPlatformModel).toHaveBeenCalledWith(SECONDARY_PASS_MODEL_ID);
         expect(model).toEqual({ __platform: SECONDARY_PASS_MODEL_ID });
         expect(isSecondaryByok(undefined)).toBe(false);
     });
 
-    it('falls through to getInternalModel when no BYOK and no platform key', () => {
-        delete process.env.API_OPEN_AI_API_KEY;
+    it('falls through to getInternalModel when no BYOK and no platform model', () => {
+        // No platform key → buildPlatformModel returns null → last-resort internal.
+        (buildPlatformModel as jest.Mock).mockReturnValueOnce(null);
         resolveSecondaryPassModel(undefined);
         expect(getInternalModel).toHaveBeenCalled();
     });

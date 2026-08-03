@@ -1,6 +1,6 @@
-import { createOpenAI } from '@ai-sdk/openai';
 import {
     buildModelFromSlot,
+    buildPlatformModel,
     getInternalModel,
 } from '@libs/llm/byok-to-vercel';
 import type { BYOKConfig } from '@libs/llm/byok-config';
@@ -21,17 +21,6 @@ export function isSecondaryByok(byokConfig?: BYOKConfig | null): boolean {
     return !!byokConfig?.main;
 }
 
-function platformSecondaryModel(): any | null {
-    const openaiKey = process.env.API_OPEN_AI_API_KEY;
-    if (!openaiKey) return null;
-    return createOpenAI({
-        apiKey: openaiKey,
-        ...(process.env.API_OPENAI_FORCE_BASE_URL
-            ? { baseURL: process.env.API_OPENAI_FORCE_BASE_URL }
-            : {}),
-    })(SECONDARY_PASS_MODEL_ID);
-}
-
 /**
  * Resolve the ONE secondary-pass model (no main→fallback branch):
  *   1. Org BYOK resolved slot — when configured
@@ -47,7 +36,7 @@ export function resolveSecondaryPassModel(byokConfig?: BYOKConfig): any {
         return buildModelFromSlot(byokConfig?.main);
     }
 
-    const platform = platformSecondaryModel();
+    const platform = buildPlatformModel(SECONDARY_PASS_MODEL_ID);
     if (platform) return platform;
 
     return getInternalModel(byokConfig?.main);

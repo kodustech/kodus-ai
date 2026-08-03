@@ -16,6 +16,8 @@ jest.mock('@ai-sdk/google', () => ({
 
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     getInternalModel: () => ({ __mock: 'byok-model' }),
+    buildPlatformModel: () => ({ __mock: 'platform-model' }),
+    buildModelFromSlot: () => ({ __mock: 'byok-model' }),
 }));
 
 import { formatSuggestionContent } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';

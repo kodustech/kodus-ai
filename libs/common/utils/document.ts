@@ -48,27 +48,38 @@ const estimateTokenCount = (text: string) => {
     return Math.floor(byteCount / 4);
 };
 
+const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
 const embeddingModelCache = new Map<string, EmbeddingModel>();
 
-const getEmbeddingModel = (options?: {
+/**
+ * The ONE platform text-embedding builder. INTENTIONALLY pinned to platform
+ * OpenAI — `text-embedding-*` models are OpenAI's, so this must NEVER route
+ * through a client's BYOK provider (Moonshot/Anthropic/… don't serve them) nor
+ * inherit a forced base URL; the base URL is pinned explicitly and only the
+ * platform key comes from the env. Returns null when no platform key is set, so
+ * callers fail soft (e.g. the dedup tier falls back to lexical veto).
+ *
+ * This is the single seam for embeddings — both the fine-tuning suggestion
+ * index and the review dedup tier build through here (no inline createOpenAI).
+ */
+const buildPlatformEmbedder = (options?: {
     model?: string;
     apiKey?: string;
-}): EmbeddingModel => {
-    const defaultOptions = {
-        model: 'text-embedding-3-small',
-        apiKey: process.env.API_OPEN_AI_API_KEY,
-    };
-
-    const config = { ...defaultOptions, ...options };
-
-    const cacheKey = `${config.apiKey ?? ''}:${config.model}`;
+}): EmbeddingModel | null => {
+    const apiKey = options?.apiKey ?? process.env.API_OPEN_AI_API_KEY;
+    if (!apiKey) {
+        return null;
+    }
+    const model = options?.model ?? DEFAULT_EMBEDDING_MODEL;
+    const cacheKey = `${apiKey}:${model}`;
 
     let embeddingModel = embeddingModelCache.get(cacheKey);
     if (!embeddingModel) {
         const provider: OpenAIProvider = createOpenAI({
-            apiKey: config.apiKey,
+            apiKey,
+            baseURL: 'https://api.openai.com/v1',
         });
-        embeddingModel = provider.embedding(config.model);
+        embeddingModel = provider.embedding(model);
         embeddingModelCache.set(cacheKey, embeddingModel);
     }
 
@@ -89,7 +100,12 @@ const getOpenAIEmbedding = async (
 
     const config = { ...defaultOptions, ...options };
 
-    const embeddingModel = getEmbeddingModel(config);
+    const embeddingModel = buildPlatformEmbedder(config);
+    if (!embeddingModel) {
+        throw new Error(
+            'No platform OpenAI key configured for embeddings (API_OPEN_AI_API_KEY).',
+        );
+    }
 
     // Match the previous LangChain `OpenAIEmbeddings` default (`stripNewLines:
     // true`): collapse newlines to spaces before embedding so vectors stay
@@ -114,4 +130,9 @@ const getOpenAIEmbedding = async (
     };
 };
 
-export { createDocument, estimateTokenCount, getOpenAIEmbedding };
+export {
+    createDocument,
+    estimateTokenCount,
+    getOpenAIEmbedding,
+    buildPlatformEmbedder,
+};
