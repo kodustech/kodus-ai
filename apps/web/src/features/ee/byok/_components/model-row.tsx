@@ -15,7 +15,6 @@ import {
     TrashIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { cn } from "src/core/utils/components";
 
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
@@ -25,9 +24,10 @@ import type {
     LlmTask,
     ReasoningEffort,
 } from "../_types";
-import { maskKey, providerAvatarTint, TASK_LABELS } from "../_utils";
+import { maskKey, TASK_LABELS } from "../_utils";
 import { PROVIDER_LABELS } from "./catalog/model-card";
 import { DeleteRejectionAlert, useDeleteModel } from "./delete-model-flow";
+import { ProviderLogo } from "./provider-logo";
 
 const formatThinking = (effort?: ReasoningEffort): string | null => {
     if (!effort || effort === "none") return null;
@@ -79,7 +79,6 @@ export function ModelRow({
     const baseURL =
         typeof settings.baseURL === "string" ? settings.baseURL : undefined;
     const keyMask = maskKey(credential?.apiKey);
-    const avatarTint = providerAvatarTint(provider);
 
     // "USED IN" — where routing points at THIS model slot (BYOKModelConfig.id).
     const routing = config?.routing;
@@ -103,13 +102,11 @@ export function ModelRow({
             <div className="border-card-lv2 flex flex-col gap-3 rounded-lg border p-3">
                 <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 items-start gap-3">
-                        <span
-                            className={cn(
-                                "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-semibold uppercase",
-                                avatarTint,
-                            )}>
-                            {(providerLabel ?? displayName).charAt(0)}
-                        </span>
+                        <ProviderLogo
+                            provider={provider}
+                            label={providerLabel ?? displayName}
+                            className="mt-0.5 size-8"
+                        />
                         <div className="flex min-w-0 flex-col gap-1.5">
                             <span className="text-text-primary text-sm font-semibold text-balance">
                                 {displayName}

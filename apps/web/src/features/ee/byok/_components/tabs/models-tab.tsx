@@ -256,8 +256,9 @@ export const ModelsTab = ({
                     Connected providers
                 </h2>
                 <span className="text-text-tertiary text-xs tabular-nums">
-                    {totalModels} {totalModels === 1 ? "model" : "models"}{" "}
-                    enabled
+                    {groups.length}{" "}
+                    {groups.length === 1 ? "provider" : "providers"} ·{" "}
+                    {totalModels} {totalModels === 1 ? "model" : "models"}
                 </span>
             </div>
 

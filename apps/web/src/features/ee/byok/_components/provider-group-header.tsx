@@ -9,11 +9,11 @@ import {
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
 import { KeyRoundIcon, RotateCwIcon } from "lucide-react";
-import { cn } from "src/core/utils/components";
 
 import type { BYOKCredential } from "../_types";
-import { maskKey, providerAvatarTint } from "../_utils";
+import { maskKey } from "../_utils";
 import { PROVIDER_LABELS } from "./catalog/model-card";
+import { ProviderLogo } from "./provider-logo";
 
 /**
  * Collapsible provider group. The credential lives on the HEADER (masked key +
@@ -51,14 +51,11 @@ export function ProviderGroupHeader({
                             type="button"
                             className="group/trigger flex min-w-0 flex-1 items-center gap-3 text-left">
                             <CollapsibleIndicator />
-                            <span
-                                aria-hidden
-                                className={cn(
-                                    "flex size-9 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-semibold uppercase",
-                                    providerAvatarTint(credential.provider),
-                                )}>
-                                {providerLabel.charAt(0)}
-                            </span>
+                            <ProviderLogo
+                                provider={credential.provider}
+                                label={providerLabel}
+                                className="size-9"
+                            />
                             <span className="flex min-w-0 flex-col gap-0.5">
                                 <span className="text-text-primary text-sm font-semibold text-balance">
                                     {providerLabel}

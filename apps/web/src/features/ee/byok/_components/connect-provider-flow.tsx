@@ -9,9 +9,9 @@ import { cn } from "src/core/utils/components";
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConfig } from "../_types";
-import { providerAvatarTint } from "../_utils";
 import { CuratedConnectPanel } from "./catalog/connect-panel";
 import { CuratedModelCard, PROVIDER_LABELS } from "./catalog/model-card";
+import { ProviderLogo } from "./provider-logo";
 
 type ProviderChoice = { id: string; label: string; modelCount: number };
 
@@ -197,15 +197,14 @@ export function ConnectProviderFlow({
             className={hero ? "ring-primary-light/30 ring-1" : undefined}>
             <CardContent
                 className={cn(
-                    "flex flex-col gap-5",
-                    hero ? "items-center px-6 py-10 text-center" : "p-5",
+                    "flex flex-col items-center gap-5",
+                    hero ? "px-6 py-10 text-center" : "p-5",
                 )}>
                 {hero}
 
                 <div
                     className={cn(
-                        "grid w-full grid-cols-2 gap-2.5 sm:grid-cols-3",
-                        hero && "max-w-xl",
+                        "grid w-full max-w-xl grid-cols-2 gap-2.5 self-center sm:grid-cols-3",
                     )}>
                     {providers.map((p) => (
                         <button
@@ -213,14 +212,11 @@ export function ConnectProviderFlow({
                             type="button"
                             onClick={() => setPickedProvider(p.id)}
                             className="border-card-lv2 bg-card-lv2 hover:border-primary-light/60 hover:bg-card-lv3 flex items-center gap-2.5 rounded-lg border p-3 text-left transition-colors">
-                            <span
-                                aria-hidden
-                                className={cn(
-                                    "flex size-8 shrink-0 items-center justify-center rounded-lg font-mono text-sm font-semibold uppercase",
-                                    providerAvatarTint(p.id),
-                                )}>
-                                {p.label.charAt(0)}
-                            </span>
+                            <ProviderLogo
+                                provider={p.id}
+                                label={p.label}
+                                className="size-8"
+                            />
                             <span className="flex min-w-0 flex-col">
                                 <span className="text-text-primary truncate text-sm font-semibold">
                                     {p.label}
