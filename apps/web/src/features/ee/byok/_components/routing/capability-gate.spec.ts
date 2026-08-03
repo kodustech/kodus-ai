@@ -2,8 +2,8 @@ import { capabilityGate } from "./capability-gate";
 
 /**
  * The client capability predicate is a pure mirror of the backend's
- * TASK_CAPABILITY_REQUIREMENTS (libs/llm/static-task-strategy.ts:53-63):
- *  - codeReview   requires structuredOutput !== 'none'
+ * TASK_CAPABILITY_REQUIREMENTS (libs/llm/static-task-strategy.ts):
+ *  - codeReview   requires structured output — natively OR via native tools
  *  - conversation requires toolCalling === 'native'
  *  - prSummary    has no requirement
  * caps undefined → soft-OK (never a hard block; the backend is the backstop).
@@ -11,18 +11,25 @@ import { capabilityGate } from "./capability-gate";
 describe("capabilityGate", () => {
     // OpenAI-like: native structured output + native tools → compatible with all.
     const full = { structuredOutput: "json_schema", toolCalling: "native" };
-    // Anthropic-like: NO native structured output, but native tools.
+    // Anthropic-like: NO native structured output, but native tools → structured
+    // output via tool use, so still eligible for codeReview.
     const noStructured = { structuredOutput: "none", toolCalling: "native" };
     // Structured output but no native tool calling.
     const noTools = { structuredOutput: "json_object", toolCalling: "none" };
+    // Neither native structured output nor native tools → fails codeReview.
+    const neither = { structuredOutput: "none", toolCalling: "none" };
 
-    describe("codeReview (requires structured output)", () => {
-        it("passes a structured-output model", () => {
+    describe("codeReview (requires structured output, natively or via tools)", () => {
+        it("passes a native structured-output model", () => {
             expect(capabilityGate("codeReview", full).ok).toBe(true);
         });
 
-        it("blocks a model whose structuredOutput is 'none'", () => {
-            const result = capabilityGate("codeReview", noStructured);
+        it("passes a tool-native model without native structured output", () => {
+            expect(capabilityGate("codeReview", noStructured).ok).toBe(true);
+        });
+
+        it("blocks a model with neither structured output nor native tools", () => {
+            const result = capabilityGate("codeReview", neither);
             expect(result.ok).toBe(false);
             expect(result.reason).toBeTruthy();
         });
@@ -65,11 +72,11 @@ describe("capabilityGate", () => {
         it("names the model in a human-readable reason when !ok", () => {
             const result = capabilityGate(
                 "codeReview",
-                noStructured,
-                "claude-sonnet-4-5",
+                neither,
+                "some-basic-model",
             );
             expect(result.ok).toBe(false);
-            expect(result.reason).toContain("claude-sonnet-4-5");
+            expect(result.reason).toContain("some-basic-model");
         });
     });
 });

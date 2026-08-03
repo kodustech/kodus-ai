@@ -20,8 +20,10 @@ export type CapabilityGateResult = {
 
 /**
  * Pure client mirror of TASK_CAPABILITY_REQUIREMENTS
- * (libs/llm/static-task-strategy.ts:53-63). KEEP IN SYNC with the backend:
- *  - codeReview   requires structuredOutput !== 'none'
+ * (libs/llm/static-task-strategy.ts). KEEP IN SYNC with the backend:
+ *  - codeReview   requires structured output — natively (structuredOutput !==
+ *                 'none') OR via native tool calling (generateObject emits the
+ *                 object through a tool call for tool-native providers)
  *  - conversation requires toolCalling === 'native'
  *  - prSummary    has no requirement (always ok)
  *
@@ -38,10 +40,14 @@ export const capabilityGate = (
     // Unknown capabilities → soft-OK: let the user save; the backend decides.
     if (!caps) return { ok: true, unknown: true };
 
-    if (task === "codeReview" && caps.structuredOutput === "none") {
+    if (
+        task === "codeReview" &&
+        caps.structuredOutput === "none" &&
+        caps.toolCalling !== "native"
+    ) {
         return {
             ok: false,
-            reason: `${modelLabel} can't do structured output, which code review requires.`,
+            reason: `${modelLabel} can't do structured output (natively or via tools), which code review requires.`,
         };
     }
 

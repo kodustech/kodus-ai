@@ -44,16 +44,21 @@ type CapabilityRequirement = {
 
 /**
  * What each task demands of a model's capability profile (REQ-ROUTE-01):
- *  - codeReview: native structured output (structuredOutput !== 'none') — the
- *    review emits a strict JSON schema; a model that can't do structured output
- *    would degrade recall badly.
+ *  - codeReview: must be able to emit structured output — EITHER natively
+ *    (structuredOutput !== 'none') OR via native tool calling. The review is
+ *    driven by `generateObject`, which for providers without a native json_schema
+ *    (Anthropic, anthropic_compatible/Kimi-Code, Bedrock, never-downgrade
+ *    Moonshot) produces the object through a tool call. Gating those out would
+ *    wrongly exclude the primary review providers; only a model with neither
+ *    path fails.
  *  - prSummary: no hard requirement (free-form text).
  *  - conversation: native tool calling (the agent invokes tools mid-turn).
  */
 const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
     codeReview: {
         capability: 'structuredOutput',
-        satisfied: (c) => c.structuredOutput !== 'none',
+        satisfied: (c) =>
+            c.structuredOutput !== 'none' || c.toolCalling === 'native',
     },
     prSummary: null,
     conversation: {

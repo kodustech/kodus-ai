@@ -2,10 +2,13 @@
  * StaticTaskStrategy — REQ-ROUTE-01 (Phase 4, plan 04-01).
  *
  * Exercises the resolver against in-memory v2 configs + the REAL provider
- * registry (no live keys): openai `gpt-*` reports structuredOutput 'json_schema'
- * (eligible for codeReview); anthropic `claude-*` reports 'none' (NOT eligible for
- * codeReview, eligible for prSummary/conversation). No decryption anywhere — the
- * apiKey values are opaque ciphertext placeholders the resolver never touches.
+ * registry (no live keys): openai `gpt-*` reports structuredOutput 'json_schema';
+ * anthropic `claude-*` reports structuredOutput 'none' but toolCalling 'native',
+ * so it IS eligible for codeReview (structured output via tool use), prSummary
+ * and conversation. Only a model with neither a native json_schema nor native
+ * tool calling — or an unregistered provider — fails the codeReview gate. No
+ * decryption anywhere — the apiKey values are opaque ciphertext placeholders the
+ * resolver never touches.
  */
 import '@libs/llm/providers'; // side-effect: self-register every provider module
 import { StaticTaskStrategy } from './static-task-strategy';
@@ -87,9 +90,9 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
             const v = strategy.resolve(
                 'codeReview',
                 NO_CTX,
-                // default is anthropic (structuredOutput none) → fails codeReview;
+                // default is an unregistered provider → skipped;
                 // fallback is openai (json_schema) → eligible.
-                cfg({ defaultModelId: 'm-ANT', fallbackModelId: 'm-A' }),
+                cfg({ defaultModelId: 'm-UK', fallbackModelId: 'm-A' }),
             );
             expect(v.modelId).toBe('m-A');
             expect(v.reason).toMatch(/fallback/i);
@@ -97,29 +100,40 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
     });
 
     describe('capability gate', () => {
-        it('skips an ineligible candidate and records the missing capability in the reason', () => {
+        it('accepts anthropic (structuredOutput none) for codeReview via native tool calling', () => {
             const v = strategy.resolve(
                 'codeReview',
                 NO_CTX,
-                cfg({ taskOverrides: { codeReview: 'm-ANT' }, defaultModelId: 'm-A' }),
+                // anthropic default: structuredOutput 'none' BUT toolCalling
+                // 'native' → structured output via tool use → eligible.
+                cfg({ defaultModelId: 'm-ANT' }),
             );
-            // anthropic taskOverride skipped → falls to openai default.
-            expect(v.modelId).toBe('m-A');
-            expect(v.reason).toMatch(/structuredOutput/);
+            expect(v.modelId).toBe('m-ANT');
         });
 
-        it('BLOCKS (modelId null) when no candidate satisfies the task requirement', () => {
+        it('skips an ungateable candidate and records the reason', () => {
+            const v = strategy.resolve(
+                'codeReview',
+                NO_CTX,
+                cfg({ taskOverrides: { codeReview: 'm-UK' }, defaultModelId: 'm-A' }),
+            );
+            // unregistered-provider taskOverride skipped → falls to openai default.
+            expect(v.modelId).toBe('m-A');
+            expect(v.reason).toMatch(/not registered/i);
+        });
+
+        it('BLOCKS (modelId null) when no candidate can be gated', () => {
             const v = strategy.resolve(
                 'codeReview',
                 NO_CTX,
                 cfg(
-                    { defaultModelId: 'm-ANT' },
-                    [M.ANT],
-                    [AN],
+                    { defaultModelId: 'm-UK' },
+                    [M.UK],
+                    [UNKNOWN],
                 ),
             );
             expect(v.modelId).toBeNull();
-            expect(v.reason).toMatch(/structuredOutput/);
+            expect(v.reason).toMatch(/not registered/i);
         });
 
         it('applies no requirement for prSummary (anthropic none is eligible)', () => {
