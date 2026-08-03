@@ -57,6 +57,37 @@ export interface ResolvedTaskModel {
 }
 
 /**
+ * The shared resolution core: route `task` over the org's v2 config to a slot
+ * (ciphertext-bearing), WITHOUT building a model. Both `resolveTaskModel` (which
+ * builds) and `resolveTaskByokConfig` (slot-only carrier) delegate here so the
+ * routing/id-THEN-name/degrade logic lives in ONE place.
+ *
+ * Degrade contract (never throws): non-v2 / BLOCKED verdict / unresolvable slot
+ * → `{ slot: null }`, so callers fall back to the managed/env default.
+ */
+function resolveTaskSlot(
+    config: BYOKConfigV2 | null | undefined,
+    task: LlmTask,
+    ctx: RequestContext,
+): { slot: NormalizedModel | null; verdict: RoutingVerdict | null } {
+    if (!isV2Config(config)) {
+        return { slot: null, verdict: null };
+    }
+    const verdict = strategy.resolve(task, ctx, config);
+    if (!verdict.modelId) {
+        return { slot: null, verdict };
+    }
+    const routed = resolveModelSlotFromV2(config, verdict.modelId);
+    // id-THEN-name: a legacy NAME override applies onto the resolved slot's
+    // `.model` (the slot still supplies the credential/ciphertext).
+    const slot =
+        routed && verdict.modelName
+            ? { ...routed, model: verdict.modelName }
+            : (routed ?? null);
+    return { slot, verdict };
+}
+
+/**
  * Resolve the LanguageModel for `task` over the org's v2 config.
  */
 export function resolveTaskModel(
@@ -64,21 +95,7 @@ export function resolveTaskModel(
     task: LlmTask,
     options: ResolveTaskModelOptions = {},
 ): ResolvedTaskModel {
-    let slot: NormalizedModel | null = null;
-    let verdict: RoutingVerdict | null = null;
-
-    if (isV2Config(config)) {
-        verdict = strategy.resolve(task, options.ctx ?? {}, config);
-        if (verdict.modelId) {
-            const routed = resolveModelSlotFromV2(config, verdict.modelId);
-            // id-THEN-name: a legacy NAME override applies onto the resolved
-            // slot's `.model` (the slot still supplies the credential/ciphertext).
-            slot =
-                routed && verdict.modelName
-                    ? { ...routed, model: verdict.modelName }
-                    : routed;
-        }
-    }
+    const { slot, verdict } = resolveTaskSlot(config, task, options.ctx ?? {});
 
     const model = buildModelFromSlot(
         slot ?? undefined,
@@ -103,37 +120,21 @@ export function resolveTaskModel(
  * `getBYOKConfig`, so the credential/model comes from the v2 `models[]`/routing
  * rather than the collapsed legacy `main`.
  *
- * Mirrors `resolveTaskModel`'s resolution (StaticTaskStrategy → routed slot, with
- * an id-THEN-name legacy override) plus the org's own routed fallback. Returns
- * `undefined` for a non-v2 / absent config or a BLOCKED/unresolvable verdict, so
- * the caller falls back to the managed/env default exactly as with a missing
- * config. Secret hygiene: the returned slot carries ENCRYPTED apiKey ciphertext
- * (`resolveModelSlotFromV2` never decrypts); only `buildModelFromSlot` downstream
- * touches plaintext.
+ * Shares `resolveTaskModel`'s resolution core (`resolveTaskSlot`) — the only
+ * difference is this returns the slot-only `{ main }` carrier instead of a built
+ * model. Returns `undefined` for a non-v2 / absent config or a BLOCKED /
+ * unresolvable verdict, so the caller falls back to the managed/env default
+ * exactly as with a missing config. Secret hygiene: the returned slot carries
+ * ENCRYPTED apiKey ciphertext (`resolveModelSlotFromV2` never decrypts); only
+ * `buildModelFromSlot` downstream touches plaintext.
  */
 export function resolveTaskByokConfig(
     config: BYOKConfigV2 | null | undefined,
     task: LlmTask,
     options: { ctx?: RequestContext } = {},
 ): BYOKConfig | undefined {
-    if (!isV2Config(config)) {
-        return undefined;
-    }
-    const verdict = strategy.resolve(task, options.ctx ?? {}, config);
-    if (!verdict.modelId) {
-        return undefined;
-    }
-    const routed = resolveModelSlotFromV2(config, verdict.modelId);
-    const main =
-        routed && verdict.modelName
-            ? { ...routed, model: verdict.modelName }
-            : routed;
-    if (!main) {
-        return undefined;
-    }
-    const fallback = resolveModelSlotFromV2(
-        config,
-        config.routing?.fallbackModelId,
-    );
-    return { main, ...(fallback ? { fallback } : {}) } as BYOKConfig;
+    const { slot } = resolveTaskSlot(config, task, options.ctx ?? {});
+    // Single-model policy: the runtime fallback was removed in 04b-05 and no
+    // consumer reads `.fallback`, so the carrier is just `{ main }`.
+    return slot ? ({ main: slot } as BYOKConfig) : undefined;
 }
