@@ -31,7 +31,7 @@ import {
     type BYOKCredential,
     type BYOKModelConfig,
 } from './byok-config';
-import type { ReasoningEffort } from './providers/types';
+import type { ReasoningEffort } from './providers/kernel/types';
 
 // ─── Legacy stored shape (structural; the blob is untrusted jsonb) ────────────
 

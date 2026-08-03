@@ -101,4 +101,41 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
             (useCase as any).organizationParametersService.findByKey,
         ).not.toHaveBeenCalled();
     });
+
+    // ---- registry-driven descriptor branches (Phase 2) ----
+
+    it('serves a curated static catalog without any HTTP call (Bedrock)', async () => {
+        const useCase = buildUseCase(null);
+
+        const res = await useCase.execute(BYOKProvider.AMAZON_BEDROCK, {
+            organizationId: 'org-1',
+        });
+
+        expect(res.models.length).toBeGreaterThan(0);
+        expect(res.models.some((m) => m.id.includes('anthropic'))).toBe(true);
+        expect(mockedAxios.get).not.toHaveBeenCalled();
+    });
+
+    it('rejects manual-only providers with a "enter the model ID" message', async () => {
+        const useCase = buildUseCase(null);
+
+        await expect(
+            useCase.execute(BYOKProvider.ANTHROPIC_COMPATIBLE, {
+                organizationId: 'org-1',
+            }),
+        ).rejects.toThrow(/enter the model ID manually/i);
+        expect(mockedAxios.get).not.toHaveBeenCalled();
+    });
+
+    it('lists Moonshot against its fixed default endpoint (registry enables what the old switch could not)', async () => {
+        const useCase = buildUseCase(null);
+
+        const res = await useCase.execute(BYOKProvider.MOONSHOT, {
+            organizationId: 'org-1',
+        });
+
+        expect(res.models.map((m) => m.id)).toContain('kimi-k2.7-code');
+        const [url] = mockedAxios.get.mock.calls[0];
+        expect(url).toBe('https://api.moonshot.ai/v1/models');
+    });
 });

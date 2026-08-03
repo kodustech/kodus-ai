@@ -8,7 +8,7 @@
  * Provider ids are plain strings matching BYOKProvider values.
  */
 import { BYOKProvider } from '@libs/llm/model-providers';
-import type { ReasoningEffort } from './providers/types';
+import type { ReasoningEffort } from './providers/kernel/types';
 
 // ─── v2 persisted shape ──────────────────────────────────────────────────────
 

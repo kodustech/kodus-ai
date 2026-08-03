@@ -10,7 +10,7 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import { createLogger } from '@libs/core/log/logger';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import { REGISTRY } from '@libs/llm/providers';
-import type { ProviderBuildConfig } from '@libs/llm/providers/types';
+import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
 
 const logger = createLogger('ReasoningOptions');
 

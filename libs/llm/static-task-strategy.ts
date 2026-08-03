@@ -21,7 +21,7 @@
 // self-registers via side effect — the capability gate needs a populated REGISTRY
 // even if nothing else in the process has loaded byok-to-vercel yet.
 import { REGISTRY } from './providers';
-import type { ModelCapabilities } from './providers/types';
+import type { ModelCapabilities } from './providers/kernel/types';
 import type {
     BYOKConfigV2,
     BYOKCredential,
