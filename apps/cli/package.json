@@ -62,7 +62,7 @@
         "open": "^11.0.0",
         "ora": "^9.4.0",
         "simple-git": "^3.36.0",
-        "undici": "^8.3.0",
+        "undici": "^8.9.0",
         "update-notifier": "^7.3.1",
         "yaml": "^2.9.0"
     },
