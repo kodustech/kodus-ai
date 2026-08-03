@@ -957,8 +957,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         return (
             "## Subscription check unavailable ⏳\n\n" +
             "We couldn't confirm your subscription right now — the license " +
-            'service is temporarily unreachable. Your trial is still active; ' +
-            'this is not a limit on your account.\n\n' +
+            'service is temporarily unreachable.\n\n' +
             'Please re-run the review in a few minutes (or push a new commit) ' +
             "and Kody will pick it up.\n\n" +
             '<!-- kody-codereview -->'
