@@ -1,5 +1,5 @@
 import { authorizedFetch } from "@services/fetch";
-import { getBYOK } from "@services/organizationParameters/fetch";
+import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import { SETUP_PATHS } from "@services/setup";
 import type { TeamMembersResponse } from "@services/setup/types";
 import { auth } from "src/core/config/auth";
@@ -20,20 +20,22 @@ const hasCompanyEmail = (email?: string | null) => {
 
 export default async function SubscriptionStatus() {
     const teamId = await getGlobalSelectedTeamId();
-    const [session, { members }, organizationMembers, byokConfig] =
+    const [session, { members }, organizationMembers, llmConfigStatus] =
         await Promise.all([
             auth(),
             authorizedFetch<TeamMembersResponse>(SETUP_PATHS.TEAM_MEMBERS, {
                 params: { teamId },
             }),
             getOrganizationMembers({ teamId }).catch(() => []),
-            getBYOK().catch(() => undefined),
+            getLLMConfigStatus().catch(() => undefined),
         ]);
 
     // BYOK config lives in the API (org parameters), not in billing — so the
     // billing license never knows a key was connected. Detect it here and use
-    // it both as a recalc signal and as the source of truth for `byok`.
-    const hasByok = Boolean(byokConfig?.main);
+    // it both as a recalc signal and as the source of truth for `byok`. Use the
+    // same credential-aware signal as the app layout (`byok.configured` requires
+    // real credentials) so this page and the app chrome can never disagree.
+    const hasByok = Boolean(llmConfigStatus?.byok?.configured);
 
     const codeHostMembersCount = Array.isArray(organizationMembers)
         ? organizationMembers.length
