@@ -327,7 +327,10 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 draft.statusInfo = {
                     status: AutomationStatus.SKIPPED,
                     message: StageMessageHelper.skippedWithReason(
-                        this.getLicenseSkipReason(validationResult.errorType),
+                        this.getLicenseSkipReason(
+                            validationResult.errorType,
+                            validationResult.subscriptionStatus,
+                        ),
                     ),
                 };
                 // Notification already posted by handleValidationFailure above
@@ -377,7 +380,10 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             draft.statusInfo = {
                 status: AutomationStatus.SKIPPED,
                 message: StageMessageHelper.skippedWithReason(
-                    this.getLicenseSkipReason(validationResult.errorType),
+                    this.getLicenseSkipReason(
+                        validationResult.errorType,
+                        validationResult.subscriptionStatus,
+                    ),
                 ),
             };
             if (!draft.pipelineMetadata) {
@@ -389,12 +395,18 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
 
     private getLicenseSkipReason(
         errorType?: ValidationErrorType,
+        subscriptionStatus?: string,
     ): PipelineReason {
         switch (errorType) {
             case ValidationErrorType.BYOK_REQUIRED:
                 return PipelineReasons.PREREQUISITES.BYOK_MISSING;
             case ValidationErrorType.PLAN_LIMIT_EXCEEDED:
-                return PipelineReasons.PREREQUISITES.PLAN_LIMIT;
+                // A trial that ran out of Kodus-funded review credits is not a
+                // paid-plan limit — the trial is still active and BYOK keeps
+                // reviews running. Steer there instead of "upgrade your plan".
+                return subscriptionStatus === 'trial'
+                    ? PipelineReasons.PREREQUISITES.TRIAL_CREDITS_EXHAUSTED
+                    : PipelineReasons.PREREQUISITES.PLAN_LIMIT;
             case ValidationErrorType.USER_NOT_LICENSED:
                 return PipelineReasons.PREREQUISITES.USER_NO_LICENSE;
             case ValidationErrorType.INVALID_LICENSE:

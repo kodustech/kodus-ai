@@ -4,15 +4,24 @@ import {
 } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 
-jest.mock('@libs/core/log/logger', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        info: jest.fn(),
-    }),
-}));
+jest.mock('@libs/core/log/logger', () => {
+    // Shared across every createLogger() instance so tests can assert on the
+    // warn channel (e.g. the BYOK state-divergence alarm).
+    const warn = jest.fn();
+    return {
+        __warn: warn,
+        createLogger: () => ({
+            log: jest.fn(),
+            error: jest.fn(),
+            warn,
+            debug: jest.fn(),
+            info: jest.fn(),
+        }),
+    };
+});
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { __warn: mockLoggerWarn } = require('@libs/core/log/logger');
 
 const mockEnvironment = {
     API_CLOUD_MODE: true,
@@ -71,7 +80,13 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
     beforeEach(() => {
         mockEnvironment.API_CLOUD_MODE = true;
         mockEnvironment.API_DEVELOPMENT_MODE = false;
+        mockLoggerWarn.mockClear();
     });
+
+    const divergenceWarned = () =>
+        mockLoggerWarn.mock.calls.some((call: any[]) =>
+            String(call?.[0]?.message).includes('BYOK state divergence'),
+        );
 
     // ─── Development mode ───────────────────────────────────────────
 
@@ -238,6 +253,51 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         const result = await service.validateExecutionPermissions(orgData);
         expect(result.allowed).toBe(true);
         expect(result.byokConfig).toEqual(byokConfig);
+    });
+
+    it('blocks a *_byok trial with billing byok:true but no local config, and warns on the divergence', async () => {
+        // The production incident: billing keeps a plan-derived byok:true for a
+        // teams_byok trial, but the local config row is gone. The gate trusts
+        // the local row (blocks at 0 credits) and flags the mismatch so support
+        // can find it in observability_logs_ts.
+        const service = createService(
+            createMockLicenseService({
+                subscriptionStatus: 'trial',
+                planType: 'teams_byok',
+                byok: true,
+                trialReviewCreditsTotal: 5,
+                trialReviewCreditsUsed: 5,
+                trialReviewCreditsRemaining: 0,
+            }),
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(orgData);
+
+        expect(result.allowed).toBe(false);
+        expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+        expect(result.subscriptionStatus).toBe('trial');
+        expect(divergenceWarned()).toBe(true);
+    });
+
+    it('does NOT warn about divergence when the local BYOK config is present', async () => {
+        const service = createService(
+            createMockLicenseService({
+                subscriptionStatus: 'trial',
+                planType: 'teams_byok',
+                byok: true,
+                trialReviewCreditsTotal: 5,
+                trialReviewCreditsUsed: 5,
+                trialReviewCreditsRemaining: 0,
+            }),
+            createMockOrgParamsService(byokConfig),
+        );
+
+        const result = await service.validateExecutionPermissions(orgData);
+
+        expect(result.allowed).toBe(true);
+        expect(result.byokConfig).toEqual(byokConfig);
+        expect(divergenceWarned()).toBe(false);
     });
 
     it('should NOT consume a trial credit when BYOK is configured (key, not credits)', async () => {

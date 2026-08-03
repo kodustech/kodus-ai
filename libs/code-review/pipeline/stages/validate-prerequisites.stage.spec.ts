@@ -561,5 +561,54 @@ describe('ValidatePrerequisitesStage', () => {
             expect(body).toContain('/organization/byok');
             expect(body).not.toContain('trial has ended');
         });
+
+        it('sets a trial-specific SKIPPED status (not the paid "Plan Limit Exceeded") when trial credits run out', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'trial',
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message).toContain('Trial Reviews Used Up');
+            expect(result.statusInfo?.message).not.toContain(
+                'Plan Limit Exceeded',
+            );
+        });
+
+        it('keeps the generic "Plan Limit Exceeded" SKIPPED status for a non-trial plan limit', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'active',
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message).toContain('Plan Limit Exceeded');
+        });
     });
 });

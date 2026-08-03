@@ -71,6 +71,10 @@ export const PipelineReasons = {
             message: 'Plan Limit Exceeded',
             action: 'Upgrade plan to continue',
         } as PipelineReason,
+        TRIAL_CREDITS_EXHAUSTED: {
+            message: 'Trial Reviews Used Up',
+            action: 'Connect your own AI key to keep reviewing (unlimited, any plan)',
+        } as PipelineReason,
         USER_NO_LICENSE: {
             message: 'User Not Licensed',
             action: 'Assign seat to user',
