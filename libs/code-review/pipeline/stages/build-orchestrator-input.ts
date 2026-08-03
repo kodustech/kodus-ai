@@ -21,6 +21,7 @@ export type OrchestratorInputComputed = Pick<
     // release check) rather than read straight off the context, so the alpha
     // gate is applied in exactly one place.
     | 'heavy'
+    | 'linkedRepoAccess'
 > & {
     // Review-ready kody rules computed by the stage: long rules swapped for
     // their validated summaries (KodyRuleSummaryService). Optional so callers
@@ -75,6 +76,7 @@ export function buildOrchestratorInput(
         reviewOptions: computed.reviewOptions,
         onAgentProgress: computed.onAgentProgress,
         gitHubToken: computed.gitHubToken,
+        linkedRepoAccess: computed.linkedRepoAccess,
         baseBranch:
             context.sandboxHandle?.baseBranch ||
             context.pullRequest?.base?.ref ||

@@ -410,10 +410,40 @@ export type CodeReviewConfig = {
      *  a symbol outline for range-less reads of large files instead of dumping
      *  the head — fewer model tokens. Threaded to ReviewAgentInput.outlineFirst. */
     outlineFirst?: boolean;
+    /**
+     * Cross-repo context (#1576): sibling repositories the agent may grep/read
+     * during review. Empty/absent → feature fully off. Only repos already
+     * connected to the same organization are accepted (validated at review
+     * time). Soft cap of 3 per review.
+     *
+     * Runtime engine lives under `libs/ee/linked-repositories` (Enterprise
+     * License) and is plan-gated to Teams / Enterprise.
+     *
+     * ```yaml
+     * linkedRepositories:
+     *   - repository: "org/backend-api"
+     *     instructions: "REST API this frontend consumes"
+     *     ref: main   # optional
+     * ```
+     */
+    linkedRepositories?: LinkedRepositoryConfig[];
     // This is the default branch of the repository, used only during the review process
     // This field is populated dynamically from the API (GitHub/GitLab) and should NOT be saved to the database
     // It represents the repository's default branch (e.g., 'main', 'develop') that comes from the code management platform
     baseBranchDefault?: string;
+};
+
+/**
+ * One linked repository used as cross-repo review context.
+ * See `linkedRepositories` on {@link CodeReviewConfig}.
+ */
+export type LinkedRepositoryConfig = {
+    /** Full name of the linked repo (`owner/repo`). */
+    repository: string;
+    /** Free-text hint for the agent (what the link is for). */
+    instructions?: string;
+    /** Optional ref pin. When omitted, cascade: PR head branch → default branch. */
+    ref?: string;
 };
 
 export type CodeReviewConfigWithoutLLMProvider = Omit<

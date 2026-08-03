@@ -30,7 +30,11 @@ on:
     # minor/major/custom releases, hotfixes, or out-of-band runs,
     # dispatch manually via workflow_dispatch.
     schedule:
-        - cron: "0 6 * * 5"
+        # Friday 03:00 UTC = 00:00 BRT. The release train starts with the
+        # cloud-gate job (full cloud matrix against QA, ~2h); the RC is
+        # only built if that gate is green, so a broken product never
+        # burns the droplet build + self-hosted matrix cost.
+        - cron: "0 3 * * 5"
     workflow_dispatch:
         inputs:
             version_type:
@@ -61,6 +65,25 @@ concurrency:
 
 jobs:
     # ----------------------------------------------------------------
+    # Cloud gate (scheduled Friday train only): run the FULL cloud matrix
+    # against QA before spending anything on the self-hosted release.
+    # The cloud matrix exercises the same product review paths with no
+    # droplets and no image build — historically most release-breaking
+    # regressions (LLM key, webhook delivery, review pipeline) trip here
+    # first. Red gate -> the whole train stops at ~zero cost and the
+    # failure IS the to-fix list. Manual dispatches skip the gate: a
+    # human asking for a release is deliberate (and may be iterating on
+    # a fix the gate would re-block for 2h).
+    # ----------------------------------------------------------------
+    cloud-gate:
+        name: Cloud gate (full matrix vs QA)
+        if: ${{ github.event_name == 'schedule' }}
+        uses: ./.github/workflows/e2e-cloud.yml
+        with:
+            matrix_file: matrix/fast.yml
+        secrets: inherit
+
+    # ----------------------------------------------------------------
     # Freeze main while the release is in flight. The repo ruleset
     # `release-freeze` lives in this repo's settings (id 17004627);
     # default state is enforcement=disabled. We flip it to active here
@@ -79,7 +102,11 @@ jobs:
         # Freeze on every release path EXCEPT hotfix. Schedule (Friday
         # cron) has no inputs, so `inputs.hotfix != true` resolves to
         # "freeze" — exactly what we want for the weekly train.
-        if: ${{ inputs.hotfix != true }}
+        # needs+if: on the scheduled train the freeze (and the whole
+        # release behind it) only starts when the cloud gate is green;
+        # on manual dispatch the gate is skipped and we proceed.
+        needs: [cloud-gate]
+        if: ${{ !cancelled() && inputs.hotfix != true && (needs.cloud-gate.result == 'success' || needs.cloud-gate.result == 'skipped') }}
         runs-on: ubuntu-latest
         environment: ci
         permissions:
@@ -159,11 +186,16 @@ jobs:
 
     plan-release:
         name: Plan release (compute version and RC version)
-        needs: freeze-main
+        needs: [freeze-main, cloud-gate]
         # Run on freeze success (normal release) OR skip (hotfix path).
         # Don't run if freeze failed — that indicates an admin / token /
         # ruleset bug and we shouldn't ship with main potentially open.
-        if: ${{ needs.freeze-main.result == 'success' || needs.freeze-main.result == 'skipped' }}
+        #
+        # The cloud-gate condition must be checked HERE too, not only on
+        # freeze-main: a red gate leaves freeze-main `skipped`, which is
+        # indistinguishable from the legitimate hotfix skip — without this
+        # guard the release would sail on through a failed gate.
+        if: ${{ !cancelled() && (needs.freeze-main.result == 'success' || needs.freeze-main.result == 'skipped') && (needs.cloud-gate.result == 'success' || needs.cloud-gate.result == 'skipped') }}
         runs-on: ubuntu-latest
         outputs:
             release_version: ${{ steps.bump.outputs.release_version }}
@@ -245,6 +277,18 @@ jobs:
     create-rc-tag:
         name: Create RC git tag at current SHA
         needs: plan-release
+        # Explicit `if` required, NOT decoration. `cloud-gate` is skipped on
+        # every non-schedule run (manual dispatch, hotfix), and GitHub's
+        # implicit `success()` walks the TRANSITIVE needs graph — so a skip
+        # upstream skips this job even though `plan-release` succeeded, and
+        # every job below it cascades. `freeze-main` / `plan-release` already
+        # tolerate the skipped gate; the rest of the chain did not, which
+        # silently no-op'd every manual release from 2026-07-29 (79b3d401c)
+        # onward: run green, nothing built, nothing shipped, no alert (a skip
+        # is not a failure, so notify-discord-failure never fires).
+        # Depend on the DIRECT predecessor's result so a genuine failure still
+        # stops the train.
+        if: ${{ !cancelled() && needs.plan-release.result == 'success' }}
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -275,6 +319,9 @@ jobs:
         needs:
             - plan-release
             - create-rc-tag
+        # See create-rc-tag: explicit condition so the skipped cloud-gate does
+        # not cascade down the chain.
+        if: ${{ !cancelled() && needs.create-rc-tag.result == 'success' }}
         runs-on: ubuntu-latest
         # No environment: production here on purpose. The gate is at PROMOTE,
         # not at build — the Friday-morning flow dispatches at 9h and lets
@@ -411,6 +458,9 @@ jobs:
         needs:
             - plan-release
             - build-and-push
+        # See create-rc-tag: without this the matrix is skipped on every
+        # manual dispatch — the exact symptom that surfaced this bug.
+        if: ${{ !cancelled() && needs.build-and-push.result == 'success' }}
         permissions:
             contents: read
             packages: read
@@ -434,6 +484,10 @@ jobs:
         needs:
             - plan-release
             - e2e-matrix
+        # See create-rc-tag. Note this keeps promote strictly gated on a GREEN
+        # matrix — the point of the chain — while letting a skipped cloud-gate
+        # through.
+        if: ${{ !cancelled() && needs.e2e-matrix.result == 'success' }}
         permissions:
             contents: write
             packages: write

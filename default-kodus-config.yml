@@ -22,6 +22,18 @@ baseBranches: []
 enableCommittableSuggestions: true
 byokModel: '' # BYOK main model, empty = inherit, (directory -> repository -> the main model set in BYOK settings)
 
+# Cross-repo context (#1576): sibling repos the agent may grep/read during review.
+# Teams / Enterprise only (trial preview). Free plans ignore this field.
+# Runtime lives under libs/ee/linked-repositories (Enterprise License, not AGPL).
+# Only repositories already connected to the same organization are accepted.
+# Soft cap of 3. Empty = feature off (zero cost).
+# Example:
+#   linkedRepositories:
+#     - repository: "org/backend-api"
+#       instructions: "REST API this frontend consumes"
+#       ref: main   # optional pin; default = same-branch cascade
+linkedRepositories: []
+
 # review categories
 codeReviewVersion: 'v2' # legacy | v2
 reviewOptions:

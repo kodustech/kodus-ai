@@ -51,8 +51,16 @@ export interface SandboxInstance {
     baseBranch?: string;
     /** Absolute path to the repo root inside the sandbox */
     repoDir: string;
-    /** Run a shell command inside the sandbox */
-    run(command: string, opts?: { timeoutMs?: number }): Promise<SandboxRunResult>;
+    /**
+     * Run a shell command inside the sandbox.
+     * `envs` are merged into the process environment for this command only
+     * (used e.g. for GIT_AUTH_HEADER during linked-repo clones — token never
+     * lands in the command string).
+     */
+    run(
+        command: string,
+        opts?: { timeoutMs?: number; envs?: Record<string, string> },
+    ): Promise<SandboxRunResult>;
     /** Read a file from the sandbox filesystem */
     readFile(path: string, opts?: { timeoutMs?: number }): Promise<string>;
     /** Write a file to the sandbox filesystem */

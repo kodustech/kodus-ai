@@ -19,6 +19,17 @@ export async function assertHealthyExecution(
 ): Promise<string> {
     // The execution row settles shortly after the completion comment is
     // delivered; poll briefly rather than racing it.
+    //
+    // A non-success terminal status must NOT end the poll early: a PR can
+    // grow execution rows one at a time, and the row the scenario cares
+    // about can land AFTER an incidental one. Observed live (2026-07-29,
+    // cloud command-review PR#672): the auto-review row — `skipped` BY
+    // DESIGN, the scenario disables auto-review to test the command — was
+    // visible 3s before the command's `success` row landed, and the old
+    // first-terminal-wins read failed the cell against a perfectly healthy
+    // review. Keep polling on non-success; only the timeout turns the
+    // last-seen status into the verdict.
+    let lastSeen: string | null = null;
     const status = await pollUntil<string>(
         async () => {
             const resp = await http<any>(
@@ -46,23 +57,29 @@ export async function assertHealthyExecution(
             if (!found || found === 'pending' || found === 'in_progress') {
                 return null;
             }
+            if (found !== 'success') {
+                lastSeen = found;
+                return null;
+            }
             return found;
         },
         { intervalSec: 5, timeoutSec: 90 },
     );
 
+    const finalStatus = status ?? lastSeen;
     ctx.assert(
-        status !== null,
+        finalStatus !== null,
         `No settled automation execution found for PR #${prNumber} within 90s — cannot verify review health`,
     );
     ctx.assert(
-        status === 'success',
-        `Review of PR #${prNumber} completed UNHEALTHY: execution status is "${status}" ` +
+        finalStatus === 'success',
+        `Review of PR #${prNumber} completed UNHEALTHY: execution status stayed "${finalStatus}" ` +
+            `through the full 90s window with no success row ` +
             `(partial_error = an agent or auxiliary stage crashed and its work was silently dropped — ` +
             `the review may still have posted findings from the surviving agents). ` +
             `Check the worker logs for the failing stage/agent.`,
     );
-    return status!;
+    return finalStatus!;
 }
 
 /**

@@ -517,6 +517,7 @@ export abstract class BaseCodeReviewAgentProvider {
                 remoteCommands: input.remoteCommands,
                 byokConfig,
                 gitHubToken: input.gitHubToken,
+                linkedRepoAccess: input.linkedRepoAccess,
                 documentationSearchService: this.documentationSearchService,
                 documentationSearchOptions: {
                     organizationAndTeamData: input.organizationAndTeamData,

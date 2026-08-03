@@ -341,6 +341,36 @@ class KodyKnowledgeApprovalDto {
     enabled: boolean;
 }
 
+/**
+ * Cross-repo context (#1576): one linked sibling repository the agent may
+ * consult during review of the declaring repo.
+ */
+class LinkedRepositoryDto {
+    @IsString()
+    @ApiProperty({
+        example: 'org/backend-api',
+        description: 'Full repository name of a repo connected to this org.',
+    })
+    repository: string;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        example: 'REST API this frontend consumes',
+        description: 'Free-text hint for the agent about this link.',
+    })
+    instructions?: string;
+
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        example: 'main',
+        description:
+            'Optional ref pin. When omitted, cascade uses the PR head branch if it exists, otherwise the default branch.',
+    })
+    ref?: string;
+}
+
 class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsString()
@@ -492,6 +522,17 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsString()
     byokModelId?: string;
+
+    @IsOptional()
+    @IsArray()
+    @ValidateNested({ each: true })
+    @Type(() => LinkedRepositoryDto)
+    @ApiPropertyOptional({
+        type: [LinkedRepositoryDto],
+        description:
+            'Sibling repositories Kody may grep/read during review for cross-boundary checks.',
+    })
+    linkedRepositories?: LinkedRepositoryDto[];
 }
 
 export class CreateOrUpdateCodeReviewParameterDto {

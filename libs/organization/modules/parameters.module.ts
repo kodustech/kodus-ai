@@ -14,6 +14,7 @@ import { ParametersRepository } from '../infrastructure/adapters/repositories/pa
 import { PARAMETERS_SERVICE_TOKEN } from '../domain/parameters/contracts/parameters.service.contract';
 import { ParametersService } from '../infrastructure/adapters/services/parameters.service';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';
+import { LicenseModule } from '@libs/ee/license/license.module';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
 import { AIEngineModule } from '@libs/ai-engine/modules/ai-engine.module'; // Added
 import { CentralizedConfigModule } from '@libs/centralized-config/modules/centralized-config.module';
@@ -33,6 +34,9 @@ import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
         forwardRef(() => PullRequestMessagesModule),
         forwardRef(() => KodyRulesModule),
         forwardRef(() => PermissionValidationModule),
+        // Cross-repo context (#1576): the code-review parameter use-case gates
+        // linkedRepositories saves by plan via LICENSE_SERVICE_TOKEN.
+        forwardRef(() => LicenseModule),
         PermissionsModule,
     ],
     providers: [

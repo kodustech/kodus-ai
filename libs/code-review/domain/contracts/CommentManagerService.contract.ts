@@ -74,6 +74,7 @@ export interface ICommentManagerService {
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
+        linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
     ): Promise<void>;
 
     updateSummarizationInPR(

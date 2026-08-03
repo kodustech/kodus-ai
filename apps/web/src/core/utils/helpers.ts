@@ -218,6 +218,9 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         "byokModel",
         // New v2 prompt overrides for categories/severity customization
         "v2PromptOverrides",
+        // Cross-repo context (#1576). Without it the stripper would drop
+        // the field and the UI save would never persist linked repos.
+        "linkedRepositories",
     ];
 
     expectedKeys.forEach((key) => {

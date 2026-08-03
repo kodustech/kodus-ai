@@ -21,6 +21,10 @@ import {
     FileChange,
     SummaryConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    formatLinkedReposSummaryLine,
+    type LinkedRepositoriesReviewMetadata,
+} from '@libs/ee/linked-repositories';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
@@ -899,6 +903,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
+        linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
     ): Promise<void> {
         try {
             // When the review failed, we cannot honor a customer-configured
@@ -919,6 +924,7 @@ You must always respond in ${languageResultPrompt}.`;
                     reviewErrorMessage,
                     reviewHasPartialErrors,
                     reviewErrorCustomMessage,
+                    linkedRepositoriesMetadata,
                 );
             } else if (reviewHasPartialErrors) {
                 // Custom end-review template is rendering — the default
@@ -990,6 +996,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
+        linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
     ): Promise<string> {
         let commentBody = await this.generatePullRequestFinishSummaryMarkdown(
             organizationAndTeamData,
@@ -1001,6 +1008,7 @@ You must always respond in ${languageResultPrompt}.`;
             reviewErrorMessage,
             reviewHasPartialErrors,
             reviewErrorCustomMessage,
+            linkedRepositoriesMetadata,
         );
 
         commentBody = this.sanitizeBitbucketMarkdown(commentBody, platformType);
@@ -1565,6 +1573,7 @@ You must always respond in ${languageResultPrompt}.`;
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
+        linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata,
     ): Promise<string> {
         try {
             const language =
@@ -1665,10 +1674,16 @@ You must always respond in ${languageResultPrompt}.`;
             // automation_execution.dataExecution.reviewWarnings for the
             // admin-facing Pull Requests dashboard in the Kodus web app.
 
+            // Cross-repo transparency (#1576): CodeRabbit-style line listing
+            // which linked repos/refs were actually cloned and consulted.
+            const linkedReposLine = formatLinkedReposSummaryLine(
+                linkedRepositoriesMetadata,
+            );
+
             // Add unique tag with timestamp to identify this comment as completed
             const uniqueId = `completed-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-            return `${resultText}\n\n${await this.generateConfigReviewMarkdown(organizationAndTeamData, prNumber, codeReviewConfig)}\n\n<!-- kody-codereview-${uniqueId} -->\n<!-- kody-codereview -->\n&#8203;`;
+            return `${resultText}${linkedReposLine}\n\n${await this.generateConfigReviewMarkdown(organizationAndTeamData, prNumber, codeReviewConfig)}\n\n<!-- kody-codereview-${uniqueId} -->\n<!-- kody-codereview -->\n&#8203;`;
         } catch (error) {
             this.logger.error({
                 message:

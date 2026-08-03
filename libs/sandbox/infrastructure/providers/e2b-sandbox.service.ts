@@ -294,10 +294,11 @@ export class E2BSandboxService implements ISandboxProvider {
                 repoDir: REPO_DIR,
                 run: async (
                     command: string,
-                    opts?: { timeoutMs?: number },
+                    opts?: { timeoutMs?: number; envs?: Record<string, string> },
                 ): Promise<SandboxRunResult> => {
                     const result = await sandbox.commands.run(command, {
                         timeoutMs: opts?.timeoutMs ?? TIMEOUTS.COMMAND_LONG_MS,
+                        ...(opts?.envs && { envs: opts.envs }),
                     });
                     return {
                         stdout: result.stdout || '',

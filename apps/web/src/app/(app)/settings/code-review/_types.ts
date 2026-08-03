@@ -136,6 +136,20 @@ export type CodeReviewGlobalConfig = {
      *  when the id is absent (a repo still on the old override keeps resolving
      *  until it re-saves). New writes target `byokModelId`. */
     byokModel?: string;
+    /**
+     * Cross-repo context (#1576): sibling repos the agent may grep/read
+     * during review. Soft cap of 3 at review time. Empty = feature off.
+     */
+    linkedRepositories?: LinkedRepositoryConfig[];
+};
+
+export type LinkedRepositoryConfig = {
+    /** Full name of the linked repo (`owner/repo`). */
+    repository: string;
+    /** Free-text hint for the agent (what the link is for). */
+    instructions?: string;
+    /** Optional ref pin. When omitted, cascade: PR head branch → default branch. */
+    ref?: string;
 };
 
 export type CodeReviewBaseConfig = {

@@ -44,6 +44,11 @@ describe('AgentReviewStage — frozen context (regression #1522)', () => {
             {
                 getReleaseTrack: jest.fn().mockResolvedValue('stable'),
             } as any,
+            // CodeManagementService — linked-repo resolution (unused when no config)
+            {
+                getRepositories: jest.fn().mockResolvedValue([]),
+                getCloneParams: jest.fn().mockResolvedValue(null),
+            } as any,
         );
         return { stage, reviewOrchestrator, featureGate };
     };

@@ -94,6 +94,11 @@ import {
     InvalidGroupPathError,
     validateGroupPaths,
 } from '@libs/centralized-config/utils/path-encoder';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
+import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
 
 @Injectable()
 export class UpdateOrCreateCodeReviewParameterUseCase {
@@ -117,6 +122,8 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
         private readonly kodyRulesService: IKodyRulesService,
         private readonly permissionValidationService: PermissionValidationService,
         private readonly generateInitialKodyRulesUseCase: GenerateInitialKodyRulesUseCase,
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService: ILicenseService,
     ) {}
 
     async execute(
@@ -181,6 +188,14 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
                     body.actor?.organizationId ??
                     body.requestUser?.organization?.uuid;
             }
+
+            // Linked repositories (cross-repo context) is Teams/Enterprise only.
+            // Strip non-empty links on free so other settings can still save,
+            // and free orgs never accumulate a paid-only config payload.
+            await this.stripLinkedRepositoriesIfPlanNotAllowed(
+                organizationAndTeamData,
+                configValue,
+            );
 
             if (!body.skipAuthorization) {
                 await this.authorizationService.ensure({
@@ -549,6 +564,58 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             directories: repository.directories ?? [],
             configs: {},
         }));
+    }
+
+    /**
+     * Linked repositories are Teams/Enterprise only. Free (and other
+     * non-allowed) plans get non-empty values stripped so a paid-only field
+     * cannot be persisted via API/CLI/yml sync.
+     */
+    private async stripLinkedRepositoriesIfPlanNotAllowed(
+        organizationAndTeamData: OrganizationAndTeamData,
+        configValue: CreateOrUpdateCodeReviewParameterDto['configValue'] | undefined,
+    ): Promise<void> {
+        if (!configValue) return;
+        const links = (configValue as { linkedRepositories?: unknown })
+            .linkedRepositories;
+        if (!Array.isArray(links) || links.length === 0) {
+            return;
+        }
+
+        let allowed = false;
+        try {
+            const license =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+            allowed = isTeamsOrEnterpriseTierAllowed(license);
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'linkedRepositories plan check failed on save — stripping links',
+                context: UpdateOrCreateCodeReviewParameterUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+            allowed = false;
+        }
+
+        if (allowed) return;
+
+        (configValue as { linkedRepositories?: unknown }).linkedRepositories =
+            [];
+        this.logger.log({
+            message:
+                'Stripped linkedRepositories — plan is not Teams/Enterprise',
+            context: UpdateOrCreateCodeReviewParameterUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData?.organizationId,
+                attemptedCount: links.length,
+            },
+        });
     }
 
     private async createNewGlobalConfig(
