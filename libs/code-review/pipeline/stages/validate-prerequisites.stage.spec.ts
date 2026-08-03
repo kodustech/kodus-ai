@@ -543,6 +543,7 @@ describe('ValidatePrerequisitesStage', () => {
                     allowed: false,
                     errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
                     subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: true },
                 },
             );
             mockParametersService.findByKey.mockResolvedValue({
@@ -562,6 +563,36 @@ describe('ValidatePrerequisitesStage', () => {
             expect(body).not.toContain('trial has ended');
         });
 
+        it('posts the generic "trial ended" comment (not credits) when a trial plan-limit is NOT genuine exhaustion (transient billing failure)', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: false },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).not.toContain('Kodus-paid PR reviews');
+            expect(result.statusInfo?.message).toContain('Plan Limit Exceeded');
+            expect(result.statusInfo?.message).not.toContain(
+                'Trial Reviews Used Up',
+            );
+        });
+
         it('sets a trial-specific SKIPPED status (not the paid "Plan Limit Exceeded") when trial credits run out', async () => {
             const context = makeContext();
 
@@ -570,6 +601,7 @@ describe('ValidatePrerequisitesStage', () => {
                     allowed: false,
                     errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
                     subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: true },
                 },
             );
             mockParametersService.findByKey.mockResolvedValue({

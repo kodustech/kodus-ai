@@ -330,6 +330,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                         this.getLicenseSkipReason(
                             validationResult.errorType,
                             validationResult.subscriptionStatus,
+                            validationResult.metadata?.trialCreditsExhausted,
                         ),
                     ),
                 };
@@ -383,6 +384,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     this.getLicenseSkipReason(
                         validationResult.errorType,
                         validationResult.subscriptionStatus,
+                        validationResult.metadata?.trialCreditsExhausted,
                     ),
                 ),
             };
@@ -396,15 +398,19 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
     private getLicenseSkipReason(
         errorType?: ValidationErrorType,
         subscriptionStatus?: string,
+        trialCreditsExhausted?: boolean,
     ): PipelineReason {
         switch (errorType) {
             case ValidationErrorType.BYOK_REQUIRED:
                 return PipelineReasons.PREREQUISITES.BYOK_MISSING;
             case ValidationErrorType.PLAN_LIMIT_EXCEEDED:
-                // A trial that ran out of Kodus-funded review credits is not a
-                // paid-plan limit — the trial is still active and BYOK keeps
-                // reviews running. Steer there instead of "upgrade your plan".
-                return subscriptionStatus === 'trial'
+                // A trial that genuinely ran out of Kodus-funded review credits
+                // is not a paid-plan limit — the trial is still active and BYOK
+                // keeps reviews running. Steer there instead of "upgrade your
+                // plan". Only when credits are actually exhausted, though: a
+                // transient billing failure also surfaces as PLAN_LIMIT_EXCEEDED
+                // and must not claim the reviews were used up.
+                return subscriptionStatus === 'trial' && trialCreditsExhausted
                     ? PipelineReasons.PREREQUISITES.TRIAL_CREDITS_EXHAUSTED
                     : PipelineReasons.PREREQUISITES.PLAN_LIMIT;
             case ValidationErrorType.USER_NOT_LICENSED:
@@ -496,10 +502,14 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             // Running out of Kodus-paid trial reviews is a plan limit, but the
             // trial itself (features/time) is still active — and BYOK keeps
             // reviews running for free. Steer there instead of "trial ended".
+            // Only when credits are genuinely exhausted: a transient billing
+            // failure also surfaces as PLAN_LIMIT_EXCEEDED and must not claim
+            // the reviews were used up.
             if (
                 validationResult.errorType ===
                     ValidationErrorType.PLAN_LIMIT_EXCEEDED &&
-                validationResult.subscriptionStatus === 'trial'
+                validationResult.subscriptionStatus === 'trial' &&
+                validationResult.metadata?.trialCreditsExhausted === true
             ) {
                 noActiveSubscriptionType = 'trial_credits_exhausted';
             }

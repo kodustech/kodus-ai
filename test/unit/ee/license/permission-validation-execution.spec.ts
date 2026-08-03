@@ -219,6 +219,43 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
         expect(result.allowed).toBe(false);
         expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+        // Credits genuinely gone → flagged as exhausted.
+        expect(result.metadata?.trialCreditsExhausted).toBe(true);
+    });
+
+    it('does NOT flag exhaustion when the credit consume fails transiently (billing unreachable)', async () => {
+        // A transport failure to billing surfaces as PLAN_LIMIT_EXCEEDED too,
+        // but the reviews are NOT actually used up — the message must stay
+        // generic, not "you've used all your trial reviews".
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 3,
+            trialReviewCreditsRemaining: 2,
+        });
+        licenseService.consumeTrialReviewCredit.mockResolvedValue({
+            allowed: false,
+            reason: 'CONSUME_TRIAL_REVIEW_CREDIT_FAILED',
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            {
+                consumeTrialReviewCredit: true,
+                trialReviewCreditUsageKey: 'repo-1:123',
+            },
+        );
+
+        expect(result.allowed).toBe(false);
+        expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+        expect(result.metadata?.trialCreditsExhausted).toBe(false);
     });
 
     it('should deny managed trial when review credits are exhausted', async () => {
@@ -277,6 +314,7 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         expect(result.allowed).toBe(false);
         expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
         expect(result.subscriptionStatus).toBe('trial');
+        expect(result.metadata?.trialCreditsExhausted).toBe(true);
         expect(divergenceWarned()).toBe(true);
     });
 

@@ -258,7 +258,9 @@ export class PermissionValidationService {
                     return {
                         allowed: false,
                         errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
-                        metadata: { validation },
+                        // Credits are genuinely gone — safe to tell the user
+                        // their trial reviews are used up.
+                        metadata: { validation, trialCreditsExhausted: true },
                         subscriptionStatus: validation.subscriptionStatus,
                     };
                 }
@@ -291,7 +293,17 @@ export class PermissionValidationService {
                         return {
                             allowed: false,
                             errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
-                            metadata: { validation, consumeResult },
+                            metadata: {
+                                validation,
+                                consumeResult,
+                                // A billing denial for actually-gone credits is
+                                // exhaustion; a transport failure reaching
+                                // billing is NOT. Don't claim "reviews used up"
+                                // when billing was merely unreachable.
+                                trialCreditsExhausted:
+                                    consumeResult.reason !==
+                                    'CONSUME_TRIAL_REVIEW_CREDIT_FAILED',
+                            },
                             subscriptionStatus: validation.subscriptionStatus,
                         };
                     }
