@@ -1,4 +1,5 @@
 import { Injectable, Inject } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
 import {
     IAutomationExecutionService,
@@ -33,6 +34,7 @@ import {
 } from '../domain/contracts/PullRequestManagerService.contract';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
+import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
 
@@ -55,6 +57,7 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
         private readonly automationExecutionService: IAutomationExecutionService,
         @Inject(TEAM_AUTOMATION_SERVICE_TOKEN)
         private readonly teamAutomationService: ITeamAutomationService,
+        private readonly eventEmitter: EventEmitter2,
     ) {}
 
     async process(jobId: string, signal?: AbortSignal): Promise<void> {
@@ -219,12 +222,13 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             }
 
             // 5. Verify Implementation
-            await this.suggestionService.validateImplementedSuggestions(
-                payload.organizationAndTeamData,
-                codePatch,
-                suggestionsToValidate,
-                payload.pullRequestNumber,
-            );
+            const implementedSuggestions =
+                await this.suggestionService.validateImplementedSuggestions(
+                    payload.organizationAndTeamData,
+                    codePatch,
+                    suggestionsToValidate,
+                    payload.pullRequestNumber,
+                );
 
             await this.suggestionService.resolveImplementedSuggestionsOnPlatform(
                 {
@@ -237,6 +241,35 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                     platformType: payload.platformType,
                 },
             );
+
+            // 6. Broadcast so the dashboard's facet counts (Needs attention /
+            // Awaiting cards) refetch right after statuses are persisted. The
+            // verification pass is what flips implementationStatus, but unlike
+            // the review run it never touches an automation execution — so
+            // without this emit the SSE stream wouldn't tell the frontend a
+            // suggestion was resolved, and the card could stay stale. Emit only
+            // when at least one status was actually persisted (the service
+            // returns the updated suggestions); a no-op verification shouldn't
+            // churn the API.
+            if (implementedSuggestions?.length) {
+                try {
+                    this.eventEmitter.emit(PR_EXECUTION_UPDATED_EVENT, {
+                        organizationId:
+                            payload.organizationAndTeamData?.organizationId,
+                        executionUuid: undefined,
+                        status: AutomationStatus.SUCCESS,
+                        timestamp: new Date().toISOString(),
+                    });
+                } catch (error) {
+                    // The statuses are already persisted — a failing listener
+                    // must never fail the whole verification job.
+                    this.logger.warn({
+                        message: `Failed to broadcast execution update after verification for PR#${payload.pullRequestNumber}`,
+                        context: ImplementationVerificationProcessor.name,
+                        error,
+                    });
+                }
+            }
 
             await this.markCompleted(jobId, {
                 checkedCount: suggestionsToCheck.length,

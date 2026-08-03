@@ -63,6 +63,7 @@ describe('ImplementationVerificationProcessor — AbortSignal propagation', () =
     const pullRequestManagerService = {};
     const automationExecutionService = {};
     const teamAutomationService = {};
+    const eventEmitter = { emit: jest.fn() };
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -78,6 +79,7 @@ describe('ImplementationVerificationProcessor — AbortSignal propagation', () =
             pullRequestManagerService as any,
             automationExecutionService as any,
             teamAutomationService as any,
+            eventEmitter as any,
         );
 
         jobRepo.findOne.mockResolvedValue(makeJob());
