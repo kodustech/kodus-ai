@@ -4,7 +4,7 @@
  *
  * Model policy (mirrors the code-review agents):
  *   - main:      the org's BYOK model, or our managed default when no BYOK
- *                (`kimi-k2.7-code` via Moonshot — resolved by byokToVercelModel).
+ *                (`deepseek-v4-flash` via DeepSeek — resolved by byokToVercelModel).
  *   - fallback:  the org's OWN configured fallback (BYOK) if present; otherwise,
  *                ONLY for a trial/no-BYOK org, our managed `openai/gpt-oss-120b`
  *                on Groq. A BYOK org whose main fails does NOT cascade onto our
