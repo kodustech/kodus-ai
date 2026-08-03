@@ -1,7 +1,7 @@
 import type { ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 
-import type { CodeReviewPayload } from '@/shared/utils/langchainCommon/prompts/configuration/codeReview';
-import { prompt_codereview_system_gemini_v2 } from '@/shared/utils/langchainCommon/prompts/configuration/codeReview';
+import type { CodeReviewPayload } from '@/shared/utils/prompts/configuration/codeReview';
+import { prompt_codereview_system_gemini_v2 } from '@/shared/utils/prompts/configuration/codeReview';
 
 const createBaseContextPack = (knowledgeContent: string): ContextPack => ({
     id: 'ctx::test',

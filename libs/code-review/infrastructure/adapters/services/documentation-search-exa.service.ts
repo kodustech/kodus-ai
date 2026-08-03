@@ -21,7 +21,7 @@ import pLimit from 'p-limit';
 import {
     prompt_code_review_documentation_formatter_system,
     prompt_code_review_documentation_formatter_user,
-} from '../../../../common/utils/langchainCommon/prompts/codeReviewDocumentationFormatter';
+} from '../../../../common/utils/prompts/codeReviewDocumentationFormatter';
 
 const CACHE_PROVIDER = 'exa';
 type ExaSearchResponse = Awaited<ReturnType<Exa['search']>>;

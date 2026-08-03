@@ -1,6 +1,6 @@
-import { prompt_codereview_cross_file_analysis } from '@/shared/utils/langchainCommon/prompts/codeReviewCrossFileAnalysis';
-import { prompt_codeReviewSafeguard_system } from '@/shared/utils/langchainCommon/prompts/codeReviewSafeguard';
-import { prompt_kodyrules_prlevel_analyzer } from '@/shared/utils/langchainCommon/prompts/kodyRulesPrLevel';
+import { prompt_codereview_cross_file_analysis } from '@/shared/utils/prompts/codeReviewCrossFileAnalysis';
+import { prompt_codeReviewSafeguard_system } from '@/shared/utils/prompts/codeReviewSafeguard';
+import { prompt_kodyrules_prlevel_analyzer } from '@/shared/utils/prompts/kodyRulesPrLevel';
 
 describe('memories injection in prompt generators and safeguards', () => {
     const memories = [

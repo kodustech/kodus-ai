@@ -17,7 +17,7 @@ import {
     DocumentationPlannerSchemaType,
     prompt_code_review_documentation_planner_system,
     prompt_code_review_documentation_planner_user,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewDocumentationPlanner';
+} from '@libs/common/utils/prompts/codeReviewDocumentationPlanner';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';

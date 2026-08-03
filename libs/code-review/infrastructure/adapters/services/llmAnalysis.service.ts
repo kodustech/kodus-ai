@@ -18,14 +18,14 @@ import {
     CrossFileContextSnippet,
     RemoteCommands,
 } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
-import { prompt_validateImplementedSuggestions } from '@libs/common/utils/langchainCommon/prompts';
+import { prompt_validateImplementedSuggestions } from '@libs/common/utils/prompts';
 import {
     prompt_codereview_system_gemini,
     prompt_codereview_system_gemini_v2,
     prompt_codereview_user_gemini,
     prompt_codereview_user_gemini_v2,
-} from '@libs/common/utils/langchainCommon/prompts/configuration/codeReview';
-import { prompt_severity_analysis_user } from '@libs/common/utils/langchainCommon/prompts/severityAnalysis';
+} from '@libs/common/utils/prompts/configuration/codeReview';
+import { prompt_severity_analysis_user } from '@libs/common/utils/prompts/severityAnalysis';
 import {
     AIAnalysisResult,
     AnalysisContext,

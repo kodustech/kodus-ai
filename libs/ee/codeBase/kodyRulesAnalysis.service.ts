@@ -32,7 +32,7 @@ import {
     prompt_kodyrules_suggestiongeneration_user,
     prompt_kodyrules_updatestdsuggestions_system,
     prompt_kodyrules_updatestdsuggestions_user,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRules';
+} from '@libs/common/utils/prompts/kodyRules';
 import { tryParseJSONObject } from '@libs/common/utils/transforms/json';
 import {
     AIAnalysisResult,

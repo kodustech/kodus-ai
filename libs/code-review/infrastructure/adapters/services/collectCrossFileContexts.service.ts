@@ -8,13 +8,13 @@ import {
     CrossFileContextPlannerSchema,
     CrossFileContextPlannerSchemaType,
     prompt_cross_file_context_planner,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextPlanner';
+} from '@libs/common/utils/prompts/codeReviewCrossFileContextPlanner';
 import {
     CrossFileContextSufficiencySchema,
     CrossFileContextSufficiencySchemaType,
     CrossFileContextSufficiencyPayload,
     prompt_cross_file_context_sufficiency,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextSufficiency';
+} from '@libs/common/utils/prompts/codeReviewCrossFileContextSufficiency';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';

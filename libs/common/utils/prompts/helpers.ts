@@ -3,7 +3,7 @@ import {
     stripMarkersFromText,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context.utils';
 
-import { convertTiptapJSONToMarkdown } from '../../tiptap-json';
+import { convertTiptapJSONToMarkdown } from '../tiptap-json';
 
 /**
  * Limits text length to a maximum number of characters.

@@ -1,5 +1,5 @@
 import z from 'zod';
-import { getTextOrDefault, sanitizePromptText } from './prompt.helpers';
+import { getTextOrDefault, sanitizePromptText } from './helpers';
 
 import { UncategorizedComment } from '@libs/code-review/domain/types/commentAnalysis.type';
 import { LibraryKodyRule } from '@libs/core/infrastructure/config/types/general/kodyRules.type';

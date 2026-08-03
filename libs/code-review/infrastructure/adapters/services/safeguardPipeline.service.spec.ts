@@ -33,7 +33,7 @@ jest.mock('@ai-sdk/openai-compatible', () => ({
 }));
 
 import { tracedGenerateText } from '@libs/llm/llm-call';
-import { SafeguardFeatureSet } from '@libs/common/utils/langchainCommon/prompts/codeReviewSafeguardFeatures';
+import { SafeguardFeatureSet } from '@libs/common/utils/prompts/codeReviewSafeguardFeatures';
 
 import { SafeguardPipelineService } from './safeguardPipeline.service';
 

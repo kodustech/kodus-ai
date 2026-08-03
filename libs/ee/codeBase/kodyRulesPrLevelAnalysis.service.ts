@@ -14,7 +14,7 @@ import {
     KodyRulesPrLevelPayload,
     prompt_kodyrules_prlevel_analyzer,
     prompt_kodyrules_prlevel_group_rules,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRulesPrLevel';
+} from '@libs/common/utils/prompts/kodyRulesPrLevel';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     AIAnalysisResult,

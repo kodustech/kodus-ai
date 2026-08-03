@@ -10,7 +10,7 @@ import { environment } from '../configs/environment';
 import {
     prompt_kodyissues_merge_suggestions_into_issues_system,
     prompt_kodyissues_resolve_issues_system,
-} from '@libs/common/utils/langchainCommon/prompts/kodyIssuesManagement';
+} from '@libs/common/utils/prompts/kodyIssuesManagement';
 import { contextToGenerateIssues } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
 
 export const KODY_ISSUES_ANALYSIS_SERVICE_TOKEN = Symbol(

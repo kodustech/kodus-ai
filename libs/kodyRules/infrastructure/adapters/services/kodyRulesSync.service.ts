@@ -61,7 +61,7 @@ import {
     kodyRulesIDEGeneratorSchema,
     kodyRulesIDEGeneratorSchemaOnboarding,
     kodyRulesManifestGeneratorSchemaOnboarding,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRules';
+} from '@libs/common/utils/prompts/kodyRules';
 import { PromptSourceType } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
 import { createLogger } from '@libs/core/log/logger';
 import { UpdateOrCreateCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/update-or-create-code-review-parameter-use-case';

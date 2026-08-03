@@ -6,7 +6,7 @@
 #   - D-03 / REQ-SEC-01: no runtime consumer can reach kodus-common's
 #     ZodOutputParser._runCorrectionChain (the system-key repair leak), because
 #     no runtime .builder().execute() and no `new BYOKPromptRunnerService` remain.
-#   - D-04: @langchain is confined to the embeddings path (langchainCommon/document.ts);
+#   - D-04: @langchain is confined to the embeddings path (document.ts);
 #     nothing on the LLM chat/review execution path imports @langchain.
 #
 # It is the DURABLE regression guard (T-03-24 / T-03-25): a future .builder() executor
@@ -77,16 +77,16 @@ else
 fi
 echo
 
-echo "== GATE-D: runtime @langchain imports in libs (MUST list ONLY langchainCommon/document.ts) =="
+echo "== GATE-D: runtime @langchain imports in libs (MUST list ONLY document.ts) =="
 gate_d="$(grep -rln --include='*.ts' '@langchain/' libs \
     | grep -v '.spec.ts' \
-    | grep -v 'langchainCommon/document.ts')"
+    | grep -v 'document.ts')"
 if [ -n "$gate_d" ]; then
     echo "FAIL — @langchain is on the LLM execution path (only the embeddings document.ts is allowed):"
     echo "$gate_d"
     fail=1
 else
-    echo "ok — @langchain confined to libs/common/utils/langchainCommon/document.ts (embeddings, out of scope)"
+    echo "ok — @langchain confined to libs/common/utils/document.ts (embeddings, out of scope)"
 fi
 echo
 

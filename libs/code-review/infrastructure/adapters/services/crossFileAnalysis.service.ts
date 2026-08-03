@@ -11,7 +11,7 @@ import {
     CrossFileAnalysisSchemaType,
     CrossFileContextForPrompt,
     prompt_codereview_cross_file_analysis,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileAnalysis';
+} from '@libs/common/utils/prompts/codeReviewCrossFileAnalysis';
 import {
     AnalysisContext,
     CodeSuggestion,

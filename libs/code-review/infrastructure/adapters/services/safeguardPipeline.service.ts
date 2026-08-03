@@ -26,14 +26,14 @@ import {
     formatMemoriesSection,
     formatReferenceSection,
     formatSyncErrors,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewSafeguard';
+} from '@libs/common/utils/prompts/codeReviewSafeguard';
 import {
     STRUCTURAL_DEFECT_FEATURES,
     SafeguardFeatureExtractionResult,
     SafeguardFeatureSet,
     prompt_codeReviewSafeguard_featureExtraction,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewSafeguardFeatures';
-import { prompt_codeReviewSafeguard_verification } from '@libs/common/utils/langchainCommon/prompts/codeReviewSafeguardVerification';
+} from '@libs/common/utils/prompts/codeReviewSafeguardFeatures';
+import { prompt_codeReviewSafeguard_verification } from '@libs/common/utils/prompts/codeReviewSafeguardVerification';
 import { ReviewModeResponse } from '@libs/core/domain/enums/code-review.enum';
 import {
     DocumentationContextItem,

@@ -25,8 +25,8 @@ import {
     kodyMemoryResolutionSchema,
     prompt_kodyMemoryResolution_system,
     prompt_kodyMemoryResolution_user,
-} from '@libs/common/utils/langchainCommon/prompts/kodyMemoryResolution';
-import { kodyRulesRecommendationSchema } from '@libs/common/utils/langchainCommon/prompts/kodyRulesRecommendation';
+} from '@libs/common/utils/prompts/kodyMemoryResolution';
+import { kodyRulesRecommendationSchema } from '@libs/common/utils/prompts/kodyRulesRecommendation';
 import { ProgrammingLanguage } from '@libs/core/domain/enums';
 import {
     ActionType,

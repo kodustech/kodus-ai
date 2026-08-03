@@ -2,7 +2,7 @@ import { ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/co
 import { CrossFileContextSnippet } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 import { LimitationType } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import { getTextOrDefault, sanitizePromptText } from '../prompt.helpers';
+import { getTextOrDefault, sanitizePromptText } from '../helpers';
 
 export interface CodeReviewPayload {
     limitationType?: LimitationType;

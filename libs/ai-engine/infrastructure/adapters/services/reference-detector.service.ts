@@ -16,11 +16,11 @@ import {
 import {
     prompt_detect_external_references_system,
     prompt_detect_external_references_user,
-} from '@libs/common/utils/langchainCommon/prompts/externalReferences';
+} from '@libs/common/utils/prompts/externalReferences';
 import {
     prompt_kodyrules_detect_references_system,
     prompt_kodyrules_detect_references_user,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRulesExternalReferences';
+} from '@libs/common/utils/prompts/kodyRulesExternalReferences';
 import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
 import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';

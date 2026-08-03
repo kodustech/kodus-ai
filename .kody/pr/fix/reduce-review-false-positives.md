@@ -253,7 +253,7 @@ Precisa rodar de novo num arquivo que gere sugestões pra testar o agent. Quer r
 - assistant_message: Roda com mais arquivos pra aumentar a chance de gerar sugestões. Algo tipo:
 
 ```bash
-kodus review libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts libs/code-review/infrastructure/adapters/services/safeguardTriage.service.ts libs/common/utils/langchainCommon/prompts/code...
+kodus review libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts libs/code-review/infrastructure/adapters/services/safeguardTriage.service.ts libs/common/utils/prompts/code...
 
 ### 2026-03-04T20:51:58.790Z | claude-code | user-prompt-submit
 - prompt: isso ai nao ta usando a api local...
@@ -262,7 +262,7 @@ kodus review libs/code-review/infrastructure/adapters/services/safeguardPipeline
 - assistant_message: Roda com a env var:
 
 ```bash
-KODUS_API_URL=http://localhost:3001 kodus review libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts libs/code-review/infrastructure/adapters/services/safeguardTriage.service.ts libs/common/utils/langchainCommon/prompts/codeReviewSafeguardVerif...
+KODUS_API_URL=http://localhost:3001 kodus review libs/code-review/infrastructure/adapters/services/safeguardPipeline.service.ts libs/code-review/infrastructure/adapters/services/safeguardTriage.service.ts libs/common/utils/prompts/codeReviewSafeguardVerif...
 
 ### 2026-03-04T20:55:07.156Z | claude-code | user-prompt-submit
 - prompt: rodei de novo

@@ -5,12 +5,12 @@ import {
     prompt_validateCodeSemantics,
     ValidateCodeSemanticsResult,
     validateCodeSemanticsSchema,
-} from '@libs/common/utils/langchainCommon/prompts/validateCodeSemantics';
+} from '@libs/common/utils/prompts/validateCodeSemantics';
 import {
     checkSuggestionSimplicitySchema,
     prompt_checkSuggestionSimplicity_system,
     prompt_checkSuggestionSimplicity_user,
-} from '@libs/common/utils/langchainCommon/prompts/checkSuggestionSimplicity';
+} from '@libs/common/utils/prompts/checkSuggestionSimplicity';
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';

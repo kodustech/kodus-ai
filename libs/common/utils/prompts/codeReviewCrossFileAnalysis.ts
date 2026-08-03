@@ -2,9 +2,9 @@ import z from 'zod';
 
 import { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
-import { SeverityLevel } from '../../enums/severityLevel.enum';
-import { getDefaultKodusConfigFile } from '../../validateCodeReviewConfigFile';
-import { getTextOrDefault, sanitizePromptText } from './prompt.helpers';
+import { SeverityLevel } from '../enums/severityLevel.enum';
+import { getDefaultKodusConfigFile } from '../validateCodeReviewConfigFile';
+import { getTextOrDefault, sanitizePromptText } from './helpers';
 
 export interface CrossFileContextForPrompt {
     filePath: string;

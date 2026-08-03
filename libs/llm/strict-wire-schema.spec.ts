@@ -2,9 +2,9 @@ import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { z } from 'zod';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
-import { kodyRulesIDEGeneratorSchema } from '@libs/common/utils/langchainCommon/prompts/kodyRules';
-import { kodyMemoryResolutionSchema } from '@libs/common/utils/langchainCommon/prompts/kodyMemoryResolution';
-import { kodyRulesRecommendationSchema } from '@libs/common/utils/langchainCommon/prompts/kodyRulesRecommendation';
+import { kodyRulesIDEGeneratorSchema } from '@libs/common/utils/prompts/kodyRules';
+import { kodyMemoryResolutionSchema } from '@libs/common/utils/prompts/kodyMemoryResolution';
+import { kodyRulesRecommendationSchema } from '@libs/common/utils/prompts/kodyRulesRecommendation';
 import { compilerOutputSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import { decomposeOutputSchema } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
 import { shardViolationsWireSchema } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
@@ -41,17 +41,17 @@ import {
 
 // Phase 3 call sites that reuse schemas already exported from prompt files —
 // they still flow through the strict-wire path, so assert them here too.
-import { CrossFileContextPlannerSchema } from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextPlanner';
-import { CrossFileContextSufficiencySchema } from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileContextSufficiency';
-import { CrossFileAnalysisSchema } from '@libs/common/utils/langchainCommon/prompts/codeReviewCrossFileAnalysis';
-import { DocumentationPlannerSchema } from '@libs/common/utils/langchainCommon/prompts/codeReviewDocumentationPlanner';
-import { validateCodeSemanticsSchema } from '@libs/common/utils/langchainCommon/prompts/validateCodeSemantics';
-import { checkSuggestionSimplicitySchema } from '@libs/common/utils/langchainCommon/prompts/checkSuggestionSimplicity';
+import { CrossFileContextPlannerSchema } from '@libs/common/utils/prompts/codeReviewCrossFileContextPlanner';
+import { CrossFileContextSufficiencySchema } from '@libs/common/utils/prompts/codeReviewCrossFileContextSufficiency';
+import { CrossFileAnalysisSchema } from '@libs/common/utils/prompts/codeReviewCrossFileAnalysis';
+import { DocumentationPlannerSchema } from '@libs/common/utils/prompts/codeReviewDocumentationPlanner';
+import { validateCodeSemanticsSchema } from '@libs/common/utils/prompts/validateCodeSemantics';
+import { checkSuggestionSimplicitySchema } from '@libs/common/utils/prompts/checkSuggestionSimplicity';
 import { classificationBatchSchema } from '@libs/ee/analytics-warehouse/classification/classification.prompts';
 import {
     kodyRulesClassifierSchema,
     kodyRulesGeneratorSchema,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRules';
+} from '@libs/common/utils/prompts/kodyRules';
 
 // OpenAI strict structured outputs impose TWO rules on every object node, and
 // 400 the request if either is violated:

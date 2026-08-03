@@ -2,7 +2,7 @@ import {
     AnalysisContext,
     FileChange,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import { getTextOrDefault, sanitizePromptText } from './prompt.helpers';
+import { getTextOrDefault, sanitizePromptText } from './helpers';
 
 export type KodyRulesPrLevelPayload = {
     pr_title: string;

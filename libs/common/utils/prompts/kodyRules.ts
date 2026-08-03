@@ -1,6 +1,6 @@
 import z from 'zod';
-import { getDefaultKodusConfigFile } from '../../validateCodeReviewConfigFile';
-import { getTextOrDefault, sanitizePromptText } from './prompt.helpers';
+import { getDefaultKodusConfigFile } from '../validateCodeReviewConfigFile';
+import { getTextOrDefault, sanitizePromptText } from './helpers';
 
 function formatMemoriesSection(
     memories?: Array<{ title?: string; rule?: string }>,

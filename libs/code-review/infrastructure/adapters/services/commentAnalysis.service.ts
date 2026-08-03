@@ -31,7 +31,7 @@ import {
     prompt_CommentCategorizerUser,
     prompt_CommentIrrelevanceFilterSystem,
     prompt_CommentIrrelevanceFilterUser,
-} from '@libs/common/utils/langchainCommon/prompts/commentAnalysis';
+} from '@libs/common/utils/prompts/commentAnalysis';
 import {
     kodyRulesGeneratorDuplicateFilterSchema,
     kodyRulesGeneratorQualityFilterSchema,
@@ -42,7 +42,7 @@ import {
     prompt_KodyRulesGeneratorQualityFilterUser,
     prompt_KodyRulesGeneratorSystem,
     prompt_KodyRulesGeneratorUser,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRulesGenerator';
+} from '@libs/common/utils/prompts/kodyRulesGenerator';
 import { DocumentationContextItem } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { LibraryKodyRule } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';

@@ -3,7 +3,7 @@ import { LLMModelProvider, MODEL_STRATEGIES } from '@libs/llm/model-providers';
 import { Injectable } from '@nestjs/common';
 import { encoding_for_model, TiktokenModel } from 'tiktoken';
 
-import { estimateTokenCount } from '@libs/common/utils/langchainCommon/document';
+import { estimateTokenCount } from '@libs/common/utils/document';
 
 export interface TokenChunkingOptions {
     model?: LLMModelProvider | string;

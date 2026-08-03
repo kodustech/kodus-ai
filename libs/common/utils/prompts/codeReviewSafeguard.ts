@@ -1,4 +1,4 @@
-import { getTextOrDefault, sanitizePromptText } from './prompt.helpers';
+import { getTextOrDefault, sanitizePromptText } from './helpers';
 
 export function formatSyncErrors(
     errors: unknown[] | string | undefined,
