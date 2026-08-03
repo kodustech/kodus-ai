@@ -166,7 +166,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         organizationAndTeamData,
                         codeReviewConfig.languageResultPrompt,
                         codeReviewConfig.summary,
-                        codeReviewConfig?.byokConfig ?? null,
+                        // No byokConfig arg: generateSummaryPR owns its model
+                        // resolution and routes by the `prSummary` task itself.
                         isCommitRun,
                         false,
                         context.externalPromptContext,

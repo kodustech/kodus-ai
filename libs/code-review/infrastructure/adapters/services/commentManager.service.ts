@@ -186,18 +186,16 @@ export class CommentManagerService implements ICommentManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         languageResultPrompt: string,
         summaryConfig: SummaryConfig,
-        byokConfig?: BYOKConfig,
         isCommitRun?: boolean,
         prPreview?: boolean,
         externalPromptContext?: any,
         platformType?: PlatformType,
     ): Promise<string> {
-        let byokConfigValue: BYOKConfig | null = byokConfig ?? null;
-
         if (!summaryConfig?.generatePRSummary) {
             return null;
         }
 
+        // Preview is gated behind a basic-license check.
         if (prPreview) {
             const validationResult =
                 await this.permissionValidationService.validateBasicLicense(
@@ -207,32 +205,23 @@ export class CommentManagerService implements ICommentManagerService {
             if (!validationResult.allowed) {
                 return null;
             }
+        }
 
+        // The summary OWNS its model resolution: always route the org's config
+        // by the `prSummary` task. There is no caller-supplied slot — passing the
+        // codeReview-resolved slot here used to make the summary silently reuse
+        // the review model and skip any prSummary override. Absent / legacy /
+        // BLOCKED config → null slot → managed default downstream, exactly as
+        // the review agents (which resolve their own BYOK) degrade.
+        let byokConfigValue: BYOKConfig | null = null;
+        try {
             const rawV2 =
                 await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
-            byokConfigValue =
-                resolveTaskByokConfig(rawV2, 'prSummary') ?? null;
-        }
-
-        // Resolve the org's BYOK when the caller didn't pass one (the review
-        // flow passes codeReviewConfig.byokConfig, which can be null even when
-        // the org has BYOK). Without this, the summary falls to the internal
-        // default provider — which hard-fails when that provider is blocked
-        // (e.g. "project denied access") — while the review agents, which
-        // resolve BYOK themselves, keep working. Fetch the same BYOK they use.
-        if (!byokConfigValue) {
-            try {
-                const rawV2 =
-                    await this.permissionValidationService.getBYOKConfigV2Raw(
-                        organizationAndTeamData,
-                    );
-                byokConfigValue =
-                    resolveTaskByokConfig(rawV2, 'prSummary') ?? null;
-            } catch {
-                byokConfigValue = null;
-            }
+            byokConfigValue = resolveTaskByokConfig(rawV2, 'prSummary') ?? null;
+        } catch {
+            byokConfigValue = null;
         }
 
         const maxRetries = 2;

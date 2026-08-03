@@ -144,7 +144,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 /* isCommitRun */ false,
                 /* prPreview */ false,
                 /* externalPromptContext */ undefined,
@@ -181,7 +180,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -208,7 +206,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -236,7 +233,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -264,7 +260,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -291,7 +286,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -313,7 +307,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -353,7 +346,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                     stubOrg,
                     'en-US',
                     summaryConfig,
-                    null,
                 ),
             ).rejects.toThrow('Path not found: /chat/completions');
         });
@@ -372,7 +364,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                     stubOrg,
                     'en-US',
                     summaryConfig,
-                    null,
                 )
                 .catch((e) => e);
 
@@ -387,7 +378,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 { ...summaryConfig, generatePRSummary: false } as any,
-                null,
             );
 
             expect(result).toBeNull();

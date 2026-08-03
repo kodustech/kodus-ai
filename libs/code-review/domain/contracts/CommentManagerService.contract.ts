@@ -51,7 +51,6 @@ export interface ICommentManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         languageResultPrompt: string,
         summaryConfig: SummaryConfig,
-        byokConfig?: BYOKConfig,
         isCommitRun?: boolean,
         prPreview?: boolean,
         externalPromptContext?: any,
