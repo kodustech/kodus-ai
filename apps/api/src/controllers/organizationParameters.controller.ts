@@ -25,6 +25,10 @@ import {
     LLMConfigStatus,
 } from '@libs/organization/application/use-cases/organizationParameters/get-llm-config-status.use-case';
 import {
+    GetByokProvidersUseCase,
+    ByokProvidersResult,
+} from '@libs/organization/application/use-cases/organizationParameters/get-byok-providers.use-case';
+import {
     TestByokConnectionUseCase,
     TestByokResult,
 } from '@libs/organization/application/use-cases/organizationParameters/test-byok-connection.use-case';
@@ -85,6 +89,7 @@ export class OrganizationParametersController {
         private readonly providerService: ProviderService,
         private readonly deleteByokConfigUseCase: DeleteByokConfigUseCase,
         private readonly getLLMConfigStatusUseCase: GetLLMConfigStatusUseCase,
+        private readonly getByokProvidersUseCase: GetByokProvidersUseCase,
         private readonly testByokConnectionUseCase: TestByokConnectionUseCase,
         private readonly testByokModelUseCase: TestByokModelUseCase,
         private readonly listModelOverridesUseCase: ListModelOverridesUseCase,
@@ -459,6 +464,34 @@ export class OrganizationParametersController {
         return await this.getLLMConfigStatusUseCase.execute({
             organizationId,
         });
+    }
+
+    @Get('/byok/providers')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        // Static, non-sensitive descriptor of the connectable BYOK providers
+        // (registry-driven; never a secret). Same read gate as
+        // /llm-config/status: code-review settings editors need the provider
+        // LIST to render the connect picker, so allow either
+        // organization-settings or code-review-settings read.
+        checkAnyPermission([
+            {
+                action: Action.Read,
+                resource: ResourceType.OrganizationSettings,
+            },
+            {
+                action: Action.Read,
+                resource: ResourceType.CodeReviewSettings,
+            },
+        ]),
+    )
+    @ApiOperation({
+        summary: 'List connectable BYOK providers',
+        description:
+            'Return the registry-driven list of connectable BYOK providers (id, label, aliases). Static and non-sensitive — never returns any credential.',
+    })
+    public async getByokProviders(): Promise<ByokProvidersResult> {
+        return await this.getByokProvidersUseCase.execute();
     }
 
     @Get('/cockpit-metrics-visibility')

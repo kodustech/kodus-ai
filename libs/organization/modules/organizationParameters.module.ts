@@ -10,6 +10,7 @@ import { CreateOrUpdateOrganizationParametersUseCase } from '../application/use-
 import { FindByKeyOrganizationParametersUseCase } from '../application/use-cases/organizationParameters/find-by-key.use-case';
 import { DeleteByokConfigUseCase } from '../application/use-cases/organizationParameters/delete-byok-config.use-case';
 import { GetLLMConfigStatusUseCase } from '../application/use-cases/organizationParameters/get-llm-config-status.use-case';
+import { GetByokProvidersUseCase } from '../application/use-cases/organizationParameters/get-byok-providers.use-case';
 import { IgnoreBotsUseCase } from '../application/use-cases/organizationParameters/ignore-bots.use-case';
 import {
     GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
@@ -50,6 +51,7 @@ import { ParametersModule } from './parameters.module';
         FindByKeyOrganizationParametersUseCase,
         DeleteByokConfigUseCase,
         GetLLMConfigStatusUseCase,
+        GetByokProvidersUseCase,
         IgnoreBotsUseCase,
         GetModelsByProviderUseCase,
         TestByokConnectionUseCase,
@@ -64,6 +66,7 @@ import { ParametersModule } from './parameters.module';
         FindByKeyOrganizationParametersUseCase,
         DeleteByokConfigUseCase,
         GetLLMConfigStatusUseCase,
+        GetByokProvidersUseCase,
         IgnoreBotsUseCase,
         GET_COCKPIT_METRICS_VISIBILITY_USE_CASE_TOKEN,
         GetModelsByProviderUseCase,

@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
+import {
+    listByokProviders,
+    type ByokProviderDescriptor,
+} from "@services/organizationParameters/fetch";
 import { ArrowLeftIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
@@ -20,6 +25,9 @@ type ProviderChoice = { id: string; label: string; modelCount: number };
  * the provider-first entry point. Each carries a human label (the shared
  * PROVIDER_LABELS, falling back to the catalog's providerDisplayName) and how
  * many curated models it offers, so the picker can show "N models".
+ *
+ * Still exported: it is the GRACEFUL FALLBACK the registry-driven grid uses
+ * while the backend list loads or if that fetch fails (never an empty picker).
  */
 export const catalogProviders = (): ProviderChoice[] => {
     const byId = new Map<string, ProviderChoice>();
@@ -39,6 +47,49 @@ export const catalogProviders = (): ProviderChoice[] => {
         });
     }
     return Array.from(byId.values());
+};
+
+/** How many curated models list a given provider id (0 for registry-only ones). */
+const curatedModelCount = (providerId: string): number =>
+    (curatedCatalog.models as CuratedModel[]).filter(
+        (m) => m.provider === providerId,
+    ).length;
+
+/** Fold to an alphanumeric key so `open_router` and `openrouter` collapse to one
+ *  entry (the registry id and the curated id name the same provider). */
+const normalizeId = (id: string): string =>
+    id.replace(/[^a-z0-9]/gi, "").toLowerCase();
+
+/**
+ * The connectable provider list, driven by the backend ProviderModule REGISTRY
+ * (the single source of truth). Each module is flattened to [id, ...aliases] so
+ * every connectable id surfaces — including providers with NO curated models
+ * (amazon_bedrock, google_vertex, novita, anthropic_compatible, moonshot). The
+ * curated providers keep their first-appearance order at the front; the extra
+ * registry-only ids follow. `open_router`/`openrouter`-style duplicates collapse
+ * via normalizeId so a curated provider never shows twice.
+ */
+export const registryProviders = (
+    registry: ByokProviderDescriptor[],
+): ProviderChoice[] => {
+    // Curated-first: keep the exact existing ordering + counts up front.
+    const curated = catalogProviders();
+    const seen = new Set(curated.map((p) => normalizeId(p.id)));
+    const out: ProviderChoice[] = [...curated];
+
+    for (const module of registry) {
+        for (const id of [module.id, ...(module.aliases ?? [])]) {
+            const key = normalizeId(id);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push({
+                id,
+                label: PROVIDER_LABELS[id] ?? module.label ?? id,
+                modelCount: curatedModelCount(id),
+            });
+        }
+    }
+    return out;
 };
 
 const providerLabelFor = (
@@ -80,7 +131,31 @@ export function ConnectProviderFlow({
     hero?: React.ReactNode;
     footer?: React.ReactNode;
 }) {
-    const providers = catalogProviders();
+    const router = useRouter();
+    // Registry-driven provider list, fetched client-side with a graceful
+    // fallback to the curated-derived list so the picker is never empty while
+    // loading or if the fetch fails.
+    const [registry, setRegistry] = useState<ByokProviderDescriptor[] | null>(
+        null,
+    );
+    useEffect(() => {
+        let alive = true;
+        listByokProviders()
+            .then((r) => {
+                if (alive) setRegistry(r);
+            })
+            .catch(() => {
+                if (alive) setRegistry([]);
+            });
+        return () => {
+            alive = false;
+        };
+    }, []);
+
+    const providers =
+        registry && registry.length > 0
+            ? registryProviders(registry)
+            : catalogProviders();
     const [pickedProvider, setPickedProvider] = useState<string | null>(
         lockedProvider ?? null,
     );
@@ -158,10 +233,21 @@ export function ConnectProviderFlow({
                         ))}
                     </div>
                 ) : (
-                    <p className="text-text-tertiary text-sm text-pretty">
-                        No catalog models for {label}. Use “Configure manually” to
-                        add one.
-                    </p>
+                    <div className="flex flex-col items-start gap-3">
+                        <p className="text-text-tertiary text-sm text-pretty">
+                            No catalog models for {label}. Configure it manually
+                            to add one.
+                        </p>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="primary"
+                            onClick={() =>
+                                router.push("/organization/byok/manual")
+                            }>
+                            Configure manually
+                        </Button>
+                    </div>
                 )}
             </div>
         );

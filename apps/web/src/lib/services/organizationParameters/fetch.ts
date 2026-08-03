@@ -206,6 +206,31 @@ export const getLLMConfigStatus = async (): Promise<LLMConfigStatus> => {
     );
 };
 
+/**
+ * One connectable BYOK provider from the backend registry (single source of
+ * truth for the provider LIST). Web mirror of the backend ByokProviderDescriptor
+ * (get-byok-providers.use-case.ts). STATIC + non-sensitive — never a secret.
+ */
+export type ByokProviderDescriptor = {
+    id: string;
+    label: string;
+    aliases: string[];
+};
+
+/**
+ * List the registry-driven connectable BYOK providers. Mirrors
+ * getLLMConfigStatus's proxy fetch. Returns [] on absence so callers can fall
+ * back to the curated-derived list (never an empty picker).
+ */
+export const listByokProviders = async (): Promise<ByokProviderDescriptor[]> => {
+    const response = await authorizedFetch<{
+        providers: ByokProviderDescriptor[];
+    }>(ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_PROVIDERS, {
+        cache: "no-store",
+    });
+    return response?.providers ?? [];
+};
+
 export type LLMProviderModel = { id: string; name: string };
 
 export const getLLMProviderModels = async (
