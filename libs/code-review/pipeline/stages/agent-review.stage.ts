@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
-import { Output, jsonSchema } from 'ai';
+import { Output, jsonSchema, embed, type EmbeddingModel } from 'ai';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
@@ -18,7 +18,7 @@ import {
     cosineSimilarity,
     dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
-import { OpenAIEmbeddings } from '@langchain/openai';
+import { createOpenAI } from '@ai-sdk/openai';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -1592,18 +1592,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      * base URL is pinned explicitly; only the platform key comes from the env.
      * (The tiebreak LLM that runs AFTER the embedding still uses BYOK.)
      */
-    private dedupEmbedder: OpenAIEmbeddings | null | undefined;
-    private getDedupEmbedder(): OpenAIEmbeddings | null {
+    private dedupEmbedder: EmbeddingModel | null | undefined;
+    private getDedupEmbedder(): EmbeddingModel | null {
         if (this.dedupEmbedder !== undefined) {
             return this.dedupEmbedder;
         }
         const apiKey = process.env.API_OPEN_AI_API_KEY;
         this.dedupEmbedder = apiKey
-            ? new OpenAIEmbeddings({
+            ? createOpenAI({
                   apiKey,
-                  model: 'text-embedding-3-small',
-                  configuration: { baseURL: 'https://api.openai.com/v1' },
-              })
+                  baseURL: 'https://api.openai.com/v1',
+              }).embedding('text-embedding-3-small')
             : null;
         return this.dedupEmbedder;
     }
@@ -1621,7 +1620,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             const text = dedupEmbeddingText(suggestion as any);
             const embedder = this.getDedupEmbedder();
             if (text && embedder) {
-                vector = await embedder.embedQuery(text);
+                const { embedding } = await embed({
+                    model: embedder,
+                    value: text,
+                });
+                vector = embedding;
             }
         } catch (err) {
             this.logger.warn({
