@@ -12,8 +12,10 @@
  * thin and stable; behavior lives in composable, unit-testable policies.
  */
 import {
+    generateObject,
     generateText,
     jsonSchema,
+    NoSuchToolError,
     stepCountIs,
     tool as aiTool,
     type LanguageModel,
@@ -41,6 +43,46 @@ import type {
 } from '../../domain/contracts/run-state.contract';
 import type { ToolContext } from '../../domain/contracts/tool.contract';
 import { isAiSdkToolSource } from './ai-sdk-tool-registry';
+
+/**
+ * Tool-call self-heal for the AI SDK `repairToolCall` seam. When a tool call's
+ * input fails schema validation, re-ask the SAME model to correct the arguments
+ * against the tool's schema. Fully fail-soft: a wrong tool NAME can't be repaired
+ * here (pass through), and ANY error resolves to `null` — exactly the SDK's
+ * default "don't repair, let the step fail" behaviour. Extracted (not inlined)
+ * so the repair policy is unit-testable in isolation.
+ */
+export async function repairInvalidToolInput(opts: {
+    model: LanguageModel;
+    abortSignal?: AbortSignal;
+    toolCall: { toolName: string; input: unknown; [k: string]: unknown };
+    inputSchema: (o: { toolName: string }) => PromiseLike<unknown>;
+    error: unknown;
+}): Promise<Record<string, unknown> | null> {
+    const { model, abortSignal, toolCall, inputSchema, error } = opts;
+    if (NoSuchToolError.isInstance(error)) {
+        return null;
+    }
+    try {
+        const { object: repaired } = await generateObject({
+            model,
+            schema: jsonSchema(
+                (await inputSchema({ toolName: toolCall.toolName })) as any,
+            ),
+            abortSignal,
+            prompt: [
+                `The tool "${toolCall.toolName}" was called with arguments that failed schema validation.`,
+                `Invalid arguments: ${JSON.stringify(toolCall.input)}`,
+                `Validation error: ${(error as Error)?.message ?? String(error)}`,
+                `Return corrected arguments that satisfy the schema. Keep the original intent; only fix what is malformed.`,
+            ].join('\n'),
+        });
+        return { ...toolCall, input: JSON.stringify(repaired) };
+    } catch {
+        // Repair itself failed → behave exactly as before (fail the call).
+        return null;
+    }
+}
 
 export class AiSdkAgentRunner implements AgentRunner {
     constructor(private readonly models: ModelResolver<LanguageModel>) {}
@@ -111,9 +153,13 @@ export class AiSdkAgentRunner implements AgentRunner {
 
         let result: Awaited<ReturnType<typeof generateText>>;
 
+        // Resolve once so the tool-call repair path reuses the SAME model
+        // (correct BYOK attribution — the repair must not fall to a system model).
+        const model = this.models.resolve(spec.modelId);
+
         try {
             result = await generateText({
-                model: this.models.resolve(spec.modelId),
+                model,
                 // Cap SDK-level retries to 3 on the main loop. Some BYOK
                 // providers (Neuralwatt/GLM, Synthetic, Z.AI) intermittently
                 // return empty response bodies (output: null, usage.total: 0).
@@ -134,6 +180,31 @@ export class AiSdkAgentRunner implements AgentRunner {
                     : spec.systemPrompt,
                 messages,
                 tools: toolMap,
+                // Tool-call self-heal (AI SDK stable): when the model emits a
+                // tool call whose input fails schema validation, re-ask the SAME
+                // model to fix the arguments against the tool's schema instead of
+                // failing the step. Fires only on a failed call (rare), reuses the
+                // resolved BYOK model, and is fully fail-soft — any error returns
+                // null, which is exactly today's "don't repair, let it fail"
+                // behavior. A wrong tool NAME (NoSuchToolError) is not repairable
+                // here, so pass it through unchanged.
+                // Cast: the helper returns the original tool call with a repaired
+                // `input` (a superset of LanguageModelV4ToolCall); the SDK's
+                // generic return type can't see the spread preserves the shape.
+                repairToolCall: ((opts: {
+                    toolCall: { toolName: string; input: unknown };
+                    inputSchema: (o: {
+                        toolName: string;
+                    }) => PromiseLike<unknown>;
+                    error: unknown;
+                }) =>
+                    repairInvalidToolInput({
+                        model,
+                        abortSignal: ctx.signal,
+                        toolCall: opts.toolCall,
+                        inputSchema: opts.inputSchema,
+                        error: opts.error,
+                    })) as any,
                 // Generic model-call config (omit -> provider default).
                 ...(spec.temperature != null
                     ? { temperature: spec.temperature }
