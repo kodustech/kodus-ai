@@ -52,7 +52,10 @@ export default async function SubscriptionStatus() {
         recalculatedLicense.subscriptionStatus === "trial"
             ? {
                   ...recalculatedLicense,
-                  byok: hasByok || recalculatedLicense.byok,
+                  // Local config is the source of truth for a connected key;
+                  // billing's plan-derived `byok` stays true for a *_byok plan
+                  // even with no key, so never OR it in here.
+                  byok: hasByok,
               }
             : undefined;
 
