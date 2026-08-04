@@ -46,11 +46,21 @@ export class FindByOrganizationIdKodyRulesUseCase {
                 );
             }
 
+            // Opening the Kody Rules screen after upgrading off Free self-heals
+            // the plan-locked rules (PAUSED + lockedByPlan:true → ACTIVE), so
+            // the UI reflects the paid state without waiting for a review to
+            // run. Self-guarded + no-op when nothing is locked.
+            const unlocked = await this.kodyRulesService.unlockRulesLockedByPlan(
+                { organizationId: this.request.user.organization.uuid },
+                { rules: existing.rules || [] },
+            );
+            const source = unlocked ? unlocked.toObject() : existing;
+
             // Soft-deleted rules stay in the document for audit/history but
             // must not surface on the Kody Rules screen. APPLIED is also
             // hidden to match find-rules-in-organization-by-filter, which is
             // the other listing endpoint the UI uses.
-            const visibleRules = (existing.rules || []).filter(
+            const visibleRules = (source.rules || []).filter(
                 (rule) =>
                     rule.status !== KodyRulesStatus.DELETED &&
                     rule.status !== KodyRulesStatus.APPLIED,
@@ -63,7 +73,7 @@ export class FindByOrganizationIdKodyRulesUseCase {
             );
 
             return {
-                ...existing,
+                ...source,
                 rules: enrichedRulesArray,
             };
         } catch (error) {

@@ -58,6 +58,18 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         newStatus?: KodyRulesStatus,
     ): Promise<KodyRulesEntity | null>;
 
+    /**
+     * Reconcile the free-plan quota lock: on a paid plan, reactivate every rule
+     * parked as PAUSED + `lockedByPlan: true`. No-op (returns null) while the
+     * org is still resource-limited or when nothing is plan-locked. Callers that
+     * already loaded the rules / computed `limited` pass them via `opts` to skip
+     * redundant work. Returns the refreshed document when an unlock happened.
+     */
+    unlockRulesLockedByPlan(
+        organizationAndTeamData: OrganizationAndTeamData,
+        opts?: { limited?: boolean; rules?: Partial<IKodyRule>[] },
+    ): Promise<KodyRulesEntity | null>;
+
     deleteRuleWithLogging(
         organizationAndTeamData: OrganizationAndTeamData,
         ruleId: string,

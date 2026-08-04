@@ -385,5 +385,30 @@ export class KodyRulesRepository implements IKodyRulesRepository {
             ? mapSimpleModelToEntity(updated, KodyRulesEntity)
             : null;
     }
+
+    async bulkUnlockPlanLockedRules(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null> {
+        const updated = await this.kodyRulesModel
+            .findOneAndUpdate(
+                { organizationId, 'rules.lockedByPlan': true },
+                {
+                    $set: {
+                        'rules.$[elem].status': KodyRulesStatus.ACTIVE,
+                        'rules.$[elem].lockedByPlan': false,
+                        'rules.$[elem].updatedAt': new Date(),
+                    },
+                },
+                {
+                    new: true,
+                    arrayFilters: [{ 'elem.lockedByPlan': true }],
+                },
+            )
+            .exec();
+
+        return updated
+            ? mapSimpleModelToEntity(updated, KodyRulesEntity)
+            : null;
+    }
     //#endregion
 }

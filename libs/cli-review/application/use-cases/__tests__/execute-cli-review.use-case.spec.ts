@@ -48,6 +48,8 @@ function createMocks() {
 
     const kodyRulesService = {
         findByOrganizationId: jest.fn().mockResolvedValue(null),
+        // Default: nothing to unlock (Free plan / no locked rules).
+        unlockRulesLockedByPlan: jest.fn().mockResolvedValue(null),
     };
 
     const kodyRulesValidationService = {
@@ -569,6 +571,63 @@ describe('ExecuteCliReviewUseCase', () => {
             expect(result.repositoryId).toBe('global');
             expect(result.repositoryName).toBeNull();
             expect(result.config).toBeDefined();
+        });
+
+        /**
+         * A CLI review is still a review: a paid org whose rules were parked as
+         * PAUSED + lockedByPlan:true on Free must have them reactivated and
+         * applied in this run, not left ignored.
+         */
+        it('unlocks plan-locked rules on a paid plan and applies them in this review', async () => {
+            const {
+                useCase,
+                parametersService,
+                kodyRulesService,
+                kodyRulesValidationService,
+            } = createMocks();
+
+            const lockedRule = makeRule({
+                uuid: 'r-locked',
+                repositoryId: 'global',
+                status: KodyRulesStatus.PAUSED,
+                lockedByPlan: true,
+            });
+            const unlockedRule = {
+                ...lockedRule,
+                status: KodyRulesStatus.ACTIVE,
+                lockedByPlan: false,
+            };
+
+            parametersService.findByKey.mockResolvedValue({
+                toObject: () => ({
+                    configValue: { configs: {}, repositories: [] },
+                }),
+            });
+
+            kodyRulesService.findByOrganizationId.mockResolvedValue({
+                toObject: () => ({ rules: [lockedRule] }),
+            });
+
+            // Paid plan → unlock flips the rule to ACTIVE and returns the doc.
+            kodyRulesService.unlockRulesLockedByPlan.mockResolvedValue({
+                toObject: () => ({ rules: [unlockedRule] }),
+            });
+
+            kodyRulesValidationService.filterKodyRules.mockReturnValue({
+                standardRules: [unlockedRule],
+                memoryRules: [],
+            });
+
+            await (useCase as any).loadUserConfigWithRules(orgAndTeam, undefined);
+
+            expect(
+                kodyRulesService.unlockRulesLockedByPlan,
+            ).toHaveBeenCalledWith(orgAndTeam, { rules: [lockedRule] });
+            // filterKodyRules must see the UNLOCKED (ACTIVE) rule, not the
+            // parked one — otherwise the review ignores it.
+            expect(
+                kodyRulesValidationService.filterKodyRules,
+            ).toHaveBeenCalledWith([unlockedRule], 'global');
         });
     });
 

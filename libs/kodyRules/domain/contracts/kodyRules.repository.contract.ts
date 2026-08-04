@@ -78,4 +78,14 @@ export interface IKodyRulesRepository {
         directoryId?: string,
         newStatus?: KodyRulesStatus,
     ): Promise<KodyRulesEntity | null>;
+
+    /**
+     * Bulk-reactivate every rule parked as PAUSED + `lockedByPlan: true` (the
+     * free-plan quota lock). Flips `status → ACTIVE` and `lockedByPlan → false`
+     * atomically, matching ONLY `lockedByPlan: true` so manual pauses are left
+     * untouched. Returns null when the org has no plan-locked rule to unlock.
+     */
+    bulkUnlockPlanLockedRules(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null>;
 }

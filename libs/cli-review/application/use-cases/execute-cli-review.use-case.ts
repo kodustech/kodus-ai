@@ -467,9 +467,22 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     paramObj.configValue?.repositories,
                 );
 
+            // Lazy reconciliation of the free-plan quota lock: on a paid plan,
+            // reactivate any rule parked as PAUSED + lockedByPlan:true so this
+            // CLI review already applies it. Self-guarded (resolves the plan
+            // internally) and a no-op when nothing is locked.
+            const loadedRules = kodyRulesEntity?.toObject()?.rules || [];
+            const unlockedEntity =
+                await this.kodyRulesService.unlockRulesLockedByPlan(
+                    organizationAndTeamData,
+                    { rules: loadedRules },
+                );
+            const effectiveRules =
+                unlockedEntity?.toObject()?.rules ?? loadedRules;
+
             const { standardRules, memoryRules } =
                 this.kodyRulesValidationService.filterKodyRules(
-                    kodyRulesEntity?.toObject()?.rules || [],
+                    effectiveRules,
                     repositoryId,
                 );
 

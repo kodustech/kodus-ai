@@ -91,3 +91,56 @@ describe('KodyRulesRepository.updateRulesStatusByFilter', () => {
         );
     });
 });
+
+/**
+ * When an org upgrades off Free, rules parked as PAUSED + lockedByPlan:true
+ * must reactivate. The Mongo write matches ONLY `lockedByPlan: true` (leaving
+ * manual pauses untouched) and flips both fields atomically: status → ACTIVE
+ * and lockedByPlan → false.
+ */
+describe('KodyRulesRepository.bulkUnlockPlanLockedRules', () => {
+    let model: any;
+    let repo: KodyRulesRepository;
+    let findOneAndUpdate: jest.Mock;
+    let exec: jest.Mock;
+
+    beforeEach(() => {
+        exec = jest.fn().mockResolvedValue(null);
+        findOneAndUpdate = jest.fn().mockReturnValue({ exec });
+        model = { findOneAndUpdate };
+
+        repo = new KodyRulesRepository(model as any, {} as any);
+    });
+
+    it('scopes the doc filter to the org and to docs holding a plan-locked rule', async () => {
+        await repo.bulkUnlockPlanLockedRules('org-1');
+
+        const [filter] = findOneAndUpdate.mock.calls[0];
+        expect(filter.organizationId).toBe('org-1');
+        expect(filter['rules.lockedByPlan']).toBe(true);
+    });
+
+    it('targets only lockedByPlan:true elements in arrayFilters', async () => {
+        await repo.bulkUnlockPlanLockedRules('org-1');
+
+        const [, , options] = findOneAndUpdate.mock.calls[0];
+        const [arrayFilter] = options.arrayFilters;
+        expect(arrayFilter['elem.lockedByPlan']).toBe(true);
+    });
+
+    it('flips status → ACTIVE and lockedByPlan → false atomically', async () => {
+        await repo.bulkUnlockPlanLockedRules('org-1');
+
+        const [, update] = findOneAndUpdate.mock.calls[0];
+        expect(update.$set['rules.$[elem].status']).toBe(
+            KodyRulesStatus.ACTIVE,
+        );
+        expect(update.$set['rules.$[elem].lockedByPlan']).toBe(false);
+        expect(update.$set['rules.$[elem].updatedAt']).toBeInstanceOf(Date);
+    });
+
+    it('returns null when no document matched (nothing to unlock)', async () => {
+        const result = await repo.bulkUnlockPlanLockedRules('org-1');
+        expect(result).toBeNull();
+    });
+});

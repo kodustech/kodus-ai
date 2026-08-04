@@ -95,6 +95,29 @@ export class FindRulesInOrganizationByRuleFilterKodyRulesUseCase implements IUse
                 return [...acc, ...entity.rules];
             }, []);
 
+            // Self-heal the free-plan quota lock when the org is on a paid plan:
+            // opening the Kody Rules screen reactivates rules parked as
+            // PAUSED + lockedByPlan:true, so the UI reflects the paid state
+            // without waiting for a review. Guarded so the plan lookup + write
+            // only run when something is actually locked; the returned doc is
+            // persisted, so we mirror the flip on the in-memory copies too.
+            if (allRules.some((rule) => rule?.lockedByPlan === true)) {
+                const unlocked =
+                    await this.kodyRulesService.unlockRulesLockedByPlan(
+                        { organizationId },
+                        { rules: allRules },
+                    );
+
+                if (unlocked) {
+                    for (const rule of allRules) {
+                        if (rule.lockedByPlan === true) {
+                            rule.status = KodyRulesStatus.ACTIVE;
+                            rule.lockedByPlan = false;
+                        }
+                    }
+                }
+            }
+
             let filteredRules = allRules;
 
             if (Array.isArray(allowedRepoScope)) {

@@ -1006,6 +1006,87 @@ export class KodyRulesService implements IKodyRulesService {
         }
     }
 
+    bulkUnlockPlanLockedRules(
+        organizationId: string,
+    ): Promise<KodyRulesEntity | null> {
+        return this.kodyRulesRepository.bulkUnlockPlanLockedRules(
+            organizationId,
+        );
+    }
+
+    /**
+     * Lazy reconciliation of the free-plan quota lock. When an org upgrades to
+     * a paid plan the 10-rule cap disappears, but rules parked as PAUSED +
+     * `lockedByPlan: true` while on Free stay parked and the review keeps
+     * ignoring them. This flips every plan-locked rule back to ACTIVE.
+     *
+     * Self-extinguishing: after the first unlock no rule carries
+     * `lockedByPlan: true`, so the in-memory guard skips every subsequent call
+     * with zero DB work — no "already reconciled" flag needed. A later
+     * downgrade→upgrade that re-locks rules reconciles again on its own.
+     *
+     * Fails open: an unlock error never blocks the calling review/list.
+     */
+    async unlockRulesLockedByPlan(
+        organizationAndTeamData: OrganizationAndTeamData,
+        opts: { limited?: boolean; rules?: Partial<IKodyRule>[] } = {},
+    ): Promise<KodyRulesEntity | null> {
+        const organizationId = organizationAndTeamData?.organizationId;
+        if (!organizationId) {
+            return null;
+        }
+
+        // Cheap in-memory guard on the already-loaded rules: nothing plan-locked
+        // → skip the plan lookup and the write entirely. This is what makes the
+        // reconciliation free on the common (post-unlock) path.
+        if (
+            opts.rules &&
+            !opts.rules.some((rule) => rule?.lockedByPlan === true)
+        ) {
+            return null;
+        }
+
+        // Plan gate: only paid plans unlock. Reuse the caller's `limited` when
+        // it already computed it (review path) to avoid a redundant license
+        // lookup; otherwise resolve it here (front/CLI).
+        const limited =
+            opts.limited ??
+            (await this.permissionValidationService.shouldLimitResources(
+                organizationAndTeamData,
+                KodyRulesService.name,
+            ));
+        if (limited) {
+            return null;
+        }
+
+        try {
+            const updated =
+                await this.kodyRulesRepository.bulkUnlockPlanLockedRules(
+                    organizationId,
+                );
+
+            if (updated) {
+                this.logger.log({
+                    message: 'Reactivated plan-locked Kody rules after upgrade',
+                    context: KodyRulesService.name,
+                    metadata: { organizationId },
+                });
+            }
+
+            return updated;
+        } catch (error) {
+            this.logger.error({
+                message: 'Error unlocking plan-locked Kody rules',
+                context: KodyRulesService.name,
+                error: error,
+                metadata: { organizationId },
+            });
+            // Fail open: never block a review or the rules list because the
+            // reconciliation write failed. Next call retries.
+            return null;
+        }
+    }
+
     async deleteRuleLogically(
         uuid: string,
         ruleId: string,

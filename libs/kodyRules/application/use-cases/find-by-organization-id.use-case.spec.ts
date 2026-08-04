@@ -30,7 +30,11 @@ describe('FindByOrganizationIdKodyRulesUseCase', () => {
     let request: any;
 
     beforeEach(() => {
-        kodyRulesService = { findByOrganizationId: jest.fn() };
+        kodyRulesService = {
+            findByOrganizationId: jest.fn(),
+            // Default: nothing to unlock (Free plan / no locked rules).
+            unlockRulesLockedByPlan: jest.fn().mockResolvedValue(null),
+        };
         contextReferenceService = {};
         request = { user: { organization: { uuid: ORG_ID } } };
 
@@ -100,5 +104,58 @@ describe('FindByOrganizationIdKodyRulesUseCase', () => {
         const result = (await useCase.execute()) as { rules: any[] };
 
         expect(result.rules).toEqual([]);
+    });
+
+    /**
+     * Opening the Kody Rules screen after upgrading off Free must self-heal the
+     * plan-locked rules so the UI reflects the paid state without waiting for a
+     * review to run.
+     */
+    it('unlocks plan-locked rules and returns them ACTIVE when the org is paid', async () => {
+        const lockedRule = {
+            uuid: 'r-locked',
+            status: KodyRulesStatus.PAUSED,
+            lockedByPlan: true,
+        };
+        kodyRulesService.findByOrganizationId.mockResolvedValueOnce({
+            organizationId: ORG_ID,
+            rules: [lockedRule],
+        });
+        // Paid plan → the unlock flips it to ACTIVE and returns the fresh doc.
+        kodyRulesService.unlockRulesLockedByPlan.mockResolvedValueOnce({
+            toObject: () => ({
+                organizationId: ORG_ID,
+                rules: [
+                    {
+                        ...lockedRule,
+                        status: KodyRulesStatus.ACTIVE,
+                        lockedByPlan: false,
+                    },
+                ],
+            }),
+        });
+
+        const result = (await useCase.execute()) as { rules: any[] };
+
+        expect(kodyRulesService.unlockRulesLockedByPlan).toHaveBeenCalledWith(
+            { organizationId: ORG_ID },
+            { rules: [lockedRule] },
+        );
+        expect(result.rules).toHaveLength(1);
+        expect(result.rules[0].status).toBe(KodyRulesStatus.ACTIVE);
+        expect(result.rules[0].lockedByPlan).toBe(false);
+    });
+
+    it('keeps the original rules when there is nothing to unlock (Free plan)', async () => {
+        kodyRulesService.findByOrganizationId.mockResolvedValueOnce({
+            organizationId: ORG_ID,
+            rules: [{ uuid: 'r-active', status: KodyRulesStatus.ACTIVE }],
+        });
+        kodyRulesService.unlockRulesLockedByPlan.mockResolvedValueOnce(null);
+
+        const result = (await useCase.execute()) as { rules: any[] };
+
+        expect(kodyRulesService.unlockRulesLockedByPlan).toHaveBeenCalled();
+        expect(result.rules.map((r) => r.uuid)).toEqual(['r-active']);
     });
 });

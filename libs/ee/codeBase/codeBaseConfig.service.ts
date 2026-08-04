@@ -156,9 +156,21 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     CodeBaseConfigService.name,
                 );
 
+            // Lazy reconciliation of the free-plan quota lock: on a paid plan,
+            // reactivate any rule parked as PAUSED + lockedByPlan:true so this
+            // review already applies it. Self-guarded + no-op when nothing is
+            // locked; returns the refreshed doc when an unlock happened.
+            const loadedRules = kodyRulesEntity?.toObject()?.rules || [];
+            const unlockedEntity =
+                await this.kodyRulesService.unlockRulesLockedByPlan(
+                    organizationAndTeamData,
+                    { limited, rules: loadedRules },
+                );
+            const effectiveRules = unlockedEntity?.toObject()?.rules ?? loadedRules;
+
             const { standardRules, memoryRules } =
                 this.kodyRulesValidationService.filterKodyRules(
-                    kodyRulesEntity?.toObject()?.rules || [],
+                    effectiveRules,
                     repository.id,
                     mergedConfigs.directoryId,
                     limited,
