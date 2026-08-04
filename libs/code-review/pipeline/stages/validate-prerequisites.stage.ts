@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
-import { resolveTaskModel } from '@libs/llm/resolve-task-model';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     AutomationMessage,
@@ -585,7 +586,9 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
-            const resolvedSlot = resolveTaskModel(rawV2, 'codeReview', {}).slot;
+            // Only the slot's presence matters here (startTrial gate), so
+            // resolve without building the model — no decrypt / SDK client.
+            const resolvedSlot = resolveTaskSlot(rawV2, LLM_TASK.codeReview).slot;
 
             const provisioned = await this.licenseService.startTrial(
                 organizationAndTeamData,

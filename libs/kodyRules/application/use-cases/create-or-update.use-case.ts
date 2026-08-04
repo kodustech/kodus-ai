@@ -25,7 +25,8 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     IKodyRuleDetectorCompiler,
     KODY_RULE_DETECTOR_COMPILER_TOKEN,
@@ -711,10 +712,10 @@ export class CreateOrUpdateKodyRulesUseCase {
                         ),
                     ]);
                     // v2-native carrier for the reference-detection chain.
-                    const byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(
+                    const byokConfig = resolveTaskCarrier(
                         rawV2,
-                        'codeReview',
-                    ).slot);
+                        LLM_TASK.codeReview,
+                    );
 
                     const contextReferenceId =
                         await this.contextReferenceDetectionService.detectAndSaveReferences(

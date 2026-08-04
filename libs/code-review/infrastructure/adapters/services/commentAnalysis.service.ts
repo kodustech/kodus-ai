@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
 
 import { resolveTaskModel } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import {
     LLM_CALL_TIMEOUT_MS,
@@ -75,7 +76,7 @@ export class CommentAnalysisService {
     /**
      * Runs a structured-output LLM call, resolving the model the SAME way the
      * code-review agents do (see `resolveAgentModel` / model-factory):
-     * `resolveTaskModel(v2Config, 'codeReview', …)` over the org's raw v2 config
+     * `resolveTaskModel(v2Config, LLM_TASK.codeReview, …)` over the org's raw v2 config
      * — BYOK wins; self-hosted resolves the env model; cloud trial forces Kimi
      * via `modelOverride` (the default-model override); cloud without BYOK is
      * already skipped upstream by the model policy. `wrapByokModel` adds the
@@ -110,7 +111,7 @@ export class CommentAnalysisService {
             await this.permissionValidationService.getBYOKConfigV2Raw(
                 organizationAndTeamData,
             );
-        const resolved = resolveTaskModel(rawV2, 'codeReview', {
+        const resolved = resolveTaskModel(rawV2, LLM_TASK.codeReview, {
             defaultModelOverride: modelConfig.modelOverride,
         });
         const model = wrapByokModel(resolved.model, {

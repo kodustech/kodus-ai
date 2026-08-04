@@ -21,6 +21,7 @@ import type { LanguageModel } from 'ai';
 
 import {
     isV2Config,
+    type BYOKConfig,
     type BYOKConfigV2,
     type LlmTask,
     type NormalizedModel,
@@ -40,8 +41,6 @@ export interface ResolveTaskModelOptions {
     structuredOutputs?: boolean;
     /** Force a default model id when there is no BYOK (trial/public-demo). */
     defaultModelOverride?: string;
-    /** Reserved for limiter scoping; not read by the resolver itself. */
-    organizationId?: string;
 }
 
 export interface ResolvedTaskModel {
@@ -116,4 +115,23 @@ export function resolveTaskModel(
         : getModelName(undefined, options.defaultModelOverride);
 
     return { model, modelName, slot, verdict };
+}
+
+/**
+ * Resolve `task` to the legacy `{ main }` carrier that most downstream consumers
+ * (runStructuredReviewCall, the agent runners, telemetry, …) still take.
+ *
+ * This is the same decision as `resolveTaskSlot`, wrapped: a resolved slot →
+ * `{ main: slot }`, no slot → `undefined` (caller degrades to the env/managed
+ * default). It exists so consumers stop hand-wrapping the slot at the call site;
+ * once the `BYOKConfig` carrier is retired in favour of the bare slot, this
+ * helper (and the `{ main }` shape) go away.
+ */
+export function resolveTaskCarrier(
+    config: BYOKConfigV2 | null | undefined,
+    task: LlmTask,
+    options: { ctx?: RequestContext } = {},
+): BYOKConfig | undefined {
+    const slot = resolveTaskSlot(config, task, { ctx: options.ctx }).slot;
+    return slot ? { main: slot } : undefined;
 }

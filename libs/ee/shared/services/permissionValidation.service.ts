@@ -1,6 +1,17 @@
 import type { BYOKConfig } from '@libs/llm/byok-config';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
-import { isV2Config, type BYOKConfigV2 } from '@libs/llm/byok-config';
+import {
+    resolveTaskCarrier as resolveCarrierFromV2,
+    resolveTaskModel as resolveModelFromV2,
+    type ResolveTaskModelOptions,
+    type ResolvedTaskModel,
+} from '@libs/llm/resolve-task-model';
+import type { RequestContext } from '@libs/llm/routing-strategy';
+import {
+    isV2Config,
+    LLM_TASK,
+    type BYOKConfigV2,
+    type LlmTask,
+} from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -183,8 +194,9 @@ export class PermissionValidationService {
                 let byokLookupFailed = false;
 
                 try {
-                    trialByokConfig = await this.resolveByokCarrier(
+                    trialByokConfig = await this.resolveTaskCarrier(
                         organizationAndTeamData,
+                        LLM_TASK.codeReview,
                     );
                 } catch (error) {
                     byokLookupFailed = true;
@@ -351,9 +363,10 @@ export class PermissionValidationService {
                 validation.planType,
             );
 
-            const byokConfig = await this.resolveByokCarrier(
-                organizationAndTeamData,
-            );
+            const byokConfig = await this.resolveTaskCarrier(
+                        organizationAndTeamData,
+                        LLM_TASK.codeReview,
+                    );
 
             // 4. Managed plans use our keys
             // if (identifiedPlanType === PlanType.MANAGED) {
@@ -643,9 +656,10 @@ export class PermissionValidationService {
             // }
 
             // Free ou BYOK plans precisam de BYOK config
-            const byokConfig = await this.resolveByokCarrier(
-                organizationAndTeamData,
-            );
+            const byokConfig = await this.resolveTaskCarrier(
+                        organizationAndTeamData,
+                        LLM_TASK.codeReview,
+                    );
 
             if (!byokConfig && this.requiresBYOK(identifiedPlanType)) {
                 this.logger.warn({
@@ -776,11 +790,36 @@ export class PermissionValidationService {
      * carries ENCRYPTED apiKey ciphertext; this method never decrypts. Non-UUID org
      * ids (CLI trial) resolve to `null` via `getBYOKConfigV2Raw`.
      */
-    private async resolveByokCarrier(
+    /**
+     * Single entry point for "give me the routed BYOK carrier for THIS task in
+     * THIS org". Reads the org's raw v2 config (getBYOKConfigV2Raw) and routes it
+     * for `task` via the pure resolver — the one place that combines the Nest/DB
+     * read with the `@nestjs`-free `libs/llm` resolver, so consumers stop
+     * re-implementing the two-step. `null` when there is no BYOK / non-v2 /
+     * BLOCKED / non-UUID org → the caller degrades to the managed/env default.
+     */
+    async resolveTaskCarrier(
         organizationAndTeamData: OrganizationAndTeamData,
+        task: LlmTask,
+        options: { ctx?: RequestContext } = {},
     ): Promise<BYOKConfig | null> {
         const rawV2 = await this.getBYOKConfigV2Raw(organizationAndTeamData);
-        return ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot) ?? null;
+        return resolveCarrierFromV2(rawV2, task, options) ?? null;
+    }
+
+    /**
+     * Sibling of `resolveTaskCarrier` for consumers that need the BUILT model
+     * (not just the carrier): reads the org's raw v2 config and returns the
+     * resolved `{ model, modelName, slot, verdict }` for `task`. Same degrade
+     * contract — no BYOK → the managed/env default model.
+     */
+    async resolveTaskModel(
+        organizationAndTeamData: OrganizationAndTeamData,
+        task: LlmTask,
+        options: ResolveTaskModelOptions = {},
+    ): Promise<ResolvedTaskModel> {
+        const rawV2 = await this.getBYOKConfigV2Raw(organizationAndTeamData);
+        return resolveModelFromV2(rawV2, task, options);
     }
 
     /**

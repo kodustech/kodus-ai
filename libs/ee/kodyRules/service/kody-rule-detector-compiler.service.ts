@@ -14,7 +14,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -56,15 +56,14 @@ export class KodyRuleDetectorCompilerService
         rule: Partial<IKodyRule>,
     ): Promise<{ compiled: boolean; declineReason?: string }> {
         try {
-            // v2-native: source the raw v2 config and resolve the kody-rules
-            // (codeReview) task to a `{main,fallback}` carrier for
-            // runStructuredReviewCall. A non-v2/managed/BLOCKED config yields
-            // `undefined` → the managed/env default, exactly as before.
-            const rawV2 =
-                await this.permissionValidationService.getBYOKConfigV2Raw(
+            // v2-native: resolve the kody-rules (codeReview) task to a `{main}`
+            // carrier for runStructuredReviewCall. A non-v2/managed/BLOCKED
+            // config yields `null` → the managed/env default, exactly as before.
+            const taskByok =
+                await this.permissionValidationService.resolveTaskCarrier(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 );
-            const taskByok = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
 
             // Local (Vercel) stack via runStructuredReviewCall — the org's
             // resolved BYOK model or our managed default (kimi-k2.7-code via

@@ -42,7 +42,8 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     attachClassification,
     classifyLLMError,
@@ -215,11 +216,11 @@ export class CommentManagerService implements ICommentManagerService {
         // the review agents (which resolve their own BYOK) degrade.
         let byokConfigValue: BYOKConfig | null = null;
         try {
-            const rawV2 =
-                await this.permissionValidationService.getBYOKConfigV2Raw(
+            byokConfigValue =
+                await this.permissionValidationService.resolveTaskCarrier(
                     organizationAndTeamData,
+                    LLM_TASK.prSummary,
                 );
-            byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'prSummary').slot) ?? null;
         } catch {
             byokConfigValue = null;
         }

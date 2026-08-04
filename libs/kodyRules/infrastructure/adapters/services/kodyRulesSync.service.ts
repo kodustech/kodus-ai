@@ -46,10 +46,8 @@ import { PermissionValidationService } from '@libs/ee/shared/services/permission
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
-import {
-    resolveTaskSlot,
-} from '@libs/llm/resolve-task-model';
-import { hasNonManagedCredential } from '@libs/llm/byok-config';
+import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
+import { hasNonManagedCredential, LLM_TASK } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -2102,7 +2100,7 @@ export class KodyRulesSyncService {
         ]);
         // v2-native carrier for the codeReview task (runStructuredReviewCall +
         // the raw-JSON fallback build); non-v2/managed/BLOCKED → env default.
-        const byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
+        const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
         const effectiveDefaultStatus =
             options?.defaultStatus ??
@@ -2435,7 +2433,7 @@ export class KodyRulesSyncService {
             await this.permissionValidationService.getBYOKConfigV2Raw(
                 params.organizationAndTeamData,
             );
-        const byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
+        const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
         const mainRun = 'kodyRulesFilesToRulesFastBatch';
 
@@ -2564,7 +2562,7 @@ export class KodyRulesSyncService {
             await this.permissionValidationService.getBYOKConfigV2Raw(
                 params.organizationAndTeamData,
             );
-        const byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
+        const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
         const mainRun = 'kodyRulesManifestsToRulesFastBatch';
 
@@ -2814,7 +2812,7 @@ export class KodyRulesSyncService {
             ),
         ]);
         // v2-native carrier for the reference-detection chain (codeReview task).
-        const byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
+        const byokConfig = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
         try {
             const contextReferenceId =

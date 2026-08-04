@@ -58,8 +58,20 @@ export interface BYOKModelConfig {
     cooldownMs?: number;
 }
 
-/** LLM task taxonomy for routing (execution is Phase 4; the shape persists now). */
-export type LlmTask = 'codeReview' | 'prSummary' | 'conversation';
+/**
+ * LLM task taxonomy for routing — the named source of truth for every
+ * `resolveTaskSlot`/`resolveTaskModel` call. `as const` keeps the values plain
+ * strings (so `routing.taskOverrides` keys, stored configs, and JSON still
+ * match), while `LlmTask` is derived from it so the union can never drift from
+ * the constant. Reference tasks as `LLM_TASK.codeReview`, not the bare literal.
+ */
+export const LLM_TASK = {
+    codeReview: 'codeReview',
+    prSummary: 'prSummary',
+    conversation: 'conversation',
+} as const;
+
+export type LlmTask = (typeof LLM_TASK)[keyof typeof LLM_TASK];
 
 /**
  * Routing policy. Persisted in Phase 2; EXECUTED in Phase 4 (Manual = static
@@ -102,7 +114,6 @@ export interface NormalizedModel {
     apiKey: string;
     model: string;
     baseURL?: string;
-    disableReasoning?: boolean;
     reasoningEffort?: ReasoningEffort;
     reasoningConfigOverride?: string;
     temperature?: number;

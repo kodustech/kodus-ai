@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { generateText } from 'ai';
 import { resolveTaskModel } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import type { IPublicPrAiSummaryService } from '@libs/cli-review/domain/contracts/public-pr-ai-summary.service.contract';
 import type { PublicPrMetadata } from './github-public-pr.service';
 
@@ -29,7 +30,7 @@ export class PublicPrAiSummaryService implements IPublicPrAiSummaryService {
         try {
             // Public demo: no BYOK → null slot → the forced cheaper default
             // (SUMMARY_MODEL) via resolveTaskModel's defaultModelOverride.
-            const { model } = resolveTaskModel(undefined, 'prSummary', {
+            const { model } = resolveTaskModel(undefined, LLM_TASK.prSummary, {
                 defaultModelOverride: SUMMARY_MODEL,
             });
 

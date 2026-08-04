@@ -24,7 +24,7 @@ import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { resolveAgentModel } from '@libs/llm/agent-model';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -451,11 +451,12 @@ export class ConversationAgentProvider {
     private async resolveBYOKConfig(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<BYOKConfig | undefined> {
-        const rawV2 =
-            await this.permissionValidationService.getBYOKConfigV2Raw(
+        return (
+            (await this.permissionValidationService.resolveTaskCarrier(
                 organizationAndTeamData,
-            );
-        return ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'conversation').slot);
+                LLM_TASK.conversation,
+            )) ?? undefined
+        );
     }
 
     /**

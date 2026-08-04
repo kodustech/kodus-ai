@@ -3,6 +3,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveTaskModel } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import type { IPublicPrGroupingService } from '@libs/cli-review/domain/contracts/public-pr-grouping.service.contract';
 import type { PublicPrMetadata } from './github-public-pr.service';
 
@@ -76,7 +77,7 @@ export class PublicPrGroupingService implements IPublicPrGroupingService {
         try {
             // Public demo: no BYOK → null slot → the forced cheaper default
             // (GROUPING_MODEL) via resolveTaskModel's defaultModelOverride.
-            const { model } = resolveTaskModel(undefined, 'prSummary', {
+            const { model } = resolveTaskModel(undefined, LLM_TASK.prSummary, {
                 defaultModelOverride: GROUPING_MODEL,
             });
             const truncated = diff.length > MAX_DIFF_CHARS;

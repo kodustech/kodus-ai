@@ -5,7 +5,8 @@ import { Injectable } from '@nestjs/common';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 @Injectable()
 export abstract class BaseAgentProvider {
@@ -65,8 +66,8 @@ export abstract class BaseAgentProvider {
         // handles the id-THEN-name match inside resolveTaskSlot.
         const overrideRef =
             byokModelIdOverride?.trim() || byokModelOverride?.trim();
-        this.byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'conversation', {
+        this.byokConfig = resolveTaskCarrier(rawV2, LLM_TASK.conversation, {
             ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
-        }).slot);
+        });
     }
 }

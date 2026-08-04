@@ -33,10 +33,10 @@ function build() {
         findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
     };
     const permissionValidationService = {
-        // v2-native: no v2 config → resolveTaskSlot yields undefined →
-        // the env/managed default. resolveAgentModel is mocked, so the harness
-        // wiring runs regardless of the resolved slot.
-        getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
+        // v2-native: the agent asks the service for the conversation carrier;
+        // null → the env/managed default. resolveAgentModel is mocked, so the
+        // harness wiring runs regardless of the resolved slot.
+        resolveTaskCarrier: jest.fn().mockResolvedValue(null),
     };
     const observabilityService = { recordAgentRunUsage };
     const mcpManagerService = {

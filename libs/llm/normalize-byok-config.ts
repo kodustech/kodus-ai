@@ -28,9 +28,9 @@ const STR = (v: unknown): string | undefined =>
 
 /** Build a NormalizedModel from a v2 model + its resolved credential, or null to
  *  skip (managed, missing credential, or no provider — all degrade to absent).
- *  Exported so an apply site (the routing resolver) can materialize the chosen
- *  model's full ciphertext-bearing slot via `resolveModelSlotFromV2`. */
-export function slotFromV2(
+ *  Module-private: the routing resolver materializes slots via the exported
+ *  `resolveModelSlotFromV2`, which wraps this. */
+function slotFromV2(
     model: BYOKModelConfig,
     creds: Map<string, BYOKCredential>,
 ): NormalizedModel | null {

@@ -3,7 +3,8 @@ import type { BYOKConfig } from '@libs/llm/byok-config';
 import { environment } from '@libs/ee/configs/environment';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 /**
  * The Kodus-funded model for Kody Rules generation when there's no BYOK:
@@ -51,7 +52,7 @@ export async function resolveKodyRulesModelPolicy(
     const rawV2 = await permissionValidationService.getBYOKConfigV2Raw(
         organizationAndTeamData,
     );
-    const byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
+    const byokConfig = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
     if (byokConfig) {
         return { generate: true, byokConfig };
     }

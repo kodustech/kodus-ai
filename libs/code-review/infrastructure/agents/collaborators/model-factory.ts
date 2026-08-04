@@ -14,6 +14,7 @@ import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { BYOKConfig } from '@libs/llm/byok-config';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { resolveTaskModel } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 import type { ReviewAgentInput } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
@@ -76,7 +77,7 @@ export async function resolveAgentModel(
     // resolveTaskModel handles the id-THEN-name match, the capability gate, and
     // the null-slot → env/managed default degrade (rawV2 null / no BYOK too).
     const overrideRef = input.byokModelId?.trim() || input.byokModel?.trim();
-    const resolved = resolveTaskModel(rawV2, 'codeReview', {
+    const resolved = resolveTaskModel(rawV2, LLM_TASK.codeReview, {
         ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
         defaultModelOverride: input.defaultModelOverride,
     });

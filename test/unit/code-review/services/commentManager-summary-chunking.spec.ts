@@ -388,16 +388,11 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         behaviourForNewCommits: 'none',
     };
 
-    // A v2 BYOK blob whose prSummary-routed model carries `maxInputTokens`.
-    // generateSummaryPR reads it via getBYOKConfigV2Raw → resolveTaskSlot, and
-    // the resolved slot's maxInputTokens drives chunkChangedFilesForSummary.
-    const v2WithMaxInputTokens = (maxInputTokens: number) => ({
-        version: 2,
-        credentials: [{ id: 'c-oa', provider: 'openai', apiKey: 'enc-key' }],
-        models: [
-            { id: 'm', credentialId: 'c-oa', model: 'gpt-4o', maxInputTokens },
-        ],
-        routing: { defaultModelId: 'm' },
+    // The carrier generateSummaryPR gets back from
+    // permissionValidationService.resolveTaskCarrier(org, prSummary); its
+    // main.maxInputTokens drives chunkChangedFilesForSummary.
+    const carrierWithMaxInputTokens = (maxInputTokens: number) => ({
+        main: { provider: 'openai', model: 'gpt-4o', maxInputTokens },
     });
 
     beforeEach(async () => {
@@ -432,7 +427,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             // v2-native: generateSummaryPR resolves its own model by routing the
             // org's v2 config for the `prSummary` task; maxInputTokens comes from
             // the resolved slot. Default null → env default (no chunking).
-            getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
+            resolveTaskCarrier: jest.fn().mockResolvedValue(null),
             getBYOKConfig: jest.fn().mockResolvedValue(null),
         };
 
@@ -482,8 +477,8 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         it('should make a single LLM call', async () => {
             const files = [makeFile('a.ts', 50)];
 
-            mockPermissionValidationService.getBYOKConfigV2Raw.mockResolvedValue(
-                v2WithMaxInputTokens(100000),
+            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+                carrierWithMaxInputTokens(100000),
             );
 
             const result = await service.generateSummaryPR(
@@ -505,8 +500,8 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             // Each file ≈ 2000 tokens, budget allows ~1 file per chunk
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            mockPermissionValidationService.getBYOKConfigV2Raw.mockResolvedValue(
-                v2WithMaxInputTokens(3000),
+            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+                carrierWithMaxInputTokens(3000),
             );
 
             const result = await service.generateSummaryPR(
@@ -542,8 +537,8 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 makeFile('e.ts', 3000),
             ];
 
-            mockPermissionValidationService.getBYOKConfigV2Raw.mockResolvedValue(
-                v2WithMaxInputTokens(4000),
+            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+                carrierWithMaxInputTokens(4000),
             );
 
             const result = await service.generateSummaryPR(
@@ -585,8 +580,8 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            mockPermissionValidationService.getBYOKConfigV2Raw.mockResolvedValue(
-                v2WithMaxInputTokens(3000),
+            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+                carrierWithMaxInputTokens(3000),
             );
 
             const result = await service.generateSummaryPR(
@@ -621,8 +616,8 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            mockPermissionValidationService.getBYOKConfigV2Raw.mockResolvedValue(
-                v2WithMaxInputTokens(3000),
+            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+                carrierWithMaxInputTokens(3000),
             );
 
             // generateSummaryPR has retry logic (maxRetries=2), and throws

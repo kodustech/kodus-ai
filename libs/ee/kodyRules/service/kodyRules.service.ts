@@ -40,7 +40,8 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
+import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import {
@@ -1421,7 +1422,7 @@ export class KodyRulesService implements IKodyRulesService {
                 await this.permissionValidationService.getBYOKConfigV2Raw(
                     organizationAndTeamData,
                 );
-            const byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
+            const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
             const mainRun = 'kodyRulesRecommendationFromSuggestions';
 
@@ -1941,7 +1942,7 @@ Analyze the suggestions and recommend the most relevant rules.`;
             await this.permissionValidationService.getBYOKConfigV2Raw(
                 organizationAndTeamData,
             );
-        const byokConfigValue = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'codeReview').slot);
+        const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
         const runName = 'kodyMemoryResolution';
 
         const incomingMemory = {
