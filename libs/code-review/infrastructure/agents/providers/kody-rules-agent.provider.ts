@@ -10,6 +10,7 @@ import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { BaseCodeReviewAgentProvider } from '@libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
 import { resolveAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
+import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import {
     judgeKodyRulesSharded,
     inlineRuleReferences,
@@ -223,14 +224,40 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 input,
             );
 
-            const result = await judgeKodyRulesSharded({
-                changedFiles: input.changedFiles,
-                rules: rulesForJudge,
-                runJudge,
-                prTitle: input.prTitle,
-                prBody: input.prBody,
-                logger: this.shardLogger,
-            });
+            // Open the Langfuse root observation the sharded judge runs under.
+            // Every OTHER review agent runs inside runAgentWithTrace (via the
+            // base provider's agentic loop); this override bypassed super.execute
+            // and with it that wrapper, so the shard `generateText` spans emitted
+            // detached — no named trace, no org/team/PR/session tags — and the
+            // agent showed ZERO traces in Langfuse. Wrapping the judge here nests
+            // every shard span under a `kodus-rules-review-agent` trace, tagged
+            // like the generalist. No-op passthrough when tracing is disabled.
+            const result = await runAgentWithTrace(
+                {
+                    traceName: this.getIdentity().name,
+                    organizationId:
+                        input.organizationAndTeamData?.organizationId,
+                    teamId: input.organizationAndTeamData?.teamId,
+                    prNumber: input.prNumber,
+                    repositoryId: input.repositoryId,
+                },
+                // Sanitized span input: shape only, never the file patches.
+                {
+                    prNumber: input.prNumber,
+                    semanticRules: rulesForJudge.length,
+                    mechanicalRules: mechanicalRules.length,
+                    changedFiles: input.changedFiles?.length ?? 0,
+                },
+                () =>
+                    judgeKodyRulesSharded({
+                        changedFiles: input.changedFiles,
+                        rules: rulesForJudge,
+                        runJudge,
+                        prTitle: input.prTitle,
+                        prBody: input.prBody,
+                        logger: this.shardLogger,
+                    }),
+            );
             judgeViolations = result.violations;
             shardsRun = result.shardsRun;
             shardsErrored = result.shardsErrored;
