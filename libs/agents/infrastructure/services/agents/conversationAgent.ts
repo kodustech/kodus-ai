@@ -20,7 +20,11 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+    withLangfuseTrace,
+} from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { resolveAgentModel } from '@libs/llm/agent-model';
@@ -210,21 +214,44 @@ export class ConversationAgentProvider {
                 sandbox,
             );
 
-            const state = await runner.run(
-                spec,
+            // Two planes of Langfuse attribution, both needed:
+            //   withLangfuseTrace -> TRACE level (session/user), what the UI
+            //     filters and groups by. A thread is a session, so every turn
+            //     of the same conversation reads as one unit instead of N
+            //     unrelated traces.
+            //   toAiSdkTelemetryArgs -> OBSERVATION level (name + metadata),
+            //     forwarded verbatim by the runner to the model call.
+            const state = await withLangfuseTrace(
                 {
-                    prompt: preparedPrompt,
-                    // experimental_telemetry feeds Langfuse (forwarded verbatim
-                    // by the runner).
-                    telemetry: buildLangfuseTelemetry('conversationAgent', {
+                    traceName: 'conversationAgent',
+                    sessionId: thread.id?.toString(),
+                    userId: organizationAndTeamData.organizationId?.toString(),
+                    metadata: {
                         organizationId:
                             organizationAndTeamData.organizationId?.toString(),
                         teamId: organizationAndTeamData.teamId?.toString(),
+                        threadId: thread.id?.toString(),
                         repositoryId: prepareContext?.repository?.id?.toString(),
-                        provider: slot?.provider,
-                    }),
+                    },
                 },
-                ctx,
+                () =>
+                    runner.run(
+                        spec,
+                        {
+                            prompt: preparedPrompt,
+                            ...toAiSdkTelemetryArgs(
+                                buildLangfuseTelemetry('conversationAgent', {
+                                    organizationId:
+                                        organizationAndTeamData.organizationId?.toString(),
+                                    teamId: organizationAndTeamData.teamId?.toString(),
+                                    repositoryId:
+                                        prepareContext?.repository?.id?.toString(),
+                                    provider: slot?.provider,
+                                }),
+                            ),
+                        },
+                        ctx,
+                    ),
             );
 
             // Cost -> Mongo `observability_telemetry` via the canonical emitter,

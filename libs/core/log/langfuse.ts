@@ -1,8 +1,9 @@
 import { LangfuseSpanProcessor } from '@langfuse/otel';
+import { propagateAttributes } from '@langfuse/tracing';
 import { LangfuseVercelAiSdkIntegration } from '@langfuse/vercel-ai-sdk';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { AttributeValue } from '@opentelemetry/api';
-import { registerTelemetry } from 'ai';
+import { registerTelemetry, type TelemetryOptions } from 'ai';
 
 let spanProcessor: LangfuseSpanProcessor | null = null;
 let ownTracerProvider: NodeTracerProvider | null = null;
@@ -128,6 +129,78 @@ export async function shutdownLangfuse(): Promise<void> {
     spanProcessor = null;
 }
 
+/** Trace-level attributes — the Langfuse dimensions you filter and group BY
+ *  (user, session, tags), as opposed to the per-observation metadata that
+ *  `buildLangfuseTelemetry` carries. Different plane, different API: the SDK
+ *  telemetry option cannot set these. */
+export interface LangfuseTraceAttributes {
+    /** Names the trace in the UI. */
+    traceName: string;
+    /** Groups traces the UI shows as one unit of work (a conversation thread,
+     *  a pull request). */
+    sessionId?: string;
+    /** Whom the trace belongs to — we scope by organization, not end user. */
+    userId?: string;
+    /** Langfuse keeps string values only (≤200 chars) and warns on anything
+     *  else, so absent identifiers are dropped rather than sent as "undefined"
+     *  — see `withLangfuseTrace`. */
+    metadata?: Record<string, string | undefined>;
+    tags?: string[];
+}
+
+/**
+ * The Langfuse session key for a pull-request-scoped run.
+ *
+ * Every agent working on the same PR MUST derive the key here: Langfuse groups
+ * traces into a session by exact string match, so a second spelling silently
+ * splits one PR into two sessions instead of failing loudly. Returns undefined
+ * when there is no PR to scope to — a session is not invented for a run that
+ * has nothing to group with.
+ */
+export function pullRequestSessionId(meta: {
+    organizationId?: string;
+    repositoryId?: string;
+    pullRequestId?: number | string;
+}): string | undefined {
+    if (!meta.pullRequestId) {
+        return undefined;
+    }
+    return `${meta.organizationId || 'unknown_org'}:${meta.repositoryId ?? 'repo'}:${meta.pullRequestId}`;
+}
+
+/**
+ * Run `fn` with Langfuse trace-level attributes propagated to every span it
+ * opens — including the AI SDK spans the agent runner produces downstream.
+ *
+ * Pass-through no-op when tracing is disabled, so callers wrap unconditionally
+ * and pay nothing when Langfuse is off.
+ */
+export function withLangfuseTrace<T>(
+    attrs: LangfuseTraceAttributes,
+    fn: () => Promise<T>,
+): Promise<T> {
+    if (!shouldTrace()) {
+        return fn();
+    }
+    const { metadata, ...rest } = attrs;
+    return propagateAttributes(
+        {
+            ...rest,
+            ...(metadata
+                ? {
+                      metadata: Object.fromEntries(
+                          Object.entries(metadata).filter(
+                              (entry): entry is [string, string] =>
+                                  entry[1] !== undefined,
+                          ),
+                      ),
+                  }
+                : {}),
+        },
+        fn,
+    );
+}
+
 export interface LangfuseTelemetryMetadata {
     organizationId?: string;
     teamId?: string;
@@ -172,16 +245,17 @@ export function buildLangfuseTelemetry(
 }
 
 /**
- * Expand `buildLangfuseTelemetry()` into AI SDK 7 `generateText` fields.
- * Spreads as `{ telemetry, runtimeContext? }` — metadata keys become
- * observation metadata via `includeRuntimeContext`.
+ * Expand `buildLangfuseTelemetry()` into AI SDK 7 call fields — the ONE place
+ * that knows how Langfuse metadata maps onto the SDK. Spreads as
+ * `{ telemetry, runtimeContext? }` into `generateText`/`generateObject`, or
+ * into an `AgentRunInput` for a harness run; both forward it verbatim.
+ *
+ * The return type is the SDK's own `TelemetryOptions`, so a telemetry redesign
+ * in a future `ai` major fails here at compile time instead of silently
+ * dropping attributes at runtime.
  */
 export function toAiSdkTelemetryArgs(config: LangfuseTelemetryConfig): {
-    telemetry: {
-        isEnabled: boolean;
-        functionId: string;
-        includeRuntimeContext?: Record<string, true>;
-    };
+    telemetry: TelemetryOptions;
     runtimeContext?: Record<string, AttributeValue>;
 } {
     const { isEnabled, functionId, metadata } = config;

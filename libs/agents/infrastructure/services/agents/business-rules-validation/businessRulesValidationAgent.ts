@@ -5,7 +5,12 @@ import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contr
 import { finalText } from '@libs/agent-harness/domain/run-state.util';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    pullRequestSessionId,
+    toAiSdkTelemetryArgs,
+    type LangfuseTraceAttributes,
+} from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { resolveAgentModel } from '@libs/llm/agent-model';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
@@ -51,6 +56,7 @@ import {
     AbstractSkillProvider,
     SkillFeedbackContext,
     SkillErrorContext,
+    type SkillExecutionContext,
 } from '../../../../skills/abstract-skill-provider';
 import { buildBusinessRulesAnalysisPrompt } from './analysis-prompt.builder';
 import { buildBusinessRulesContractViolationFeedback } from './contract-feedback.builder';
@@ -146,6 +152,39 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         ctx: BusinessRulesContext,
     ): Promise<BusinessRulesContext> {
         return this.runAnalyzer(step, ctx);
+    }
+
+    /**
+     * This skill is PR-scoped, so its run joins the pull request's Langfuse
+     * session — the same one the code-review agents open. Without a sessionId
+     * the trace lands outside it and reads as "missing" in the sessions view,
+     * which is what the per-call metadata alone could never fix (metadata
+     * annotates an observation; only a session groups traces).
+     */
+    protected traceAttributes(
+        context: SkillExecutionContext<BusinessRulesPrepareContext>,
+    ): LangfuseTraceAttributes {
+        const base = super.traceAttributes(context);
+        const pc = context.prepareContext;
+        const repoId = pc?.repository?.id;
+        const repositoryId = repoId != null ? String(repoId) : undefined;
+        const pullRequestId =
+            pc?.pullRequestNumber ?? pc?.pullRequest?.pullRequestNumber;
+
+        return {
+            ...base,
+            sessionId: pullRequestSessionId({
+                organizationId: base.userId,
+                repositoryId,
+                pullRequestId,
+            }),
+            metadata: {
+                ...base.metadata,
+                repositoryId,
+                pullRequestId:
+                    pullRequestId != null ? String(pullRequestId) : undefined,
+            },
+        };
     }
 
     protected createInitialContext(params: {
@@ -658,14 +697,17 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                 {
                     prompt: last?.content ?? '',
                     ...(seedMessages.length ? { seedMessages } : {}),
-                    // experimental_telemetry feeds Langfuse (forwarded by the runner).
-                    telemetry: buildLangfuseTelemetry(functionId, {
-                        organizationId: metadata?.organizationId,
-                        teamId: metadata?.teamId,
-                        pullRequestId: metadata?.pullRequestId,
-                        repositoryId: metadata?.repositoryId,
-                        provider: this.byokConfig?.main?.provider,
-                    }),
+                    // Telemetry feeds Langfuse — expanded to the AI SDK shape
+                    // here, forwarded verbatim by the runner.
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry(functionId, {
+                            organizationId: metadata?.organizationId,
+                            teamId: metadata?.teamId,
+                            pullRequestId: metadata?.pullRequestId,
+                            repositoryId: metadata?.repositoryId,
+                            provider: this.byokConfig?.main?.provider,
+                        }),
+                    ),
                 },
                 ctx,
             );

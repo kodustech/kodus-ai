@@ -29,6 +29,7 @@ import {
 } from '@libs/agent-harness/infrastructure/verify/llm-verdict';
 import {
     buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 
@@ -97,12 +98,12 @@ export class BusinessRulesVerifier implements Verifier<ValidationResult> {
             {
                 prompt: this.buildPrompt(candidate),
                 ...(this.params.telemetryMetadata
-                    ? {
-                          telemetry: buildLangfuseTelemetry(
+                    ? toAiSdkTelemetryArgs(
+                          buildLangfuseTelemetry(
                               'business-rules/verify',
                               this.params.telemetryMetadata,
                           ),
-                      }
+                      )
                     : {}),
             },
             ctx,

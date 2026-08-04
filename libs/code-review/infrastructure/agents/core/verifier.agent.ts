@@ -28,6 +28,7 @@ import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/c
 import { supportsStrictTools } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import {
     buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 
@@ -252,9 +253,11 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             spec,
             {
                 prompt: verifierPromptFor(candidate),
-                telemetry: buildLangfuseTelemetry(
-                    fnId,
-                    this.params.telemetryMetadata,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        fnId,
+                        this.params.telemetryMetadata,
+                    ),
                 ),
             },
             ctx,

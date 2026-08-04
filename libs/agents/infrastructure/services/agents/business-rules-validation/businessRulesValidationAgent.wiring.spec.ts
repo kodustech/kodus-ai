@@ -12,6 +12,15 @@ jest.mock('@libs/llm/agent-model', () => ({
     resolveAgentModel: () => modelRef.model,
 }));
 
+// Trace-level attributes only exist in OTel context; intercept to assert them.
+const propagated: { params: any[] } = { params: [] };
+jest.mock('@langfuse/tracing', () => ({
+    propagateAttributes: (params: any, fn: () => unknown) => {
+        propagated.params.push(params);
+        return fn();
+    },
+}));
+
 import { BusinessRulesValidationAgentProvider } from './businessRulesValidationAgent';
 
 function makeModel(text: string) {
@@ -80,5 +89,49 @@ describe('BusinessRulesValidationAgentProvider.callLLM (harness wiring)', () => 
         );
 
         expect(res.content).toBe('');
+    });
+});
+
+describe('BusinessRulesValidationAgentProvider trace attribution', () => {
+    it('joins the PR session the code-review agents open', () => {
+        const { provider } = build();
+
+        const attrs = (provider as any).traceAttributes({
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            prepareContext: {
+                pullRequestNumber: 42,
+                repository: { id: 'repo-9' },
+            },
+        });
+
+        expect(attrs).toMatchObject({
+            // Same key `runAgentWithTrace` derives for the review agents —
+            // that is what puts both in ONE Langfuse session. The base class
+            // applies it around the whole run (fetcher included).
+            sessionId: 'org-1:repo-9:42',
+            userId: 'org-1',
+            metadata: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+                repositoryId: 'repo-9',
+                pullRequestId: '42',
+            },
+        });
+    });
+
+    it('falls back to an org-scoped trace when there is no PR', () => {
+        const { provider } = build();
+
+        const attrs = (provider as any).traceAttributes({
+            organizationAndTeamData: { organizationId: 'org-1' },
+        });
+
+        // No PR to group under -> no invented session, but the run is still
+        // attributed to the org.
+        expect(attrs.sessionId).toBeUndefined();
+        expect(attrs.userId).toBe('org-1');
     });
 });

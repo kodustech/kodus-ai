@@ -8,7 +8,7 @@
  */
 import type { ObservabilityService } from '@libs/core/log/observability.service';
 import { propagateAttributes, startActiveObservation } from '@langfuse/tracing';
-import { shouldTrace } from '@libs/core/log/langfuse';
+import { pullRequestSessionId, shouldTrace } from '@libs/core/log/langfuse';
 
 export interface AgentTraceMeta {
     traceName: string;
@@ -46,9 +46,13 @@ export async function runAgentWithTrace<T>(
     return propagateAttributes(
         {
             traceName: meta.traceName,
-            sessionId: traceMetadata.prNumber
-                ? `${traceMetadata.organizationId ?? 'org'}:${traceMetadata.repositoryId ?? 'repo'}:${traceMetadata.prNumber}`
-                : undefined,
+            // Shared derivation: the business-rules agent must land in THIS
+            // session, which only happens if both spell the key identically.
+            sessionId: pullRequestSessionId({
+                organizationId: traceMetadata.organizationId,
+                repositoryId: traceMetadata.repositoryId,
+                pullRequestId: traceMetadata.prNumber,
+            }),
             userId: traceMetadata.organizationId,
             metadata: traceMetadata,
         },

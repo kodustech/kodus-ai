@@ -39,6 +39,7 @@ import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agent
 import type { Verdict } from '@libs/agent-harness/domain/contracts/verifier.contract';
 import {
     buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 // Domain helper relocated out of the legacy file (Zod validation of findings).
@@ -459,9 +460,11 @@ export async function runFinderWithVerify(
         params.finderSpec,
         {
             ...input,
-            telemetry: buildLangfuseTelemetry(
-                params.agentName ?? 'finder',
-                params.telemetryMetadata,
+            ...toAiSdkTelemetryArgs(
+                buildLangfuseTelemetry(
+                    params.agentName ?? 'finder',
+                    params.telemetryMetadata,
+                ),
             ),
         },
         ctx,
@@ -740,9 +743,11 @@ export async function runRecallPasses(
             spec,
             {
                 prompt,
-                telemetry: buildLangfuseTelemetry(
-                    `${params.agentName ?? 'finder'}-${label}`,
-                    params.telemetryMetadata,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        `${params.agentName ?? 'finder'}-${label}`,
+                        params.telemetryMetadata,
+                    ),
                 ),
             },
             ctx,

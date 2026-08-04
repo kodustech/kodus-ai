@@ -65,12 +65,22 @@ export interface AgentRunInput {
     readonly prompt: string;
     /** Optional seed messages (prior context). */
     readonly seedMessages?: readonly { role: 'user' | 'assistant'; content: string }[];
-    /** Opaque per-run telemetry forwarded to the model call as the AI SDK's
-     *  `telemetry` (and optional `runtimeContext` when `metadata` is present).
-     *  The harness does not interpret it. Per-RUN so each call — finder, each
-     *  recall pass, each per-finding verify — can carry its own observation
-     *  name; the domain builds it (e.g. Langfuse). */
+    /** Opaque per-run telemetry, forwarded VERBATIM as the model call's
+     *  `telemetry`. The harness does not interpret it: the domain hands it over
+     *  already in the shape the SDK takes (e.g. `toAiSdkTelemetryArgs`), so the
+     *  vendor mapping lives in ONE place, outside the harness. Per-RUN so each
+     *  call — finder, each recall pass, each per-finding verify — can carry its
+     *  own observation name.
+     *
+     *  Type the payload with a `type` alias, never an `interface`: interfaces
+     *  get no implicit index signature and so do not satisfy `Record<string,
+     *  unknown>`, however identical their members look. */
     readonly telemetry?: Readonly<Record<string, unknown>>;
+    /** Opaque per-run runtime context, forwarded VERBATIM as the model call's
+     *  `runtimeContext`. Carries the values whose keys the telemetry payload
+     *  opts into — the tracer records nothing that was not opted in, and both
+     *  halves are the domain's call. */
+    readonly runtimeContext?: Readonly<Record<string, unknown>>;
 }
 
 /** Adapter that exposes an AgentSpec AS A TOOL (sub-agent-as-tool pattern).

@@ -23,7 +23,10 @@ import type {
 } from '@libs/agent-harness/domain/contracts';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import { resolveAgentModel } from '@libs/llm/agent-model';
 
 /**
@@ -165,17 +168,19 @@ export async function runMcpFetcherAgent(params: {
             : {}),
     };
 
-    const telemetry = params.telemetry
-        ? buildLangfuseTelemetry(params.telemetry.functionId, {
-              organizationId: params.telemetry.organizationId,
-              teamId: params.telemetry.teamId,
-              provider: params.telemetry.provider,
-          })
+    const telemetryArgs = params.telemetry
+        ? toAiSdkTelemetryArgs(
+              buildLangfuseTelemetry(params.telemetry.functionId, {
+                  organizationId: params.telemetry.organizationId,
+                  teamId: params.telemetry.teamId,
+                  provider: params.telemetry.provider,
+              }),
+          )
         : undefined;
 
     const state = await runner.run(
         spec,
-        { prompt: params.prompt, ...(telemetry ? { telemetry } : {}) },
+        { prompt: params.prompt, ...(telemetryArgs ?? {}) },
         { runId: params.runId, signal: params.signal },
     );
 

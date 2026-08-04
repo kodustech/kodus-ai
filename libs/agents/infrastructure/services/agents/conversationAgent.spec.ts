@@ -13,6 +13,17 @@ jest.mock('@libs/llm/agent-model', () => ({
     resolveAgentModel: () => modelRef.model,
 }));
 
+// Captures the Langfuse TRACE-level attributes the run propagates. Real
+// `propagateAttributes` only sets OTel context, so there is nothing to assert
+// on without intercepting it here.
+const propagated: { params: any[] } = { params: [] };
+jest.mock('@langfuse/tracing', () => ({
+    propagateAttributes: (params: any, fn: () => unknown) => {
+        propagated.params.push(params);
+        return fn();
+    },
+}));
+
 import { ConversationAgentProvider } from './conversationAgent';
 import { CONVERSATION_FALLBACK_MESSAGE } from './conversation-response.util';
 
@@ -81,6 +92,41 @@ describe('ConversationAgentProvider (harness wiring)', () => {
         const res = await provider.execute('hi', ctx);
 
         expect(res).toBe(CONVERSATION_FALLBACK_MESSAGE);
+    });
+
+    it('groups the run under a Langfuse session so a thread reads as one conversation', async () => {
+        // Trace-level attributes are only emitted when tracing is on — the same
+        // gate `buildLangfuseTelemetry` uses for the observation payload.
+        process.env.LANGFUSE_TRACING = 'true';
+        process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
+        process.env.LANGFUSE_SECRET_KEY = 'sk-test';
+        propagated.params = [];
+        modelRef.model = makeModel('answer');
+        const { provider } = build();
+
+        await provider.execute('hi', ctx);
+
+        expect(propagated.params).toHaveLength(1);
+        expect(propagated.params[0]).toMatchObject({
+            traceName: 'conversationAgent',
+            // A thread IS the session: every turn of the same conversation
+            // lands under one Langfuse session instead of N orphan traces.
+            sessionId: 'th1',
+            // Org-level filtering in the Langfuse UI (parity with code-review).
+            userId: 'org1',
+            metadata: { organizationId: 'org1', teamId: 't1', threadId: 'th1' },
+        });
+    });
+
+    it('does not propagate trace attributes when tracing is disabled', async () => {
+        delete process.env.LANGFUSE_TRACING;
+        propagated.params = [];
+        modelRef.model = makeModel('answer');
+        const { provider } = build();
+
+        await provider.execute('hi', ctx);
+
+        expect(propagated.params).toHaveLength(0);
     });
 
     it('requires organization data and a thread', async () => {
