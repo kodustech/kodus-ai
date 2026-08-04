@@ -1,47 +1,92 @@
 ---
-title: "Segurança do Modelo de IA"
+title: "Segurança dos Modelos de IA"
+description: "Quais modelos de IA processam seu código, quem detém a relação com o provedor e o que acontece com seu código durante uma revisão."
 ---
 
-## Modelos Utilizados
+## Qual modelo revisa seu código
 
-O Kodus usa os seguintes modelos de linguagem para análise de código:
+Não existe um modelo fixo. **O Kodus roda em BYOK (Bring Your Own Key) por padrão em todos os
+planos**, o que significa que o modelo — e a relação com o provedor por trás dele — normalmente
+é seu, não nosso.
 
-- **GPT-4o e derivados** (OpenAI)
-- **Gemini 1.5 Pro e derivados** (Google)
-- **Claude 3.5 Sonnet e derivados** (Anthropic)
+<Info>
+  De propósito não fixamos nomes de modelo nesta página. O catálogo muda rápido; para os modelos
+  recomendados hoje, veja [BYOK](/how_to_use/pt-br/byok).
+</Info>
 
-## Tratamento de Dados
+Existem três caminhos, e qual deles se aplica muda com quem está seu acordo de dados:
 
-Seu código é processado temporariamente e nunca é usado para treinamento:
+| Caminho | Quem é dono da conta do provedor | Qual classe de modelo |
+| --- | --- | --- |
+| **BYOK** (padrão, todos os planos) | **Você.** Sua chave, seu faturamento, seu contrato com o provedor. | O que você configurar — um modelo frontier de propósito geral, um especializado em código, ou um endpoint self-hosted/compatível. |
+| **Trial / sem chave conectada** | Kodus, por um número limitado de revisões. | Um modelo especializado em código escolhido por nós, com um modelo open-weights menor como fallback. |
+| **Enterprise com chave gerenciada pela Kodus** | Kodus, sob o seu contrato Enterprise. | Modelos frontier de propósito geral, selecionados por nós. |
 
-- Dados retidos apenas durante a sessão de revisão
-- Descartados imediatamente após a conclusão
-- Nunca usados para treinar ou melhorar modelos
-- Privacidade mantida de acordo com os contratos dos provedores
+### Classes de provedor suportadas
 
-## Termos de Uso de Cada Modelo
+No BYOK você pode apontar o Kodus para:
 
-- **GPT-4o e derivados**: [Termos de Uso do GPT-4o](https://openai.com/enterprise-privacy/)
-- **Gemini 1.5 Pro e derivados**: [Termos de Uso do Gemini 1.5 Pro](https://ai.google.dev/gemini-api/terms)
-- **Claude 3.5 Sonnet e derivados**: [Termos de Uso do Claude 3.5 Sonnet](https://support.anthropic.com/en/articles/7996885-how-do-you-use-personal-data-in-model-training)
+- **Provedores frontier de primeira parte** — os grandes laboratórios comerciais, via API própria.
+- **Gateways enterprise hospedados em nuvem** — os mesmos modelos frontier faturados na sua conta
+  de nuvem existente, com o IAM, o pinning de região e as garantias de residência de dados dela.
+- **Agregadores** — uma única relação de faturamento na frente de vários modelos.
+- **Qualquer endpoint compatível com OpenAI ou Anthropic** — incluindo provedores especializados
+  em código e modelos que você mesmo hospeda, que nunca saem da sua rede.
 
-## Medidas de Segurança
+A lista completa e atual, com instruções de configuração, está em [BYOK](/how_to_use/pt-br/byok).
 
-- **Criptografia**: Dados criptografados em trânsito e em repouso
-- **Isolamento de Dados**: Os modelos não armazenam nem retêm dados após o processamento
-- **Acesso Controlado**: Controles de acesso rígidos apenas para pessoal autorizado (veja [Funções do Workspace](/how_to_use/pt-br/workspace_roles))
-- **Auditorias Regulares**: Auditorias de segurança periódicas para conformidade
-- **Atualizações de Segurança**: Patches e atualizações regulares
+<Note>
+  **Uma revisão BYOK nunca cai silenciosamente em um modelo gerenciado pela Kodus.** Se o modelo
+  que você configurou falhar e você não tiver definido seu próprio fallback, a revisão falha —
+  não redirecionamos seu código (nem sua conta) para a nossa infraestrutura.
+</Note>
+
+## O que o Kodus faz com seu código
+
+- O código é enviado ao provedor do modelo apenas para produzir aquela revisão, e apenas nas
+  partes necessárias: o diff mais o contexto que a revisão exige.
+- Nada é retido pelo Kodus para treinamento.
+- Os resultados da revisão (sugestões, metadados) são armazenados para o produto conseguir
+  mostrar histórico, evitar repetir sugestões e calcular métricas.
+
+## O que o provedor faz com seu código
+
+Esta é a parte que vale ler com atenção, porque **no BYOK isso não é regido pelo seu contrato com
+a Kodus — é regido pelo seu contrato com o provedor.**
+
+- A maioria dos tiers comerciais de API declara não treinar com tráfego de API por padrão.
+  Confirme isso no plano em que você está de fato: tiers gratuitos/consumer costumam diferir dos
+  tiers pagos de API.
+- Janelas de retenção (para monitoramento de abuso, por exemplo) são definidas pelo provedor,
+  não pelo Kodus.
+- Se você precisa de garantia contratual (retenção zero, região específica, DPA assinado),
+  obtenha direto do provedor — ou use um gateway em nuvem ou um endpoint self-hosted, onde esses
+  termos já fazem parte do seu acordo existente.
+
+<Warning>
+  Como quem escolhe o provedor é você, **o Kodus não pode fazer promessas de tratamento de dados
+  em nome dele.** Se sua postura de compliance depende de garantias específicas, confirme com o
+  provedor antes de apontar o Kodus para ele.
+</Warning>
+
+## Medidas de segurança do lado do Kodus
+
+- **Tratamento da chave**: sua chave de provedor é criptografada em repouso e nunca é exibida de
+  volta em texto claro.
+- **Criptografia**: dados criptografados em trânsito e em repouso.
+- **Acesso controlado**: acesso ao workspace baseado em papéis — veja
+  [Papéis do Workspace](/how_to_use/pt-br/workspace_roles).
+- **Self-hosting**: rode todo o stack na sua própria infraestrutura se não quiser que o código
+  saia da sua rede. Veja [Deploy do Kodus](/how_to_deploy/pt-br/deploy_kodus/generic_vm).
 
 ## Telemetria self-hosted
 
-Se você roda o Kodus self-hosted, cada instância envia um heartbeat
-diário anônimo para `telemetry.kodus.io` com contadores agregados e
-metadados de runtime — nunca código, identidades, ou qualquer coisa que
-possa rastrear até seus usuários. Você pode inspecionar o payload exato
-com `yarn telemetry:preview` ou desligar com
-`KODUS_TELEMETRY_DISABLED=true`. O schema completo, política de retenção
-e links para o código-fonte estão documentados em
+Se você roda o Kodus self-hosted, cada instância envia um heartbeat anônimo diário
+para `telemetry.kodus.io` com contadores agregados e metadados de runtime — nunca
+código, identidades ou qualquer coisa que possa ser rastreada até seus usuários.
+Você pode inspecionar o payload exato com `pnpm run telemetry:preview` ou desativar
+com `KODUS_TELEMETRY_DISABLED=true`. Schema completo, política de retenção e links
+para o código-fonte estão em
 [Telemetria Anônima](/how_to_deploy/pt-br/deploy_kodus/telemetry).
 
-Dúvidas? Entre em contato com nossa equipe de suporte ou junte-se ao [Discord](https://discord.gg/TFZBRk9fT6).
+Dúvidas? Fale com nosso suporte ou entre no [Discord](https://discord.gg/TFZBRk9fT6).

@@ -91,7 +91,7 @@ Before any heartbeat leaves your instance, you can dump the exact payload
 that the daily cron would build:
 
 ```bash
-yarn telemetry:preview
+pnpm run telemetry:preview
 ```
 
 This boots a minimal Kodus context, runs the same collector the cron uses,
@@ -99,7 +99,7 @@ and prints the JSON to stdout — without sending it. Pipe it through `jq` to
 explore:
 
 ```bash
-yarn telemetry:preview | jq '.usage_7d'
+pnpm run telemetry:preview | jq '.usage_7d'
 ```
 
 ## Disable telemetry

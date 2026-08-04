@@ -84,14 +84,14 @@ receiver 强制 5 KB 的 body 限制,并拒绝文档 schema 之外的任何字�
 在任何心跳离开您的实例之前,您可以输出每日 cron 将构建的精确负载:
 
 ```bash
-yarn telemetry:preview
+pnpm run telemetry:preview
 ```
 
 此命令启动一个最小的 Kodus 上下文,运行 cron 使用的同一收集器,并将
 JSON 打印到 stdout — 不发送任何内容。可以通过 `jq` 管道来探索:
 
 ```bash
-yarn telemetry:preview | jq '.usage_7d'
+pnpm run telemetry:preview | jq '.usage_7d'
 ```
 
 ## 禁用遥测

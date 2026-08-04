@@ -97,6 +97,30 @@ Tu prompt personalizado le indica a Kody cómo escribir los mensajes de sugerenc
 
 Puedes personalizar el tono, el nivel de detalle y el estilo de comunicación según las necesidades de tu equipo — desde explicaciones detalladas para problemas críticos hasta feedback conciso para los menores.
 
+## Definirlos en `kodus-config.yml`
+
+Los mismos cuatro campos están disponibles bajo la clave `v2PromptOverrides`:
+
+```yaml
+v2PromptOverrides:
+    generation:
+        main: |
+            Base instruction used for every suggestion.
+    categories:
+        descriptions:
+            bug: |
+                What Kody should look for in the Bug category.
+            performance: |
+                What Kody should look for in the Performance category.
+            security: |
+                What Kody should look for in the Security category.
+```
+
+Solo estos cuatro son configurables — no hay override de prompt para la categoría Business Logic.
+Cada campo tiene un límite de 2000 caracteres, y el archivo solo se lee una vez que
+`kodusConfigFileOverridesWebPreferences` está habilitado (consulta
+[General](/how_to_use/es/code_review/configs/general)).
+
 ## Referencias Externas
 
 Todos los prompts personalizados — de Categoría, Sugerencia y Resumen de PR — soportan referencias a archivos reales de los repositorios a los que Kody tiene acceso. Cuando guardas una actualización, Kody detecta automáticamente las referencias externas y las resuelve para revisiones futuras.

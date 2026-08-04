@@ -25,6 +25,10 @@ Kodus 自动检测和导入以下规则文件模式:
 - `.github/copilot-instructions.md` - Copilot 指令
 - `.github/instructions/**/*.instructions.md` - 详细指令文件
 
+### Agentic(agents.md 约定)
+- `AGENTS.md` - 事实上的标准代理指引文件
+- `.agents.md` / `.agent.md` - 点文件变体
+
 ### Claude
 - `CLAUDE.md` - Claude 特定规则
 - `.claude/settings.json` - Claude 配置设置
@@ -44,8 +48,15 @@ Kodus 自动检测和导入以下规则文件模式:
 
 ### 通用/内部规则
 - `.rules/**/*` - 通用规则目录
-- `.kody/rules/*` - Kody 特定规则
+- `.kody/rules/**` 和 `rules/**/*.md` - Kody 特定规则(参见[代码库规则](/how_to_use/zh/code_review/configs/repository_rules) —— 它们会被逐字导入,不经过 LLM 改写)
 - `docs/coding-standards/**/*` - 基于文档的编码标准
+
+### 检测细节
+
+- **会发现嵌套文件。** 上述每个模式都会在代码库根目录**以及任意子目录**下进行匹配。`services/billing/CLAUDE.md` 会被导入并自动限定到 `services/billing/**` —— 按目录放置的指引文件(monorepo 的常见约定)开箱即用。
+- **匹配不区分大小写。** `claude.md` 和 `CLAUDE.md` 等价。
+- **会跟随 `@file` 引用。** 如果某个规则文件用标准的 `@` 约定引用了另一个文件(例如 `CLAUDE.md` 中的 `@AGENTS.md`),被引用文件的内容会在导入时被抓取并纳入(仅一层,每个文件最多 5 个引用,每个被引用文件 100KB)。
+- **单条规则支持多个 glob。** 形如 `app/**/*.rb,lib/**/*.rb` 的规则路径(或[代码库规则](/how_to_use/zh/code_review/configs/repository_rules)frontmatter 中的 `path: []` 列表)会把规则应用到匹配**任意一个** glob 的文件。
 
 ## 工作原理
 
@@ -72,6 +83,33 @@ Kodus 自动检测和导入以下规则文件模式:
 
 这使您可以选择性地同步规则,而无需为所有文件启用自动同步。
 
+### 排除某个文件(`@kody-ignore`)
+
+如果你想把规则/指引文件保留在代码库中,但不让 Kody 把它变成 Kody Rules,在文件的任意位置加上 `@kody-ignore`:
+
+1. 在规则文件的任意位置添加 `@kody-ignore`(不区分大小写)
+2. 提交该更改
+
+下次同步时,Kody 会**跳过**该文件,**并移除此前由它创建的 Kody Rules**。如果之后你去掉 `@kody-ignore` 标记(或加上 `@kody-sync`),这些规则会自动回来。用它可以把 `CLAUDE.md`、`AGENTS.md` 这类内部风格文档留在代码库中,而不让它们成为审查中强制执行的规则。
+
 <Warning>
 如果您手动编辑从 IDE 规则文件创建的 Kody 规则,下次修改和同步相应文件时,您的更改将被覆盖。
 </Warning>
+
+## 验证同步与规则评估(自托管)
+
+在自托管部署中,API 日志会输出便于 grep 的标记:
+
+- `[kody-rules-sync]` —— 每次同步的汇总:哪些文件被导入、被跳过(含原因)或被移除。
+- `[kody-rules-eval]` —— 审查过程中按文件的评估轨迹:每个被审查文件究竟有哪些规则(uuid + 标题)被选入提示词。
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+如果某条规则在 UI 中显示为启用,却从未在你预期文件的 `[kody-rules-eval]` 中出现,请检查它的 **Path** glob —— 规则只会在匹配其路径的文件上运行。
+
+## 规则数量上限
+
+**没有有效许可证**运行的自托管实例(Community Edition)每次审查最多评估 **10 条规则**(按最早创建优先)。已授权的自托管实例和云端没有此限制。如果在未授权的实例上第 10 条之后的规则不触发,原因就是这个上限。

@@ -25,6 +25,10 @@ Kodus detecta e importa automáticamente los siguientes patrones de archivos de 
 - `.github/copilot-instructions.md` - Instrucciones de Copilot
 - `.github/instructions/**/*.instructions.md` - Archivos de instrucciones detalladas
 
+### Agentic (convención agents.md)
+- `AGENTS.md` - El archivo estándar de facto para guiar agentes
+- `.agents.md` / `.agent.md` - Variantes con punto
+
 ### Claude
 - `CLAUDE.md` - Reglas específicas de Claude
 - `.claude/settings.json` - Configuración de Claude
@@ -44,8 +48,15 @@ Kodus detecta e importa automáticamente los siguientes patrones de archivos de 
 
 ### Reglas Genéricas/Internas
 - `.rules/**/*` - Directorio de reglas genéricas
-- `.kody/rules/*` - Reglas específicas de Kody
+- `.kody/rules/**` y `rules/**/*.md` - Reglas específicas de Kody (consulta [Reglas de Repositorio](/how_to_use/es/code_review/configs/repository_rules) — se importan literalmente, sin reescritura por LLM)
 - `docs/coding-standards/**/*` - Estándares de codificación basados en documentación
+
+### Detalles de la detección
+
+- **Se descubren archivos anidados.** Cada patrón anterior se busca en la raíz del repositorio **y bajo cualquier subdirectorio**. Un `services/billing/CLAUDE.md` se importa y se acota automáticamente a `services/billing/**` — los archivos de guía por directorio (la convención habitual en monorepos) funcionan sin configuración.
+- **La coincidencia no distingue mayúsculas.** `claude.md` y `CLAUDE.md` son equivalentes.
+- **Se siguen las referencias `@file`.** Si un archivo de reglas referencia otro con la convención `@` (p. ej. `@AGENTS.md` dentro de `CLAUDE.md`), el contenido referenciado se descarga y se incluye durante la importación (un nivel de profundidad, hasta 5 referencias por archivo, 100KB por archivo referenciado).
+- **Se admiten varios globs por regla.** Una ruta como `app/**/*.rb,lib/**/*.rb` (o una lista `path: []` en el frontmatter de [Reglas de Repositorio](/how_to_use/es/code_review/configs/repository_rules)) aplica la regla a los archivos que coincidan con **cualquiera** de los globs.
 
 ## Cómo Funciona
 
@@ -72,6 +83,33 @@ Puedes sincronizar archivos de reglas individuales sin habilitar la sincronizaci
 
 Esto te permite sincronizar selectivamente reglas sin habilitar la sincronización automática para todos los archivos.
 
+### Excluir un archivo (`@kody-ignore`)
+
+Para mantener un archivo de reglas/guía en tu repositorio pero evitar que Kody lo convierta en Kody Rules, agrega `@kody-ignore` en cualquier parte del archivo:
+
+1. Agrega `@kody-ignore` en cualquier parte del archivo de reglas (sin distinguir mayúsculas)
+2. Haz commit del cambio
+
+En la siguiente sincronización Kody **omitirá** ese archivo **y eliminará las Kody Rules creadas a partir de él**. Las reglas vuelven automáticamente si más adelante quitas el marcador `@kody-ignore` (o agregas `@kody-sync`). Úsalo para mantener documentos de estilo interno como un `CLAUDE.md` o `AGENTS.md` sin que se conviertan en reglas aplicadas en la revisión.
+
 <Warning>
 Si editas manualmente una Kody Rule que fue creada desde un archivo de regla del IDE, tus cambios serán sobreescritos la próxima vez que el archivo correspondiente sea modificado y sincronizado.
 </Warning>
+
+## Verificar sincronización y evaluación de reglas (self-hosted)
+
+En despliegues self-hosted los logs de la API llevan marcadores grep-ables para depurar:
+
+- `[kody-rules-sync]` — resumen por ejecución: qué archivos se importaron, se omitieron (con el motivo) o se eliminaron.
+- `[kody-rules-eval]` — traza de evaluación por archivo durante una revisión: exactamente qué reglas (uuid + título) se seleccionaron para el prompt de cada archivo revisado.
+
+```bash
+docker logs kodus_api 2>&1 | grep "kody-rules-sync"
+docker logs kodus_api 2>&1 | grep "kody-rules-eval"
+```
+
+Si una regla aparece activa en la UI pero nunca sale en `[kody-rules-eval]` para los archivos que esperas, revisa su glob de **Path** — una regla solo se ejecuta sobre archivos que coincidan con su ruta.
+
+## Límites de reglas
+
+Las instancias self-hosted que corren **sin una licencia válida** (Community Edition) evalúan como máximo **10 reglas** por revisión (las más antiguas primero). Las instancias self-hosted con licencia y las de nube no tienen ese límite. Si las reglas más allá de la décima no se disparan en una instancia sin licencia, este límite es la razón.

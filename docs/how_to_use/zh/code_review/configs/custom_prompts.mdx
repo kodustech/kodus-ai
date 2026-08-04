@@ -97,6 +97,30 @@ description: "为每个类别和建议的编写方式自定义 Kody 的审查提
 
 您可以根据团队的需求自定义语气、详细程度和沟通风格 - 从关键问题的详细解释到次要问题的简洁反馈。
 
+## 在 `kodus-config.yml` 中设置
+
+同样的四个字段可在 `v2PromptOverrides` 键下配置:
+
+```yaml
+v2PromptOverrides:
+    generation:
+        main: |
+            Base instruction used for every suggestion.
+    categories:
+        descriptions:
+            bug: |
+                What Kody should look for in the Bug category.
+            performance: |
+                What Kody should look for in the Performance category.
+            security: |
+                What Kody should look for in the Security category.
+```
+
+只有这四项可配置 —— Business Logic 类别没有提示词覆盖。
+每个字段上限为 2000 个字符,并且只有在启用
+`kodusConfigFileOverridesWebPreferences` 之后该文件才会被读取(参见
+[通用设置](/how_to_use/zh/code_review/configs/general))。
+
 ## 外部引用
 
 所有自定义提示——类别、建议和 PR 摘要——都支持引用 Kody 可以访问的代码库中的真实文件。当您保存更新时,Kody 会自动检测外部引用并为将来的审查解析它们。
@@ -387,7 +411,7 @@ description: "为每个类别和建议的编写方式自定义 Kody 的审查提
     **解决方案:**
     - 使提示更具体和集中
     - 为您想要忽略的模式添加排除项
-    - 在[建议控制](/how_to_use/en/code_review/configs/suggestion_control)中提高最低严重性阈值
+    - 在[建议控制](/how_to_use/zh/code_review/configs/suggestion_control)中提高最低严重性阈值
     - 检查类别提示之间的冗余
   </Accordion>
 

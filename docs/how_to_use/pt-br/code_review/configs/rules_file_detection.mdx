@@ -85,6 +85,15 @@ Você pode sincronizar arquivos de regras individuais sem habilitar a sincroniza
 
 Isso permite sincronizar regras seletivamente sem habilitar a sincronização automática para todos os arquivos.
 
+### Excluindo um arquivo (`@kody-ignore`)
+
+Para manter um arquivo de regra/orientação no repositório mas impedir que o Kody o transforme em Kody Rules, adicione `@kody-ignore` em qualquer lugar do arquivo:
+
+1. Adicione `@kody-ignore` em qualquer parte do arquivo de regra (sem distinção de maiúsculas)
+2. Faça commit da mudança
+
+Na próxima sincronização o Kody vai **pular** aquele arquivo **e remover as Kody Rules criadas a partir dele**. As regras voltam automaticamente se você remover depois o marcador `@kody-ignore` (ou adicionar `@kody-sync`). Use isso para manter documentos de estilo da casa, como um `CLAUDE.md` ou `AGENTS.md`, sem que virem regras aplicadas na revisão.
+
 <Warning>
 Se você editar manualmente uma Kody Rule que foi criada a partir de um arquivo de regra da IDE, suas alterações serão sobrescritas na próxima vez que o arquivo correspondente for modificado e sincronizado.
 </Warning>

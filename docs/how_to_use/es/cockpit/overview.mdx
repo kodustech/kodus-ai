@@ -8,7 +8,7 @@ description: "Analíticas integrales y métricas para el rendimiento del equipo 
 Cockpit Analytics proporciona información integral sobre el rendimiento de tu equipo de ingeniería a través de métricas clave que miden la productividad, la calidad del código y la eficiencia de entrega. Estas métricas te ayudan a identificar áreas de mejora y rastrear el progreso a lo largo del tiempo.
 
 <Warning>
-  Cockpit está disponible exclusivamente en el **plan Teams (cloud)**. Las instalaciones de Community auto-alojadas no incluyen las funciones de Cockpit.
+  Cockpit requiere un plan de pago: **Teams o Enterprise en la nube**, o **self-hosted Enterprise con licencia**. El self-hosted sin licencia (Community) y los planes free BYOK no lo incluyen. En self-hosted Enterprise además hay que ejecutar el [Analytics Worker](/how_to_deploy/es/deploy_kodus/analytics_worker).
 </Warning>
 
 <Frame caption="Monitorea el rendimiento de tu equipo con analíticas en tiempo real.">
@@ -17,8 +17,8 @@ Cockpit Analytics proporciona información integral sobre el rendimiento de tu e
 
 ## Características Principales
 
-- Los datos se actualizan cada 2 horas
-- Solo para el plan Teams (cloud)
+- Los datos se actualizan cada 30 minutos por defecto (`ANALYTICS_INGESTION_CRON`)
+- Teams/Enterprise en la nube, o self-hosted Enterprise con licencia
 - Cálculo de métricas impulsado por IA
 - Más de 8 métricas DORA y personalizadas
 
@@ -28,6 +28,11 @@ El cockpit se divide en dos pestañas:
 
 - **Kodus Review** — qué tan efectivas son las revisiones de Kodus: implementation rate, calibración de severidad, retroalimentación negativa y la salud de tus Kody Rules. Trata sobre Kodus en sí, y es donde tomas acción. Consulta [Kodus Review](/how_to_use/es/cockpit/kodus_review).
 - **Productividad** — métricas generales de entrega: frecuencia de despliegue, lead time, tiempo de ciclo de PR, tamaño de PR y actividad de los desarrolladores.
+
+<Note>
+  Los Owners pueden ocultar pestañas enteras o métricas individuales para toda la organización —
+  consulta [Configuración de Cockpit](/how_to_use/es/cockpit/configuration).
+</Note>
 
 ## Categorías de Métricas Principales
 

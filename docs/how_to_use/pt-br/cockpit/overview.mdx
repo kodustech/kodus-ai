@@ -8,7 +8,7 @@ description: "Análises e métricas abrangentes para o desempenho da equipe de e
 O Cockpit Analytics fornece insights abrangentes sobre o desempenho da sua equipe de engenharia por meio de métricas-chave que medem produtividade, qualidade de código e eficiência de entrega. Essas métricas ajudam a identificar áreas de melhoria e acompanhar o progresso ao longo do tempo.
 
 <Warning>
-  O Cockpit está disponível exclusivamente no **plano Teams (cloud)**. Instalações Community self-hosted não incluem os recursos do Cockpit.
+  O Cockpit exige um plano pago: **Teams ou Enterprise na cloud**, ou **self-hosted Enterprise licenciado**. Self-hosted sem licença (Community) e planos free BYOK não incluem. No self-hosted Enterprise também é preciso rodar o [Analytics Worker](/how_to_deploy/pt-br/deploy_kodus/analytics_worker).
 </Warning>
 
 <Frame caption="Monitore o desempenho da sua equipe com análises em tempo real.">
@@ -17,8 +17,8 @@ O Cockpit Analytics fornece insights abrangentes sobre o desempenho da sua equip
 
 ## Principais Recursos
 
-- Dados atualizados a cada 2 horas
-- Apenas no plano Teams (cloud)
+- Dados atualizados a cada 30 minutos por padrão (`ANALYTICS_INGESTION_CRON`)
+- Teams/Enterprise na cloud, ou self-hosted Enterprise licenciado
 - Cálculo de métricas alimentado por IA
 - Mais de 8 métricas DORA e personalizadas
 
@@ -28,6 +28,11 @@ O cockpit é dividido em duas abas:
 
 - **Kodus Review** — o quanto as revisões do Kodus são eficazes: taxa de implementação, calibração de severidade, feedback negativo e a saúde das suas Kody Rules. É sobre o próprio Kodus, e é onde você toma ação. Veja [Kodus Review](/how_to_use/pt-br/cockpit/kodus_review).
 - **Productivity** — métricas gerais de entrega: frequência de deploy, lead time, tempo de ciclo de PR, tamanho de PR e atividade dos desenvolvedores.
+
+<Note>
+  Owners podem esconder abas inteiras ou métricas individuais para toda a organização — veja
+  [Configuração do Cockpit](/how_to_use/pt-br/cockpit/configuration).
+</Note>
 
 ## Categorias de Métricas Principais
 

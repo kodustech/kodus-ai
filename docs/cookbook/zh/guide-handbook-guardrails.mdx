@@ -10,8 +10,8 @@ icon: "shield-check"
 
 我们将重点关注两个构建块:
 
-- [Kody 规则](/how_to_use/en/code_review/configs/kody_rules) – 将每个策略要点编码为确定性的文件级或 PR 级检查。
-- [自定义插件](/cookbook/en/custom-plugin-install) – 当真相源存在于 Git 之外时,从远程 MCP 服务器获取标准。
+- [Kody 规则](/how_to_use/zh/code_review/configs/kody_rules) – 将每个策略要点编码为确定性的文件级或 PR 级检查。
+- [自定义插件](/cookbook/zh/custom-plugin-install) – 当真相源存在于 Git 之外时,从远程 MCP 服务器获取标准。
 
 遵循流程,任何代码库都可以从"手册 PDF"演变为"活策略包"。
 
@@ -117,7 +117,7 @@ icon: "shield-check"
 ```
 
 <Info>
-  规则已经理解变量(`fileDiff`、`pr_files_diff` 等)、文件引用和 MCP 调用。请参阅 [Kody 规则指南](/how_to_use/en/code_review/configs/kody_rules)中的完整矩阵。
+  规则已经理解变量(`fileDiff`、`pr_files_diff` 等)、文件引用和 MCP 调用。请参阅 [Kody 规则指南](/how_to_use/zh/code_review/configs/kody_rules)中的完整矩阵。
 </Info>
 
 
@@ -126,7 +126,7 @@ icon: "shield-check"
 有时手册(或其部分)必须保留在 Notion、Confluence、Google Docs 或其他系统中。您仍然可以将其输入 Kody:
 
 1. 构建或采用公开 `listSections()` 和 `getSection(id)` 的远程 MCP 端点。
-2. 通过**添加自定义插件**安装它。按照[自定义插件指南](/cookbook/en/custom-plugin-install)获取确切流程。
+2. 通过**添加自定义插件**安装它。按照[自定义插件指南](/cookbook/zh/custom-plugin-install)获取确切流程。
 3. 用 `@MCP:policy_pack.getSection({"id":"architecture"})` 替换 `@file` 引用。
 4. 在 MCP 服务器上缓存响应,以便多个规则在每次审查时共享负载。
 

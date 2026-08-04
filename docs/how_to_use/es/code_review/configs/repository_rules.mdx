@@ -60,12 +60,31 @@ Describe qué revisar y cómo decidir. Sé directo y objetivo.
 
 ### Campos Requeridos
 
+Solo dos cosas son estrictamente obligatorias: un `title` no vacío y un cuerpo de regla no vacío.
+Un archivo al que le falte cualquiera de los dos se omite por completo.
+
 | Campo | Descripción | Valores |
 |-------|-------------|---------|
 | `title` | Nombre de la regla mostrado en la interfaz | Cualquier cadena descriptiva |
-| `scope` | Alcance del análisis de la regla | `"file"` o `"pull-request"` |
-| `path` | Rutas de archivos donde aplica la regla | Array de patrones glob |
-| `severity_min` | Nivel mínimo de severidad | `"low"`, `"medium"`, `"high"`, `"critical"` |
+
+### Campos con valor por defecto
+
+Todo lo demás es opcional — si lo omites, se aplica el valor por defecto.
+
+| Campo | Descripción | Valores | Por defecto |
+|-------|-------------|---------|---------|
+| `scope` | Alcance del análisis de la regla | `"file"` o `"pull-request"` | `"file"` |
+| `path` | Rutas donde aplica la regla. La regla se dispara en archivos que coincidan con **cualquiera** de los globs | Array de patrones glob | `**/*` (todos los archivos) |
+| `severity_min` | Nivel mínimo de severidad | `"low"`, `"medium"`, `"high"`, `"critical"` | `"medium"` |
+| `enabled` | Ponlo en `false` para no importar este archivo (una regla ya importada no se elimina) | boolean | `true` |
+| `uuid` | Identificador estable de la regla — mantiene la misma regla en la plataforma aunque se renombre el archivo | string | ninguno |
+| `languages`, `buckets` | Metadatos informativos | — | — |
+
+<Note>
+  `severity` se acepta como alias de `severity_min`, ya que es fácil de escribir mal y la
+  intención es inequívoca. Cualquier valor fuera de los cuatro niveles cae a `"medium"`, y
+  cualquier `scope` distinto de `"pull-request"` se trata como `"file"`.
+</Note>
 
 ## Ejemplos de Reglas
 

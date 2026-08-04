@@ -8,7 +8,7 @@ BYOK (Bring Your Own Key) é a **forma padrão como o Kodus usa LLMs em todos os
 <Card
   title="Como isso se aplica aos planos"
   icon="scale-balanced"
-  href="/how_to_use/pt-br/pricing#byok-is-the-default-across-all-plans"
+  href="/how_to_use/pt-br/pricing#byok-é-o-padrão-em-todos-os-planos"
 >
   O BYOK é gratuito no Community, incluído no Teams ($10/dev ativo/mês além do seu gasto com tokens) e uma das duas opções no Enterprise (a outra sendo uma chave de API gerenciada pelo Kodus).
 </Card>
@@ -147,7 +147,9 @@ Quando o modelo que você quer não está na lista curada (endpoint personalizad
 
 <Steps>
   <Step title="Escolha um provedor">
-    Escolha entre OpenAI, Anthropic, Google Gemini, OpenRouter, Novita ou **OpenAI Compatible** (para qualquer endpoint no formato OpenAI).
+    Escolha entre OpenAI, Anthropic, Google Gemini, Google Vertex AI, Amazon Bedrock, OpenRouter, Novita, **OpenAI Compatible** (para qualquer endpoint no formato OpenAI) ou **Anthropic-compatible** (para qualquer endpoint no formato Messages da Anthropic).
+
+    Vertex e Bedrock aparecem como **Beta** e pedem credenciais específicas em vez de uma chave única — veja [Provedores Suportados](#provedores-suportados) abaixo.
   </Step>
 
   <Step title="Informe a URL base (se necessário)">
@@ -158,8 +160,8 @@ Quando o modelo que você quer não está na lista curada (endpoint personalizad
     Se o Kodus conseguir listar modelos do provedor, você recebe um dropdown. Caso contrário (ex.: self-hosted ou quando chaves de plataforma não estão configuradas), digite o Model ID exato manualmente.
   </Step>
 
-  <Step title="Cole a chave de API">
-    O campo da chave aparece assim que provedor e modelo são definidos.
+  <Step title="Cole as credenciais">
+    Na maioria dos provedores é um único campo de chave de API, que aparece depois de definir provedor e modelo. O Vertex pede um JSON de service account mais uma região, e o Bedrock uma Bedrock API key (ou credenciais IAM) mais uma região.
   </Step>
 
   <Step title="Ajustar configurações avançadas (opcional)">
@@ -231,6 +233,36 @@ Quando o modelo que você quer não está na lista curada (endpoint personalizad
     </Warning>
   </Tab>
 
+  <Tab title="Google Vertex AI">
+    <Info>**Beta.** Integração mais nova, com caminho de autenticação mais complexo que o padrão de chave única.</Info>
+
+    **Melhor para:** Times já no Google Cloud que precisam do Gemini (ou Claude) sob o billing, o IAM e as garantias de residência de dados que já têm na GCP.
+
+    **Como configurar:**
+    1. No wizard manual, escolha **Google Vertex AI** como provedor.
+    2. Cole o **conteúdo do arquivo JSON da sua service account** no campo Service Account JSON (base64 também funciona). O Kodus extrai o `project_id` do JSON automaticamente.
+    3. **Region** — deixe vazio para usar o endpoint global (recomendado). Fixe uma região (ex.: `us-east5`) só quando houver requisito de residência de dados.
+
+    A service account precisa de permissão para chamar a API de predição do Vertex AI naquele projeto.
+  </Tab>
+
+  <Tab title="Amazon Bedrock">
+    <Info>**Beta.** Integração mais nova, com caminho de autenticação mais complexo que o padrão de chave única.</Info>
+
+    **Melhor para:** Times padronizados em AWS que querem os modelos faturados na própria conta AWS.
+
+    **Como configurar:**
+    1. No wizard manual, escolha **Amazon Bedrock** como provedor.
+    2. Informe uma **Bedrock API key** (bearer token) — veja [como gerar uma Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-generate.html).
+    3. Defina a **Region** (ex.: `us-east-1`, `us-west-2`, `eu-central-1`).
+
+    <Accordion title="Avançado: credenciais IAM em vez da API key">
+      Se seu time ainda não migrou para Bedrock API keys, expanda **Advanced — use IAM user credentials instead** e informe access key ID + secret estáticos (mais um session token para credenciais temporárias do STS). O principal IAM precisa de `bedrock:InvokeModel`.
+
+      A API key tem precedência: se houver bearer token, os campos de IAM são ignorados.
+    </Accordion>
+  </Tab>
+
   <Tab title="OpenAI Compatible">
     **Melhor para:** provedores especializados (Moonshot, Z.ai, Fireworks, Together, Groq, DeepSeek) ou endpoints self-hosted.
 
@@ -253,6 +285,17 @@ Quando o modelo que você quer não está na lista curada (endpoint personalizad
         Configuração do Together AI.
       </Card>
     </CardGroup>
+  </Tab>
+  <Tab title="Anthropic-compatible">
+    **Melhor para:** Endpoints que falam a API Messages da Anthropic em vez da da OpenAI — incluindo endpoints de coding plan, como o da Kimi.
+
+    **Como configurar:**
+    1. No wizard manual, escolha o provedor **Anthropic-compatible**.
+    2. Informe a base URL, a chave e o model ID.
+
+    <Note>
+      Cole a base URL no formato que seu provedor documenta — com ou sem `/v1` no final (ex.: `https://api.kimi.com/coding` ou `https://api.kimi.com/coding/v1`). O Kodus normaliza internamente, porque os dois caminhos do SDK da Anthropic discordam sobre onde o `/v1` entra.
+    </Note>
   </Tab>
 </Tabs>
 

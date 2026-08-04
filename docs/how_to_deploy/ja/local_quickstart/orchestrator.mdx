@@ -23,7 +23,8 @@ icon: "laptop"
 
 - Node.js（LTSバージョン）
 - Docker
-- YarnまたはNPM
+- pnpm
+- OpenSSL
 - LLM APIキー
 
 ## プロジェクトの実行
@@ -35,11 +36,11 @@ icon: "laptop"
       ```bash
       git clone https://github.com/kodustech/kodus-ai.git
       cd kodus-ai
-      yarn setup
+      pnpm run setup
       ```
 
       このスクリプトは自動的に以下を行います：
-      - ✅ 必要な依存関係（Node.js、Yarn、Docker、OpenSSL）をすべて確認
+      - ✅ 必要な依存関係（Node.js、pnpm、Docker、OpenSSL）をすべて確認
       - ✅ プロジェクトの依存関係をインストール
       - ✅ `.env`ファイルを作成・設定
       - ✅ 必要なセキュリティキーをすべて自動生成
@@ -56,18 +57,24 @@ icon: "laptop"
 
       **基本セットアップ：**
       ```bash
-      yarn docker:start
-      yarn migrate:dev
-      yarn seed
+      pnpm run docker:start
+      pnpm run migration:run
+      pnpm run seed
       ```
 
       **外部インテグレーション（Webhooksなど）を使用する場合：**
       ```bash
-      yarn docker:start
-      yarn migrate:dev
-      yarn seed
-      yarn tunnel  # 外部サービス用のパブリックエンドポイントを作成
+      pnpm run docker:start
+      pnpm run migration:run
+      pnpm run seed
+      pnpm run tunnel  # 外部サービス用のパブリックエンドポイントを作成
       ```
+
+      <Info>
+        データベースのマイグレーションとシードは、コンテナ起動時に**自動的に**実行されます —
+        開発用 compose では `RUN_MIGRATIONS` と `RUN_SEEDS` のデフォルトが `true` です。
+        上記のコマンドが必要なのは、これらを無効にした場合だけです。
+      </Info>
 
       すべてが起動したら、ブラウザで **http://localhost:3000** を開いてください。
   </Tab>
@@ -83,7 +90,7 @@ icon: "laptop"
       ### 2. 依存関係のインストール
 
       ```bash
-      yarn install
+      pnpm install
       ```
 
       ### 3. 環境変数の設定
@@ -113,8 +120,8 @@ icon: "laptop"
       ```
 
       以下のセキュリティキーの値を生成する必要があります：
-      - `JWT_SECRET`（`openssl rand -base64 32`を使用）
-      - `JWT_REFRESH_SECRET`（`openssl rand -base64 32`を使用）
+      - `API_JWT_SECRET`（`openssl rand -base64 32`を使用）
+      - `API_JWT_REFRESH_SECRET`（`openssl rand -base64 32`を使用）
       - `CODE_MANAGEMENT_SECRET`（`openssl rand -hex 32`を使用）
       - `CODE_MANAGEMENT_WEBHOOK_TOKEN`（`openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'`を使用）
 
@@ -133,7 +140,7 @@ icon: "laptop"
       Dockerを使用してサービスを起動します：
 
       ```bash
-      yarn docker:start
+      pnpm run docker:start
       ```
 
       このコマンドは以下を起動します：
@@ -149,7 +156,7 @@ icon: "laptop"
 
       外部サービス用のパブリックエンドポイントも作成する場合：
       ```bash
-      yarn tunnel
+      pnpm run tunnel
       ```
 
       ### 8. 初回セットアップ
@@ -159,13 +166,13 @@ icon: "laptop"
       データベースマイグレーションの実行：
 
       ```bash
-      yarn migrate:dev
+      pnpm run migration:run
       ```
 
       初期データのシード：
 
       ```bash
-      yarn seed
+      pnpm run seed
       ```
 
       ### 9. サービスエンドポイント
@@ -185,18 +192,18 @@ icon: "laptop"
 
 ### 基本的なローカル開発
 
-1. **サービスの起動**: `yarn docker:start`
-2. **マイグレーションの実行**: `yarn migrate:dev`
-3. **シードデータの読み込み**: `yarn seed`
+1. **サービスの起動**: `pnpm run docker:start`
+2. **マイグレーションの実行**: `pnpm run migration:run`
+3. **シードデータの読み込み**: `pnpm run seed`
 4. **アプリを開く**: `http://localhost:3000`にアクセス
-5. **ヘルスチェック**: `yarn dev:health-check`
+5. **ヘルスチェック**: `pnpm run dev:health-check`
 
 ### 外部インテグレーションを使用した開発
 
 外部サービス（GitのWebhookなど）とのインテグレーションをテストする必要がある場合：
 
-1. **サービスの起動**: `yarn docker:start && yarn migrate:dev && yarn seed`
-2. **トンネルの作成**: `yarn tunnel`（パブリックエンドポイントを作成）
+1. **サービスの起動**: `pnpm run docker:start && pnpm run migration:run && pnpm run seed`
+2. **トンネルの作成**: `pnpm run tunnel`（パブリックエンドポイントを作成）
 3. **Webhook URLの更新**: トンネルコマンドが`.env`を自動的に更新します
 4. **Gitプロバイダーの設定**: Gitプロバイダーの設定でトンネルURLを使用
 5. **インテグレーションのテスト**: WebhookをトリガーしてログをモニタリングJP
@@ -214,7 +221,7 @@ icon: "laptop"
 ### クイックヘルスチェック
 
 ```bash
-yarn dev:health-check
+pnpm run dev:health-check
 ```
 
 この包括的なヘルスチェックは以下を検証します：
@@ -235,13 +242,13 @@ yarn dev:health-check
 
 ### セットアップスクリプトの問題
 
-自動セットアップスクリプト（`yarn setup`）が失敗した場合：
+自動セットアップスクリプト（`pnpm run setup`）が失敗した場合：
 
 **依存関係が見つからない場合：**
 ```bash
 # 必要なツールがすべてインストールされているか確認
 node --version
-yarn --version
+pnpm --version
 docker --version
 openssl version
 ```
@@ -273,10 +280,10 @@ docker network rm kodus-backend-services shared-network
 - 必要なセキュリティキーがすべて正しく生成されたことを確認
 
 **ヘルスチェックの失敗：**
-- `yarn dev:health-check`を実行して詳細な診断を確認
-- コンテナが完全に起動しているか確認（`yarn docker:start`後、1〜2分待機）
+- `pnpm run dev:health-check`を実行して詳細な診断を確認
+- コンテナが完全に起動しているか確認（`pnpm run docker:start`後、1〜2分待機）
 - データベースマイグレーションとシードデータが読み込まれていることを確認
-- `yarn docker:logs`でAPIのログを確認して起動エラーを確認
+- `pnpm run docker:logs`でAPIのログを確認して起動エラーを確認
 
 **APIが応答しない：**
 - APIはコンテナ起動後に完全に初期化されるまでに時間がかかります
@@ -285,7 +292,7 @@ docker network rm kodus-backend-services shared-network
 - ヘルスチェックを実行して、どの特定のコンポーネントが失敗しているかを確認
 
 **外部サービスとのWebhookの問題：**
-- `yarn tunnel`を使用して外部Webhook用のパブリックエンドポイントを作成
+- `pnpm run tunnel`を使用して外部Webhook用のパブリックエンドポイントを作成
 - GitプロバイダーのWebhook URLをトンネルURLに更新
 - Webhookインテグレーションのテスト中はトンネルNが稼働していることを確認
 - トンネルのログで接続の問題を確認

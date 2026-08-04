@@ -5,22 +5,19 @@ description: "Ajuste sua revisão de código com IA para exibir apenas as sugest
 
 Muitas sugestões de baixa prioridade podem fazer os desenvolvedores ignorarem completamente o feedback das revisões de código. O segredo é ajustar a revisão para que ela mostre o que importa e fique quieta no que não importa.
 
-## Controle de sugestões
+## Filtros de revisão
 
-O Kodus oferece controle refinado sobre quantas sugestões aparecem e em qual severidade:
+O Kodus filtra quais achados são efetivamente publicados:
 
-- **Máximo de sugestões por PR** — limite o número total de sugestões (ex.: 9)
-- **Filtro de severidade** — mostre apenas sugestões acima de um limite (ex.: Média e acima)
-- **Modo de agrupamento** — controle como as sugestões são organizadas no PR
+- **Severidade mínima** — mostra apenas sugestões no nível escolhido ou acima (padrão: Medium)
+- **Aplicar filtros às Kody Rules** — desligado por padrão, para que as regras do seu time sempre apareçam
 
-Configure isso em **Configurações de Revisão de Código** → **Controle de Sugestões**, ou em `kodus-config.yml`:
+Configure em **Code Review Settings** → **Review filters**, ou no `kodus-config.yml`:
 
 ```yaml
 suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
-  severityLevelFilter: medium
+  severityLevelFilter: medium   # low | medium | high | critical
+  applyFiltersToKodyRules: false
 ```
 
 ## Ignorar arquivos e caminhos
@@ -52,10 +49,10 @@ Desative categorias inteiras de revisão que você não precisa:
 
 ```yaml
 reviewOptions:
+  bug: true
   security: true
-  code_style: true
-  refactoring: false        # desative se estiver gerando muito ruído
-  documentation_and_comments: false  # desative se não for relevante
+  performance: false        # desligue se gerar muito ruído
+  business_logic: false     # desligue se não for relevante
 ```
 
 ## Cadência de revisão

@@ -22,21 +22,14 @@ Comienza con valores predeterminados razonables antes de personalizar:
 ```yaml
 # kodus-config.yml — coloca esto en la raíz de cada repositorio
 reviewOptions:
+  bug: true
   security: true
-  code_style: true
-  kody_rules: true
-  refactoring: true
-  error_handling: true
-  maintainability: true
-  potential_issues: true
-  performance_and_optimization: true
+  performance: true
   business_logic: true
 
 suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
   severityLevelFilter: medium
+  applyFiltersToKodyRules: false
 
 automatedReviewActive: true
 ```

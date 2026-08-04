@@ -97,6 +97,30 @@ camelCase を使用する必要があります。標準に準拠するために�
 
 チームのニーズに基づいて、重大な問題には詳細な説明を、軽微な問題には簡潔なフィードバックなど、トーン、詳細レベル、コミュニケーションスタイルをカスタマイズできます。
 
+## `kodus-config.yml` で設定する
+
+同じ 4 つのフィールドが `v2PromptOverrides` キーの下で利用できます：
+
+```yaml
+v2PromptOverrides:
+    generation:
+        main: |
+            Base instruction used for every suggestion.
+    categories:
+        descriptions:
+            bug: |
+                What Kody should look for in the Bug category.
+            performance: |
+                What Kody should look for in the Performance category.
+            security: |
+                What Kody should look for in the Security category.
+```
+
+設定できるのはこの 4 つだけで、Business Logic カテゴリのプロンプトoverride はありません。
+各フィールドの上限は 2000 文字です。また、このファイルは
+`kodusConfigFileOverridesWebPreferences` を有効にして初めて読み込まれます（
+[一般設定](/how_to_use/ja/code_review/configs/general) を参照）。
+
 ## 外部参照
 
 すべてのカスタムプロンプト（カテゴリ、サジェスト、PR サマリー）は、Kody がアクセスできるコードベースの実際のファイルへの参照をサポートします。更新を保存すると、Kody は自動的に外部参照を検出し、将来のレビューのために解決します。

@@ -96,7 +96,7 @@ Antes de que cualquier heartbeat salga de tu instancia, puedes imprimir
 la carga útil exacta que el cron diario construiría:
 
 ```bash
-yarn telemetry:preview
+pnpm run telemetry:preview
 ```
 
 Este comando inicializa un contexto Kodus mínimo, ejecuta el mismo
@@ -104,7 +104,7 @@ coletor que usa el cron, e imprime el JSON en stdout — sin enviarlo.
 Encadénalo con `jq` para explorar:
 
 ```bash
-yarn telemetry:preview | jq '.usage_7d'
+pnpm run telemetry:preview | jq '.usage_7d'
 ```
 
 ## Desactivar la telemetría

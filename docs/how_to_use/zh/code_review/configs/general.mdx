@@ -1,53 +1,110 @@
 ---
 title: "通用设置"
+description: "审查的核心设置 —— 节奏、PR 工作流、跳过条件和分析类型 —— 以及 kodus-config.yml 的完整参考。"
 ---
 
 ## 核心设置
 
 <Note>
-  Kodus 有三个配置级别:全局、代码库和目录。了解它们如何工作,请参阅<a href="/how_to_use/en/code_review/configs/inheritance_overrides">配置继承与覆盖</a>。
+  Kodus 有三个配置级别:全局、代码库和目录。了解它们如何工作,请参阅<a href="/how_to_use/zh/code_review/configs/inheritance_overrides">配置继承与覆盖</a>。
 </Note>
 
 ### 配置优先级
-代码库根目录中的 `kodus-config.yml` 会覆盖网页设置。无需设置——只需提交文件即可。
+
+你可以把审查配置放在代码库根目录的 `kodus-config.yml` 文件中，而不使用网页界面。
+
+<Warning>
+  **在你主动开启之前，该文件会被忽略。** `kodusConfigFileOverridesWebPreferences` 默认为
+  `false`，这意味着 Kody 根本不会读取 `kodus-config.yml` —— 仅仅提交文件不会产生任何效果。
+
+  请先在 **Settings → Code Review → 对应代码库 → General** 中开启，或在网页界面的代码库
+  （或目录）级别设置 `kodusConfigFileOverridesWebPreferences: true`。之后该文件才会生效。
+</Warning>
+
+开启后，该文件会合并到你的网页设置之上，因此你只需声明想要修改的键 —— 未声明的项会保留网页中的值。
+
+<Note>
+  **未知的键会被静默丢弃。** 任何不属于当前 schema 的顶层键，都会在配置生效前被移除 ——
+  没有报错，也没有警告。如果某项设置看起来没有生效，请对照下面的示例检查拼写。
+</Note>
 
 <Accordion title="示例 kodus-config.yml">
 ```yaml
-version: '1.2'
-summary:
-  generatePRSummary: true
-  customInstructions: ''
-  behaviourForExistingDescription: concatenate
-ignorePaths:
-  - yarn.lock
-  - package-lock.json
-  - package.json
-  - .env
-baseBranches: []
-reviewOptions:
-  security: true
-  code_style: true
-  kody_rules: true
-  refactoring: true
-  error_handling: true
-  maintainability: true
-  potential_issues: true
-  documentation_and_comments: true
-  performance_and_optimization: true
-  business_logic: true
-suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
-  severityLevelFilter: medium
-ignoredTitleKeywords: []
+version: 2.0
+
+# general
 automatedReviewActive: true
+showStatusFeedback: true
+kodusConfigFileOverridesWebPreferences: false
+reviewCadence:
+    type: 'automatic' # automatic | auto_pause | manual
+    timeWindow: 15 # 分钟
+    pushesToTrigger: 3
 pullRequestApprovalActive: false
-isRequestChangesActive: false
+isRequestChangesActive: false # GitLab 上不可用
+runOnDraft: true
+ignorePaths:
+    - 'yarn.lock'
+    - 'package-lock.json'
+    - 'package.json'
+    - '.env'
+    - '**/*.json'
+ignoredTitleKeywords: []
+baseBranches: []
+enableCommittableSuggestions: true
+byokModel: '' # 留空 = 继承 BYOK 设置中的模型
+
+# 仅 Teams / Enterprise。审查时代理可以查阅的关联代码库。
+# 建议上限为 3；留空 = 关闭该功能。
+linkedRepositories: []
+
+# 审查类别
+reviewOptions:
+    bug: true
+    performance: true
+    security: true
+    business_logic: true
+
+# 建议控制
+suggestionControl:
+    applyFiltersToKodyRules: false
+    severityLevelFilter: 'medium' # low | medium | high | critical
+
+# PR 摘要
+summary:
+    generatePRSummary: true
+    behaviourForNewCommits: 'none'
+    behaviourForExistingDescription: 'replace'
+    customInstructions: ''
+
+# kody rules
+ideRulesSyncEnabled: false
+kodyRulesGeneratorEnabled: true
+kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false
+
+# 自定义消息
+customMessages:
+    globalSettings:
+        hideComments: false # 仅 GitHub
+        suggestionCopyPrompt: true # Bitbucket 上不可用
+    errorReviewMessage:
+        status: 'off' # off | active
+        content: ''
+    startReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: ''
+    endReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: ''
 ```
 </Accordion>
+
+<Note>
+  该示例反映了随产品发布的默认值。权威来源是 kodus-ai 代码库中的
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)。
+</Note>
 
 ## 审查行为
 
@@ -93,24 +150,46 @@ Kody 如何处理后续提交的审查:
 
 ### 跳过条件
 
-**忽略的文件:** 使用 glob 模式(例如 `**/*.js`),每行一个。默认:`yarn.lock`, `package-lock.json`, `package.json`, `.env`
+**忽略的文件:** 使用 glob 模式(例如 `**/*.js`),每行一个。默认:`yarn.lock`, `package-lock.json`, `package.json`, `.env`, `**/*.json`
 
 **忽略的标题:** 跳过包含特定关键字的 PR(不区分大小写,最多 100 个字符)
 
-**基础分支:** 除默认分支外还要审查的其他分支(dev, release, master)
+**基础分支:** 限定*哪些*目标分支会被审查。
+
+<Info>
+  **留空(默认值)表示所有目标分支都会被审查** —— 并不存在内置的 `dev`/`release`/`master` 列表。
+  只有当你想*收窄*范围时才添加条目:一旦列表非空,Kody 只审查指向这些分支的 PR(你代码库的
+  默认分支始终包含在内)。
+
+  条目会与 PR 的**目标**分支进行匹配,并支持一套简单语法:
+
+  | 条目 | 匹配 |
+  | --- | --- |
+  | `main` | 目标恰好为 `main` 的 PR |
+  | `release/*` | 目标为 `release/` 下任意分支的 PR(`*` 为单层通配符) |
+  | `=main` | 精确匹配,等同于直接写 `main` |
+  | `!staging` | 排除目标为 `staging` 的 PR |
+  | `contains:hotfix` | 改为匹配**源**分支 —— 源分支名包含 `hotfix` 的任意 PR |
+
+  当多个条目同时匹配时,以最具体的那个为准。每个条目最长 100 个字符,只能使用
+  `a-z A-Z 0-9 / * - _ ! = :`,且不允许使用 `**`。
+</Info>
+
+**草稿 PR:** `runOnDraft` 默认为 `true`,因此草稿也会被审查。设为 `false` 可跳过它们,
+直到 PR 被标记为 ready。
 
 ## 分析类型
 
-### 代码质量
-- 安全性:SQL 注入、XSS、安全威胁
-- 性能:缓存、查询优化、速度改进
-- 错误处理:异常管理、错误消息
-- 潜在问题:空指针、资源泄漏、无限循环
+Kody 从四个类别进行审查。你可以在 **Analysis Types** 中,或通过 `kodus-config.yml` 的
+`reviewOptions` 逐项启用或禁用。
 
-### 代码结构
-- 重构:代码组织、函数大小、重复
-- 可维护性:面向未来的代码模式
-- 代码风格:一致的格式和标准
-- 文档:清晰的注释和 API 文档
-- Kody 规则:自定义规则执行
-- 业务逻辑:验证 PR 实现是否符合任务需求和验收标准
+- **Bug** —— 逻辑错误、竞态条件、空指针解引用、边界情况和错误行为。
+- **Security** —— 漏洞、注入、认证问题、数据泄露和密钥。
+- **Performance** —— N+1 查询、热路径分配、缺失缓存和阻塞式 I/O。
+- **Business Logic** —— 对照 PR 中关联的业务规则、需求和验收标准验证实现。参见
+  [业务逻辑验证](/how_to_use/zh/code_review/business_logic_validation)。
+
+<Note>
+  Kody Rules **不属于**上述类别 —— 它们始终运行,与 `reviewOptions` 无关。参见
+  [Kody Rules](/how_to_use/zh/code_review/configs/kody_rules)。
+</Note>

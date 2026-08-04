@@ -91,23 +91,6 @@ kodus config centralized disable
 
 若团队需要对审查设置进行可审计、可版本控制的管理，使用集中化配置。若不需要此仪式，保留默认的单仓库设置即可。
 
-## 决策记忆（Decision Memory）
-
-决策记忆是 Kodus 持久化 AI 代理工作 *原因* 的方式 — 不仅是 diff，还包括推理、约束、考量的替代方案。
-
-启用后，Kodus 会为 Claude Code、Cursor 或 Codex 安装钩子，在每次 turn-complete 事件时触发，将结构化的决策捕获到：
-
-```
-.kody/
-├── pr/by-sha/<head-sha>.md    # PR 级别决策（与代码同版本控制）
-├── memory/<module-id>.md      # 模块级别决策（长期）
-└── modules.yml                # 模块配置
-```
-
-PR 级别记忆存在于分支上；PR 合并后，通过 `kodus decisions promote` 将其决策提升为模块级别记忆，以便未来对该模块的工作自动获得已积累的上下文。
-
-完整流程：[决策记忆](decision_memory)。
-
 ## 业务验证（Business Validation）
 
 若 `kodus review` 问的是"代码质量是否良好？"，那么 `kodus pr business-validation` 问的是"这段 diff 是否真的做了任务要求的事？"。将它指向 Linear/Jira/URL 任务和 diff 来源（工作目录、暂存、分支、提交），它会根据任务的验收标准检查实现。
@@ -136,9 +119,6 @@ kodus pr business-validation --task-url https://linear.app/… --staged
   </Card>
   <Card title="AI 代理" icon="robot" href="ai_agents">
     与编码代理构建审查-修复循环。
-  </Card>
-  <Card title="决策记忆" icon="brain" href="decision_memory">
-    跨分支捕获并提升代理决策。
   </Card>
   <Card title="故障排查" icon="life-ring" href="troubleshooting">
     常见错误和退出码。
