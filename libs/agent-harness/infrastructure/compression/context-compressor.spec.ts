@@ -176,21 +176,28 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
         expect(typeof out.value).toBe('string');
     });
 
-    it('shrinks a large json output while keeping the { type:"json" } wrapper (fit guarantee, #1574)', () => {
+    // Both object- and array-valued json payloads must shrink so the hard clamp
+    // reaches budget (#1574). Once truncated the value is no longer valid JSON,
+    // so it is re-typed to `text` — a provider-serializable lossy preview.
+    it.each([
+        ['object', { files: Array.from({ length: 4_000 }, (_, i) => `f${i}.ts`) }],
+        ['array', Array.from({ length: 5_000 }, (_, i) => `f${i}.ts`)],
+    ])('shrinks a large json output (%s value) and re-types it to text', (_label, jsonValue) => {
         const window = structuredWindow(1);
         (window.find((m) => m.role === 'tool')!.content as any[])[0].output = {
             type: 'json',
-            value: { files: Array.from({ length: 4_000 }, (_, i) => `f${i}.ts`) },
+            value: jsonValue,
         };
         const budget = 500;
         const clamped = clampMessagesToBudget(window, budget);
         const out = firstToolOutput(clamped);
 
-        // Wrapper preserved so the provider can still serialize a valid output...
-        expect(out.type).toBe('json');
-        // ...but the payload is shrunk (as a string) so the hard clamp reaches
-        // budget — leaving the object intact would re-open #1574.
+        // Re-typed to a serializable text preview (no longer a json blob that
+        // lies about being parseable)...
+        expect(out.type).toBe('text');
         expect(typeof out.value).toBe('string');
+        expect(out.value.endsWith('…[truncated]')).toBe(true);
+        // ...and the hard clamp actually reached budget.
         expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
     });
 });

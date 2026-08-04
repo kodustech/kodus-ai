@@ -168,22 +168,47 @@ function truncateText(text: string, maxChars: number): string {
 }
 
 /**
- * Truncates a structured tool-result payload while PRESERVING its shape.
+ * Truncates a structured tool-result payload while keeping it serializable.
  *
- * A tool-result part's `output` is a discriminated object the provider switches
- * on — `{ type:'text'|'error-text', value:string }`, `{ type:'content', value:
- * [{type:'text',text},…] }`, or `{ type:'json', value }`. Replacing that object
- * with a truncated JSON *string* (the old behavior) drops the `type`
- * discriminant, so `@ai-sdk/openai`'s Responses serializer falls through its
- * `switch (output.type)` (no default), emits `output: undefined`, and the field
- * is stripped → OpenAI 400 `Missing required parameter: 'input[N].output'`.
- * So we shrink the inner text and keep the wrapper intact. `json` outputs are
- * left untouched — truncating their serialized form would corrupt the JSON.
+ * A tool-result's `output` is a discriminated object the provider switches on:
+ * `{ type:'text'|'error-text', value:string }`, `{ type:'content', value:[…] }`,
+ * or `{ type:'json'|'error-json', value }`. The Responses serializer has no
+ * `default` case, so an output it can't recognize — or one flattened to a bare
+ * string (the old bug) — serializes with `output: undefined`, which
+ * JSON.stringify strips → OpenAI 400 `Missing required parameter:
+ * 'input[N].output'`. Each branch below therefore returns a shape the
+ * serializer still handles:
+ *   - text / content: shrink the inner string(s) in place; wrapper unchanged.
+ *   - json / error-json: the value is a whole document — once truncated it is
+ *     no longer valid JSON, so we re-type it to text / error-text, an honest
+ *     lossy preview. This also lets the hard clamp actually reach budget; a
+ *     large json left intact would defeat the fit guarantee (re-opening #1574).
+ *   - anything else (e.g. execution-denied) is small/bounded — left intact.
  */
 function truncateStructuredValue(
     v: any,
     maxChars: number,
 ): { value: any; truncated: boolean } {
+    // { type:'json'|'error-json', value } — checked BEFORE the string/array
+    // branches so an array- OR string-valued json payload is shrunk here rather
+    // than being mistaken for content parts / plain text.
+    if (v?.type === 'json' || v?.type === 'error-json') {
+        try {
+            const serialized = JSON.stringify(v.value);
+            if (serialized.length > maxChars) {
+                return {
+                    value: {
+                        type: v.type === 'error-json' ? 'error-text' : 'text',
+                        value: truncateText(serialized, maxChars),
+                    },
+                    truncated: true,
+                };
+            }
+        } catch {
+            // non-serializable (cycles, BigInt, …) — leave intact
+        }
+        return { value: v, truncated: false };
+    }
     // { type:'text'|'error-text', value:string }
     if (typeof v?.value === 'string') {
         if (v.value.length > maxChars) {
@@ -211,25 +236,7 @@ function truncateStructuredValue(
             truncated: true,
         };
     }
-    // { type:'json', value } or anything unrecognized — DON'T leave an
-    // over-budget blob in place (that would defeat the hard clamp's fit
-    // guarantee, re-opening #1574). Shrink its serialized form but keep the
-    // { type, value } shape: on the OpenAI Responses path a `json` output is
-    // emitted via JSON.stringify(output.value), so a truncated *string* value
-    // still serializes to a present `output` field.
-    if (v && typeof v === 'object') {
-        try {
-            const serialized = JSON.stringify('value' in v ? v.value : v);
-            if (serialized.length > maxChars) {
-                return {
-                    value: { ...v, value: truncateText(serialized, maxChars) },
-                    truncated: true,
-                };
-            }
-        } catch {
-            // non-serializable (cycles, BigInt, …) — leave as-is
-        }
-    }
+    // Unrecognized / bounded (e.g. execution-denied) — leave intact.
     return { value: v, truncated: false };
 }
 
