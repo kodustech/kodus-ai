@@ -1,4 +1,4 @@
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
     CrossFileContextSnippet,
@@ -80,7 +80,7 @@ export interface ISuggestionService {
         suggestions: Partial<CodeSuggestion>[],
         languageResultPrompt: string,
         reviewMode: ReviewModeResponse,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedByokConfig,
         crossFileSnippets?: CrossFileContextSnippet[],
         remoteCommands?: RemoteCommands,
         memories?: Array<Partial<IKodyRule>>,
@@ -179,7 +179,7 @@ export interface ISuggestionService {
         codeSuggestions: Partial<CodeSuggestion>[],
         selectedCategories: ReviewOptions,
         codeReviewVersion?: CodeReviewVersion,
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedByokConfig,
     ): Promise<Partial<CodeSuggestion>[]>;
 
     /**
@@ -190,7 +190,7 @@ export interface ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: Partial<CodeSuggestion>[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedByokConfig,
     ): Promise<{
         prioritizedSuggestions: Partial<CodeSuggestion>[];
         discardedSuggestionsBySeverityOrQuantity: Partial<CodeSuggestion>[];

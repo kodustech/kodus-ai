@@ -1,6 +1,6 @@
 import { ContextDependency } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import {
@@ -87,7 +87,7 @@ export interface DetectReferencesParams {
     organizationAndTeamData: OrganizationAndTeamData;
     context?: 'rule' | 'instruction' | 'prompt';
     detectionMode?: 'rule' | 'prompt';
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedByokConfig;
     subscriptionStatus?: string;
 }
 

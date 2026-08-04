@@ -1,7 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { TokenUsage } from '@libs/llm/token-usage';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
@@ -1044,7 +1044,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         language: string,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedByokConfig,
     ): Promise<AIAnalysisResultPrLevel> {
         if (!allViolatedRules?.length) {
             this.logger.log({
@@ -1131,7 +1131,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         language: string,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedByokConfig,
     ): Promise<ISuggestionByPR[]> {
         if (!suggestions?.length) {
             return suggestions;
@@ -1254,7 +1254,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         language: string,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedByokConfig,
     ): Promise<ISuggestionByPR> {
         // Filtro rápido + fallback seguro
         if (!duplicatedSuggestions || duplicatedSuggestions.length === 0) {

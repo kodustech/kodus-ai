@@ -9,7 +9,7 @@
 import type { QueryRunner } from 'typeorm';
 import { encrypt } from '@libs/common/utils/crypto';
 import { ByokConfigV22026072918034700 } from '../2026072918034700-ByokConfigV2';
-import { isV2Config } from '@libs/llm/byok-config';
+import { isByokConfig } from '@libs/llm/byok-config';
 
 const BYOK_CONFIG_KEY = 'byok_config';
 
@@ -71,7 +71,7 @@ describe('ByokConfigV2 migration', () => {
         await new ByokConfigV22026072918034700().up(queryRunner);
 
         expect(updates).toHaveLength(1);
-        expect(isV2Config(store[0].configValue)).toBe(true);
+        expect(isByokConfig(store[0].configValue)).toBe(true);
         expect((store[0].configValue as any).version).toBe(2);
     });
 
@@ -92,7 +92,7 @@ describe('ByokConfigV2 migration', () => {
         expect(updates).toHaveLength(0);
     });
 
-    it('up(): ciphertext is carried VERBATIM (no re-encrypt) into the v2 credential', async () => {
+    it('up(): ciphertext is carried VERBATIM (no re-encrypt) into the credential', async () => {
         const row = legacyRow('org-1');
         const originalKey = (row.configValue as any).main.apiKey;
         const { queryRunner, store } = makeQueryRunner([row]);
@@ -103,7 +103,7 @@ describe('ByokConfigV2 migration', () => {
         expect(v2.credentials[0].apiKey).toBe(originalKey);
     });
 
-    it('down(): best-effort re-expands a v2 row toward {main,fallback}', async () => {
+    it('down(): best-effort re-expands a row toward {main,fallback}', async () => {
         const v2Row: Row = {
             uuid: 'org-1',
             configKey: BYOK_CONFIG_KEY,

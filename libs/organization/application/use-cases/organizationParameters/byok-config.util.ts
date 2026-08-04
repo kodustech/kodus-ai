@@ -1,5 +1,5 @@
 import { BYOKProvider } from '@libs/llm/model-providers';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 import type {
     BYOKCredential,
@@ -10,7 +10,7 @@ import type {
  * A single BYOK credential slot — the `main` (or `fallback`) block of a
  * stored BYOK config.
  */
-export type BYOKSlot = BYOKConfig['main'];
+export type BYOKSlot = NormalizedByokConfig['main'];
 
 const asString = (value: unknown): string | undefined =>
     typeof value === 'string' && value.length > 0 ? value : undefined;
@@ -46,7 +46,7 @@ export function isByokSlotConfigured(
 }
 
 /**
- * Per-model resolvability for the v2 multi-model status (05-07).
+ * Per-model resolvability for the multi-model status (05-07).
  *
  * A v2 model "resolves" when the pipeline could actually run it:
  *  - a MANAGED / env-default credential → resolves iff the env-default LLM is

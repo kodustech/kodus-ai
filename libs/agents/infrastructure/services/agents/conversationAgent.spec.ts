@@ -44,7 +44,7 @@ function build() {
         findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
     };
     const permissionValidationService = {
-        // v2-native: the agent asks the service for the conversation carrier;
+        // native: the agent asks the service for the conversation carrier;
         // null → the env/managed default. resolveAgentModel is mocked, so the
         // harness wiring runs regardless of the resolved slot.
         resolveTaskCarrier: jest.fn().mockResolvedValue(null),

@@ -1,4 +1,4 @@
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import {
     resolveTaskCarrier as resolveCarrierFromV2,
     resolveTaskModel as resolveModelFromV2,
@@ -7,9 +7,10 @@ import {
 } from '@libs/llm/resolve-task-model';
 import type { RequestContext } from '@libs/llm/routing-strategy';
 import {
-    isV2Config,
+    hasNonManagedCredential,
+    isByokConfig,
     LLM_TASK,
-    type BYOKConfigV2,
+    type BYOKConfig,
     type LlmTask,
 } from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
@@ -56,7 +57,7 @@ export class ValidationError extends Error {
 
 export interface ValidationResult {
     allowed: boolean;
-    byokConfig?: BYOKConfig | null;
+    byokConfig?: NormalizedByokConfig | null;
     errorType?: ValidationErrorType;
     metadata?: Record<string, any>;
     // Subscription status of the org (e.g. 'trial', 'active'). Exposed so
@@ -190,7 +191,7 @@ export class PermissionValidationService {
             // 2. Trial skips user validation, but still honors BYOK and
             // billing-managed review credits when those fields are present.
             if (validation.subscriptionStatus === 'trial') {
-                let trialByokConfig: BYOKConfig | null = null;
+                let trialByokConfig: NormalizedByokConfig | null = null;
                 let byokLookupFailed = false;
 
                 try {
@@ -621,7 +622,7 @@ export class PermissionValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
         validation: OrganizationLicenseValidationResult,
         contextName?: string,
-    ): Promise<BYOKConfig | null> {
+    ): Promise<NormalizedByokConfig | null> {
         try {
             // Self-hosted sempre usa config das env vars (não usa BYOK)
             if (!this.isCloud) {
@@ -780,19 +781,19 @@ export class PermissionValidationService {
 
     /**
      * Resolve the org's BYOK `{main,fallback}` carrier for the `codeReview` task,
-     * v2-native (04b-06 — the legacy stored-shape read is GONE). Sources the FULL
-     * v2 blob via `getBYOKConfigV2Raw` and routes it through `resolveTaskSlot`
+     * native (04b-06 — the legacy stored-shape read is GONE). Sources the FULL
+     * config blob via `getBYOKConfig` and routes it through `resolveTaskSlot`
      * (StaticTaskStrategy → routed slot + the org's routed fallback), so the
      * credential/model comes from the v2 `models[]`/routing rather than a collapsed
      * legacy `main`. Returns `null` for a non-v2 / absent config or a
      * BLOCKED/unresolvable verdict — the caller then falls to the managed/env
      * default, exactly as with a missing config. Secret hygiene: the returned slot
      * carries ENCRYPTED apiKey ciphertext; this method never decrypts. Non-UUID org
-     * ids (CLI trial) resolve to `null` via `getBYOKConfigV2Raw`.
+     * ids (CLI trial) resolve to `null` via `getBYOKConfig`.
      */
     /**
      * Single entry point for "give me the routed BYOK carrier for THIS task in
-     * THIS org". Reads the org's raw v2 config (getBYOKConfigV2Raw) and routes it
+     * THIS org". Reads the org's raw config (getBYOKConfig) and routes it
      * for `task` via the pure resolver — the one place that combines the Nest/DB
      * read with the `@nestjs`-free `libs/llm` resolver, so consumers stop
      * re-implementing the two-step. `null` when there is no BYOK / non-v2 /
@@ -802,14 +803,14 @@ export class PermissionValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
         task: LlmTask,
         options: { ctx?: RequestContext } = {},
-    ): Promise<BYOKConfig | null> {
-        const rawV2 = await this.getBYOKConfigV2Raw(organizationAndTeamData);
+    ): Promise<NormalizedByokConfig | null> {
+        const rawV2 = await this.getBYOKConfig(organizationAndTeamData);
         return resolveCarrierFromV2(rawV2, task, options) ?? null;
     }
 
     /**
      * Sibling of `resolveTaskCarrier` for consumers that need the BUILT model
-     * (not just the carrier): reads the org's raw v2 config and returns the
+     * (not just the carrier): reads the org's raw config and returns the
      * resolved `{ model, modelName, slot, verdict }` for `task`. Same degrade
      * contract — no BYOK → the managed/env default model.
      */
@@ -818,22 +819,36 @@ export class PermissionValidationService {
         task: LlmTask,
         options: ResolveTaskModelOptions = {},
     ): Promise<ResolvedTaskModel> {
-        const rawV2 = await this.getBYOKConfigV2Raw(organizationAndTeamData);
+        const rawV2 = await this.getBYOKConfig(organizationAndTeamData);
         return resolveModelFromV2(rawV2, task, options);
+    }
+
+    /**
+     * "Did this org bring its own key?" — true iff its stored config carries
+     * at least one non-managed credential (a managed/env-default credential does
+     * NOT count). This is a whole-config question (not per-task), so it reads the
+     * raw config blob rather than a resolved carrier — the org-aware companion to the
+     * pure `hasNonManagedCredential` helper. Used by the trial gates.
+     */
+    async hasBYOK(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<boolean> {
+        const rawV2 = await this.getBYOKConfig(organizationAndTeamData);
+        return hasNonManagedCredential(rawV2);
     }
 
     /**
      * Full v2-shape accessor for the routing resolver.
      *
      * `resolveByokCarrier` (above) collapses the stored blob to the routed
-     * `{main,fallback}` carrier; this accessor returns the FULL v2 blob instead —
+     * `{main,fallback}` carrier; this accessor returns the FULL config blob instead —
      * the `models[]`/`routing` the StaticTaskStrategy needs to route PER TASK.
-     * Returns `null` for an absent / non-v2 blob and for a non-UUID org id (CLI
+     * Returns `null` for an absent / non-config blob and for a non-UUID org id (CLI
      * trial).
      */
-    async getBYOKConfigV2Raw(
+    async getBYOKConfig(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<BYOKConfigV2 | null> {
+    ): Promise<BYOKConfig | null> {
         const UUID_RE =
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!UUID_RE.test(organizationAndTeamData?.organizationId || '')) {
@@ -846,7 +861,7 @@ export class PermissionValidationService {
         );
 
         const raw = byokConfig?.configValue;
-        return isV2Config(raw) ? raw : null;
+        return isByokConfig(raw) ? raw : null;
     }
 
     /**

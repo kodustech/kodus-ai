@@ -5,7 +5,7 @@ import {
 } from '@libs/mcp-server/mcp-adapter';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 import type { ToolRegistry } from '@libs/agent-harness/domain/contracts';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -118,7 +118,7 @@ export class GenericSkillRunnerService {
      */
     async createFetcherOrchestration(
         skillName: string,
-        byokConfig: BYOKConfig | undefined,
+        byokConfig: NormalizedByokConfig | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<SkillFetcherRuntime> {
         const startedAt = Date.now();

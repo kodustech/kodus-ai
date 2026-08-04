@@ -95,7 +95,7 @@ describe('MonthlySpendUseCase', () => {
                 { model: 'm1', spentUsd: 1.5 },
                 { model: 'm2', spentUsd: 2.25 },
             ]);
-            // No v2 config supplied ⇒ every model is unattributed, not dropped.
+            // No config supplied ⇒ every model is unattributed, not dropped.
             expect(result.byCredential).toEqual([
                 { credentialId: 'unattributed', spentUsd: 3.75 },
             ]);
@@ -162,7 +162,7 @@ describe('MonthlySpendUseCase', () => {
             ],
         };
 
-        it('rolls per-model spend up to credentials via the v2 config map', async () => {
+        it('rolls per-model spend up to credentials via the config map', async () => {
             tokenUsageService.getDailyUsage.mockResolvedValue([
                 { input: 1, output: 1, outputReasoning: 0, model: 'gpt-4o' },
             ]);
@@ -294,7 +294,7 @@ describe('MonthlySpendUseCase', () => {
             expect(status.runRate.projectedMonthlyUsd).toBeGreaterThan(0);
         });
 
-        it('threads the v2 config through to the per-credential readout', async () => {
+        it('threads the config through to the per-credential readout', async () => {
             tokenUsageService.getDailyUsage.mockResolvedValue([
                 { input: 1, output: 1, outputReasoning: 0, model: 'gpt-4o' },
             ]);

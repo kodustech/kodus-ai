@@ -17,7 +17,7 @@ import type {
     ModelCapabilities as BaseModelCapabilities,
     ReasoningConfig,
 } from '@libs/llm/providers/kernel/model-types';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 /**
  * Provider capability descriptor. Extends the reasoning-only base
@@ -44,7 +44,7 @@ export interface ModelCapabilities extends BaseModelCapabilities {
  * already DECRYPTED by the caller (byok-to-vercel decrypts before dispatch), so
  * modules never import crypto. `main` is a superset of `fallback`.
  */
-export type ProviderBuildConfig = BYOKConfig['main'];
+export type ProviderBuildConfig = NormalizedByokConfig['main'];
 
 /** Mirrors byok-to-vercel's `ByokModelOptions` — per-call structured-output opt-in. */
 export interface ProviderBuildOptions {

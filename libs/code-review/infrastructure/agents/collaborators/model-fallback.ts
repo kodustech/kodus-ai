@@ -1,7 +1,7 @@
 /**
  * code-review (domain) — provider fallback for the v5 agent loop.
  *
- * The agent harness resolves ONE model and runs; unlike the v2 legacy flow
+ * The agent harness resolves ONE model and runs; unlike the legacy flow
  * (LangChain `.withFallbacks`), it has no built-in retry against a second
  * provider. This wrapper gives the agent providers the same resilience the org
  * already expects from its BYOK `fallback` config: run the `main` model, and if

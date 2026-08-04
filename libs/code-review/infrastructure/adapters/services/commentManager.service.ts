@@ -1,5 +1,5 @@
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
@@ -42,7 +42,6 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     attachClassification,
@@ -148,7 +147,7 @@ export class CommentManagerService implements ICommentManagerService {
             model: slot?.model ?? 'kimi-k2.7-code',
             attrs,
             exec: async () => {
-                // Build the single resolved slot (v2-native). Off-BYOK →
+                // Build the single resolved slot (native). Off-BYOK →
                 // kimi-k2.7-code default (cloud/trial). buildModelFromSlot
                 // decrypts the ciphertext key only in this local scope.
                 const model = buildModelFromSlot(
@@ -214,7 +213,7 @@ export class CommentManagerService implements ICommentManagerService {
         // the review model and skip any prSummary override. Absent / legacy /
         // BLOCKED config → null slot → managed default downstream, exactly as
         // the review agents (which resolve their own BYOK) degrade.
-        let byokConfigValue: BYOKConfig | null = null;
+        let byokConfigValue: NormalizedByokConfig | null = null;
         try {
             byokConfigValue =
                 await this.permissionValidationService.resolveTaskCarrier(
@@ -1828,7 +1827,7 @@ ${reviewOptions}
         prNumber: number,
         provider: LLMModelProvider,
         codeSuggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedByokConfig,
     ) {
         const language = (
             await this.parametersService.findByKey(
@@ -1887,7 +1886,7 @@ ${reviewOptions}
                         prNumber,
                         // This method delegates its model build to the
                         // out-of-scope runStructuredReviewCall({main,fallback})
-                        // helper; its telemetry reads go v2-native when that
+                        // helper; its telemetry reads go native when that
                         // helper does (04b-05).
                         provider: byokConfig?.main?.provider || provider, // removed in 04b-05
                         fallbackProvider:

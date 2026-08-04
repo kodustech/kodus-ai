@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import type { BYOKConfigV2 } from '@libs/llm/byok-config';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
 import {
     DeleteByokConfigUseCase,
@@ -12,7 +12,7 @@ const ORG = 'org-1';
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
 /** Two credentials, two models, routing pointing default→m1, override→m2. */
-function v2Config(overrides: Partial<BYOKConfigV2> = {}): BYOKConfigV2 {
+function v2Config(overrides: Partial<BYOKConfig> = {}): BYOKConfig {
     return {
         version: 2,
         credentials: [
@@ -183,7 +183,7 @@ describe('DeleteByokConfigUseCase — v2 referential-integrity guard (REQ-DELETE
         });
         await expect(
             useCase.execute(ORG, { modelId: 'm2' }),
-        ).rejects.toThrow(/v2 BYOK configuration/);
+        ).rejects.toThrow(/BYOK configuration/);
         expect(deleteByokModel).not.toHaveBeenCalled();
     });
 });
@@ -238,7 +238,7 @@ describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
         await expect(service.deleteByokModel(ORG, 'm2')).resolves.toBe(true);
         expect(del).not.toHaveBeenCalled();
 
-        const written = update.mock.calls[0][1].configValue as BYOKConfigV2;
+        const written = update.mock.calls[0][1].configValue as BYOKConfig;
         expect(written.models.map((m) => m.id)).toEqual(['m1']);
         // cred-anthropic is orphaned (only m2 referenced it) → removed.
         expect(written.credentials.map((c) => c.id)).toEqual(['cred-openai']);
@@ -257,7 +257,7 @@ describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
         const { service, update } = buildService(shared);
 
         await service.deleteByokModel(ORG, 'm2');
-        const written = update.mock.calls[0][1].configValue as BYOKConfigV2;
+        const written = update.mock.calls[0][1].configValue as BYOKConfig;
         expect(written.credentials.map((c) => c.id)).toContain('cred-openai');
     });
 
@@ -272,7 +272,7 @@ describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
         const { service, update } = buildService(withManaged);
 
         await service.deleteByokModel(ORG, 'm2');
-        const written = update.mock.calls[0][1].configValue as BYOKConfigV2;
+        const written = update.mock.calls[0][1].configValue as BYOKConfig;
         expect(written.credentials.map((c) => c.id)).toEqual([
             'cred-openai',
             'cred-managed',
@@ -304,7 +304,7 @@ describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
     it('throws on a non-v2 (legacy) config', async () => {
         const { service } = buildService({ main: { provider: 'openai' } });
         await expect(service.deleteByokModel(ORG, 'm1')).rejects.toThrow(
-            /v2 BYOK configuration/,
+            /BYOK configuration/,
         );
     });
 });

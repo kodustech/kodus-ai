@@ -1,4 +1,4 @@
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 import { environment } from '@libs/ee/configs/environment';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -24,7 +24,7 @@ export const KODY_RULES_KODUS_MODEL = 'kimi-k2.7-code';
  */
 export interface KodyRulesModelPolicy {
     generate: boolean;
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedByokConfig;
     modelOverride?: string;
     /** Set when `generate` is false — human-readable reason for the skip. */
     skipReason?: string;
@@ -44,7 +44,7 @@ export async function resolveKodyRulesModelPolicy(
     permissionValidationService: PermissionValidationService,
     organizationAndTeamData: OrganizationAndTeamData,
 ): Promise<KodyRulesModelPolicy> {
-    // v2-native: resolve the Kody Rules generation (codeReview) task to a
+    // native: resolve the Kody Rules generation (codeReview) task to a
     // `{main}` carrier. A non-v2 / managed / BLOCKED config yields `null` →
     // fall through to the self-hosted / trial / skip policy below.
     const byokConfig = await permissionValidationService.resolveTaskCarrier(

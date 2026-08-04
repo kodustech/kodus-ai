@@ -15,7 +15,7 @@ import {
     SpendLimitEvaluation,
     UNATTRIBUTED_CREDENTIAL,
 } from '@libs/analytics/domain/spend-limit/spend-limit.types';
-import { BYOKConfigV2, isV2Config } from '@libs/llm/byok-config';
+import { BYOKConfig, isByokConfig } from '@libs/llm/byok-config';
 
 import { CostUsageRow, ModelCostCalculator } from './model-cost-calculator';
 
@@ -47,7 +47,7 @@ export class MonthlySpendUseCase {
         // service already reads it) rather than fetched here — keeping this
         // use-case free of config/org-parameter concerns. Absent / non-v2 ⇒
         // every model rolls up to the `unattributed` credential bucket.
-        byokConfig?: BYOKConfigV2 | null,
+        byokConfig?: BYOKConfig | null,
     ): Promise<MonthlySpendResult> {
         const { start, end, periodKey, monthMs } = this.getMonthRange(now);
 
@@ -79,7 +79,7 @@ export class MonthlySpendUseCase {
 
     /**
      * Per-credential scope, derived IN-APP: map each priced model-name back to
-     * its `credentialId` via the v2 config, then sum spend per credential. The
+     * its `credentialId` via the config, then sum spend per credential. The
      * usage store has no credentialId dimension (it bakes only `tu.model`), so
      * this is the smaller change — no new pipeline, no backfill.
      *
@@ -97,10 +97,10 @@ export class MonthlySpendUseCase {
      */
     private rollupByCredential(
         byModel: ModelSpend[],
-        byokConfig?: BYOKConfigV2 | null,
+        byokConfig?: BYOKConfig | null,
     ): CredentialSpend[] {
         const modelToCredential = new Map<string, string>();
-        if (isV2Config(byokConfig)) {
+        if (isByokConfig(byokConfig)) {
             for (const model of byokConfig.models ?? []) {
                 const name = model?.model?.trim();
                 // first-wins ⇒ approximate on a model-name collision (A2).
@@ -154,7 +154,7 @@ export class MonthlySpendUseCase {
         limitUsd: number,
         now: Date = new Date(),
         overrides?: ManualPricingOverrides,
-        byokConfig?: BYOKConfigV2 | null,
+        byokConfig?: BYOKConfig | null,
     ): Promise<SpendLimitEvaluation> {
         const spend = await this.getMonthToDateSpend(
             organizationId,

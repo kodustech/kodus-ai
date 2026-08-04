@@ -113,7 +113,7 @@ Before generating ANY query, verify it passes ALL these checks:
 
 3. **No log/comment strings** — Strings inside \`logger.log()\`, \`console.log()\`, or comments are NOT code symbols. Never search for \`[TIMING]\`, \`error occurred\`, etc.
 
-4. **No generic parameter names** — \`config\`, \`options\`, \`params\`, \`context\`, \`data\` match hundreds of files. Search for the specific TYPE instead (e.g., \`BYOKConfig\` not \`byokConfig\`).
+4. **No generic parameter names** — \`config\`, \`options\`, \`params\`, \`context\`, \`data\` match hundreds of files. Search for the specific TYPE instead (e.g., \`NormalizedByokConfig\` not \`byokConfig\`).
 
 5. **No private/internal symbols** — Constants like \`MAX_AGENT_TURNS\` or methods like \`extractFeatures\` that are private to one file will NOT have consumers outside that file. Skip them.
 

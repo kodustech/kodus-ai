@@ -9,7 +9,7 @@
  * Prompt + parse live in severity-prompt.ts (shared with the severity eval).
  */
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { resolveSecondaryPassModel } from './secondary-pass-model';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
@@ -43,7 +43,7 @@ const SEVERITY_TIMEOUT_MS = 90_000;
 export async function classifySeverity(
     suggestions: SuggestionForClassification[],
     severityFlags?: CodeReviewConfig['v2PromptOverrides'],
-    byokConfig?: BYOKConfig,
+    byokConfig?: NormalizedByokConfig,
 ): Promise<Map<number, string>> {
     if (suggestions.length === 0) return new Map();
 

@@ -1,8 +1,8 @@
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
-    isV2Config,
-    type BYOKConfigV2,
+    isByokConfig,
+    type BYOKConfig,
     type BYOKCredential,
 } from '@libs/llm/byok-config';
 import { validateByokConfigRefs } from '@libs/llm/validate-byok-config-refs';
@@ -134,11 +134,11 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         configValue: any,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<boolean> {
-        // Write-time referential integrity for the untyped v2 blob (RFC §13.8):
+        // Write-time referential integrity for the untyped config blob (RFC §13.8):
         // the DTO is `configValue: any`, so this is the ONLY server-side schema
         // gate. Reject a dangling model.credentialId / routing ref BEFORE persist
         // (never silently drop). Legacy configs are a no-op pass.
-        if (isV2Config(configValue)) {
+        if (isByokConfig(configValue)) {
             const refCheck = validateByokConfigRefs(configValue);
             if (!refCheck.valid) {
                 throw new BadRequestException({
@@ -156,8 +156,8 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             );
 
         const existingConfig = getConfigValue?.configValue as
+            | NormalizedByokConfig
             | BYOKConfig
-            | BYOKConfigV2
             | undefined;
 
         const processedConfigValue = this.encryptByokConfigApiKey(
@@ -165,7 +165,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             existingConfig,
         );
 
-        // The front-end fully drives the untyped v2 blob, so a v2 write is the
+        // The front-end fully drives the untyped config blob, so a write is the
         // complete intended config — use it verbatim (04b-06: encrypt now rejects
         // any non-v2 shape, so there is no legacy partial-save merge to preserve).
         const mergedConfigValue = processedConfigValue;
@@ -205,8 +205,8 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
 
     private encryptByokConfigApiKey(
         configValue: any,
-        existingConfig?: BYOKConfig | BYOKConfigV2,
-    ): BYOKConfigV2 {
+        existingConfig?: NormalizedByokConfig | BYOKConfig,
+    ): BYOKConfig {
         if (!configValue || typeof configValue !== 'object') {
             throw new Error('Invalid BYOK config value');
         }
@@ -217,12 +217,12 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         // from the matching credentials[] entry (by id, else provider) so a
         // migrated org does not lose its key on a blank/masked resubmit. A non-v2
         // blob is rejected: v2 is the only accepted stored shape.
-        if (!isV2Config(configValue)) {
+        if (!isByokConfig(configValue)) {
             throw new Error('Invalid BYOK config value: expected v2 shape');
         }
         return this.encryptV2ByokConfig(
             configValue,
-            isV2Config(existingConfig) ? existingConfig : undefined,
+            isByokConfig(existingConfig) ? existingConfig : undefined,
         );
     }
 
@@ -235,9 +235,9 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
      * only, no re-encryption of untouched ciphertext.
      */
     private encryptV2ByokConfig(
-        next: BYOKConfigV2,
-        existing?: BYOKConfigV2,
-    ): BYOKConfigV2 {
+        next: BYOKConfig,
+        existing?: BYOKConfig,
+    ): BYOKConfig {
         const existingById = new Map<string, BYOKCredential>();
         const existingByProvider = new Map<string, BYOKCredential>();
         for (const cred of existing?.credentials ?? []) {
@@ -350,7 +350,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
     }
 
-    /** Secret fields carried inside a v2 credential's `settings` (Bedrock auth). */
+    /** Secret fields carried inside a credential's `settings` (Bedrock auth). */
     private static readonly V2_SECRET_SETTINGS = [
         'awsBearerToken',
         'awsAccessKeyId',
@@ -361,14 +361,14 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     /**
      * Provider + slot for the byok_configured telemetry event. v2-only (04b-06 —
      * the legacy main/fallback read is GONE): the "main" is the routing default
-     * model's credential (else the first model's). A non-v2 blob reports no
+     * model's credential (else the first model's). A non-config blob reports no
      * provider (it is rejected upstream at encrypt time).
      */
-    private describeByokForTelemetry(config: BYOKConfig | BYOKConfigV2): {
+    private describeByokForTelemetry(config: NormalizedByokConfig | BYOKConfig): {
         provider?: string;
         slot: 'main' | 'fallback';
     } {
-        if (isV2Config(config)) {
+        if (isByokConfig(config)) {
             const models = config.models ?? [];
             const creds = new Map(
                 (config.credentials ?? [])

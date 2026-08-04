@@ -1,8 +1,8 @@
 /**
- * Write-time referential integrity for the v2 BYOK config blob (RFC §13.8).
+ * Write-time referential integrity for the BYOK config blob (RFC §13.8).
  *
  * The write DTO is untyped (`POST /create-or-update` accepts `configValue: any`
- * and casts to BYOKConfig — controller:137), so nothing else gates the v2 shape:
+ * and casts to NormalizedByokConfig — controller:137), so nothing else gates the shape:
  * the front-end fully drives the blob. This validator is the ONLY server-side
  * schema gate. It asserts that every `model.credentialId` resolves to a
  * `credentials[]` entry and every routing ref
@@ -16,7 +16,7 @@
  * `findModelReferences` is exported for reuse by the 04-06 model-delete guard
  * (which must reject a delete that would orphan a routing ref).
  */
-import { isV2Config } from './byok-config';
+import { isByokConfig } from './byok-config';
 
 export interface ByokRefValidationResult {
     valid: boolean;
@@ -26,10 +26,10 @@ export interface ByokRefValidationResult {
 
 /**
  * Validate the referential integrity of a BYOK config. Legacy `{main,fallback}`
- * (and any non-v2 blob) is a no-op PASS — only the v2 shape carries refs to gate.
+ * (and any non-config blob) is a no-op PASS — only the shape carries refs to gate.
  */
 export function validateByokConfigRefs(config: unknown): ByokRefValidationResult {
-    if (!isV2Config(config)) {
+    if (!isByokConfig(config)) {
         return { valid: true, errors: [] };
     }
 
@@ -98,13 +98,13 @@ export function validateByokConfigRefs(config: unknown): ByokRefValidationResult
  * Which routing refs point at `modelId`. Returns dotted-path keys
  * (e.g. `routing.defaultModelId`, `routing.taskOverrides.codeReview`).
  * Used by the 04-06 delete guard to reject a delete that would orphan a ref.
- * A non-v2 config (or an empty modelId) yields `[]`.
+ * A non-config (or an empty modelId) yields `[]`.
  */
 export function findModelReferences(
     config: unknown,
     modelId: string,
 ): string[] {
-    if (!isV2Config(config) || !modelId) {
+    if (!isByokConfig(config) || !modelId) {
         return [];
     }
 

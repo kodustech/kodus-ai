@@ -37,7 +37,7 @@ describe('ValidatePrerequisitesStage', () => {
     let mockPermissionValidationService: {
         validateExecutionPermissions: jest.Mock;
         getBYOKConfig: jest.Mock;
-        getBYOKConfigV2Raw: jest.Mock;
+        resolveTaskCarrier: jest.Mock;
     };
     let mockLicenseService: {
         startTrial: jest.Mock;
@@ -106,9 +106,9 @@ describe('ValidatePrerequisitesStage', () => {
         mockPermissionValidationService = {
             validateExecutionPermissions: jest.fn(),
             getBYOKConfig: jest.fn().mockResolvedValue(null),
-            // v2-native "is BYOK?" heal check resolves the codeReview slot from
-            // the raw v2 config; null → env/managed default (no client BYOK).
-            getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
+            // native "is BYOK?" heal check resolves the codeReview carrier via
+            // the per-task API; null → env/managed default (no client BYOK).
+            resolveTaskCarrier: jest.fn().mockResolvedValue(null),
         };
 
         mockLicenseService = {

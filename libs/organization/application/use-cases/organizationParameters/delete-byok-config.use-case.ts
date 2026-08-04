@@ -8,15 +8,15 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
-import { isV2Config } from '@libs/llm/byok-config';
+import { isByokConfig } from '@libs/llm/byok-config';
 import { findModelReferences } from '@libs/llm/validate-byok-config-refs';
 import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 
 /**
- * Delete target: a v2 delete-by-model-id (`{ modelId }`), which runs the
+ * Delete target: a delete-by-model-id (`{ modelId }`), which runs the
  * referential-integrity guard (REQ-DELETE-01). The legacy `'main'`/`'fallback'`
- * slot delete is GONE (04b-06 — a v2 config has no top-level slots); those string
+ * slot delete is GONE (04b-06 — a config has no top-level slots); those string
  * variants remain in the union only for the (out-of-scope) legacy controller
  * signature and are REJECTED at runtime.
  */
@@ -24,7 +24,7 @@ export type DeleteByokTarget = 'main' | 'fallback' | { modelId: string };
 
 /**
  * Scan a single scope's `configs` for a reference to the model being deleted.
- * A repo/folder override can point at a v2 model by its stable id (`byokModelId`,
+ * A repo/folder override can point at a model by its stable id (`byokModelId`,
  * RFC §4.2) or, in the legacy read window, by the model NAME (`byokModel`). An
  * empty-string value means "inherit" and is NOT a reference.
  * Returns the field name that matched (`byokModelId` | `byokModel`) or null.
@@ -128,12 +128,12 @@ export class DeleteByokConfigUseCase {
     ): Promise<boolean> {
         // ── v2 delete-by-model-id path (REQ-DELETE-01) — the SOLE path. ─────
         // 04b-06: the legacy 'main'/'fallback' slot delete is GONE. A legacy
-        // string target is rejected (a v2 config has no top-level slots to drop).
+        // string target is rejected (a config has no top-level slots to drop).
         const modelId =
             typeof target === 'object' && target ? target.modelId : undefined;
         if (!modelId) {
             throw new BadRequestException(
-                'modelId is required to delete a v2 BYOK model',
+                'modelId is required to delete a BYOK model',
             );
         }
 
@@ -147,9 +147,9 @@ export class DeleteByokConfigUseCase {
         if (!config) {
             throw new BadRequestException('BYOK configuration not found');
         }
-        if (!isV2Config(config)) {
+        if (!isByokConfig(config)) {
             throw new BadRequestException(
-                'Model-level delete requires a v2 BYOK configuration',
+                'Model-level delete requires a BYOK configuration',
             );
         }
 

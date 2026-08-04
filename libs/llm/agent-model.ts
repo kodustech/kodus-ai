@@ -7,7 +7,7 @@
  *
  * Lives in @libs/llm (infra), not the harness — the engine stays model-agnostic.
  */
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import type { LanguageModel } from 'ai';
 
 import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
@@ -35,7 +35,7 @@ export function resolveAgentModel(
     // `{main}` carrier, so reconstruct it here at the wrapper boundary — the
     // builder itself never reads `.main`/`.fallback`.
     return wrapByokModel(buildModelFromSlot(slot), {
-        byokConfig: slot ? ({ main: slot } as BYOKConfig) : undefined,
+        byokConfig: slot ? ({ main: slot } as NormalizedByokConfig) : undefined,
         organizationId: opts.organizationId,
         provider: opts.provider ?? slot?.provider,
         ...(opts.queueTimeoutMs != null

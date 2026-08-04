@@ -1,5 +1,5 @@
 /**
- * Maps BYOKConfig to a Vercel AI SDK LanguageModel.
+ * Maps NormalizedByokConfig to a Vercel AI SDK LanguageModel.
  *
  * This adapter converts the Kodus BYOK configuration (provider + apiKey + model)
  * into a Vercel AI SDK model instance that supports native function calling.
@@ -65,7 +65,7 @@ const DEFAULT_MODEL = {
 };
 
 /**
- * Convert a BYOKConfig to a Vercel AI SDK LanguageModel.
+ * Convert a NormalizedByokConfig to a Vercel AI SDK LanguageModel.
  *
  * Supports all BYOKProvider types:
  * - OPENAI → @ai-sdk/openai

@@ -1,12 +1,12 @@
 import {
     normalizeByokConfig,
-    resolveModelSlotFromV2,
+    resolveModelSlot,
 } from './normalize-byok-config';
-import type { BYOKConfigV2 } from './byok-config';
+import type { BYOKConfig } from './byok-config';
 
 describe('normalizeByokConfig — v2-only (04b-06, dual-read dropped)', () => {
-    it('resolves a v2 config: model + credential → main with the credential ciphertext', () => {
-        const v2: BYOKConfigV2 = {
+    it('resolves a config: model + credential → main with the credential ciphertext', () => {
+        const v2: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: 'c1', provider: 'openai_compatible', apiKey: 'enc-C1', settings: { baseURL: 'https://h:8000/v1' } },
@@ -23,7 +23,7 @@ describe('normalizeByokConfig — v2-only (04b-06, dual-read dropped)', () => {
     });
 
     it('honors routing.defaultModelId for main; the next model becomes fallback', () => {
-        const v2: BYOKConfigV2 = {
+        const v2: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: 'c1', provider: 'openai', apiKey: 'enc-1' },
@@ -41,7 +41,7 @@ describe('normalizeByokConfig — v2-only (04b-06, dual-read dropped)', () => {
     });
 
     it('managed:true credential → absent main (env-default branch runs)', () => {
-        const v2: BYOKConfigV2 = {
+        const v2: BYOKConfig = {
             version: 2,
             credentials: [{ id: 'mgd', provider: 'openai_compatible', managed: true }],
             models: [{ id: 'm1', credentialId: 'mgd', model: 'kimi-k2.7-code' }],
@@ -50,7 +50,7 @@ describe('normalizeByokConfig — v2-only (04b-06, dual-read dropped)', () => {
     });
 
     it('degrades (does not throw) on an unknown/credential-less model', () => {
-        const v2: BYOKConfigV2 = {
+        const v2: BYOKConfig = {
             version: 2,
             credentials: [],
             models: [{ id: 'm1', credentialId: 'missing', model: 'gpt-4o' }],
@@ -82,8 +82,8 @@ describe('normalizeByokConfig — v2-only (04b-06, dual-read dropped)', () => {
     });
 });
 
-describe('resolveModelSlotFromV2 — materialize ONE v2 model slot by id (04b)', () => {
-    const v2: BYOKConfigV2 = {
+describe('resolveModelSlot — materialize ONE v2 model slot by id (04b)', () => {
+    const v2: BYOKConfig = {
         version: 2,
         credentials: [
             { id: 'c1', provider: 'openai_compatible', apiKey: 'enc-C1', settings: { baseURL: 'https://h/v1' } },
@@ -96,7 +96,7 @@ describe('resolveModelSlotFromV2 — materialize ONE v2 model slot by id (04b)',
     };
 
     it('materializes the slot for a known model id with ciphertext intact', () => {
-        const slot = resolveModelSlotFromV2(v2, 'm1');
+        const slot = resolveModelSlot(v2, 'm1');
         expect(slot).toMatchObject({
             provider: 'openai_compatible',
             model: 'kimi-k2.7-code',
@@ -106,9 +106,9 @@ describe('resolveModelSlotFromV2 — materialize ONE v2 model slot by id (04b)',
     });
 
     it('returns null for an absent / unknown / managed model id', () => {
-        expect(resolveModelSlotFromV2(v2, null)).toBeNull();
-        expect(resolveModelSlotFromV2(v2, undefined)).toBeNull();
-        expect(resolveModelSlotFromV2(v2, 'nope')).toBeNull();
-        expect(resolveModelSlotFromV2(v2, 'm-managed')).toBeNull();
+        expect(resolveModelSlot(v2, null)).toBeNull();
+        expect(resolveModelSlot(v2, undefined)).toBeNull();
+        expect(resolveModelSlot(v2, 'nope')).toBeNull();
+        expect(resolveModelSlot(v2, 'm-managed')).toBeNull();
     });
 });

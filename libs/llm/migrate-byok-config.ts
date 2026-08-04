@@ -1,7 +1,7 @@
 /**
  * Pure legacy→v2 BYOK transform (Phase 04b, plan 04b-07).
  *
- * Converts a stored legacy `{main,fallback}` BYOK blob into the v2 shape
+ * Converts a stored legacy `{main,fallback}` BYOK blob into the shape
  * (`{version:2, credentials[], models[], routing}`) that the v2-only code
  * (04b-01..06) reads. It is DB-free and unit-testable; the TypeORM migration
  * (04b-07 Task 3) applies it per `organization_parameters` BYOK row.
@@ -14,7 +14,7 @@
  *    `===` and is NEVER logged and NEVER placed in the returned blob.
  *  - `decrypt()` throwing (rotated / mismatched crypto key) DEGRADES to
  *    "treat the two slots as distinct" — it never aborts the transform (D-08).
- *  - Value-idempotent: an already-v2 blob is returned unchanged.
+ *  - Value-idempotent: an already-config blob is returned unchanged.
  *  - `routing.defaultModelId` = the first (migrated `main`) model, so the v2
  *    resolver picks the SAME model the legacy config resolved (no behavior
  *    change on the resolved model).
@@ -26,8 +26,8 @@
  */
 import { decrypt } from '@libs/common/utils/crypto';
 import {
-    isV2Config,
-    type BYOKConfigV2,
+    isByokConfig,
+    type BYOKConfig,
     type BYOKCredential,
     type BYOKModelConfig,
 } from './byok-config';
@@ -93,7 +93,7 @@ function plaintextEquals(a?: string, b?: string): boolean {
     }
 }
 
-/** Build a v2 credential from a legacy slot, carrying all ciphertext VERBATIM. */
+/** Build a credential from a legacy slot, carrying all ciphertext VERBATIM. */
 function credentialFromSlot(id: string, slot: LegacySlot): BYOKCredential {
     const settings: Record<string, unknown> = {};
     const put = (k: string, v: unknown) => {
@@ -121,7 +121,7 @@ function credentialFromSlot(id: string, slot: LegacySlot): BYOKCredential {
     return cred;
 }
 
-/** Build a v2 model referencing `credentialId`, carrying the tuning fields. */
+/** Build a model referencing `credentialId`, carrying the tuning fields. */
 function modelFromSlot(
     id: string,
     credentialId: string,
@@ -149,12 +149,12 @@ function modelFromSlot(
 
 /**
  * The v2 shape for a managed / env-default legacy config (no usable main). An
- * empty `credentials`/`models` v2 blob normalizes to `{}` — the SAME env/managed
- * default a managed:true credential resolves to (normalizeV2 → absent main), so
+ * empty `credentials`/`models` config blob normalizes to `{}` — the SAME env/managed
+ * default a managed:true credential resolves to (normalizeConfig → absent main), so
  * there is no behavior change. Kept empty (rather than a synthetic managed
  * credential) so the result is unambiguous and value-idempotent.
  */
-function managedDefaultV2(): BYOKConfigV2 {
+function managedDefaultV2(): BYOKConfig {
     return { version: 2, credentials: [], models: [] };
 }
 
@@ -164,9 +164,9 @@ function managedDefaultV2(): BYOKConfigV2 {
  * invariants (ciphertext verbatim, in-memory dedup compare, degrade on throw,
  * routing.defaultModelId = first model).
  */
-export function migrateLegacyToV2(blob: unknown): BYOKConfigV2 {
-    // Idempotent: an already-v2 blob is returned as-is (same reference).
-    if (isV2Config(blob)) return blob;
+export function migrateLegacyToV2(blob: unknown): BYOKConfig {
+    // Idempotent: an already-config blob is returned as-is (same reference).
+    if (isByokConfig(blob)) return blob;
 
     const legacy: LegacyConfig =
         blob && typeof blob === 'object' ? (blob as LegacyConfig) : {};

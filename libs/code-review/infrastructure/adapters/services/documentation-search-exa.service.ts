@@ -3,7 +3,7 @@ export const DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN = Symbol.for(
 );
 
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { z } from 'zod';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
@@ -83,7 +83,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedByokConfig;
         },
     ): Promise<Record<string, DocumentationItem[]>> {
         if (!this.exaClient) {
@@ -116,7 +116,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedByokConfig;
         },
     ): Promise<DocumentationItem[]> {
         const queryTasks = this.normalizeQueryTasks(plan.queryTasks);
@@ -148,7 +148,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedByokConfig;
         },
     ): Promise<DocumentationItem | null> {
         const queryNormalized = this.normalizeCacheSegment(task.query);
@@ -188,7 +188,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedByokConfig;
         },
     ): Promise<DocumentationItem | null> {
         if (!this.exaClient) {
@@ -417,7 +417,7 @@ export class DocumentationSearchExaService {
         rawSearchContent: string;
         organizationAndTeamData?: OrganizationAndTeamData;
         prNumber?: number;
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedByokConfig;
     }): Promise<string> {
         if (!params.rawSearchContent.trim()) {
             return '';

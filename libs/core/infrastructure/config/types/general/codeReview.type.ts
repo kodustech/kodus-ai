@@ -1,6 +1,6 @@
 import type { ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -338,11 +338,11 @@ export type CodeReviewConfig = {
     directoryFolders?: Array<{ id: string; name: string; path: string }>;
     runOnDraft?: boolean;
     codeReviewVersion?: CodeReviewVersion;
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedByokConfig;
     /**
      * The single model slot the run resolved for the `codeReview` task via the
      * v2 resolver (`resolveTaskModel` / `StaticTaskStrategy`). This is the
-     * v2-native replacement for the internal `byokConfig.main` intermediate:
+     * native replacement for the internal `byokConfig.main` intermediate:
      * downstream pipeline stages read their telemetry/limit metadata
      * (`provider`, `maxInputTokens`, `maxConcurrentRequests`) off this resolved
      * slot instead of the `{main,fallback}` shape. `null`/absent means the run
@@ -355,14 +355,14 @@ export type CodeReviewConfig = {
      * Empty string '' means "inherit": directory -> repository -> the main
      * model defined in the BYOK settings page.
      *
-     * Legacy NAME-based override, kept during the v2 transition window (D-05).
+     * Legacy NAME-based override, kept during the transition window (D-05).
      * Superseded by `byokModelId` going forward; the routing resolver reads
      * `byokModelId` first and only falls back to this NAME when it is absent.
      */
     byokModel?: string;
     /**
      * Id-based BYOK model override (Phase 4). References a v2 `models[]` entry
-     * by its stable `id` (BYOKConfigV2.models[].id), so the routing resolver
+     * by its stable `id` (BYOKConfig.models[].id), so the routing resolver
      * addresses the exact model regardless of a later rename. This is the top
      * of the routing precedence chain (folder/repo override > task override >
      * default). Empty/absent means "inherit"; when both `byokModelId` and the
@@ -373,7 +373,7 @@ export type CodeReviewConfig = {
     enableReflection?: boolean;
     /**
      * Optional overrides for v2 prompts (categories and severity guidance only).
-     * These influence only the v2 system prompt used during suggestion generation.
+     * These influence only the system prompt used during suggestion generation.
      */
     v2PromptOverrides?: {
         categories?: {

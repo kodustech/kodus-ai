@@ -178,7 +178,7 @@ describe('SpendLimitConfigService', () => {
     });
 
     describe('loadAndEvaluate', () => {
-        it('returns the config alongside the evaluation, threading the v2 BYOK config', async () => {
+        it('returns the config alongside the evaluation, threading the BYOK config', async () => {
             const config = {
                 enabled: true,
                 monthlyLimitUsd: 1000,

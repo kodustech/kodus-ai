@@ -6,8 +6,8 @@ import {
     type EnvLLMProviderId,
 } from '@libs/llm/env-llm-config';
 import {
-    isV2Config,
-    type BYOKConfigV2,
+    isByokConfig,
+    type BYOKConfig,
     type BYOKCredential,
 } from '@libs/llm/byok-config';
 import { normalizeByokConfig } from '@libs/llm/normalize-byok-config';
@@ -142,7 +142,7 @@ export class GetLLMConfigStatusUseCase implements IUseCase {
         // empty config yields [] (the single-slot fields above still describe
         // the effective resolved slot). Uses the env descriptor's reachability
         // for managed models — no cloud call.
-        const models = isV2Config(configValue)
+        const models = isByokConfig(configValue)
             ? this.enumerateModels(configValue, envDescriptor.configured)
             : [];
 
@@ -156,7 +156,7 @@ export class GetLLMConfigStatusUseCase implements IUseCase {
      * `isV2ModelResolvable` to compute the boolean and never leave this method.
      */
     private enumerateModels(
-        config: BYOKConfigV2,
+        config: BYOKConfig,
         envReachable: boolean,
     ): LLMModelStatus[] {
         const credentialsById = new Map<string, BYOKCredential>(

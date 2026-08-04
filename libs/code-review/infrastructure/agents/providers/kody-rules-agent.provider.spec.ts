@@ -373,8 +373,14 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         );
         const provider = new KodyRulesAgentProvider(
             {
-                getBYOKConfig: jest.fn(async () => null),
-                getBYOKConfigV2Raw: jest.fn(async () => null),
+                // model-factory resolves the run's model through the per-task
+                // entry point; no BYOK → env/managed default (null slot).
+                resolveTaskModel: jest.fn(async () => ({
+                    model: {} as any,
+                    modelName: 'default:model',
+                    slot: null,
+                    verdict: null,
+                })),
             } as any, // permission (system model)
             {} as any, // observability (unused — runStructuredReviewCall mocked)
         );

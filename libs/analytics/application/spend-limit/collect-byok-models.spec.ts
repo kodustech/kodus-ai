@@ -1,8 +1,8 @@
 import { collectByokModels } from './collect-byok-models';
-import type { BYOKConfigV2 } from '@libs/llm/byok-config';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 
-/** Build a minimal v2 config carrying only the model ids under test. */
-const v2 = (models: string[]): BYOKConfigV2 => ({
+/** Build a minimal config carrying only the model ids under test. */
+const v2 = (models: string[]): BYOKConfig => ({
     version: 2,
     credentials: [{ id: 'c1', provider: 'openai' }],
     models: models.map((model, i) => ({
@@ -44,7 +44,7 @@ describe('collectByokModels', () => {
         ).toEqual(['gpt-x', 'repo-model']);
     });
 
-    it('treats a legacy / absent / non-v2 blob as having no configured models', () => {
+    it('treats a legacy / absent / non-config blob as having no configured models', () => {
         expect(collectByokModels(undefined, ['only-model'])).toEqual([
             'only-model',
         ]);

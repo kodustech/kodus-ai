@@ -37,7 +37,7 @@ const makeJob = (overrides: Partial<any> = {}): any => ({
 
 // A v2 BYOK blob that routes `codeReview` to a single anthropic model carrying
 // the given maxConcurrentRequests. This is the stored shape the gate now reads
-// (v2-native — no legacy {main,fallback}).
+// (native — no legacy {main,fallback}).
 const makeV2Config = (overrides: { maxConcurrentRequests?: number } = {}): any => ({
     version: 2,
     credentials: [{ id: 'c1', provider: 'anthropic', apiKey: 'sk-test' }],

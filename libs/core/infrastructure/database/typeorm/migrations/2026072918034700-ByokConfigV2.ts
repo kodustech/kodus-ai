@@ -2,8 +2,8 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 import { migrateLegacyToV2 } from '@libs/llm/migrate-byok-config';
 import {
-    isV2Config,
-    type BYOKConfigV2,
+    isByokConfig,
+    type BYOKConfig,
     type BYOKCredential,
 } from '@libs/llm/byok-config';
 
@@ -27,7 +27,7 @@ import {
  *  - Idempotent: a row already `version===2` is SKIPPED — safe to re-run.
  *  - Self-host-safe: plain SQL via the queryRunner, NO Kodus-cloud/service
  *    dependency. An env-only self-host org has no BYOK row → untouched.
- *  - Best-effort down(): re-expands a v2 blob toward `{main,fallback}` (first
+ *  - Best-effort down(): re-expands a config blob toward `{main,fallback}` (first
  *    model+credential → main, second → fallback). A precise inverse is NOT
  *    guaranteed once main/fallback were deduped into one credential (the
  *    fallback slot's original provider/settings, if they ever differed, are not
@@ -47,7 +47,7 @@ export class ByokConfigV22026072918034700 implements MigrationInterface {
 
         for (const row of rows ?? []) {
             // Idempotent: already-v2 rows are left untouched (safe to re-run).
-            if (isV2Config(row.configValue)) continue;
+            if (isByokConfig(row.configValue)) continue;
 
             const migrated = migrateLegacyToV2(row.configValue);
             await queryRunner.query(
@@ -58,7 +58,7 @@ export class ByokConfigV22026072918034700 implements MigrationInterface {
     }
 
     /**
-     * Best-effort inverse: carry a v2 blob back toward the legacy
+     * Best-effort inverse: carry a config blob back toward the legacy
      * `{main,fallback}` shape so an older code path could read it. This is NOT a
      * guaranteed exact inverse (deduped credentials cannot be split back), and it
      * re-encrypts nothing — ciphertext is carried verbatim. A non-v2 row is left
@@ -72,7 +72,7 @@ export class ByokConfigV22026072918034700 implements MigrationInterface {
             );
 
         for (const row of rows ?? []) {
-            if (!isV2Config(row.configValue)) continue;
+            if (!isByokConfig(row.configValue)) continue;
 
             const legacy = this.v2ToLegacyBestEffort(row.configValue);
             await queryRunner.query(
@@ -82,8 +82,8 @@ export class ByokConfigV22026072918034700 implements MigrationInterface {
         }
     }
 
-    /** Re-expand a v2 blob toward `{main,fallback}` (best-effort, no re-encrypt). */
-    private v2ToLegacyBestEffort(config: BYOKConfigV2): {
+    /** Re-expand a config blob toward `{main,fallback}` (best-effort, no re-encrypt). */
+    private v2ToLegacyBestEffort(config: BYOKConfig): {
         main?: Record<string, unknown>;
         fallback?: Record<string, unknown>;
     } {

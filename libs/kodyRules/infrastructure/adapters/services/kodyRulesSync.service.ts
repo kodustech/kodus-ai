@@ -2090,15 +2090,19 @@ export class KodyRulesSyncService {
             return null;
         }
 
+        // Sourced once: this method needs the FULL config for BOTH the
+        // codeReview carrier (below) and the has-BYOK gate (further down), so it
+        // resolves the carrier locally rather than through the per-task API,
+        // which would re-fetch the same config.
         const [rawV2, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.getBYOKConfigV2Raw(
+            this.permissionValidationService.getBYOKConfig(
                 params.organizationAndTeamData,
             ),
             this.permissionValidationService.getSubscriptionStatus(
                 params.organizationAndTeamData,
             ),
         ]);
-        // v2-native carrier for the codeReview task (runStructuredReviewCall +
+        // native carrier for the codeReview task (runStructuredReviewCall +
         // the raw-JSON fallback build); non-v2/managed/BLOCKED → env default.
         const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
@@ -2197,7 +2201,7 @@ export class KodyRulesSyncService {
             SubscriptionStatus.CANCELED,
             SubscriptionStatus.EXPIRED,
         ];
-        // v2-native has-BYOK: the org brought at least one non-managed key.
+        // native has-BYOK: the org brought at least one non-managed key.
         const hasByok = hasNonManagedCredential(rawV2);
         if (
             !hasByok &&
@@ -2427,13 +2431,13 @@ export class KodyRulesSyncService {
         repositoryId: string;
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<Array<Partial<CreateKodyRuleDto>>> {
-        // v2-native carrier for the codeReview task; non-v2/managed/BLOCKED →
+        // native carrier for the codeReview task; non-v2/managed/BLOCKED →
         // env default.
-        const rawV2 =
-            await this.permissionValidationService.getBYOKConfigV2Raw(
+        const byokConfigValue =
+            await this.permissionValidationService.resolveTaskCarrier(
                 params.organizationAndTeamData,
+                LLM_TASK.codeReview,
             );
-        const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
         const mainRun = 'kodyRulesFilesToRulesFastBatch';
 
@@ -2556,13 +2560,13 @@ export class KodyRulesSyncService {
         repositoryId: string;
         organizationAndTeamData: OrganizationAndTeamData;
     }): Promise<Array<Partial<CreateKodyRuleDto>>> {
-        // v2-native carrier for the codeReview task; non-v2/managed/BLOCKED →
+        // native carrier for the codeReview task; non-v2/managed/BLOCKED →
         // env default.
-        const rawV2 =
-            await this.permissionValidationService.getBYOKConfigV2Raw(
+        const byokConfigValue =
+            await this.permissionValidationService.resolveTaskCarrier(
                 params.organizationAndTeamData,
+                LLM_TASK.codeReview,
             );
-        const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
         const mainRun = 'kodyRulesManifestsToRulesFastBatch';
 
@@ -2803,16 +2807,16 @@ export class KodyRulesSyncService {
             },
         ];
 
-        const [rawV2, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.getBYOKConfigV2Raw(
+        // native carrier for the reference-detection chain (codeReview task).
+        const [byokConfig, subscriptionStatus] = await Promise.all([
+            this.permissionValidationService.resolveTaskCarrier(
                 detectionOrgData,
+                LLM_TASK.codeReview,
             ),
             this.permissionValidationService.getSubscriptionStatus(
                 detectionOrgData,
             ),
         ]);
-        // v2-native carrier for the reference-detection chain (codeReview task).
-        const byokConfig = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
         try {
             const contextReferenceId =

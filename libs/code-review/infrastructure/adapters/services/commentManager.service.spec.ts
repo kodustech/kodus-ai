@@ -13,7 +13,7 @@ const capturedPrompts: Array<{ prompt: string; role: string }> = [];
 const NEW_SUMMARY_TEXT = 'NEW_SUMMARY_CONTENT';
 
 // generateSummaryPR now runs through the v5 path (byok-to-vercel +
-// tracedGenerateText) instead of the v2 BYOKPromptRunner builder, so
+// tracedGenerateText) instead of the BYOKPromptRunner builder, so
 // Claude-on-Vertex works. Mock that path: capture the system/user prompts
 // (Bug E) and return a deterministic summary (Bug A).
 jest.mock('@libs/llm/byok-to-vercel', () => ({

@@ -8,7 +8,7 @@
  */
 import { wrapLanguageModel, type LanguageModel } from 'ai';
 
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
@@ -63,7 +63,7 @@ function extractUsageTotal(result: unknown): number | undefined {
 }
 
 export interface WrapByokModelOptions {
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedByokConfig;
     organizationId?: string;
     provider?: string;
     /** @deprecated No-op since 04b-02 — the limiter keys off the single resolved

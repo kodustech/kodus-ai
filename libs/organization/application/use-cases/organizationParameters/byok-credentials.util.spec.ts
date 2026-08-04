@@ -46,7 +46,7 @@ describe('resolveByokSlot', () => {
             expect(slot?.apiKey).toBe('dec:ENC_KEY');
             // baseURL is a plaintext setting, carried through verbatim.
             expect(slot?.baseURL).toBe('https://api.moonshot.ai/v1');
-            // model is not part of a v2 credential — the caller supplies it.
+            // model is not part of a credential — the caller supplies it.
             expect(slot?.model).toBeUndefined();
         });
 

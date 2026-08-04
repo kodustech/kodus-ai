@@ -1,7 +1,7 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
@@ -202,7 +202,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         fileContext: FileChangeContext,
         reviewModeResponse: ReviewModeResponse,
         context: AnalysisContext,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedByokConfig,
     ): Promise<AIAnalysisResult> {
         const defaultProvider = LLMModelProvider.GEMINI_2_5_PRO;
         const runName = 'analyzeCodeWithAI_v2';
@@ -389,7 +389,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         prNumber: number,
         provider: LLMModelProvider,
         codeSuggestions: CodeSuggestion[],
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedByokConfig,
     ): Promise<Partial<CodeSuggestion>[]> {
         const runName = 'severityAnalysis';
 
@@ -465,7 +465,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         suggestions: any[],
         languageResultPrompt: string,
         reviewMode: ReviewModeResponse,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedByokConfig,
         crossFileSnippets?: CrossFileContextSnippet[],
         remoteCommands?: RemoteCommands,
         memories?: Array<Partial<IKodyRule>>,

@@ -1415,7 +1415,7 @@ export class KodyRulesService implements IKodyRulesService {
                     severity: rule.severity,
                 }));
 
-            // v2-native: resolve the codeReview task to a carrier for
+            // native: resolve the codeReview task to a carrier for
             // runStructuredReviewCall; non-v2/managed/BLOCKED → env default.
             const byokConfigValue =
                 await this.permissionValidationService.resolveTaskCarrier(
@@ -1935,7 +1935,7 @@ Analyze the suggestions and recommend the most relevant rules.`;
         memory: IKodyRuleMemory,
         existingMemories: Partial<IKodyRule>[],
     ) {
-        // v2-native: resolve the codeReview task to a carrier for
+        // native: resolve the codeReview task to a carrier for
         // runStructuredReviewCall; non-v2/managed/BLOCKED → env default.
         const byokConfigValue =
             await this.permissionValidationService.resolveTaskCarrier(

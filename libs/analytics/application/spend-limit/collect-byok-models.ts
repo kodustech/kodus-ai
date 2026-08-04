@@ -1,18 +1,18 @@
-import { isV2Config, type BYOKConfigV2 } from '@libs/llm/byok-config';
+import { isByokConfig, type BYOKConfig } from '@libs/llm/byok-config';
 
 /**
  * Assemble the distinct, non-blank model ids that a spend limit must be able
  * to price: EVERY model the org configured in its v2 `models[]`, plus any extra
  * models the caller supplies (e.g. per-repository / per-directory `byokModel`
- * overrides). v2-native — a legacy / absent / non-v2 blob contributes no
+ * overrides). native — a legacy / absent / non-config blob contributes no
  * configured models (only the caller's extras), so the enumeration reflects the
  * full v2 model set rather than the two collapsed `{main,fallback}` slots.
  */
 export function collectByokModels(
-    byokConfig?: BYOKConfigV2 | null,
+    byokConfig?: BYOKConfig | null,
     extraModels: string[] = [],
 ): string[] {
-    const configuredModels = isV2Config(byokConfig)
+    const configuredModels = isByokConfig(byokConfig)
         ? byokConfig.models.map((m) => m.model)
         : [];
 

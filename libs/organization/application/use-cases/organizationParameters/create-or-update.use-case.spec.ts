@@ -2,7 +2,7 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import { BadRequestException } from '@nestjs/common';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
-import type { BYOKConfigV2 } from '@libs/llm/byok-config';
+import type { BYOKConfig } from '@libs/llm/byok-config';
 import { CreateOrUpdateOrganizationParametersUseCase } from './create-or-update.use-case';
 
 const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
@@ -47,7 +47,7 @@ const saveByok = (useCase: CreateOrUpdateOrganizationParametersUseCase, configVa
         orgAndTeam,
     );
 
-const v2 = (over: Partial<BYOKConfigV2> = {}): BYOKConfigV2 => ({
+const v2 = (over: Partial<BYOKConfig> = {}): BYOKConfig => ({
     version: 2,
     credentials: [{ id: 'cred-openai', provider: 'openai', apiKey: '' }],
     models: [{ id: 'model-a', credentialId: 'cred-openai', model: 'gpt-5' }],
@@ -183,10 +183,10 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(cred.settings.awsRegion).toBe('us-east-1'); // non-secret verbatim
         });
 
-        it('does NOT throw on a v2 blob with no top-level main/fallback', async () => {
+        it('does NOT throw on a config blob with no top-level main/fallback', async () => {
             const { useCase } = buildUseCase(undefined);
             // A first-save credential must carry a usable key (auth-path guard);
-            // the point here is that the v2 shape (no legacy main/fallback) is
+            // the point here is that the shape (no legacy main/fallback) is
             // accepted, not keyless leniency.
             await expect(
                 saveByok(
@@ -227,7 +227,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
     // Task 1: legacy {main,fallback} write path dropped (04b-06 — v2-only)
     // ─────────────────────────────────────────────────────────────────────
     describe('legacy {main,fallback} write is rejected (v2-only)', () => {
-        it('rejects a legacy {main} blob — encrypt expects the v2 shape', async () => {
+        it('rejects a legacy {main} blob — encrypt expects the shape', async () => {
             const incoming = {
                 main: {
                     provider: BYOKProvider.OPENAI,
@@ -251,7 +251,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
     // ─────────────────────────────────────────────────────────────────────
     // Task 2: write-time referential integrity (RFC §13.8)
     // ─────────────────────────────────────────────────────────────────────
-    describe('write-time referential integrity for the v2 blob', () => {
+    describe('write-time referential integrity for the config blob', () => {
         it('rejects a dangling model.credentialId BEFORE persist (400)', async () => {
             const incoming = v2({
                 credentials: [
@@ -281,7 +281,7 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
             expect(createOrUpdateConfig).not.toHaveBeenCalled();
         });
 
-        it('persists a consistent v2 config', async () => {
+        it('persists a consistent config', async () => {
             const incoming = v2({
                 credentials: [
                     { id: 'cred-openai', provider: 'openai', apiKey: 'sk-x' },

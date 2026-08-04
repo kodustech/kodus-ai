@@ -5,7 +5,7 @@ import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
-describe('ValidateConfigStage — byokModel override', () => {
+describe('ValidateConfigStage — no BYOK config', () => {
     let stage: ValidateConfigStage;
     let mockAutomationExecutionService: any;
     let mockOrganizationParametersService: any;
@@ -72,62 +72,6 @@ describe('ValidateConfigStage — byokModel override', () => {
         }).compile();
 
         stage = module.get<ValidateConfigStage>(ValidateConfigStage);
-    });
-
-    it('overrides byokConfig.main.model with byokModel and leaves fallback untouched', async () => {
-        mockOrganizationParametersService.findByKey.mockResolvedValue({
-            configValue: {
-                main: {
-                    provider: 'openai',
-                    apiKey: 'key',
-                    model: 'gpt-4o',
-                },
-                fallback: {
-                    provider: 'anthropic',
-                    apiKey: 'key2',
-                    model: 'claude-fallback',
-                },
-            },
-        });
-
-        context = buildContext('gpt-5-mini');
-
-        const result = await stage.execute(context);
-
-        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe(
-            'gpt-5-mini',
-        );
-        expect(result.codeReviewConfig.byokConfig?.fallback?.model).toBe(
-            'claude-fallback',
-        );
-    });
-
-    it('does not override the model when byokModel is empty', async () => {
-        mockOrganizationParametersService.findByKey.mockResolvedValue({
-            configValue: {
-                main: { provider: 'openai', apiKey: 'key', model: 'gpt-4o' },
-            },
-        });
-
-        context = buildContext('');
-
-        const result = await stage.execute(context);
-
-        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe('gpt-4o');
-    });
-
-    it('does not override the model when byokModel is undefined', async () => {
-        mockOrganizationParametersService.findByKey.mockResolvedValue({
-            configValue: {
-                main: { provider: 'openai', apiKey: 'key', model: 'gpt-4o' },
-            },
-        });
-
-        context = buildContext(undefined);
-
-        const result = await stage.execute(context);
-
-        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe('gpt-4o');
     });
 
     it('does not crash when there is no BYOK config', async () => {
@@ -246,7 +190,7 @@ describe('ValidateConfigStage — v2 routing', () => {
             configValue: v2({ defaultModelId: 'm-A' }),
         });
 
-        // byokModelId 'm-B' is a v2 models[] id → routes straight to that model.
+        // byokModelId 'm-B' is a models[] id → routes straight to that model.
         const result = await stage.execute(buildContext(undefined, 'm-B'));
 
         expect(result.codeReviewConfig.byokConfig?.main?.model).toBe(
@@ -268,7 +212,7 @@ describe('ValidateConfigStage — v2 routing', () => {
         );
     });
 
-    it('W1: a legacy byokModel NAME override still resolves on a v2 config', async () => {
+    it('W1: a legacy byokModel NAME override still resolves on a config', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue({
             configValue: v2({ defaultModelId: 'm-A' }),
         });

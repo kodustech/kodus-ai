@@ -2,9 +2,9 @@ import {
     validateByokConfigRefs,
     findModelReferences,
 } from './validate-byok-config-refs';
-import type { BYOKConfigV2 } from './byok-config';
+import type { BYOKConfig } from './byok-config';
 
-const v2 = (over: Partial<BYOKConfigV2> = {}): BYOKConfigV2 => ({
+const v2 = (over: Partial<BYOKConfig> = {}): BYOKConfig => ({
     version: 2,
     credentials: [{ id: 'cred-openai', provider: 'openai', apiKey: 'enc(k)' }],
     models: [
@@ -41,7 +41,7 @@ describe('validateByokConfigRefs', () => {
             expect(result.errors).toEqual([]);
         });
 
-        it('passes a v2 config with no routing block', () => {
+        it('passes a config with no routing block', () => {
             const result = validateByokConfigRefs(v2({ routing: undefined }));
             expect(result).toEqual({ valid: true, errors: [] });
         });

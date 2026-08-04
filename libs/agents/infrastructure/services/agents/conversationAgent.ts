@@ -1,4 +1,4 @@
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { type Tool, type LanguageModel } from 'ai';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -470,14 +470,14 @@ export class ConversationAgentProvider {
     }
 
     /**
-     * Resolve the BYOK carrier for the org's `conversation` task. v2-native:
-     * source the raw v2 config and route it through `resolveTaskSlot`
+     * Resolve the BYOK carrier for the org's `conversation` task. native:
+     * source the raw config and route it through `resolveTaskSlot`
      * (StaticTaskStrategy over `models[]`/`routing`), so a non-v2/managed/
      * BLOCKED config yields `undefined` → the env/managed default.
      */
     private async resolveBYOKConfig(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<BYOKConfig | undefined> {
+    ): Promise<NormalizedByokConfig | undefined> {
         return (
             (await this.permissionValidationService.resolveTaskCarrier(
                 organizationAndTeamData,

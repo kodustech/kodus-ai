@@ -7,7 +7,7 @@
  * cycle once byok-to-vercel imports every module in 01-03).
  *
  * No LangChain runtime dependency: the bedrock config is
- * typed structurally, not via BYOKConfig.
+ * typed structurally, not via NormalizedByokConfig.
  */
 import type { LanguageModel } from 'ai';
 import { createVertex } from '@ai-sdk/google-vertex';
@@ -84,7 +84,7 @@ export function vertexModelFromSaJson(
     }
 }
 
-/** Bedrock auth fields (structural — no BYOKConfig import). aws* values are the
+/** Bedrock auth fields (structural — no NormalizedByokConfig import). aws* values are the
  *  ENCRYPTED ciphertext; this builder decrypts them internally. */
 export interface BedrockCredentials {
     awsRegion?: string;

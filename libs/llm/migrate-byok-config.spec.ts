@@ -8,7 +8,7 @@
  */
 import { encrypt, decrypt } from '@libs/common/utils/crypto';
 import { migrateLegacyToV2 } from './migrate-byok-config';
-import { isV2Config, type BYOKConfigV2 } from './byok-config';
+import { isByokConfig, type BYOKConfig } from './byok-config';
 import { normalizeByokConfig } from './normalize-byok-config';
 
 // A minimal legacy `{main,fallback}` slot with the sensitive apiKey ENCRYPTED,
@@ -45,7 +45,7 @@ describe('migrateLegacyToV2', () => {
             expect(v2.routing?.defaultModelId).toBe(v2.models[0].id);
         });
 
-        it('carries model tuning fields onto the v2 model', () => {
+        it('carries model tuning fields onto the model', () => {
             const main = legacySlot({
                 reasoningEffort: 'high',
                 temperature: 0.3,
@@ -153,8 +153,8 @@ describe('migrateLegacyToV2', () => {
     });
 
     describe('idempotency', () => {
-        it('already-v2 blob → returned UNCHANGED (value-idempotent)', () => {
-            const v2: BYOKConfigV2 = {
+        it('already-config blob → returned UNCHANGED (value-idempotent)', () => {
+            const v2: BYOKConfig = {
                 version: 2,
                 credentials: [{ id: 'c1', provider: 'openai', apiKey: 'ct' }],
                 models: [{ id: 'm1', credentialId: 'c1', model: 'gpt-4o' }],
@@ -168,7 +168,7 @@ describe('migrateLegacyToV2', () => {
             const once = migrateLegacyToV2(legacy);
             const twice = migrateLegacyToV2(once);
             expect(twice).toEqual(once);
-            expect(isV2Config(twice)).toBe(true);
+            expect(isByokConfig(twice)).toBe(true);
         });
     });
 
@@ -212,7 +212,7 @@ describe('migrateLegacyToV2', () => {
             }
         });
 
-        it('the returned v2 blob never contains the plaintext', () => {
+        it('the returned config blob never contains the plaintext', () => {
             const plaintext = 'plaintext-must-not-leak-into-blob';
             const v2 = migrateLegacyToV2({
                 main: legacySlot({ apiKey: encrypt(plaintext) }),

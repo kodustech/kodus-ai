@@ -447,7 +447,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // dedup key. Otherwise dedupReviewWarnings sees them as distinct
         // and the user sees duplicate bullets (PROMPT_COMPACTED listed
         // twice — once with "gemini-2.5-flash" and once with
-        // "google_gemini:gemini-2.5-flash"). getModelName is v2-native: it
+        // "google_gemini:gemini-2.5-flash"). getModelName is native: it
         // takes the resolved slot directly (no `{main}` wrapping).
         const effectiveModelName = getModelName(effectiveSlot ?? undefined);
         const effectiveContextWindow = resolveContextWindow({
@@ -1835,8 +1835,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         // The secondary-pass gate helpers (isSecondaryByok /
         // resolveSecondaryPassModel) still consume the single-slot {main} carrier;
         // wrap the resolved slot for them. withStructuredOutputFallback is already
-        // v2-native (takes the resolved slot directly). Those gate helpers go
-        // v2-native in 04b-05.
+        // native (takes the resolved slot directly). Those gate helpers go
+        // native in 04b-05.
         const dedupByokConfig = resolvedSlot ? { main: resolvedSlot } : undefined;
         if (suggestions.length <= 1) {
             return {

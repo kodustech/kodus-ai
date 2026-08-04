@@ -13,7 +13,7 @@
  * (Reliability caveat accepted 2026-07-29; resilience is re-addressed in Phase 5.)
  */
 import { Output, type LanguageModel, type Schema } from 'ai';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { z } from 'zod';
 import {
     buildModelFromSlot,
@@ -55,7 +55,7 @@ function isAbortOrHardTimeout(err: unknown): boolean {
 }
 
 export interface StructuredReviewCallParams<S extends z.ZodType | Schema> {
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedByokConfig;
     /** A zod schema, or an AI-SDK `jsonSchema()` Schema when the caller
      *  needs the wire JSON schema to differ from the parse validation
      *  (e.g. OpenAI-strict `required` semantics vs lenient providers). */

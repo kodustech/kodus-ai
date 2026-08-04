@@ -1,12 +1,12 @@
 /**
- * commentAnalysis.service.spec.ts — v2-native model resolution parity
+ * commentAnalysis.service.spec.ts — native model resolution parity
  * (slice 04b, plan 04b-03).
  *
  * Proves the code-review comment-analysis consumer resolves its structured-LLM
- * model through the v2 resolver (`resolveTaskModel(rawV2, 'codeReview', …)`)
- * instead of `byokToVercelModel(byokConfig, 'main', …)`:
- *  - the raw v2 config is sourced from `getBYOKConfigV2Raw` (matching
- *    model-factory), and the task is `codeReview`;
+ * model through the per-task entry point owned by the permission service
+ * (`permissionService.resolveTaskModel(org, 'codeReview', …)`, matching
+ * model-factory) instead of `byokToVercelModel(byokConfig, 'main', …)`:
+ *  - the org + task drive the resolution (no separate raw-config fetch);
  *  - `modelConfig.modelOverride` flows through as the default-model override
  *    (trial forces Kimi; off-BYOK still yields a model);
  *  - the observability span records the resolver's `modelName`;
@@ -18,10 +18,9 @@
  * seam (NOT MockLanguageModelV4 over Output.object, which hangs).
  */
 
+// resolveAgentModel/commentAnalysis now call permissionService.resolveTaskModel;
+// this mock IS that method (wired into the permission-service stub below).
 const resolveTaskModel = jest.fn();
-jest.mock('@libs/llm/resolve-task-model', () => ({
-    resolveTaskModel: (...args: any[]) => (resolveTaskModel as any)(...args),
-}));
 
 const wrapByokModel = jest.fn(() => ({ __wrapped: true }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({
@@ -41,13 +40,12 @@ jest.mock('@libs/core/log/langfuse', () => ({
 
 import { CommentAnalysisService } from './commentAnalysis.service';
 
-describe('CommentAnalysisService — v2-native model resolution', () => {
+describe('CommentAnalysisService — native model resolution', () => {
     let service: CommentAnalysisService;
     let observabilityService: { runAiSdkLLMInSpan: jest.Mock };
-    let permissionValidationService: { getBYOKConfigV2Raw: jest.Mock };
+    let permissionValidationService: { resolveTaskModel: jest.Mock };
 
     const org = { organizationId: 'org-1', teamId: 'team-1' } as any;
-    const rawV2 = { version: 2, credentials: [], models: [], routing: {} };
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -69,7 +67,7 @@ describe('CommentAnalysisService — v2-native model resolution', () => {
             runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
         };
         permissionValidationService = {
-            getBYOKConfigV2Raw: jest.fn().mockResolvedValue(rawV2),
+            resolveTaskModel,
         };
 
         service = new CommentAnalysisService(
@@ -78,17 +76,15 @@ describe('CommentAnalysisService — v2-native model resolution', () => {
         );
     });
 
-    it('resolves the codeReview slot from the raw v2 config (not byokToVercelModel)', async () => {
+    it('resolves the codeReview slot from the raw config (not byokToVercelModel)', async () => {
         await service.categorizeComments({
             comments: [{ id: 1, body: 'a comment' } as any],
             organizationAndTeamData: org,
         });
 
-        expect(
-            permissionValidationService.getBYOKConfigV2Raw,
-        ).toHaveBeenCalledWith(org);
+        // The per-task resolver is driven by the org + task (no raw-config fetch).
         expect(resolveTaskModel).toHaveBeenCalledWith(
-            rawV2,
+            org,
             'codeReview',
             expect.objectContaining({ defaultModelOverride: undefined }),
         );

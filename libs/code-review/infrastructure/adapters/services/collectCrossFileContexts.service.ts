@@ -1,6 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -84,7 +84,7 @@ export type CollectCrossFileContextsResult = {
 interface CollectContextsParams {
     remoteCommands: RemoteCommands;
     changedFiles: FileChange[];
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedByokConfig;
     organizationAndTeamData: OrganizationAndTeamData;
     prNumber: number;
     language: string;
@@ -294,7 +294,7 @@ export class CollectCrossFileContextsService {
     //#region Planner
     private async runPlanner(
         changedFiles: FileChange[],
-        byokConfig: BYOKConfig | undefined,
+        byokConfig: NormalizedByokConfig | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         language: string,
@@ -406,7 +406,7 @@ export class CollectCrossFileContextsService {
         diffSummary: string,
         changedFilenames: string[],
         language: string,
-        byokConfig: BYOKConfig | undefined,
+        byokConfig: NormalizedByokConfig | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
     ): Promise<CrossFileContextPlannerSchemaType['queries']> {
@@ -933,7 +933,7 @@ export class CollectCrossFileContextsService {
         remoteCommands: RemoteCommands;
         changedFilePaths: Set<string>;
         repoRoot: string;
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedByokConfig;
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         language: string;
@@ -960,7 +960,7 @@ export class CollectCrossFileContextsService {
         remoteCommands: RemoteCommands;
         changedFilePaths: Set<string>;
         repoRoot: string;
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedByokConfig;
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         language: string;
@@ -1103,7 +1103,7 @@ export class CollectCrossFileContextsService {
         currentContexts: CrossFileContextSnippet[],
         queryResultMap: Map<string, boolean>,
         language: string,
-        byokConfig: BYOKConfig | undefined,
+        byokConfig: NormalizedByokConfig | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
     ): Promise<CrossFileContextSufficiencySchemaType | null> {

@@ -1,5 +1,5 @@
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
@@ -104,7 +104,7 @@ export interface ICommentManagerService {
         prNumber: number,
         provider: LLMModelProvider,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedByokConfig,
     ): Promise<any>;
 
     enrichParentSuggestionsWithRelated(

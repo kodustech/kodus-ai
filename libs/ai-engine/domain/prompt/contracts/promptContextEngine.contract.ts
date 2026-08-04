@@ -1,5 +1,5 @@
 import type { ContextRequirement } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -22,7 +22,7 @@ export interface IPromptContextEngineService {
         organizationAndTeamData: OrganizationAndTeamData;
         context?: 'rule' | 'instruction' | 'prompt';
         detectionMode?: 'rule' | 'prompt';
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedByokConfig;
         subscriptionStatus?: string;
     }): Promise<{
         references: IFileReference[];

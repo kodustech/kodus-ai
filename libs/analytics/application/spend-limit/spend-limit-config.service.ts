@@ -14,7 +14,7 @@ import {
     SpendLimitEvaluation,
 } from '@libs/analytics/domain/spend-limit/spend-limit.types';
 import { ManualPricingOverrides } from '@libs/analytics/domain/token-usage/types/pricing.types';
-import { BYOKConfigV2 } from '@libs/llm/byok-config';
+import { BYOKConfig } from '@libs/llm/byok-config';
 
 import { MonthlySpendUseCase } from '../use-cases/usage/monthly-spend.use-case';
 import { PricingResolver } from '../use-cases/usage/pricing-resolver';
@@ -106,13 +106,13 @@ export class SpendLimitConfigService {
      */
     private async getByokConfig(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<BYOKConfigV2 | null> {
+    ): Promise<BYOKConfig | null> {
         return this.organizationParametersService
             .findByKey(
                 OrganizationParametersKey.BYOK_CONFIG,
                 organizationAndTeamData,
             )
-            .then((p) => (p?.configValue as BYOKConfigV2) ?? null)
+            .then((p) => (p?.configValue as BYOKConfig) ?? null)
             .catch(() => null);
     }
 

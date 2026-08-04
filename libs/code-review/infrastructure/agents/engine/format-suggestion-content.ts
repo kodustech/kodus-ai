@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
 import {
     buildLangfuseTelemetry,
@@ -35,7 +35,7 @@ export async function formatSuggestionContent(
     suggestions: SuggestionToFormat[],
     options?: {
         customWritingGuidelines?: string;
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedByokConfig;
         languageResultPrompt?: string;
     },
 ): Promise<Map<number, FormattedSuggestion>> {

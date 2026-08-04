@@ -1,5 +1,5 @@
 // 04b-06: the legacy {main,fallback} branch is GONE — resolveAgentModel is
-// v2-native and always routes through resolveTaskModel (the runtime fallback was
+// native and always routes through resolveTaskModel (the runtime fallback was
 // removed in 04b-05, so it resolves ONE model). This byok-to-vercel mock is kept
 // only so the fallback-not-built assertion can inspect the (now-unused) seam.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
@@ -10,13 +10,12 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
 }));
 
 // v2 path (slice 04b): the codeReview MAIN model resolves through the single
-// task→model entry point. Mock the seam so we assert model-factory delegates the
-// routing decision (and maps the returned slot onto AgentModelParams) rather than
-// re-implementing StaticTaskStrategy here.
+// task→model entry point, now owned by the permission service
+// (permissionService.resolveTaskModel(org, task, opts)). This mock IS that
+// method (wired into the permission-service stubs below), so we assert
+// model-factory delegates the routing decision (task + override ctx) and maps
+// the returned slot onto AgentModelParams rather than re-implementing routing.
 const resolveTaskModelMock = jest.fn();
-jest.mock('@libs/llm/resolve-task-model', () => ({
-    resolveTaskModel: (...args: any[]) => resolveTaskModelMock(...args),
-}));
 
 import { resolveAgentModel } from './model-factory';
 
@@ -28,20 +27,20 @@ const orgTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
 function permissionServiceReturning(byokConfig: any) {
     return {
         getBYOKConfig: jest.fn().mockResolvedValue(byokConfig),
-        getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
+        resolveTaskModel: resolveTaskModelMock,
     } as any;
 }
 
-// v2 raw accessor returns the full v2 blob; the collapsed accessor must NOT be
-// consulted on the v2 branch (routing is by task, not always main).
+// v2 raw accessor returns the full config blob; the collapsed accessor must NOT be
+// consulted on the branch (routing is by task, not always main).
 function permissionServiceReturningV2(v2Config: any) {
     return {
         getBYOKConfig: jest
             .fn()
             .mockRejectedValue(
-                new Error('getBYOKConfig must not run on the v2 branch'),
+                new Error('getBYOKConfig must not run on the branch'),
             ),
-        getBYOKConfigV2Raw: jest.fn().mockResolvedValue(v2Config),
+        resolveTaskModel: resolveTaskModelMock,
     } as any;
 }
 
@@ -124,10 +123,10 @@ describe('resolveAgentModel', () => {
                 svc,
             );
 
-            // resolveTaskModel is the SOLE path now — even with no BYOK it is
-            // called with the null config and returns the env/managed default.
+            // resolveTaskModel is the SOLE path now — called with the org + task;
+            // no BYOK → it returns the env/managed default.
             expect(resolveTaskModelMock).toHaveBeenCalledTimes(1);
-            expect(resolveTaskModelMock.mock.calls[0][0]).toBeNull();
+            expect(resolveTaskModelMock.mock.calls[0][0]).toBe(orgTeam);
             expect(resolveTaskModelMock.mock.calls[0][1]).toBe('codeReview');
             expect(resolved.main.role).toBe('main');
             expect(resolved.main.model).toEqual({ tag: 'env-default' });
@@ -173,8 +172,8 @@ describe('resolveAgentModel', () => {
             );
 
             expect(resolveTaskModelMock).toHaveBeenCalledTimes(1);
-            const [passedCfg, task, opts] = resolveTaskModelMock.mock.calls[0];
-            expect(passedCfg).toBe(cfg);
+            const [passedOrg, task, opts] = resolveTaskModelMock.mock.calls[0];
+            expect(passedOrg).toBe(orgTeam);
             expect(task).toBe('codeReview');
             expect(opts.ctx).toEqual({ override: { modelId: 'm-B' } });
             // The collapsed accessor must NOT have been used.

@@ -14,7 +14,7 @@ import '@libs/llm/providers'; // side-effect: self-register every provider modul
 import { StaticTaskStrategy } from './static-task-strategy';
 import type { RequestContext } from './routing-strategy';
 import type {
-    BYOKConfigV2,
+    BYOKConfig,
     BYOKCredential,
     BYOKModelConfig,
     BYOKRouting,
@@ -49,7 +49,7 @@ const cfg = (
     routing: BYOKRouting,
     models: BYOKModelConfig[] = [M.A, M.B, M.ANT, M.MG, M.UK],
     credentials: BYOKCredential[] = [OA, AN, MANAGED, UNKNOWN],
-): BYOKConfigV2 => ({ version: 2, credentials, models, routing });
+): BYOKConfig => ({ version: 2, credentials, models, routing });
 
 const NO_CTX: RequestContext = {};
 
@@ -197,7 +197,7 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
         });
     });
 
-    describe('W1: legacy byokModel NAME override on a v2 config (id-THEN-name)', () => {
+    describe('W1: legacy byokModel NAME override on a config (id-THEN-name)', () => {
         it('applies a NAME override onto the chosen slot and carries it in modelName', () => {
             const v = strategy.resolve(
                 'codeReview',

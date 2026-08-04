@@ -3,7 +3,7 @@ import {
     buildPlatformModel,
     getInternalModel,
 } from '@libs/llm/byok-to-vercel';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 /**
  * Model for the review's SECONDARY passes (dedup, severity classification,
@@ -17,7 +17,7 @@ import type { BYOKConfig } from '@libs/llm/byok-config';
 export const SECONDARY_PASS_MODEL_ID = 'gpt-5.4-mini';
 
 /** True when secondary should bill the client BYOK key (one resolved slot). */
-export function isSecondaryByok(byokConfig?: BYOKConfig | null): boolean {
+export function isSecondaryByok(byokConfig?: NormalizedByokConfig | null): boolean {
     return !!byokConfig?.main;
 }
 
@@ -29,7 +29,7 @@ export function isSecondaryByok(byokConfig?: BYOKConfig | null): boolean {
  *
  * Returns null when nothing is configured; callers skip the pass gracefully.
  */
-export function resolveSecondaryPassModel(byokConfig?: BYOKConfig): any {
+export function resolveSecondaryPassModel(byokConfig?: NormalizedByokConfig): any {
     if (isSecondaryByok(byokConfig)) {
         // Secondary matches the model the client configured for review — build
         // from the carrier's resolved main slot (read at this boundary).

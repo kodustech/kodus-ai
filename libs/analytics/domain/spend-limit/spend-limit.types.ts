@@ -21,7 +21,7 @@ export interface ModelSpend {
  * Spend attributed to a single BYOK credential over a period, in US$.
  *
  * Derived IN-APP by mapping each priced model-name back to its
- * `credentialId` via the v2 config (`BYOKModelConfig`) — the usage store has
+ * `credentialId` via the config (`BYOKModelConfig`) — the usage store has
  * no credentialId dimension. Spend whose model-name matches no configured
  * model lands in the `unattributed` pseudo-credential (see
  * `UNATTRIBUTED_CREDENTIAL`) rather than being dropped.
@@ -61,7 +61,7 @@ export interface MonthlySpendResult {
     tokenUsage: TokenUsageBreakdown;
     /** Per-model scope (free — the usage store bakes `tu.model`). */
     byModel: ModelSpend[];
-    /** Per-credential scope (in-app derived from the v2 config; approximate
+    /** Per-credential scope (in-app derived from the config; approximate
      *  on model-name collisions across credentials — see CredentialSpend). */
     byCredential: CredentialSpend[];
     /** Run-rate projection of the total to a full month. */

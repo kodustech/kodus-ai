@@ -28,7 +28,7 @@ describe('KodyRulesSyncService.convertFileToKodyRules — post-trial BYOK gate',
         teamId: 'team-1',
     };
 
-    // A v2 config carrying one non-managed credential → the org "has BYOK"
+    // A config carrying one non-managed credential → the org "has BYOK"
     // (hasNonManagedCredential true). `null` → no BYOK.
     const v2WithByok = {
         version: 2,
@@ -43,7 +43,7 @@ describe('KodyRulesSyncService.convertFileToKodyRules — post-trial BYOK gate',
     }) => {
         const permissionValidationService = {
             validateBasicLicense: jest.fn().mockResolvedValue({ allowed: true }),
-            getBYOKConfigV2Raw: jest
+            getBYOKConfig: jest
                 .fn()
                 .mockResolvedValue(opts.byok ? v2WithByok : null),
             getSubscriptionStatus: jest.fn().mockResolvedValue(opts.status),
@@ -141,8 +141,8 @@ describe('KodyRulesSyncService FastBatch conversions — AI SDK migration parity
     const makeService = () => {
         const permissionValidationService = {
             // FastBatch parity test only exercises DTO mapping — the resolved
-            // carrier is irrelevant, so no v2 config (env default) is fine.
-            getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
+            // carrier is irrelevant, so null (env default) is fine.
+            resolveTaskCarrier: jest.fn().mockResolvedValue(null),
         };
         const observabilityService = {
             runAiSdkLLMInSpan: jest.fn(),

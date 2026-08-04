@@ -1,5 +1,5 @@
 import { decrypt } from '@libs/common/utils/crypto';
-import { isV2Config } from '@libs/llm/byok-config';
+import { isByokConfig } from '@libs/llm/byok-config';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IOrganizationParametersService } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
@@ -72,7 +72,7 @@ export async function resolveByokSlot(
     // plaintext — so this v2 branch reads credentials[] and safeDecrypt's the
     // secret fields (server-only path; DecryptedByokSlot never reaches a
     // client). A managed credential is never probed. RESEARCH §13.2 / Pattern 3.
-    if (isV2Config(config)) {
+    if (isByokConfig(config)) {
         const cred = (config.credentials ?? []).find(
             (c) => c && c.provider === provider && !c.managed,
         );
@@ -88,7 +88,7 @@ export async function resolveByokSlot(
             provider: cred.provider,
             apiKey: safeDecrypt(cred.apiKey),
             baseURL: str(settings.baseURL),
-            // model is not part of a v2 credential — the caller supplies it.
+            // model is not part of a credential — the caller supplies it.
             model: undefined,
             vertexLocation: str(settings.vertexLocation),
             awsBearerToken: safeDecrypt(str(settings.awsBearerToken)),

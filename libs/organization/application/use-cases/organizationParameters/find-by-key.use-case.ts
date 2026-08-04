@@ -1,7 +1,7 @@
 import { decrypt } from '@libs/common/utils/crypto';
 import {
-    isV2Config,
-    type BYOKConfigV2,
+    isByokConfig,
+    type BYOKConfig,
     type BYOKCredential,
 } from '@libs/llm/byok-config';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
@@ -55,10 +55,10 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
                 // v2-only (04b-06 — the legacy main/fallback mask is GONE):
                 // secrets live per-credential (credentials[].apiKey + aws* under
                 // settings). Mask them before the blob leaves the server
-                // (T-04b-06-01), leaving models[]/routing plaintext. A non-v2 blob
+                // (T-04b-06-01), leaving models[]/routing plaintext. A non-config blob
                 // carries only ciphertext (never plaintext) and passes through
                 // unmasked — it is on its way out via the 04b-07 migration.
-                if (isV2Config(configValue)) {
+                if (isByokConfig(configValue)) {
                     try {
                         const processedConfig =
                             this.maskV2ConfigSecrets(configValue);
@@ -140,7 +140,7 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
     }
 
     /**
-     * The encrypted secret fields carried inside a v2 credential's `settings`
+     * The encrypted secret fields carried inside a credential's `settings`
      * (Amazon Bedrock auth). Kept in sync with `V2_SECRET_SETTINGS` in
      * create-or-update.use-case.ts. `awsRegion`, `baseURL`, `vertexLocation`
      * are plaintext settings and are left untouched.
@@ -153,13 +153,13 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
     ] as const;
 
     /**
-     * Mask every credential's secret fields on a v2 config: the top-level
+     * Mask every credential's secret fields on a config: the top-level
      * `apiKey` and the aws* fields under `settings`. `models[]`/`routing`/
      * `version` pass through plaintext. A managed credential (env default,
      * hidden from the UI) never surfaces a secret — its secret fields are
      * stripped entirely rather than masked.
      */
-    private maskV2ConfigSecrets(config: BYOKConfigV2): BYOKConfigV2 {
+    private maskV2ConfigSecrets(config: BYOKConfig): BYOKConfig {
         const credentials = (config.credentials ?? []).map((cred) =>
             this.maskCredentialSecrets(cred),
         );

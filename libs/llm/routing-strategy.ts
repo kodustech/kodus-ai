@@ -14,7 +14,7 @@
  * Lives in libs/llm next to `getBYOKConfig`/`normalizeByokConfig` — routing is a
  * resolver-layer concern, never smeared across pipeline stages.
  */
-import type { BYOKConfigV2, LlmTask } from './byok-config';
+import type { BYOKConfig, LlmTask } from './byok-config';
 
 /**
  * Per-request routing inputs the resolver reads BESIDES the stored config.
@@ -63,7 +63,7 @@ export interface RoutingStrategy {
     resolve(
         task: LlmTask,
         ctx: RequestContext,
-        config: BYOKConfigV2,
+        config: BYOKConfig,
         stats?: ModelRuntimeStats,
     ): RoutingVerdict;
 }

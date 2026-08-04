@@ -1,16 +1,15 @@
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
 import { LLM_TASK } from '@libs/llm/byok-config';
 
 @Injectable()
 export abstract class BaseAgentProvider {
-    protected byokConfig?: BYOKConfig;
+    protected byokConfig?: NormalizedByokConfig;
     protected organizationAndTeamData?: OrganizationAndTeamData;
 
     protected abstract readonly defaultLLMConfig: {
@@ -37,12 +36,12 @@ export abstract class BaseAgentProvider {
     /**
      * Fetches BYOK configuration for the organization.
      *
-     * Skill agents run the `conversation` task. The FULL v2 config is sourced
-     * via `getBYOKConfigV2Raw` and routed through `resolveTaskSlot` for
-     * the `conversation` task, so routing is by task rather than always the
-     * collapsed main slot (RESEARCH Pitfall 1). A non-v2 / managed / BLOCKED
-     * config resolves to `undefined` → the env/managed default (matches a
-     * missing config today; never throws).
+     * Skill agents run the `conversation` task. Resolution goes through the
+     * permission service's per-task entry point (`resolveTaskCarrier(org,
+     * conversation, …)`), which sources the FULL config and routes by task
+     * rather than always the collapsed main slot (RESEARCH Pitfall 1). A
+     * non-v2 / managed / BLOCKED config resolves to `undefined` → the
+     * env/managed default (matches a missing config today; never throws).
      *
      * `byokModelOverride` is the legacy per-repository/directory model NAME
      * resolved by the code review pipeline (`codeReviewConfig.byokModel`).
@@ -57,17 +56,19 @@ export abstract class BaseAgentProvider {
     ): Promise<void> {
         this.organizationAndTeamData = organizationAndTeamData;
 
-        const rawV2 =
-            await this.permissionValidationService.getBYOKConfigV2Raw(
-                organizationAndTeamData,
-            );
-
         // byokModelId (id) wins over the legacy byokModel NAME; the strategy
-        // handles the id-THEN-name match inside resolveTaskSlot.
+        // handles the id-THEN-name match inside the resolver.
         const overrideRef =
             byokModelIdOverride?.trim() || byokModelOverride?.trim();
-        this.byokConfig = resolveTaskCarrier(rawV2, LLM_TASK.conversation, {
-            ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
-        });
+        this.byokConfig =
+            (await this.permissionValidationService.resolveTaskCarrier(
+                organizationAndTeamData,
+                LLM_TASK.conversation,
+                {
+                    ctx: overrideRef
+                        ? { override: { modelId: overrideRef } }
+                        : {},
+                },
+            )) ?? undefined;
     }
 }

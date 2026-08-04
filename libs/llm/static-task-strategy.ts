@@ -23,7 +23,7 @@
 import { REGISTRY } from './providers';
 import type { ModelCapabilities } from './providers/kernel/types';
 import type {
-    BYOKConfigV2,
+    BYOKConfig,
     BYOKCredential,
     BYOKModelConfig,
     LlmTask,
@@ -92,7 +92,7 @@ export class StaticTaskStrategy implements RoutingStrategy {
     resolve(
         task: LlmTask,
         ctx: RequestContext,
-        config: BYOKConfigV2,
+        config: BYOKConfig,
         _stats?: ModelRuntimeStats, // reserved for the Auto router — unused in v1
     ): RoutingVerdict {
         // Parent-task inheritance: an internal helper call under BYOK inherits the
@@ -151,7 +151,7 @@ export class StaticTaskStrategy implements RoutingStrategy {
     private buildPrimaryCandidates(
         task: LlmTask,
         ctx: RequestContext,
-        routing: NonNullable<BYOKConfigV2['routing']>,
+        routing: NonNullable<BYOKConfig['routing']>,
         byId: Map<string, BYOKModelConfig>,
     ): Candidate[] {
         const candidates: Candidate[] = [];
@@ -198,7 +198,7 @@ export class StaticTaskStrategy implements RoutingStrategy {
     }
 
     private buildFallbackCandidate(
-        routing: NonNullable<BYOKConfigV2['routing']>,
+        routing: NonNullable<BYOKConfig['routing']>,
         byId: Map<string, BYOKModelConfig>,
     ): Candidate[] {
         const fallbackModel = routing.fallbackModelId

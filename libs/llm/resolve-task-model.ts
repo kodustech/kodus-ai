@@ -2,9 +2,9 @@
  * resolveTaskModel — the SINGLE task→model resolution entry point (slice 04b,
  * plan 04b-01, TRACER).
  *
- * Every v2-native consumer calls this in place of reading `.main`/`.fallback`:
+ * Every native consumer calls this in place of reading `.main`/`.fallback`:
  * "give me the LanguageModel for THIS task, resolved via `StaticTaskStrategy`
- * over the org's v2 config, or the managed/env default if no BYOK." It resolves
+ * over the org's config, or the managed/env default if no BYOK." It resolves
  * the routed model id for the task (verdict), materializes that model's slot
  * (ciphertext-bearing), and builds the LanguageModel via `buildModelFromSlot`.
  *
@@ -20,15 +20,15 @@
 import type { LanguageModel } from 'ai';
 
 import {
-    isV2Config,
+    isByokConfig,
+    type NormalizedByokConfig,
     type BYOKConfig,
-    type BYOKConfigV2,
     type LlmTask,
     type NormalizedModel,
 } from './byok-config';
 import type { RequestContext, RoutingVerdict } from './routing-strategy';
 import { StaticTaskStrategy } from './static-task-strategy';
-import { resolveModelSlotFromV2 } from './normalize-byok-config';
+import { resolveModelSlot } from './normalize-byok-config';
 import { buildModelFromSlot, getModelName } from './byok-to-vercel';
 
 // Manual routing policy (Phase 4). Stateless + dependency-free — instantiated once.
@@ -55,7 +55,7 @@ export interface ResolvedTaskModel {
 }
 
 /**
- * Resolve `task` over the org's v2 config to a slot (ciphertext-bearing) WITHOUT
+ * Resolve `task` over the org's config to a slot (ciphertext-bearing) WITHOUT
  * building a model — the "decide which model + creds" step. BYOK when the org
  * routes one for the task; otherwise `{ slot: null }` → the caller degrades to
  * the managed/env default. This is the single resolution primitive:
@@ -67,22 +67,22 @@ export interface ResolvedTaskModel {
  * → `{ slot: null }`.
  *
  * Secret hygiene: the slot carries ENCRYPTED apiKey ciphertext
- * (`resolveModelSlotFromV2` never decrypts); only `buildModelFromSlot` touches
+ * (`resolveModelSlot` never decrypts); only `buildModelFromSlot` touches
  * plaintext.
  */
 export function resolveTaskSlot(
-    config: BYOKConfigV2 | null | undefined,
+    config: BYOKConfig | null | undefined,
     task: LlmTask,
     options: { ctx?: RequestContext } = {},
 ): { slot: NormalizedModel | null; verdict: RoutingVerdict | null } {
-    if (!isV2Config(config)) {
+    if (!isByokConfig(config)) {
         return { slot: null, verdict: null };
     }
     const verdict = strategy.resolve(task, options.ctx ?? {}, config);
     if (!verdict.modelId) {
         return { slot: null, verdict };
     }
-    const routed = resolveModelSlotFromV2(config, verdict.modelId);
+    const routed = resolveModelSlot(config, verdict.modelId);
     // id-THEN-name: a legacy NAME override applies onto the resolved slot's
     // `.model` (the slot still supplies the credential/ciphertext).
     const slot =
@@ -96,7 +96,7 @@ export function resolveTaskSlot(
  * Resolve the LanguageModel for `task` — `resolveTaskSlot` + build.
  */
 export function resolveTaskModel(
-    config: BYOKConfigV2 | null | undefined,
+    config: BYOKConfig | null | undefined,
     task: LlmTask,
     options: ResolveTaskModelOptions = {},
 ): ResolvedTaskModel {
@@ -124,14 +124,14 @@ export function resolveTaskModel(
  * This is the same decision as `resolveTaskSlot`, wrapped: a resolved slot →
  * `{ main: slot }`, no slot → `undefined` (caller degrades to the env/managed
  * default). It exists so consumers stop hand-wrapping the slot at the call site;
- * once the `BYOKConfig` carrier is retired in favour of the bare slot, this
+ * once the `NormalizedByokConfig` carrier is retired in favour of the bare slot, this
  * helper (and the `{ main }` shape) go away.
  */
 export function resolveTaskCarrier(
-    config: BYOKConfigV2 | null | undefined,
+    config: BYOKConfig | null | undefined,
     task: LlmTask,
     options: { ctx?: RequestContext } = {},
-): BYOKConfig | undefined {
+): NormalizedByokConfig | undefined {
     const slot = resolveTaskSlot(config, task, { ctx: options.ctx }).slot;
     return slot ? { main: slot } : undefined;
 }

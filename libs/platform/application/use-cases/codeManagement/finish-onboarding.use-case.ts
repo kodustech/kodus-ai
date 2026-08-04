@@ -29,7 +29,6 @@ import {
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { hasNonManagedCredential } from '@libs/llm/byok-config';
 
 @Injectable()
 export class FinishOnboardingUseCase {
@@ -348,17 +347,14 @@ export class FinishOnboardingUseCase {
         }
 
         try {
-            // v2-native "has BYOK": the org brought at least one non-managed
+            // native "has BYOK": the org brought at least one non-managed
             // credential (a managed/env-default credential does NOT count).
-            const rawV2 =
-                await this.permissionValidationService.getBYOKConfigV2Raw({
-                    organizationId,
-                    teamId,
-                });
-
             const provisioned = await this.licenseService.startTrial(
                 { organizationId, teamId },
-                hasNonManagedCredential(rawV2),
+                await this.permissionValidationService.hasBYOK({
+                    organizationId,
+                    teamId,
+                }),
             );
 
             if (!provisioned) {

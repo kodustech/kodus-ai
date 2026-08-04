@@ -47,7 +47,7 @@ import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/
 import { withStructuredOutputFallback } from '@libs/llm/byok-to-vercel';
 import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 
@@ -336,7 +336,7 @@ export async function extractFindingsWithRecovery(
 
 export async function recoverFindingsFromProse(
     prose: string,
-    byokConfig: BYOKConfig | undefined,
+    byokConfig: NormalizedByokConfig | undefined,
     organizationId: string | undefined,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
@@ -344,7 +344,7 @@ export async function recoverFindingsFromProse(
         const suggestions = await withStructuredOutputFallback(
             {
                 // Read the carrier's resolved main slot at this boundary; the
-                // helper is v2-native and never reads `.main`/`.fallback`.
+                // helper is native and never reads `.main`/`.fallback`.
                 slot: byokConfig?.main,
                 organizationId,
                 label: 'finder-prose-recovery',

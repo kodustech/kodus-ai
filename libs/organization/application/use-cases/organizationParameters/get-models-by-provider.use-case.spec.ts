@@ -58,7 +58,7 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         expect(cfg?.headers?.Authorization).toBe('Bearer decrypted:enc-key');
     });
 
-    it('matches the v2 credential for the requested provider', async () => {
+    it('matches the credential for the requested provider', async () => {
         const useCase = buildUseCase({
             version: 2,
             credentials: [

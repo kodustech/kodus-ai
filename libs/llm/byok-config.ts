@@ -1,7 +1,7 @@
 /**
- * BYOK config — the v2 persisted shape + the internal normalized shape.
+ * BYOK config — the persisted shape + the internal normalized shape.
  *
- * `BYOKConfigV2` (credentials + models + routing) is the stored format.
+ * `BYOKConfig` (credentials + models + routing) is the single stored format.
  * `normalizeByokConfig` resolves it to `NormalizedByokConfig` — the internal
  * `{main,fallback}` shape the resolver family (byok-to-vercel.ts) consumes, with
  * the apiKey kept as ENCRYPTED ciphertext so decryption happens once, downstream.
@@ -10,7 +10,7 @@
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { ReasoningEffort } from './providers/kernel/types';
 
-// ─── v2 persisted shape ──────────────────────────────────────────────────────
+// ─── Persisted shape ─────────────────────────────────────────────────────────
 
 /**
  * A connected provider credential. Connected once, referenced by many models via
@@ -91,7 +91,7 @@ export interface BYOKRouting {
     fallbackModelId?: string;
 }
 
-export interface BYOKConfigV2 {
+export interface BYOKConfig {
     version: 2;
     credentials: BYOKCredential[];
     models: BYOKModelConfig[];
@@ -101,14 +101,14 @@ export interface BYOKConfigV2 {
 // ─── Internal normalized shape (what the resolver family consumes) ───────────
 
 /**
- * One resolved model slot. Mirrors the legacy `BYOKConfig['main']` fields so it
+ * One resolved model slot. Mirrors the legacy `NormalizedByokConfig['main']` fields so it
  * is a drop-in for byok-to-vercel.ts. `apiKey` is ENCRYPTED ciphertext —
  * byok-to-vercel decrypts downstream; normalize must NOT decrypt.
  */
 export interface NormalizedModel {
     /** Provider id. Typed as BYOKProvider so NormalizedModel is a structural
-     *  drop-in for the legacy BYOKConfig['main'] — a normalized config casts to
-     *  BYOKConfig cleanly, so the 25 getBYOKConfig callers need no change. */
+     *  drop-in for the legacy NormalizedByokConfig['main'] — a normalized config casts to
+     *  NormalizedByokConfig cleanly, so the 25 getBYOKConfig callers need no change. */
     provider: BYOKProvider;
     /** Encrypted key ciphertext (decrypted by byok-to-vercel). */
     apiKey: string;
@@ -151,15 +151,8 @@ export interface NormalizedByokConfig {
     fallback?: NormalizedModel;
 }
 
-/**
- * Canonical BYOK carrier type: the resolved `{main,fallback}` slot pair the
- * resolver family passes to byok-to-vercel, built from our own `NormalizedModel`.
- * Consumers import `BYOKConfig` from `@libs/llm/byok-config`.
- */
-export type BYOKConfig = NormalizedByokConfig;
-
-/** Narrow an unknown blob to v2 by its discriminant. */
-export function isV2Config(raw: unknown): raw is BYOKConfigV2 {
+/** Narrow an unknown blob to a valid BYOK config by its schema discriminant. */
+export function isByokConfig(raw: unknown): raw is BYOKConfig {
     return (
         !!raw &&
         typeof raw === 'object' &&
@@ -168,15 +161,15 @@ export function isV2Config(raw: unknown): raw is BYOKConfigV2 {
 }
 
 /**
- * True when a v2 config carries at least one NON-managed (real BYOK) credential
+ * True when a config carries at least one NON-managed (real BYOK) credential
  * — i.e. the org brought its own key. A managed credential (`managed: true`) is
- * the Kodus env-default and does NOT count as BYOK. This is the v2-native
+ * the Kodus env-default and does NOT count as BYOK. This is the native
  * replacement for the legacy `Boolean(byokConfig?.main)` has-BYOK presence check
  * (a managed/env default always produced a `main`, so `.main` presence
- * over-reported BYOK). A legacy / absent / non-v2 blob is treated as "no BYOK".
+ * over-reported BYOK). A legacy / absent / non-config blob is treated as "no BYOK".
  */
 export function hasNonManagedCredential(
-    config: BYOKConfigV2 | null | undefined,
+    config: BYOKConfig | null | undefined,
 ): boolean {
-    return isV2Config(config) && config.credentials.some((c) => !c.managed);
+    return isByokConfig(config) && config.credentials.some((c) => !c.managed);
 }

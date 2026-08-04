@@ -90,7 +90,7 @@ const SA_JSON_B64 = Buffer.from(
     }),
 ).toString('base64');
 
-// v2-native: buildModelFromSlot takes ONE resolved slot (NormalizedModel), never
+// native: buildModelFromSlot takes ONE resolved slot (NormalizedModel), never
 // a legacy `{main,fallback}` carrier. These helpers build a plain slot.
 function vertexSlot(model: string, vertexLocation?: string): NormalizedModel {
     return {
@@ -227,7 +227,7 @@ describe('buildModelFromSlot — OpenAI registry routing (resolved slot)', () =>
     });
 });
 
-// v2-native env/managed default path: a `undefined` slot is the no-BYOK path
+// native env/managed default path: a `undefined` slot is the no-BYOK path
 // (managed org / self-host env), NOT a `.main`/`.fallback` read.
 describe('buildModelFromSlot — env/managed default (undefined slot)', () => {
     const prevEnvMode = process.env.API_LLM_PROVIDER_MODEL;
@@ -307,7 +307,7 @@ describe('getModelName — resolved slot vs env default', () => {
 // ─── rpm min-interval gate through the PUBLIC runWithBYOKLimiter seam ─────────
 // These drive the exact entry point `wrapByokModel` calls
 // (byok-model-wrapper.ts:76-85) — never the private limiter class — with jest
-// fake timers to assert call SPACING. rpm is a v2 config field (sibling to
+// fake timers to assert call SPACING. rpm is a config field (sibling to
 // maxConcurrentRequests) carried config → NormalizedModel slot → limiter.
 
 function flushMicrotasks(): Promise<void> {

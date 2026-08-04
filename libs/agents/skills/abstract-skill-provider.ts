@@ -41,7 +41,7 @@ export interface SkillExecutionContext<TPrepareContext = unknown> {
      * review pipeline (`codeReviewConfig.byokModel`). When set, the skill's
      * LLM calls run on this model instead of the BYOK-settings main model.
      *
-     * Legacy NAME-based override, kept for the v2 transition window (D-05).
+     * Legacy NAME-based override, kept for the transition window (D-05).
      */
     byokModel?: string;
     /**

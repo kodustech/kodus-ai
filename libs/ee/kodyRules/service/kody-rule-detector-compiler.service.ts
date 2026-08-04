@@ -56,7 +56,7 @@ export class KodyRuleDetectorCompilerService
         rule: Partial<IKodyRule>,
     ): Promise<{ compiled: boolean; declineReason?: string }> {
         try {
-            // v2-native: resolve the kody-rules (codeReview) task to a `{main}`
+            // native: resolve the kody-rules (codeReview) task to a `{main}`
             // carrier for runStructuredReviewCall. A non-v2/managed/BLOCKED
             // config yields `null` → the managed/env default, exactly as before.
             const taskByok =

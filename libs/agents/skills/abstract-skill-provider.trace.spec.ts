@@ -71,7 +71,7 @@ function build() {
     });
 
     const provider = new TestSkillProvider(
-        { getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null) } as any,
+        { resolveTaskCarrier: jest.fn().mockResolvedValue(null) } as any,
         {} as any,
         { createFetcherOrchestration } as any,
     );

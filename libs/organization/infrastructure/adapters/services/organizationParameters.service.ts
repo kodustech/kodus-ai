@@ -12,7 +12,7 @@ import { OrganizationParametersEntity } from '@libs/organization/domain/organiza
 import { IOrganizationParameters } from '@libs/organization/domain/organizationParameters/interfaces/organizationParameters.interface';
 import { OrganizationParametersKey } from '@libs/core/domain/enums/organization-parameters-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKConfigV2, isV2Config } from '@libs/llm/byok-config';
+import { BYOKConfig, isByokConfig } from '@libs/llm/byok-config';
 
 @Injectable()
 export class OrganizationParametersService implements IOrganizationParametersService {
@@ -192,9 +192,9 @@ export class OrganizationParametersService implements IOrganizationParametersSer
 
             const configValue = currentConfig.configValue;
 
-            if (!isV2Config(configValue)) {
+            if (!isByokConfig(configValue)) {
                 throw new BadRequestException(
-                    'Model-level delete requires a v2 BYOK configuration',
+                    'Model-level delete requires a BYOK configuration',
                 );
             }
 
@@ -231,7 +231,7 @@ export class OrganizationParametersService implements IOrganizationParametersSer
                 (c) => c?.managed || (c?.id && stillReferenced.has(c.id)),
             );
 
-            const newConfigValue: BYOKConfigV2 = {
+            const newConfigValue: BYOKConfig = {
                 ...configValue,
                 models: remainingModels,
                 credentials: remainingCredentials,

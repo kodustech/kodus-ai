@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
@@ -65,7 +65,7 @@ export class KodyIssuesAnalysisService {
         organizationAndTeamData: OrganizationAndTeamData,
         pullRequest: any,
         promptData: any,
-        byokConfig: BYOKConfig | null,
+        byokConfig: NormalizedByokConfig | null,
     ): Promise<any> {
         try {
             const runName = 'mergeSuggestionsIntoIssues';
@@ -118,7 +118,7 @@ export class KodyIssuesAnalysisService {
             'organizationAndTeamData' | 'repository' | 'pullRequest'
         >,
         promptData: any,
-        byokConfig: BYOKConfig | null,
+        byokConfig: NormalizedByokConfig | null,
     ): Promise<any> {
         try {
             const runName = 'resolveExistingIssues';

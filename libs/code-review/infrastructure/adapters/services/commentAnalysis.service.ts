@@ -1,12 +1,11 @@
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { Output } from 'ai';
 import z from 'zod';
 import filteredLibraryKodyRules from '@libs/code-review/infrastructure/data/filtered-rules.json';
 import { Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
 
-import { resolveTaskModel } from '@libs/llm/resolve-task-model';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import {
@@ -61,7 +60,7 @@ import {
  * resolves the self-hosted env model. Produced by `resolveKodyRulesModelPolicy`.
  */
 export interface KodyRulesModelSelection {
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedByokConfig;
     modelOverride?: string;
 }
 
@@ -76,7 +75,7 @@ export class CommentAnalysisService {
     /**
      * Runs a structured-output LLM call, resolving the model the SAME way the
      * code-review agents do (see `resolveAgentModel` / model-factory):
-     * `resolveTaskModel(v2Config, LLM_TASK.codeReview, …)` over the org's raw v2 config
+     * `resolveTaskModel(v2Config, LLM_TASK.codeReview, …)` over the org's raw config
      * — BYOK wins; self-hosted resolves the env model; cloud trial forces Kimi
      * via `modelOverride` (the default-model override); cloud without BYOK is
      * already skipped upstream by the model policy. `wrapByokModel` adds the
@@ -103,17 +102,16 @@ export class CommentAnalysisService {
             attrs,
         } = args;
 
-        // Resolve the codeReview slot from the org's raw v2 config (matching
+        // Resolve the codeReview slot from the org's raw config (matching
         // model-factory). `modelOverride` is the default-model override (trial
         // forces Kimi); it only applies when there is no BYOK. Off-BYOK yields
         // the env/managed default.
-        const rawV2 =
-            await this.permissionValidationService.getBYOKConfigV2Raw(
+        const resolved =
+            await this.permissionValidationService.resolveTaskModel(
                 organizationAndTeamData,
+                LLM_TASK.codeReview,
+                { defaultModelOverride: modelConfig.modelOverride },
             );
-        const resolved = resolveTaskModel(rawV2, LLM_TASK.codeReview, {
-            defaultModelOverride: modelConfig.modelOverride,
-        });
         const model = wrapByokModel(resolved.model, {
             byokConfig: resolved.slot ? { main: resolved.slot } : undefined,
             organizationId: organizationAndTeamData.organizationId,
@@ -178,7 +176,7 @@ export class CommentAnalysisService {
             }
 
             // The codeReview slot is resolved inside runStructuredLLM from the
-            // raw v2 config (v2-native); no legacy byokConfig needed here.
+            // raw config (native); no legacy byokConfig needed here.
             const categorizedCommentsRes = await this.runStructuredLLM({
                 organizationAndTeamData,
                 modelConfig: {},
@@ -264,7 +262,7 @@ export class CommentAnalysisService {
 
         // The use-case/cron pass the policy-resolved selection (its
         // `modelOverride` still honored). When called without one, the codeReview
-        // slot is resolved inside runStructuredLLM from the raw v2 config.
+        // slot is resolved inside runStructuredLLM from the raw config.
         const modelConfig: KodyRulesModelSelection = params.modelConfig ?? {};
 
         // NOTE: no swallowing try/catch here — an LLM failure must propagate so
@@ -440,8 +438,8 @@ export class CommentAnalysisService {
     }): Promise<UncategorizedComment[]> {
         const { comments, organizationAndTeamData } = params;
 
-        // Resolved inside runStructuredLLM from the raw v2 config when no
-        // policy-resolved selection is passed (v2-native).
+        // Resolved inside runStructuredLLM from the raw config when no
+        // policy-resolved selection is passed (native).
         const modelConfig: KodyRulesModelSelection = params.modelConfig ?? {};
 
         // No swallowing catch — a provider failure must propagate so the run

@@ -1,5 +1,4 @@
 import { createLogger } from '@libs/core/log/logger';
-import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
@@ -578,21 +577,21 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 return false;
             }
 
-            // "Is BYOK configured?" = did the run resolve a non-managed slot for
-            // the codeReview task (v2 resolver), rather than a legacy main-slot
-            // presence check. A null slot means the env/managed default — no
-            // client BYOK — so the trial is provisioned without one.
-            const rawV2 =
-                await this.permissionValidationService.getBYOKConfigV2Raw(
+            // "Is BYOK configured?" = did the run resolve a non-managed carrier
+            // for the codeReview task (v2 resolver), rather than a legacy
+            // main-slot presence check. A null carrier means the env/managed
+            // default — no client BYOK — so the trial is provisioned without one.
+            // resolveTaskCarrier resolves without building the model (no decrypt
+            // / SDK client), so only the carrier's presence is inspected here.
+            const carrier =
+                await this.permissionValidationService.resolveTaskCarrier(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 );
-            // Only the slot's presence matters here (startTrial gate), so
-            // resolve without building the model — no decrypt / SDK client.
-            const resolvedSlot = resolveTaskSlot(rawV2, LLM_TASK.codeReview).slot;
 
             const provisioned = await this.licenseService.startTrial(
                 organizationAndTeamData,
-                Boolean(resolvedSlot),
+                Boolean(carrier),
             );
 
             if (provisioned) {

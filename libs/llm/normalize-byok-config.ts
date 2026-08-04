@@ -1,7 +1,7 @@
 /**
  * The v2-only normalize adapter (Phase 2, plan 02-01; dual-read dropped 04b-06).
  *
- * Maps the v2 shape to the internal `NormalizedByokConfig` the resolver family
+ * Maps the shape to the internal `NormalizedByokConfig` the resolver family
  * (byok-to-vercel.ts) consumes. The legacy `{main,fallback}` stored shape is NO
  * LONGER read — a legacy blob normalizes to `{}` (env/managed default).
  *
@@ -15,8 +15,8 @@
  */
 import { BYOKProvider } from '@libs/llm/model-providers';
 import {
-    isV2Config,
-    type BYOKConfigV2,
+    isByokConfig,
+    type BYOKConfig,
     type BYOKCredential,
     type BYOKModelConfig,
     type NormalizedByokConfig,
@@ -26,10 +26,10 @@ import {
 const STR = (v: unknown): string | undefined =>
     typeof v === 'string' && v.length > 0 ? v : undefined;
 
-/** Build a NormalizedModel from a v2 model + its resolved credential, or null to
+/** Build a NormalizedModel from a model + its resolved credential, or null to
  *  skip (managed, missing credential, or no provider — all degrade to absent).
  *  Module-private: the routing resolver materializes slots via the exported
- *  `resolveModelSlotFromV2`, which wraps this. */
+ *  `resolveModelSlot`, which wraps this. */
 function slotFromV2(
     model: BYOKModelConfig,
     creds: Map<string, BYOKCredential>,
@@ -64,7 +64,7 @@ function slotFromV2(
     };
 }
 
-function normalizeV2(cfg: BYOKConfigV2): NormalizedByokConfig {
+function normalizeConfig(cfg: BYOKConfig): NormalizedByokConfig {
     const creds = new Map<string, BYOKCredential>(
         (cfg.credentials ?? []).filter((c) => c && c.id).map((c) => [c.id, c]),
     );
@@ -91,8 +91,8 @@ function normalizeV2(cfg: BYOKConfigV2): NormalizedByokConfig {
  * verbatim — never decrypts (T-04-01-01); byok-to-vercel decrypts downstream.
  * Returns null when the id is absent/unknown or the model is managed/incomplete.
  */
-export function resolveModelSlotFromV2(
-    config: BYOKConfigV2,
+export function resolveModelSlot(
+    config: BYOKConfig,
     modelId: string | null | undefined,
 ): NormalizedModel | null {
     if (!modelId) return null;
@@ -106,14 +106,14 @@ export function resolveModelSlotFromV2(
 
 /**
  * Normalize a stored BYOK config blob to the internal shape. The dual-read is
- * GONE (04b-06): ONLY the v2 shape is read. A legacy `{main,fallback}` blob, an
+ * GONE (04b-06): ONLY the shape is read. A legacy `{main,fallback}` blob, an
  * undefined/primitive, or anything malformed all yield `{}` (absent main →
  * env/managed default downstream) — a legacy blob is NEVER read as a stored
  * shape. Never throws.
  */
 export function normalizeByokConfig(raw: unknown): NormalizedByokConfig {
     try {
-        if (isV2Config(raw)) return normalizeV2(raw);
+        if (isByokConfig(raw)) return normalizeConfig(raw);
         return {}; // non-v2 / legacy / undefined / malformed → env/managed default
     } catch {
         return {}; // any unexpected shape degrades to the managed default
