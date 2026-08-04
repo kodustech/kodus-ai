@@ -13,11 +13,14 @@ import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collab
 import {
     judgeKodyRulesSharded,
     inlineRuleReferences,
+    inlineLoadedReferences,
+    findUnresolvedReferenceRules,
     shardViolationsWireSchema,
     type RunJudge,
     type RawShardViolation,
     type ShardViolation,
 } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
 import { buildDetectorViolations } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import {
     ReviewAgentIdentity,
@@ -52,6 +55,11 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         documentationSearchService?: DocumentationSearchExaService,
         @Optional()
         byokErrorCounter?: ByokErrorCounter,
+        // Resolves each rule's `@file:` citations from the Context OS
+        // (contextReferenceId). @Optional so unit tests can `new` the provider
+        // without it — absent = external refs simply aren't inlined.
+        @Optional()
+        private readonly externalReferenceLoaderService?: ExternalReferenceLoaderService,
     ) {
         super(
             promptRunnerService,
@@ -195,12 +203,24 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     []) as RawShardViolation[];
             };
 
-            // T2 — inline any referenced convention file so the judge sees the
-            // full rule (deterministic read; the judgment stays LLM).
-            const rulesForJudge = await inlineRuleReferences(
+            // T2a — inline the rule's own `sourcePath` (IDE-sync / centralized)
+            // via the sandbox read so the judge sees the full convention.
+            let rulesForJudge = await inlineRuleReferences(
                 semanticRules,
                 input.remoteCommands?.read?.bind(input.remoteCommands),
                 this.shardLogger,
+            );
+
+            // T2b — inline the `@file:` citations authored in the rule BODY.
+            // Current-arch rules store these as a `contextReferenceId` (Context
+            // OS), NOT an inline field, and the review path reads rules raw — so
+            // the sharded judge used to see the bare "@file:X" marker and judge
+            // blind. Resolve them through the same loader the PR-level path uses
+            // (contextReferenceId -> ContextPack -> file content, same or cross
+            // repo). Best-effort: any failure degrades to the rule text alone.
+            rulesForJudge = await this.inlineContextOsReferences(
+                rulesForJudge,
+                input,
             );
 
             const result = await judgeKodyRulesSharded({
@@ -454,6 +474,91 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
     <Rule>Commit-hygiene rules (e.g. "don't mix mechanical and behavioral changes", "separate commits and call out which are mechanical") MUST be judged against the &lt;Commits&gt; list, NOT the aggregated diff or the PR description. Seeing several commits' changes together, or an incremental push that is purely mechanical, is NOT a violation — you are just viewing more than one commit at once, or a subset. This rule is HIGH-PRECISION and targets only WHOLESALE mechanical changes — project/file-wide reformatting, mass renames, or import re-sorting — that are bundled into the SAME commit as unrelated behavioral logic. The following are NOT violations and must NOT be reported: incidental comments or docstrings, local whitespace/indentation, and formatting that is a normal part of implementing the change in that commit; a commit that is entirely mechanical (e.g. "fix lint", "style: formatting"); or mechanical changes already isolated in their own commit. When in doubt, do NOT report.</Rule>
   </Rules>
 </ReviewTask>`;
+    }
+
+    /**
+     * Resolve each rule's `@file:` citations from the Context OS
+     * (`contextReferenceId`) and inline the fetched content into the rule text,
+     * so the sharded judge sees the authoritative convention instead of the bare
+     * marker. Uses the SAME loader the PR-level path uses (handles same- and
+     * cross-repo via `getRepositoryContentFile`). No-op when the loader isn't
+     * wired (unit tests) or no rule carries a `contextReferenceId`. Best-effort:
+     * any failure degrades to the rule text alone.
+     */
+    private async inlineContextOsReferences(
+        rules: Partial<IKodyRule>[],
+        input: ReviewAgentInput,
+    ): Promise<Partial<IKodyRule>[]> {
+        if (!this.externalReferenceLoaderService) return rules;
+        // Pre-filter: only rules that actually cite an external reference reach
+        // the loader — each resolution is an (uncached) network round-trip, so
+        // don't pay it for rules that carry no contextReferenceId.
+        const refRules = rules.filter((r) => r.contextReferenceId);
+        if (refRules.length === 0) return rules;
+
+        try {
+            const analysisContext = {
+                organizationAndTeamData: input.organizationAndTeamData,
+                repository: input.repositoryId
+                    ? {
+                          id: input.repositoryId,
+                          name:
+                              input.repositoryFullName?.split('/').pop() ??
+                              input.repositoryFullName,
+                      }
+                    : undefined,
+                // `getRepositoryContentFile` fetches from `head.ref` (fallback
+                // `base.ref`) and dereferences both objects — a bare `{ number }`
+                // throws "Cannot read properties of undefined (reading 'ref')".
+                // We only carry the base branch here (the reviewed head branch's
+                // ref isn't on the agent input), so point both at it: reference
+                // files are the established convention, which lives on the base
+                // branch anyway.
+                pullRequest: {
+                    number: input.prNumber,
+                    head: { ref: input.baseBranch },
+                    base: { ref: input.baseBranch },
+                },
+            } as any;
+
+            const { referencesMap } =
+                await this.externalReferenceLoaderService.loadReferencesForRules(
+                    refRules,
+                    analysisContext,
+                );
+
+            // Surface rules whose reference failed to resolve — otherwise the
+            // judge-blind degradation is invisible (inlineLoadedReferences logs
+            // only on success, and the loader swallows per-rule fetch errors).
+            const unresolved = findUnresolvedReferenceRules(
+                refRules,
+                referencesMap,
+            );
+            if (unresolved.length > 0) {
+                this.shardLogger.warn({
+                    message: `[kody-rules-shard] ${unresolved.length} rule(s) with a contextReferenceId resolved ZERO references for PR#${input.prNumber}; judging those without their referenced file(s)`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        organizationAndTeamData: input.organizationAndTeamData,
+                        prNumber: input.prNumber,
+                        ruleUuids: unresolved.map((r) => r.uuid),
+                    },
+                });
+            }
+
+            return inlineLoadedReferences(rules, referencesMap, this.shardLogger);
+        } catch (err) {
+            this.shardLogger.warn({
+                message: `[kody-rules-shard] Context OS reference load failed for PR#${input.prNumber}; judging without external refs: ${err instanceof Error ? err.message : String(err)}`,
+                context: this.getIdentity().name,
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    prNumber: input.prNumber,
+                    err,
+                },
+            });
+            return rules;
+        }
     }
 
     /**
