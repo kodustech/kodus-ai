@@ -1,6 +1,6 @@
 import type {
+    BYOKConnectInput,
     BYOKConfig,
-    BYOKConfigV2,
     BYOKCredential,
     BYOKModelConfig,
     BYOKRouting,
@@ -68,13 +68,13 @@ export type BuildV2Edit =
     | { kind: "routing"; routing: BYOKRouting };
 
 /**
- * Split the legacy {@link BYOKConfig} that `CuratedConnectPanel`/`CuratedCatalog`
+ * Split the legacy {@link BYOKConnectInput} that `CuratedConnectPanel`/`CuratedCatalog`
  * still emit into the v2 halves: the CREDENTIAL settings (provider-scoped:
  * baseURL, vertexLocation, aws*, openrouter*) and the per-MODEL fields. The key
  * itself stays on the form's `apiKey` and is passed to the builder separately.
  */
 export const credentialSettingsFromConfig = (
-    cfg: BYOKConfig,
+    cfg: BYOKConnectInput,
 ): Record<string, unknown> | undefined => {
     const settings: Record<string, unknown> = {};
     if (cfg.baseURL) settings.baseURL = cfg.baseURL;
@@ -92,8 +92,8 @@ export const credentialSettingsFromConfig = (
     return Object.keys(settings).length > 0 ? settings : undefined;
 };
 
-/** Lift the per-model config fields out of a legacy {@link BYOKConfig}. */
-export const modelFieldsFromConfig = (cfg: BYOKConfig): BYOKModelFields => ({
+/** Lift the per-model config fields out of a legacy {@link BYOKConnectInput}. */
+export const modelFieldsFromConfig = (cfg: BYOKConnectInput): BYOKModelFields => ({
     model: cfg.model,
     reasoningEffort: cfg.reasoningEffort,
     reasoningConfigOverride: cfg.reasoningConfigOverride,
@@ -155,7 +155,7 @@ const buildModel = (
  * A managed-only / empty / absent config counts as "no visible model".
  */
 const hasNoVisibleModel = (
-    existing: BYOKConfigV2 | null | undefined,
+    existing: BYOKConfig | null | undefined,
 ): boolean => {
     if (!existing) return true;
     const nonManaged = new Set(
@@ -169,7 +169,7 @@ const hasNoVisibleModel = (
 };
 
 /**
- * Pure builder: turn a Models-tab write into a full v2 BYOKConfigV2 blob for
+ * Pure builder: turn a Models-tab write into a full v2 BYOKConfig blob for
  * `createOrUpdateOrganizationParameter(BYOK_CONFIG, blob)`.
  *
  * Secret hygiene is the whole point: every credential carried over from
@@ -178,11 +178,11 @@ const hasNoVisibleModel = (
  * rotated key is emitted verbatim. Routing is preserved from `existing`;
  * routing.defaultModelId is set ONLY when creating the org's first visible model.
  */
-export const buildV2Blob = (
-    existing: BYOKConfigV2 | null | undefined,
+export const buildByokBlob = (
+    existing: BYOKConfig | null | undefined,
     edit: BuildV2Edit,
     genId: () => string = defaultGenId,
-): BYOKConfigV2 => {
+): BYOKConfig => {
     const routing: BYOKRouting = { ...(existing?.routing ?? {}) };
     const firstRun = hasNoVisibleModel(existing);
 

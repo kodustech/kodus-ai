@@ -1,5 +1,5 @@
-import type { BYOKConfigV2 } from "../_types";
-import { buildV2Blob } from "./byok-v2-write";
+import type { BYOKConfig } from "../_types";
+import { buildByokBlob } from "./byok-write";
 
 /**
  * The builder is pure and its ids must be deterministic under test — inject a
@@ -13,10 +13,10 @@ const makeGenId = () => {
 
 const MASK = "sk-1•••••fabc"; // the shape maskKey() produces for a stored key
 
-describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
+describe("buildByokBlob — v2 write builder (blank-key keep rule)", () => {
     describe("connect / first model (no existing config)", () => {
         it("creates one credential + one model and points routing.defaultModelId at it", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 null,
                 {
                     kind: "connect",
@@ -50,14 +50,14 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         });
 
         it("sets the first-run default even when the existing config is managed-only (no visible model)", () => {
-            const existing: BYOKConfigV2 = {
+            const existing: BYOKConfig = {
                 version: 2,
                 credentials: [{ id: "mgd", provider: "openai", managed: true }],
                 models: [],
                 routing: {},
             };
 
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "connect",
@@ -77,7 +77,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
     });
 
     describe("add-model to an ALREADY-connected provider (reuse credential)", () => {
-        const existing: BYOKConfigV2 = {
+        const existing: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: "cred-openai", provider: "openai", apiKey: MASK },
@@ -89,7 +89,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         };
 
         it("appends only a models[] entry with the existing credentialId; credentials list is unchanged in shape", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "add-existing-provider",
@@ -111,7 +111,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         });
 
         it("does NOT change routing.defaultModelId when a model already exists", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "add-existing-provider",
@@ -124,7 +124,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         });
 
         it("NEVER re-emits the masked apiKey for the reused credential — it is blanked to keep the stored ciphertext", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "add-existing-provider",
@@ -139,7 +139,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
     });
 
     describe("add-model for a NEW provider (new credential + key step)", () => {
-        const existing: BYOKConfigV2 = {
+        const existing: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: "cred-openai", provider: "openai", apiKey: MASK },
@@ -151,7 +151,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         };
 
         it("appends a new credential (with the pasted key) + a model referencing it, and blanks pre-existing credentials", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "add-new-provider",
@@ -179,7 +179,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
     });
 
     describe("rotate key (blank keeps ciphertext, real value replaces it)", () => {
-        const existing: BYOKConfigV2 = {
+        const existing: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: "cred-openai", provider: "openai", apiKey: MASK },
@@ -191,7 +191,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         };
 
         it("sends apiKey: '' (NOT the •••• mask) when the key is unchanged", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 { kind: "rotate", credentialId: "cred-openai", apiKey: "" },
                 makeGenId(),
@@ -202,7 +202,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         });
 
         it("sends the new key verbatim when the user typed one", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "rotate",
@@ -216,7 +216,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         });
 
         it("carries new provider settings (e.g. baseURL) when supplied on rotate", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "rotate",
@@ -233,7 +233,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         });
 
         it("does not add or remove models on rotate", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 { kind: "rotate", credentialId: "cred-openai", apiKey: "" },
                 makeGenId(),
@@ -244,7 +244,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
     });
 
     describe("edit-model (preserve id, replace fields)", () => {
-        const existing: BYOKConfigV2 = {
+        const existing: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: "cred-openai", provider: "openai", apiKey: MASK },
@@ -261,7 +261,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         };
 
         it("preserves the existing model id and credentialId while replacing its config fields", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "edit-model",
@@ -287,7 +287,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         });
 
         it("blanks every existing credential key on edit-model (mask never emitted)", () => {
-            const blob = buildV2Blob(
+            const blob = buildByokBlob(
                 existing,
                 {
                     kind: "edit-model",
@@ -301,7 +301,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
     });
 
     describe("secret hygiene invariant (across every flow)", () => {
-        const existing: BYOKConfigV2 = {
+        const existing: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: "cred-openai", provider: "openai", apiKey: MASK },
@@ -356,7 +356,7 @@ describe("buildV2Blob — v2 write builder (blank-key keep rule)", () => {
         it.each(flows)(
             "never emits a masked ('•') string as any credential apiKey — $name",
             ({ edit }) => {
-                const blob = buildV2Blob(existing, edit, makeGenId());
+                const blob = buildByokBlob(existing, edit, makeGenId());
                 for (const cred of blob.credentials) {
                     expect(cred.apiKey ?? "").not.toContain("•");
                 }

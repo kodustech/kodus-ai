@@ -13,7 +13,7 @@ import { cn } from "src/core/utils/components";
 
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
-import type { BYOKConfig } from "../_types";
+import type { BYOKConnectInput } from "../_types";
 import { CuratedConnectPanel } from "./catalog/connect-panel";
 import { CuratedModelCard, PROVIDER_LABELS } from "./catalog/model-card";
 import { ProviderLogo } from "./provider-logo";
@@ -126,7 +126,7 @@ export function ConnectProviderFlow({
 }: {
     existingKeyByProvider?: Partial<Record<string, string>>;
     lockedProvider?: string;
-    onSave: (cfg: BYOKConfig) => Promise<void>;
+    onSave: (cfg: BYOKConnectInput) => Promise<void>;
     onCancel?: () => void;
     hero?: React.ReactNode;
     footer?: React.ReactNode;

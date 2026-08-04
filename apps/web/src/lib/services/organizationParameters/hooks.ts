@@ -3,7 +3,7 @@ import {
     Timezone,
 } from "@services/parameters/types";
 import { useFetch, useSuspenseFetch } from "src/core/utils/reactQuery";
-import type { BYOKConfig } from "src/features/ee/byok/_types";
+import type { BYOKConnectInput } from "src/features/ee/byok/_types";
 
 import { ORGANIZATION_PARAMETERS_PATHS } from ".";
 
@@ -46,7 +46,7 @@ export function useGetTimezone() {
 
 export function useSuspenseGetBYOK() {
     return useSuspenseFetch<{
-        configValue: { main: BYOKConfig; fallback: BYOKConfig };
+        configValue: { main: BYOKConnectInput; fallback: BYOKConnectInput };
     } | null>(
         ORGANIZATION_PARAMETERS_PATHS.GET_BY_KEY,
         {

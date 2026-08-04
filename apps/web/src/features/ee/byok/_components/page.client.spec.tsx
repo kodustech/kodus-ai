@@ -3,7 +3,7 @@ import "@testing-library/jest-dom";
 import { TooltipProvider } from "@components/ui/tooltip";
 import { render, screen } from "@testing-library/react";
 
-import type { BYOKConfigV2 } from "../_types";
+import type { BYOKConfig } from "../_types";
 import { ByokPageClient } from "./page.client";
 
 /**
@@ -68,7 +68,7 @@ const llmConfigStatus = {
 
 describe("ByokPageClient — v2 read path", () => {
     it("renders config.models[] grouped by provider (managed excluded) and enables Routing", () => {
-        const config: BYOKConfigV2 = {
+        const config: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: "cred-byok", provider: "openai", apiKey: "sk-abcd1234wxyz" },

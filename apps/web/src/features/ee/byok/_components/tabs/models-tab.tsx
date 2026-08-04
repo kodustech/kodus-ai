@@ -22,17 +22,17 @@ import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side"
 import curatedCatalog from "../../_data/curated-models.json";
 import type { CuratedModel } from "../../_data/curated-models.types";
 import type {
+    BYOKConnectInput,
     BYOKConfig,
-    BYOKConfigV2,
     BYOKCredential,
     BYOKModelConfig,
 } from "../../_types";
 import { groupModelsByProvider, hasVisibleModels, maskKey } from "../../_utils";
 import {
-    buildV2Blob,
+    buildByokBlob,
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
-} from "../byok-v2-write";
+} from "../byok-write";
 import { CuratedConnectPanel } from "../catalog/connect-panel";
 import { PROVIDER_LABELS } from "../catalog/model-card";
 import { ConnectProviderFlow } from "../connect-provider-flow";
@@ -42,7 +42,7 @@ import { ProviderGroupHeader } from "../provider-group-header";
 import { SpendLimitSection } from "../spend-limit-section";
 
 type ModelsTabProps = {
-    config: BYOKConfigV2 | null | undefined;
+    config: BYOKConfig | null | undefined;
     /** Per-model accumulated cost, keyed by BYOKModelConfig.id. */
     costByModelId?: Record<string, ByokModelCost>;
     teamId?: string;
@@ -73,7 +73,7 @@ type View =
 /**
  * The interactive Models tab: first-run single-decision card, or the
  * provider-grouped steady-state pool with add-model (key deduped by provider),
- * rotate-key, and per-model config edit. Every write builds a v2 BYOKConfigV2
+ * rotate-key, and per-model config edit. Every write builds a v2 BYOKConfig
  * blob (blank-key keep rule) and posts it through create-or-update.
  */
 export const ModelsTab = ({
@@ -91,7 +91,7 @@ export const ModelsTab = ({
     );
     const firstRun = !hasVisibleModels(config);
 
-    const persist = async (blob: BYOKConfigV2, successTitle: string) => {
+    const persist = async (blob: BYOKConfig, successTitle: string) => {
         try {
             await createOrUpdateOrganizationParameter(
                 OrganizationParametersConfigKey.BYOK_CONFIG,
@@ -117,18 +117,18 @@ export const ModelsTab = ({
             group.credential.apiKey ?? "••••";
     }
 
-    const saveAdd = async (cfg: BYOKConfig) => {
+    const saveAdd = async (cfg: BYOKConnectInput) => {
         const existingCred = (config?.credentials ?? []).find(
             (c) => !c.managed && c.provider === cfg.provider,
         );
         const name = displayNameFor(cfg.model);
         const blob = existingCred
-            ? buildV2Blob(config, {
+            ? buildByokBlob(config, {
                   kind: "add-existing-provider",
                   credentialId: existingCred.id,
                   model: modelFieldsFromConfig(cfg),
               })
-            : buildV2Blob(config, {
+            : buildByokBlob(config, {
                   kind: "add-new-provider",
                   newCredential: {
                       provider: cfg.provider,
@@ -152,8 +152,8 @@ export const ModelsTab = ({
         setView({ mode: "edit", model, credential });
     };
 
-    const saveEdit = async (model: BYOKModelConfig, cfg: BYOKConfig) => {
-        const blob = buildV2Blob(config, {
+    const saveEdit = async (model: BYOKModelConfig, cfg: BYOKConnectInput) => {
+        const blob = buildByokBlob(config, {
             kind: "edit-model",
             modelId: model.id,
             model: modelFieldsFromConfig(cfg),
@@ -194,7 +194,7 @@ export const ModelsTab = ({
                 probeModelId={firstModel?.model}
                 onCancel={() => setView({ mode: "list" })}
                 onSave={async (apiKey, settings) => {
-                    const blob = buildV2Blob(config, {
+                    const blob = buildByokBlob(config, {
                         kind: "rotate",
                         credentialId: view.credential.id,
                         apiKey,
@@ -215,7 +215,7 @@ export const ModelsTab = ({
             string,
             unknown
         >;
-        const existingConfig: BYOKConfig = {
+        const existingConfig: BYOKConnectInput = {
             provider: view.credential.provider,
             model: view.model.model,
             apiKey: view.credential.apiKey ?? "",

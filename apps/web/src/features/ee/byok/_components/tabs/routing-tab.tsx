@@ -22,9 +22,9 @@ import { useRouter } from "next/navigation";
 
 import curatedCatalog from "../../_data/curated-models.json";
 import type { CuratedModel } from "../../_data/curated-models.types";
-import type { BYOKConfigV2, BYOKRouting, LlmTask } from "../../_types";
+import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
 import { groupModelsByProvider } from "../../_utils";
-import { buildV2Blob } from "../byok-v2-write";
+import { buildByokBlob } from "../byok-write";
 import {
     ModelCombobox,
     TaskOverrideGrid,
@@ -32,7 +32,7 @@ import {
 } from "../routing/task-override-grid";
 
 type RoutingTabProps = {
-    config: BYOKConfigV2 | null | undefined;
+    config: BYOKConfig | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
     /** Switch the parent BYOK Tabs to the Providers panel (empty-state
      *  affordance). Supplied by the controlled Tabs in page.client. */
@@ -151,7 +151,7 @@ export const RoutingTab = ({
         try {
             await createOrUpdateOrganizationParameter(
                 OrganizationParametersConfigKey.BYOK_CONFIG,
-                buildV2Blob(config, { kind: "routing", routing: nextRouting() }),
+                buildByokBlob(config, { kind: "routing", routing: nextRouting() }),
             );
             toast({ variant: "success", title: "Routing saved" });
             router.refresh();

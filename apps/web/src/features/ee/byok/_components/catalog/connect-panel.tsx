@@ -27,7 +27,7 @@ import type {
     CuratedModel,
     ModelVariant,
 } from "../../_data/curated-models.types";
-import type { BYOKConfig } from "../../_types";
+import type { BYOKConnectInput } from "../../_types";
 import { ByokAdvancedSettings } from "../_modals/edit-key/_components/advanced-settings";
 import type { EditKeyForm } from "../_modals/edit-key/_types";
 import { CuratedModelCard, PROVIDER_LABELS } from "./model-card";
@@ -91,10 +91,10 @@ export function CuratedConnectPanel({
     onSave,
 }: {
     model: CuratedModel;
-    existingConfig?: BYOKConfig;
+    existingConfig?: BYOKConnectInput;
     existingKey?: string;
     onBack: () => void;
-    onSave: (_: BYOKConfig) => Promise<void>;
+    onSave: (_: BYOKConnectInput) => Promise<void>;
 }) {
     const [testState, setTestState] = useState<
         | { status: "idle" }
@@ -185,7 +185,7 @@ export function CuratedConnectPanel({
         if (testState.status !== "idle") setTestState({ status: "idle" });
     };
 
-    const buildConfig = (data: EditKeyForm): BYOKConfig => {
+    const buildConfig = (data: EditKeyForm): BYOKConnectInput => {
         const effort = data.reasoningEffort;
         return {
             provider: data.provider,

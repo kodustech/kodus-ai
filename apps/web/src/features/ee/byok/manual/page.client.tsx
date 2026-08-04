@@ -33,7 +33,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
-import type { BYOKConfig } from "../_types";
+import type { BYOKConnectInput } from "../_types";
 import { maskKey } from "../_utils";
 import { ByokAdvancedSettings } from "../_components/_modals/edit-key/_components/advanced-settings";
 import { ByokBaseURLInput } from "../_components/_modals/edit-key/_components/baseurl-input";
@@ -78,7 +78,7 @@ export function ByokManualPageClient({
     llmConfigStatus,
 }: {
     slot: Slot;
-    existingConfig: BYOKConfig | null;
+    existingConfig: BYOKConnectInput | null;
     llmConfigStatus: LLMConfigStatus | null;
 }) {
     const router = useRouter();
@@ -230,7 +230,7 @@ export function ByokManualPageClient({
         if (!testResult?.ok) return;
 
         const effort = data.reasoningEffort;
-        const newConfig: BYOKConfig = {
+        const newConfig: BYOKConnectInput = {
             provider: data.provider,
             model: data.model,
             apiKey: data.apiKey || undefined!,

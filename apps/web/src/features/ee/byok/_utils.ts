@@ -9,7 +9,7 @@ import { hasPermission } from "src/core/utils/permission-map";
 
 import type { OrganizationLicense } from "../subscription/_services/billing/types";
 import type {
-    BYOKConfigV2,
+    BYOKConfig,
     BYOKCredential,
     BYOKModelConfig,
     LlmTask,
@@ -27,9 +27,9 @@ export const TASK_LABELS: Record<LlmTask, string> = {
 };
 
 /** Narrow an unknown blob to the v2 shape by its `version` discriminant. */
-const isV2Config = (
-    config: BYOKConfigV2 | null | undefined,
-): config is BYOKConfigV2 =>
+const isByokConfig = (
+    config: BYOKConfig | null | undefined,
+): config is BYOKConfig =>
     !!config &&
     typeof config === "object" &&
     (config as { version?: unknown }).version === 2;
@@ -43,9 +43,9 @@ const isV2Config = (
  * yields []. An absent routing block is tolerated.
  */
 export const groupModelsByProvider = (
-    config: BYOKConfigV2 | null | undefined,
+    config: BYOKConfig | null | undefined,
 ): { credential: BYOKCredential; models: BYOKModelConfig[] }[] => {
-    if (!isV2Config(config)) return [];
+    if (!isByokConfig(config)) return [];
     const models = config.models ?? [];
     return config.credentials
         .filter((c) => !c.managed)
@@ -62,7 +62,7 @@ export const groupModelsByProvider = (
  * non-v2 blob, a managed-only config, or a non-managed credential with no model.
  */
 export const hasVisibleModels = (
-    config: BYOKConfigV2 | null | undefined,
+    config: BYOKConfig | null | undefined,
 ): boolean =>
     groupModelsByProvider(config).some((group) => group.models.length > 0);
 

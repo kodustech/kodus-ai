@@ -7,7 +7,7 @@ import Link from "next/link";
 
 import curatedCatalog from "../../_data/curated-models.json";
 import type { CuratedModel } from "../../_data/curated-models.types";
-import type { BYOKConfig } from "../../_types";
+import type { BYOKConnectInput } from "../../_types";
 import { CuratedConnectPanel } from "./connect-panel";
 import { CuratedModelCard } from "./model-card";
 
@@ -20,9 +20,9 @@ export function CuratedCatalog({
     showManualLink = true,
 }: {
     slot: "main" | "fallback";
-    existingConfig?: BYOKConfig;
+    existingConfig?: BYOKConnectInput;
     existingKeyByProvider?: Partial<Record<string, string>>;
-    onSave: (_: BYOKConfig) => Promise<void>;
+    onSave: (_: BYOKConnectInput) => Promise<void>;
     onCancel?: () => void;
     showManualLink?: boolean;
 }) {

@@ -20,7 +20,7 @@ import {
     TabsTrigger,
 } from "src/core/components/ui/tabs";
 
-import type { BYOKConfigV2 } from "../_types";
+import type { BYOKConfig } from "../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../_utils";
 import { ModelOverridesBanner } from "./model-overrides-banner";
 import { ModelsTab } from "./tabs/models-tab";
@@ -121,7 +121,7 @@ export const ByokPageClient = ({
     periodLabel,
     costRangeQuery,
 }: {
-    config: BYOKConfigV2 | null | undefined;
+    config: BYOKConfig | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
     teamId?: string;
     costByModelId?: Record<string, ByokModelCost>;

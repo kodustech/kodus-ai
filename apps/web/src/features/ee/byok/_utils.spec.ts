@@ -1,7 +1,7 @@
 import { UserRole } from '@enums';
 import { Action, ResourceType } from '@services/permissions/types';
 
-import type { BYOKConfigV2 } from './_types';
+import type { BYOKConfig } from './_types';
 import { groupModelsByProvider, hasVisibleModels } from './_utils';
 
 describe('BYOK topbar visibility', () => {
@@ -199,7 +199,7 @@ describe('BYOK topbar visibility', () => {
 });
 
 /** A v2 config: 2 models on 1 non-managed credential + 1 model on a managed one. */
-const configWithManaged: BYOKConfigV2 = {
+const configWithManaged: BYOKConfig = {
     version: 2,
     credentials: [
         { id: 'cred-byok', provider: 'openai', apiKey: 'sk-••••1234' },
@@ -235,7 +235,7 @@ describe('groupModelsByProvider', () => {
     });
 
     it('tolerates an absent routing block without throwing', () => {
-        const noRouting: BYOKConfigV2 = {
+        const noRouting: BYOKConfig = {
             version: 2,
             credentials: [{ id: 'c', provider: 'openai', apiKey: 'sk-••••' }],
             models: [{ id: 'm', credentialId: 'c', model: 'gpt-4o' }],
@@ -253,7 +253,7 @@ describe('hasVisibleModels (first-run check)', () => {
     });
 
     it('is false when the only credential is managed', () => {
-        const managedOnly: BYOKConfigV2 = {
+        const managedOnly: BYOKConfig = {
             version: 2,
             credentials: [
                 { id: 'cm', provider: 'google_gemini', managed: true },
@@ -266,7 +266,7 @@ describe('hasVisibleModels (first-run check)', () => {
     });
 
     it('is false when a non-managed credential has no model yet', () => {
-        const noModels: BYOKConfigV2 = {
+        const noModels: BYOKConfig = {
             version: 2,
             credentials: [{ id: 'c', provider: 'openai', apiKey: 'sk-••••' }],
             models: [],

@@ -5,7 +5,7 @@ import {
     type OrganizationParametersAutoAssignConfig,
 } from "@services/parameters/types";
 import { axiosAuthorized } from "src/core/utils/axios";
-import type { BYOKConfigV2 } from "src/features/ee/byok/_types";
+import type { BYOKConfig } from "src/features/ee/byok/_types";
 
 import { ORGANIZATION_PARAMETERS_PATHS } from ".";
 
@@ -22,11 +22,11 @@ export const createOrUpdateOrganizationParameter = async (
     );
 };
 
-export const getBYOK = async (): Promise<BYOKConfigV2 | undefined> => {
+export const getBYOK = async (): Promise<BYOKConfig | undefined> => {
     // find-by-key returns the RAW v2 blob run through maskV2ConfigSecrets, so
     // every secret is already `••••` — no new endpoint is needed (open item #5).
     const byokConfig = await getOrganizationParameterByKey<{
-        configValue: BYOKConfigV2;
+        configValue: BYOKConfig;
     }>(
         {
             key: OrganizationParametersConfigKey.BYOK_CONFIG,

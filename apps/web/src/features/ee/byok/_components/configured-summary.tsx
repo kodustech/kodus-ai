@@ -20,7 +20,7 @@ import { formatUsd } from "@services/usage/format";
 
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
-import type { BYOKConfig } from "../_types";
+import type { BYOKConnectInput } from "../_types";
 import { PROVIDER_LABELS } from "./catalog/model-card";
 
 function formatTokens(n: number): string {
@@ -29,7 +29,7 @@ function formatTokens(n: number): string {
     return n.toLocaleString();
 }
 
-const formatReasoning = (config: BYOKConfig): string | null => {
+const formatReasoning = (config: BYOKConnectInput): string | null => {
     if (!config.reasoningEffort || config.reasoningEffort === "none")
         return null;
     if (config.reasoningConfigOverride) return "Custom";
@@ -48,7 +48,7 @@ export function ConfiguredSummary({
     periodLabel,
     costRangeQuery,
 }: {
-    config: BYOKConfig;
+    config: BYOKConnectInput;
     onChange: () => void;
     onDelete: () => void;
     isDeleting?: boolean;

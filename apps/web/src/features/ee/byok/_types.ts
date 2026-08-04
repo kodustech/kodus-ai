@@ -1,8 +1,8 @@
 export type ReasoningEffort = "none" | "low" | "medium" | "high";
 
-// ─── v2 web mirror ───────────────────────────────────────────────────────────
+// ─── web mirror ──────────────────────────────────────────────────────────────
 //
-// Web-side mirror of the persisted v2 shape in libs/llm/byok-config.ts, kept
+// Web-side mirror of the persisted shape in libs/llm/byok-config.ts, kept
 // field-for-field EXCEPT that every secret is a MASKED, display-only string:
 // getBYOK() reads the find-by-key blob, which passes through maskV2ConfigSecrets
 // server-side, so `credential.apiKey` is already a display mask — the
@@ -59,17 +59,20 @@ export type BYOKRouting = {
     fallbackModelId?: string;
 };
 
-export type BYOKConfigV2 = {
+export type BYOKConfig = {
     version: 2;
     credentials: BYOKCredential[];
     models: BYOKModelConfig[];
     routing?: BYOKRouting;
 };
 
-// ─── legacy shape (still referenced by the manual/edit-key + code-review
-//     selector flows until 04-08/04-12 migrate them; do not delete yet) ────────
+// ─── connect-form input ──────────────────────────────────────────────────────
+//
+// The flat single-model+credential shape the manual/edit-key + curated
+// connect-panel/catalog flows emit from their forms; `byok-write.ts` splits it
+// into the credential + model entries of the stored `BYOKConfig`.
 
-export type BYOKConfig = {
+export type BYOKConnectInput = {
     model: string;
     apiKey: string;
     provider: string;

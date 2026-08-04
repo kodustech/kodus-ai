@@ -12,12 +12,12 @@ import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side"
 
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
-import type { BYOKConfig, BYOKConfigV2 } from "../_types";
+import type { BYOKConnectInput, BYOKConfig } from "../_types";
 import {
-    buildV2Blob,
+    buildByokBlob,
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
-} from "./byok-v2-write";
+} from "./byok-write";
 import { CuratedCatalog } from "./catalog/catalog";
 import { ConnectProviderFlow } from "./connect-provider-flow";
 
@@ -27,18 +27,18 @@ const BYOK_DOCS_URL = "https://docs.kodus.io/how_to_use/en/byok";
  * D-UI-FIRSTRUN empty state. A no-model org sees the 🐶 hero + copy above the
  * shared PROVIDER-FIRST flow (pick a provider → one of its models → paste the
  * key). "Browse all models" still opens the full CuratedCatalog escape hatch.
- * Every write goes through buildV2Blob (blank-key keep rule) → the
+ * Every write goes through buildByokBlob (blank-key keep rule) → the
  * create-or-update endpoint, with routing.defaultModelId → the new model.
  */
 export function FirstRunCard({
     existing,
 }: {
-    existing: BYOKConfigV2 | null | undefined;
+    existing: BYOKConfig | null | undefined;
 }) {
     const router = useRouter();
     const [showCatalog, setShowCatalog] = useState(false);
 
-    const persist = async (blob: BYOKConfigV2, modelName: string) => {
+    const persist = async (blob: BYOKConfig, modelName: string) => {
         await createOrUpdateOrganizationParameter(
             OrganizationParametersConfigKey.BYOK_CONFIG,
             blob,
@@ -51,9 +51,9 @@ export function FirstRunCard({
         router.refresh();
     };
 
-    /** Adapter for the connect path: convert its BYOKConfig into a v2 blob. */
-    const saveFromCatalog = async (cfg: BYOKConfig) => {
-        const blob = buildV2Blob(existing, {
+    /** Adapter for the connect path: convert its BYOKConnectInput into a v2 blob. */
+    const saveFromCatalog = async (cfg: BYOKConnectInput) => {
+        const blob = buildByokBlob(existing, {
             kind: "connect",
             newCredential: {
                 provider: cfg.provider,

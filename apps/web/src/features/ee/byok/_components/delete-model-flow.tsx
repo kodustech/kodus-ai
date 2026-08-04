@@ -10,7 +10,7 @@ import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
-import type { BYOKConfigV2, BYOKModelConfig } from "../_types";
+import type { BYOKConfig, BYOKModelConfig } from "../_types";
 import { groupModelsByProvider } from "../_utils";
 
 /** Human display name for a model id (curated catalog), falling back to the id. */
@@ -77,7 +77,7 @@ export function parseRejectionReasons(error: unknown): string[] {
  * excluded (they never render and don't count as connected BYOK models).
  */
 export function isLastModel(
-    config: BYOKConfigV2 | null | undefined,
+    config: BYOKConfig | null | undefined,
     modelId: string,
 ): boolean {
     const models = groupModelsByProvider(config).flatMap((g) => g.models);
@@ -176,7 +176,7 @@ export function useDeleteModel({
     model,
     onDeleted,
 }: {
-    config: BYOKConfigV2 | null | undefined;
+    config: BYOKConfig | null | undefined;
     model: BYOKModelConfig;
     onDeleted?: () => void;
 }): { confirmAndDelete: () => void; rejectionReasons: string[] } {

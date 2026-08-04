@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
-import type { BYOKConfigV2 } from "../_types";
+import type { BYOKConfig } from "../_types";
 import {
     DeleteRejectionAlert,
     deleteConfirmCopy,
@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
-const twoModelConfig: BYOKConfigV2 = {
+const twoModelConfig: BYOKConfig = {
     version: 2,
     credentials: [{ id: "c1", provider: "openai", apiKey: "••••" }],
     models: [
@@ -54,13 +54,13 @@ const twoModelConfig: BYOKConfigV2 = {
     ],
 };
 
-const oneModelConfig: BYOKConfigV2 = {
+const oneModelConfig: BYOKConfig = {
     version: 2,
     credentials: [{ id: "c1", provider: "openai", apiKey: "••••" }],
     models: [{ id: "m1", credentialId: "c1", model: "test-model-alpha" }],
 };
 
-const managedPlusOneConfig: BYOKConfigV2 = {
+const managedPlusOneConfig: BYOKConfig = {
     version: 2,
     credentials: [
         { id: "c1", provider: "openai", apiKey: "••••" },
@@ -193,8 +193,8 @@ function Harness({
     model,
     onDeleted,
 }: {
-    config: BYOKConfigV2;
-    model: BYOKConfigV2["models"][number];
+    config: BYOKConfig;
+    model: BYOKConfig["models"][number];
     onDeleted: () => void;
 }) {
     const { confirmAndDelete, rejectionReasons } = useDeleteModel({

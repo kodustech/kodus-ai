@@ -19,7 +19,7 @@ import Link from "next/link";
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
 import type {
-    BYOKConfigV2,
+    BYOKConfig,
     BYOKModelConfig,
     LlmTask,
     ReasoningEffort,
@@ -55,7 +55,7 @@ export function ModelRow({
     onDeleted,
 }: {
     model: BYOKModelConfig;
-    config?: BYOKConfigV2 | null;
+    config?: BYOKConfig | null;
     cost?: ByokModelCost;
     periodLabel?: string;
     costRangeQuery?: string;
