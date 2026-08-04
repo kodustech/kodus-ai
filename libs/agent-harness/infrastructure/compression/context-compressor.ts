@@ -168,6 +168,54 @@ function truncateText(text: string, maxChars: number): string {
 }
 
 /**
+ * Truncates a structured tool-result payload while PRESERVING its shape.
+ *
+ * A tool-result part's `output` is a discriminated object the provider switches
+ * on — `{ type:'text'|'error-text', value:string }`, `{ type:'content', value:
+ * [{type:'text',text},…] }`, or `{ type:'json', value }`. Replacing that object
+ * with a truncated JSON *string* (the old behavior) drops the `type`
+ * discriminant, so `@ai-sdk/openai`'s Responses serializer falls through its
+ * `switch (output.type)` (no default), emits `output: undefined`, and the field
+ * is stripped → OpenAI 400 `Missing required parameter: 'input[N].output'`.
+ * So we shrink the inner text and keep the wrapper intact. `json` outputs are
+ * left untouched — truncating their serialized form would corrupt the JSON.
+ */
+function truncateStructuredValue(
+    v: any,
+    maxChars: number,
+): { value: any; truncated: boolean } {
+    // { type:'text'|'error-text', value:string }
+    if (typeof v?.value === 'string') {
+        if (v.value.length > maxChars) {
+            return {
+                value: { ...v, value: truncateText(v.value, maxChars) },
+                truncated: true,
+            };
+        }
+        return { value: v, truncated: false };
+    }
+    // { type:'content', value:[{type:'text',text},…] } or a bare content-part array
+    const parts = Array.isArray(v) ? v : Array.isArray(v?.value) ? v.value : null;
+    if (parts) {
+        let truncated = false;
+        const nextParts = parts.map((item: any) => {
+            if (typeof item?.text === 'string' && item.text.length > maxChars) {
+                truncated = true;
+                return { ...item, text: truncateText(item.text, maxChars) };
+            }
+            return item;
+        });
+        if (!truncated) return { value: v, truncated: false };
+        return {
+            value: Array.isArray(v) ? nextParts : { ...v, value: nextParts },
+            truncated: true,
+        };
+    }
+    // { type:'json', value } or anything unrecognized — leave structurally intact.
+    return { value: v, truncated: false };
+}
+
+/**
  * Truncates the content of a `tool` message. The content can be:
  *   - a string
  *   - an array of tool-result parts (Vercel AI SDK v5 structure)
@@ -204,15 +252,13 @@ function truncateToolMessage(
                     next[field] = truncateText(v, maxChars);
                     truncated = true;
                 } else if (v && typeof v === 'object') {
-                    // Nested structured output (e.g. { type: 'text', value: '...' })
-                    try {
-                        const serialized = JSON.stringify(v);
-                        if (serialized.length > maxChars) {
-                            next[field] = truncateText(serialized, maxChars);
-                            truncated = true;
-                        }
-                    } catch {
-                        // Ignore non-serializable nested content
+                    // Structured output ({ type, value }) — shrink the inner text
+                    // but keep the discriminated shape so the provider can still
+                    // serialize a valid tool-result `output` (see helper docs).
+                    const res = truncateStructuredValue(v, maxChars);
+                    if (res.truncated) {
+                        next[field] = res.value;
+                        truncated = true;
                     }
                 }
             }

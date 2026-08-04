@@ -115,6 +115,81 @@ describe('clampMessagesToBudget', () => {
     });
 });
 
+describe('structured tool-result output survives truncation (PR#302 regression)', () => {
+    // ai@7 emits tool-result `output` as a discriminated object
+    // ({ type:'text', value }). The old truncation JSON-stringified the whole
+    // object into a *string*, dropping `type`; @ai-sdk/openai then serialized a
+    // `function_call_output` with no `output` field → OpenAI 400
+    // "Missing required parameter: 'input[N].output'". Truncation must keep the
+    // { type, value } shape and only shrink the inner text.
+    function structuredWindow(valueChars: number): ModelMessage[] {
+        return [
+            { role: 'user', content: 'Review this diff:\n' + 'x'.repeat(2_000) },
+            {
+                role: 'assistant',
+                content: [
+                    {
+                        type: 'tool-call',
+                        toolCallId: 'c1',
+                        toolName: 'grep',
+                        input: { pattern: 'foo' },
+                    },
+                ],
+            },
+            {
+                role: 'tool',
+                content: [
+                    {
+                        type: 'tool-result',
+                        toolCallId: 'c1',
+                        toolName: 'grep',
+                        output: { type: 'text', value: 'z'.repeat(valueChars) },
+                    },
+                ],
+            },
+        ];
+    }
+
+    function firstToolOutput(messages: ModelMessage[]): any {
+        const toolMsg = messages.find((m) => m.role === 'tool');
+        return (toolMsg?.content as any[])[0].output;
+    }
+
+    it('clampMessagesToBudget keeps output a { type, value } object, not a string', () => {
+        const clamped = clampMessagesToBudget(structuredWindow(40_000), 50);
+        const out = firstToolOutput(clamped);
+
+        expect(typeof out).toBe('object');
+        expect(out.type).toBe('text');
+        expect(typeof out.value).toBe('string');
+        // inner text was actually shrunk (compression still does its job)...
+        expect(out.value.length).toBeLessThan(40_000);
+        expect(out.value.endsWith('…[truncated]')).toBe(true);
+    });
+
+    it('compressMessages (soft pass) preserves the structured output shape', () => {
+        const compressed = compressMessages(structuredWindow(20_000), []);
+        const out = firstToolOutput(compressed);
+
+        expect(typeof out).toBe('object');
+        expect(out.type).toBe('text');
+        expect(typeof out.value).toBe('string');
+    });
+
+    it('leaves a json output structurally intact (never a corrupted string)', () => {
+        const window = structuredWindow(1);
+        (window.find((m) => m.role === 'tool')!.content as any[])[0].output = {
+            type: 'json',
+            value: { files: Array.from({ length: 2_000 }, (_, i) => `f${i}.ts`) },
+        };
+        const clamped = clampMessagesToBudget(window, 50);
+        const out = firstToolOutput(clamped);
+
+        expect(out.type).toBe('json');
+        expect(typeof out.value).toBe('object');
+    });
+});
+
 describe('compressMessages (soft pass) still structurally preserves tool turns', () => {
     it('keeps tool content as an array (no re-flatten to string)', () => {
         const msgs = buildWindow(10, 8_000);
