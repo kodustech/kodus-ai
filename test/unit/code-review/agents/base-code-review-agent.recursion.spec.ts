@@ -47,6 +47,7 @@ jest.mock(
     '@libs/llm/byok-to-vercel',
     () => ({
         byokToVercelModel: jest.fn(() => ({ id: 'fake-model' })),
+        buildModelFromSlot: jest.fn(() => ({ id: 'fake-model' })),
         getModelName: jest.fn(() => 'fake-model'),
     }),
 );
@@ -120,10 +121,13 @@ import type { FileChange } from '@libs/core/infrastructure/config/types/general/
 
 class TestAgent extends BaseCodeReviewAgentProvider {
     constructor() {
+        // v2-native: resolveAgentModel reads getBYOKConfigV2Raw (null → env
+        // default). The base ctor dropped the leading promptRunnerService, so
+        // permissionValidationService is now the FIRST arg.
         const permissionService: any = {
-            getBYOKConfig: jest.fn().mockResolvedValue(null),
+            getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
         };
-        super(null as any, permissionService, null as any);
+        super(permissionService, null as any, null as any);
     }
 
     protected getIdentity(): ReviewAgentIdentity {

@@ -39,6 +39,11 @@ jest.mock(
         // Used by resolveSecondaryPassModel when platform OpenAI key is absent.
         getInternalModel: jest.fn().mockReturnValue({ __mockModel: 'internal' }),
         byokToVercelModel: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
+        buildModelFromSlot: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
+        // Platform (non-BYOK) model seam used by the summary/secondary paths.
+        buildPlatformModel: jest
+            .fn()
+            .mockReturnValue({ __mockModel: 'platform' }),
     }),
 );
 

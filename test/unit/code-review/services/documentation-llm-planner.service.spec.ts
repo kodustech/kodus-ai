@@ -3,18 +3,43 @@ import { RepositoryPackageReference } from '@libs/code-review/pipeline/context/c
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
+// v2-native: the planner routes each file through `runStructuredReviewCall`
+// (the AI SDK path — the legacy `runLLMInSpan` wrapper was dropped). We mock it
+// at that boundary. The structured per-file payload is no longer a call arg —
+// it is serialized into the user prompt via
+// `prompt_code_review_documentation_planner_user`, so we capture it by mocking
+// that builder (the payload is what the tests assert on).
+const mockPayloads: any[] = [];
+const mockRun = jest.fn();
+
+jest.mock('@libs/llm/structured-review-call', () => ({
+    runStructuredReviewCall: (...args: unknown[]) => mockRun(...args),
+}));
+
+jest.mock('@libs/common/utils/prompts/codeReviewDocumentationPlanner', () => ({
+    DocumentationPlannerSchema: {},
+    prompt_code_review_documentation_planner_system: jest.fn(() => 'system'),
+    prompt_code_review_documentation_planner_user: jest.fn((payload: any) => {
+        mockPayloads.push(payload);
+        return 'user';
+    }),
+}));
+
 function buildObservabilityMock(): ObservabilityService {
-    return {
-        runLLMInSpan: jest.fn(async ({ exec }) => {
-            const result = await exec([]);
-            return { result };
-        }),
-    } as unknown as ObservabilityService;
+    // runStructuredReviewCall is fully mocked, so the observability service is
+    // just held by the constructor and never exercised here.
+    return {} as unknown as ObservabilityService;
 }
 
 describe('DocumentationLLMPlannerService', () => {
+    beforeEach(() => {
+        mockPayloads.length = 0;
+        mockRun.mockReset();
+        // Default: planner succeeds with no documentation need.
+        mockRun.mockResolvedValue({ queryTasks: [] });
+    });
+
     it('should only send ecosystem-compatible packages for each code file', async () => {
-        const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
             buildObservabilityMock(),
         );
@@ -63,10 +88,10 @@ describe('DocumentationLLMPlannerService', () => {
         );
         expect(result['README.md']).toBeUndefined();
 
-        const tsPayload = payloads.find(
+        const tsPayload = mockPayloads.find(
             (payload) => payload.file.filePath === 'apps/web/src/app.ts',
         );
-        const rubyPayload = payloads.find(
+        const rubyPayload = mockPayloads.find(
             (payload) => payload.file.filePath === 'apps/api/lib/service.rb',
         );
 
@@ -84,7 +109,9 @@ describe('DocumentationLLMPlannerService', () => {
     });
 
     it('should keep empty queryTasks when planner succeeds with no documentation need', async () => {
-        const service = new DocumentationLLMPlannerService(buildObservabilityMock());
+        const service = new DocumentationLLMPlannerService(
+            buildObservabilityMock(),
+        );
 
         const result = await service.planDocumentationByFile({
             packages: [
@@ -109,7 +136,6 @@ describe('DocumentationLLMPlannerService', () => {
     });
 
     it('should scope npm packages to nearest workspace manifest in monorepos', async () => {
-        const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
             buildObservabilityMock(),
         );
@@ -150,11 +176,11 @@ describe('DocumentationLLMPlannerService', () => {
             changedFiles,
         });
 
-        const apiPayload = payloads.find(
+        const apiPayload = mockPayloads.find(
             (payload) =>
                 payload.file.filePath === 'apps/api/src/user.controller.ts',
         );
-        const webPayload = payloads.find(
+        const webPayload = mockPayloads.find(
             (payload) => payload.file.filePath === 'apps/web/src/app/page.tsx',
         );
 
@@ -174,7 +200,13 @@ describe('DocumentationLLMPlannerService', () => {
     });
 
     it('should return empty queryTasks when planner fails', async () => {
-        const service = new DocumentationLLMPlannerService(buildObservabilityMock());
+        const service = new DocumentationLLMPlannerService(
+            buildObservabilityMock(),
+        );
+
+        // The structured call rejects → the per-file promise settles rejected →
+        // the planner degrades that file to an empty plan.
+        mockRun.mockRejectedValue(new Error('planner failed'));
 
         const result = await service.planDocumentationByFile({
             packages: [
@@ -205,7 +237,6 @@ describe('DocumentationLLMPlannerService', () => {
     });
 
     it('should pass entire file content and diff to planner payload without truncation', async () => {
-        const payloads: any[] = [];
         const service = new DocumentationLLMPlannerService(
             buildObservabilityMock(),
         );
@@ -231,7 +262,7 @@ describe('DocumentationLLMPlannerService', () => {
             ],
         });
 
-        const payload = payloads.find(
+        const payload = mockPayloads.find(
             (entry) =>
                 entry.file.filePath === 'apps/api/src/large.controller.ts',
         );

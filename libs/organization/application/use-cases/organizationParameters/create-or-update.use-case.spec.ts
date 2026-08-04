@@ -185,7 +185,23 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
 
         it('does NOT throw on a v2 blob with no top-level main/fallback', async () => {
             const { useCase } = buildUseCase(undefined);
-            await expect(saveByok(useCase, v2())).resolves.toBe(true);
+            // A first-save credential must carry a usable key (auth-path guard);
+            // the point here is that the v2 shape (no legacy main/fallback) is
+            // accepted, not keyless leniency.
+            await expect(
+                saveByok(
+                    useCase,
+                    v2({
+                        credentials: [
+                            {
+                                id: 'cred-openai',
+                                provider: 'openai',
+                                apiKey: 'sk-openai',
+                            },
+                        ],
+                    }),
+                ),
+            ).resolves.toBe(true);
         });
 
         it('persists models/routing/version verbatim (field-level encrypt only)', async () => {

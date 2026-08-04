@@ -22,6 +22,7 @@ jest.mock('@libs/llm/llm-call', () => ({
 
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     byokToVercelModel: jest.fn(() => ({})),
+    buildModelFromSlot: jest.fn(() => ({})),
     getModelName: jest.fn(() => 'openai_compatible:test-model'),
 }));
 
@@ -54,6 +55,9 @@ function createService(
     } = {},
 ) {
     const permissionValidationService = {
+        // v2-native: generateAtoms/summary resolve BYOK via getBYOKConfigV2Raw
+        // (null → env/managed default; the legacy getBYOKConfig is unused now).
+        getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
         getBYOKConfig: jest
             .fn()
             .mockResolvedValue(

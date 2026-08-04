@@ -13,6 +13,14 @@ jest.mock('@libs/core/log/logger', () => {
     };
 });
 
+// v2-native: verifyWithPromptOnly runs the single span via runStructuredReviewCall
+// (the legacy runLLMInSpan wrapper was dropped — REQ-NOLC-01 / Q4). Mock it there.
+const mockRunStructuredReviewCall = jest.fn();
+jest.mock('@libs/llm/structured-review-call', () => ({
+    runStructuredReviewCall: (...args: unknown[]) =>
+        mockRunStructuredReviewCall(...args),
+}));
+
 import { DocumentationSearchExaService } from '@/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { SafeguardPipelineService } from '@/code-review/infrastructure/adapters/services/safeguardPipeline.service';
 import { ObservabilityService } from '@/core/log/observability.service';
@@ -190,13 +198,9 @@ describe('SafeguardPipelineService', () => {
 
     describe('verifyWithPromptOnly', () => {
         it('should attach sandbox fallback attrs to the prompt-only verification span', async () => {
-            (
-                mockObservabilityService.runLLMInSpan as jest.Mock
-            ).mockResolvedValue({
-                result: {
-                    verdict: false,
-                    evidence: 'not enough evidence',
-                },
+            mockRunStructuredReviewCall.mockResolvedValue({
+                verdict: false,
+                evidence: 'not enough evidence',
             });
 
             const result = await (service as any).verifyWithPromptOnly(
@@ -243,7 +247,7 @@ describe('SafeguardPipelineService', () => {
                 {} as any,
             );
 
-            expect(mockObservabilityService.runLLMInSpan).toHaveBeenCalledWith(
+            expect(mockRunStructuredReviewCall).toHaveBeenCalledWith(
                 expect.objectContaining({
                     runName: 'safeguardPromptOnlyVerification',
                     attrs: expect.objectContaining({

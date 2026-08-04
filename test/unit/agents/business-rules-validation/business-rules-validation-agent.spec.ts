@@ -2,11 +2,19 @@ import { BusinessRulesValidationAgentProvider } from '@libs/agents/infrastructur
 
 function createProvider(): BusinessRulesValidationAgentProvider {
     return new BusinessRulesValidationAgentProvider(
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
+        {} as any, // permissionValidationService
+        {} as any, // parametersService
+        {} as any, // observabilityService
+        // genericSkillRunner (4th arg now — the leading promptRunnerService was
+        // dropped): the analyzer path reads the skill's execution policy +
+        // instructions before running.
+        {
+            getExecutionPolicy: jest.fn(() => ({
+                analyzerTimeoutMs: 5_000,
+                analyzerMaxIterations: 1,
+            })),
+            getAnalyzerInstructions: jest.fn(() => 'SYSTEM SKILL INSTRUCTIONS'),
+        } as any,
     );
 }
 
@@ -273,7 +281,6 @@ describe('BusinessRulesValidationAgentProvider analyzer execution', () => {
             {} as any,
             {} as any,
             {} as any,
-            {} as any,
             {
                 getExecutionPolicy: jest.fn(() => ({
                     analyzerTimeoutMs: 5_000,
@@ -324,7 +331,6 @@ describe('BusinessRulesValidationAgentProvider analyzer execution', () => {
             recordHistogram: jest.fn(),
         };
         const provider = new BusinessRulesValidationAgentProvider(
-            {} as any,
             {} as any,
             {} as any,
             {} as any,

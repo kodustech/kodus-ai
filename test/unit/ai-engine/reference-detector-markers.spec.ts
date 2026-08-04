@@ -107,6 +107,8 @@ jest.mock('@libs/llm/llm-call', () => ({
 }));
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     byokToVercelModel: jest.fn().mockReturnValue({}),
+    buildModelFromSlot: jest.fn().mockReturnValue({}),
+    buildPlatformModel: jest.fn().mockReturnValue({}),
     getModelName: jest.fn().mockReturnValue('mock-model'),
 }));
 jest.mock('@libs/core/log/langfuse', () => ({
