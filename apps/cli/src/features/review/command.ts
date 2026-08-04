@@ -38,7 +38,7 @@ import {
     shouldUseHunkViewer,
     shouldUseInteractiveReview,
 } from './result.js';
-import { canRenderScopeInHunk, openReviewInHunk } from './hunk-viewer.js';
+import { buildHunkViewerScope, openReviewInHunk } from './hunk-viewer.js';
 import {
     convertReviewToHunkContext,
     countHunkAnnotations,
@@ -235,7 +235,9 @@ async function reviewAction(
                         heavy: options.heavy,
                         quiet: globalOpts.quiet,
                         onProgress: (status) => {
-                            if (globalOpts.quiet || ctx.isAgent) {return;}
+                            if (globalOpts.quiet || ctx.isAgent) {
+                                return;
+                            }
                             if (status === 'PENDING') {
                                 spinner.text = chalk.cyan(
                                     'Queued for review...',
@@ -369,11 +371,13 @@ async function reviewAction(
         const selectedResult = fields ? applyFieldMask(result, fields) : result;
         const ttyOut = Boolean(process.stdout.isTTY);
         const platformSupported = isHunkPlatformSupported();
-        const scopeSupported = canRenderScopeInHunk({
+        const hunkScope = buildHunkViewerScope({
             files,
             commit: options.commit,
             branch: options.branch,
+            staged: options.staged,
         });
+        const scopeSupported = hunkScope !== null;
         // The user is in an "interactive human" context where we'd otherwise
         // route to hunk; we use this to decide whether to surface a one-line
         // hint explaining why hunk was skipped.
@@ -394,7 +398,7 @@ async function reviewAction(
         } else if (interactiveHumanContext && !scopeSupported) {
             cliInfo(
                 chalk.dim(
-                    'ℹ Hunk viewer skipped: --branch / --commit / explicit files have no direct hunk scope yet. Showing the interactive list instead. Pass --no-hunk to silence this hint.',
+                    'ℹ Hunk viewer skipped: this review scope has no direct hunk equivalent. Showing the interactive list instead. Pass --no-hunk to silence this hint.',
                 ),
             );
         }
@@ -459,7 +463,7 @@ async function reviewAction(
             } else {
                 const { exitCode } = await openReviewInHunk({
                     result: reviewResult,
-                    scope: { staged: Boolean(options.staged) },
+                    scope: hunkScope!,
                     keepContextOnExit: Boolean(globalOpts.verbose),
                 });
 
