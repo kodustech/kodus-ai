@@ -4,7 +4,6 @@ import { createLogger } from '@libs/core/log/logger';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
-import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     tracedGenerateText,
@@ -221,18 +220,18 @@ export class KodyRuleSummaryService {
             return null;
         }
         try {
-            const [rawV2, subscriptionStatus] = await Promise.all([
-                this.permissionValidationService.getBYOKConfigV2Raw(
+            const [byokConfig, subscriptionStatus] = await Promise.all([
+                // Model policy = the review's: resolve the codeReview task to a
+                // `{main}` carrier (BYOK main when configured; managed default
+                // only during trial). null ⇒ no BYOK ⇒ env default downstream.
+                this.permissionValidationService.resolveTaskCarrier(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 ),
                 this.permissionValidationService.getSubscriptionStatus(
                     organizationAndTeamData,
                 ),
             ]);
-            // Model policy = the review's: resolve the customer's v2 config for
-            // the codeReview task (BYOK main when configured; managed default
-            // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
-            const byokConfig = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
 
             const hasByok = !!byokConfig?.main;
             if (
@@ -457,18 +456,18 @@ export class KodyRuleSummaryService {
             return null;
         }
         try {
-            const [rawV2, subscriptionStatus] = await Promise.all([
-                this.permissionValidationService.getBYOKConfigV2Raw(
+            const [byokConfig, subscriptionStatus] = await Promise.all([
+                // Model policy = the review's: resolve the codeReview task to a
+                // `{main}` carrier (BYOK main when configured; managed default
+                // only during trial). null ⇒ no BYOK ⇒ env default downstream.
+                this.permissionValidationService.resolveTaskCarrier(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 ),
                 this.permissionValidationService.getSubscriptionStatus(
                     organizationAndTeamData,
                 ),
             ]);
-            // Model policy = the review's: resolve the customer's v2 config for
-            // the codeReview task (BYOK main when configured; managed default
-            // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
-            const byokConfig = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
             const hasByok = !!byokConfig?.main;
             // The carrier's resolved main slot, read at this consumer boundary.
             const mainSlot = byokConfig?.main;

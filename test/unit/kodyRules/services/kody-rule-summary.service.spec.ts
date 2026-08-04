@@ -55,9 +55,9 @@ function createService(
     } = {},
 ) {
     const permissionValidationService = {
-        // v2-native: generateAtoms/summary resolve BYOK via getBYOKConfigV2Raw
-        // (null → env/managed default; the legacy getBYOKConfig is unused now).
-        getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
+        // v2-native: generateAtoms/summary ask the service for the codeReview
+        // carrier (null → env/managed default).
+        resolveTaskCarrier: jest.fn().mockResolvedValue(null),
         getBYOKConfig: jest
             .fn()
             .mockResolvedValue(
