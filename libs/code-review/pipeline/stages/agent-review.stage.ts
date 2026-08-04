@@ -1976,7 +1976,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // per suggestion for this dedup run.
             const embedCache = new Map<string, number[] | null>();
             const runTiebreak = this.buildDedupTiebreak(
-                byokConfig,
+                dedupByokConfig,
                 telemetryMeta,
                 prNumber,
             );

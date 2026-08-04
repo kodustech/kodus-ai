@@ -6,6 +6,7 @@ import {
     type BYOKCredential,
 } from '@libs/llm/byok-config';
 import { validateByokConfigRefs } from '@libs/llm/validate-byok-config-refs';
+import { BYOKProvider } from '@libs/llm/model-providers';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -253,7 +254,14 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 (cred.provider
                     ? existingByProvider.get(cred.provider)
                     : undefined);
-            return this.encryptCredentialSecrets(cred, prior);
+            const encrypted = this.encryptCredentialSecrets(cred, prior);
+            // Auth-path integrity: after encrypt/keep, a non-managed credential
+            // must carry a usable secret (a kept ciphertext counts). Bedrock
+            // accepts a bearer token OR IAM (access key + secret); every other
+            // provider requires an apiKey. Guards against persisting a keyless
+            // BYOK credential the runtime can't use.
+            this.validateCredentialAuth(encrypted);
+            return encrypted;
         });
 
         return {
@@ -305,6 +313,41 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
 
         return result;
+    }
+
+    /**
+     * Reject a non-managed credential that carries no usable secret after the
+     * encrypt/keep pass. Bedrock is satisfied by a bearer token OR IAM (access
+     * key id + secret access key); every other provider needs an `apiKey`. A
+     * kept ciphertext (partial edit) counts as present, so this only fires on a
+     * genuinely keyless save. Managed credentials use platform keys and skip.
+     */
+    private validateCredentialAuth(cred: BYOKCredential): void {
+        if (cred?.managed) {
+            return;
+        }
+        const has = (v: unknown): boolean =>
+            typeof v === 'string' && v.length > 0;
+        const settings = (cred?.settings ?? {}) as Record<string, unknown>;
+
+        if (cred?.provider === BYOKProvider.AMAZON_BEDROCK) {
+            const hasBearer = has(settings.awsBearerToken);
+            const hasIam =
+                has(settings.awsAccessKeyId) &&
+                has(settings.awsSecretAccessKey);
+            if (!hasBearer && !hasIam) {
+                throw new BadRequestException(
+                    'Bedrock BYOK credential requires either awsBearerToken or awsAccessKeyId + awsSecretAccessKey',
+                );
+            }
+            return;
+        }
+
+        if (!has(cred?.apiKey)) {
+            throw new BadRequestException(
+                `apiKey is required for the ${cred?.provider ?? 'unknown'} BYOK credential`,
+            );
+        }
     }
 
     /** Secret fields carried inside a v2 credential's `settings` (Bedrock auth). */
