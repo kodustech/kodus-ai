@@ -249,8 +249,8 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
             // without this emit the SSE stream wouldn't tell the frontend a
             // suggestion was resolved, and the card could stay stale. Emit only
             // when at least one status was actually persisted (the service
-            // returns the updated suggestions); a no-op verification shouldn't
-            // churn the API.
+            // returns only the suggestions it actually persisted); a no-op
+            // verification shouldn't churn the API.
             if (implementedSuggestions?.length) {
                 try {
                     this.eventEmitter.emit(PR_EXECUTION_UPDATED_EVENT, {
@@ -267,6 +267,11 @@ export class ImplementationVerificationProcessor implements IJobProcessorService
                         message: `Failed to broadcast execution update after verification for PR#${payload.pullRequestNumber}`,
                         context: ImplementationVerificationProcessor.name,
                         error,
+                        metadata: {
+                            organizationId:
+                                payload.organizationAndTeamData?.organizationId,
+                            prNumber: payload.pullRequestNumber,
+                        },
                     });
                 }
             }
