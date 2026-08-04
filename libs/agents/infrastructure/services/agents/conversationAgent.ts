@@ -444,7 +444,7 @@ export class ConversationAgentProvider {
 
     /**
      * Resolve the BYOK carrier for the org's `conversation` task. v2-native:
-     * source the raw v2 config and route it through `resolveTaskByokConfig`
+     * source the raw v2 config and route it through `resolveTaskSlot`
      * (StaticTaskStrategy over `models[]`/`routing`), so a non-v2/managed/
      * BLOCKED config yields `undefined` → the env/managed default.
      */

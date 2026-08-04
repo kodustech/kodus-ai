@@ -547,6 +547,7 @@ describe('ValidatePrerequisitesStage', () => {
                     allowed: false,
                     errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
                     subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: true },
                 },
             );
             mockParametersService.findByKey.mockResolvedValue({
@@ -564,6 +565,90 @@ describe('ValidatePrerequisitesStage', () => {
             expect(body).toContain('Kodus-paid PR reviews');
             expect(body).toContain('/organization/byok');
             expect(body).not.toContain('trial has ended');
+        });
+
+        it('posts a "subscription check unavailable" message (not credits, not trial-ended) on a transient billing failure', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: false },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            const body =
+                mockCodeManagementService.createIssueComment.mock.calls[0][0]
+                    .body;
+            expect(body).toContain('Subscription check unavailable');
+            expect(body).not.toContain('Kodus-paid PR reviews');
+            expect(body).not.toContain('trial has ended');
+            expect(result.statusInfo?.message).toContain(
+                'Subscription Check Unavailable',
+            );
+            expect(result.statusInfo?.message).not.toContain(
+                'Trial Reviews Used Up',
+            );
+        });
+
+        it('sets a trial-specific SKIPPED status (not the paid "Plan Limit Exceeded") when trial credits run out', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'trial',
+                    metadata: { trialCreditsExhausted: true },
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message).toContain('Trial Reviews Used Up');
+            expect(result.statusInfo?.message).not.toContain(
+                'Plan Limit Exceeded',
+            );
+        });
+
+        it('keeps the generic "Plan Limit Exceeded" SKIPPED status for a non-trial plan limit', async () => {
+            const context = makeContext();
+
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: false,
+                    errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+                    subscriptionStatus: 'active',
+                },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+            expect(result.statusInfo?.message).toContain('Plan Limit Exceeded');
         });
     });
 });

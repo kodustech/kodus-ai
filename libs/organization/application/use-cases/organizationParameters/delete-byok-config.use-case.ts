@@ -10,6 +10,7 @@ import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { isV2Config } from '@libs/llm/byok-config';
 import { findModelReferences } from '@libs/llm/validate-byok-config-refs';
+import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Injectable, Inject } from '@nestjs/common';
 
 /**
@@ -34,8 +35,7 @@ function scopeReference(
     modelName?: string,
 ): 'byokModelId' | 'byokModel' | null {
     const c = configs as
-        | { byokModel?: unknown; byokModelId?: unknown }
-        | undefined;
+        { byokModel?: unknown; byokModelId?: unknown } | undefined;
 
     const overrideId =
         typeof c?.byokModelId === 'string' ? c.byokModelId.trim() : '';
@@ -113,6 +113,8 @@ export function findRepoFolderModelReferences(
 
 @Injectable()
 export class DeleteByokConfigUseCase {
+    private readonly logger = createLogger(DeleteByokConfigUseCase.name);
+
     constructor(
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
@@ -160,7 +162,10 @@ export class DeleteByokConfigUseCase {
         const model = (config.models ?? []).find((m) => m?.id === modelId);
 
         const codeReviewConfig = await this.parametersService
-            .findByKey(ParametersKey.CODE_REVIEW_CONFIG, organizationAndTeamData)
+            .findByKey(
+                ParametersKey.CODE_REVIEW_CONFIG,
+                organizationAndTeamData,
+            )
             .then((p) => p?.configValue ?? null)
             .catch(() => null);
         const overrideRefs = findRepoFolderModelReferences(

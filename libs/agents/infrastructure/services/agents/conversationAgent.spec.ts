@@ -33,7 +33,7 @@ function build() {
         findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
     };
     const permissionValidationService = {
-        // v2-native: no v2 config → resolveTaskByokConfig yields undefined →
+        // v2-native: no v2 config → resolveTaskSlot yields undefined →
         // the env/managed default. resolveAgentModel is mocked, so the harness
         // wiring runs regardless of the resolved slot.
         getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),

@@ -37,7 +37,7 @@ export abstract class BaseAgentProvider {
      * Fetches BYOK configuration for the organization.
      *
      * Skill agents run the `conversation` task. The FULL v2 config is sourced
-     * via `getBYOKConfigV2Raw` and routed through `resolveTaskByokConfig` for
+     * via `getBYOKConfigV2Raw` and routed through `resolveTaskSlot` for
      * the `conversation` task, so routing is by task rather than always the
      * collapsed main slot (RESEARCH Pitfall 1). A non-v2 / managed / BLOCKED
      * config resolves to `undefined` → the env/managed default (matches a
@@ -62,7 +62,7 @@ export abstract class BaseAgentProvider {
             );
 
         // byokModelId (id) wins over the legacy byokModel NAME; the strategy
-        // handles the id-THEN-name match inside resolveTaskByokConfig.
+        // handles the id-THEN-name match inside resolveTaskSlot.
         const overrideRef =
             byokModelIdOverride?.trim() || byokModelOverride?.trim();
         this.byokConfig = ((__s) => (__s ? { main: __s } : undefined))(resolveTaskSlot(rawV2, 'conversation', {

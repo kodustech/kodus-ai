@@ -86,7 +86,7 @@ export class KodyRuleDetectorCompilerService
                 rule,
                 runCompiler,
                 // Marker: a resolved non-managed BYOK slot vs the managed/
-                // env-default path (`resolveTaskByokConfig` returns undefined
+                // env-default path (`resolveTaskSlot` returns undefined
                 // for a managed/BLOCKED config).
                 { modelName: taskByok ? 'byok' : 'system' },
             );

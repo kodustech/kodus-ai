@@ -4,15 +4,24 @@ import {
 } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 
-jest.mock('@libs/core/log/logger', () => ({
-    createLogger: () => ({
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-        debug: jest.fn(),
-        info: jest.fn(),
-    }),
-}));
+jest.mock('@libs/core/log/logger', () => {
+    // Shared across every createLogger() instance so tests can assert on the
+    // warn channel (e.g. the BYOK state-divergence alarm).
+    const warn = jest.fn();
+    return {
+        __warn: warn,
+        createLogger: () => ({
+            log: jest.fn(),
+            error: jest.fn(),
+            warn,
+            debug: jest.fn(),
+            info: jest.fn(),
+        }),
+    };
+});
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { __warn: mockLoggerWarn } = require('@libs/core/log/logger');
 
 const mockEnvironment = {
     API_CLOUD_MODE: true,
@@ -27,7 +36,19 @@ jest.mock('@libs/ee/configs/environment', () => ({
 const VALID_ORG_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const orgData = { organizationId: VALID_ORG_ID };
 
+// v2-native stored blob: the service reads BYOK v2-only (04b-06 — the legacy
+// `{main}` stored shape is GONE), routing per task via `resolveByokCarrier`.
 const byokConfig = {
+    version: 2,
+    credentials: [{ id: 'c-oa', provider: 'openai', apiKey: 'sk-test' }],
+    models: [{ id: 'm-A', credentialId: 'c-oa', model: 'gpt-4' }],
+    routing: { defaultModelId: 'm-A' },
+};
+
+// What `resolveByokCarrier` collapses the stored v2 blob to for the resolved
+// task: the routed slot under `main`. Extra NormalizedModel fields resolve to
+// `undefined` (no settings/reasoning), which `toEqual` ignores.
+const expectedByokCarrier = {
     main: { provider: 'openai', model: 'gpt-4', apiKey: 'sk-test' },
 };
 
@@ -71,7 +92,13 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
     beforeEach(() => {
         mockEnvironment.API_CLOUD_MODE = true;
         mockEnvironment.API_DEVELOPMENT_MODE = false;
+        mockLoggerWarn.mockClear();
     });
+
+    const divergenceWarned = () =>
+        mockLoggerWarn.mock.calls.some((call: any[]) =>
+            String(call?.[0]?.message).includes('BYOK state divergence'),
+        );
 
     // ─── Development mode ───────────────────────────────────────────
 
@@ -204,6 +231,78 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
         expect(result.allowed).toBe(false);
         expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+        // Credits genuinely gone → flagged as exhausted.
+        expect(result.metadata?.trialCreditsExhausted).toBe(true);
+    });
+
+    it('does NOT flag exhaustion when the credit consume fails transiently (billing unreachable)', async () => {
+        // A transport failure to billing surfaces as PLAN_LIMIT_EXCEEDED too,
+        // but the reviews are NOT actually used up — the message must stay
+        // generic, not "you've used all your trial reviews".
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 3,
+            trialReviewCreditsRemaining: 2,
+        });
+        licenseService.consumeTrialReviewCredit.mockResolvedValue({
+            allowed: false,
+            reason: 'CONSUME_TRIAL_REVIEW_CREDIT_FAILED',
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            {
+                consumeTrialReviewCredit: true,
+                trialReviewCreditUsageKey: 'repo-1:123',
+            },
+        );
+
+        expect(result.allowed).toBe(false);
+        expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+        expect(result.metadata?.trialCreditsExhausted).toBe(false);
+    });
+
+    it('does NOT flag exhaustion for a non-credit billing denial (e.g. trial expired mid-request)', async () => {
+        // Exhaustion is matched positively (reason === TRIAL_REVIEW_CREDITS_
+        // EXHAUSTED); any other denial (TRIAL_EXPIRED, LICENSE_NOT_FOUND, ...)
+        // must not be mislabeled as "reviews used up".
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 2,
+            trialReviewCreditsRemaining: 3,
+        });
+        licenseService.consumeTrialReviewCredit.mockResolvedValue({
+            allowed: false,
+            reason: 'TRIAL_EXPIRED',
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(
+            orgData,
+            undefined,
+            'ValidatePrerequisitesStage',
+            {
+                consumeTrialReviewCredit: true,
+                trialReviewCreditUsageKey: 'repo-1:123',
+            },
+        );
+
+        expect(result.allowed).toBe(false);
+        expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+        expect(result.metadata?.trialCreditsExhausted).toBe(false);
     });
 
     it('should deny managed trial when review credits are exhausted', async () => {
@@ -237,7 +336,53 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
         const result = await service.validateExecutionPermissions(orgData);
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(byokConfig);
+        expect(result.byokConfig).toEqual(expectedByokCarrier);
+    });
+
+    it('blocks a *_byok trial with billing byok:true but no local config, and warns on the divergence', async () => {
+        // The production incident: billing keeps a plan-derived byok:true for a
+        // teams_byok trial, but the local config row is gone. The gate trusts
+        // the local row (blocks at 0 credits) and flags the mismatch so support
+        // can find it in observability_logs_ts.
+        const service = createService(
+            createMockLicenseService({
+                subscriptionStatus: 'trial',
+                planType: 'teams_byok',
+                byok: true,
+                trialReviewCreditsTotal: 5,
+                trialReviewCreditsUsed: 5,
+                trialReviewCreditsRemaining: 0,
+            }),
+            createMockOrgParamsService(),
+        );
+
+        const result = await service.validateExecutionPermissions(orgData);
+
+        expect(result.allowed).toBe(false);
+        expect(result.errorType).toBe(ValidationErrorType.PLAN_LIMIT_EXCEEDED);
+        expect(result.subscriptionStatus).toBe('trial');
+        expect(result.metadata?.trialCreditsExhausted).toBe(true);
+        expect(divergenceWarned()).toBe(true);
+    });
+
+    it('does NOT warn about divergence when the local BYOK config is present', async () => {
+        const service = createService(
+            createMockLicenseService({
+                subscriptionStatus: 'trial',
+                planType: 'teams_byok',
+                byok: true,
+                trialReviewCreditsTotal: 5,
+                trialReviewCreditsUsed: 5,
+                trialReviewCreditsRemaining: 0,
+            }),
+            createMockOrgParamsService(byokConfig),
+        );
+
+        const result = await service.validateExecutionPermissions(orgData);
+
+        expect(result.allowed).toBe(true);
+        expect(result.byokConfig).toEqual(expectedByokCarrier);
+        expect(divergenceWarned()).toBe(false);
     });
 
     it('should NOT consume a trial credit when BYOK is configured (key, not credits)', async () => {
@@ -261,7 +406,7 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         );
 
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(byokConfig);
+        expect(result.byokConfig).toEqual(expectedByokCarrier);
         expect(
             licenseService.consumeTrialReviewCredit,
         ).not.toHaveBeenCalled();
