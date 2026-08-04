@@ -64,7 +64,7 @@ Kodus detecta e importa automaticamente os seguintes padrões de arquivos de reg
 1. **Habilitar Sincronização Automática**: Alterne a opção "Sincronizar automaticamente regras do repositório" nas suas configurações
 2. **Modal de Primeira Sincronização**: Um modal aparecerá perguntando se você deseja sincronizar pela primeira vez
 3. **Varredura do Repositório**: Quando você confirmar, Kodus varre todo o seu repositório em busca de arquivos de regras suportados
-4. **Geração de Regras**: Um LLM processa os arquivos encontrados e cria automaticamente as Kody Rules correspondentes. Exceção: arquivos de template `.kody/rules/**` e `rules/**/*.md` são importados **verbatim** — sem conversão por LLM — preservando instruções, exemplos e identificadores exatamente como escritos.
+4. **Geração de Regras**: Um LLM processa os arquivos encontrados e cria automaticamente as Kody Rules correspondentes. Exceção: arquivos de template `.kody/rules/**` e `rules/**/*.md` são importados **verbatim** — sem conversão por LLM — preservando instruções, exemplos e identificadores exatamente como escritos. Se um desses arquivos não seguir o template (frontmatter ausente/inválido, ou sem `title`), ele volta para o caminho do LLM.
 
 Cada arquivo importado produz **uma Kody Rule**. Se um arquivo contém várias diretrizes distintas, o LLM as mescla em uma única regra abrangente — divida a orientação em múltiplos arquivos quando quiser regras gerenciáveis de forma independente.
 

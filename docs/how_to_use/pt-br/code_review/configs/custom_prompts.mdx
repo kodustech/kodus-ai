@@ -116,9 +116,37 @@ v2PromptOverrides:
                 What Kody should look for in the Security category.
 ```
 
-Apenas esses quatro são configuráveis — não há override de prompt para a categoria Business Logic.
-Cada campo tem limite de 2000 caracteres, e o arquivo só é lido depois que
-`kodusConfigFileOverridesWebPreferences` estiver habilitado (veja
+Esses quatro são os que a interface web expõe, e cada um tem limite de 2000 caracteres. Não há
+override de prompt para a categoria Business Logic.
+
+O arquivo de config aceita mais dois grupos que a interface não mostra — a rubrica de severidade
+que o Kody usa para classificar um achado, e o texto de cada nível de severidade:
+
+```yaml
+v2PromptOverrides:
+    severity:
+        flags:
+            critical: |
+                O que conta como crítico (crash, perda de dados, brecha de segurança...).
+            high: |
+            medium: |
+            low: |
+    level:
+        critical: |
+            Como o nível "critical" é descrito para o modelo.
+        issue: |
+        warning: |
+```
+
+<Warning>
+  Isso muda como o Kody *classifica* os achados, não só como ele os redige — uma rubrica ruim
+  pode silenciar ou inflar severidades em todas as revisões sem avisar. Parta dos padrões que já
+  vêm no
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml),
+  que é a lista canônica de todas as chaves sobrescrevíveis.
+</Warning>
+
+O arquivo só é lido depois que `kodusConfigFileOverridesWebPreferences` estiver habilitado (veja
 [Geral](/how_to_use/pt-br/code_review/configs/general)).
 
 ## Referências Externas

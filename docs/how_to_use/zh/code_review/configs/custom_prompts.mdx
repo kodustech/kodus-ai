@@ -116,9 +116,35 @@ v2PromptOverrides:
                 What Kody should look for in the Security category.
 ```
 
-只有这四项可配置 —— Business Logic 类别没有提示词覆盖。
-每个字段上限为 2000 个字符,并且只有在启用
-`kodusConfigFileOverridesWebPreferences` 之后该文件才会被读取(参见
+这四项是网页界面所暴露的,每个字段上限为 2000 个字符。Business Logic 类别没有提示词覆盖。
+
+配置文件还接受另外两组界面上看不到的键 —— Kody 用来对发现进行分级的严重性评判标准,以及
+每个严重性级别的措辞:
+
+```yaml
+v2PromptOverrides:
+    severity:
+        flags:
+            critical: |
+                什么算作 critical(崩溃、数据丢失、安全漏洞……)。
+            high: |
+            medium: |
+            low: |
+    level:
+        critical: |
+            如何向模型描述 "critical" 级别。
+        issue: |
+        warning: |
+```
+
+<Warning>
+  这会改变 Kody 对发现的*分级*,而不只是措辞 —— 一份糟糕的评判标准会在所有审查中悄悄压低或
+  抬高严重性。请以随产品发布的默认值
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
+  为起点,它是所有可覆盖键的权威清单。
+</Warning>
+
+只有在启用 `kodusConfigFileOverridesWebPreferences` 之后该文件才会被读取(参见
 [通用设置](/how_to_use/zh/code_review/configs/general))。
 
 ## 外部引用

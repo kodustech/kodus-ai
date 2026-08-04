@@ -64,7 +64,7 @@ Kodus detecta e importa automáticamente los siguientes patrones de archivos de 
 1. **Habilitar Sincronización Automática**: Activa la opción "Auto-sincronizar reglas del repositorio" en tu configuración
 2. **Modal de Primera Sincronización**: Aparecerá un modal preguntando si deseas sincronizar por primera vez
 3. **Escaneo del Repositorio**: Al confirmar, Kodus escanea todo tu repositorio en busca de archivos de reglas soportados
-4. **Generación de Reglas**: Un LLM procesa los archivos encontrados y crea automáticamente las Kody Rules correspondientes
+4. **Generación de Reglas**: Un LLM procesa los archivos encontrados y crea automáticamente las Kody Rules correspondientes. Excepción: los archivos de plantilla `.kody/rules/**` y `rules/**/*.md` se importan **literalmente** — sin conversión por LLM — preservando instrucciones, ejemplos e identificadores tal como se escribieron. Si uno de esos archivos no sigue la plantilla (frontmatter ausente o inválido, o sin `title`), vuelve a la ruta del LLM
 
 ### Sincronización Continua
 - **Actualizaciones Automáticas**: La sincronización ocurre automáticamente cuando se cierra un Pull Request

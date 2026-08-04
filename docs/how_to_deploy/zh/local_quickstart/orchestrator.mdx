@@ -55,15 +55,11 @@ icon: "laptop"
       **基本设置：**
       ```bash
       pnpm run docker:start
-      pnpm run migration:run
-      pnpm run seed
       ```
 
       **带外部集成（webhook 等）：**
       ```bash
       pnpm run docker:start
-      pnpm run migration:run
-      pnpm run seed
       pnpm run tunnel  # 为外部服务创建公共端点
       ```
 
@@ -158,19 +154,26 @@ icon: "laptop"
 
       ### 8. 首次设置
 
-      如果这是您第一次运行该项目，请执行以下命令：
+      无需操作 —— API 容器会在启动时运行迁移和种子数据,因为 `docker-compose.dev.yml` 把
+      `RUN_MIGRATIONS` 和 `RUN_SEEDS` 默认设为 `true`。
 
-      运行数据库迁移：
+      <Accordion title="手动运行迁移">
+        如果你在 `.env` 中设置了 `RUN_MIGRATIONS=false` / `RUN_SEEDS=false`(例如想自己控制),
+        请在宿主机上运行:
 
-      ```bash
-      pnpm run migration:run
-      ```
+        ```bash
+        pnpm run migration:run   # OLTP 数据库
+        pnpm run seed            # 初始数据
+        ```
 
-      填充初始数据：
+        其他数据存储有各自的命令:
 
-      ```bash
-      pnpm run seed
-      ```
+        ```bash
+        pnpm run analytics:migration:run     # analytics warehouse
+        pnpm run mcp-manager:migration:run   # MCP manager
+        pnpm run mongo:migrate               # MongoDB
+        ```
+      </Accordion>
 
       ### 9. 服务端点
 
@@ -189,17 +192,15 @@ icon: "laptop"
 
 ### 基本本地开发
 
-1. **启动服务**：`pnpm run docker:start`
-2. **运行迁移**：`pnpm run migration:run`
-3. **加载种子数据**：`pnpm run seed`
-4. **打开应用**：访问 `http://localhost:3000`
+1. **启动服务**：`pnpm run docker:start`(迁移和种子数据会自动运行)
+2. **打开应用**：访问 `http://localhost:3000`
 5. **健康检查**：`pnpm run dev:health-check`
 
 ### 带外部集成的开发
 
 如果您需要测试与外部服务的集成（如 Git webhook）：
 
-1. **启动服务**：`pnpm run docker:start && pnpm run migration:run && pnpm run seed`
+1. **启动服务**：`pnpm run docker:start`
 2. **创建隧道**：`pnpm run tunnel`（创建公共端点）
 3. **更新 webhook URL**：隧道命令会自动更新您的 `.env`
 4. **配置 Git 提供商**：在 Git 提供商的 webhook 设置中使用隧道 URL

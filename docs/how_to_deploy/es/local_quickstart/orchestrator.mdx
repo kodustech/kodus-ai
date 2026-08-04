@@ -58,15 +58,11 @@ icon: "laptop"
       **Configuración básica:**
       ```bash
       pnpm run docker:start
-      pnpm run migration:run
-      pnpm run seed
       ```
 
       **Con integraciones externas (webhooks, etc.):**
       ```bash
       pnpm run docker:start
-      pnpm run migration:run
-      pnpm run seed
       pnpm run tunnel  # Crea un endpoint público para servicios externos
       ```
 
@@ -162,19 +158,26 @@ Selecciona un modo y completa tu .env antes de iniciar los servicios.
 
       ### 8. Configuración inicial
 
-      Si es la primera vez que ejecutas el proyecto, ejecuta los siguientes comandos:
+      Nada que hacer — el contenedor de la API ejecuta migraciones y seeds al arrancar, porque
+      `docker-compose.dev.yml` usa `RUN_MIGRATIONS` y `RUN_SEEDS` con valor por defecto `true`.
 
-      Ejecutar migraciones de base de datos:
+      <Accordion title="Ejecutar migraciones manualmente">
+        Si defines `RUN_MIGRATIONS=false` / `RUN_SEEDS=false` en tu `.env` (por ejemplo para
+        controlarlas tú mismo), ejecútalas desde el host con:
 
-      ```bash
-      pnpm run migration:run
-      ```
+        ```bash
+        pnpm run migration:run   # base de datos OLTP
+        pnpm run seed            # datos iniciales
+        ```
 
-      Cargar datos iniciales:
+        Hay comandos separados para los demás datastores:
 
-      ```bash
-      pnpm run seed
-      ```
+        ```bash
+        pnpm run analytics:migration:run     # analytics warehouse
+        pnpm run mcp-manager:migration:run   # MCP manager
+        pnpm run mongo:migrate               # MongoDB
+        ```
+      </Accordion>
 
       ### 9. Endpoints de los servicios
 
@@ -193,17 +196,15 @@ Selecciona un modo y completa tu .env antes de iniciar los servicios.
 
 ### Desarrollo local básico
 
-1. **Iniciar servicios**: `pnpm run docker:start`
-2. **Ejecutar migraciones**: `pnpm run migration:run`
-3. **Cargar datos iniciales**: `pnpm run seed`
-4. **Abrir la aplicación**: Visita `http://localhost:3000`
+1. **Iniciar servicios**: `pnpm run docker:start` (las migraciones y seeds se ejecutan automáticamente)
+2. **Abrir la aplicación**: Visita `http://localhost:3000`
 5. **Verificación de salud**: `pnpm run dev:health-check`
 
 ### Desarrollo con integraciones externas
 
 Si necesitas probar integraciones con servicios externos (como webhooks de Git):
 
-1. **Iniciar servicios**: `pnpm run docker:start && pnpm run migration:run && pnpm run seed`
+1. **Iniciar servicios**: `pnpm run docker:start`
 2. **Crear túnel**: `pnpm run tunnel` (crea un endpoint público)
 3. **Actualizar URLs de webhook**: El comando tunnel actualiza tu `.env` automáticamente
 4. **Configurar el proveedor Git**: Usa la URL del túnel en la configuración de webhooks de tu proveedor Git

@@ -58,15 +58,11 @@ icon: "laptop"
       **基本セットアップ：**
       ```bash
       pnpm run docker:start
-      pnpm run migration:run
-      pnpm run seed
       ```
 
       **外部インテグレーション（Webhooksなど）を使用する場合：**
       ```bash
       pnpm run docker:start
-      pnpm run migration:run
-      pnpm run seed
       pnpm run tunnel  # 外部サービス用のパブリックエンドポイントを作成
       ```
 
@@ -161,19 +157,26 @@ icon: "laptop"
 
       ### 8. 初回セットアップ
 
-      プロジェクトを初めて実行する場合は、以下のコマンドを実行してください：
+      することはありません — `docker-compose.dev.yml` が `RUN_MIGRATIONS` と `RUN_SEEDS` を
+      デフォルトで `true` にしているため、API コンテナが起動時にマイグレーションとシードを実行します。
 
-      データベースマイグレーションの実行：
+      <Accordion title="マイグレーションを手動で実行する">
+        `.env` で `RUN_MIGRATIONS=false` / `RUN_SEEDS=false` にした場合（自分で管理したい場合など）は、
+        ホストから次を実行します：
 
-      ```bash
-      pnpm run migration:run
-      ```
+        ```bash
+        pnpm run migration:run   # OLTP データベース
+        pnpm run seed            # 初期データ
+        ```
 
-      初期データのシード：
+        他のデータストアには個別のコマンドがあります：
 
-      ```bash
-      pnpm run seed
-      ```
+        ```bash
+        pnpm run analytics:migration:run     # analytics warehouse
+        pnpm run mcp-manager:migration:run   # MCP manager
+        pnpm run mongo:migrate               # MongoDB
+        ```
+      </Accordion>
 
       ### 9. サービスエンドポイント
 
@@ -192,17 +195,15 @@ icon: "laptop"
 
 ### 基本的なローカル開発
 
-1. **サービスの起動**: `pnpm run docker:start`
-2. **マイグレーションの実行**: `pnpm run migration:run`
-3. **シードデータの読み込み**: `pnpm run seed`
-4. **アプリを開く**: `http://localhost:3000`にアクセス
+1. **サービスの起動**: `pnpm run docker:start`（マイグレーションとシードは自動実行）
+2. **アプリを開く**: `http://localhost:3000`にアクセス
 5. **ヘルスチェック**: `pnpm run dev:health-check`
 
 ### 外部インテグレーションを使用した開発
 
 外部サービス（GitのWebhookなど）とのインテグレーションをテストする必要がある場合：
 
-1. **サービスの起動**: `pnpm run docker:start && pnpm run migration:run && pnpm run seed`
+1. **サービスの起動**: `pnpm run docker:start`
 2. **トンネルの作成**: `pnpm run tunnel`（パブリックエンドポイントを作成）
 3. **Webhook URLの更新**: トンネルコマンドが`.env`を自動的に更新します
 4. **Gitプロバイダーの設定**: Gitプロバイダーの設定でトンネルURLを使用
