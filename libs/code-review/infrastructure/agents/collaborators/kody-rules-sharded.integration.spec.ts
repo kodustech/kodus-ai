@@ -248,4 +248,37 @@ describe('sharded kody-rules — Context OS references inline into the shard', (
             rule().rule,
         );
     });
+
+    // The augmented rule is re-embedded into every file shard, so the budget
+    // must cap the TOTAL appended text per rule — not each ref independently —
+    // or a multi-ref / large-ref rule balloons the input by the file count.
+    it('caps the TOTAL inlined content per rule at maxRefChars across refs', () => {
+        const base = { uuid: 'r1', title: 't', rule: 'base rule text' };
+        const map = new Map([
+            [
+                'r1',
+                [
+                    { filePath: 'a.md', content: 'X'.repeat(100) },
+                    { filePath: 'b.md', content: 'Y'.repeat(100) },
+                ],
+            ],
+        ]);
+        const out = inlineLoadedReferences([base as any], map, undefined, 50);
+        const contentChars = (out[0].rule!.match(/[XY]/g) || []).length;
+        expect(contentChars).toBeLessThanOrEqual(50);
+        expect(contentChars).toBeGreaterThan(0);
+    });
+
+    it('truncates a single oversized reference to the budget', () => {
+        const base = { uuid: 'r1', title: 't', rule: 'base' };
+        const out = inlineLoadedReferences(
+            [base as any],
+            new Map([['r1', [{ filePath: 'big.md', content: 'Z'.repeat(10000) }]]]),
+            undefined,
+            100,
+        );
+        const z = (out[0].rule!.match(/Z/g) || []).length;
+        expect(z).toBeLessThanOrEqual(100);
+        expect(z).toBeGreaterThan(0);
+    });
 });

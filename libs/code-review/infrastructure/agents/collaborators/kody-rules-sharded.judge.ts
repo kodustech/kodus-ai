@@ -420,6 +420,9 @@ export interface LoadedRuleReference {
  * the judge sees the authoritative convention instead of the marker.
  *
  * Empty/absent map entries and empty content degrade to the rule text alone.
+ * `maxRefChars` bounds the TOTAL appended text PER RULE (not per reference) —
+ * the augmented rule is re-embedded in every shard, so the budget caps the
+ * token multiplication across changed files.
  */
 export function inlineLoadedReferences(
     rules: Array<Partial<IKodyRule>>,
@@ -433,12 +436,20 @@ export function inlineLoadedReferences(
         if (!refs || refs.length === 0) return rule;
 
         let augmented = rule.rule ?? '';
+        const baseLen = (rule.rule ?? '').length;
         const inlined: string[] = [];
         for (const ref of refs) {
             const content = ref?.content;
             if (!content || content.trim().length === 0) continue;
+            // Per-rule TOTAL budget, not per-ref: this augmented text is
+            // re-embedded into EVERY file shard's rule block (and the PR shard's,
+            // which only budgets diffs), so an unbounded rule multiplies the LLM
+            // input by the changed-file count and can overflow the context /
+            // fail every shard. Stop once the appended text hits maxRefChars.
+            const remaining = maxRefChars - (augmented.length - baseLen);
+            if (remaining <= 0) break;
             const filePath = ref?.filePath?.trim() || 'referenced file';
-            augmented += `\n\n[Authoritative convention referenced by this rule — from \`${filePath}\`]:\n${content.slice(0, maxRefChars)}`;
+            augmented += `\n\n[Authoritative convention referenced by this rule — from \`${filePath}\`]:\n${content.slice(0, remaining)}`;
             inlined.push(filePath);
         }
         if (inlined.length === 0) return rule;
@@ -457,6 +468,23 @@ export function inlineLoadedReferences(
         });
         return { ...rule, rule: augmented };
     });
+}
+
+/**
+ * Rules that declare a `contextReferenceId` but for which the loader resolved
+ * NO references — the file citation failed to resolve (fetch error, missing
+ * branch, or a reference that no longer exists). The judge runs these WITHOUT
+ * their referenced file, so callers should surface it: otherwise the
+ * judge-blind degradation is silent, since `inlineLoadedReferences` logs only
+ * on success.
+ */
+export function findUnresolvedReferenceRules(
+    rules: Array<Partial<IKodyRule>>,
+    referencesMap: Map<string, LoadedRuleReference[]> | undefined,
+): Array<Partial<IKodyRule>> {
+    return rules.filter(
+        (r) => r.contextReferenceId && (!r.uuid || !referencesMap?.has(r.uuid)),
+    );
 }
 
 /**

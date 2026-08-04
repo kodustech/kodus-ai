@@ -14,6 +14,7 @@ import {
     judgeKodyRulesSharded,
     inlineRuleReferences,
     inlineLoadedReferences,
+    findUnresolvedReferenceRules,
     shardViolationsWireSchema,
     type RunJudge,
     type RawShardViolation,
@@ -489,7 +490,11 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
         input: ReviewAgentInput,
     ): Promise<Partial<IKodyRule>[]> {
         if (!this.externalReferenceLoaderService) return rules;
-        if (!rules.some((r) => r.contextReferenceId)) return rules;
+        // Pre-filter: only rules that actually cite an external reference reach
+        // the loader — each resolution is an (uncached) network round-trip, so
+        // don't pay it for rules that carry no contextReferenceId.
+        const refRules = rules.filter((r) => r.contextReferenceId);
+        if (refRules.length === 0) return rules;
 
         try {
             const analysisContext = {
@@ -518,16 +523,39 @@ If no violations found, respond with \`{"reasoning": "Checked all rules, no viol
 
             const { referencesMap } =
                 await this.externalReferenceLoaderService.loadReferencesForRules(
-                    rules,
+                    refRules,
                     analysisContext,
                 );
+
+            // Surface rules whose reference failed to resolve — otherwise the
+            // judge-blind degradation is invisible (inlineLoadedReferences logs
+            // only on success, and the loader swallows per-rule fetch errors).
+            const unresolved = findUnresolvedReferenceRules(
+                refRules,
+                referencesMap,
+            );
+            if (unresolved.length > 0) {
+                this.shardLogger.warn({
+                    message: `[kody-rules-shard] ${unresolved.length} rule(s) with a contextReferenceId resolved ZERO references for PR#${input.prNumber}; judging those without their referenced file(s)`,
+                    context: this.getIdentity().name,
+                    metadata: {
+                        organizationAndTeamData: input.organizationAndTeamData,
+                        prNumber: input.prNumber,
+                        ruleUuids: unresolved.map((r) => r.uuid),
+                    },
+                });
+            }
 
             return inlineLoadedReferences(rules, referencesMap, this.shardLogger);
         } catch (err) {
             this.shardLogger.warn({
                 message: `[kody-rules-shard] Context OS reference load failed for PR#${input.prNumber}; judging without external refs: ${err instanceof Error ? err.message : String(err)}`,
                 context: this.getIdentity().name,
-                metadata: { prNumber: input.prNumber, err },
+                metadata: {
+                    organizationAndTeamData: input.organizationAndTeamData,
+                    prNumber: input.prNumber,
+                    err,
+                },
             });
             return rules;
         }
