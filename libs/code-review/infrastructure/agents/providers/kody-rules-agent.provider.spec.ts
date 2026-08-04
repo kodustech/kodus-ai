@@ -662,3 +662,142 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(partialWarns).toHaveLength(0);
     });
 });
+
+describe('KodyRulesAgentProvider — Context OS reference loading', () => {
+    const makeInput = () => ({
+        prNumber: 7,
+        organizationAndTeamData: {
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        },
+        repositoryId: 'repo-1',
+        repositoryFullName: 'owner/repo',
+        baseBranch: 'main',
+    });
+
+    const makeProvider = (loader?: any) => {
+        const p = new KodyRulesAgentProvider(
+            {} as any,
+            {} as any,
+            {} as any,
+            undefined,
+            undefined,
+            loader,
+        );
+        // Swap the real structured logger for spies.
+        (p as any).shardLogger = { warn: jest.fn(), log: jest.fn() };
+        return p;
+    };
+
+    const call = (p: any, rules: any[], input: any) =>
+        (p as any).inlineContextOsReferences(rules, input);
+
+    it('inlines resolved content and does NOT warn', async () => {
+        const loader = {
+            loadReferencesForRules: jest.fn().mockResolvedValue({
+                referencesMap: new Map([
+                    ['r1', [{ filePath: 'CLAUDE.md', content: 'the convention' }]],
+                ]),
+                mcpResultsMap: new Map(),
+            }),
+        };
+        const p = makeProvider(loader);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
+        ];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out[0].rule).toContain('the convention');
+        expect((p as any).shardLogger.warn).not.toHaveBeenCalled();
+    });
+
+    it('WARNS (with organizationId) when a contextReferenceId rule resolves ZERO references', async () => {
+        const loader = {
+            loadReferencesForRules: jest.fn().mockResolvedValue({
+                referencesMap: new Map(),
+                mcpResultsMap: new Map(),
+            }),
+        };
+        const p = makeProvider(loader);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
+        ];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out).toEqual(rules); // judged blind, unchanged
+        const warn = (p as any).shardLogger.warn as jest.Mock;
+        expect(warn).toHaveBeenCalledTimes(1);
+        const entry = warn.mock.calls[0][0];
+        expect(entry.metadata.ruleUuids).toEqual(['r1']);
+        expect(entry.metadata.organizationAndTeamData).toEqual(
+            makeInput().organizationAndTeamData,
+        );
+    });
+
+    it('sends ONLY rules with a contextReferenceId to the loader (pre-filter)', async () => {
+        const loader = {
+            loadReferencesForRules: jest.fn().mockResolvedValue({
+                referencesMap: new Map(),
+                mcpResultsMap: new Map(),
+            }),
+        };
+        const p = makeProvider(loader);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'a' },
+            { uuid: 'r2', title: 't', rule: 'b' }, // no contextReferenceId
+        ];
+
+        await call(p, rules, makeInput());
+
+        expect(loader.loadReferencesForRules).toHaveBeenCalledTimes(1);
+        const passed = loader.loadReferencesForRules.mock.calls[0][0];
+        expect(passed).toHaveLength(1);
+        expect(passed[0].uuid).toBe('r1');
+    });
+
+    it('skips the loader entirely when no rule carries a contextReferenceId', async () => {
+        const loader = { loadReferencesForRules: jest.fn() };
+        const p = makeProvider(loader);
+        const rules = [{ uuid: 'r1', title: 't', rule: 'a' }];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out).toBe(rules);
+        expect(loader.loadReferencesForRules).not.toHaveBeenCalled();
+    });
+
+    it('degrades (warns with organizationId) when the loader throws', async () => {
+        const loader = {
+            loadReferencesForRules: jest
+                .fn()
+                .mockRejectedValue(new Error('boom')),
+        };
+        const p = makeProvider(loader);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
+        ];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out).toBe(rules);
+        const warn = (p as any).shardLogger.warn as jest.Mock;
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][0].metadata.organizationAndTeamData).toEqual(
+            makeInput().organizationAndTeamData,
+        );
+    });
+
+    it('is a no-op when the loader service is not wired', async () => {
+        const p = makeProvider(undefined);
+        const rules = [
+            { uuid: 'r1', contextReferenceId: 'ctx', title: 't', rule: 'base' },
+        ];
+
+        const out = await call(p, rules, makeInput());
+
+        expect(out).toBe(rules);
+        expect((p as any).shardLogger.warn).not.toHaveBeenCalled();
+    });
+});
