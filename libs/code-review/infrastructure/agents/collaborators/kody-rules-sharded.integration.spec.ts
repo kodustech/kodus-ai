@@ -9,6 +9,7 @@
 import {
     judgeKodyRulesSharded,
     inlineRuleReferences,
+    inlineLoadedReferences,
     RunJudge,
 } from './kody-rules-sharded.judge';
 import { mapAgentFindings } from './finding-mapper';
@@ -161,5 +162,90 @@ describe('sharded kody-rules — T2 reference-inline (#1449)', () => {
             undefined,
         );
         expect(out[0].rule).toBe('plain');
+    });
+});
+
+/**
+ * Regression: a rule that cites repo files via `@file:` markers in its BODY is
+ * stored "context-os-only" — only a `contextReferenceId` on the rule, resolved
+ * through the Context OS (loader -> ContextPack -> file content). The code-review
+ * path reads rules raw (no UI enrichment), so `externalReferences` is NOT on the
+ * rule and `sourcePath` is null. The sharded path only inlined `sourcePath`, so
+ * the referenced file never reached the shard and the model saw the bare
+ * "@file:X" marker — the root cause of the recall miss (capim rule 4902…, and
+ * proven in runtime with a `@file:CLAUDE.md` rule).
+ *
+ * `inlineLoadedReferences` takes the loader's resolved map (uuid -> refs WITH
+ * content) and appends that content to the rule text.
+ */
+describe('sharded kody-rules — Context OS references inline into the shard', () => {
+    const rule = () => ({
+        uuid: 'r-ctx',
+        title: 'Validate data against the project conventions',
+        rule: 'Siga exatamente essas regras para validar os dados: @file:CLAUDE.md',
+        sourcePath: null,
+        contextReferenceId: 'ctx-abc',
+    });
+
+    it('inlines the resolved reference content (contextReferenceId path)', () => {
+        const map = new Map([
+            [
+                'r-ctx',
+                [
+                    {
+                        filePath: 'CLAUDE.md',
+                        content: '# Conventions\nAlways validate input before persisting.',
+                    },
+                ],
+            ],
+        ]);
+
+        const out = inlineLoadedReferences([rule() as any], map);
+
+        // The judge must see the ACTUAL file content, not the "@file:" marker.
+        expect(out[0].rule).toContain('Always validate input before persisting');
+        expect(out[0].rule).toContain('CLAUDE.md');
+        // Original rule text is preserved.
+        expect(out[0].rule).toContain('validar os dados');
+    });
+
+    it('inlines multiple resolved references for one rule', () => {
+        const map = new Map([
+            [
+                'r-ctx',
+                [
+                    { filePath: 'DESIGN.md', content: 'design conventions here' },
+                    { filePath: 'src/resolver.js', content: 'resolver logic here' },
+                ],
+            ],
+        ]);
+        const out = inlineLoadedReferences([rule() as any], map);
+        expect(out[0].rule).toContain('design conventions here');
+        expect(out[0].rule).toContain('resolver logic here');
+    });
+
+    it('leaves the rule untouched when the map has no entry for its uuid', () => {
+        const out = inlineLoadedReferences(
+            [rule() as any],
+            new Map([['other-uuid', [{ filePath: 'x', content: 'y' }]]]),
+        );
+        expect(out[0].rule).toBe(rule().rule);
+    });
+
+    it('degrades to the rule text when the resolved content is empty', () => {
+        const out = inlineLoadedReferences(
+            [rule() as any],
+            new Map([['r-ctx', [{ filePath: 'CLAUDE.md', content: '' }]]]),
+        );
+        expect(out[0].rule).toBe(rule().rule);
+    });
+
+    it('returns rules unchanged when the references map is empty or absent', () => {
+        expect(inlineLoadedReferences([rule() as any], new Map())[0].rule).toBe(
+            rule().rule,
+        );
+        expect(inlineLoadedReferences([rule() as any], undefined)[0].rule).toBe(
+            rule().rule,
+        );
     });
 });

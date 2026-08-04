@@ -303,9 +303,6 @@ function prShardUser(
     ].join('\n');
 }
 
-// ── path filtering (mirrors KodyRulesAgentProvider.matchesPathPattern) ───────
-import { isFileMatchingGlob } from '@libs/common/utils/glob-utils';
-
 export function ruleAppliesToFile(filePath: string, pattern?: string): boolean {
     if (!pattern) return true;
     // Shared helper: rule paths may be several comma-joined globs — see
@@ -358,6 +355,11 @@ async function mapLimit<T, R>(
  * file / read error / no sandbox all degrade to the rule text alone — never
  * worse than not having the reference. Extracted here (not on the provider) so
  * it is unit-testable without the provider's heavy import graph.
+ *
+ * NOTE: this handles `sourcePath` only (the rule's own source file, IDE-sync /
+ * centralized-config). The `@file:` citations authors write in the rule BODY
+ * are resolved through the Context OS (`contextReferenceId`) — see
+ * `inlineLoadedReferences`.
  */
 export async function inlineRuleReferences(
     rules: Array<Partial<IKodyRule>>,
@@ -393,6 +395,68 @@ export async function inlineRuleReferences(
             }
         }),
     );
+}
+
+/** One resolved reference from the Context OS (shape from `LoadedReference`). */
+export interface LoadedRuleReference {
+    filePath?: string;
+    content?: string;
+    description?: string;
+}
+
+/**
+ * Inline references resolved from the Context OS into the rule text. Pure.
+ *
+ * `referencesMap` (rule uuid -> resolved references WITH content) comes from
+ * `ExternalReferenceLoaderService.loadReferencesForRules` — the SAME resolver
+ * the PR-level path uses — which follows each rule's `contextReferenceId` and
+ * fetches the file content (same or cross repo, via `getRepositoryContentFile`).
+ *
+ * This is the current-architecture path: `@file:` citations are stored as a
+ * `contextReferenceId` on the rule ("context-os-only"), NOT as an inline
+ * `externalReferences` array, and the code-review path reads rules raw (no UI
+ * enrichment). So the sharded judge saw the bare "@file:X" marker and judged
+ * blind — the root cause of the recall miss. With the loaded content appended,
+ * the judge sees the authoritative convention instead of the marker.
+ *
+ * Empty/absent map entries and empty content degrade to the rule text alone.
+ */
+export function inlineLoadedReferences(
+    rules: Array<Partial<IKodyRule>>,
+    referencesMap: Map<string, LoadedRuleReference[]> | undefined,
+    logger?: { warn: (entry: any) => void; log?: (entry: any) => void },
+    maxRefChars = 6000,
+): Array<Partial<IKodyRule>> {
+    if (!referencesMap || referencesMap.size === 0) return rules;
+    return rules.map((rule) => {
+        const refs = rule.uuid ? referencesMap.get(rule.uuid) : undefined;
+        if (!refs || refs.length === 0) return rule;
+
+        let augmented = rule.rule ?? '';
+        const inlined: string[] = [];
+        for (const ref of refs) {
+            const content = ref?.content;
+            if (!content || content.trim().length === 0) continue;
+            const filePath = ref?.filePath?.trim() || 'referenced file';
+            augmented += `\n\n[Authoritative convention referenced by this rule — from \`${filePath}\`]:\n${content.slice(0, maxRefChars)}`;
+            inlined.push(filePath);
+        }
+        if (inlined.length === 0) return rule;
+
+        // Success is otherwise silent; log it so a reference actually reaching
+        // the shard prompt is visible in the worker logs.
+        logger?.log?.({
+            message: `[kody-rules-shard] inlined ${inlined.length} reference file(s) for rule ${rule.uuid}: ${inlined.join(', ')}`,
+            context: 'kody-rules-sharded',
+            metadata: {
+                ruleUuid: rule.uuid,
+                ruleTitle: rule.title,
+                inlinedRefs: inlined,
+                addedChars: augmented.length - (rule.rule ?? '').length,
+            },
+        });
+        return { ...rule, rule: augmented };
+    });
 }
 
 /**
