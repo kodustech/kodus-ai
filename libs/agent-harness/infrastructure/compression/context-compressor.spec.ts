@@ -176,17 +176,22 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
         expect(typeof out.value).toBe('string');
     });
 
-    it('leaves a json output structurally intact (never a corrupted string)', () => {
+    it('shrinks a large json output while keeping the { type:"json" } wrapper (fit guarantee, #1574)', () => {
         const window = structuredWindow(1);
         (window.find((m) => m.role === 'tool')!.content as any[])[0].output = {
             type: 'json',
-            value: { files: Array.from({ length: 2_000 }, (_, i) => `f${i}.ts`) },
+            value: { files: Array.from({ length: 4_000 }, (_, i) => `f${i}.ts`) },
         };
-        const clamped = clampMessagesToBudget(window, 50);
+        const budget = 500;
+        const clamped = clampMessagesToBudget(window, budget);
         const out = firstToolOutput(clamped);
 
+        // Wrapper preserved so the provider can still serialize a valid output...
         expect(out.type).toBe('json');
-        expect(typeof out.value).toBe('object');
+        // ...but the payload is shrunk (as a string) so the hard clamp reaches
+        // budget — leaving the object intact would re-open #1574.
+        expect(typeof out.value).toBe('string');
+        expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
     });
 });
 

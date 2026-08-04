@@ -211,7 +211,25 @@ function truncateStructuredValue(
             truncated: true,
         };
     }
-    // { type:'json', value } or anything unrecognized — leave structurally intact.
+    // { type:'json', value } or anything unrecognized — DON'T leave an
+    // over-budget blob in place (that would defeat the hard clamp's fit
+    // guarantee, re-opening #1574). Shrink its serialized form but keep the
+    // { type, value } shape: on the OpenAI Responses path a `json` output is
+    // emitted via JSON.stringify(output.value), so a truncated *string* value
+    // still serializes to a present `output` field.
+    if (v && typeof v === 'object') {
+        try {
+            const serialized = JSON.stringify('value' in v ? v.value : v);
+            if (serialized.length > maxChars) {
+                return {
+                    value: { ...v, value: truncateText(serialized, maxChars) },
+                    truncated: true,
+                };
+            }
+        } catch {
+            // non-serializable (cycles, BigInt, …) — leave as-is
+        }
+    }
     return { value: v, truncated: false };
 }
 
