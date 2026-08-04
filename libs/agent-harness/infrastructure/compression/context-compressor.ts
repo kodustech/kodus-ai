@@ -236,7 +236,24 @@ function truncateStructuredValue(
             truncated: true,
         };
     }
-    // Unrecognized / bounded (e.g. execution-denied) — leave intact.
+    // Unrecognized object output (a bounded type like execution-denied, or a
+    // future AI SDK output type). Last-resort net: shrink a serialized preview
+    // so the hard clamp can ALWAYS reach budget (#1574 is an unconditional
+    // guarantee), re-typed to text to stay provider-serializable. Bounded
+    // outputs serialize under maxChars and pass through untouched.
+    if (v && typeof v === 'object') {
+        try {
+            const serialized = JSON.stringify(v);
+            if (serialized.length > maxChars) {
+                return {
+                    value: { type: 'text', value: truncateText(serialized, maxChars) },
+                    truncated: true,
+                };
+            }
+        } catch {
+            // non-serializable (cycles, BigInt, …) — unmeasurable, leave intact
+        }
+    }
     return { value: v, truncated: false };
 }
 

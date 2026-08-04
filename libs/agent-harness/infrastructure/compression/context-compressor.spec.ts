@@ -167,6 +167,21 @@ describe('structured tool-result output survives truncation (PR#302 regression)'
         expect(out.value.endsWith('…[truncated]')).toBe(true);
     });
 
+    it('shrinks a large unrecognized/future output type so the hard clamp still fits (#1574)', () => {
+        const window = structuredWindow(1);
+        (window.find((m) => m.role === 'tool')!.content as any[])[0].output = {
+            type: 'future-output-type',
+            value: { data: Array.from({ length: 4_000 }, (_, i) => `item${i}`) },
+        };
+        const budget = 500;
+        const clamped = clampMessagesToBudget(window, budget);
+        const out = firstToolOutput(clamped);
+
+        expect(out.type).toBe('text'); // re-typed to a serializable preview
+        expect(typeof out.value).toBe('string');
+        expect(estimateMessagesTokens(clamped)).toBeLessThanOrEqual(budget);
+    });
+
     it('compressMessages (soft pass) preserves the structured output shape', () => {
         const compressed = compressMessages(structuredWindow(20_000), []);
         const out = firstToolOutput(compressed);
