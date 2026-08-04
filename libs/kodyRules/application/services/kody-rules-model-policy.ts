@@ -3,7 +3,6 @@ import type { BYOKConfig } from '@libs/llm/byok-config';
 import { environment } from '@libs/ee/configs/environment';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
-import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
 import { LLM_TASK } from '@libs/llm/byok-config';
 
 /**
@@ -45,14 +44,13 @@ export async function resolveKodyRulesModelPolicy(
     permissionValidationService: PermissionValidationService,
     organizationAndTeamData: OrganizationAndTeamData,
 ): Promise<KodyRulesModelPolicy> {
-    // v2-native: source the raw v2 config and resolve the Kody Rules
-    // generation (codeReview) task to a `{main,fallback}` carrier. A non-v2 /
-    // managed / BLOCKED config yields `undefined` → fall through to the
-    // self-hosted / trial / skip policy below.
-    const rawV2 = await permissionValidationService.getBYOKConfigV2Raw(
+    // v2-native: resolve the Kody Rules generation (codeReview) task to a
+    // `{main}` carrier. A non-v2 / managed / BLOCKED config yields `null` →
+    // fall through to the self-hosted / trial / skip policy below.
+    const byokConfig = await permissionValidationService.resolveTaskCarrier(
         organizationAndTeamData,
+        LLM_TASK.codeReview,
     );
-    const byokConfig = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
     if (byokConfig) {
         return { generate: true, byokConfig };
     }

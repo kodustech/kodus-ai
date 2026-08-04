@@ -170,23 +170,9 @@ describe('GenerateKodyRulesUseCase', () => {
                     useValue: {
                         // Truthy BYOK → model policy resolves to "generate with
                         // BYOK", so these tests exercise the persistence flow.
-                        // v2-native: the flow now reads getBYOKConfigV2Raw and
-                        // routes it via resolveTaskSlot → a resolvable slot.
-                        getBYOKConfigV2Raw: jest.fn().mockResolvedValue({
-                            version: 2,
-                            credentials: [
-                                { id: 'c', provider: 'openai', apiKey: 'enc' },
-                            ],
-                            models: [
-                                {
-                                    id: 'm',
-                                    credentialId: 'c',
-                                    model: 'test-model',
-                                },
-                            ],
-                            routing: { defaultModelId: 'm' },
-                        }),
-                        getBYOKConfig: jest
+                        // v2-native: the model policy now asks the service for
+                        // the codeReview carrier directly.
+                        resolveTaskCarrier: jest
                             .fn()
                             .mockResolvedValue({ main: { model: 'test-model' } }),
                         getSubscriptionStatus: jest

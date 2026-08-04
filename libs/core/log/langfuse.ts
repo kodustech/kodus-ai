@@ -136,12 +136,15 @@ export interface LangfuseTelemetryMetadata {
     provider?: string;
 }
 
-export interface LangfuseTelemetryConfig {
+/** Declared as a type alias (not an interface) on purpose: aliases get an
+ *  implicit index signature, so this stays assignable to the harness's opaque
+ *  `Readonly<Record<string, unknown>>` telemetry slot. */
+export type LangfuseTelemetryConfig = {
     isEnabled: boolean;
     functionId: string;
     /** Carried for AI SDK 7 via `runtimeContext` (see `toAiSdkTelemetryArgs`). */
     metadata?: Record<string, AttributeValue>;
-}
+};
 
 /**
  * Build Langfuse telemetry knobs for a Vercel AI SDK call.
