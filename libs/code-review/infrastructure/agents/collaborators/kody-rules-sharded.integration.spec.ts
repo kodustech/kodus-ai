@@ -10,6 +10,7 @@ import {
     judgeKodyRulesSharded,
     inlineRuleReferences,
     inlineLoadedReferences,
+    findUnresolvedReferenceRules,
     RunJudge,
 } from './kody-rules-sharded.judge';
 import { mapAgentFindings } from './finding-mapper';
@@ -280,5 +281,72 @@ describe('sharded kody-rules — Context OS references inline into the shard', (
         const z = (out[0].rule!.match(/Z/g) || []).length;
         expect(z).toBeLessThanOrEqual(100);
         expect(z).toBeGreaterThan(0);
+    });
+});
+
+describe('findUnresolvedReferenceRules — surfaces judge-blind rules', () => {
+    const r = (over: Record<string, unknown> = {}) => ({
+        uuid: 'r1',
+        title: 't',
+        rule: 'base',
+        contextReferenceId: 'ctx',
+        ...over,
+    });
+
+    it('does NOT flag a rule without a contextReferenceId', () => {
+        const out = findUnresolvedReferenceRules(
+            [r({ contextReferenceId: undefined }) as any],
+            new Map(),
+        );
+        expect(out).toHaveLength(0);
+    });
+
+    it('flags a contextReferenceId rule with no map entry', () => {
+        const out = findUnresolvedReferenceRules([r() as any], new Map());
+        expect(out.map((x) => x.uuid)).toEqual(['r1']);
+    });
+
+    it('does NOT flag a rule whose entry has real content', () => {
+        const out = findUnresolvedReferenceRules(
+            [r() as any],
+            new Map([['r1', [{ filePath: 'CLAUDE.md', content: 'conv' }]]]),
+        );
+        expect(out).toHaveLength(0);
+    });
+
+    // The gap: a whitespace-only reference file passes the loader's
+    // `typeof === 'string'` guard, so the map entry exists, but
+    // inlineLoadedReferences inlines nothing (content.trim() empty) — must
+    // still be treated as unresolved so it is surfaced.
+    it('flags a rule whose entries are all empty/whitespace content', () => {
+        const out = findUnresolvedReferenceRules(
+            [r() as any],
+            new Map([
+                [
+                    'r1',
+                    [
+                        { filePath: 'a.md', content: '   \n\t ' },
+                        { filePath: 'b.md', content: '' },
+                    ],
+                ],
+            ]),
+        );
+        expect(out.map((x) => x.uuid)).toEqual(['r1']);
+    });
+
+    it('does NOT flag when at least one entry has real content', () => {
+        const out = findUnresolvedReferenceRules(
+            [r() as any],
+            new Map([
+                [
+                    'r1',
+                    [
+                        { filePath: 'a.md', content: '   ' },
+                        { filePath: 'b.md', content: 'real' },
+                    ],
+                ],
+            ]),
+        );
+        expect(out).toHaveLength(0);
     });
 });

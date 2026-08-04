@@ -472,19 +472,26 @@ export function inlineLoadedReferences(
 
 /**
  * Rules that declare a `contextReferenceId` but for which the loader resolved
- * NO references — the file citation failed to resolve (fetch error, missing
- * branch, or a reference that no longer exists). The judge runs these WITHOUT
- * their referenced file, so callers should surface it: otherwise the
- * judge-blind degradation is silent, since `inlineLoadedReferences` logs only
- * on success.
+ * nothing usable — the file citation failed to resolve (fetch error, missing
+ * branch, a reference that no longer exists) OR resolved only empty/whitespace
+ * content. The judge runs these WITHOUT their referenced file, so callers
+ * should surface it: otherwise the judge-blind degradation is silent, since
+ * `inlineLoadedReferences` logs only on success.
+ *
+ * "Resolved" here MUST match what `inlineLoadedReferences` actually inlines
+ * (`content.trim()` non-empty) — a map entry can exist yet hold only whitespace
+ * (a whitespace-only reference file passes the loader's `typeof === 'string'`
+ * guard), which inlines nothing. Checking only `map.has(uuid)` would miss that.
  */
 export function findUnresolvedReferenceRules(
     rules: Array<Partial<IKodyRule>>,
     referencesMap: Map<string, LoadedRuleReference[]> | undefined,
 ): Array<Partial<IKodyRule>> {
-    return rules.filter(
-        (r) => r.contextReferenceId && (!r.uuid || !referencesMap?.has(r.uuid)),
-    );
+    return rules.filter((r) => {
+        if (!r.contextReferenceId) return false;
+        const refs = r.uuid ? referencesMap?.get(r.uuid) : undefined;
+        return !refs || refs.every((ref) => !ref?.content?.trim());
+    });
 }
 
 /**
