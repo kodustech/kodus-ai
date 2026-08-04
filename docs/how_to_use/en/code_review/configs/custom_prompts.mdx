@@ -119,8 +119,8 @@ v2PromptOverrides:
 These four are what the web UI exposes, and each is capped at 2000 characters. There is no
 prompt override for the Business Logic category.
 
-The config file accepts two more groups that the UI doesn't surface — the severity rubric Kody
-uses to classify a finding, and the wording of each severity level:
+The config file accepts one more group that the UI doesn't surface — the severity rubric Kody
+uses to classify a finding:
 
 ```yaml
 v2PromptOverrides:
@@ -131,18 +131,13 @@ v2PromptOverrides:
             high: |
             medium: |
             low: |
-    level:
-        critical: |
-            How the "critical" level is described to the model.
-        issue: |
-        warning: |
 ```
 
 <Warning>
-  These change how Kody *classifies* findings, not just how it words them — a bad rubric can
+  This changes how Kody *classifies* findings, not just how it words them — a bad rubric can
   quietly mute or inflate severities across every review. Start from the shipped defaults in
-  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml),
-  which is the canonical list of every overridable key.
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
+  rather than writing a rubric from scratch.
 </Warning>
 
 The file is only read once `kodusConfigFileOverridesWebPreferences` is enabled (see

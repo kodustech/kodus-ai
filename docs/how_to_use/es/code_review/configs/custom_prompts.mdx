@@ -119,8 +119,8 @@ v2PromptOverrides:
 Estos cuatro son los que expone la interfaz web, y cada uno tiene un límite de 2000 caracteres.
 No hay override de prompt para la categoría Business Logic.
 
-El archivo de configuración acepta dos grupos más que la interfaz no muestra — la rúbrica de
-severidad que Kody usa para clasificar un hallazgo, y la redacción de cada nivel de severidad:
+El archivo de configuración acepta un grupo más que la interfaz no muestra — la rúbrica de
+severidad que Kody usa para clasificar un hallazgo:
 
 ```yaml
 v2PromptOverrides:
@@ -131,19 +131,14 @@ v2PromptOverrides:
             high: |
             medium: |
             low: |
-    level:
-        critical: |
-            Cómo se describe el nivel "critical" al modelo.
-        issue: |
-        warning: |
 ```
 
 <Warning>
   Esto cambia cómo Kody *clasifica* los hallazgos, no solo cómo los redacta — una rúbrica mala
   puede silenciar o inflar severidades en todas las revisiones sin avisar. Parte de los valores
   por defecto de
-  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml),
-  que es la lista canónica de todas las claves sobrescribibles.
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
+  en lugar de escribir una rúbrica desde cero.
 </Warning>
 
 El archivo solo se lee una vez que `kodusConfigFileOverridesWebPreferences` está habilitado

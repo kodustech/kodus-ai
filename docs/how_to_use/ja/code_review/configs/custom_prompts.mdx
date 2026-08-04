@@ -119,8 +119,8 @@ v2PromptOverrides:
 この 4 つは Web UI が公開しているもので、それぞれ上限は 2000 文字です。Business Logic
 カテゴリにプロンプトの override はありません。
 
-設定ファイルは、UI に出てこない 2 つのグループも受け付けます — Kody が検出結果を分類する
-ための重大度ルーブリックと、各重大度レベルの文言です：
+設定ファイルは、UI に出てこないグループをもう 1 つ受け付けます — Kody が検出結果を分類する
+ための重大度ルーブリックです：
 
 ```yaml
 v2PromptOverrides:
@@ -131,18 +131,13 @@ v2PromptOverrides:
             high: |
             medium: |
             low: |
-    level:
-        critical: |
-            "critical" レベルをモデルにどう説明するか。
-        issue: |
-        warning: |
 ```
 
 <Warning>
   これは Kody の*表現*だけでなく*分類*そのものを変えます — ルーブリックを誤ると、すべての
   レビューで重大度が静かに下げられたり、逆に膨らんだりします。出荷時のデフォルトである
   [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
-  を起点にしてください。これが override 可能なキーの正典です。
+  を起点にし、ルーブリックをゼロから書き起こさないでください。
 </Warning>
 
 このファイルは `kodusConfigFileOverridesWebPreferences` を有効にして初めて読み込まれます
