@@ -375,11 +375,21 @@ export function byokToVercelModel(
                 //      Application Default Credentials (Workload Identity,
                 //      attached service account, or `gcloud auth
                 //      application-default login`).
-                const adcModel = vertexModelFromAdc(
-                    envMode,
-                    process.env.API_VERTEX_AI_LOCATION,
-                );
-                if (adcModel) return adcModel;
+                //
+                //      Gated on `!openaiKey` so an explicitly configured key
+                //      always wins over an ambient identity: GOOGLE_CLOUD_PROJECT
+                //      is set by default on GCE/Cloud Run, so without this a
+                //      deployment that only set API_OPEN_AI_API_KEY would be
+                //      switched to Vertex by an env var it never opted into.
+                //      Mirrors the claude branch, where the native Anthropic key
+                //      takes precedence over the Vertex path.
+                if (!openaiKey) {
+                    const adcModel = vertexModelFromAdc(
+                        envMode,
+                        process.env.API_VERTEX_AI_LOCATION,
+                    );
+                    if (adcModel) return adcModel;
+                }
                 // No Google-side key at all — fall through to the cloud
                 // Gemini default below.
             }

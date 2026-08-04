@@ -211,6 +211,19 @@ describe('byokToVercelModel — Vertex keyless (ADC) auth', () => {
         });
     });
 
+    it('lets an explicit API_OPEN_AI_API_KEY win over ambient ADC for gemini', () => {
+        // GOOGLE_CLOUD_PROJECT is set by default on GCE/Cloud Run, so it must
+        // not hijack a deployment that only configured an OpenAI-compatible key.
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GOOGLE_CLOUD_PROJECT = 'ambient-proj';
+        process.env.API_OPEN_AI_API_KEY = 'sk-explicit';
+
+        byokToVercelModel(undefined);
+
+        expect(createVertexMock).not.toHaveBeenCalled();
+        expect(createVertexAnthropicMock).not.toHaveBeenCalled();
+    });
+
     it('uses ADC for a gemini-* model in env mode with no SA key', () => {
         process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
         process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
