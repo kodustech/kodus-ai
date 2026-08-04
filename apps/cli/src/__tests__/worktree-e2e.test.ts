@@ -25,7 +25,9 @@ function run(
     return new Promise((resolve, reject) => {
         const child = spawn(process.execPath, [cliEntryPoint, ...args], {
             cwd,
-            env: { ...process.env, KODUS_SKIP_UPDATE_CHECK: '1' },
+            // Without this the CLI reaches the network on every invocation and
+            // the test hangs when that call is slow.
+            env: { ...process.env, KODUS_DISABLE_UPDATE_CHECK: '1' },
         });
         let stdout = '';
         let stderr = '';
