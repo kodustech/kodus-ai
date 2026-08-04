@@ -51,7 +51,13 @@ async function getPrePushHookStatus(repoRoot: string | null): Promise<string> {
         return 'n/a';
     }
 
-    const hookPath = path.join(repoRoot, '.git', 'hooks', 'pre-push');
+    let hookPath: string;
+    try {
+        hookPath = path.join(await gitService.getHooksDir(), 'pre-push');
+    } catch {
+        return 'n/a';
+    }
+
     try {
         const content = await fs.readFile(hookPath, 'utf-8');
         if (content.includes(KODUS_HOOK_MARKER)) {

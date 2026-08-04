@@ -5,10 +5,12 @@ import os from 'os';
 import { gitHooksService } from '../git-hooks.service.js';
 
 let tmpDir: string;
+let hooksDir: string;
 
 beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kodus-git-hooks-'));
-    await fs.mkdir(path.join(tmpDir, '.git', 'hooks'), { recursive: true });
+    hooksDir = path.join(tmpDir, '.git', 'hooks');
+    await fs.mkdir(hooksDir, { recursive: true });
 });
 
 afterEach(async () => {
@@ -16,12 +18,12 @@ afterEach(async () => {
 });
 
 function hookPath(name: string): string {
-    return path.join(tmpDir, '.git', 'hooks', name);
+    return path.join(hooksDir, name);
 }
 
 describe('gitHooksService.install', () => {
     it('installs prepare-commit-msg and post-commit hooks', async () => {
-        const result = await gitHooksService.install(tmpDir);
+        const result = await gitHooksService.install(hooksDir);
 
         expect(result.installed).toContain('prepare-commit-msg');
         expect(result.installed).toContain('post-commit');
@@ -41,7 +43,7 @@ describe('gitHooksService.install', () => {
     });
 
     it('hooks are executable', async () => {
-        await gitHooksService.install(tmpDir);
+        await gitHooksService.install(hooksDir);
 
         const prepareStat = await fs.stat(hookPath('prepare-commit-msg'));
         expect(prepareStat.mode & 0o100).toBeTruthy();
@@ -51,8 +53,8 @@ describe('gitHooksService.install', () => {
     });
 
     it('is idempotent — second install reports alreadyInstalled', async () => {
-        await gitHooksService.install(tmpDir);
-        const result = await gitHooksService.install(tmpDir);
+        await gitHooksService.install(hooksDir);
+        const result = await gitHooksService.install(hooksDir);
 
         expect(result.installed).toHaveLength(0);
         expect(result.alreadyInstalled).toContain('prepare-commit-msg');
@@ -63,7 +65,7 @@ describe('gitHooksService.install', () => {
         const existing = '#!/bin/sh\necho "existing hook"\n';
         await fs.writeFile(hookPath('prepare-commit-msg'), existing);
 
-        await gitHooksService.install(tmpDir);
+        await gitHooksService.install(hooksDir);
 
         const content = await fs.readFile(
             hookPath('prepare-commit-msg'),
@@ -76,8 +78,8 @@ describe('gitHooksService.install', () => {
 
 describe('gitHooksService.uninstall', () => {
     it('removes kodus sections from hooks', async () => {
-        await gitHooksService.install(tmpDir);
-        const result = await gitHooksService.uninstall(tmpDir);
+        await gitHooksService.install(hooksDir);
+        const result = await gitHooksService.uninstall(hooksDir);
 
         expect(result.removed).toContain('prepare-commit-msg');
         expect(result.removed).toContain('post-commit');
@@ -94,10 +96,10 @@ describe('gitHooksService.uninstall', () => {
         await fs.writeFile(hookPath('prepare-commit-msg'), existing);
 
         // Install (appends)
-        await gitHooksService.install(tmpDir);
+        await gitHooksService.install(hooksDir);
 
         // Uninstall (removes only kodus section)
-        await gitHooksService.uninstall(tmpDir);
+        await gitHooksService.uninstall(hooksDir);
 
         const content = await fs.readFile(
             hookPath('prepare-commit-msg'),
@@ -108,7 +110,7 @@ describe('gitHooksService.uninstall', () => {
     });
 
     it('returns empty removed array when hooks do not exist', async () => {
-        const result = await gitHooksService.uninstall(tmpDir);
+        const result = await gitHooksService.uninstall(hooksDir);
         expect(result.removed).toHaveLength(0);
     });
 });

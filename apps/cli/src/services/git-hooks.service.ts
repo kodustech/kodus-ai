@@ -32,15 +32,20 @@ ${KODY_CHECKPOINT_END_MARKER}
 class GitHooksService {
     /**
      * Install prepare-commit-msg and post-commit hooks for checkpoint tracking.
+     *
+     * `hooksDir` must be the directory git actually executes hooks from —
+     * resolve it with `gitService.getHooksDir()` rather than joining
+     * `.git/hooks` onto the worktree root, which breaks inside linked
+     * worktrees (where `.git` is a file) and ignores `core.hooksPath`.
      */
     async install(
-        gitRoot: string,
+        hooksDir: string,
     ): Promise<{ installed: string[]; alreadyInstalled: string[] }> {
         const installed: string[] = [];
         const alreadyInstalled: string[] = [];
 
         const prepareResult = await this.installHook(
-            gitRoot,
+            hooksDir,
             'prepare-commit-msg',
             PREPARE_COMMIT_MSG_SCRIPT,
         );
@@ -51,7 +56,7 @@ class GitHooksService {
         }
 
         const postResult = await this.installHook(
-            gitRoot,
+            hooksDir,
             'post-commit',
             POST_COMMIT_SCRIPT,
         );
@@ -67,18 +72,18 @@ class GitHooksService {
     /**
      * Remove kodus session hooks from prepare-commit-msg and post-commit.
      */
-    async uninstall(gitRoot: string): Promise<{ removed: string[] }> {
+    async uninstall(hooksDir: string): Promise<{ removed: string[] }> {
         const removed: string[] = [];
 
         const prepareResult = await this.removeHook(
-            gitRoot,
+            hooksDir,
             'prepare-commit-msg',
         );
         if (prepareResult) {
             removed.push('prepare-commit-msg');
         }
 
-        const postResult = await this.removeHook(gitRoot, 'post-commit');
+        const postResult = await this.removeHook(hooksDir, 'post-commit');
         if (postResult) {
             removed.push('post-commit');
         }
@@ -87,11 +92,11 @@ class GitHooksService {
     }
 
     private async installHook(
-        gitRoot: string,
+        hooksDir: string,
         hookName: string,
         script: string,
     ): Promise<{ hookPath: string; alreadyInstalled: boolean }> {
-        const hookPath = path.join(gitRoot, '.git', 'hooks', hookName);
+        const hookPath = path.join(hooksDir, hookName);
 
         let existing = '';
         try {
@@ -120,10 +125,10 @@ class GitHooksService {
     }
 
     private async removeHook(
-        gitRoot: string,
+        hooksDir: string,
         hookName: string,
     ): Promise<boolean> {
-        const hookPath = path.join(gitRoot, '.git', 'hooks', hookName);
+        const hookPath = path.join(hooksDir, hookName);
 
         let content: string;
         try {
