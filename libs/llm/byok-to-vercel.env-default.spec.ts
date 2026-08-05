@@ -116,6 +116,9 @@ const ENV_KEYS = [
     'API_OPENAI_FORCE_BASE_URL',
     'API_MOONSHOT_API_KEY',
     'MOONSHOT_API_KEY',
+    'API_DEEPSEEK_API_KEY',
+    'DEEPSEEK_API_KEY',
+    'API_DEEPSEEK_BASE_URL',
 ] as const;
 
 const savedEnv: Record<string, string | undefined> = {};
@@ -293,20 +296,20 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         });
     });
 
-    // ── 7. auto env + kimi default → Moonshot OpenAI-compatible ───────────────
-    it('auto env (unset) + kimi default → createOpenAICompatible({name:moonshot, moonshot key, moonshot base})(defaultModel)', () => {
-        // API_LLM_PROVIDER_MODEL unset → 'auto'; default model is kimi-*.
-        process.env.API_MOONSHOT_API_KEY = 'ms-key';
+    // ── 7. auto env + deepseek default → DeepSeek OpenAI-compatible ───────────
+    it('auto env (unset) + deepseek default → createOpenAICompatible({name:deepseek, deepseek key, deepseek base})(defaultModel)', () => {
+        // API_LLM_PROVIDER_MODEL unset → 'auto'; default model is deepseek-*.
+        process.env.API_DEEPSEEK_API_KEY = 'ds-key';
 
         const result: any = buildModelFromSlot(undefined);
 
         expect(createOpenAICompatibleMock).toHaveBeenCalledTimes(1);
         expect(result.sdk).toBe('openai-compatible');
-        expect(result.modelId).toBe('kimi-k2.7-code');
+        expect(result.modelId).toBe('deepseek-v4-flash');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'moonshot',
-            apiKey: 'ms-key',
-            baseURL: 'https://api.moonshot.ai/v1',
+            name: 'deepseek',
+            apiKey: 'ds-key',
+            baseURL: 'https://api.deepseek.com/v1',
         });
     });
 
@@ -332,19 +335,19 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
     });
 
     // ── 9. self-hosted mode declared but NO usable env key → falls to default ─
-    it('self-hosted model declared but NO env key → falls through to the kimi default (does NOT throw)', () => {
+    it('self-hosted model declared but NO env key → falls through to the deepseek default (does NOT throw)', () => {
         // openai-style model id but neither openai key nor vertex/studio keys.
         process.env.API_LLM_PROVIDER_MODEL = 'some-self-hosted-model';
-        process.env.API_MOONSHOT_API_KEY = 'ms-key';
+        process.env.API_DEEPSEEK_API_KEY = 'ds-key';
 
         const result: any = buildModelFromSlot(undefined);
 
         // No native/openai-compat branch fired for the declared model; execution
-        // fell through to the kimi default (DEFAULT_MODEL.model = kimi-k2.7-code).
+        // fell through to the deepseek default (DEFAULT_MODEL.model = deepseek-v4-flash).
         expect(result.sdk).toBe('openai-compatible');
-        expect(result.modelId).toBe('kimi-k2.7-code');
+        expect(result.modelId).toBe('deepseek-v4-flash');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'moonshot' }),
+            expect.objectContaining({ name: 'deepseek' }),
         );
         expect(createAnthropicMock).not.toHaveBeenCalled();
     });

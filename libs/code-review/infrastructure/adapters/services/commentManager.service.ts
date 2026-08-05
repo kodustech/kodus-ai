@@ -111,8 +111,8 @@ export class CommentManagerService implements ICommentManagerService {
      * SDK) path so the user's BYOK model — including Claude-on-Vertex — is
      * honored. The legacy v2 langchain path (PromptRunnerService) only spoke
      * Gemini on Vertex, so a Claude-on-Vertex BYOK crashed the summary step
-     * before suggestions could be posted. Defaults to kimi-k2.7-code (Moonshot)
-     * when no BYOK is configured (cloud/trial default).
+     * before suggestions could be posted. Defaults to deepseek-v4-flash
+     * (DeepSeek) when no BYOK is configured (cloud/trial default).
      */
     private async runSummaryPromptV5(params: {
         slot: NormalizedModel | null;
@@ -144,23 +144,24 @@ export class CommentManagerService implements ICommentManagerService {
         const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
             spanName,
             runName,
-            model: slot?.model ?? 'kimi-k2.7-code',
+            model: slot?.model ?? 'deepseek-v4-flash',
             attrs,
             exec: async () => {
                 // Build the single resolved slot (native). Off-BYOK →
-                // kimi-k2.7-code default (cloud/trial). buildModelFromSlot
+                // deepseek-v4-flash default (cloud/trial). buildModelFromSlot
                 // decrypts the ciphertext key only in this local scope.
                 const model = buildModelFromSlot(
                     slot ?? undefined,
                     {},
-                    'kimi-k2.7-code',
+                    'deepseek-v4-flash',
                 );
                 // Only pin temperature when the BYOK config sets one. Forcing 0
-                // broke models that reject a non-default temperature — Moonshot's
-                // kimi-k2.7-code rejects anything but 1 (HTTP 400), so the summary
-                // silently failed for kimi users while reviews kept working. The
-                // finder omits temperature for the same reason (finder.agent.ts),
-                // letting the provider default apply.
+                // broke models that reject a non-default temperature (e.g.
+                // Moonshot's kimi-k2.7-code rejected anything but 1 with HTTP
+                // 400), so the summary silently failed for those users while
+                // reviews kept working. The finder omits temperature for the
+                // same reason (finder.agent.ts), letting the provider default
+                // apply.
                 const configuredTemperature = slot?.temperature;
                 return await tracedGenerateText({
                     model: model as any,

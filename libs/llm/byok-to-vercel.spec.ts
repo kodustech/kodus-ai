@@ -246,12 +246,12 @@ describe('buildModelFromSlot — env/managed default (undefined slot)', () => {
         else process.env.API_MOONSHOT_API_KEY = prevMoonshot;
     });
 
-    it('no slot + auto env → the managed Kimi default (kimi-k2.7-code via Moonshot)', () => {
+    it('no slot + auto env → the managed DeepSeek default (deepseek-v4-flash via DeepSeek)', () => {
         const result: any = buildModelFromSlot(undefined);
 
-        expect(result.modelId).toBe('kimi-k2.7-code');
+        expect(result.modelId).toBe('deepseek-v4-flash');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'moonshot' }),
+            expect.objectContaining({ name: 'deepseek' }),
         );
     });
 
@@ -284,7 +284,7 @@ describe('getModelName — resolved slot vs env default', () => {
     });
 
     it('undefined slot + auto env → the managed default model id', () => {
-        expect(getModelName(undefined)).toBe('kimi-k2.7-code');
+        expect(getModelName(undefined)).toBe('deepseek-v4-flash');
     });
 
     it('undefined slot preserves the self-host env-mode name branch', () => {

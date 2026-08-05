@@ -61,7 +61,7 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
  */
 const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,
-    model: 'kimi-k2.7-code',
+    model: 'deepseek-v4-flash',
 };
 
 /**
@@ -234,11 +234,30 @@ export function resolveManagedSlot(
         // the API call instead of here).
     }
 
-    // Kimi (Moonshot AI) — the public-demo trial flow. Now a FIRST-CLASS registry
-    // provider (moonshot.module): the managed default routes through the module,
-    // which reproduces the exact `createOpenAICompatible({name:'moonshot', apiKey,
-    // baseURL})` factory call the old inline exception made (no
-    // `supportsStructuredOutputs` field on the un-opted-in default path).
+    // DeepSeek — the managed default model for the trial / no-BYOK flow.
+    // Detected by model-name prefix so we don't need a new BYOK provider entry
+    // just for the default-only path; wires through the OpenAI-compatible adapter
+    // pointed at DeepSeek's endpoint (inline exception, like self-hosted above).
+    if (/^deepseek[-_.]/i.test(defaultModel)) {
+        const deepseekKey =
+            process.env.API_DEEPSEEK_API_KEY ||
+            process.env.DEEPSEEK_API_KEY ||
+            '';
+        return {
+            kind: 'inline',
+            model: createOpenAICompatible({
+                name: 'deepseek',
+                apiKey: deepseekKey,
+                baseURL:
+                    process.env.API_DEEPSEEK_BASE_URL ||
+                    'https://api.deepseek.com/v1',
+            })(defaultModel),
+        };
+    }
+
+    // Kimi (Moonshot AI) — legacy managed default, kept for any lingering
+    // `kimi-*` override still in flight. New default is DeepSeek above. Routes
+    // through the moonshot registry module (createOpenAICompatible under the hood).
     if (/^kimi[-_.]/i.test(defaultModel)) {
         const moonshotKey =
             process.env.API_MOONSHOT_API_KEY ||

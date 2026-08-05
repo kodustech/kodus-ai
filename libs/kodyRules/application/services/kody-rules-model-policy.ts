@@ -7,20 +7,20 @@ import { LLM_TASK } from '@libs/llm/byok-config';
 
 /**
  * The Kodus-funded model for Kody Rules generation when there's no BYOK:
- * Kimi K2.7 Code via the Moonshot official API (`API_MOONSHOT_API_KEY`),
- * routed by `byokToVercelModel`'s `kimi-*` prefix detection. Gemini is dead
+ * DeepSeek V4 Flash via the DeepSeek official API (`API_DEEPSEEK_API_KEY`),
+ * routed by the resolver's `deepseek-*` prefix detection. Gemini is dead
  * (project denied access) and must never be used here — see item 9 of
  * docs/plans/fix-kody-rules-generation.md.
  */
-export const KODY_RULES_KODUS_MODEL = 'kimi-k2.7-code';
+export const KODY_RULES_KODUS_MODEL = 'deepseek-v4-flash';
 
 /**
  * Resolved model policy for a Kody Rules generation run.
  *
  * `generate: false` means the run must be skipped (no model the org is
- * entitled to). `byokConfig`/`modelOverride` feed `byokToVercelModel`:
+ * entitled to). `byokConfig`/`modelOverride` feed the resolver:
  * BYOK wins when present; otherwise `modelOverride` forces the Kodus model
- * (Kimi); self-hosted resolves the env model (both undefined).
+ * (DeepSeek); self-hosted resolves the env model (both undefined).
  */
 export interface KodyRulesModelPolicy {
     generate: boolean;
@@ -34,10 +34,10 @@ export interface KodyRulesModelPolicy {
  * Decides which model (if any) a Kody Rules generation run may use.
  *
  * Policy (see docs/plans/fix-kody-rules-generation.md). The Kodus-funded model
- * is ALWAYS Kimi — Gemini is dead and must never be reached from this flow:
+ * is ALWAYS DeepSeek — Gemini is dead and must never be reached from this flow:
  * - BYOK configured              → client's BYOK model.
  * - Self-hosted (not cloud)      → the deployment's env model (customer keys).
- * - Cloud + dev OR trial         → Kimi K2.7 (Kodus pays).
+ * - Cloud + dev OR trial         → DeepSeek V4 Flash (Kodus pays).
  * - Cloud + free/paid, no BYOK   → SKIP (generates nothing).
  */
 export async function resolveKodyRulesModelPolicy(
@@ -62,8 +62,8 @@ export async function resolveKodyRulesModelPolicy(
     }
 
     // Cloud. When Kodus foots the bill (local dev, or an active trial) the model
-    // is Kimi — explicitly overridden so buildModelFromSlot never falls back to
-    // its dead Gemini default.
+    // is DeepSeek — explicitly overridden so buildModelFromSlot never falls back
+    // to its dead Gemini default.
     const subscriptionStatus =
         await permissionValidationService.getSubscriptionStatus(
             organizationAndTeamData,

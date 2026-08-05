@@ -4,7 +4,7 @@
  *
  * Model policy (1 model per task — no runtime error-recovery fallback):
  *   - the run resolves ONE model: the org's BYOK model, or our managed default
- *     when no BYOK (`kimi-k2.7-code` via Moonshot — resolved by byokToVercelModel).
+ *     when no BYOK (`deepseek-v4-flash` via DeepSeek — resolved by buildModelFromSlot).
  *
  * There is NO 2nd-model cascade: no managed Groq for trial orgs, no
  * `byok-fallback` for BYOK orgs. A model failure/timeout fails the call. The
