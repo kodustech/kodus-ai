@@ -676,13 +676,15 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
     });
 
     const makeProvider = (loader?: any) => {
+        // 5-arg constructor (promptRunnerService was removed with the LangChain
+        // exit): permission, observability, documentationSearch, byokErrorCounter,
+        // externalReferenceLoaderService.
         const p = new KodyRulesAgentProvider(
-            {} as any,
-            {} as any,
-            {} as any,
-            undefined,
-            undefined,
-            loader,
+            {} as any, // permissionValidationService
+            {} as any, // observabilityService
+            undefined, // documentationSearchService
+            undefined, // byokErrorCounter
+            loader, // externalReferenceLoaderService
         );
         // Swap the real structured logger for spies.
         (p as any).shardLogger = { warn: jest.fn(), log: jest.fn() };
