@@ -389,6 +389,27 @@ export function isTransientFailure(message: string): boolean {
     return TRANSIENT_FAILURE_PATTERNS.some((re) => re.test(message ?? ''));
 }
 
+// A transient-SHAPED failure is only worth retrying when it also failed
+// FAST. A failure that consumed most of the scenario's own budget — e.g. a
+// pollForReview that exhausted its full 1500s window because the review
+// never posted — is NOT transient noise: re-running it (a) tends to fail
+// the same way and (b) stacks a second near-full-budget attempt that blows
+// the job-level (60 min) timeout, turning a clean red-with-evidence into a
+// grey "cancelled" with no artifacts. This fraction of the scenario's
+// timeoutSec is the line between a lost-webhook blip (fails in seconds) and
+// a deterministic slow/hung review (fails at the poll ceiling). See
+// fix/review-timeout-robustness.
+export const RETRY_MAX_ATTEMPT_FRACTION = 0.5;
+
+export function shouldRetryFailure(
+    message: string,
+    attemptDurationMs: number,
+    scenarioBudgetMs: number,
+): boolean {
+    if (!isTransientFailure(message)) return false;
+    return attemptDurationMs < scenarioBudgetMs * RETRY_MAX_ATTEMPT_FRACTION;
+}
+
 // GitHub's primary rate limit is per ACCOUNT and resets hourly, so an
 // in-run retry can't clear it — re-running just burns more of the same
 // quota. When a cell fails purely because GitHub said "rate limit
@@ -767,20 +788,29 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                         );
                         break;
                     }
-                    if (
-                        attempt === 1 &&
-                        !opts.failFast &&
-                        isTransientFailure(e.message)
-                    ) {
-                        retriedAfter = e.message;
-                        const settleMs = absenceRetryDelayMs(e.message);
-                        log.info(
-                            `RETRY ${cellLabel}: transient failure shape, re-running once${settleMs ? ` after a ${settleMs / 1000}s settle (absence shape — likely a deploy/worker rollout window)` : ''} (${e.message.slice(0, 160)})`,
-                        );
-                        if (settleMs) {
-                            await settle(settleMs);
+                    const scenarioBudgetMs = (scenario.timeoutSec ?? 1800) * 1000;
+                    if (attempt === 1 && !opts.failFast) {
+                        if (shouldRetryFailure(e.message, duration, scenarioBudgetMs)) {
+                            retriedAfter = e.message;
+                            const settleMs = absenceRetryDelayMs(e.message);
+                            log.info(
+                                `RETRY ${cellLabel}: transient failure shape, re-running once${settleMs ? ` after a ${settleMs / 1000}s settle (absence shape — likely a deploy/worker rollout window)` : ''} (${e.message.slice(0, 160)})`,
+                            );
+                            if (settleMs) {
+                                await settle(settleMs);
+                            }
+                            continue;
                         }
-                        continue;
+                        // Transient SHAPE but it consumed most of the budget —
+                        // a full-window failure, not retryable noise. Say so, so
+                        // it doesn't read as a missed retry, and fail fast with
+                        // evidence instead of stacking a second full-budget
+                        // attempt that would blow the job-level timeout.
+                        if (isTransientFailure(e.message)) {
+                            log.info(
+                                `NO-RETRY ${cellLabel}: transient shape but ran ${(duration / 1000).toFixed(0)}s (≥${Math.round(RETRY_MAX_ATTEMPT_FRACTION * 100)}% of its ${(scenarioBudgetMs / 1000).toFixed(0)}s budget) — a full-window failure won't clear on retry, failing fast with evidence`,
+                            );
+                        }
                     }
                     // Infra vs product: if the target itself is down, the
                     // result is INCONCLUSIVE (skipped), not a red product

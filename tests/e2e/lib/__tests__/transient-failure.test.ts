@@ -1,6 +1,11 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { absenceRetryDelayMs, isTransientFailure } from "../runner.js";
+import {
+    absenceRetryDelayMs,
+    isTransientFailure,
+    shouldRetryFailure,
+    RETRY_MAX_ATTEMPT_FRACTION,
+} from "../runner.js";
 
 // The retry classifier decides which cell failures get ONE automatic
 // re-run. The split is ABSENCE/NETWORK (retry — a lost webhook or provider
@@ -63,6 +68,37 @@ test("absenceRetryDelayMs: review-never-started shapes get the 120s settle", () 
     for (const msg of absent) {
         assert.equal(absenceRetryDelayMs(msg), 120_000, msg.slice(0, 60));
     }
+});
+
+// shouldRetryFailure layers a DURATION gate on top of the shape check: a
+// transient-shaped failure is only re-run when it failed FAST. A failure
+// that burned most of the scenario budget (the review never posted, poll
+// exhausted its full window) must NOT retry — a second full-budget attempt
+// blows the job-level timeout and turns a red-with-evidence into a grey
+// cancel. See fix/review-timeout-robustness.
+const BUDGET_MS = 1800 * 1000; // command-review-focus scenario budget
+const THRESHOLD = BUDGET_MS * RETRY_MAX_ATTEMPT_FRACTION;
+
+test("shouldRetryFailure: transient shape that failed FAST retries", () => {
+    const msg =
+        'Assertion failed: No review findings on PR/MR #8 within 900s after posting "@kody review".';
+    assert.ok(shouldRetryFailure(msg, 30_000, BUDGET_MS)); // failed in 30s
+    assert.ok(shouldRetryFailure(msg, THRESHOLD - 1, BUDGET_MS));
+});
+
+test("shouldRetryFailure: transient shape that consumed the full window does NOT retry", () => {
+    // The exact command-review-focus failure: poll exhausted its 1500s window.
+    const msg =
+        'Assertion failed: No review on PR/MR #758 within 1502s after posting "@kody review focus on the map-based storage logic".';
+    assert.ok(isTransientFailure(msg), "shape is still transient");
+    assert.ok(!shouldRetryFailure(msg, 1_502_000, BUDGET_MS), "but ran full window → no retry");
+    assert.ok(!shouldRetryFailure(msg, THRESHOLD + 1, BUDGET_MS));
+});
+
+test("shouldRetryFailure: deterministic mismatch never retries, even if fast", () => {
+    const msg =
+        'Assertion failed: Expected NO real review for license=free but Kody posted one.';
+    assert.ok(!shouldRetryFailure(msg, 1_000, BUDGET_MS));
 });
 
 test("absenceRetryDelayMs: transport noise retries immediately (0ms)", () => {

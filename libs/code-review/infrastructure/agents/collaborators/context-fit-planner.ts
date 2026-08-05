@@ -64,7 +64,7 @@ export const LARGE_PR_AGGRESSIVE_FILTER_PATTERNS = [
  * tool schemas + coverage list + PR context) already exceeds the
  * model's context window, no PR can ever fit and the LLM call would
  * fail immediately with a 4xx. Without this check the agent silently
- * hangs until AGENT_TIMEOUT_MS (30 min) — see runAgentLoop's setTimeout
+ * hangs until AGENT_TIMEOUT_MS (20 min) — see runAgentLoop's setTimeout
  * — burning a queue slot and producing zero output.
  *
  * Exported so it can be unit-tested in isolation. Called from
