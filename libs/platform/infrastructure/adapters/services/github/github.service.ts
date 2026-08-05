@@ -2947,27 +2947,63 @@ export class GithubService
                         doNotRetry: [400, 401, 403, 404, 422, 451],
                     },
                     throttle: {
+                        // NEVER sleep inside the octokit call (mirrors the App
+                        // path above). A primary-rate-limit retryAfter is the
+                        // time until the hourly bucket resets — up to ~59 min.
+                        // Returning `true` made octokit sleep that whole window
+                        // holding the worker slot; the webhook job's own 9-min
+                        // watchdog then killed it with ZERO user-facing signal,
+                        // so the review just vanished. Return false → the 403
+                        // throws immediately → the processor converts it to
+                        // RateLimitError(resetAt) and the RabbitMQ error handler
+                        // republishes the job aligned to the reset. A review
+                        // that can't reach GitHub must surface a clear error,
+                        // not hang silently.
                         onRateLimit: (
-                            _retryAfter,
+                            retryAfter,
                             options: { method: string; url: string },
                             octokit,
                         ) => {
                             octokit.log.warn(
-                                `Request quota exhausted for request ${options.method} ${options.url}`,
+                                `RATE-LIMIT: ${options.method} ${options.url} — retryAfter=${retryAfter}s (failing fast, not sleeping)`,
                             );
-
-                            return true;
+                            this.logger.warn({
+                                message: `GitHub primary rate limit — failing fast (retryAfter=${retryAfter}s) so the review surfaces a clear error instead of hanging silently`,
+                                context: GithubService.name,
+                                serviceName: 'GithubService',
+                                metadata: {
+                                    method: options.method,
+                                    url: options.url,
+                                    retryAfter,
+                                    organizationId:
+                                        organizationAndTeamData?.organizationId,
+                                    teamId: organizationAndTeamData?.teamId,
+                                },
+                            });
+                            return false;
                         },
                         onSecondaryRateLimit: (
-                            _retryAfter,
+                            retryAfter,
                             options: { method: string; url: string },
                             octokit,
                         ) => {
                             octokit.log.warn(
-                                `Secondary rate limit hit for request ${options.method} ${options.url}`,
+                                `SECONDARY-RATE-LIMIT: ${options.method} ${options.url} — wait=${retryAfter}s (failing fast)`,
                             );
-
-                            return true;
+                            this.logger.warn({
+                                message: `GitHub secondary rate limit — failing fast (wait=${retryAfter}s)`,
+                                context: GithubService.name,
+                                serviceName: 'GithubService',
+                                metadata: {
+                                    method: options.method,
+                                    url: options.url,
+                                    retryAfter,
+                                    organizationId:
+                                        organizationAndTeamData?.organizationId,
+                                    teamId: organizationAndTeamData?.teamId,
+                                },
+                            });
+                            return false;
                         },
                     },
                 });

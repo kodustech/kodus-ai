@@ -171,9 +171,16 @@ jobs:
                   # pool above. The self-hosted product uses this for all its
                   # own GitHub calls (read diff/files, post comments) — pinning
                   # it to GH_TEST_TOKEN meant product + harness drained one
-                  # account and tripped the rate limit mid-cell. Falls back to
-                  # GH_TEST_TOKEN when unset (see github.ts authToken()).
-                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN }}
+                  # account and tripped the rate limit mid-cell.
+                  #
+                  # Split by license so the two github cells don't share ONE
+                  # product account: the license-paid cell (heavy — ~13 review
+                  # scenarios, several multi-PR) gets its own bot, license-free
+                  # keeps GH_INTEGRATION_TOKEN. Falls back to GH_INTEGRATION_TOKEN
+                  # when GH_INTEGRATION_TOKEN_PAID is unset (graceful until the
+                  # secret is added), and to GH_TEST_TOKEN when both are unset
+                  # (see github.ts authToken()).
+                  GH_INTEGRATION_TOKEN: ${{ (matrix.cell.license == 'license-paid' && secrets.GH_INTEGRATION_TOKEN_PAID) || secrets.GH_INTEGRATION_TOKEN }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
 
