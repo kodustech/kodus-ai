@@ -141,6 +141,13 @@ v2PromptOverrides:
   em vez de escrever uma rubrica do zero.
 </Warning>
 
+<Note>
+  O `default-kodus-config.yml` que vem no repositório também traz um grupo
+  `v2PromptOverrides.level`. Ele continua sendo aceito por retrocompatibilidade, mas **o engine
+  não lê mais** — definir esse bloco não muda nada. Só `categories.descriptions`,
+  `severity.flags` e `generation.main` chegam na revisão.
+</Note>
+
 O arquivo só é lido depois que `kodusConfigFileOverridesWebPreferences` estiver habilitado (veja
 [Geral](/how_to_use/pt-br/code_review/configs/general)).
 

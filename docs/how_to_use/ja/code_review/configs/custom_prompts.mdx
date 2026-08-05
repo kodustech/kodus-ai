@@ -140,6 +140,12 @@ v2PromptOverrides:
   を起点にし、ルーブリックをゼロから書き起こさないでください。
 </Warning>
 
+<Note>
+  同梱の `default-kodus-config.yml` には `v2PromptOverrides.level` グループも含まれています。
+  後方互換のため受け付けられ続けますが、**エンジンはもう読みません** — 設定しても何も変わりません。
+  レビューに届くのは `categories.descriptions`、`severity.flags`、`generation.main` だけです。
+</Note>
+
 このファイルは `kodusConfigFileOverridesWebPreferences` を有効にして初めて読み込まれます
 （[一般設定](/how_to_use/ja/code_review/configs/general) を参照）。
 

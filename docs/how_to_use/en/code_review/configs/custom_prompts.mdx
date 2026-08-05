@@ -140,6 +140,13 @@ v2PromptOverrides:
   rather than writing a rubric from scratch.
 </Warning>
 
+<Note>
+  The shipped `default-kodus-config.yml` also contains a `v2PromptOverrides.level` group. It is
+  still accepted for backward compatibility but **the engine no longer reads it** — setting it
+  changes nothing. Only `categories.descriptions`, `severity.flags` and `generation.main` reach
+  the review.
+</Note>
+
 The file is only read once `kodusConfigFileOverridesWebPreferences` is enabled (see
 [General](/how_to_use/en/code_review/configs/general)).
 

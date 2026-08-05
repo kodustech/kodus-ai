@@ -138,6 +138,12 @@ v2PromptOverrides:
   为起点,而不要从零编写评判标准。
 </Warning>
 
+<Note>
+  随产品发布的 `default-kodus-config.yml` 中还包含一个 `v2PromptOverrides.level` 分组。出于向后
+  兼容它仍会被接受,但**引擎已不再读取它** —— 设置它不会产生任何变化。只有
+  `categories.descriptions`、`severity.flags` 和 `generation.main` 会进入审查。
+</Note>
+
 只有在启用 `kodusConfigFileOverridesWebPreferences` 之后该文件才会被读取(参见
 [通用设置](/how_to_use/zh/code_review/configs/general))。
 
