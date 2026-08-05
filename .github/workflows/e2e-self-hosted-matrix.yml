@@ -112,14 +112,6 @@ jobs:
             matrix:
                 cell: ${{ fromJson(needs.plan.outputs.cells) }}
         steps:
-            # Stamp the run deadline (job start + the 60-min job timeout) as an
-            # epoch the matrix runner reads for its retry budget gate
-            # (shouldRetryFailure). MUST be the first step: ~7min provisioning +
-            # checkout/install run before the runner but still burn the 60-min
-            # job budget, so measuring from runMatrix entry would undercount.
-            - name: Record run deadline for the retry budget gate
-              run: echo "E2E_DEADLINE_EPOCH_MS=$(( ($(date +%s) + 3600) * 1000 ))" >> "$GITHUB_ENV"
-
             - name: Checkout monorepo
               uses: actions/checkout@v6.0.2
 
@@ -179,9 +171,16 @@ jobs:
                   # pool above. The self-hosted product uses this for all its
                   # own GitHub calls (read diff/files, post comments) — pinning
                   # it to GH_TEST_TOKEN meant product + harness drained one
-                  # account and tripped the rate limit mid-cell. Falls back to
-                  # GH_TEST_TOKEN when unset (see github.ts authToken()).
-                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN }}
+                  # account and tripped the rate limit mid-cell.
+                  #
+                  # Split by license so the two github cells don't share ONE
+                  # product account: the license-paid cell (heavy — ~13 review
+                  # scenarios, several multi-PR) gets its own bot, license-free
+                  # keeps GH_INTEGRATION_TOKEN. Falls back to GH_INTEGRATION_TOKEN
+                  # when GH_INTEGRATION_TOKEN_PAID is unset (graceful until the
+                  # secret is added), and to GH_TEST_TOKEN when both are unset
+                  # (see github.ts authToken()).
+                  GH_INTEGRATION_TOKEN: ${{ (matrix.cell.license == 'license-paid' && secrets.GH_INTEGRATION_TOKEN_PAID) || secrets.GH_INTEGRATION_TOKEN }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
 

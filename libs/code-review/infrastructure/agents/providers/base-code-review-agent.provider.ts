@@ -253,7 +253,7 @@ export abstract class BaseCodeReviewAgentProvider {
         };
         // Fail fast when the configured model's context window cannot
         // even hold the agent's static overhead. Without this, the loop
-        // would run to AGENT_TIMEOUT_MS (20 min) while the LLM 400s on
+        // would run to AGENT_TIMEOUT_MS (30 min) while the LLM 400s on
         // every retry — see runAgentLoop. Surfaces as CONTEXT_OVERFLOW
         // via classifyLLMError → friendlyMessage on lastReviewError.
         assertContextWindowFitsOverhead({

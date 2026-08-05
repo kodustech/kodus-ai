@@ -238,13 +238,6 @@ jobs:
                   echo "::error::QA backend never settled (app-ready + expected build, $NEED_OK consecutive) in ~15min — aborting before the matrix to avoid deploy-race false failures."
                   exit 1
 
-            # Stamp the run deadline (now + the runner STEP's 135-min timeout,
-            # the bound the matrix actually runs under) as an epoch the runner
-            # reads for its retry budget gate (shouldRetryFailure). Set right
-            # before the step so "now" ≈ the step start.
-            - name: Record run deadline for the retry budget gate
-              run: echo "E2E_DEADLINE_EPOCH_MS=$(( ($(date +%s) + 8100) * 1000 ))" >> "$GITHUB_ENV"
-
             - name: Run cloud matrix
               id: matrix
               # Deliberately BELOW the job's timeout-minutes. When the JOB
