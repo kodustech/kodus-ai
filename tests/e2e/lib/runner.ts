@@ -389,25 +389,33 @@ export function isTransientFailure(message: string): boolean {
     return TRANSIENT_FAILURE_PATTERNS.some((re) => re.test(message ?? ''));
 }
 
-// A transient-SHAPED failure is only worth retrying when it also failed
-// FAST. A failure that consumed most of the scenario's own budget — e.g. a
-// pollForReview that exhausted its full 1500s window because the review
-// never posted — is NOT transient noise: re-running it (a) tends to fail
-// the same way and (b) stacks a second near-full-budget attempt that blows
-// the job-level (60 min) timeout, turning a clean red-with-evidence into a
-// grey "cancelled" with no artifacts. This fraction of the scenario's
-// timeoutSec is the line between a lost-webhook blip (fails in seconds) and
-// a deterministic slow/hung review (fails at the poll ceiling). See
+// A poll-based absence ("No review … within timeout") surfaces at the POLL
+// CEILING, not "in seconds": a genuinely lost webhook AND a too-slow review
+// both fail only after the full poll window elapses. So attempt duration alone
+// can't tell a retryable flake from a deterministic slow review — both look the
+// same. What actually decides whether a retry is safe is whether a SECOND
+// attempt still FITS: re-running is only harmful when the doubled wall-clock
+// would blow the matrix JOB timeout (grey "cancelled", no evidence uploaded).
+// So gate on the remaining job budget, NOT on a fraction of the scenario budget
+// — that fraction wrongly suppressed retries for scenarios whose poll window
+// exceeds half their budget (kody-rules / kody-rules-coverage: a 720s poll in a
+// 1200s budget), i.e. exactly the lost-webhook flake the retry exists for. See
 // fix/review-timeout-robustness.
-export const RETRY_MAX_ATTEMPT_FRACTION = 0.5;
+export const JOB_BUDGET_MS =
+    Number(process.env.E2E_JOB_BUDGET_MS) || 60 * 60 * 1000; // matrix job timeout-minutes: 60
+// Headroom so a permitted retry (plus teardown) still lands inside the job.
+export const JOB_BUDGET_SAFETY_MS = 5 * 60 * 1000;
 
 export function shouldRetryFailure(
     message: string,
     attemptDurationMs: number,
-    scenarioBudgetMs: number,
+    elapsedJobMs: number,
+    jobBudgetMs: number = JOB_BUDGET_MS,
 ): boolean {
     if (!isTransientFailure(message)) return false;
-    return attemptDurationMs < scenarioBudgetMs * RETRY_MAX_ATTEMPT_FRACTION;
+    // A retry re-runs a similar poll, so it costs ~another attemptDurationMs.
+    // Permit it only if that still lands inside the job budget with headroom.
+    return elapsedJobMs + attemptDurationMs < jobBudgetMs - JOB_BUDGET_SAFETY_MS;
 }
 
 // GitHub's primary rate limit is per ACCOUNT and resets hourly, so an
@@ -448,6 +456,9 @@ export function absenceRetryDelayMs(message: string): number {
 
 export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     const startedAt = new Date().toISOString();
+    // Numeric run start for the retry budget gate (shouldRetryFailure): a
+    // retry is only allowed when it still fits inside the job timeout.
+    const runStartMs = Date.now();
     const results: ScenarioResult[] = [];
     const artifactDir = join(opts.artifactRoot, opts.runId);
     mkdirSync(artifactDir, { recursive: true });
@@ -788,9 +799,9 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                         );
                         break;
                     }
-                    const scenarioBudgetMs = (scenario.timeoutSec ?? 1800) * 1000;
+                    const elapsedJobMs = Date.now() - runStartMs;
                     if (attempt === 1 && !opts.failFast) {
-                        if (shouldRetryFailure(e.message, duration, scenarioBudgetMs)) {
+                        if (shouldRetryFailure(e.message, duration, elapsedJobMs)) {
                             retriedAfter = e.message;
                             const settleMs = absenceRetryDelayMs(e.message);
                             log.info(
@@ -801,14 +812,14 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                             }
                             continue;
                         }
-                        // Transient SHAPE but it consumed most of the budget —
-                        // a full-window failure, not retryable noise. Say so, so
-                        // it doesn't read as a missed retry, and fail fast with
-                        // evidence instead of stacking a second full-budget
-                        // attempt that would blow the job-level timeout.
+                        // Transient SHAPE, but a retry (~another ${duration}ms
+                        // poll) wouldn't fit the remaining job budget — stacking
+                        // it would blow the job-level timeout (grey cancel, no
+                        // evidence). Say so, so it doesn't read as a missed
+                        // retry, and fail fast with evidence instead.
                         if (isTransientFailure(e.message)) {
                             log.info(
-                                `NO-RETRY ${cellLabel}: transient shape but ran ${(duration / 1000).toFixed(0)}s (≥${Math.round(RETRY_MAX_ATTEMPT_FRACTION * 100)}% of its ${(scenarioBudgetMs / 1000).toFixed(0)}s budget) — a full-window failure won't clear on retry, failing fast with evidence`,
+                                `NO-RETRY ${cellLabel}: transient shape but a retry (~${(duration / 1000).toFixed(0)}s) wouldn't fit the remaining job budget (${(elapsedJobMs / 1000).toFixed(0)}s of ${(JOB_BUDGET_MS / 1000).toFixed(0)}s used) — failing fast with evidence`,
                             );
                         }
                     }

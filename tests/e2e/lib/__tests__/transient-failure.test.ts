@@ -4,7 +4,6 @@ import {
     absenceRetryDelayMs,
     isTransientFailure,
     shouldRetryFailure,
-    RETRY_MAX_ATTEMPT_FRACTION,
 } from "../runner.js";
 
 // The retry classifier decides which cell failures get ONE automatic
@@ -70,35 +69,41 @@ test("absenceRetryDelayMs: review-never-started shapes get the 120s settle", () 
     }
 });
 
-// shouldRetryFailure layers a DURATION gate on top of the shape check: a
-// transient-shaped failure is only re-run when it failed FAST. A failure
-// that burned most of the scenario budget (the review never posted, poll
-// exhausted its full window) must NOT retry — a second full-budget attempt
-// blows the job-level timeout and turns a red-with-evidence into a grey
-// cancel. See fix/review-timeout-robustness.
-const BUDGET_MS = 1800 * 1000; // command-review-focus scenario budget
-const THRESHOLD = BUDGET_MS * RETRY_MAX_ATTEMPT_FRACTION;
+// shouldRetryFailure gates a transient-shaped failure on whether a SECOND
+// attempt still fits the JOB budget — not on a fraction of the scenario budget.
+// Absence failures surface at the poll ceiling, so a lost-webhook flake and a
+// slow review are indistinguishable by duration; the deciding factor is the
+// budget slack left for a retry. See fix/review-timeout-robustness.
+const JOB_BUDGET = 60 * 60 * 1000; // matches JOB_BUDGET_MS default (5min safety)
 
-test("shouldRetryFailure: transient shape that failed FAST retries", () => {
+test("shouldRetryFailure: absence retries when a second attempt fits the job budget", () => {
+    // kody-rules regression guard: a 720s poll absence (> 50% of its 1200s
+    // scenario budget) early in the job MUST still retry — the old
+    // fraction-of-budget gate wrongly suppressed exactly this lost-webhook case.
     const msg =
-        'Assertion failed: No review findings on PR/MR #8 within 900s after posting "@kody review".';
-    assert.ok(shouldRetryFailure(msg, 30_000, BUDGET_MS)); // failed in 30s
-    assert.ok(shouldRetryFailure(msg, THRESHOLD - 1, BUDGET_MS));
+        "Assertion failed: No review activity on PR https://x/-/merge_requests/74 within timeout";
+    assert.ok(shouldRetryFailure(msg, 720_000, 60_000, JOB_BUDGET)); // 12min poll, 1min in
 });
 
-test("shouldRetryFailure: transient shape that consumed the full window does NOT retry", () => {
-    // The exact command-review-focus failure: poll exhausted its 1500s window.
+test("shouldRetryFailure: absence does NOT retry when a retry would blow the job budget", () => {
+    // The original command-review-focus failure: a ~25min poll absence ~36min
+    // into the 60min job — a second 25min attempt lands past the ceiling.
     const msg =
-        'Assertion failed: No review on PR/MR #758 within 1502s after posting "@kody review focus on the map-based storage logic".';
+        'Assertion failed: No review on PR/MR #8 within 1502s after posting "@kody review".';
     assert.ok(isTransientFailure(msg), "shape is still transient");
-    assert.ok(!shouldRetryFailure(msg, 1_502_000, BUDGET_MS), "but ran full window → no retry");
-    assert.ok(!shouldRetryFailure(msg, THRESHOLD + 1, BUDGET_MS));
+    assert.ok(!shouldRetryFailure(msg, 1_500_000, 36 * 60_000, JOB_BUDGET));
 });
 
-test("shouldRetryFailure: deterministic mismatch never retries, even if fast", () => {
+test("shouldRetryFailure: same slow absence DOES retry when it happens early with budget to spare", () => {
     const msg =
-        'Assertion failed: Expected NO real review for license=free but Kody posted one.';
-    assert.ok(!shouldRetryFailure(msg, 1_000, BUDGET_MS));
+        'Assertion failed: No review on PR/MR #8 within 1502s after posting "@kody review".';
+    assert.ok(shouldRetryFailure(msg, 1_500_000, 60_000, JOB_BUDGET)); // 25min poll, 1min in
+});
+
+test("shouldRetryFailure: deterministic mismatch never retries, even with budget to spare", () => {
+    const msg =
+        "Assertion failed: Expected NO real review for license=free but Kody posted one.";
+    assert.ok(!shouldRetryFailure(msg, 1_000, 0, JOB_BUDGET));
 });
 
 test("absenceRetryDelayMs: transport noise retries immediately (0ms)", () => {
