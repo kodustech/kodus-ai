@@ -18,6 +18,50 @@ import {
     BYOKProvider,
 } from '@kodus/kodus-common/llm';
 import { decrypt } from '@libs/common/utils/crypto';
+import { createLogger } from '@libs/core/log/logger';
+
+const rateLimitLogger = createLogger('LlmRateLimit');
+// Process-wide counters so a run can see the aggregate at a glance.
+let rateLimitHits = 0;
+let overloadHits = 0;
+
+/**
+ * Pass-through fetch that surfaces provider back-pressure (HTTP 429 rate
+ * limits, 503 overloads) as structured WARN logs. The Vercel AI SDK retries
+ * these internally (maxRetries: 3, exponential backoff), so they NEVER reach
+ * the caller as errors — they show up only as extra wall-clock. Under a
+ * parallel workload hammering one account (e.g. the E2E matrix on a shared
+ * OpenAI key) that backoff can stretch a single model call past the agent
+ * budget; this is how we tell "the review is slow because it's being
+ * throttled" apart from "the model is just slow". Behaviour-neutral: reads
+ * only status + headers and returns the response untouched (never the body).
+ */
+export const instrumentedFetch: typeof globalThis.fetch = async (
+    input,
+    init,
+) => {
+    const res = await globalThis.fetch(input as any, init as any);
+    if (res.status === 429 || res.status === 503) {
+        const kind = res.status === 429 ? 'rate_limit' : 'overloaded';
+        const n =
+            res.status === 429 ? (rateLimitHits += 1) : (overloadHits += 1);
+        rateLimitLogger.warn({
+            message: `[llm-backpressure] HTTP ${res.status} (${kind}) from model provider — SDK will back off + retry`,
+            context: 'LlmRateLimit',
+            metadata: {
+                status: res.status,
+                kind,
+                retryAfter: res.headers.get('retry-after') ?? undefined,
+                url:
+                    typeof input === 'string'
+                        ? input
+                        : (input as any)?.url,
+                processHitsForKind: n,
+            },
+        });
+    }
+    return res;
+};
 
 /**
  * Build a Vercel AI SDK model from a base64-encoded Google Service Account
@@ -356,6 +400,7 @@ export function byokToVercelModel(
                     baseURL: openaiBaseURL || 'https://api.openai.com/v1',
                     supportsStructuredOutputs:
                         options.structuredOutputs === true,
+                    fetch: instrumentedFetch,
                 })(envMode);
             }
             // self-hosted mode declared but no usable env key — fall through
@@ -396,6 +441,7 @@ export function byokToVercelModel(
             return createOpenAI({
                 apiKey,
                 ...(baseURL ? { baseURL } : {}),
+                fetch: instrumentedFetch,
             })(model);
 
         case BYOKProvider.ANTHROPIC:
