@@ -4,7 +4,7 @@ description: "使用结构化的 markdown 文件直接在代码库中创建自�
 ---
 
 <Info>
-代码库规则使用与 IDE 规则文件检测相同的自动同步机制。在设置中启用"从代码库自动同步规则"以激活这两个功能。请参阅<a href="/how_to_use/en/code_review/configs/rules_file_detection">规则文件检测</a>进行设置。
+代码库规则使用与 IDE 规则文件检测相同的自动同步机制。在设置中启用"从代码库自动同步规则"以激活这两个功能。请参阅<a href="/how_to_use/zh/code_review/configs/rules_file_detection">规则文件检测</a>进行设置。
 </Info>
 
 ## 如何使用
@@ -58,14 +58,31 @@ enabled: true            # 可选
 ```
 ## 模板字段
 
-### 必需字段
+### 必填字段
 
-| 字段 | 描述 | 值 |
+严格必填的只有两项:非空的 `title` 和非空的规则正文。缺少其中任意一项的文件会被整体跳过。
+
+| 字段 | 说明 | 取值 |
 |-------|-------------|---------|
-| `title` | 界面中显示的规则名称 | 任何描述性字符串 |
-| `scope` | 规则分析范围 | `"file"` 或 `"pull-request"` |
-| `path` | 规则适用的文件路径 | glob 模式数组 |
-| `severity_min` | 最低严重性级别 | `"low"`, `"medium"`, `"high"`, `"critical"` |
+| `title` | 在界面中显示的规则名称 | 任意描述性字符串 |
+
+### 带默认值的字段
+
+其余都是可选的 —— 省略时使用默认值。
+
+| 字段 | 说明 | 取值 | 默认值 |
+|-------|-------------|---------|---------|
+| `scope` | 规则的分析范围 | `"file"` 或 `"pull-request"` | `"file"` |
+| `path` | 规则适用的路径。只要匹配**任意一个** glob 即会触发 | glob 模式数组 | `**/*`(所有文件) |
+| `severity_min` | 最低严重性级别 | `"low"`、`"medium"`、`"high"`、`"critical"` | `"medium"` |
+| `enabled` | 设为 `false` 可跳过导入该文件(已导入的规则不会被移除) | boolean | `true` |
+| `uuid` | 稳定的规则标识符 —— 文件重命名后仍对应平台上的同一条规则 | string | 无 |
+| `languages`、`buckets` | 说明性元数据 | — | — |
+
+<Note>
+  `severity` 会被当作 `severity_min` 的别名接受,因为它很容易写错而意图并不含糊。四个级别之外
+  的取值会回退为 `"medium"`,而 `"pull-request"` 以外的 `scope` 都按 `"file"` 处理。
+</Note>
 
 ## 示例规则
 
@@ -149,5 +166,5 @@ enabled: true
 3. **提交更改**:仅标记的文件将同步(自动同步切换保持关闭)
 
 <Tip>
-代码库规则使用与<a href="/how_to_use/en/code_review/configs/rules_file_detection">规则文件检测</a>相同的同步机制。使用手动同步(`@kody-sync`)可以选择性地同步特定规则,而无需启用自动同步。
+代码库规则使用与<a href="/how_to_use/zh/code_review/configs/rules_file_detection">规则文件检测</a>相同的同步机制。使用手动同步(`@kody-sync`)可以选择性地同步特定规则,而无需启用自动同步。
 </Tip>

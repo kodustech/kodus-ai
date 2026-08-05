@@ -15,7 +15,7 @@ API_OPENAI_FORCE_BASE_URL="https://your-api-endpoint.com/v1"  # Your OpenAI-comp
 API_OPEN_AI_API_KEY="your-api-key"                          # Your API key
 ```
 
-For OpenAI-compatible providers, you can use any endpoint. See our [cookbook guides](https://docs.kodus.io/cookbook/en) for specific provider configurations (Novita, Together AI, Fireworks, Groq, etc.).
+For OpenAI-compatible providers, you can use any endpoint. See our [cookbook guides](https://docs.kodus.io/knowledge_base/en/can-i-use-my-own-llm-provider) for specific provider configurations (Novita, Together AI, Fireworks, Groq, etc.).
 
 ## Troubleshooting the BYOK Web Interface Issue
 

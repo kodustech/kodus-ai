@@ -97,6 +97,56 @@ description: "为每个类别和建议的编写方式自定义 Kody 的审查提
 
 您可以根据团队的需求自定义语气、详细程度和沟通风格 - 从关键问题的详细解释到次要问题的简洁反馈。
 
+## 在 `kodus-config.yml` 中设置
+
+同样的四个字段可在 `v2PromptOverrides` 键下配置:
+
+```yaml
+v2PromptOverrides:
+    generation:
+        main: |
+            Base instruction used for every suggestion.
+    categories:
+        descriptions:
+            bug: |
+                What Kody should look for in the Bug category.
+            performance: |
+                What Kody should look for in the Performance category.
+            security: |
+                What Kody should look for in the Security category.
+```
+
+这四项是网页界面所暴露的,每个字段上限为 2000 个字符。Business Logic 类别没有提示词覆盖。
+
+配置文件还接受一组界面上看不到的键 —— Kody 用来对发现进行分级的严重性评判标准:
+
+```yaml
+v2PromptOverrides:
+    severity:
+        flags:
+            critical: |
+                什么算作 critical(崩溃、数据丢失、安全漏洞……)。
+            high: |
+            medium: |
+            low: |
+```
+
+<Warning>
+  这会改变 Kody 对发现的*分级*,而不只是措辞 —— 一份糟糕的评判标准会在所有审查中悄悄压低或
+  抬高严重性。请以随产品发布的默认值
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
+  为起点,而不要从零编写评判标准。
+</Warning>
+
+<Note>
+  随产品发布的 `default-kodus-config.yml` 中还包含一个 `v2PromptOverrides.level` 分组。出于向后
+  兼容它仍会被接受,但**引擎已不再读取它** —— 设置它不会产生任何变化。只有
+  `categories.descriptions`、`severity.flags` 和 `generation.main` 会进入审查。
+</Note>
+
+只有在启用 `kodusConfigFileOverridesWebPreferences` 之后该文件才会被读取(参见
+[通用设置](/how_to_use/zh/code_review/configs/general))。
+
 ## 外部引用
 
 所有自定义提示——类别、建议和 PR 摘要——都支持引用 Kody 可以访问的代码库中的真实文件。当您保存更新时,Kody 会自动检测外部引用并为将来的审查解析它们。
@@ -387,7 +437,7 @@ description: "为每个类别和建议的编写方式自定义 Kody 的审查提
     **解决方案:**
     - 使提示更具体和集中
     - 为您想要忽略的模式添加排除项
-    - 在[建议控制](/how_to_use/en/code_review/configs/suggestion_control)中提高最低严重性阈值
+    - 在[建议控制](/how_to_use/zh/code_review/configs/suggestion_control)中提高最低严重性阈值
     - 检查类别提示之间的冗余
   </Accordion>
 

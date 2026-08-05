@@ -63,6 +63,67 @@ Usa una directiva para decir *"mira aquí con más atención"* — no *"mira sol
   </Tab>
 </Tabs>
 
+## Heavy mode
+
+<Warning>
+  **Alpha — acceso bajo petición.** El heavy mode no está activado para nadie por defecto. Para
+  probarlo, pídenos que lo habilitemos en tu organización en
+  [Discord](https://discord.gg/TFZBRk9fT6) o en [support@kodus.io](mailto:support@kodus.io).
+  Hasta entonces la flag se acepta pero no tiene efecto — consulta
+  [Disponibilidad](#disponibilidad) más abajo.
+</Warning>
+
+Una directiva de foco le dice a Kody *dónde* mirar con más atención. `--heavy` le dice que mire
+*más tiempo*: el finder ejecuta pasadas extra de crítico ("¿qué se te ha escapado?") sobre el
+mismo diff, sacando más problemas reales a costa de una revisión más lenta y más candidatos que
+triar.
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+kodus review --heavy
+```
+
+`--heavy` puede ir en cualquier posición de la línea — antes o después del texto de foco — y se
+elimina de la directiva en ambos casos, así que `@kody review enfócate en la lógica de retry
+--heavy` se enfoca en "enfócate en la lógica de retry".
+
+<Warning>
+  **Para combinarlo con `--force`, pon `--force` primero.** `--force` solo se reconoce
+  inmediatamente después del comando, así que `@kody review --force --heavy` ejecuta una revisión
+  heavy forzada, mientras que `@kody review --heavy --force` ejecuta una revisión heavy que
+  **no** está forzada.
+</Warning>
+
+El guion es obligatorio: un `heavy` suelto se lee como texto de directiva, así que
+`@kody review heavy flujo de checkout` se enfoca en "heavy flujo de checkout" en vez de activar
+la flag.
+
+### Disponibilidad
+
+El heavy mode es una función **alpha**. Solo se ejecuta para las organizaciones que habilitamos
+explícitamente:
+
+| | Estado |
+| --- | --- |
+| **Cloud** | Disponible bajo petición — movemos tu organización al release track `alpha`. |
+| **Self-hosted** | Aún no disponible. Las funciones alpha permanecen desactivadas con independencia de `BETA_FEATURES`; llegará al self-hosted cuando se promueva a beta. |
+
+<Note>
+  **La flag falla en silencio, no con error.** Si tu organización no está habilitada, `--heavy`
+  se acepta y la revisión **se ejecuta con normalidad** — sin error, sin aviso, sin resultado
+  distinto. Si pediste acceso y no sabes si está activo, escríbenos en lugar de suponerlo.
+</Note>
+
+Para solicitar acceso, escríbenos en [Discord](https://discord.gg/TFZBRk9fT6) o a
+[support@kodus.io](mailto:support@kodus.io) con el nombre de tu organización.
+
+<Tip>
+  Úsalo en los cambios donde que se escape algo sale caro — una migración, un cambio de auth, un
+  flujo de pago — no por defecto. En los PRs del día a día los candidatos extra suelen ser ruido
+  que tendrás que filtrar.
+</Tip>
+
 ## Cómo Escribir una Buena Directiva
 
 - **Sé específico sobre el área, no sobre el veredicto.** "enfócate en la concurrencia del consumidor de la cola" funciona mejor que "encuentra bugs".

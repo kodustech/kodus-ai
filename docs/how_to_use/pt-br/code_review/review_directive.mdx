@@ -63,6 +63,63 @@ Use uma diretiva para dizer *"olhe aqui com mais afinco"* — não *"olhe só aq
   </Tab>
 </Tabs>
 
+## Heavy mode
+
+<Warning>
+  **Alpha — acesso sob pedido.** O heavy mode não vem ligado para ninguém. Para experimentar,
+  peça para habilitarmos na sua organização no [Discord](https://discord.gg/TFZBRk9fT6) ou em
+  [support@kodus.io](mailto:support@kodus.io). Até lá a flag é aceita mas não tem efeito — veja
+  [Disponibilidade](#disponibilidade) abaixo.
+</Warning>
+
+Uma diretiva de foco diz ao Kody *onde* olhar com mais atenção. O `--heavy` diz para olhar por
+*mais tempo*: o finder roda passadas extras de crítico ("o que você deixou passar?") sobre o
+mesmo diff, trazendo mais problemas reais ao custo de uma revisão mais lenta e mais candidatos
+para triar.
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+kodus review --heavy
+```
+
+O `--heavy` pode ficar em qualquer posição da linha — antes ou depois do texto de foco — e é
+removido da diretiva de qualquer jeito, então `@kody review foca na lógica de retry --heavy`
+foca em "foca na lógica de retry".
+
+<Warning>
+  **Para combinar com `--force`, coloque o `--force` primeiro.** O `--force` só é reconhecido
+  imediatamente após o comando, então `@kody review --force --heavy` roda uma revisão heavy
+  forçada, enquanto `@kody review --heavy --force` roda uma revisão heavy que **não** é forçada.
+</Warning>
+
+O traço é obrigatório: um `heavy` solto é lido como texto de diretiva, então
+`@kody review heavy fluxo de checkout` foca em "heavy fluxo de checkout" em vez de ligar a flag.
+
+### Disponibilidade
+
+O heavy mode é um recurso **alpha**. Ele só roda para organizações que habilitamos explicitamente:
+
+| | Status |
+| --- | --- |
+| **Cloud** | Disponível sob pedido — movemos sua organização para o release track `alpha`. |
+| **Self-hosted** | Ainda não disponível. Recursos alpha ficam desligados independentemente de `BETA_FEATURES`; chega ao self-hosted quando for promovido a beta. |
+
+<Note>
+  **A flag falha em silêncio, não com erro.** Se sua organização não está habilitada, o `--heavy`
+  é aceito e a revisão **roda normalmente** — sem erro, sem aviso, sem resultado diferente. Se
+  você pediu acesso e não consegue saber se está ativo, fale com a gente em vez de presumir.
+</Note>
+
+Para pedir acesso, chame a gente no [Discord](https://discord.gg/TFZBRk9fT6) ou mande um e-mail
+para [support@kodus.io](mailto:support@kodus.io) com o nome da sua organização.
+
+<Tip>
+  Use nas mudanças em que deixar algo passar sai caro — uma migration, uma mudança de auth, um
+  fluxo de pagamento — não como padrão. Em PRs do dia a dia os candidatos extras costumam ser
+  ruído que você vai ter que filtrar.
+</Tip>
+
 ## Escrevendo uma Boa Diretiva
 
 - **Seja específico sobre a área, não sobre o veredito.** "foque em concorrência no consumidor da fila" funciona melhor que "encontre bugs".

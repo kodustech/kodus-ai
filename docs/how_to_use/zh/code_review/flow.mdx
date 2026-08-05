@@ -1,5 +1,6 @@
 ---
 title: "代码审查流程"
+description: "一次 Kody 审查从头到尾如何运行:何时触发、何时跳过、你会得到什么,以及每个状态表情的含义。"
 ---
 
 ## 概述
@@ -49,7 +50,10 @@ Kody 自动或按需审查您的 PR，添加清晰的建议，并帮助您的团
 Kody 使用表情符号反应直接在您的 Git 提供商中显示代码审查的实时状态。无需猜测她是在工作、完成还是遇到问题。她总是用最新状态替换之前的表情符号（例如：🚀 → 🎉、👀 或 😕）。
 
 <Note>
-支持 GitHub 和 GitLab。Azure DevOps 和 Bitbucket 尚不支持反应。
+**原生反应**在 GitHub、GitLab 和 Forgejo 上可用。
+
+  Azure DevOps 和 Bitbucket 没有反应 API,因此 Kody 会把状态表情作为**评论**发布 ——
+  在那里你会看到 👀(跳过)、😕(错误)和 👎(无许可证),但看不到 🚀 / 🎉 的进度组合。
 </Note>
 
 ### 每个表情符号的含义
@@ -88,7 +92,8 @@ Kody 使用表情符号反应直接在您的 Git 提供商中显示代码审查�
 ### 常见问题
 
 **我看不到反应**
-- GitHub/GitLab：✅ | Azure DevOps/Bitbucket：❌（尚不支持）
+- GitHub / GitLab / Forgejo:✅ 原生反应
+- Azure DevOps / Bitbucket:❌ 无反应 API —— 请查看作为评论发布的状态表情
 
 **为什么表情符号改变了？**
 - 正常——Kody 替换之前的状态（🚀 → 🎉/👀/😕）
@@ -98,24 +103,24 @@ Kody 使用表情符号反应直接在您的 Git 提供商中显示代码审查�
 - 修复：评论 `@kody review --force` — 如果没有新提交，普通的 `start-review` 会再次跳过
 
 **我看到了 😕**
-- 使用 `@kody start-review` 重试。如果问题持续存在，请查看[故障排除](/how_to_use/en/code_review/troubleshooting)或 [Discord](https://discord.gg/TFZBRk9fT6)
+- 使用 `@kody start-review` 重试。如果问题持续存在，请查看[故障排除](/how_to_use/zh/code_review/troubleshooting)或 [Discord](https://discord.gg/TFZBRk9fT6)
 
 ## 重要设置
 
 - 自动与手动审查以及后续节奏
 - 忽略模式和范围内的基础分支
 - 自定义规则和跨文件分析
-- 建议控制：严重性过滤器、分组和最大建议数
+- 审查过滤器:最低严重性,以及是否对 Kody Rules 生效
 - 文件限制和超时
 
 <CardGroup cols={2}>
-  <Card title="通用配置" icon="sliders" href="/how_to_use/en/code_review/configs/general">
+  <Card title="通用配置" icon="sliders" href="/how_to_use/zh/code_review/configs/general">
     配置模式、节奏、分支和建议选项
   </Card>
-  <Card title="审查策略" icon="shield-check" href="/how_to_use/en/code_review/policy">
+  <Card title="审查策略" icon="shield-check" href="/how_to_use/zh/code_review/policy">
     了解建议与阻塞以及何时启用每种
   </Card>
-  <Card title="故障排除" icon="triangle-exclamation" href="/how_to_use/en/code_review/troubleshooting">
+  <Card title="故障排除" icon="triangle-exclamation" href="/how_to_use/zh/code_review/troubleshooting">
     修复常见问题并了解限制
   </Card>
 </CardGroup>

@@ -1,5 +1,6 @@
 ---
 title: "Code Review Flow"
+description: "How a Kody review runs end to end: when it triggers, when it skips, what you get back, and what each status emoji means."
 ---
 
 ## Overview
@@ -48,8 +49,11 @@ Reference: <a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Cod
 Kody uses emoji reactions to show the live status of your code review directly in your Git provider. No guessing whether she’s working, done, or ran into a problem. She always replaces the previous emoji with the latest status (for example: 🚀 → 🎉, 👀, 👎 or 😕).
 
 <Note>
-  Supported on GitHub and GitLab. Azure DevOps and Bitbucket do not support
-  reactions yet.
+  **Native reactions** work on GitHub, GitLab, and Forgejo.
+
+  Azure DevOps and Bitbucket have no reaction API, so Kody falls back to posting the status
+  emoji as a **comment** instead — you'll see 👀 (skipped), 😕 (error), and 👎 (no license)
+  there, but not the 🚀 / 🎉 progress pair.
 </Note>
 
 ### What each emoji means
@@ -94,7 +98,8 @@ Kody uses emoji reactions to show the live status of your code review directly i
 
 **I don't see reactions**
 
-- GitHub/GitLab: ✅ | Azure DevOps/Bitbucket: ❌ (not supported yet)
+- GitHub / GitLab / Forgejo: ✅ native reactions
+- Azure DevOps / Bitbucket: ❌ no reaction API — look for the status emoji posted as a comment instead
 
 **Why did the emoji change?**
 
@@ -119,7 +124,7 @@ Kody uses emoji reactions to show the live status of your code review directly i
 - Automated vs manual reviews and follow-up cadence
 - Ignore patterns and base branches in scope
 - Custom rules and cross-file analysis
-- Suggestion controls: severity filter, grouping, and max suggestions
+- Review filters: minimum severity and whether they apply to Kody Rules
 - File limits and timeouts
 
 <CardGroup cols={2}>

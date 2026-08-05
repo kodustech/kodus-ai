@@ -202,6 +202,31 @@ export class PermissionValidationService {
                 // must not be blocked by a flaky read — fail open on BYOK.
                 const noByok = !trialByokConfig && !byokLookupFailed;
 
+                // Divergence alarm: billing still reports BYOK (its `byok` flag
+                // is plan-derived, so a `*_byok` trial keeps it set) while the
+                // local config is gone. The two sources never reconcile — the
+                // local row is the source of truth for the gate, so we don't
+                // trust billing here, but we surface the mismatch so support can
+                // find these orgs in observability_logs_ts and reconnect the key.
+                if (
+                    noByok &&
+                    (validation.byok === true ||
+                        this.identifyPlanType(validation.planType) ===
+                            PlanType.BYOK)
+                ) {
+                    this.logger.warn({
+                        message:
+                            'BYOK state divergence: billing reports BYOK but no local config found (trial)',
+                        context:
+                            contextName || PermissionValidationService.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            billingByok: validation.byok,
+                            planType: validation.planType,
+                        },
+                    });
+                }
+
                 // Only trials created under the managed-credit model carry
                 // these fields. Legacy trials (started before this shipped)
                 // have no credit data — they must keep the old behaviour:
@@ -233,7 +258,9 @@ export class PermissionValidationService {
                     return {
                         allowed: false,
                         errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
-                        metadata: { validation },
+                        // Credits are genuinely gone — safe to tell the user
+                        // their trial reviews are used up.
+                        metadata: { validation, trialCreditsExhausted: true },
                         subscriptionStatus: validation.subscriptionStatus,
                     };
                 }
@@ -266,7 +293,19 @@ export class PermissionValidationService {
                         return {
                             allowed: false,
                             errorType: ValidationErrorType.PLAN_LIMIT_EXCEEDED,
-                            metadata: { validation, consumeResult },
+                            metadata: {
+                                validation,
+                                consumeResult,
+                                // Only a billing denial for actually-gone
+                                // credits is exhaustion. Match it positively:
+                                // billing has other denial reasons (TRIAL_EXPIRED,
+                                // LICENSE_NOT_FOUND) and a transport failure
+                                // (CONSUME_TRIAL_REVIEW_CREDIT_FAILED), none of
+                                // which mean "reviews used up".
+                                trialCreditsExhausted:
+                                    consumeResult.reason ===
+                                    'TRIAL_REVIEW_CREDITS_EXHAUSTED',
+                            },
                             subscriptionStatus: validation.subscriptionStatus,
                         };
                     }
@@ -329,6 +368,10 @@ export class PermissionValidationService {
                             organizationAndTeamData,
                             planType: validation.planType,
                             identifiedPlanType,
+                            // Billing keeps a plan-derived `byok` flag that can
+                            // stay true after the local key was disconnected;
+                            // flag the mismatch so support can spot it.
+                            billingByok: validation.byok,
                         },
                     });
 

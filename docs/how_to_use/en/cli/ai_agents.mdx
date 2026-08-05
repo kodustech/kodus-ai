@@ -9,7 +9,7 @@ The CLI ships with a minimal, structured output mode (`--prompt-only`) designed 
 
 - **Claude Code** — native skill via the skill installer.
 - **Cursor** — native skill.
-- **Codex** — native skill, with Decision Memory via `notify` hooks.
+- **Codex** — native skill.
 - **Windsurf** — via `--prompt-only` output.
 
 For any other agent that can run shell commands and parse structured text, `kodus review --prompt-only` works out of the box.
@@ -78,15 +78,6 @@ Generate a key at <a href="https://app.kodus.io/organization/cli-keys" target="_
 | `--fail-on`      | Exit code gate. The loop keeps going while this is non-zero.        |
 | `--fields <csv>` | Narrow the JSON/agent payload (e.g. `summary,issues.file,issues.severity`). Useful to keep agent context windows small. |
 
-## Combining with Decision Memory
-
-Pair agent loops with [Decision Memory](decision_memory) to capture the reasoning behind every agent turn as structured files in your repo. The loop handles *what* changed; memory captures *why*.
-
-```bash
-kodus decisions enable
-# Now every agent turn writes a decision file under .kody/
-```
-
 ## Example: Claude Code loop with business validation
 
 ```bash
@@ -102,9 +93,6 @@ With the skill installer, Claude Code's Kodus skill knows when to invoke each of
 ## Related
 
 <CardGroup cols={2}>
-  <Card title="Decision Memory" icon="brain" href="decision_memory">
-    Persist agent decisions as structured files in your repo.
-  </Card>
   <Card title="Concepts" icon="book-open" href="concepts">
     Review modes, diff modes, and agent output flags.
   </Card>

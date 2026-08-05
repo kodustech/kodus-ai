@@ -9,7 +9,16 @@
  */
 import { generateText as _aiSdkGenerateText } from 'ai';
 
-export const AGENT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes max per agent
+// 20 minutes max per agent. This is the wall-clock ceiling for a whole
+// agent run (the sum of its sequential model calls), NOT a single call —
+// that's LLM_CALL_TIMEOUT_MS below. It MUST stay below the slowest
+// consumer's patience so a long review aborts and still reaches the
+// posting stages (finish-comments) instead of being cut off mid-run with
+// nothing posted. Concretely it must be < the E2E command-review poll
+// window (1500s / 25 min in command-review-focus.ts) — otherwise a slow
+// review reads as "no review posted" and the whole matrix job times out.
+// Lowered from 30 min for exactly that reason (fix/review-timeout-robustness).
+export const AGENT_TIMEOUT_MS = 20 * 60 * 1000;
 // 10 minutes per individual LLM call — matches the undici headersTimeout
 // set in the worker bootstrap so neither layer aborts the other. Large
 // Gemini calls (>500K prompt + high reasoning) can legitimately take

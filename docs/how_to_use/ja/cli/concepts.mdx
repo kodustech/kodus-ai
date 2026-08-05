@@ -91,23 +91,6 @@ kodus config centralized disable
 
 チームがレビュー設定の監査可能なバージョン管理を望む場合は集中管理設定を使用します。その手間が過剰な場合はデフォルト（Kodus 内のリポジトリごとの設定）を維持します。
 
-## Decision Memory
-
-Decision Memory は、AIエージェントの作業の背後にある*推論*を永続化する Kodus の方法です — 差分だけでなく「なぜ」も。
-
-有効にすると、Kodus は Claude Code、Cursor、または Codex に、ターン完了イベントごとに発火して構造化された決定をキャプチャするフックをインストールします:
-
-```
-.kody/
-├── pr/by-sha/<head-sha>.md    # PR レベルの決定（コードとともにバージョン管理）
-├── memory/<module-id>.md      # モジュールレベルの決定（長期）
-└── modules.yml                # モジュール設定
-```
-
-PR レベルのメモリはブランチに存在します。PR がマージされたら、その決定をモジュールレベルのメモリに昇格させます（`kodus decisions promote`）。これにより、そのモジュールの将来の作業が蓄積されたコンテキストから始まります。
-
-完全なウォークスルー: [Decision Memory](decision_memory)。
-
 ## ビジネス検証
 
 `kodus review` が「このコードは良いか?」を問うのに対し、`kodus pr business-validation` は「この差分は実際にタスクが指示したことを行っているか?」を問います。Linear/Jira/URL ベースのタスクと差分ソース（作業ツリー、ステージ済み、ブランチ、コミット）を指定すると、タスクの受け入れ基準に対して実装をチェックします。
@@ -136,9 +119,6 @@ kodus pr business-validation --task-url https://linear.app/… --staged
   </Card>
   <Card title="AI エージェント" icon="robot" href="ai_agents">
     コーディングエージェントとのレビュー・修正ループを構築。
-  </Card>
-  <Card title="Decision Memory" icon="brain" href="decision_memory">
-    ブランチをまたいでエージェントの決定をキャプチャして昇格。
   </Card>
   <Card title="トラブルシューティング" icon="life-ring" href="troubleshooting">
     一般的なエラーと終了コード。

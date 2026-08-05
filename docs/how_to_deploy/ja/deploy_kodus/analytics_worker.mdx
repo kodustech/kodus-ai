@@ -118,7 +118,7 @@ ANALYTICS_CLASSIFIER_CRON=*/15 * * * *
 `worker-analytics` コンテナは `api`/`worker`/`webhooks` と同じ
 `prod-entrypoint.sh` を共有します。`RUN_MIGRATIONS=true`（インストーラー
 のデフォルト）の場合、analytics warehouse のマイグレーション
-（`yarn analytics:migration:run:prod`）が初回 boot で実行され、
+（`pnpm run analytics:migration:run:prod`）が初回 boot で実行され、
 `analytics` schema とそのテーブルが作成されます。
 
 ## リファレンス

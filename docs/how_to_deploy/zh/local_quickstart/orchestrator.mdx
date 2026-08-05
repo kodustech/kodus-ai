@@ -20,7 +20,8 @@ icon: "laptop"
 
 - Node.js（LTS 版本）
 - Docker
-- Yarn 或 NPM
+- pnpm
+- OpenSSL
 - LLM API 密钥
 
 ## 运行项目
@@ -32,11 +33,11 @@ icon: "laptop"
       ```bash
       git clone https://github.com/kodustech/kodus-ai.git
       cd kodus-ai
-      yarn setup
+      pnpm run setup
       ```
 
       此脚本将自动：
-      - ✅ 检查所有必需的依赖项（Node.js、Yarn、Docker、OpenSSL）
+      - ✅ 检查所有必需的依赖项（Node.js、pnpm、Docker、OpenSSL）
       - ✅ 安装项目依赖项
       - ✅ 创建和配置 `.env` 文件
       - ✅ 自动生成所有必需的安全密钥
@@ -53,18 +54,20 @@ icon: "laptop"
 
       **基本设置：**
       ```bash
-      yarn docker:start
-      yarn migrate:dev
-      yarn seed
+      pnpm run docker:start
       ```
 
       **带外部集成（webhook 等）：**
       ```bash
-      yarn docker:start
-      yarn migrate:dev
-      yarn seed
-      yarn tunnel  # 为外部服务创建公共端点
+      pnpm run docker:start
+      pnpm run tunnel  # 为外部服务创建公共端点
       ```
+
+      <Info>
+        数据库迁移和种子数据会在容器启动时**自动**执行 —— 开发用 compose 中
+        `RUN_MIGRATIONS` 和 `RUN_SEEDS` 默认为 `true`。只有当你关闭这些变量时,
+        才需要用到上面的命令。
+      </Info>
 
       一切运行后，在浏览器中打开 **http://localhost:3000**。
   </Tab>
@@ -80,7 +83,7 @@ icon: "laptop"
       ### 2. 安装依赖项
 
       ```bash
-      yarn install
+      pnpm install
       ```
 
       ### 3. 配置环境变量
@@ -110,8 +113,8 @@ icon: "laptop"
       ```
 
       您需要为这些安全密钥生成值：
-      - `JWT_SECRET`（使用 `openssl rand -base64 32`）
-      - `JWT_REFRESH_SECRET`（使用 `openssl rand -base64 32`）
+      - `API_JWT_SECRET`（使用 `openssl rand -base64 32`）
+      - `API_JWT_REFRESH_SECRET`（使用 `openssl rand -base64 32`）
       - `CODE_MANAGEMENT_SECRET`（使用 `openssl rand -hex 32`）
       - `CODE_MANAGEMENT_WEBHOOK_TOKEN`（使用 `openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'`）
 
@@ -130,7 +133,7 @@ icon: "laptop"
       使用 Docker 启动服务：
 
       ```bash
-      yarn docker:start
+      pnpm run docker:start
       ```
 
       此命令启动：
@@ -146,24 +149,31 @@ icon: "laptop"
 
       如需为外部服务创建公共端点：
       ```bash
-      yarn tunnel
+      pnpm run tunnel
       ```
 
       ### 8. 首次设置
 
-      如果这是您第一次运行该项目，请执行以下命令：
+      无需操作 —— API 容器会在启动时运行迁移和种子数据,因为 `docker-compose.dev.yml` 把
+      `RUN_MIGRATIONS` 和 `RUN_SEEDS` 默认设为 `true`。
 
-      运行数据库迁移：
+      <Accordion title="手动运行迁移">
+        如果你在 `.env` 中设置了 `RUN_MIGRATIONS=false` / `RUN_SEEDS=false`(例如想自己控制),
+        请在宿主机上运行:
 
-      ```bash
-      yarn migrate:dev
-      ```
+        ```bash
+        pnpm run migration:run   # OLTP 数据库
+        pnpm run seed            # 初始数据
+        ```
 
-      填充初始数据：
+        其他数据存储有各自的命令:
 
-      ```bash
-      yarn seed
-      ```
+        ```bash
+        pnpm run analytics:migration:run     # analytics warehouse
+        pnpm run mcp-manager:migration:run   # MCP manager
+        pnpm run mongo:migrate               # MongoDB
+        ```
+      </Accordion>
 
       ### 9. 服务端点
 
@@ -182,18 +192,16 @@ icon: "laptop"
 
 ### 基本本地开发
 
-1. **启动服务**：`yarn docker:start`
-2. **运行迁移**：`yarn migrate:dev`
-3. **加载种子数据**：`yarn seed`
-4. **打开应用**：访问 `http://localhost:3000`
-5. **健康检查**：`yarn dev:health-check`
+1. **启动服务**：`pnpm run docker:start`(迁移和种子数据会自动运行)
+2. **打开应用**：访问 `http://localhost:3000`
+5. **健康检查**：`pnpm run dev:health-check`
 
 ### 带外部集成的开发
 
 如果您需要测试与外部服务的集成（如 Git webhook）：
 
-1. **启动服务**：`yarn docker:start && yarn migrate:dev && yarn seed`
-2. **创建隧道**：`yarn tunnel`（创建公共端点）
+1. **启动服务**：`pnpm run docker:start`
+2. **创建隧道**：`pnpm run tunnel`（创建公共端点）
 3. **更新 webhook URL**：隧道命令会自动更新您的 `.env`
 4. **配置 Git 提供商**：在 Git 提供商的 webhook 设置中使用隧道 URL
 5. **测试集成**：触发 webhook 并监控日志
@@ -211,7 +219,7 @@ icon: "laptop"
 ### 快速健康检查
 
 ```bash
-yarn dev:health-check
+pnpm run dev:health-check
 ```
 
 此综合健康检查验证：
@@ -232,13 +240,13 @@ yarn dev:health-check
 
 ### 设置脚本问题
 
-如果自动设置脚本（`yarn setup`）失败：
+如果自动设置脚本（`pnpm run setup`）失败：
 
 **缺少依赖项：**
 ```bash
 # 检查是否安装了所有必需的工具
 node --version
-yarn --version
+pnpm --version
 docker --version
 openssl version
 ```
@@ -270,10 +278,10 @@ docker network rm kodus-backend-services shared-network
 - 确保所有必需的安全密钥都已正确生成
 
 **健康检查失败：**
-- 运行 `yarn dev:health-check` 以获取详细诊断
-- 检查容器是否完全启动（在 `yarn docker:start` 后等待 1-2 分钟）
+- 运行 `pnpm run dev:health-check` 以获取详细诊断
+- 检查容器是否完全启动（在 `pnpm run docker:start` 后等待 1-2 分钟）
 - 验证数据库迁移和种子数据是否已加载
-- 使用 `yarn docker:logs` 检查 API 日志以查找启动错误
+- 使用 `pnpm run docker:logs` 检查 API 日志以查找启动错误
 
 **API 无响应：**
 - 容器启动后 API 需要时间才能完全初始化
@@ -282,7 +290,7 @@ docker network rm kodus-backend-services shared-network
 - 运行健康检查以查看哪些特定组件失败
 
 **外部服务的 webhook 问题：**
-- 使用 `yarn tunnel` 为外部 webhook 创建公共端点
+- 使用 `pnpm run tunnel` 为外部 webhook 创建公共端点
 - 更新 Git 提供商的 webhook URL 以使用隧道 URL
 - 测试 webhook 集成时确保隧道正在运行
 - 检查隧道日志以查找连接问题

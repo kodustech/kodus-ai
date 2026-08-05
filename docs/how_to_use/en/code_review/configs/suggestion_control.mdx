@@ -1,51 +1,65 @@
 ---
-title: "Suggestion Control"
-description: "Control how Kody provides feedback in your PRs."
+title: "Review Filters"
+description: "Control how much feedback Kody posts in your PRs."
 ---
 
-## Suggestion Limit
+Review filters decide **which** of Kody's findings actually get posted. You'll find them under
+**Settings → Code Review → the repository → Review filters**, and they can be set at the global,
+repository, or directory level — see
+[Config Inheritance & Overrides](/how_to_use/en/code_review/configs/inheritance_overrides).
 
-### Limitation Type
+## Minimum severity level
 
-- By PR (default): Max suggestions in entire pull request
-- By File: Max suggestions per file
+Kody assigns a severity to every suggestion and only posts the ones at or above the level you
+pick. The default is **Medium**.
 
-### Maximum Suggestions
+| Level | What it covers |
+| --- | --- |
+| **Low / All** | Minor enhancements that would improve code quality — small optimizations, style improvements, subtle refinements. |
+| **Medium** (default) | Moderate improvements that are recommended but not immediately critical: best practices, preventing future technical debt. |
+| **High** | Significant issues that should be addressed in the near term — important quality improvements, potential risks, substantial technical concerns. |
+| **Critical** | Issues that require immediate attention and could severely impact stability, security, or functionality. |
 
-Set how many suggestions Kody can make:
+<Tip>
+  Too much noise on a big PR is usually a severity problem, not a volume problem. Move to
+  **High** before reaching for anything else — you keep every real bug and drop the nitpicks.
+  See [Reduce code review noise](/knowledge_base/en/how-to-reduce-code-review-noise).
+</Tip>
 
-- Minimum: 6 suggestions
-- Default: 10 suggestions
-- Set to 0 for unlimited
+## Apply filters to Kody Rules
 
-Pro tip: Start with 10 and adjust based on your team's feedback. Too many suggestions can be overwhelming, too few might miss important issues.
+A toggle, **off by default**.
 
-## Severity Levels
+- **Off** — [Kody Rules](/how_to_use/en/code_review/configs/kody_rules) findings **bypass** the
+  severity filter. A rule your team wrote is always reported, whatever severity it lands on.
+- **On** — Kody Rules go through the same severity filter as every other suggestion.
 
-### Minimum Severity
+Leave it off unless your rules are producing more noise than signal. The whole point of a Kody
+Rule is that your team already decided it matters.
 
-Choose which issues Kody will report:
+<Note>
+  In `kodus-config.yml` these two settings live under `suggestionControl`:
 
-- Low/All: Style issues, minor improvements
-- Medium: Common best practices, potential bugs
-- High: Significant issues, definite bugs
-- Critical: Security issues, major problems
+  ```yaml
+  suggestionControl:
+      severityLevelFilter: 'medium' # low | medium | high | critical
+      applyFiltersToKodyRules: false
+  ```
 
-## Suggestion Grouping
+  Remember that the file is only read once you enable
+  `kodusConfigFileOverridesWebPreferences` — see
+  [General](/how_to_use/en/code_review/configs/general).
+</Note>
 
-### Unified Comments (default)
+## Other ways to cut noise
 
-<img src="https://app.kodus.io/_next/image?url=%2Fassets%2Fimages%2Ffull_grouping.png&w=1080&q=75" alt="Unified Comments" />
-Combines similar issues into one comment, showing all affected files and lines. Great for:
+Review filters are a blunt instrument. When you need something more targeted:
 
-- Large PRs with repeated issues
-- Keeping discussions focused
-- Reducing notification noise
-
-### Individual Comments
-
-<img src="https://app.kodus.io/_next/image?url=%2Fassets%2Fimages%2Fminimal_grouping.png&w=1080&q=75" alt="Individual Comments" />
-Separate comment for each issue. Better when:
-
-- You need direct links to each location
-- Team prefers focused, line-specific discussions
+- **Ignore paths** — skip generated code, lockfiles, and vendored directories entirely.
+  See [General](/how_to_use/en/code_review/configs/general).
+- **Analysis types** — turn off a whole category (e.g. `performance`) for repositories where it
+  isn't useful.
+- **Directory-level config** — apply stricter or looser filters per folder in a monorepo.
+  See [Directory Level Config](/how_to_use/en/code_review/configs/directory_level).
+- **Kody Rules** — encode what your team actually cares about, so the signal comes from your
+  standards instead of generic advice.

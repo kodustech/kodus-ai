@@ -1,5 +1,6 @@
 ---
 title: Webhookの作成
+description: "自動登録が行われなかった場合に GitHub の Webhook を手動で作成し、Kodus が利用する 3 つのイベントを選択する手順。"
 icon: webhook
 ---
 
@@ -23,11 +24,13 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
    - 以下のボックスにチェックを入れます：
      - Issue comment
      - Pull request review comments
-     - Pull request review threads
-     - Pull request reviews
      - Pull requests
-     - Pushes
 
 6. 「Add webhook」をクリック
 
 GitHubリポジトリのコードレビュー用Webhookのセットアップが完了しました。
+
+<Note>
+  Kodus が利用するのはこの 3 つのイベントだけです。それ以外（pushes、pull request reviews、
+  review threads）を選んでも、届いた時点で破棄されるトラフィックが増えるだけです。
+</Note>

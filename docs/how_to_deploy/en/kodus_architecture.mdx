@@ -43,6 +43,7 @@ The 2.0 stack splits backend responsibilities into dedicated services:
 - API: Central service layer handling business logic and request processing
 - Worker: Asynchronous processing for queues and background jobs
 - Webhooks: Dedicated service for Git provider webhooks
+- Analytics Worker: Optional ingestion worker (`WORKER_ROLE=analytics`) that powers the Cockpit dashboards. Enterprise-only — see [Analytics Worker](/how_to_deploy/en/deploy_kodus/analytics_worker)
 
 ### 3. MCP Manager
 
@@ -65,8 +66,10 @@ Prometheus and Grafana are optional and used for monitoring and visualization.
 
 ### 6. Auxiliary Services (Kodus Cloud)
 
-Kodus Cloud includes closed-source auxiliary services (billing, analytics, and
-chat integrations) that are not required for self-hosted deployments.
+Kodus Cloud includes closed-source auxiliary services (billing and chat
+integrations) that are not required for self-hosted deployments. Analytics is
+not cloud-only: licensed self-hosted Enterprise runs the same ingestion worker
+locally.
 
 ## Next Steps
 <CardGroup cols={2}>
