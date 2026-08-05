@@ -69,41 +69,58 @@ test("absenceRetryDelayMs: review-never-started shapes get the 120s settle", () 
     }
 });
 
-// shouldRetryFailure gates a transient-shaped failure on whether a SECOND
-// attempt still fits the JOB budget — not on a fraction of the scenario budget.
+// shouldRetryFailure gates a transient-shaped failure on whether a WORST-CASE
+// second attempt (unconditional settle + a full scenario-timeout poll) still
+// finishes before the run deadline — not on a fraction of the scenario budget.
 // Absence failures surface at the poll ceiling, so a lost-webhook flake and a
 // slow review are indistinguishable by duration; the deciding factor is the
-// budget slack left for a retry. See fix/review-timeout-robustness.
-const JOB_BUDGET = 60 * 60 * 1000; // matches JOB_BUDGET_MS default (5min safety)
+// wall-clock left before the job/step deadline. Signature is
+// (message, scenarioTimeoutMs, nowMs, deadlineMs) — we pin now + deadline so the
+// tests are deterministic. See fix/review-timeout-robustness.
+const T = 1_000_000_000_000; // fixed "now" epoch
+const MIN = 60_000;
+const deadline60 = T + 60 * MIN; // a 60-min run window starting at T
 
-test("shouldRetryFailure: absence retries when a second attempt fits the job budget", () => {
-    // kody-rules regression guard: a 720s poll absence (> 50% of its 1200s
-    // scenario budget) early in the job MUST still retry — the old
-    // fraction-of-budget gate wrongly suppressed exactly this lost-webhook case.
+test("shouldRetryFailure: absence retries when a worst-case retry fits before the deadline", () => {
+    // kody-rules regression guard: 1200s scenario whose 720s poll is > 50% of
+    // its budget. Worst case = 120s settle + 1200s = 22min; early in a 60-min
+    // window it fits, so it MUST retry — the old fraction gate wrongly killed it.
     const msg =
         "Assertion failed: No review activity on PR https://x/-/merge_requests/74 within timeout";
-    assert.ok(shouldRetryFailure(msg, 720_000, 60_000, JOB_BUDGET)); // 12min poll, 1min in
+    assert.ok(shouldRetryFailure(msg, 1200 * 1000, T, deadline60));
 });
 
-test("shouldRetryFailure: absence does NOT retry when a retry would blow the job budget", () => {
-    // The original command-review-focus failure: a ~25min poll absence ~36min
-    // into the 60min job — a second 25min attempt lands past the ceiling.
+test("shouldRetryFailure: absence does NOT retry when a worst-case retry would overrun the deadline", () => {
+    // The original command-review-focus failure: a 1800s scenario 36min into a
+    // 60-min window — a worst-case ~32min second attempt lands past the deadline.
     const msg =
         'Assertion failed: No review on PR/MR #8 within 1502s after posting "@kody review".';
     assert.ok(isTransientFailure(msg), "shape is still transient");
-    assert.ok(!shouldRetryFailure(msg, 1_500_000, 36 * 60_000, JOB_BUDGET));
+    assert.ok(!shouldRetryFailure(msg, 1800 * 1000, T + 36 * MIN, deadline60));
 });
 
-test("shouldRetryFailure: same slow absence DOES retry when it happens early with budget to spare", () => {
+test("shouldRetryFailure: same slow scenario DOES retry early with the whole window ahead", () => {
     const msg =
         'Assertion failed: No review on PR/MR #8 within 1502s after posting "@kody review".';
-    assert.ok(shouldRetryFailure(msg, 1_500_000, 60_000, JOB_BUDGET)); // 25min poll, 1min in
+    assert.ok(shouldRetryFailure(msg, 1800 * 1000, T, deadline60));
 });
 
-test("shouldRetryFailure: deterministic mismatch never retries, even with budget to spare", () => {
+test("shouldRetryFailure: a FAST-failing absence is still charged a full second attempt", () => {
+    // "within 60s" fails fast, but attempt-2 can run the full poll window, so the
+    // gate charges the scenario timeout — not the (tiny) first-attempt duration.
+    const msg =
+        "[provider:github] No kody-codereview status comment on PR #23 within 60s — review pipeline likely never started.";
+    assert.ok(isTransientFailure(msg), "fast absence is still a transient shape");
+    // Late in the job the worst-case retry overruns → no retry...
+    assert.ok(!shouldRetryFailure(msg, 1800 * 1000, T + 40 * MIN, deadline60));
+    // ...but early, the same fast failure retries.
+    assert.ok(shouldRetryFailure(msg, 1800 * 1000, T, deadline60));
+});
+
+test("shouldRetryFailure: deterministic mismatch never retries, even with the whole window ahead", () => {
     const msg =
         "Assertion failed: Expected NO real review for license=free but Kody posted one.";
-    assert.ok(!shouldRetryFailure(msg, 1_000, 0, JOB_BUDGET));
+    assert.ok(!shouldRetryFailure(msg, 1800 * 1000, T, deadline60));
 });
 
 test("absenceRetryDelayMs: transport noise retries immediately (0ms)", () => {

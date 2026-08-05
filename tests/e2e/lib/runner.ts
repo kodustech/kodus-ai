@@ -389,33 +389,43 @@ export function isTransientFailure(message: string): boolean {
     return TRANSIENT_FAILURE_PATTERNS.some((re) => re.test(message ?? ''));
 }
 
-// A poll-based absence ("No review … within timeout") surfaces at the POLL
-// CEILING, not "in seconds": a genuinely lost webhook AND a too-slow review
-// both fail only after the full poll window elapses. So attempt duration alone
-// can't tell a retryable flake from a deterministic slow review — both look the
-// same. What actually decides whether a retry is safe is whether a SECOND
-// attempt still FITS: re-running is only harmful when the doubled wall-clock
-// would blow the matrix JOB timeout (grey "cancelled", no evidence uploaded).
-// So gate on the remaining job budget, NOT on a fraction of the scenario budget
-// — that fraction wrongly suppressed retries for scenarios whose poll window
-// exceeds half their budget (kody-rules / kody-rules-coverage: a 720s poll in a
-// 1200s budget), i.e. exactly the lost-webhook flake the retry exists for. See
-// fix/review-timeout-robustness.
-export const JOB_BUDGET_MS =
-    Number(process.env.E2E_JOB_BUDGET_MS) || 60 * 60 * 1000; // matrix job timeout-minutes: 60
-// Headroom so a permitted retry (plus teardown) still lands inside the job.
-export const JOB_BUDGET_SAFETY_MS = 5 * 60 * 1000;
+// Absolute wall-clock deadline (epoch ms) by which THIS runner invocation must
+// finish. Set by the workflow as (deadline-clock start + the bounding timeout),
+// so the retry gate knows the REAL time left — INCLUDING the provisioning +
+// checkout + npm-install that run before runMatrix but still count against the
+// job timeout (measuring from runMatrix entry would undercount that setup). Each
+// workflow sets its own: the self-hosted matrix JOB is 60min, the cloud runner
+// STEP is 135min. Local/dev fallback: a fresh 60min from process start.
+export const RUN_DEADLINE_EPOCH_MS =
+    Number(process.env.E2E_DEADLINE_EPOCH_MS) || Date.now() + 60 * 60 * 1000;
+// Headroom left after the last permitted work for evidence upload + teardown
+// before the runner hits the hard timeout.
+export const RUN_DEADLINE_SAFETY_MS = 5 * 60 * 1000;
 
+// A poll-based absence ("No review … within timeout") surfaces at the POLL
+// CEILING, not "in seconds": a genuinely lost webhook AND a too-slow review both
+// fail only after the full poll window elapses, so attempt duration can't tell a
+// retryable flake from a deterministic slow review. What decides safety is
+// whether a second attempt still fits before the deadline — re-running is
+// harmful only when its wall-clock would overrun the job/step timeout (grey
+// "cancelled", no evidence). Gating on the real deadline (not a fraction of the
+// scenario budget) also keeps retries for scenarios whose poll window exceeds
+// half their budget (kody-rules: a 720s poll in a 1200s budget), i.e. exactly
+// the lost-webhook flake the retry exists for. See fix/review-timeout-robustness.
 export function shouldRetryFailure(
     message: string,
-    attemptDurationMs: number,
-    elapsedJobMs: number,
-    jobBudgetMs: number = JOB_BUDGET_MS,
+    scenarioTimeoutMs: number,
+    nowMs: number = Date.now(),
+    deadlineMs: number = RUN_DEADLINE_EPOCH_MS,
 ): boolean {
     if (!isTransientFailure(message)) return false;
-    // A retry re-runs a similar poll, so it costs ~another attemptDurationMs.
-    // Permit it only if that still lands inside the job budget with headroom.
-    return elapsedJobMs + attemptDurationMs < jobBudgetMs - JOB_BUDGET_SAFETY_MS;
+    // Charge the retry's WORST-CASE wall-clock: the unconditional absence settle
+    // (absenceRetryDelayMs) + a full second attempt (the runner caps each attempt
+    // at the scenario's timeoutSec). Charging the upper bound means a permitted
+    // retry can never overrun the deadline, even when attempt-1 failed fast but
+    // attempt-2 runs to the poll ceiling.
+    const worstCaseRetryMs = absenceRetryDelayMs(message) + scenarioTimeoutMs;
+    return nowMs + worstCaseRetryMs < deadlineMs - RUN_DEADLINE_SAFETY_MS;
 }
 
 // GitHub's primary rate limit is per ACCOUNT and resets hourly, so an
@@ -456,9 +466,6 @@ export function absenceRetryDelayMs(message: string): number {
 
 export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     const startedAt = new Date().toISOString();
-    // Numeric run start for the retry budget gate (shouldRetryFailure): a
-    // retry is only allowed when it still fits inside the job timeout.
-    const runStartMs = Date.now();
     const results: ScenarioResult[] = [];
     const artifactDir = join(opts.artifactRoot, opts.runId);
     mkdirSync(artifactDir, { recursive: true });
@@ -799,9 +806,9 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                         );
                         break;
                     }
-                    const elapsedJobMs = Date.now() - runStartMs;
+                    const scenarioTimeoutMs = (scenario.timeoutSec ?? 1800) * 1000;
                     if (attempt === 1 && !opts.failFast) {
-                        if (shouldRetryFailure(e.message, duration, elapsedJobMs)) {
+                        if (shouldRetryFailure(e.message, scenarioTimeoutMs)) {
                             retriedAfter = e.message;
                             const settleMs = absenceRetryDelayMs(e.message);
                             log.info(
@@ -812,14 +819,23 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                             }
                             continue;
                         }
-                        // Transient SHAPE, but a retry (~another ${duration}ms
-                        // poll) wouldn't fit the remaining job budget — stacking
-                        // it would blow the job-level timeout (grey cancel, no
-                        // evidence). Say so, so it doesn't read as a missed
-                        // retry, and fail fast with evidence instead.
+                        // Transient SHAPE, but a worst-case retry (settle + a full
+                        // second attempt) wouldn't finish before the job/step
+                        // deadline — stacking it risks a grey cancel with no
+                        // evidence. Say so (so it doesn't read as a missed retry)
+                        // and fail fast with evidence instead.
                         if (isTransientFailure(e.message)) {
+                            const worstCaseMin = (
+                                (absenceRetryDelayMs(e.message) +
+                                    scenarioTimeoutMs) /
+                                60_000
+                            ).toFixed(0);
+                            const leftMin = (
+                                (RUN_DEADLINE_EPOCH_MS - Date.now()) /
+                                60_000
+                            ).toFixed(0);
                             log.info(
-                                `NO-RETRY ${cellLabel}: transient shape but a retry (~${(duration / 1000).toFixed(0)}s) wouldn't fit the remaining job budget (${(elapsedJobMs / 1000).toFixed(0)}s of ${(JOB_BUDGET_MS / 1000).toFixed(0)}s used) — failing fast with evidence`,
+                                `NO-RETRY ${cellLabel}: transient shape but a worst-case retry (~${worstCaseMin}min) wouldn't fit the ~${leftMin}min left before the deadline — failing fast with evidence`,
                             );
                         }
                     }
