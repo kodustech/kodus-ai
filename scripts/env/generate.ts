@@ -361,16 +361,26 @@ function renderDocsSnippet(sections: SchemaSection[]): string {
         out.push('| --- | --- | --- | --- | --- |');
         for (const item of items) {
             const required = item.required ? '✅' : '–';
-            const type = item.sensitive
+            const rawType = item.sensitive
                 ? `secret${item.type ? ` (${item.type})` : ''}`
                 : item.type ?? 'string';
-            // Escape backslash first (otherwise the next replace would
-            // produce inconsistent escaping when descriptions contain
-            // both `\` and `|`), then escape the markdown table delimiter.
-            const desc = item.description
-                .join(' ')
-                .replace(/\\/g, '\\\\')
-                .replace(/\|/g, '\\|');
+            // Escape backslash first (otherwise the later replaces would
+            // produce inconsistent escaping when values contain both `\`
+            // and one of the other characters), then the markdown table
+            // delimiter, then the MDX expression braces. Applies to every
+            // free-form cell:
+            //   - `enum=free|trial|paid` would split the row into extra
+            //     columns and render as a broken table;
+            //   - a brace pair such as `evals/{investigation,promotion}/`
+            //     is parsed by MDX as a JS expression over undefined
+            //     identifiers instead of literal text.
+            const escapeCell = (value: string): string =>
+                value
+                    .replace(/\\/g, '\\\\')
+                    .replace(/\|/g, '\\|')
+                    .replace(/([{}])/g, '\\$1');
+            const type = escapeCell(rawType);
+            const desc = escapeCell(item.description.join(' '));
             out.push(
                 `| \`${item.name}\` | ${required} | ${type} | ${audienceBadge(item)} | ${desc} |`,
             );

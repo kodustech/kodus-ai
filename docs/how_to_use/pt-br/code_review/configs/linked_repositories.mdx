@@ -1,0 +1,88 @@
+---
+title: "Repositórios Vinculados"
+description: "Deixe o Kody ler repositórios irmãos como contexto para pegar quebras de contrato entre repositórios durante a revisão."
+---
+
+Repositórios Vinculados permitem que o Kody leia repositórios irmãos como **contexto somente-leitura** enquanto revisa um pull request. Use para pegar os bugs que uma revisão de repositório único não enxerga: o backend renomeia um campo da API e o frontend continua lendo o antigo, um producer adiciona um valor de enum que nenhum consumer trata, ou writer e reader derivam a mesma chave de formas diferentes.
+
+Disponível nos planos **Teams e Enterprise**. Configurado **por repositório** — não existe padrão global, porque as relações são direcionais: vincular `frontend → backend-api` significa que *revisões de `frontend`* podem consultar `backend-api`, e não o contrário. Vincule as duas direções explicitamente se os dois times quiserem a verificação.
+
+## O que você ganha
+
+Um exemplo concreto. Seu PR de frontend adiciona este tratamento de erro:
+
+```ts
+const isNotApproved =
+    error.response?.data?.error === 'INTEGRATION_NOT_APPROVED';
+```
+
+Com o backend vinculado, o Kody verifica o outro lado desse contrato e comenta no PR:
+
+> **Bug · medium** — O frontend verifica `error.response?.data?.error` procurando `INTEGRATION_NOT_APPROVED`, mas o `sendError` do backend retorna o código num campo `message`. O branch de not-approved nunca casa, então os usuários sempre veem o toast de erro genérico. Leia `data.message`.
+
+O resumo da revisão também mostra o que foi consultado: **Additional context used:** `org/backend-api@main`.
+
+## Como funciona
+
+Quando um pull request num repositório com repositórios vinculados toca superfície de fronteira (literais de string alterados, campos de payload, valores de status, símbolos exportados), o agente de revisão do Kody pode buscar e ler os repositórios vinculados — do mesmo jeito que faz grep no seu próprio repositório — para verificar se os dois lados do contrato continuam de acordo. Achados só são levantados com evidência confirmada no arquivo da contraparte, e o comentário sempre cai numa linha do **seu** PR; o código do repositório vinculado é citado dentro dele como evidência de apoio, nunca comentado diretamente.
+
+Revisões que usaram contexto entre repositórios avisam: o resumo da revisão inclui uma linha **Additional context used** listando cada repositório e o ref em que foi lido.
+
+<Info>
+- Só podem ser vinculados repositórios **já conectados à mesma organização Kodus** (o Kody reaproveita sua integração de Git existente — sem tokens extras).
+- Até **3 repositórios vinculados** por repositório.
+- O acesso é somente leitura. O Kody nunca faz push, comenta nem modifica um repositório vinculado.
+- Se um repositório vinculado não puder ser buscado (permissões, timeout), a revisão continua normalmente sem ele.
+</Info>
+
+## Adicionando um repositório vinculado
+
+Vá em **Code Review Settings → _seu repositório_ → Linked Repositories**, escolha um repositório da lista (só aparecem repositórios conectados) e salve. Cada vínculo tem dois campos opcionais, descritos abaixo.
+
+### Instruções
+
+Uma dica em texto livre que diz ao agente de revisão **para que serve esse vínculo e onde olhar**. O Kody funciona sem ela, mas uma boa instrução deixa a passagem entre repositórios mais rápida e precisa — é a diferença entre o agente explorar o repositório vinculado do zero e ir direto ao código relevante.
+
+Boas instruções nomeiam a relação e os caminhos que sustentam o contrato:
+
+```text
+API REST que este dashboard consome. As respostas de erro são montadas por
+src/api/response.ts — confira os códigos de erro contra esse arquivo.
+```
+
+```text
+Máquina de estados de pedido compartilhada. Os enums de status ficam em
+src/domain/order-status.ts; precisamos tratar todos os valores que ele define.
+```
+
+Instruções fracas repetem o óbvio ("repositório do backend") e não acrescentam nada.
+
+### Ref pin (seleção de branch)
+
+Controla qual branch ("ref") do repositório vinculado o Kody lê. **A maioria dos times deixa vazio**: o Kody então lê a branch com o mesmo nome da branch do seu PR quando ela existe (para que mudanças coordenadas entre repositórios se enxerguem antes do merge), e cai na branch padrão caso contrário.
+
+A ordem completa de resolução, vence a primeira que casar:
+
+1. **Override na descrição do PR** — mencione a branch ou o PR do repositório vinculado na descrição do PR em revisão (ex.: `org/backend-api#123` ou `org/backend-api@feature-x`). Pontual, prioridade máxima. Só vale para repositórios já vinculados.
+2. **Pin de `ref` na config** (este campo), se definido.
+3. **PR aberto numa branch correspondente** — um pull request aberto no repositório vinculado cuja head branch coincide com a head branch do seu PR.
+4. **Mesmo nome de branch** no repositório vinculado.
+5. A **branch padrão** do repositório vinculado (depois `main`/`master` como fallback).
+
+Os passos 3–4 são o que mantém trabalho de feature multi-repo alinhado: a revisão vê a mudança companheira *antes* de ela ser mergeada, em vez de uma branch padrão que ainda não a contém.
+
+Defina um **ref pin** (ex.: `main`, `develop`, `release/2.x`) quando quiser revisões determinísticas contra uma branch estável — por exemplo, quando nomes de branch são reaproveitados entre repositórios para trabalhos não relacionados e o casamento por mesmo nome pegaria a coisa errada. O override na descrição do PR ainda vence o pin em casos pontuais.
+
+O resumo da revisão sempre mostra qual ref foi realmente usado. Para um passo a passo com exemplos, veja [Como usar repositórios vinculados](/knowledge_base/pt-br/how-to-use-linked-repositories-in-code-review).
+
+## Quando usar
+
+Repositórios vinculados compensam quando repositórios compartilham um contrato que não é garantido por ferramenta:
+
+- Pares **frontend ↔ backend** que redeclaram formatos de payload em cada lado.
+- Integrações **serviço ↔ serviço** passando valores de status, nomes de evento ou IDs.
+- **Consumidores de uma biblioteca compartilhada** que reimplementam ou espelham seus tipos.
+
+<Note>
+Repositórios vinculados **não** cobrem contratos que vivem fora do seu código — as regras de validação de uma API de terceiros, por exemplo, não são descobríveis em nenhum repositório vinculado.
+</Note>

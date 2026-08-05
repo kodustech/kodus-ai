@@ -1,5 +1,6 @@
 ---
 title: "Azure DevOps PAT 令牌"
+description: "生成 Kody 读取代码库并发布审查评论所需的 Azure DevOps Personal Access Token,含所需的确切权限范围。"
 ---
 
 ## PAT 简介
@@ -54,7 +55,7 @@ title: "Azure DevOps PAT 令牌"
 
 ### 1. 检查 PAT 范围
 
-在 Azure DevOps 中打开 PAT,确认[生成 PAT](#使用以下规格设置新令牌) 下列出的每个范围都已启用。最常被遗漏的是 **Code:读和写** — 没有**写**权限,Kody 可以读取您的代码库但无法发布审查评论,所以审查"静默运行"。
+在 Azure DevOps 中打开 PAT,确认[生成 PAT](#生成-pat个人访问令牌) 下列出的每个范围都已启用。最常被遗漏的是 **Code:读和写** — 没有**写**权限,Kody 可以读取您的代码库但无法发布审查评论,所以审查"静默运行"。
 
 如果 PAT 在某个范围添加之前就已创建,Azure DevOps 不会追加添加该范围。请使用完整的范围列表创建新的 PAT,并在 Kody 自动化设置中更新它。
 

@@ -1,5 +1,6 @@
 ---
 title: Webhookの作成
+description: "自動登録が行われなかった場合に Bitbucket の Webhook を手動で作成し、Kodus が実際に利用するプルリクエストのトリガーだけを選ぶ手順。"
 icon: webhook
 ---
 
@@ -20,27 +21,22 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
    - **Status**: Active
    - **SSL/TLS**: SSL検証を有効にするにチェック
    - **Triggers**: 以下のイベントを選択：
-        - Repository（リポジトリ）:
-            - Push
-            - Updated
-            - Commit comment created
-            - Build status created
-            - Build status updated
-        - Issue（課題）:
-            - Created
-            - Updated
-            - Comment created
-        - Pull Request（プルリクエスト）:
+        - Pull Request
             - Created
             - Updated
             - Merged
             - Declined
             - Comment created
-            - Comment deleted
-            - Comment updated
-            - Comment resolved
-            - Comment reopened
 
 6. 「Save」をクリック
 
 以上です！Bitbucketリポジトリでコードレビューを行うためのWebhookのセットアップが完了しました。
+
+<Note>
+  Kodus が利用するのは Pull Request イベントだけです — `created`、`updated`、`merged`、
+  `declined`、`comment created`。Repository・Issue・ビルドステータスのトリガーは届いた時点で
+  破棄されるため、チェックを外しておくと Webhook のトラフィックを抑えられます。
+
+  Bitbucket Data Center では、対応するイベントは `pr:opened`、`pr:modified`、
+  `pr:reviewer:updated`、`pr:comment:added`、`pr:merged`、`pr:declined` です。
+</Note>

@@ -42,12 +42,24 @@ kodus review --prompt-only            # 为 AI 代理优化的输出
 | `--branch <name>` | `-b` | 与指定分支对比 |
 | `--rules-only` | — | 仅使用配置的规则审查（不生成通用建议） |
 | `--fast` | — | 快速模式：使用更轻量的检查进行更快分析 |
+| `--focus <text>` | — | 将审查引导到特定区域 —— 参见[引导一次审查](/how_to_use/zh/code_review/review_directive) |
+| `--heavy` | — | 更深入的一轮：额外的批评轮次以提升召回（alpha，见下文） |
 | `--interactive` | `-i` | 交互模式：浏览并应用修复 |
 | `--fix` | — | 自动应用所有可修复的问题 |
 | `--prompt-only` | — | 为 AI 代理优化的输出 |
 | `--fail-on <severity>` | — | 如果问题达到或超过指定严重级别则退出码为 1 |
 | `--context <file>` | — | 包含在审查中的自定义上下文文件 |
 | `--fields <csv>` | — | 选择响应字段（JSON/代理模式），例如 `summary,issues.file` |
+| `--github-pat <token>` | — | 用于克隆私有代码库的 GitHub 令牌(`read:repo`)。仅限试用用户。也可通过 `KODUS_GITHUB_PAT` 设置。仅保留在内存中,绝不持久化。 |
+| `--no-hunk` | — | 跳过 hunk 查看器,使用旧版交互列表(仅交互式会话) |
+
+<Warning>
+  `--heavy` 是 **alpha** 功能,**需申请开通** —— 在我们为你开通之前,它对所有组织都是关闭的。
+  目前仅云端可用;自托管尚不支持。在开通之前,该标志会被接受,但审查按正常方式运行,
+  没有报错也没有警告。请通过 [Discord](https://discord.gg/TFZBRk9fT6) 或
+  [support@kodus.io](mailto:support@kodus.io) 申请访问。参见
+  [Heavy mode](/how_to_use/zh/code_review/review_directive#heavy-mode)。
+</Warning>
 
 ### 审查模式
 
@@ -231,63 +243,39 @@ KODUS_SKIP_HOOK=1 git push
 
 ---
 
-## `kodus decisions`
+## `kodus config centralized`
 
-捕获并持久化 AI 代理的决策到代码仓库中，供未来参考。决策以结构化 Markdown 文件存储在 `.kody/` 目录中。
+从 CLI 管理集中式配置。
 
-### `decisions enable`
-
-```bash
-kodus decisions enable                                    # 所有代理
-kodus decisions enable --agents claude,cursor            # 特定代理
-kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
-kodus decisions enable --force                           # 覆盖现有配置
-```
-
-| 标志 | 默认值 | 描述 |
-|------|--------|------|
-| `--agents <agents>` | `claude,cursor,codex` | 以逗号分隔的代理列表 |
-| `--codex-config <path>` | `~/.codex/config.toml` | Codex 配置路径 |
-| `--force` | — | 覆盖现有 `modules.yml` |
-
-### `decisions disable`
+### 用法
 
 ```bash
-kodus decisions disable
+kodus config centralized status
+kodus config centralized init [owner/repo] --sync-option <pr|manual>
+kodus config centralized sync
+kodus config centralized disable
+kodus config centralized download --out ./centralized-config.zip
 ```
 
-移除所有决策钩子。`.kody/` 中的已保存数据不会被删除。
+### 子命令
 
-### `decisions status`
+| 子命令                    | 说明                                           |
+| ----------------------- | --------------------------------------------- |
+| `status`                | 显示集中式配置是否已启用,以及所选的源代码库             |
+| `init [repository]`     | 为所选代码库启用集中式配置                          |
+| `sync`                  | 按需运行集中式配置同步                              |
+| `disable`               | 禁用集中式配置并清除所选代码库                        |
+| `download --out <path>` | 下载集中式配置的 ZIP 包                            |
 
-```bash
-kodus decisions status
-```
+### 标志
 
-显示 PR 记忆、会话、最新 SHA、代理和模块配置。
+| 标志                             | 适用于                | 说明                        |
+| ------------------------------ | -------------------- | -------------------------- |
+| `--sync-option <pr \| manual>` | `init`               | 同步策略,默认为 `pr`          |
+| `--out <path>`                 | `download`           | ZIP 文件的输出路径(必填)      |
+| `--json`                       | 所有 centralized 子命令 | 输出结构化 JSON              |
 
-### `decisions show`
-
-```bash
-kodus decisions show                  # 当前分支的 PR 记忆
-kodus decisions show auth             # 'auth' 模块的决策
-kodus decisions show feat/new-api     # 特定分支的 PR 决策
-```
-
-### `decisions promote`
-
-```bash
-kodus decisions promote                                   # 当前分支，所有模块
-kodus decisions promote --branch feat/auth                # 特定分支
-kodus decisions promote --branch feat/auth --modules auth,users
-```
-
-| 标志 | 描述 |
-|------|------|
-| `--branch <name>` | 分支名称（默认：当前分支） |
-| `--modules <ids>` | 以逗号分隔的模块 ID（默认：所有匹配的模块） |
-
-将 PR 级别的决策提升为长期模块记忆。
+完整流程参见:[集中式配置的 CLI 部分](/how_to_use/zh/code_review/configs/centralized_config#cli)
 
 ---
 
@@ -442,6 +430,24 @@ kodus status
 
 ---
 
+## `kodus diff`
+
+在 Hunk 终端 diff 查看器中打开当前变更集。
+
+```bash
+kodus diff
+```
+
+这是对 `hunk diff` 的一层薄封装 —— 你传入的每个参数都会原样转发,因此 Hunk 支持的任何标志
+在这里同样可用。
+
+<Note>
+  在对某个变更集运行 `kodus review` 之前先扫一眼时很有用。同一个查看器也支撑着交互式审查体验;
+  如果你更喜欢旧版列表,可以给 `kodus review` 传 `--no-hunk`。
+</Note>
+
+---
+
 ## `kodus update`
 
 将 Kodus CLI 更新到 npm 上的最新版本。
@@ -487,3 +493,4 @@ kodus subscribe
 | `complexity` | 代码复杂度问题 |
 | `maintainability` | 可维护性问题 |
 | `style` | 代码风格问题 |
+| `documentation` | 文档缺失(`kodus pr suggestions` 的 `--category` 接受该值) |

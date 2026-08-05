@@ -14,7 +14,7 @@
 | `RELEASE_VERSION` | – | string | ☁️ Cloud | Released version tag, set by CI on prod builds. |
 | `KODUS_LICENSE_KEY` | – | secret | 🏢 Self-hosted Enterprise | Self-hosted license key. Unlocks enterprise features. EE-only — documented in the docs reference; does not appear in either default .env.example. |
 | `API_DEVELOPMENT_MODE` | – | boolean | ☁️ Cloud | Dev-only bypass of permission validation. Cloud devs only. |
-| `GLOBAL_RULES_IMPORT_TIER_OVERRIDE` | – | enum=free|trial|paid | ☁️ Cloud | Dev-only override for the global Kody Rules import tier so the free/trial/paid UI can be exercised locally (where an install usually has no license and would otherwise resolve to `free`). Only honored when API_DEVELOPMENT_MODE is true; ignored in production. Leave empty to resolve the tier from the org's license as usual. |
+| `GLOBAL_RULES_IMPORT_TIER_OVERRIDE` | – | enum=free\|trial\|paid | ☁️ Cloud | Dev-only override for the global Kody Rules import tier so the free/trial/paid UI can be exercised locally (where an install usually has no license and would otherwise resolve to `free`). Only honored when API_DEVELOPMENT_MODE is true; ignored in production. Leave empty to resolve the tier from the org's license as usual. |
 | `RUN_MIGRATIONS` | – | boolean | ⚙️ Both | Run TypeORM migrations on container boot (OLTP + analytics warehouse + mcp-manager). Default true so a fresh install boots into a usable state without an extra step. Set to false to manage migrations manually (e.g. blue/green deploys where you run them out-of-band). |
 | `RUN_SEEDS` | – | boolean | ⚙️ Both | Run database seeds on container boot. Required for first-time setup (creates default org, admin role, etc). Idempotent — safe to leave on. |
 | `USE_LOCAL_DB` | – | boolean | 🏠 Self-hosted | When true, the installer's docker-compose spins up a local Postgres container. Set to false to point at an externally-managed Postgres (managed RDS/Supabase/Neon/Railway). Read by kodus-installer/scripts/ install.sh + doctor.sh; not consumed by kodus-ai itself. |
@@ -119,7 +119,7 @@
 | `API_VERTEX_AI_LOCATION` | – | string | ☁️ Cloud |  |
 | `API_GOOGLE_AI_PROVIDER` | – | enum(gemini,vertex) | ☁️ Cloud | Google AI provider: gemini (AI Studio) or vertex (Vertex AI). |
 | `API_NOVITA_AI_API_KEY` | – | secret | ☁️ Cloud |  |
-| `API_MOONSHOT_API_KEY` | – | secret | ☁️ Cloud | Moonshot AI (Kimi) — used by the public-demo trial flow in libs/code-review/infrastructure/agents/llm/byok-to-vercel.ts when the default model name matches /^kimi[-_.]/. Wires through the OpenAI- compatible adapter pointed at https://api.moonshot.ai/v1. The eval scripts (evals/{investigation,promotion}/run-eval.js) also reference this key by name. Cloud-only — self-hosted has no Moonshot demo path. |
+| `API_MOONSHOT_API_KEY` | – | secret | ☁️ Cloud | Moonshot AI (Kimi) — used by the public-demo trial flow in libs/code-review/infrastructure/agents/llm/byok-to-vercel.ts when the default model name matches /^kimi[-_.]/. Wires through the OpenAI- compatible adapter pointed at https://api.moonshot.ai/v1. The eval scripts (evals/\{investigation,promotion\}/run-eval.js) also reference this key by name. Cloud-only — self-hosted has no Moonshot demo path. |
 | `API_GROQ_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_GROQ_API_KEY` | – | secret | ☁️ Cloud |  |
 | `API_CEREBRAS_BASE_URL` | – | url | ☁️ Cloud |  |

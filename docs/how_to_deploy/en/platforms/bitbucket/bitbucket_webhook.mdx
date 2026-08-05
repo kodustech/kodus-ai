@@ -1,5 +1,6 @@
 ---
 title: Creating a Webhook
+description: "Manually create the Bitbucket webhook when automatic registration didn't happen, and pick the pull request triggers Kodus actually consumes."
 icon: webhook
 ---
 
@@ -20,27 +21,22 @@ Kodus usually creates the webhook automatically. If that didn't happen, follow t
    - **Status**: Active
    - **SSL/TLS**: Check Enable SSL verification
    - **Triggers**: Select these events:
-        - Repository:
-            - Push
-            - Updated
-            - Commit comment created
-            - Build status created
-            - Build status updated
-        - Issue
-            - Created
-            - Updated
-            - Comment created
         - Pull Request
             - Created
             - Updated
             - Merged
             - Declined
             - Comment created
-            - Comment deleted
-            - Comment updated
-            - Comment resolved
-            - Comment reopened
 
 6. Click "Save"
 
 And that's it! You've successfully set up a webhook to do code reviews in your Bitbucket repository.
+
+<Note>
+  Kodus only consumes Pull Request events — `created`, `updated`, `merged`, `declined`, and
+  `comment created`. Repository, Issue, and build-status triggers are discarded on arrival, so
+  leaving them unchecked keeps the webhook traffic down.
+
+  On Bitbucket Data Center the equivalent events are `pr:opened`, `pr:modified`,
+  `pr:reviewer:updated`, `pr:comment:added`, `pr:merged`, and `pr:declined`.
+</Note>

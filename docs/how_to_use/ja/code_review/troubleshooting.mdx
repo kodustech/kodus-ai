@@ -29,9 +29,9 @@ description: "Kody コードレビューのトラブルシューティング"
 
 ### 設定の問題
 
-- **自動レビュー**：[グローバル設定](https://app.kodus.io/automations/AutomationCodeReview/global/general)で自動レビューが有効になっていることを確認します。無効の場合は、`@kody start-review` で手動でレビューを開始します。
-- **レビュータイプ**：Kody がサジェストを提供するために少なくとも 1 つのレビュータイプが選択されていることを確認します。[レビュータイプを設定](https://app.kodus.io/automations/AutomationCodeReview/global/general)。
-- **ブランチレビュー**：デフォルトでは、Kody はデフォルトブランチにマージされる PR をレビューします。追加のブランチを含めるには、[設定を更新](https://app.kodus.io/automations/AutomationCodeReview/global/general)してください。
+- **自動レビュー**：[グローバル設定](https://app.kodus.io/settings/code-review/global/general)で自動レビューが有効になっていることを確認します。無効の場合は、`@kody start-review` で手動でレビューを開始します。
+- **レビュータイプ**：Kody がサジェストを提供するために少なくとも 1 つのレビュータイプが選択されていることを確認します。[レビュータイプを設定](https://app.kodus.io/settings/code-review/global/general)。
+- **ブランチレビュー**：デフォルトでは、Kody はデフォルトブランチにマージされる PR をレビューします。追加のブランチを含めるには、[設定を更新](https://app.kodus.io/settings/code-review/global/general)してください。
 - **大きな PR**：変更数が多い PR は処理に時間がかかる場合があります。
 
 ---
@@ -45,7 +45,7 @@ Kody は階層的な設定システムを使用します。仕組みは以下の
 
 #### トラブルシューティングの手順
 
-1. **グローバル設定を確認**：グローバル設定が正しいことをレビューして確認します。[グローバル設定にアクセス](https://app.kodus.io/automations/AutomationCodeReview/global/general)。
+1. **グローバル設定を確認**：グローバル設定が正しいことをレビューして確認します。[グローバル設定にアクセス](https://app.kodus.io/settings/code-review/global/general)。
 2. **リポジトリ設定を確認**：
    - 設定の**リポジトリ別**セクションに移動します。
    - 対象のリポジトリにカスタム設定が設定されているかどうかを確認します。

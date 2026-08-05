@@ -1,5 +1,6 @@
 ---
 title: "Token PAT de Azure DevOps"
+description: "Genera el Personal Access Token de Azure DevOps que Kody necesita para leer tus repositorios y publicar comentarios, con los scopes exactos."
 ---
 
 ## Introducción al PAT
@@ -54,7 +55,7 @@ Si Kody está conectado pero **no ocurre nada en los nuevos pull requests** — 
 
 ### 1. Verificar los alcances del PAT
 
-Abre el PAT en Azure DevOps y confirma que cada alcance listado en [Generar el PAT](#configura-el-nuevo-token-con-las-siguientes-especificaciones) esté habilitado. El que más frecuentemente se omite es **Code: Lectura y Escritura** — sin **Escritura**, Kody puede leer tus repositorios pero no puede publicar comentarios de revisión, por lo que las revisiones "se ejecutan silenciosamente".
+Abre el PAT en Azure DevOps y confirma que cada alcance listado en [Generar el PAT](#generar-el-pat-token-de-acceso-personal) esté habilitado. El que más frecuentemente se omite es **Code: Lectura y Escritura** — sin **Escritura**, Kody puede leer tus repositorios pero no puede publicar comentarios de revisión, por lo que las revisiones "se ejecutan silenciosamente".
 
 Si el PAT fue creado antes de que se agregara un alcance, Azure DevOps no lo añadirá retroactivamente. Crea un nuevo PAT con la lista completa de alcances y actualízalo en la configuración de automatización de Kody.
 

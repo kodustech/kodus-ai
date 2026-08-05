@@ -1,0 +1,71 @@
+---
+title: "Fuentes Globales de Reglas"
+description: "Convierte un repositorio conectado en fuente de Kody Rules para toda la organización, aplicando un único conjunto de estándares de arquitectura y código en todos los repositorios durante la revisión."
+---
+
+Las Fuentes Globales de Reglas te permiten apuntar Kodus a uno o más repositorios conectados e importar sus archivos de reglas como Kody Rules **globales**. A diferencia de las [Reglas de Repositorio](/how_to_use/es/code_review/configs/repository_rules) — que solo aplican al repositorio donde viven — las reglas importadas desde una fuente global aplican a **todos** los repositorios durante la revisión de código.
+
+Úsalo cuando un equipo mantiene sus estándares de arquitectura y código en un repositorio dedicado de "standards" y quiere que se apliquen en todas partes, sin copiar archivos de reglas a cada proyecto.
+
+## Cómo funciona
+
+- Seleccionas repositorios conectados para que actúen como **fuentes**.
+- Kodus escanea cada repositorio fuente en busca de archivos de reglas usando los mismos patrones que la [Detección de Archivos de Reglas](/how_to_use/es/code_review/configs/rules_file_detection) (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/**`, `.kody/rules/**`, etc.).
+- Cada archivo de reglas descubierto se importa al **ámbito global** y se etiqueta con el repositorio fuente del que proviene.
+- Durante la revisión de cualquier repositorio, estas reglas globales se aplican junto con las reglas propias de ese repositorio (sujetas a la [herencia](/how_to_use/es/code_review/configs/rules_inheritance)).
+
+<Info>
+Solo los repositorios ya conectados en tus ajustes de git pueden usarse como fuentes globales. Esto mantiene una única fuente de verdad para los repositorios conectados y garantiza que las reglas importadas se mantengan al día mediante el disparador de Pull Request descrito abajo.
+</Info>
+
+## Configuración
+
+1. Abre **Settings → Code Review → Kody Rules** y cambia a la vista **global**.
+2. En la pestaña **Configuration**, busca **Global rule sources**.
+3. Haz clic en el selector de repositorios y elige uno o más repositorios conectados.
+4. Haz clic en **Import selected**.
+
+La importación se ejecuta en segundo plano. Al terminar, las reglas importadas aparecen en tu lista de Kody Rules globales, cada una etiquetada con su repositorio fuente.
+
+<Tip>
+Puedes seleccionar tantos repositorios fuente como quieras. Kodus importa los archivos de reglas que encuentre en cada uno de ellos.
+</Tip>
+
+## Mantener las reglas al día
+
+Las reglas importadas se actualizan automáticamente y bajo demanda:
+
+- **Al hacer merge** — cuando se fusiona un Pull Request en un repositorio fuente, sus archivos de reglas se vuelven a escanear y las reglas globales se actualizan. Los archivos sin cambios se omiten, así que es barato.
+- **Resync now** — usa el botón **Resync now** para volver a escanear todas las fuentes configuradas bajo demanda. Esto también cubre los cambios subidos directamente a la rama por defecto de un repositorio fuente.
+
+<Note>
+Los cambios subidos **directamente** a la rama por defecto de un repositorio fuente (sin Pull Request) no se detectan automáticamente. Usa **Resync now** después de un push directo para recogerlos.
+</Note>
+
+## Eliminar una fuente
+
+Eliminar un repositorio de la lista de fuentes **borra las reglas globales que se importaron desde él** — dejarán de aplicarse durante la revisión. Se te pedirá confirmación antes de que la eliminación surta efecto. Las reglas importadas desde tus otras fuentes, y cualquier regla que hayas escrito a mano, nunca se ven afectadas.
+
+## Los repositorios fuente no se revisan
+
+Un repositorio usado únicamente como fuente de reglas globales se trata como repositorio de configuración, no como base de código. Kodus **omite la revisión de código** en los Pull Requests abiertos en una fuente global de reglas, igual que hace con un repositorio de [configuración centralizada](/how_to_use/es/code_review/configs/centralized_config).
+
+## Disponibilidad por plan
+
+El acceso a las Fuentes Globales de Reglas depende de tu plan:
+
+| Plan | Acceso |
+|------|--------|
+| **Free** | No disponible. |
+| **Trial** | Importa hasta **5 reglas globales en total**, sumando todos los repositorios fuente. Solo se importan las 5 primeras reglas encontradas; alcanzado el límite, no se importan más reglas hasta que elimines algunas o hagas upgrade. |
+| **De pago** (cloud) y **self-hosted con licencia** | Ilimitado. |
+
+<Info>
+En el plan Trial, al importar, Kodus importa las **5 primeras reglas que encuentra** entre los repositorios que seleccionaste (en el orden de los archivos del repositorio). Un contador en pantalla muestra cuántas de tus 5 reglas ya están usadas, y un diálogo de confirmación detalla cuántas se añadirán antes de importar.
+</Info>
+
+## Relacionados
+
+- [Reglas de Repositorio](/how_to_use/es/code_review/configs/repository_rules) — reglas versionadas con alcance de un único repositorio.
+- [Detección de Archivos de Reglas](/how_to_use/es/code_review/configs/rules_file_detection) — los patrones de archivo que Kodus escanea.
+- [Herencia de Reglas](/how_to_use/es/code_review/configs/rules_inheritance) — cómo se combinan las reglas globales, de repositorio y de directorio durante la revisión.

@@ -63,7 +63,7 @@ You can enhance your custom messages with dynamic context using the **Add Contex
 
 A summary of changed files, showing additions and deletions per file. This provides a detailed breakdown of what was modified in the pull request.
 
-### changedSummary
+### changeSummary
 
 A comprehensive summary of all changes in the pull request, giving an overview of the entire modification scope.
 
@@ -106,6 +106,51 @@ agent to apply all of the review's fixes at once.
   These context variables will be automatically populated with the actual data
   from your pull request when Kody sends the message.
 </Info>
+
+<Note>
+  In `kodus-config.yml` these are written with an `@` prefix — `@changedFiles`,
+  `@changeSummary`, `@reviewOptions`, `@reviewCadence`, `@reviewScope`, `@agentPrompt` — placed
+  anywhere inside the message `content`. The **Add Context** button inserts the same tokens for
+  you in the web UI.
+</Note>
+
+## Error message
+
+Separate from the start/end pair, you can append your own text to the comment Kody posts when a
+review **fails** — for example when no BYOK provider is configured, or the provider rejected the
+request.
+
+- **Off** (default) — Kody posts its standard error comment unchanged.
+- **Active** — your text is appended below the standard error comment.
+
+Use it to point people at the right internal owner or runbook instead of leaving them with a
+generic failure:
+
+```yaml
+customMessages:
+    errorReviewMessage:
+        status: 'active' # off | active
+        content: |
+            Reviews are failing? Ping #platform-eng — we own the Kodus API key.
+```
+
+Leaving `content` empty keeps the default error message unchanged.
+
+## Global settings
+
+Two toggles that apply to every Kody comment, not just custom messages:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `hideComments` | `false` | Posts every review message as a hidden/minimized comment. Shown in the UI as **Post as hidden comment**. **GitHub only** — the toggle is hidden on other platforms. |
+| `suggestionCopyPrompt` | `true` | Adds the copy-as-prompt affordance to suggestions so you can paste them into a coding agent. **Not available on Bitbucket.** |
+
+```yaml
+customMessages:
+    globalSettings:
+        hideComments: false # GitHub only
+        suggestionCopyPrompt: true # not available on Bitbucket
+```
 
 <Note>
   You can always revert to the default behavior by disabling both custom

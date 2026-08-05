@@ -64,7 +64,7 @@ Kodus automatically detects and imports the following rule file patterns:
 1. **Enable Auto-sync**: Toggle the "Auto-sync rules from repo" option in your settings
 2. **First Sync Modal**: A modal will appear asking if you want to sync for the first time
 3. **Repository Scan**: When you confirm, Kodus scans your entire repository for supported rule files
-4. **Rule Generation**: An LLM processes the found files and automatically creates corresponding Kody Rules. Exception: `.kody/rules/**` and `rules/**/*.md` template files are imported **verbatim** — no LLM conversion — so your instructions, examples and identifiers are preserved exactly as authored.
+4. **Rule Generation**: An LLM processes the found files and automatically creates corresponding Kody Rules. Exception: `.kody/rules/**` and `rules/**/*.md` template files are imported **verbatim** — no LLM conversion — so your instructions, examples and identifiers are preserved exactly as authored. If one of those files doesn't follow the template (missing/invalid frontmatter, or no `title`), it falls back to the LLM path.
 
 Each imported file produces **one Kody Rule**. If a file contains several distinct guidelines, the LLM merges them into a single comprehensive rule — split guidance across multiple files when you want independently manageable rules.
 

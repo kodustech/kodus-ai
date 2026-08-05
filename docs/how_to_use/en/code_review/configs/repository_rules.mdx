@@ -64,20 +64,31 @@ Describe what to review and how to decide. Be direct and objective.
 
 ### Required Fields
 
+Only two things are strictly required: a non-empty `title` and a non-empty rule body. A file
+missing either is skipped entirely.
+
 | Field | Description | Values |
 |-------|-------------|---------|
 | `title` | Rule name displayed in the interface | Any descriptive string |
-| `scope` | Rule analysis scope | `"file"` or `"pull-request"` |
-| `path` | File paths where rule applies. The rule fires on files matching **any** of the globs | Array of glob patterns |
-| `severity_min` | Minimum severity level | `"low"`, `"medium"`, `"high"`, `"critical"` |
 
-### Optional Fields
+### Fields with defaults
 
-| Field | Description |
-|-------|-------------|
-| `uuid` | Stable rule identifier — keeps the same platform rule across renames |
-| `enabled` | Set to `false` to skip importing this file (an already-imported rule is not removed) |
-| `languages`, `buckets` | Informational metadata |
+Everything else is optional — omit it and the default applies.
+
+| Field | Description | Values | Default |
+|-------|-------------|---------|---------|
+| `scope` | Rule analysis scope | `"file"` or `"pull-request"` | `"file"` |
+| `path` | File paths where rule applies. The rule fires on files matching **any** of the globs | Array of glob patterns | `**/*` (every file) |
+| `severity_min` | Minimum severity level | `"low"`, `"medium"`, `"high"`, `"critical"` | `"medium"` |
+| `enabled` | Set to `false` to skip importing this file (an already-imported rule is not removed) | boolean | `true` |
+| `uuid` | Stable rule identifier — keeps the same platform rule across renames | string | none |
+| `languages`, `buckets` | Informational metadata | — | — |
+
+<Note>
+  `severity` is accepted as an alias for `severity_min`, since it's an easy thing to mistype and
+  the intent is unambiguous. Any value outside the four levels falls back to `"medium"`, and any
+  `scope` other than `"pull-request"` is treated as `"file"`.
+</Note>
 
 ## Example Rules
 

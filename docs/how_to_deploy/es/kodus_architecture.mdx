@@ -43,6 +43,7 @@ El stack 2.0 divide las responsabilidades del backend en servicios dedicados:
 - API: Capa de servicio central que gestiona la lógica de negocio y el procesamiento de solicitudes
 - Worker: Procesamiento asíncrono para colas y tareas en segundo plano
 - Webhooks: Servicio dedicado para los webhooks del proveedor de Git
+- Analytics Worker: Worker opcional de ingesta (`WORKER_ROLE=analytics`) que alimenta los paneles de Cockpit. Solo Enterprise — consulta [Analytics Worker](/how_to_deploy/es/deploy_kodus/analytics_worker)
 
 ### 3. MCP Manager
 
@@ -65,8 +66,8 @@ Prometheus y Grafana son opcionales y se utilizan para monitoreo y visualizació
 
 ### 6. Servicios auxiliares (Kodus Cloud)
 
-Kodus Cloud incluye servicios auxiliares de código cerrado (facturación, analíticas e
-integraciones de chat) que no son necesarios para los despliegues auto-hospedados.
+Kodus Cloud incluye servicios auxiliares de código cerrado (facturación e
+integraciones de chat) que no son necesarios para los despliegues auto-hospedados. Analytics no es exclusivo de la nube: el self-hosted Enterprise con licencia ejecuta el mismo worker de ingesta localmente.
 
 ## Próximos pasos
 <CardGroup cols={2}>

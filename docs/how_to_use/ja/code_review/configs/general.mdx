@@ -1,5 +1,6 @@
 ---
 title: "一般設定"
+description: "レビューの中核設定 — 頻度、PR ワークフロー、スキップ条件、分析タイプ — と kodus-config.yml の完全なリファレンス。"
 ---
 
 ## コア設定
@@ -9,45 +10,106 @@ title: "一般設定"
 </Note>
 
 ### 設定の優先度
-リポジトリルートの `kodus-config.yml` は Web 設定をオーバーライドします。セットアップ不要 — ファイルをコミットするだけです。
+
+Web UI の代わりに、リポジトリルートの `kodus-config.yml` ファイルでレビュー設定を管理できます。
+
+<Warning>
+  **オプトインするまでこのファイルは無視されます。** デフォルトでは
+  `kodusConfigFileOverridesWebPreferences` が `false` のため、Kody は `kodus-config.yml` を
+  一切読み込みません — ファイルをコミットしただけでは何も起こりません。
+
+  まず **Settings → Code Review → 対象リポジトリ → General** で有効化するか、Web UI から
+  リポジトリ（またはディレクトリ）レベルで `kodusConfigFileOverridesWebPreferences: true` を
+  設定してください。それではじめてファイルが有効になります。
+</Warning>
+
+有効化すると、ファイルは Web 設定の上にマージされます。変更したいキーだけを書けばよく、
+省略したものは Web 側の値がそのまま使われます。
+
+<Note>
+  **未知のキーは警告なく破棄されます。** 現在のスキーマに含まれないトップレベルのキーは、
+  設定が適用される前に削除されます — エラーも警告も出ません。設定が効いていないように
+  見える場合は、下のサンプルとスペルを照合してください。
+</Note>
 
 <Accordion title="kodus-config.yml のサンプル">
 ```yaml
-version: '1.2'
-summary:
-  generatePRSummary: true
-  customInstructions: ''
-  behaviourForExistingDescription: concatenate
-ignorePaths:
-  - yarn.lock
-  - package-lock.json
-  - package.json
-  - .env
-baseBranches: []
-reviewOptions:
-  security: true
-  code_style: true
-  kody_rules: true
-  refactoring: true
-  error_handling: true
-  maintainability: true
-  potential_issues: true
-  documentation_and_comments: true
-  performance_and_optimization: true
-  business_logic: true
-suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
-  severityLevelFilter: medium
-ignoredTitleKeywords: []
+version: 2.0
+
+# general
 automatedReviewActive: true
+showStatusFeedback: true
+kodusConfigFileOverridesWebPreferences: false
+reviewCadence:
+    type: 'automatic' # automatic | auto_pause | manual
+    timeWindow: 15 # 分
+    pushesToTrigger: 3
 pullRequestApprovalActive: false
-isRequestChangesActive: false
+isRequestChangesActive: false # GitLab では利用できません
+runOnDraft: true
+ignorePaths:
+    - 'yarn.lock'
+    - 'package-lock.json'
+    - 'package.json'
+    - '.env'
+    - '**/*.json'
+ignoredTitleKeywords: []
+baseBranches: []
+enableCommittableSuggestions: true
+byokModel: '' # 空 = BYOK 設定のモデルを継承
+
+# Teams / Enterprise のみ。レビュー中にエージェントが参照できる関連リポジトリ。
+# 推奨上限は 3、空 = 機能オフ。
+linkedRepositories: []
+
+# レビューカテゴリ
+reviewOptions:
+    bug: true
+    performance: true
+    security: true
+    business_logic: true
+
+# 提案コントロール
+suggestionControl:
+    applyFiltersToKodyRules: false
+    severityLevelFilter: 'medium' # low | medium | high | critical
+
+# PR サマリー
+summary:
+    generatePRSummary: true
+    behaviourForNewCommits: 'none'
+    behaviourForExistingDescription: 'replace'
+    customInstructions: ''
+
+# kody rules
+ideRulesSyncEnabled: false
+kodyRulesGeneratorEnabled: true
+kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false
+
+# カスタムメッセージ
+customMessages:
+    globalSettings:
+        hideComments: false # GitHub のみ
+        suggestionCopyPrompt: true # Bitbucket では利用できません
+    errorReviewMessage:
+        status: 'off' # off | active
+        content: ''
+    startReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: ''
+    endReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: ''
 ```
 </Accordion>
+
+<Note>
+  このサンプルは出荷時のデフォルトを反映しています。正典となるのは kodus-ai リポジトリの
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
+  です。
+</Note>
 
 ## レビュー動作
 
@@ -93,24 +155,47 @@ Kody は PR が開かれたときに自動的にレビューするか、`@kody s
 
 ### スキップ条件
 
-**無視するファイル：** glob パターンを使用します（例：`**/*.js`）、1 行に 1 つ。デフォルト：`yarn.lock`、`package-lock.json`、`package.json`、`.env`
+**無視するファイル：** glob パターンを使用します（例：`**/*.js`）、1 行に 1 つ。デフォルト：`yarn.lock`、`package-lock.json`、`package.json`、`.env`、`**/*.json`
 
 **無視するタイトル：** 特定のキーワードを含む PR をスキップします（大文字・小文字を区別しない、最大 100 文字）
 
-**ベースブランチ：** デフォルト以外にレビューする追加ブランチ（dev、release、master）
+**ベースブランチ：** *どの*ターゲットブランチをレビューするかを絞り込みます。
+
+<Info>
+  **空（デフォルト）はすべてのターゲットブランチをレビューする意味です** — `dev`/`release`/`master`
+  といった組み込みのリストは存在しません。スコープを*狭めたい*ときだけエントリを追加してください。
+  リストが空でなくなると、Kody はそれらのブランチ宛の PR だけをレビューします（リポジトリの
+  デフォルトブランチは常に含まれます）。
+
+  エントリは PR の**ターゲット**ブランチと照合され、専用の記法をサポートします：
+
+  | エントリ | 一致するもの |
+  | --- | --- |
+  | `main` | ちょうど `main` 宛の PR |
+  | `release/*` | `release/` 配下の任意のブランチ宛の PR（`*` は 1 階層のワイルドカード） |
+  | `=main` | 完全一致。`main` と書くのと同じ |
+  | `!staging` | `staging` 宛の PR を除外 |
+  | `contains:hotfix` | 代わりに**ソース**ブランチと照合 — ヘッドブランチに `hotfix` を含む PR |
+
+  複数のエントリが一致した場合は、より具体的なものが優先されます。各エントリは 100 文字以内で、
+  使用できる文字は `a-z A-Z 0-9 / * - _ ! = :` のみ、`**` は使えません。
+</Info>
+
+**ドラフト PR：** `runOnDraft` はデフォルトで `true` なので、ドラフトもレビューされます。
+`false` にすると、PR が ready になるまでスキップされます。
 
 ## 分析タイプ
 
-### コード品質
-- セキュリティ：SQL インジェクション、XSS、セキュリティの脅威
-- パフォーマンス：キャッシュ、クエリ最適化、速度改善
-- エラー処理：例外管理、エラーメッセージ
-- 潜在的な問題：ヌルポインタ、リソースリーク、無限ループ
+Kody は 4 つのカテゴリでレビューします。**Analysis Types** で、または `kodus-config.yml` の
+`reviewOptions` で個別に有効・無効を切り替えられます。
 
-### コード構造
-- リファクタリング：コードの整理、関数サイズ、重複
-- 保守性：将来に対応できるコードパターン
-- コードスタイル：一貫したフォーマットと標準
-- ドキュメント：明確なコメントと API ドキュメント
-- Kody ルール：カスタムルールの強制
-- ビジネスロジック：タスク要件と受け入れ基準に対する PR 実装の検証
+- **Bug** — ロジックエラー、競合状態、null 参照、エッジケース、誤った挙動。
+- **Security** — 脆弱性、インジェクション、認証の問題、データ露出、シークレット。
+- **Performance** — N+1 クエリ、ホットパスでのアロケーション、キャッシュ不足、ブロッキング I/O。
+- **Business Logic** — PR に紐づくビジネスルール・要件・受け入れ基準に対して実装を検証します。
+  [ビジネスロジック検証](/how_to_use/ja/code_review/business_logic_validation) を参照してください。
+
+<Note>
+  Kody Rules はこれらのカテゴリの 1 つ**ではありません** — `reviewOptions` とは無関係に常に実行されます。
+  [Kody Rules](/how_to_use/ja/code_review/configs/kody_rules) を参照してください。
+</Note>
