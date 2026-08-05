@@ -25,7 +25,7 @@ export function createAgentRunContext(params: {
     runId: string;
     /** Caller signal (workflow/router timeout) — cancellation propagates in. */
     parentSignal?: AbortSignal;
-    /** Hard ceiling per agent. Defaults to AGENT_TIMEOUT_MS (20 min). */
+    /** Hard ceiling per agent. Defaults to AGENT_TIMEOUT_MS (30 min). */
     timeoutMs?: number;
 }): AgentRunContext {
     const controller = new AbortController();

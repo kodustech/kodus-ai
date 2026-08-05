@@ -112,14 +112,6 @@ jobs:
             matrix:
                 cell: ${{ fromJson(needs.plan.outputs.cells) }}
         steps:
-            # Stamp the run deadline (job start + the 60-min job timeout) as an
-            # epoch the matrix runner reads for its retry budget gate
-            # (shouldRetryFailure). MUST be the first step: ~7min provisioning +
-            # checkout/install run before the runner but still burn the 60-min
-            # job budget, so measuring from runMatrix entry would undercount.
-            - name: Record run deadline for the retry budget gate
-              run: echo "E2E_DEADLINE_EPOCH_MS=$(( ($(date +%s) + 3600) * 1000 ))" >> "$GITHUB_ENV"
-
             - name: Checkout monorepo
               uses: actions/checkout@v6.0.2
 
