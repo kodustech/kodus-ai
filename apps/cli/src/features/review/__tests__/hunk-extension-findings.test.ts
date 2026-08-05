@@ -4,6 +4,7 @@ import {
     countBySeverity,
     findFile,
     findHunkIndex,
+    nextCursor,
     orderFindings,
     parseFindings,
     shortenPath,
@@ -236,5 +237,28 @@ describe('countBySeverity', () => {
                 finding({ severity: 'info' }),
             ]),
         ).toEqual({ critical: 1, info: 2 });
+    });
+});
+
+describe('nextCursor', () => {
+    it('starts at the first finding going forward', () => {
+        expect(nextCursor(-1, 1, 3)).toBe(0);
+    });
+
+    it('starts at the last finding going backward', () => {
+        // Regression: the plain modulo gave `length - 2` here, so the first
+        // `p` skipped the last finding and only `n` could ever reach it.
+        expect(nextCursor(-1, -1, 3)).toBe(2);
+        expect(nextCursor(-1, -1, 1)).toBe(0);
+    });
+
+    it('wraps in both directions once started', () => {
+        expect(nextCursor(2, 1, 3)).toBe(0);
+        expect(nextCursor(0, -1, 3)).toBe(2);
+        expect(nextCursor(1, 1, 3)).toBe(2);
+    });
+
+    it('stays out of the way when there is nothing to walk', () => {
+        expect(nextCursor(-1, 1, 0)).toBe(-1);
     });
 });

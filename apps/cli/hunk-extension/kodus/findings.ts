@@ -203,3 +203,24 @@ export function countBySeverity(
     }
     return tally;
 }
+
+/**
+ * Advance the severity-first finding cursor.
+ *
+ * `-1` means "nothing selected yet". Feeding that through the plain modulo
+ * lands on `length - 2` when stepping backwards, so the first `p` used to skip
+ * the last finding entirely; anchor each direction to its natural start instead.
+ */
+export function nextCursor(
+    cursor: number,
+    delta: number,
+    length: number,
+): number {
+    if (length === 0) {
+        return -1;
+    }
+    if (cursor === -1) {
+        return delta > 0 ? 0 : length - 1;
+    }
+    return (cursor + delta + length) % length;
+}

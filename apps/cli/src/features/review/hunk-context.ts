@@ -356,6 +356,9 @@ function resolveCodeWrapWidth(): number {
     return Math.max(20, Math.min(CODE_WRAP_FALLBACK, columns - 25));
 }
 
+/** Columns a continuation must still have left, or the hanging indent is dropped. */
+const MIN_CONTINUATION = 8;
+
 export function wrapCodeBlock(
     code: string,
     width = resolveCodeWrapWidth(),
@@ -366,17 +369,26 @@ export function wrapCodeBlock(
             if (line.length <= width) {
                 return [line];
             }
-            const indent = `${line.match(/^\s*/)?.[0] ?? ''}  `;
-            const chunks: string[] = [];
-            let rest = line;
-            let budget = width;
+            const leading = line.match(/^\s*/)?.[0] ?? '';
+
+            // Continuations carry a hanging indent so a wrap still reads as one
+            // logical line — but only while that leaves room to make real
+            // progress. A deeply indented line in a narrow pane would otherwise
+            // re-add more prefix than the pass consumed, growing the remainder
+            // forever instead of terminating.
+            const indent =
+                leading.length + 2 <= width - MIN_CONTINUATION
+                    ? `${leading}  `
+                    : '';
+            const budget = width - indent.length;
+
+            const chunks: string[] = [line.slice(0, width)];
+            let rest = line.slice(width);
             while (rest.length > budget) {
-                chunks.push(rest.slice(0, budget));
+                chunks.push(`${indent}${rest.slice(0, budget)}`);
                 rest = rest.slice(budget);
-                budget = Math.max(8, width - indent.length);
-                rest = `${indent}${rest}`;
             }
-            chunks.push(rest);
+            chunks.push(`${indent}${rest}`);
             return chunks;
         })
         .join('\n');

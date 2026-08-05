@@ -385,6 +385,39 @@ describe('wrapCodeBlock', () => {
         expect(wrapCodeBlock(code, 80)).toBe(code);
     });
 
+    it('terminates and stays lossless for every indent/width combination', () => {
+        // Regression: the previous implementation re-prepended the full hanging
+        // indent each pass. Once that indent was wide relative to the budget the
+        // remainder grew instead of shrinking, looping forever and eating memory
+        // — reachable from any deeply indented patch in a narrow pane. The old
+        // tests missed it because they only used a 4-space indent.
+        for (let width = 20; width <= 60; width += 4) {
+            for (let indent = 0; indent <= 40; indent += 4) {
+                const line = ' '.repeat(indent) + 'x'.repeat(200);
+                const wrapped = wrapCodeBlock(line, width);
+
+                // Continuation indentation is cosmetic; the payload is not.
+                expect(wrapped.replace(/\s/g, '')).toBe(
+                    line.replace(/\s/g, ''),
+                );
+                for (const emitted of wrapped.split('\n')) {
+                    expect(emitted.length).toBeLessThanOrEqual(width);
+                }
+            }
+        }
+    });
+
+    it('drops the hanging indent when it would leave no room to progress', () => {
+        // Indent (20) + 2 leaves under MIN_CONTINUATION of a 20-column budget,
+        // so prettiness yields to making progress.
+        const line = ' '.repeat(20) + 'x'.repeat(120);
+        const wrapped = wrapCodeBlock(line, 20).split('\n');
+
+        expect(wrapped.length).toBeGreaterThan(1);
+        expect(wrapped.slice(1).every((l) => !l.startsWith(' '))).toBe(true);
+        expect(wrapped.join('').replace(/\s/g, '')).toBe('x'.repeat(120));
+    });
+
     it('indents continuations so a wrap still reads as one line', () => {
         const wrapped = wrapCodeBlock('    ' + 'x'.repeat(60), 20);
         expect(wrapped.split('\n').length).toBeGreaterThan(1);

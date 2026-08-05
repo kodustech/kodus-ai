@@ -29,6 +29,7 @@ import {
     countBySeverity,
     findFile,
     findHunkIndex,
+    nextCursor,
     orderFindings,
     parseFindings,
     shortenPath,
@@ -307,7 +308,7 @@ export default function registerKodusFindings(hunk: HunkExtensionAPI): void {
             return;
         }
 
-        cursor = (cursor + delta + ordered.length) % ordered.length;
+        cursor = nextCursor(cursor, delta, ordered.length);
         const finding = ordered[cursor];
 
         reveal(ctx);

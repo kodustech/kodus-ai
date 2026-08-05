@@ -7,7 +7,7 @@ import chalk from 'chalk';
 import { gitService } from '../services/git.service.js';
 import { getAuthModeSummary } from '../utils/auth-mode.js';
 import { listBundledSkills } from '../utils/skills.js';
-import { cliInfo } from '../utils/logger.js';
+import { cliDebug, cliInfo } from '../utils/logger.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
@@ -54,7 +54,16 @@ async function getPrePushHookStatus(repoRoot: string | null): Promise<string> {
     let hookPath: string;
     try {
         hookPath = path.join(await gitService.getHooksDir(), 'pre-push');
-    } catch {
+    } catch (error) {
+        // `n/a` on its own gives the user nothing to act on, so leave a trail
+        // behind `--verbose` rather than swallowing the cause outright.
+        cliDebug(
+            chalk.dim(
+                `[verbose] status: could not resolve the git hooks dir for ${repoRoot}: ${
+                    error instanceof Error ? error.message : String(error)
+                }`,
+            ),
+        );
         return 'n/a';
     }
 
