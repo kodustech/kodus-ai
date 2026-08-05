@@ -1,5 +1,6 @@
 ---
 title: Webhookの作成
+description: "自動登録が行われなかった場合に GitLab の Webhook を手動で作成し、Kodus が利用するイベントを選択する手順。"
 icon: webhook
 ---
 
@@ -21,9 +22,13 @@ Kodusは通常、Webhookを自動的に作成します。それが行われな�
    - **SSL verification**: SSL検証を有効にする
    - **Trigger**: 以下のイベントを選択：
      - Comments
-     - Issue events
      - Merge request events
 
 4. 「Add webhook」をクリック
 
 GitLabリポジトリのコードレビュー用Webhookのセットアップが完了しました。
+
+<Note>
+  Kodus が利用するのはコメントとマージリクエストのイベントだけです。Issue イベントは届いた
+  時点で破棄されます。
+</Note>

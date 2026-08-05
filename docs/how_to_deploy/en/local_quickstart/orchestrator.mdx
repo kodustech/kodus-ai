@@ -21,10 +21,16 @@ icon: "laptop"
 
 ## Prerequisites
 
-- Node.js (LTS version)
+- Node.js (see `.nvmrc` for the pinned version)
+- pnpm
 - Docker
-- Yarn or NPM
+- OpenSSL
 - LLM API Keys
+
+<Note>
+  kodus-ai is a pnpm workspace — `pnpm-lock.yaml` is the only lockfile in the repo. npm and yarn
+  are not supported for local development.
+</Note>
 
 ## Running the project
 
@@ -35,11 +41,16 @@ icon: "laptop"
       ```bash
       git clone https://github.com/kodustech/kodus-ai.git
       cd kodus-ai
-      yarn setup
+      pnpm run setup
       ```
 
+      <Warning>
+        Use `pnpm run setup`, not `pnpm setup` — the latter is pnpm's own built-in command for
+        configuring its home directory and will not run the project script.
+      </Warning>
+
       This script will automatically:
-      - ✅ Check all required dependencies (Node.js, Yarn, Docker, OpenSSL)
+      - ✅ Check all required dependencies (Node.js, pnpm, Docker, OpenSSL)
       - ✅ Install project dependencies
       - ✅ Create and configure the `.env` file
       - ✅ Generate all required security keys automatically
@@ -56,18 +67,22 @@ icon: "laptop"
 
       **Basic setup:**
       ```bash
-      yarn docker:start
-      yarn migrate:dev
-      yarn seed
+      pnpm run docker:start
       ```
 
       **With external integrations (webhooks, etc.):**
       ```bash
-      yarn docker:start
-      yarn migrate:dev
-      yarn seed
-      yarn tunnel  # Creates public endpoint for external services
+      pnpm run docker:start
+      pnpm run tunnel  # Creates public endpoint for external services
       ```
+
+      <Info>
+        Database migrations and seeds run **automatically** on container boot — the dev compose
+        file defaults `RUN_MIGRATIONS` and `RUN_SEEDS` to `true`. You don't need a separate step.
+
+        If you set them to `false` to manage them yourself, run `pnpm run migration:run` and
+        `pnpm run seed` from the host.
+      </Info>
 
       Once everything is running, open **http://localhost:3000** in your browser.
   </Tab>
@@ -83,7 +98,7 @@ icon: "laptop"
       ### 2. Install dependencies
 
       ```bash
-      yarn install
+      pnpm install
       ```
 
       ### 3. Configure environment variables
@@ -113,8 +128,8 @@ Select one mode and fill your .env before starting the services.
       ```
 
       You'll need to generate values for these security keys:
-      - `JWT_SECRET` (use `openssl rand -base64 32`)
-      - `JWT_REFRESH_SECRET` (use `openssl rand -base64 32`)
+      - `API_JWT_SECRET` (use `openssl rand -base64 32`)
+      - `API_JWT_REFRESH_SECRET` (use `openssl rand -base64 32`)
       - `CODE_MANAGEMENT_SECRET` (use `openssl rand -hex 32`)
       - `CODE_MANAGEMENT_WEBHOOK_TOKEN` (use `openssl rand -base64 32 | tr -d '=' | tr '/+' '_-'`)
 
@@ -133,7 +148,7 @@ Select one mode and fill your .env before starting the services.
       Launch the services using Docker:
 
       ```bash
-      yarn docker:start
+      pnpm run docker:start
       ```
 
       This command starts:
@@ -149,24 +164,31 @@ Select one mode and fill your .env before starting the services.
 
       To also create a public endpoint for external services:
       ```bash
-      yarn tunnel
+      pnpm run tunnel
       ```
 
       ### 8. First-time setup
 
-      If this is your first time running the project, execute the following commands:
+      Nothing to do — the API container runs migrations and seeds on boot, because
+      `docker-compose.dev.yml` defaults `RUN_MIGRATIONS` and `RUN_SEEDS` to `true`.
 
-      Run database migrations:
+      <Accordion title="Running migrations manually">
+        If you set `RUN_MIGRATIONS=false` / `RUN_SEEDS=false` in your `.env` (for example to
+        control them yourself), run them from the host with:
 
-      ```bash
-      yarn migrate:dev
-      ```
+        ```bash
+        pnpm run migration:run   # OLTP database
+        pnpm run seed            # initial data
+        ```
 
-      Seed initial data:
+        There are separate commands for the other datastores:
 
-      ```bash
-      yarn seed
-      ```
+        ```bash
+        pnpm run analytics:migration:run     # analytics warehouse
+        pnpm run mcp-manager:migration:run   # MCP manager
+        pnpm run mongo:migrate               # MongoDB
+        ```
+      </Accordion>
 
       ### 9. Service endpoints
 
@@ -185,18 +207,16 @@ Select one mode and fill your .env before starting the services.
 
 ### Basic Local Development
 
-1. **Start services**: `yarn docker:start`
-2. **Run migrations**: `yarn migrate:dev`
-3. **Load seed data**: `yarn seed`
-4. **Open the app**: Visit `http://localhost:3000`
-5. **Health check**: `yarn dev:health-check`
+1. **Start services**: `pnpm run docker:start` (migrations and seeds run automatically)
+2. **Open the app**: Visit `http://localhost:3000`
+3. **Health check**: `pnpm run dev:health-check`
 
 ### Development with External Integrations
 
 If you need to test integrations with external services (like Git webhooks):
 
-1. **Start services**: `yarn docker:start && yarn migrate:dev && yarn seed`
-2. **Create tunnel**: `yarn tunnel` (creates public endpoint)
+1. **Start services**: `pnpm run docker:start`
+2. **Create tunnel**: `pnpm run tunnel` (creates public endpoint)
 3. **Update webhook URLs**: The tunnel command updates your `.env` automatically
 4. **Configure Git provider**: Use the tunnel URL in your Git provider webhook settings
 5. **Test integration**: Trigger webhooks and monitor logs
@@ -214,7 +234,7 @@ If you need to test integrations with external services (like Git webhooks):
 ### Quick Health Check
 
 ```bash
-yarn dev:health-check
+pnpm run dev:health-check
 ```
 
 This comprehensive health check validates:
@@ -235,13 +255,13 @@ This comprehensive health check validates:
 
 ### Setup Script Issues
 
-If the automated setup script (`yarn setup`) fails:
+If the automated setup script (`pnpm run setup`) fails:
 
 **Missing dependencies:**
 ```bash
 # Check if all required tools are installed
 node --version
-yarn --version
+pnpm --version
 docker --version
 openssl version
 ```
@@ -273,10 +293,10 @@ docker network rm kodus-backend-services shared-network
 - Ensure all required security keys were generated properly
 
 **Health check failures:**
-- Run `yarn dev:health-check` to get detailed diagnostics
-- Check if containers are fully started (wait 1-2 minutes after `yarn docker:start`)
+- Run `pnpm run dev:health-check` to get detailed diagnostics
+- Check if containers are fully started (wait 1-2 minutes after `pnpm run docker:start`)
 - Verify database migrations and seed data are loaded
-- Check API logs with `yarn docker:logs` for startup errors
+- Check API logs with `pnpm run docker:logs` for startup errors
 
 **API not responding:**
 - The API takes time to fully initialize after container startup
@@ -285,7 +305,7 @@ docker network rm kodus-backend-services shared-network
 - Run health check to see which specific components are failing
 
 **Webhook issues with external services:**
-- Use `yarn tunnel` to create a public endpoint for external webhooks
+- Use `pnpm run tunnel` to create a public endpoint for external webhooks
 - Update your Git provider webhook URLs to use the tunnel URL
 - Ensure the tunnel is running when testing webhook integrations
 - Check tunnel logs for connection issues

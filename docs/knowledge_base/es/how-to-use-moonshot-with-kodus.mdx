@@ -116,7 +116,7 @@ El razonamiento está ACTIVADO por defecto para Kimi K2.6 Coding — la tarjeta 
   ```
 
 <Note>
-  No necesitas envolver en namespace — Kodus auto-envuelve bajo `openaiCompatible` (el provider activo) antes de enviar. Consulta [main BYOK doc → Custom JSON override](/how_to_use/es/byok#custom-json-override) para más detalles.
+  No necesitas envolver en namespace — Kodus auto-envuelve bajo `openaiCompatible` (el provider activo) antes de enviar. Consulta [main BYOK doc → Custom JSON override](/how_to_use/es/byok#sobrescritura-con-json-personalizado) para más detalles.
 </Note>
 
 ### Ajustar la concurrencia
@@ -161,7 +161,7 @@ Reinicia los contenedores de API y worker después de editar `.env`, luego verif
 docker-compose logs api worker | grep -iE "moonshot|kimi"
 ```
 
-Para la configuración completa con alojamiento autónomo (dominios, claves de seguridad, base de datos, webhooks, proxy inverso), sigue la [guía de despliegue en VM genérica](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm) y solo reemplaza el bloque LLM con el anterior.
+Para la configuración completa con alojamiento autónomo (dominios, claves de seguridad, base de datos, webhooks, proxy inverso), sigue la [guía de despliegue en VM genérica](https://docs.kodus.io/how_to_deploy/es/deploy_kodus/generic_vm) y solo reemplaza el bloque LLM con el anterior.
 
 ## Elegir entre Kimi Code Plan, Developer API y agregadores
 

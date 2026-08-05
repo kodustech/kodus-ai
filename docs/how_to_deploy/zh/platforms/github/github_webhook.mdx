@@ -1,5 +1,6 @@
 ---
 title: 创建 Webhook
+description: "当自动注册未发生时,手动创建 GitHub webhook,并选择 Kodus 消费的三个事件。"
 icon: webhook
 ---
 
@@ -21,13 +22,15 @@ Kodus 通常会自动创建 webhook。如果没有发生，请按照以下步骤
    - **SSL verification**：启用 SSL 验证
    - **Which events would you like to trigger this webhook?**：让我选择单个事件
    - 勾选这些框：
-     - 工单评论
-     - 拉取请求审查评论
-     - 拉取请求审查线程
-     - 拉取请求审查
-     - 拉取请求
-     - 推送
+     - 工单评论(Issue comment)
+     - 拉取请求审查评论(Pull request review comments)
+     - 拉取请求(Pull requests)
 
 6. 单击"添加 webhook"
 
 您已成功为 GitHub 仓库中的代码审查设置了 webhook。
+
+<Note>
+  Kodus 只消费这三个事件。勾选其他事件(pushes、pull request reviews、review threads)
+  只会产生到达后即被丢弃的流量。
+</Note>

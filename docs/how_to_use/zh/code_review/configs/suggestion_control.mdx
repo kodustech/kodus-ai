@@ -1,51 +1,60 @@
 ---
-title: "建议控制"
-description: "控制 Kody 如何在您的 PR 中提供反馈。"
+title: "审查过滤器"
+description: "控制 Kody 在你的 PR 中发布多少反馈。"
 ---
 
-## 建议限制
+审查过滤器决定 Kody 的哪些发现**真正会被发布**。你可以在
+**Settings → Code Review → 对应代码库 → Review filters** 中找到它们,并且可以在全局、代码库或
+目录级别设置 —— 参见
+[配置继承与覆盖](/how_to_use/zh/code_review/configs/inheritance_overrides)。
 
-### 限制类型
+## 最低严重性级别
 
-- 按 PR(默认):整个拉取请求中的最大建议数
-- 按文件:每个文件的最大建议数
+Kody 会为每条建议分配严重性,只发布达到或高于你所选级别的建议。默认值为 **Medium**。
 
-### 最大建议数
+| 级别 | 涵盖内容 |
+| --- | --- |
+| **Low / All** | 提升代码质量的细微改进 —— 小幅优化、风格改进、细节打磨。 |
+| **Medium**(默认) | 推荐但不紧急的中等改进:最佳实践,预防未来的技术债。 |
+| **High** | 应在近期处理的重要问题 —— 关键的质量改进、潜在风险、实质性的技术问题。 |
+| **Critical** | 需要立即处理、可能严重影响稳定性、安全性或功能的问题。 |
 
-设置 Kody 可以提出多少建议:
+<Tip>
+  大型 PR 上噪音过多,通常是严重性的问题,而不是数量的问题。在尝试其他手段之前先调到
+  **High** —— 你会保留所有真正的 bug,只丢掉吹毛求疵的部分。参见
+  [如何减少代码审查噪音](/knowledge_base/zh/how-to-reduce-code-review-noise)。
+</Tip>
 
-- 最小值:6 条建议
-- 默认值:10 条建议
-- 设置为 0 表示无限制
+## 对 Kody Rules 应用过滤器
 
-专业提示:从 10 开始,根据团队反馈进行调整。太多建议可能会让人不知所措,太少可能会遗漏重要问题。
+一个开关,**默认关闭**。
 
-## 严重性级别
+- **关闭** —— [Kody Rules](/how_to_use/zh/code_review/configs/kody_rules) 的发现会**绕过**严重性
+  过滤器。团队自己编写的规则,无论被判定为何种严重性,都始终会被报告。
+- **开启** —— Kody Rules 与其他建议一样,经过相同的严重性过滤器。
 
-### 最低严重性
+除非你的规则产生的噪音多于信号,否则请保持关闭。Kody Rule 的意义正在于:团队已经认定这件事很重要。
 
-选择 Kody 将报告哪些问题:
+<Note>
+  在 `kodus-config.yml` 中,这两项设置位于 `suggestionControl` 之下:
 
-- 低/全部:风格问题、小改进
-- 中等:常见最佳实践、潜在错误
-- 高:重大问题、明确的错误
-- 严重:安全问题、主要问题
+  ```yaml
+  suggestionControl:
+      severityLevelFilter: 'medium' # low | medium | high | critical
+      applyFiltersToKodyRules: false
+  ```
 
-## 建议分组
+  请记住,只有在你启用 `kodusConfigFileOverridesWebPreferences` 之后,该文件才会被读取 ——
+  参见[通用设置](/how_to_use/zh/code_review/configs/general)。
+</Note>
 
-### 统一评论(默认)
+## 减少噪音的其他方式
 
-<img src="https://app.kodus.io/_next/image?url=%2Fassets%2Fimages%2Ffull_grouping.png&w=1080&q=75" alt="统一评论" />
-将类似问题合并到一条评论中,显示所有受影响的文件和行。适用于:
+审查过滤器是一把钝刀。当你需要更有针对性的手段时:
 
-- 有重复问题的大型 PR
-- 保持讨论集中
-- 减少通知噪音
-
-### 单独评论
-
-<img src="https://app.kodus.io/_next/image?url=%2Fassets%2Fimages%2Fminimal_grouping.png&w=1080&q=75" alt="单独评论" />
-每个问题单独评论。更适合以下情况:
-
-- 您需要直接链接到每个位置
-- 团队更喜欢集中、特定行的讨论
+- **Ignore paths** —— 完全跳过生成代码、锁文件和 vendored 目录。
+  参见[通用设置](/how_to_use/zh/code_review/configs/general)。
+- **分析类型** —— 在用不上的代码库中,直接关闭整个类别(例如 `performance`)。
+- **目录级配置** —— 在 monorepo 中按文件夹应用更严格或更宽松的过滤器。
+  参见[目录级配置](/how_to_use/zh/code_review/configs/directory_level)。
+- **Kody Rules** —— 把团队真正在意的东西固化下来,让信号来自你们的标准,而不是泛泛的建议。
