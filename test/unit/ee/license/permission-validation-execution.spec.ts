@@ -223,6 +223,43 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         expect(result.metadata?.trialCreditsExhausted).toBe(true);
     });
 
+    it.each([0, -1, -3])(
+        'gates a trial when remaining credits are %s (blocks at <= 0, not only exactly 0)',
+        async (remaining) => {
+            // Post-delivery consumption can over-commit a single credit under
+            // concurrency and leave the counter negative; the gate must still
+            // block. Prerequisites gates WITHOUT consuming.
+            const licenseService = createMockLicenseService({
+                subscriptionStatus: 'trial',
+                planType: 'trial',
+                trialReviewCreditsTotal: 5,
+                trialReviewCreditsUsed: 5 - remaining,
+                trialReviewCreditsRemaining: remaining,
+            });
+            const service = createService(
+                licenseService,
+                createMockOrgParamsService(),
+            );
+
+            const result = await service.validateExecutionPermissions(
+                orgData,
+                undefined,
+                'ValidatePrerequisitesStage',
+                { consumeTrialReviewCredit: false },
+            );
+
+            expect(result.allowed).toBe(false);
+            expect(result.errorType).toBe(
+                ValidationErrorType.PLAN_LIMIT_EXCEEDED,
+            );
+            expect(result.metadata?.trialCreditsExhausted).toBe(true);
+            // Gate blocks before any consume is attempted.
+            expect(
+                licenseService.consumeTrialReviewCredit,
+            ).not.toHaveBeenCalled();
+        },
+    );
+
     it('does NOT flag exhaustion when the credit consume fails transiently (billing unreachable)', async () => {
         // A transport failure to billing surfaces as PLAN_LIMIT_EXCEEDED too,
         // but the reviews are NOT actually used up — the message must stay

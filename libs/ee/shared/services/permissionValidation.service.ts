@@ -238,7 +238,14 @@ export class PermissionValidationService {
                 if (
                     usesTrialCredits &&
                     noByok &&
-                    validation.trialReviewCreditsRemaining === 0
+                    // <= 0, not === 0: consumption happens post-delivery, so a
+                    // burst of concurrent reviews can over-commit a single
+                    // credit and leave the billing counter negative. Blocking
+                    // only at exactly 0 would let a negative-balance org keep
+                    // running free reviews. `undefined <= 0` is false, so legacy
+                    // trials without a remaining value are unaffected.
+                    typeof validation.trialReviewCreditsRemaining === 'number' &&
+                    validation.trialReviewCreditsRemaining <= 0
                 ) {
                     this.logger.warn({
                         message: 'Trial managed review credits exhausted',
