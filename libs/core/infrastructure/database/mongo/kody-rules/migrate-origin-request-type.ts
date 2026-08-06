@@ -42,6 +42,7 @@ const IDE_RULE_SOURCE_PATTERNS: RegExp[] = [
     /(?:^|\/)\.github\/copilot-instructions\.md$/,
     /(?:^|\/)\.github\/instructions\//,
     /(?:^|\/)\.agents?\.md$/,
+    /(?:^|\/)\.agents\/rules\//,
     /(?:^|\/)CLAUDE\.md$/,
     /(?:^|\/)\.claude\//,
     /(?:^|\/)\.windsurfrules$/,
