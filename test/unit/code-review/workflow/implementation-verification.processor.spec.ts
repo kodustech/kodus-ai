@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ImplementationVerificationProcessor } from '@/code-review/workflow/implementation-verification.processor';
 import { WORKFLOW_JOB_REPOSITORY_TOKEN } from '@/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { SUGGESTION_SERVICE_TOKEN } from '@/code-review/domain/contracts/SuggestionService.contract';
@@ -54,6 +55,10 @@ describe('ImplementationVerificationProcessor', () => {
 
     const mockTeamAutomationService = {
         find: jest.fn(),
+    };
+
+    const mockEventEmitter = {
+        emit: jest.fn(),
     };
 
     // Test data factories
@@ -133,6 +138,10 @@ describe('ImplementationVerificationProcessor', () => {
                 {
                     provide: TEAM_AUTOMATION_SERVICE_TOKEN,
                     useValue: mockTeamAutomationService,
+                },
+                {
+                    provide: EventEmitter2,
+                    useValue: mockEventEmitter,
                 },
             ],
         }).compile();
@@ -311,6 +320,10 @@ describe('ImplementationVerificationProcessor', () => {
                         .calls[0][2];
                 expect(passedSuggestions).toHaveLength(1);
                 expect(passedSuggestions[0].id).toBe('partial-suggestion');
+
+                // No statuses were persisted (service returned []), so no
+                // facet-refresh event should be emitted.
+                expect(mockEventEmitter.emit).not.toHaveBeenCalled();
             });
 
             it('should complete with NO_RELEVANT_CHANGES when changed files do not match suggestions', async () => {
@@ -482,6 +495,18 @@ describe('ImplementationVerificationProcessor', () => {
                         completedAt: expect.any(Date),
                         result: { checkedCount: 1 },
                     },
+                );
+
+                // Verify the facet-refresh event was broadcast after statuses
+                // were persisted — this is what tells the dashboard's "Needs
+                // attention" card to refetch the count.
+                expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+                    'pr-execution.updated',
+                    expect.objectContaining({
+                        organizationId: 'org-123',
+                        status: 'success',
+                        timestamp: expect.any(String),
+                    }),
                 );
             });
 
