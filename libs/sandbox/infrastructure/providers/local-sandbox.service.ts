@@ -338,7 +338,7 @@ export class LocalSandboxService implements ISandboxProvider {
                         return { stdout: '', stderr: '', exitCode: 1 };
                     }
                     const tokens = parts
-                        .map((p) => p.replace(/^['"]|['"]$/g, ''))
+                        .map((p: string) => p.replace(/^['"]|['"]$/g, ''))
                         .filter((t) => t !== '2>&1');
                     const [program, ...args] = tokens;
 
@@ -977,20 +977,8 @@ export class LocalSandboxService implements ISandboxProvider {
             }
         };
 
-        const sandboxReadFile = async (path: string): Promise<string> => {
-            const safePath = await this.resolveSafePath(capturedRepoDir, path);
-            return readFile(safePath, 'utf-8');
-        };
-
-        const sandboxWriteFile = async (
-            path: string,
-            content: string,
-        ): Promise<void> => {
-            const safePath = await this.resolveSafeWritePath(capturedRepoDir, path);
-            const dir = join(safePath, '..');
-            await mkdir(dir, { recursive: true });
-            await writeFile(safePath, content, 'utf-8');
-        };
+        const { readFile: sandboxReadFile, writeFile: sandboxWriteFile } =
+            this.buildSandboxFileAccess(capturedRepoDir);
 
         return {
             remoteCommands,

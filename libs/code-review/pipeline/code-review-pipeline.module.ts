@@ -78,7 +78,7 @@ import { BugAgentProvider } from '../infrastructure/agents/providers/bug-agent.p
 import { SecurityAgentProvider } from '../infrastructure/agents/providers/security-agent.provider';
 import { PerformanceAgentProvider } from '../infrastructure/agents/providers/performance-agent.provider';
 import { GeneralistAgentProvider } from '../infrastructure/agents/providers/generalist-agent.provider';
-import { DuplicateLogicAgentProvider } from '../infrastructure/agents/duplicate-logic-agent.provider';
+import { DuplicateLogicAgentProvider } from '../infrastructure/agents/providers/duplicate-logic-agent.provider';
 import { DUPLICATE_LOGIC_AGENT_TOKEN } from '../infrastructure/agents/review-agent.contract';
 import { KodyRulesAgentProvider } from '../infrastructure/agents/providers/kody-rules-agent.provider';
 // ReflectionAgentProvider removed — verify/discover was hurting recall

@@ -1,0 +1,52 @@
+[
+  {
+    "description": "duplicate logic evaluation: detect un-synced relative date calculation twin across modules",
+    "vars": {
+      "caseId": "duplicate-date-formatter-logic-drift",
+      "mode": "planner",
+      "prTitle": "feat: add formatRelativeDate helper for dashboard cards",
+      "prBody": "Adds a new relative date formatter helper for UI timestamp rendering.",
+      "repositoryFullName": "eval/duplicate-test",
+      "reviewMode": "normal",
+      "maxSteps": 8,
+      "requestedCategories": "[\"duplicate_logic\"]",
+      "changedFiles": "[{\"filename\":\"src/utils/date-formatter.ts\",\"patchWithLinesStr\":\"## file: 'src/utils/date-formatter.ts'\\n@@ -0,0 +1,25 @@\\n+export function formatRelativeDate(targetDate: Date, now: Date = new Date()): string {\\n+  const diffMs = now.getTime() - targetDate.getTime();\\n+  const diffSecs = Math.floor(diffMs / 1000);\\n+  if (diffSecs < 60) return `${diffSecs}s ago`;\\n+  const diffMins = Math.floor(diffSecs / 60);\\n+  if (diffMins < 60) return `${diffMins}m ago`;\\n+  const diffHours = Math.floor(diffMins / 60);\\n+  if (diffHours < 24) return `${diffHours}h ago`;\\n+  const diffDays = Math.floor(diffHours / 24);\\n+  return `${diffDays}d ago`;\\n+}\\n\"}]",
+      "toolReplay": "{\"readFile\":[{\"match\":{\"path\":\"src/utils/date-formatter.ts\"},\"result\":\"export function formatRelativeDate(targetDate: Date, now: Date = new Date()): string {\\n  const diffMs = now.getTime() - targetDate.getTime();\\n  const diffSecs = Math.floor(diffMs / 1000);\\n  if (diffSecs < 60) return `${diffSecs}s ago`;\\n  const diffMins = Math.floor(diffSecs / 60);\\n  if (diffMins < 60) return `${diffMins}m ago`;\\n  const diffHours = Math.floor(diffMins / 60);\\n  if (diffHours < 24) return `${diffHours}h ago`;\\n  const diffDays = Math.floor(diffHours / 24);\\n  return `${diffDays}d ago`;\\n}\\n\"},{\"match\":{\"path\":\"src/common/time-utils.ts\"},\"result\":\"export function formatTimeAgo(timestamp: number, baseTime: number = Date.now()): string {\\n  if (timestamp > baseTime) return 'in the future';\\n  const diffSecs = Math.floor((baseTime - timestamp) / 1000);\\n  if (diffSecs < 60) return `${diffSecs} seconds ago`;\\n  const diffMins = Math.floor(diffSecs / 60);\\n  if (diffMins < 60) return `${diffMins} minutes ago`;\\n  const diffHours = Math.floor(diffMins / 60);\\n  if (diffHours < 24) return `${diffHours} hours ago`;\\n  const diffDays = Math.floor(diffHours / 24);\\n  return `${diffDays} days ago`;\\n}\\n\"}],\"grep\":[{\"match\":{\"patternIncludes\":\"formatTimeAgo\"},\"result\":\"src/common/time-utils.ts:1:export function formatTimeAgo(timestamp: number, baseTime: number = Date.now()): string {\\n\"}],\"listDir\":[{\"match\":{\"path\":\".\",\"maxDepth\":3},\"result\":\"src/\\nsrc/utils/\\nsrc/utils/date-formatter.ts\\nsrc/common/\\nsrc/common/time-utils.ts\\n\"}]}",
+      "goldenComments": "[{\"comment\":\"formatRelativeDate in src/utils/date-formatter.ts duplicates relative time formatting logic from formatTimeAgo in src/common/time-utils.ts without handling future timestamps\",\"severity\":\"High\"}]",
+      "expectedRequiredTools": "[\"readFile\"]",
+      "expectedForbiddenTools": "[\"searchDocs\"]",
+      "expectedMaxSteps": 8
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://investigation-assertion.js"
+      }
+    ]
+  },
+  {
+    "description": "duplicate logic evaluation: detect token verification twin omitting nbf check",
+    "vars": {
+      "caseId": "duplicate-auth-token-validation-drift",
+      "mode": "planner",
+      "prTitle": "feat: add client token validation helper",
+      "prBody": "Adds standalone token validation for lightweight client requests.",
+      "repositoryFullName": "eval/duplicate-test",
+      "reviewMode": "normal",
+      "maxSteps": 8,
+      "requestedCategories": "[\"duplicate_logic\"]",
+      "changedFiles": "[{\"filename\":\"src/auth/jwt-validator.ts\",\"patchWithLinesStr\":\"## file: 'src/auth/jwt-validator.ts'\\n@@ -0,0 +1,22 @@\\n+export function validateClientToken(token: string, secret: string): { valid: boolean; payload?: any } {\\n+  const parts = token.split('.');\\n+  if (parts.length !== 3) return { valid: false };\\n+  const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));\\n+  const now = Math.floor(Date.now() / 1000);\\n+  if (payload.exp && payload.exp < now) return { valid: false };\\n+  const signature = createHmac('sha256', secret).update(`${parts[0]}.${parts[1]}`).digest('base64url');\\n+  if (signature !== parts[2]) return { valid: false };\\n+  return { valid: true, payload };\\n+}\\n\"}]",
+      "toolReplay": "{\"readFile\":[{\"match\":{\"path\":\"src/auth/jwt-validator.ts\"},\"result\":\"import { createHmac } from 'crypto';\\nexport function validateClientToken(token: string, secret: string): { valid: boolean; payload?: any } {\\n  const parts = token.split('.');\\n  if (parts.length !== 3) return { valid: false };\\n  const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));\\n  const now = Math.floor(Date.now() / 1000);\\n  if (payload.exp && payload.exp < now) return { valid: false };\\n  const signature = createHmac('sha256', secret).update(`${parts[0]}.${parts[1]}`).digest('base64url');\\n  if (signature !== parts[2]) return { valid: false };\\n  return { valid: true, payload };\\n}\\n\"},{\"match\":{\"path\":\"src/security/token-verifier.ts\"},\"result\":\"import { createHmac } from 'crypto';\\nexport function verifySessionToken(tokenStr: string, signingKey: string): { valid: boolean; claims?: any } {\\n  const segments = tokenStr.split('.');\\n  if (segments.length !== 3) return { valid: false };\\n  const claims = JSON.parse(Buffer.from(segments[1], 'base64').toString('utf8'));\\n  const current = Math.floor(Date.now() / 1000);\\n  if (claims.exp && claims.exp < current) return { valid: false };\\n  if (claims.nbf && claims.nbf > current) return { valid: false };\\n  const expectedSig = createHmac('sha256', signingKey).update(`${segments[0]}.${segments[1]}`).digest('base64url');\\n  if (expectedSig !== segments[2]) return { valid: false };\\n  return { valid: true, claims };\\n}\\n\"}],\"grep\":[{\"match\":{\"patternIncludes\":\"verifySessionToken\"},\"result\":\"src/security/token-verifier.ts:2:export function verifySessionToken(tokenStr: string, signingKey: string): { valid: boolean; claims?: any } {\\n\"}],\"listDir\":[{\"match\":{\"path\":\".\",\"maxDepth\":3},\"result\":\"src/\\nsrc/auth/\\nsrc/auth/jwt-validator.ts\\nsrc/security/\\nsrc/security/token-verifier.ts\\n\"}]}",
+      "goldenComments": "[{\"comment\":\"validateClientToken in src/auth/jwt-validator.ts duplicates token verification logic from verifySessionToken in src/security/token-verifier.ts but omits the nbf claim check\",\"severity\":\"High\"}]",
+      "expectedRequiredTools": "[\"readFile\"]",
+      "expectedForbiddenTools": "[\"searchDocs\"]",
+      "expectedMaxSteps": 8
+    },
+    "assert": [
+      {
+        "type": "javascript",
+        "value": "file://investigation-assertion.js"
+      }
+    ]
+  }
+]

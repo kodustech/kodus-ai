@@ -371,16 +371,79 @@ export class AstGraphRepository {
         repoId: string,
         changedFiles: string[],
         sha?: string,
+        includeDuplicates = false,
     ): Promise<string> {
         if (changedFiles.length === 0) {
             return '{"sha":"","nodes":[],"edges":[]}';
         }
 
+        const duplicateCte = includeDuplicates
+            ? `,
+            -- Outgoing CALLS targets for each changed node (its "call shape")
+            changed_calls AS (
+                SELECT DISTINCT cn.qualified_name AS qn, e.target_qualified AS callee
+                FROM changed_nodes cn
+                JOIN ast_edges e
+                  ON e.repo_id = $1
+                 AND e.kind = 'CALLS'
+                 AND e.source_qualified = cn.qualified_name
+            ),
+            duplicate_candidates AS (
+                -- TIER 1 (high confidence): structural twins — same return type
+                -- + shared call shape (>= 2 common callees). Catches
+                -- differently-named functions over the same domain entities.
+                SELECT DISTINCT n.qualified_name AS qn
+                FROM ast_nodes n
+                JOIN changed_nodes c ON n.repo_id = $1
+                WHERE n.kind IN ('Function', 'Method', 'function', 'method')
+                  AND n.qualified_name != c.qualified_name
+                  AND n.return_type = c.return_type
+                  AND (
+                      SELECT COUNT(DISTINCT cc.callee)
+                      FROM changed_calls cc
+                      WHERE cc.qn = c.qualified_name
+                        AND cc.callee IN (
+                            SELECT e2.target_qualified
+                            FROM ast_edges e2
+                            WHERE e2.repo_id = $1
+                              AND e2.kind = 'CALLS'
+                              AND e2.source_qualified = n.qualified_name
+                        )
+                  ) >= 2
+                UNION
+                -- TIER 2 (softer signal): high name similarity + same return
+                -- type + same param count. Catches utility-function twins
+                -- (toCaps / toCapsLock) with no shared repo-level callees.
+                SELECT DISTINCT n.qualified_name AS qn
+                FROM ast_nodes n
+                JOIN changed_nodes c ON n.repo_id = $1
+                WHERE n.kind IN ('Function', 'Method', 'function', 'method')
+                  AND n.qualified_name != c.qualified_name
+                  AND similarity(n.name, c.name) >= 0.7
+                  AND length(c.name) > 5
+                  AND n.return_type = c.return_type
+                  AND COALESCE(array_length(string_to_array(NULLIF(n.params, ''), ','), 1), 0) =
+                      COALESCE(array_length(string_to_array(NULLIF(c.params, ''), ','), 1), 0)
+                LIMIT 10
+            )`
+            : '';
+
+        const duplicateUnion = includeDuplicates
+            ? `
+                UNION
+                SELECT qn FROM duplicate_candidates`
+            : '';
+
+        const duplicateNodeProp = includeDuplicates
+            ? `
+                        'is_duplicate', (n.qualified_name IN (SELECT qn FROM duplicate_candidates)),`
+            : '';
+
         const result = await this.dataSource.query(
             `WITH changed_nodes AS (
-                SELECT qualified_name, name
+                SELECT qualified_name, name, params, return_type
                 FROM ast_nodes
-                WHERE repo_id = $1 AND REPLACE(file_path, '\\', '/') = ANY($3::text[])
+                WHERE repo_id = $1 AND file_path = ANY($3::text[])
             ),
             -- Edges touching changed nodes (direct neighbors)
             touching_edges AS (
@@ -422,24 +485,11 @@ export class AstGraphRepository {
                 SELECT * FROM touching_edges
                 UNION
                 SELECT * FROM sibling_edges
-            ),
-            duplicate_candidates AS (
-                SELECT DISTINCT n.qualified_name AS qn
-                FROM ast_nodes n
-                WHERE n.repo_id = $1
-                  AND n.kind IN ('Function', 'Method', 'function', 'method')
-                  AND EXISTS (
-                      SELECT 1 FROM changed_nodes c
-                      WHERE n.qualified_name != c.qualified_name
-                        AND similarity(n.name, c.name) > 0.15
-                  )
-            ),
+            )${duplicateCte},
             neighbor_qnames AS (
                 SELECT DISTINCT source_qualified AS qn FROM all_edges
                 UNION
-                SELECT DISTINCT target_qualified AS qn FROM all_edges
-                UNION
-                SELECT qn FROM duplicate_candidates
+                SELECT DISTINCT target_qualified AS qn FROM all_edges${duplicateUnion}
             ),
             all_relevant_nodes AS (
                 SELECT n.*
@@ -458,8 +508,7 @@ export class AstGraphRepository {
                         'line_start', COALESCE(n.line_start, 0),
                         'line_end', COALESCE(n.line_end, 0),
                         'language', COALESCE(n.language, ''),
-                        'is_test', n.is_test,
-                        'is_duplicate', (n.qualified_name IN (SELECT qn FROM duplicate_candidates)),
+                        'is_test', n.is_test,${duplicateNodeProp}
                         'parent_name', n.parent_name,
                         'params', n.params,
                         'return_type', n.return_type,

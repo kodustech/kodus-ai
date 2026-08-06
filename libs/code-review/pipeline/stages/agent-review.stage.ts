@@ -533,7 +533,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 context.sandboxHandle,
                                 changedFiles,
                                 repo.uuid,
-                                reviewOptions.duplicate_logic,
+                                reviewOptions.duplicate_logic === true,
                             );
                         } else {
                             callGraph =

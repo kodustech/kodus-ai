@@ -18,8 +18,10 @@ const TIER0 = {
     'gpt-5.4-mini': { provider: 'openai', keyEnvs: ['BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'] },
     'claude-sonnet-4-6': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'claude-opus-4-7': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
-    'gemini-3.1-pro-preview-customtools': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
-    'gemini-3-flash-preview': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
+    'gemini-3.1-pro-preview-customtools': { provider: 'google', keyEnvs: ['GEMINI_API_KEY', 'BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY'] },
+    'gemini-3-flash-preview': { provider: 'google', keyEnvs: ['GEMINI_API_KEY', 'BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY'] },
+    'gemini-3.5-flash-lite': { provider: 'google', keyEnvs: ['GEMINI_API_KEY', 'BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY'] },
+    'gemini-3.1-flash-lite': { provider: 'google', keyEnvs: ['GEMINI_API_KEY', 'BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY', 'GOOGLE_API_KEY'] },
     'kimi-k2.7-code': { provider: 'openai_compatible', keyEnvs: ['BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
     'glm-5.2': { provider: 'openai_compatible', keyEnvs: ['BYOK_ZHIPU_API_KEY', 'API_ZHIPU_API_KEY'], baseURL: 'https://api.z.ai/api/paas/v4' },
 };

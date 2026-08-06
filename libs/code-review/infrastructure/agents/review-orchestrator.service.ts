@@ -10,6 +10,7 @@ import { BugAgentProvider } from '@libs/code-review/infrastructure/agents/provid
 import { SecurityAgentProvider } from '@libs/code-review/infrastructure/agents/providers/security-agent.provider';
 import { PerformanceAgentProvider } from '@libs/code-review/infrastructure/agents/providers/performance-agent.provider';
 import { GeneralistAgentProvider } from '@libs/code-review/infrastructure/agents/providers/generalist-agent.provider';
+import { KodyRulesAgentProvider } from '@libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider';
 import { DUPLICATE_LOGIC_AGENT_TOKEN, ReviewAgentInput, ReviewAgentOutput } from './review-agent.contract';
 import { BaseCodeReviewAgentProvider } from './providers/base-code-review-agent.provider';
 import {

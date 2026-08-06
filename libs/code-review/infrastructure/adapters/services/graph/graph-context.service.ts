@@ -42,7 +42,7 @@ export class GraphContextService {
         sandbox: SandboxInstance,
         changedFiles: FileChange[],
         repoId: string,
-        includeDuplicates?: boolean,
+        includeDuplicates = false,
     ): Promise<string> {
         if (!sandbox?.run) {
             this.logger.warn({
@@ -96,6 +96,7 @@ export class GraphContextService {
                 repoId,
                 filePaths,
                 repo.astGraphSha ?? undefined,
+                includeDuplicates,
             );
 
             const diffPath = await this.writeDiffToSandbox(
@@ -113,7 +114,7 @@ export class GraphContextService {
             });
             if (includeDuplicates) {
                 try {
-                    const graphJsonStr = await sandbox.readFile(BASE_GRAPH_PATH, { timeoutMs: 5000 });
+                    const graphJsonStr = await sandbox.readFile(`${sandbox.repoDir}/${BASE_GRAPH_PATH}`, { timeoutMs: 5000 });
                     if (graphJsonStr) {
                         const baseGraph = JSON.parse(graphJsonStr);
                         const allNodes = baseGraph.nodes || [];
@@ -125,14 +126,6 @@ export class GraphContextService {
                                 prompt += `    <Candidate name="${t.name}" file="${t.file_path}" lineStart="${t.line_start}" lineEnd="${t.line_end}" />\n`;
                             }
                             prompt += '  </DuplicateCandidates>\n</CallGraph>';
-                        } else {
-                            this.logger.log({
-                                message: '[DEBUG-DUPLICATE] No twins found',
-                                context: GraphContextService.name,
-                                metadata: {
-                                    nodeIsDuplicateValues: allNodes.map((n: any) => ({ name: n.name, is_duplicate: n.is_duplicate }))
-                                }
-                            });
                         }
                     }
                 } catch (error) {
@@ -407,6 +400,7 @@ export class GraphContextService {
         repoId: string,
         changedFiles: string[],
         sha?: string,
+        includeDuplicates = false,
     ): Promise<void> {
         // Filtered subgraph: only nodes in changed files + direct neighbors.
         // ~99% reduction vs full export (e.g. ~500 nodes instead of 50k+).
@@ -414,6 +408,7 @@ export class GraphContextService {
             repoId,
             changedFiles,
             sha,
+            includeDuplicates,
         );
         const baseGraphPath = `${sandbox.repoDir}/${BASE_GRAPH_PATH}`;
 

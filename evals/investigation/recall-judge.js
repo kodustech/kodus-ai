@@ -119,6 +119,9 @@ async function judgeCall(model, apiKey, prompt) {
     for (let attempt = 0; attempt < 6; attempt++) {
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 90000);
+        const maskedKey = apiKey ? `${apiKey.slice(0, 8)}...${apiKey.slice(-4)}` : 'NONE';
+        console.log(`[EVAL-DEBUG] Judge calling model ${model} (attempt ${attempt + 1}, key=${maskedKey}, waiting 5s delay)...`);
+        await new Promise((r) => setTimeout(r, 5000)); // 5s delay between judge LLM calls to avoid rate limiting
         try {
             let url;
             let headers;
@@ -166,6 +169,14 @@ async function judgeCall(model, apiKey, prompt) {
                 return extractText(provider, data);
             }
             const errBody = await resp.text();
+            console.error(`[JUDGE-ERROR] HTTP ${resp.status} response body:`, errBody);
+            if (resp.status === 429 || errBody.includes('RESOURCE_EXHAUSTED') || errBody.includes('Quota exceeded')) {
+                const waitMs = 60000;
+                console.log(`[JUDGE-RETRY] Rate limited (429/Quota). Strictly waiting 60s before retry attempt ${attempt + 2}/6...`);
+                await new Promise((r) => setTimeout(r, waitMs));
+                lastErr = new Error(`judge HTTP 429: ${errBody.slice(0, 150)}`);
+                continue;
+            }
             if (isHardError(resp.status)) {
                 throw new Error(`judge HTTP ${resp.status} ${errBody.slice(0, 150)}`);
             }

@@ -415,14 +415,25 @@ class ReplayRemoteCommands {
 }
 
 function buildCurrentPrompts(caseData) {
-    const { GeneralistAgentProvider } = require(
-        path.join(
-            __dirname,
-            '../../libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts',
-        ),
-    );
+    const category = process.env.RECALL_CATEGORY;
+    let ProviderClass;
+    if (category === 'duplicate_logic') {
+        ProviderClass = require(
+            path.join(
+                __dirname,
+                '../../libs/code-review/infrastructure/agents/providers/duplicate-logic-agent.provider.ts',
+            ),
+        ).DuplicateLogicAgentProvider;
+    } else {
+        ProviderClass = require(
+            path.join(
+                __dirname,
+                '../../libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts',
+            ),
+        ).GeneralistAgentProvider;
+    }
 
-    const provider = new GeneralistAgentProvider({}, {}, {});
+    const provider = new ProviderClass({}, {}, {});
     const input = {
         organizationAndTeamData: {
             organizationId: 'eval-org',
@@ -537,6 +548,7 @@ class InvestigationAgentProvider {
 
     async callApi(prompt, context, options) {
         let stage = 'parse-prompt';
+        let caseData;
         try {
             const rawPrompt =
                 typeof prompt === 'string'
@@ -544,7 +556,7 @@ class InvestigationAgentProvider {
                     : prompt && typeof prompt === 'object' && 'prompt' in prompt
                       ? prompt.prompt
                       : prompt;
-            const caseData = parseMaybeJson(rawPrompt);
+            caseData = parseMaybeJson(rawPrompt);
             if (!caseData || typeof caseData !== 'object') {
                 throw new Error(
                     `Expected prompt loader to provide a JSON object, got ${JSON.stringify(
@@ -567,6 +579,9 @@ class InvestigationAgentProvider {
             );
 
             stage = 'create-model';
+            const keyEnv = process.env.GEMINI_API_KEY || process.env.API_GOOGLE_AI_API_KEY || process.env.BYOK_GOOGLE_API_KEY || 'NONE';
+            const maskedKey = keyEnv !== 'NONE' ? `${keyEnv.slice(0, 8)}...${keyEnv.slice(-4)}` : 'NONE';
+            console.log(`[EVAL-DEBUG] Creating finder model for ${this.providerId} (key=${maskedKey})`);
             const model = await createModel(this.config);
             stage = 'build-prompts';
             const { input, systemPrompt, userPrompt } =
@@ -577,30 +592,55 @@ class InvestigationAgentProvider {
             );
 
             stage = 'run-agent-loop';
-            // runAgentLoop(input, secrets): `secrets` was split out of `input` so
-            // span I/O never records keys/services. The deterministic tool replay
-            // (remoteCommands) lives in `secrets` now — passing it in `input` (the
-            // old single-arg shape) left the agent tool-less and crashed on
-            // `secrets.byokErrorReporter`.
-            const agentResult = await runAgentLoop(
-                {
-                    model,
-                    systemPrompt,
-                    userPrompt,
-                    changedFiles: input.changedFiles,
-                    prNumber: input.prNumber,
-                    repositoryFullName: input.repositoryFullName,
-                    baseBranch: input.baseBranch,
-                    reviewMode: input.reviewMode,
-                    maxSteps: input.maxSteps,
-                    agentName: `investigation-eval:${this.providerId}`,
-                },
-                {
-                    remoteCommands,
-                    byokConfig: undefined,
-                    byokErrorReporter: undefined,
-                },
-            );
+            console.log(`[EVAL-DEBUG] Starting finder agent loop for case: ${caseData.caseId || 'unknown'}`);
+
+            let agentResult;
+            for (let attempt = 0; attempt < 5; attempt++) {
+                try {
+                    agentResult = await runAgentLoop(
+                        {
+                            model,
+                            systemPrompt,
+                            userPrompt,
+                            changedFiles: input.changedFiles,
+                            prNumber: input.prNumber,
+                            repositoryFullName: input.repositoryFullName,
+                            baseBranch: input.baseBranch,
+                            reviewMode: input.reviewMode,
+                            maxSteps: input.maxSteps,
+                            agentName: `investigation-eval:${this.providerId}`,
+                        },
+                        {
+                            remoteCommands,
+                            byokConfig: undefined,
+                            byokErrorReporter: undefined,
+                        },
+                    );
+                    const failure = agentRunFailure(agentResult);
+                    if (failure) {
+                        if (failure.includes('Quota exceeded') || failure.includes('429') || failure.includes('RESOURCE_EXHAUSTED')) {
+                            throw new Error(failure);
+                        }
+                    }
+                    break;
+                } catch (loopErr) {
+                    const errMsg = loopErr instanceof Error ? loopErr.message : String(loopErr);
+                    if (attempt < 4 && (
+                        errMsg.includes('Quota exceeded') ||
+                        errMsg.includes('429') ||
+                        errMsg.includes('RESOURCE_EXHAUSTED') ||
+                        errMsg.includes('rate-limit') ||
+                        errMsg.includes('high demand') ||
+                        errMsg.includes('Spikes in demand')
+                    )) {
+                        const waitMs = 60000;
+                        console.log(`[EVAL-RETRY] Quota/Rate limit/Demand spike hit for case ${caseData.caseId || 'unknown'}. Strictly waiting 60s before retry attempt ${attempt + 2}/5...`);
+                        await new Promise((r) => setTimeout(r, waitMs));
+                        continue;
+                    }
+                    throw loopErr;
+                }
+            }
 
             const failure = agentRunFailure(agentResult);
             if (failure) {
@@ -628,6 +668,12 @@ class InvestigationAgentProvider {
                 },
             };
         } catch (error) {
+            console.error(`[EVAL-ERROR] Exception during ${stage} for case ${caseData?.caseId || 'unknown'}:`, error);
+            if (error && typeof error === 'object') {
+                if (error.responseBody) console.error('[EVAL-ERROR] Response body:', error.responseBody);
+                if (error.statusCode) console.error('[EVAL-ERROR] Status code:', error.statusCode);
+                if (error.cause) console.error('[EVAL-ERROR] Cause:', error.cause);
+            }
             const payload = {
                 error:
                     error instanceof Error ? error.message : String(error),

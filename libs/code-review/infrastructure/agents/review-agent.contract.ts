@@ -144,7 +144,7 @@ export interface ReviewRuleConfig {
     v2PromptOverrides?: CodeReviewConfig['v2PromptOverrides'];
     generationMain?: string;
     /** Categories allowed for this run when using a mixed/generalist reviewer. */
-    requestedCategories?: Array<'bug' | 'security' | 'performance'>;
+    requestedCategories?: Array<'bug' | 'security' | 'performance' | "duplicate_logic">;
     /** Review mode: 'fast' skips heavy passes (verify, coverage recovery, synthesis rescue) and caps agent steps; 'normal' skips verify only for very-high-confidence findings; 'deep' verifies everything. */
     reviewMode?: 'fast' | 'normal' | 'deep';
 }
