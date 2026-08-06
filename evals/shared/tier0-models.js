@@ -22,6 +22,36 @@ const TIER0 = {
     'gemini-3-flash-preview': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
     'kimi-k2.7-code': { provider: 'openai_compatible', keyEnvs: ['BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
     'glm-5.2': { provider: 'openai_compatible', keyEnvs: ['BYOK_ZHIPU_API_KEY', 'API_ZHIPU_API_KEY'], baseURL: 'https://api.z.ai/api/paas/v4' },
+    'deepseek-v4-flash': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com/v1' },
+    // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
+    // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
+    'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+
+    // NVIDIA NIM (integrate.api.nvidia.com) — gateway OpenAI-compatible. Usado
+    // quando a API nativa do fornecedor está indisponível (Z.ai sem saldo,
+    // MiniMax sem chave). Modelo servido por intermediário: registrar como
+    // provider `nvidia`, não como se fosse a API nativa.
+    'minimax-m3@nvidia': { provider: 'openai_compatible', doModel: 'minimaxai/minimax-m3', keyEnvs: ['NVIDIA_API_KEY'], baseURL: 'https://integrate.api.nvidia.com/v1' },
+    'glm-5.2@nvidia': { provider: 'openai_compatible', doModel: 'z-ai/glm-5.2', keyEnvs: ['NVIDIA_API_KEY'], baseURL: 'https://integrate.api.nvidia.com/v1' },
+
+    // Meta Model API (api.meta.ai) — OpenAI-compatible, rota nativa.
+    // Standard tier: $1,25 in / $4,25 out. O tier `-contributor` (12x mais
+    // barato) nao esta provisionado nesta conta.
+    'muse-spark-1.2': { provider: 'openai_compatible', keyEnvs: ['META_MUSE_API_KEY'], baseURL: 'https://api.meta.ai/v1' },
+
+    // xAI — OpenAI-compatible. ATENCAO no custo: o preco DOBRA acima de 200k
+    // tokens de prompt, e os casos do light 30 passam disso com folga (media
+    // ~500k). Orcar pelo dobro da tabela, nao pela tabela.
+    'grok-4.5': { provider: 'openai_compatible', keyEnvs: ['X_AI_KEY', 'BYOK_XAI_API_KEY'], baseURL: 'https://api.x.ai/v1' },
+    // Alibaba DashScope (endpoint internacional, modo OpenAI-compatible).
+    'qwen3.8-max': { provider: 'openai_compatible', keyEnvs: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'], baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
+
+    // Rota de ASSINATURA (Codex OAuth): credencial vem de ~/.codex/auth.json,
+    // nao de env. Cobra na cota semanal do plano ChatGPT, nao por token — sai
+    // no leaderboard com accessPath=subscription e SEM coluna de custo.
+    'gpt-5.6-sol@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-sol', keyEnvs: [] },
+    'gpt-5.6-luna@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-luna', keyEnvs: [] },
+    'gpt-5.6-terra@sub': { provider: 'codex_subscription', codexModel: 'gpt-5.6-terra', keyEnvs: [] },
 };
 
 // Models the benchmark excludes from the default full run (cost). Opt in with
@@ -39,10 +69,15 @@ function defaultMatrix() {
 function applyModelEnv(modelId, env = process.env) {
     const spec = TIER0[modelId];
     if (!spec) throw new Error(`unknown tier-0 model '${modelId}' (known: ${Object.keys(TIER0).join(', ')})`);
+    // Assinatura nao usa env var: credencial em ~/.codex/auth.json, modelo
+    // construido direto em createModel (agent-provider.js).
+    if (spec.provider === 'codex_subscription') return spec;
     const key = spec.keyEnvs.map((e) => env[e]).find(Boolean);
     if (!key) throw new Error(`no API key for ${modelId} — set one of ${spec.keyEnvs.join('/')}`);
 
-    env.API_LLM_PROVIDER_MODEL = modelId;
+    // id do TIER0 pode ter sufixo de roteamento (@nvidia, @do); o provider
+    // recebe o id real do modelo.
+    env.API_LLM_PROVIDER_MODEL = spec.doModel || modelId;
     // Clear any base-url left from a prior model so anthropic/google don't get
     // mis-proxied (one process = one model in CI, but stay defensive).
     delete env.API_OPENAI_FORCE_BASE_URL;

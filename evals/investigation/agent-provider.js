@@ -163,7 +163,17 @@ function buildOpenAICompatibleConfig(config, apiKey, defaultName) {
 async function createModel(config) {
     if (config.provider === 'tier0') {
         const modelId = process.env.RECALL_MODEL || config.model;
-        const { applyModelEnv } = require('../shared/tier0-models');
+        const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
+
+        // Assinatura: nao passa por byokToVercelModel (que espera chave de API).
+        // Fala com chatgpt.com/backend-api via token OAuth do Codex; o wrapper
+        // resolve o streaming-only + store:false.
+        const spec = TIER0[modelId];
+        if (spec && spec.provider === 'codex_subscription') {
+            const { buildCodexSubscriptionModel } = require('../../libs/llm/codex-subscription-model.ts');
+            return buildCodexSubscriptionModel(spec.codexModel || modelId);
+        }
+
         const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
         applyModelEnv(modelId);
         return byokToVercelModel(undefined, 'main', {});
@@ -593,6 +603,10 @@ class InvestigationAgentProvider {
                     baseBranch: input.baseBranch,
                     reviewMode: input.reviewMode,
                     maxSteps: input.maxSteps,
+                    // heavy força as passadas de resample (mais recall via
+                    // reamostragem). É EIXO DE REGIME: comparar heavy com normal
+                    // é o mesmo erro que comparar assinatura com API.
+                    ...(process.env.RECALL_HEAVY === '1' ? { heavy: true } : {}),
                     agentName: `investigation-eval:${this.providerId}`,
                 },
                 {
