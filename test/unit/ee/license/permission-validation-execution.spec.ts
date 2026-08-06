@@ -724,3 +724,91 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         });
     });
 });
+
+describe('PermissionValidationService.consumeTrialReviewCreditOnSuccess', () => {
+    beforeEach(() => {
+        mockEnvironment.API_CLOUD_MODE = true;
+        mockEnvironment.API_DEVELOPMENT_MODE = false;
+        mockLoggerWarn.mockClear();
+    });
+
+    const trialWithCredits = () =>
+        createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsUsed: 1,
+            trialReviewCreditsRemaining: 4,
+        });
+
+    it('consumes one managed trial credit (trial + no BYOK + credit model) keyed by repo:pr', async () => {
+        const licenseService = trialWithCredits();
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        await service.consumeTrialReviewCreditOnSuccess(orgData, 'repo-1:42');
+
+        expect(licenseService.consumeTrialReviewCredit).toHaveBeenCalledWith(
+            orgData,
+            'repo-1:42',
+        );
+    });
+
+    it('does NOT consume when BYOK is connected (org runs on its own key)', async () => {
+        const licenseService = trialWithCredits();
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(byokConfig),
+        );
+
+        await service.consumeTrialReviewCreditOnSuccess(orgData, 'repo-1:42');
+
+        expect(licenseService.consumeTrialReviewCredit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT consume when the subscription is not a trial', async () => {
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: SubscriptionStatus.ACTIVE,
+            trialReviewCreditsTotal: 5,
+            trialReviewCreditsRemaining: 4,
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        await service.consumeTrialReviewCreditOnSuccess(orgData, 'repo-1:42');
+
+        expect(licenseService.consumeTrialReviewCredit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT consume for a legacy trial that carries no credit fields', async () => {
+        const licenseService = createMockLicenseService({
+            subscriptionStatus: 'trial',
+            planType: 'trial',
+            // no trialReviewCredits* fields → legacy trial, pre-credit model
+        });
+        const service = createService(
+            licenseService,
+            createMockOrgParamsService(),
+        );
+
+        await service.consumeTrialReviewCreditOnSuccess(orgData, 'repo-1:42');
+
+        expect(licenseService.consumeTrialReviewCredit).not.toHaveBeenCalled();
+    });
+
+    it('fails closed: does NOT consume when the BYOK lookup throws', async () => {
+        const licenseService = trialWithCredits();
+        const flakyOrgParams = {
+            findByKey: jest.fn().mockRejectedValue(new Error('flaky DB')),
+        };
+        const service = createService(licenseService, flakyOrgParams);
+
+        await service.consumeTrialReviewCreditOnSuccess(orgData, 'repo-1:42');
+
+        expect(licenseService.consumeTrialReviewCredit).not.toHaveBeenCalled();
+    });
+});
