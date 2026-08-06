@@ -30,6 +30,14 @@ export type ClassificationSource =
 @Index('IDX_session_events_org_branch', ['organizationId', 'branch'])
 @Index('IDX_session_events_session_type', ['sessionId', 'type'])
 @Index('IDX_session_events_timestamp', ['eventTimestamp'])
+// Partial index for the ClassifyOrphanedSessions cron's hot NOT EXISTS
+// probe (`SELECT 1 FROM session_events WHERE session_id=? AND
+// organization_id=? AND type='session_end'`). The existing composite
+// on (session_id, type) still fetched heap rows to filter by org and
+// only-session-end; the partial makes the anti-join a pure index probe.
+// TypeORM cannot emit the WHERE clause, so `synchronize: false` and
+// the actual CREATE lives in migration CronPoolReliefIndexes2026080600000000.
+@Index('IDX_session_events_end_only', { synchronize: false })
 export class SessionEventModel extends CoreModel {
     @Column({ type: 'uuid', name: 'organization_id' })
     organizationId: string;

@@ -1,6 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import pLimit from 'p-limit';
 
 import {
     AUTOMATION_SERVICE_TOKEN,
@@ -56,6 +57,19 @@ import { IPullRequestWithDeliveredSuggestions } from '@libs/platformData/domain/
 
 const API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED =
     process.env.API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED;
+
+// Cron runs every 6 minutes and fans out ONE query per team across
+// 4 different rajadas (parameters/find, teamAutomation/find, main
+// teams.map, and PR-level for each eligible PR). Without a cap, ~40
+// teams = 40 parallel conns per rajada, which starved the pool during
+// the 2026-08-06 incident. `TEAM_CONCURRENCY=10` leaves ~40 pool slots
+// free for regular traffic; the cron finishes in under a second still,
+// well before the next 6-min tick.
+const TEAM_CONCURRENCY = 10;
+// PR-level fanout is nested inside the team-level loop, so the real
+// ceiling is TEAM_CONCURRENCY * PR_CONCURRENCY = 30 conns — still
+// safe against pool=50 and headroom for other services.
+const PR_CONCURRENCY = 3;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -170,23 +184,35 @@ export class CheckIfPRCanBeApprovedCronProvider {
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             const now = new Date();
 
+            // Cap DB fan-out across every teams.map()/prs.map() below.
+            // Old behavior spawned N teams (~40) queries in parallel per
+            // rajada across 4 rajadas — enough to starve the API pool
+            // (see 2026-08-06 incident). Team-level 10 * PR-level 3
+            // = 30 max in flight, leaves ~20 pool slots free for
+            // regular traffic while the cron runs.
+            const teamLimit = pLimit(TEAM_CONCURRENCY);
+            const prLimit = pLimit(PR_CONCURRENCY);
+
             // Fetch all parameters in parallel (non-blocking)
             const parametersPromises = teams.map((team) =>
-                this.parametersService
-                    .findOne({
-                        configKey: ParametersKey.CODE_REVIEW_CONFIG,
-                        team: { uuid: team.uuid },
-                        active: true,
-                    })
-                    .catch((error) => {
-                        this.logger.error({
-                            message: 'Error fetching parameter for team',
-                            context: CheckIfPRCanBeApprovedCronProvider.name,
-                            metadata: { teamId: team.uuid },
-                            error,
-                        });
-                        return null;
-                    }),
+                teamLimit(() =>
+                    this.parametersService
+                        .findOne({
+                            configKey: ParametersKey.CODE_REVIEW_CONFIG,
+                            team: { uuid: team.uuid },
+                            active: true,
+                        })
+                        .catch((error) => {
+                            this.logger.error({
+                                message: 'Error fetching parameter for team',
+                                context:
+                                    CheckIfPRCanBeApprovedCronProvider.name,
+                                metadata: { teamId: team.uuid },
+                                error,
+                            });
+                            return null;
+                        }),
+                ),
             );
 
             const allParameters = await Promise.all(parametersPromises);
@@ -200,20 +226,23 @@ export class CheckIfPRCanBeApprovedCronProvider {
 
             // Fetch all teamAutomations in parallel
             const teamAutomationsPromises = teams.map((team) =>
-                this.teamAutomationService
-                    .find({
-                        team: { uuid: team.uuid },
-                        automation: { uuid: automationUuid },
-                    })
-                    .catch((error) => {
-                        this.logger.error({
-                            message: 'Error fetching team automation',
-                            context: CheckIfPRCanBeApprovedCronProvider.name,
-                            metadata: { teamId: team.uuid },
-                            error,
-                        });
-                        return [];
-                    }),
+                teamLimit(() =>
+                    this.teamAutomationService
+                        .find({
+                            team: { uuid: team.uuid },
+                            automation: { uuid: automationUuid },
+                        })
+                        .catch((error) => {
+                            this.logger.error({
+                                message: 'Error fetching team automation',
+                                context:
+                                    CheckIfPRCanBeApprovedCronProvider.name,
+                                metadata: { teamId: team.uuid },
+                                error,
+                            });
+                            return [];
+                        }),
+                ),
             );
 
             const allTeamAutomations = await Promise.all(
@@ -230,11 +259,12 @@ export class CheckIfPRCanBeApprovedCronProvider {
                     ]),
             );
 
-            // Process teams in parallel
+            // Process teams in parallel (bounded by teamLimit)
             await Promise.allSettled(
-                teams.map(async (team) => {
-                    const organizationId = team.organization?.uuid;
-                    const teamId = team.uuid;
+                teams.map((team) =>
+                    teamLimit(async () => {
+                        const organizationId = team.organization?.uuid;
+                        const teamId = team.uuid;
 
                     const organizationAndTeamData: OrganizationAndTeamData = {
                         organizationId,
@@ -326,48 +356,51 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         return;
                     }
 
-                    // Process PRs in parallel with proper error handling
+                    // Process PRs in parallel (bounded by prLimit)
                     await Promise.allSettled(
-                        eligibleOpenPullRequests.map(async (pr) => {
-                            const repository = pr?.repository;
+                        eligibleOpenPullRequests.map((pr) =>
+                            prLimit(async () => {
+                                const repository = pr?.repository;
 
-                            const codeReviewConfigFromRepo =
-                                codeReviewConfig?.repositories?.find(
-                                    (codeReviewConfigRepo) =>
-                                        codeReviewConfigRepo?.id ===
-                                        repository?.id,
-                                );
+                                const codeReviewConfigFromRepo =
+                                    codeReviewConfig?.repositories?.find(
+                                        (codeReviewConfigRepo) =>
+                                            codeReviewConfigRepo?.id ===
+                                            repository?.id,
+                                    );
 
-                            if (!codeReviewConfigFromRepo) {
-                                return;
-                            }
+                                if (!codeReviewConfigFromRepo) {
+                                    return;
+                                }
 
-                            const resolvedConfig =
-                                await this.codeBaseConfigService.getConfig(
+                                const resolvedConfig =
+                                    await this.codeBaseConfigService.getConfig(
+                                        organizationAndTeamData,
+                                        {
+                                            id: codeReviewConfigFromRepo.id,
+                                            name: codeReviewConfigFromRepo.name,
+                                        },
+                                        [],
+                                    );
+
+                                if (
+                                    resolvedConfig?.pullRequestApprovalActive ===
+                                    false
+                                ) {
+                                    return;
+                                }
+
+                                await this.shouldApprovePR({
                                     organizationAndTeamData,
-                                    {
-                                        id: codeReviewConfigFromRepo.id,
-                                        name: codeReviewConfigFromRepo.name,
-                                    },
-                                    [],
-                                );
-
-                            if (
-                                resolvedConfig?.pullRequestApprovalActive ===
-                                false
-                            ) {
-                                return;
-                            }
-
-                            await this.shouldApprovePR({
-                                organizationAndTeamData,
-                                pr,
-                                codeReviewConfig: resolvedConfig,
-                                teamAutomationId: teamAutomation.uuid,
-                            });
-                        }),
+                                    pr,
+                                    codeReviewConfig: resolvedConfig,
+                                    teamAutomationId: teamAutomation.uuid,
+                                });
+                            }),
+                        ),
                     );
                 }),
+                ),
             );
         } catch (error) {
             this.logger.error({

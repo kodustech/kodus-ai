@@ -15,6 +15,15 @@ import type { InboxMessageModel } from './inbox-message.model';
 @Index('IDX_workflow_jobs_correlation_id', ['correlationId'])
 @Index('IDX_workflow_jobs_organization_team', ['organizationId', 'teamId'])
 @Index('idx_workflow_jobs_type_updated', ['workflowType', 'updatedAt'])
+// Partial covering index for the WebhookFailureMonitorService cron —
+// `COUNT(*) FILTER (status=...) FROM workflow_jobs WHERE workflowType
+// ='WEBHOOK_PROCESSING' AND updatedAt >= now()-30min`. The composite
+// above forced a Bitmap Heap Scan (3-16s in prod); this partial with
+// `status` in the key turns it into an Index Only Scan (measured 14×
+// faster). TypeORM cannot emit the DESC ordering or the WHERE clause,
+// so `synchronize: false` and the real CREATE lives in migration
+// CronPoolReliefIndexes2026080600000000.
+@Index('idx_workflow_jobs_webhook_monitor', { synchronize: false })
 export class WorkflowJobModel extends CoreModel {
     @Column({ type: 'varchar', length: 255 })
     correlationId: string;

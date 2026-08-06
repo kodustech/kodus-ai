@@ -1,6 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import pLimit from 'p-limit';
 
 import { IMessageBrokerService } from '@libs/core/domain/contracts/message-broker.service.contracts';
 import { MESSAGE_BROKER_SERVICE_TOKEN } from '@libs/core/domain/contracts/message-broker.service.contracts';
@@ -28,9 +29,20 @@ import {
     ITeamAutomationService,
     TEAM_AUTOMATION_SERVICE_TOKEN,
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 
 const API_CRON_SYNC_CODE_REVIEW_REACTIONS =
     process.env.API_CRON_SYNC_CODE_REVIEW_REACTIONS;
+
+// Max DB queries in flight per rajada. Each team.map() spawns 1 query;
+// without a cap, N teams = N parallel conns, which starves the pool
+// during scale-down (2026-08-06 incident). 5 is safe against pool=50.
+const DB_CONCURRENCY = 5;
+
+const LOCK_KEY = 'CRON:SYNC_CODE_REVIEW_REACTIONS';
+// TTL just longer than the worst observed run so a crashed holder
+// unlocks quickly for the next tick.
+const LOCK_TTL_MS = 4 * 60 * 1000;
 
 @Injectable()
 export class CodeReviewFeedbackCronProvider {
@@ -46,6 +58,7 @@ export class CodeReviewFeedbackCronProvider {
         private readonly automationService: IAutomationService,
         @Inject(TEAM_AUTOMATION_SERVICE_TOKEN)
         private readonly teamAutomationService: ITeamAutomationService,
+        private readonly distributedLockService: DistributedLockService,
     ) {}
 
     @Cron(API_CRON_SYNC_CODE_REVIEW_REACTIONS, {
@@ -53,6 +66,27 @@ export class CodeReviewFeedbackCronProvider {
         timeZone: 'America/Sao_Paulo',
     })
     async handleCron() {
+        // Every API pod fires this cron; without a lock, N pods run the
+        // full teams.map() rajada N times in parallel and collectively
+        // starve the pool. One winner runs, the rest no-op.
+        const lock = await this.distributedLockService
+            .acquire(LOCK_KEY, { ttl: LOCK_TTL_MS })
+            .catch((error) => {
+                this.logger.error({
+                    message: 'Failed to acquire sync-reactions cron lock',
+                    context: CodeReviewFeedbackCronProvider.name,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                });
+                return null;
+            });
+
+        if (!lock) {
+            return;
+        }
+
         try {
             this.logger.log({
                 message: 'Code review feedback cron started',
@@ -93,18 +127,28 @@ export class CodeReviewFeedbackCronProvider {
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             const now = new Date();
 
+            // Cap parallel DB queries across the 3 team-fan-outs below.
+            // Previous behavior spawned one query per team simultaneously
+            // (~40+ in a burst); the API pool has ~50 slots, so a single
+            // rajada could starve everything else. limit(5) leaves ~45
+            // slots free for regular traffic; the cron finishes a few
+            // seconds slower but never drives a pool-timeout cascade.
+            const limit = pLimit(DB_CONCURRENCY);
+
             const teamAutomationsResults = await Promise.allSettled(
                 teams.map((team) =>
-                    this.teamAutomationService
-                        .find({
-                            team: { uuid: team.uuid },
-                            automation: { uuid: automationUuid },
-                            status: true,
-                        })
-                        .then((automations) => ({
-                            team,
-                            teamAutomation: automations?.[0],
-                        })),
+                    limit(() =>
+                        this.teamAutomationService
+                            .find({
+                                team: { uuid: team.uuid },
+                                automation: { uuid: automationUuid },
+                                status: true,
+                            })
+                            .then((automations) => ({
+                                team,
+                                teamAutomation: automations?.[0],
+                            })),
+                    ),
                 ),
             );
 
@@ -131,17 +175,19 @@ export class CodeReviewFeedbackCronProvider {
 
             const executionsResults = await Promise.allSettled(
                 teamsWithAutomation.map(({ team, teamAutomation }) =>
-                    this.automationExecutionService
-                        .findByPeriodAndTeamAutomationId(
-                            sevenDaysAgo,
-                            now,
-                            teamAutomation.uuid,
-                            AutomationStatus.SUCCESS,
-                        )
-                        .then((executions) => ({
-                            team,
-                            executions,
-                        })),
+                    limit(() =>
+                        this.automationExecutionService
+                            .findByPeriodAndTeamAutomationId(
+                                sevenDaysAgo,
+                                now,
+                                teamAutomation.uuid,
+                                AutomationStatus.SUCCESS,
+                            )
+                            .then((executions) => ({
+                                team,
+                                executions,
+                            })),
+                    ),
                 ),
             );
 
@@ -168,39 +214,41 @@ export class CodeReviewFeedbackCronProvider {
             }
 
             const publishResults = await Promise.allSettled(
-                teamsToProcess.map(async ({ team, executions }) => {
-                    const automationExecutionsPRs = executions
-                        .map(
-                            (execution) =>
-                                execution?.dataExecution?.pullRequestNumber,
-                        )
-                        .filter(
-                            (prNumber): prNumber is number =>
-                                prNumber !== undefined && prNumber !== null,
+                teamsToProcess.map(({ team, executions }) =>
+                    limit(async () => {
+                        const automationExecutionsPRs = executions
+                            .map(
+                                (execution) =>
+                                    execution?.dataExecution?.pullRequestNumber,
+                            )
+                            .filter(
+                                (prNumber): prNumber is number =>
+                                    prNumber !== undefined && prNumber !== null,
+                            );
+
+                        if (!automationExecutionsPRs.length) {
+                            this.logger.warn({
+                                message: `Team has executions but no valid PR numbers`,
+                                context: CodeReviewFeedbackCronProvider.name,
+                                metadata: {
+                                    teamId: team.uuid,
+                                    executionsCount: executions.length,
+                                },
+                            });
+                            throw new Error('No valid PR numbers found');
+                        }
+
+                        await this.publishSyncCodeReviewReactionsTasks(
+                            team,
+                            automationExecutionsPRs,
                         );
 
-                    if (!automationExecutionsPRs.length) {
-                        this.logger.warn({
-                            message: `Team has executions but no valid PR numbers`,
-                            context: CodeReviewFeedbackCronProvider.name,
-                            metadata: {
-                                teamId: team.uuid,
-                                executionsCount: executions.length,
-                            },
-                        });
-                        throw new Error('No valid PR numbers found');
-                    }
-
-                    await this.publishSyncCodeReviewReactionsTasks(
-                        team,
-                        automationExecutionsPRs,
-                    );
-
-                    return {
-                        team,
-                        executionsCount: executions.length,
-                    };
-                }),
+                        return {
+                            team,
+                            executionsCount: executions.length,
+                        };
+                    }),
+                ),
             );
 
             publishResults.forEach((result) => {
@@ -252,6 +300,17 @@ export class CodeReviewFeedbackCronProvider {
                 message: 'Error executing code review feedback cron',
                 context: CodeReviewFeedbackCronProvider.name,
                 error,
+            });
+        } finally {
+            await lock.release().catch((error) => {
+                this.logger.error({
+                    message: 'Failed to release sync-reactions cron lock',
+                    context: CodeReviewFeedbackCronProvider.name,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                });
             });
         }
     }

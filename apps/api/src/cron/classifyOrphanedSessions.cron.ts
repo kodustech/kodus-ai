@@ -3,6 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
 import { ClassifySessionUseCase } from '@libs/cli-review/application/use-cases/classify-session.use-case';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 
 const INACTIVITY_THRESHOLD_MINUTES = 30;
 const BATCH_LIMIT = 10;
@@ -10,6 +11,11 @@ const CONCURRENCY = 3;
 
 const API_CRON_CLASSIFY_ORPHANED_SESSIONS =
     process.env.API_CRON_CLASSIFY_ORPHANED_SESSIONS || '0 */15 * * * *';
+
+const LOCK_KEY = 'CRON:CLASSIFY_ORPHANED_SESSIONS';
+// TTL larger than the worst observed run so a crashed holder unblocks
+// the next tick automatically.
+const LOCK_TTL_MS = 4 * 60 * 1000;
 
 @Injectable()
 export class ClassifyOrphanedSessionsCronProvider {
@@ -20,6 +26,7 @@ export class ClassifyOrphanedSessionsCronProvider {
     constructor(
         private readonly sessionEventRepository: SessionEventRepository,
         private readonly classifySessionUseCase: ClassifySessionUseCase,
+        private readonly distributedLockService: DistributedLockService,
     ) {}
 
     @Cron(API_CRON_CLASSIFY_ORPHANED_SESSIONS, {
@@ -27,6 +34,29 @@ export class ClassifyOrphanedSessionsCronProvider {
         timeZone: 'America/Sao_Paulo',
     })
     async handleCron() {
+        // Every API pod fires this cron; without a lock, N pods run the
+        // same `findOrphanedSessions` + processing in parallel and rack
+        // up N x M `session_events NOT EXISTS` scans (~2.5s avg each)
+        // against the same rows. One winner runs, the rest no-op.
+        const lock = await this.distributedLockService
+            .acquire(LOCK_KEY, { ttl: LOCK_TTL_MS })
+            .catch((error) => {
+                this.logger.error({
+                    message:
+                        'Failed to acquire classify-orphaned-sessions cron lock',
+                    context: ClassifyOrphanedSessionsCronProvider.name,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                });
+                return null;
+            });
+
+        if (!lock) {
+            return;
+        }
+
         try {
             let succeeded = 0;
             let failed = 0;
@@ -124,6 +154,18 @@ export class ClassifyOrphanedSessionsCronProvider {
                 message: 'Error in orphaned sessions classification cron',
                 context: ClassifyOrphanedSessionsCronProvider.name,
                 error,
+            });
+        } finally {
+            await lock.release().catch((error) => {
+                this.logger.error({
+                    message:
+                        'Failed to release classify-orphaned-sessions cron lock',
+                    context: ClassifyOrphanedSessionsCronProvider.name,
+                    error:
+                        error instanceof Error
+                            ? error
+                            : new Error(String(error)),
+                });
             });
         }
     }
