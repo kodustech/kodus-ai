@@ -7,6 +7,7 @@ import type {
 } from '../../types/review.js';
 import type { GitMetrics, IReviewApi } from './api.interface.js';
 import { requestWithRetry } from './api-core.js';
+import { CommandError } from '../../utils/command-errors.js';
 
 type RequestWithRetry = <T>(
     endpoint: string,
@@ -37,6 +38,14 @@ interface CliReviewJobStatusResponse {
 const POLL_MIN_DELAY_MS = 1_000;
 const POLL_MAX_DELAY_MS = 5_000;
 const POLL_MAX_WAIT_MS = 30 * 60 * 1000;
+
+// Keep the serialized request body comfortably under the API's 25mb body
+// parser and 20MB diff cap. Working-tree reviews inline full file contents
+// (review-config-builder), so large changesets can easily blow past this —
+// submitting them makes a gateway/WAF in front of the API reject the request
+// with an opaque 403, or the server drop it with a 400/413. Fail fast with a
+// clear message instead. --branch/--commit/--fast skip inlining entirely.
+const MAX_REVIEW_PAYLOAD_BYTES = 20 * 1024 * 1024; // 20MB
 
 export class RealReviewApi implements IReviewApi {
     constructor(private readonly requester: RequestWithRetry = requestWithRetry) {}
@@ -72,6 +81,15 @@ export class RealReviewApi implements IReviewApi {
         // the parameter's meaning.
         const endpoint = '/cli/review';
 
+        const body = JSON.stringify({ diff, config, ...metrics });
+        const payloadBytes = Buffer.byteLength(body, 'utf8');
+        if (payloadBytes > MAX_REVIEW_PAYLOAD_BYTES) {
+            throw new CommandError(
+                'REVIEW_TOO_LARGE',
+                `Review payload is too large (${(payloadBytes / (1024 * 1024)).toFixed(1)}MB, limit ${MAX_REVIEW_PAYLOAD_BYTES / (1024 * 1024)}MB). Narrow the review scope or use --branch, --commit, or --fast, which avoid inlining file contents.`,
+            );
+        }
+
         // Enqueue: server returns 202 + jobId. We then poll for completion.
         const enqueueResponse = await this.requester<CliReviewEnqueueResponse>(
             endpoint,
@@ -81,11 +99,7 @@ export class RealReviewApi implements IReviewApi {
                     ...authHeaders,
                     'X-Kodus-Async': '1',
                 },
-                body: JSON.stringify({
-                    diff,
-                    config,
-                    ...metrics,
-                }),
+                body,
             },
         );
 

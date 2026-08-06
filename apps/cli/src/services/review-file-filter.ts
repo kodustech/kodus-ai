@@ -3,8 +3,11 @@ import { cliWarn } from '../utils/logger.js';
 import type { FileContent } from '../types/review.js';
 
 const MAX_FILES = 500;
-const MAX_DIFF_SIZE = 1024 * 1024; // 1MB
-const MAX_CONTENT_SIZE = 5 * 1024 * 1024; // 5MB
+// Must match the API DTO limits (apps/api/src/dtos/cli-review.dto.ts):
+// per-file diff 500KB and per-file content 2MB. Sending larger payloads
+// makes the server reject the whole review with a 400.
+const MAX_DIFF_SIZE = 500_000; // 500KB
+const MAX_CONTENT_SIZE = 2_000_000; // 2MB
 
 export function filterReviewFiles(
     files: FileContent[],
@@ -18,15 +21,14 @@ export function filterReviewFiles(
         if (diffBytes > MAX_DIFF_SIZE) {
             const sizeKB = Math.round(diffBytes / 1024);
             skipped.push(
-                `  - ${file.path} (diff: ${sizeKB}KB, max: ${MAX_DIFF_SIZE / 1024}KB)`,
-            );
+                `  - ${file.path} (diff: ${sizeKB}KB, max: 500KB)`);
             return false;
         }
 
         if (contentBytes > MAX_CONTENT_SIZE) {
             const sizeMB = (contentBytes / (1024 * 1024)).toFixed(1);
             skipped.push(
-                `  - ${file.path} (content: ${sizeMB}MB, max: ${MAX_CONTENT_SIZE / (1024 * 1024)}MB)`,
+                `  - ${file.path} (content: ${sizeMB}MB, max: 2MB)`
             );
             return false;
         }
