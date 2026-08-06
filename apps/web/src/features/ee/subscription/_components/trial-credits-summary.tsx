@@ -159,8 +159,8 @@ export const TrialCreditsSummary = ({
                         {byok
                             ? `Reviews run on your AI key, so there's no review limit. Your ${TRIAL_DAYS}-day trial just unlocks the full Team features.`
                             : showCredits
-                              ? `Reviews run on your AI key — free and unlimited, on any plan. To let you start with zero setup, we cover your first ${balance.total} reviews. Add your key anytime to keep going.`
-                              : `Reviews are unlimited during your ${TRIAL_DAYS}-day trial. Connect your AI key anytime to keep them unlimited after it ends.`}
+                              ? `During your trial, reviews run on efficient models we provide — like DeepSeek V4 Flash, GPT Luna and Kimi K2.7. They're great for seeing Kody in action; larger models often go deeper on complex code. Connect your own AI key anytime to run any model you prefer.`
+                              : `During your ${TRIAL_DAYS}-day trial, reviews are unlimited and run on efficient models we provide — like DeepSeek V4 Flash, GPT Luna and Kimi K2.7. They're great for seeing Kody in action; larger models often go deeper on complex code. Connect your own AI key anytime to run any model you prefer.`}
                     </p>
                 </div>
 
