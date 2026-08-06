@@ -39,13 +39,17 @@ const POLL_MIN_DELAY_MS = 1_000;
 const POLL_MAX_DELAY_MS = 5_000;
 const POLL_MAX_WAIT_MS = 30 * 60 * 1000;
 
-// Keep the serialized request body comfortably under the API's 25mb body
-// parser and 20MB diff cap. Working-tree reviews inline full file contents
-// (review-config-builder), so large changesets can easily blow past this —
-// submitting them makes a gateway/WAF in front of the API reject the request
-// with an opaque 403, or the server drop it with a 400/413. Fail fast with a
-// clear message instead. --branch/--commit/--fast skip inlining entirely.
-const MAX_REVIEW_PAYLOAD_BYTES = 20 * 1024 * 1024; // 20MB
+// Match the API contract exactly. The DTO caps the raw diff by character
+// count (@MaxLength(20000000) — apps/api/src/dtos/cli-review.dto.ts) and the
+// server body-parser caps the whole request at 25mb (apps/api/src/main.ts).
+// A serialized-body cap alone would hard-fail valid payloads (JSON escaping
+// or config.files push a valid diff's body just past a 20MiB threshold), so
+// guard on diff.length for the DTO cap and keep a byte guard with margin
+// under the parser cap. Working-tree reviews inline full file contents, so
+// large changesets can blow past this — fail fast with a clear message
+// instead of letting a gateway/WAF turn it into an opaque 403.
+const MAX_DIFF_CHARS = 20_000_000; // matches DTO @MaxLength(20000000)
+const MAX_SERIALIZED_BODY_BYTES = 24 * 1024 * 1024; // margin under the 25mb body parser
 
 export class RealReviewApi implements IReviewApi {
     constructor(private readonly requester: RequestWithRetry = requestWithRetry) {}
@@ -83,10 +87,16 @@ export class RealReviewApi implements IReviewApi {
 
         const body = JSON.stringify({ diff, config, ...metrics });
         const payloadBytes = Buffer.byteLength(body, 'utf8');
-        if (payloadBytes > MAX_REVIEW_PAYLOAD_BYTES) {
+        if (diff.length > MAX_DIFF_CHARS) {
             throw new CommandError(
                 'REVIEW_TOO_LARGE',
-                `Review payload is too large (${(payloadBytes / (1024 * 1024)).toFixed(1)}MB, limit ${MAX_REVIEW_PAYLOAD_BYTES / (1024 * 1024)}MB). Narrow the review scope or use --branch, --commit, or --fast, which avoid inlining file contents.`,
+                `Diff is too large (${diff.length.toLocaleString()} characters, limit ${MAX_DIFF_CHARS.toLocaleString()}). Narrow the review scope.`,
+            );
+        }
+        if (payloadBytes > MAX_SERIALIZED_BODY_BYTES) {
+            throw new CommandError(
+                'REVIEW_TOO_LARGE',
+                `Review payload is too large (${(payloadBytes / (1024 * 1024)).toFixed(1)}MB, limit ${MAX_SERIALIZED_BODY_BYTES / (1024 * 1024)}MB). Narrow the review scope or use --branch, --commit, or --fast, which avoid inlining file contents.`,
             );
         }
 

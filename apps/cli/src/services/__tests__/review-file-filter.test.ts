@@ -71,6 +71,25 @@ describe('filterReviewFiles', () => {
         expect(warnSpy).toHaveBeenCalled();
     });
 
+    it('counts characters, not UTF-8 bytes, to match the API DTO limits', () => {
+        // The DTO caps by string length (@MaxLength), so a non-ASCII diff of
+        // 400K chars (800K UTF-8 bytes) is under the 500K-char limit and must
+        // be kept. A byte-based filter would wrongly drop it.
+        const result = filterReviewFiles(
+            [
+                {
+                    path: 'non-ascii.ts',
+                    content: 'c',
+                    status: 'modified',
+                    diff: 'é'.repeat(400_000),
+                },
+            ],
+            true,
+        );
+
+        expect(result.map((file) => file.path)).toEqual(['non-ascii.ts']);
+    });
+
     it('keeps files within the API content limit and skips those above it', () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
