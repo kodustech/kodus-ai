@@ -14,6 +14,14 @@ describe('migrateRule — .agents/rules origin mapping', () => {
         expect(migrateRule(rule)?.origin).toBe('repo_file_sync');
     });
 
+    it('maps a case-variant .agents/rules sourcePath to repo_file_sync', () => {
+        const rule = {
+            origin: 'user',
+            sourcePath: '.AGENTS/RULES/architecture.md',
+        };
+        expect(migrateRule(rule)?.origin).toBe('repo_file_sync');
+    });
+
     it('leaves an already-migrated .agents/rules rule untouched', () => {
         const rule = {
             origin: 'repo_file_sync',
