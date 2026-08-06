@@ -1,0 +1,22 @@
+id: github-paid-only
+description: |
+    Single cell — self-hosted × github × license-paid only. Used to validate
+    the KODY_INITIAL_LEARNING_ENABLED=false change: does disabling the initial
+    3-month Kody-learning scan (which fans out over tiny-url's ~750 accumulated
+    PRs and exhausts the 5000/h GitHub core budget) make the cell green.
+    Same scenario set as fast.yml.
+scenarios:
+    - onboarding-webhook-registration
+    - code-review-basic
+    - command-review
+    - kody-rules-create-and-apply
+    - centralized-config-sync
+    - license-attribution
+    - per-seat-license-toggle
+    - rbac-authorization
+    - rbac-frontend-routes
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid

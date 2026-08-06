@@ -71,6 +71,19 @@ export class GenerateInitialKodyRulesUseCase {
             return;
         }
 
+        // Opt-out for environments (e.g. e2e cells) where the initial
+        // 3-month past-review scan would burn the provider's API budget on a
+        // repo with a large accumulated PR backlog. Defaults to enabled.
+        if (process.env.KODY_INITIAL_LEARNING_ENABLED === 'false') {
+            this.logger.log({
+                message:
+                    'Initial Kody Rules generation skipped — disabled via KODY_INITIAL_LEARNING_ENABLED=false',
+                context: GenerateInitialKodyRulesUseCase.name,
+                metadata: { organizationId, teamId, repositoryId },
+            });
+            return;
+        }
+
         let lock: DistributedLock | null = null;
         try {
             // Serialize against a concurrent seed of the same repo (another

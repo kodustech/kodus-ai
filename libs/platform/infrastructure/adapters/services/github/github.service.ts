@@ -136,6 +136,31 @@ interface GitHubInstallationData {
     target_id: number;
 }
 
+// [DIAGNOSTIC — LOCAL ONLY, DO NOT MERGE] Count every GitHub API request per
+// normalized endpoint so we can see where a review's API calls actually go.
+// Injected as octokit's request.fetch below. Remove before any real commit.
+const ghReqLogger = createLogger('GhReqCount');
+const countingGithubFetch: typeof globalThis.fetch = async (input, init) => {
+    const raw =
+        typeof input === 'string' ? input : (input as any)?.url ?? String(input);
+    const path = String(raw)
+        .replace(/^https?:\/\/[^/]+/, '')
+        .replace(/\?.*$/, '')
+        .replace(/\/[0-9a-f]{40}\b/gi, '/:sha')
+        .replace(/\/\d+\b/g, '/:n');
+    const method = String((init as any)?.method || 'GET').toUpperCase();
+    try {
+        ghReqLogger.log({
+            message: `[gh-req] ${method} ${path}`,
+            context: 'GhReqCount',
+            metadata: { method, path },
+        });
+    } catch {
+        // diagnostic must NEVER break a real GitHub request
+    }
+    return globalThis.fetch(input as any, init as any);
+};
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITHUB, 'codeManagement')
 export class GithubService
@@ -280,7 +305,7 @@ export class GithubService
         if (!baseUrl) {
             return new this.standardUserOctokit({
                 auth: params.auth,
-                request: { retries: params.retries ?? 0 },
+                request: { retries: params.retries ?? 0, fetch: countingGithubFetch },
                 ...(params.retry && { retry: params.retry }),
                 throttle: throttleConfig,
             }) as unknown as Octokit;
@@ -289,7 +314,7 @@ export class GithubService
         return new this.enterpriseOctokit({
             auth: params.auth,
             ...(baseUrl && { baseUrl }),
-            request: { retries: params.retries ?? 0 },
+            request: { retries: params.retries ?? 0, fetch: countingGithubFetch },
             ...(params.retry && { retry: params.retry }),
             throttle: throttleConfig,
         }) as unknown as Octokit;

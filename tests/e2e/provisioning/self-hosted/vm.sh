@@ -336,6 +336,11 @@ env_set IMAGE_TAG "$IMAGE_TAG"
 # Test stacks must be observable: the installer default (error) hides the
 # sync/eval traces the scenarios and the failure-evidence collector rely on.
 env_set API_LOG_LEVEL "info"
+# Initial 3-month Kody-learning scan on onboarding. Passes through whatever the
+# matrix workflow sets (default enabled). The github-paid cell sets this to
+# `false` because tiny-url's ~750 accumulated PRs make the scan exhaust the
+# product account's 5000/h GitHub core budget mid-cell.
+env_set KODY_INITIAL_LEARNING_ENABLED "${KODY_INITIAL_LEARNING_ENABLED:-true}"
 # Point the web's server-side API calls (next-auth authorize → /auth/login,
 # used by rbac-frontend-routes / rbac-ui-render) at the compose SERVICE name
 # `api`, which Docker DNS always resolves on the shared network regardless of

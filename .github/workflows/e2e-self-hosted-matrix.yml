@@ -148,6 +148,11 @@ jobs:
                   IMAGE_TAG: ${{ inputs.image_tag }}
                   SOURCE_MATRIX_FILE: ${{ inputs.matrix_file }}
                   LICENSE_MODE: ${{ matrix.cell.license }}
+                  # Disable the initial 3-month Kody-learning scan for the
+                  # github-paid cell only: tiny-url's ~750 accumulated PRs make
+                  # it exhaust the product account's 5000/h GitHub core budget
+                  # mid-cell. All other cells keep learning enabled.
+                  KODY_INITIAL_LEARNING_ENABLED: ${{ (matrix.cell.provider == 'github' && matrix.cell.license == 'license-paid') && 'false' || 'true' }}
                   KODUS_INSTALLER_PATH: ${{ github.workspace }}/kodus-installer
                   TEST_VM_PROVIDER: digitalocean
                   TEST_KEEP_RUNNING: ${{ inputs.keep_running && '1' || '0' }}

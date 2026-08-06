@@ -1,0 +1,17 @@
+id: github-paid-local
+description: |
+    Local-target diagnostic — github × license-paid only, run against the local
+    stack (localhost + pinggy tunnel) with the [gh-req] request counter live in
+    github.service.ts. Reproduces the CI burn sequence (onboarding per scenario +
+    reviews) so we can count where the ~5000 GitHub API calls actually go.
+    NOT for CI — throwaway.
+scenarios:
+    - onboarding-webhook-registration
+    - code-review-basic
+    - command-review
+    - kody-rules-create-and-apply
+    - license-attribution
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid
