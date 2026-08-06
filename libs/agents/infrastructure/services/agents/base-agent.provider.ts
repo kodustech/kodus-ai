@@ -1,5 +1,5 @@
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -9,7 +9,7 @@ import { LLM_TASK } from '@libs/llm/byok-config';
 
 @Injectable()
 export abstract class BaseAgentProvider {
-    protected byokConfig?: NormalizedByokConfig;
+    protected byokConfig?: NormalizedModel;
     protected organizationAndTeamData?: OrganizationAndTeamData;
 
     protected abstract readonly defaultLLMConfig: {
@@ -37,11 +37,11 @@ export abstract class BaseAgentProvider {
      * Fetches BYOK configuration for the organization.
      *
      * Skill agents run the `conversation` task. Resolution goes through the
-     * permission service's per-task entry point (`resolveTaskCarrier(org,
+     * permission service's per-task entry point (`resolveTaskSlot(org,
      * conversation, …)`), which sources the FULL config and routes by task
-     * rather than always the collapsed main slot (RESEARCH Pitfall 1). A
-     * non-v2 / managed / BLOCKED config resolves to `undefined` → the
-     * env/managed default (matches a missing config today; never throws).
+     * to the bare model slot (RESEARCH Pitfall 1). A non-v2 / managed / BLOCKED
+     * config resolves to `undefined` → the env/managed default (matches a
+     * missing config today; never throws).
      *
      * `byokModelOverride` is the legacy per-repository/directory model NAME
      * resolved by the code review pipeline (`codeReviewConfig.byokModel`).
@@ -61,7 +61,7 @@ export abstract class BaseAgentProvider {
         const overrideRef =
             byokModelIdOverride?.trim() || byokModelOverride?.trim();
         this.byokConfig =
-            (await this.permissionValidationService.resolveTaskCarrier(
+            (await this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
                 LLM_TASK.conversation,
                 {

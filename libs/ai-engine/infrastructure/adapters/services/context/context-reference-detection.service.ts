@@ -7,7 +7,7 @@ import type {
     ContextRequirement,
 } from './context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import {
     IPromptReferenceSyncError,
@@ -45,7 +45,7 @@ export interface ContextReferenceDetectionParams {
     repositoryId?: string;
     repositoryName?: string;
     organizationAndTeamData: OrganizationAndTeamData;
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     subscriptionStatus?: string;
 }
 
@@ -217,7 +217,7 @@ export class ContextReferenceDetectionService {
         repositoryId?: string;
         repositoryName?: string;
         organizationAndTeamData: OrganizationAndTeamData;
-        byokConfig?: NormalizedByokConfig;
+        byokConfig?: NormalizedModel;
         subscriptionStatus?: string;
     }): Promise<
         | {
@@ -498,7 +498,7 @@ export class ContextReferenceDetectionService {
         repositoryId?: string;
         repositoryName?: string;
         organizationAndTeamData: OrganizationAndTeamData;
-        byokConfig?: NormalizedByokConfig;
+        byokConfig?: NormalizedModel;
         subscriptionStatus?: string;
         fieldId?: string;
     }): Promise<{

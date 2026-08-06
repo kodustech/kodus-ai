@@ -6,7 +6,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { BaseFileReviewContextPreparation } from './base-file-review.abstract';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { ReviewModeOptions } from '@libs/core/domain/interfaces/file-review-context-preparation.interface';
 import {
     FileChange,
@@ -17,7 +17,7 @@ import {
 export class FileReviewContextPreparation extends BaseFileReviewContextPreparation {
     protected async determineReviewMode(
         options?: ReviewModeOptions,
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<ReviewModeResponse> {
         return ReviewModeResponse.HEAVY_MODE;
     }

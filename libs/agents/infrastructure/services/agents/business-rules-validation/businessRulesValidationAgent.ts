@@ -14,7 +14,8 @@ import {
 import { createLogger } from '@libs/core/log/logger';
 import { resolveAgentModel } from '@libs/llm/agent-model';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
-import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { resolveModelInvocation } from '@libs/llm/model-invocation';
+import { agentModelIdentity } from '../agent-usage.util';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
@@ -395,9 +396,9 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             ctx.organizationAndTeamData?.organizationId?.toString();
         const teamId = ctx.organizationAndTeamData?.teamId?.toString();
         try {
-            const model = resolveAgentModel(this.byokConfig?.main, {
+            const model = resolveAgentModel(this.byokConfig, {
                 organizationId: orgId,
-                provider: this.byokConfig?.main?.provider,
+                provider: this.byokConfig?.provider,
                 reporter: this.byokErrorCounter
                     ? (e) => void this.byokErrorCounter!.record(e)
                     : undefined,
@@ -411,7 +412,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                 telemetryMetadata: {
                     organizationId: orgId,
                     teamId,
-                    provider: this.byokConfig?.main?.provider,
+                    provider: this.byokConfig?.provider,
                 },
             });
             const { ctx: runCtx, cleanup } = createAgentRunContext({
@@ -428,8 +429,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                     agentName: 'BusinessRulesValidation',
                     phase: 'businessRulesVerify',
                     runName: 'businessRulesVerify',
-                    model: this.byokConfig?.main?.model,
-                    isByok: !!this.byokConfig,
+                    ...agentModelIdentity(this.byokConfig),
                     usage: {
                         inputTokens: u.inputTokens,
                         outputTokens: u.outputTokens,
@@ -590,7 +590,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     /**
      * Run a single LLM completion on the Vercel AI SDK. Replaces the legacy
      * `super.createLLMAdapter(...).call(...)` (the legacy flow-engine LLM bridge):
-     * `byokToVercelModel` resolves the BYOK model and `generateText` runs a
+     * `buildModelFromSlot` resolves the BYOK model and `generateText` runs a
      * plain (no-tools) completion. Langfuse parity via `buildLangfuseTelemetry`.
      */
     /**
@@ -631,36 +631,33 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             repositoryId?: string;
         },
     ): Promise<AnalyzerCallResult> {
-        // Standard model setup (same as every agent): BYOK resolve + concurrency
-        // limiter + failure reporter.
-        const model = resolveAgentModel(this.byokConfig?.main, {
+        // ONE resolution for model + tuning + reasoning, via the shared primitive
+        // every agent uses (BYOK resolve + concurrency limiter + failure reporter,
+        // slot tuning, and the slot's reasoning incl. reasoningConfigOverride).
+        // Consolidating it here removes the hand-rolled tuning copy that used to
+        // drift from the review/conversation paths.
+        const invocation = resolveModelInvocation(this.byokConfig, {
+            runName: functionId,
             organizationId: metadata?.organizationId,
-            provider: this.byokConfig?.main?.provider,
             reporter: this.byokErrorCounter
                 ? (e) => void this.byokErrorCounter!.record(e)
                 : undefined,
         });
+        const model = invocation.model;
         const system = messages.find((m) => m.role === 'system')?.content;
         const userTurns = messages.filter((m) => m.role !== 'system');
 
-        // Per-call model params come from the org's saved BYOK config — NOT
-        // hardcoded. A fixed `temperature: 0` overrode the config and broke
-        // models that only accept their configured value (e.g. kimi-k2.7-code
-        // wants 1). For a BYOK model we honor the config (omit when unset →
-        // provider default); for a system model we keep the call's option.
-        const temperature = this.byokConfig?.main
-            ? this.byokConfig.main.temperature
+        // Per-call model params: a BYOK model honors the org's saved config (a
+        // fixed `temperature: 0` used to override it and broke models that only
+        // accept their configured value — e.g. kimi-k2.7-code wants 1); a system
+        // model keeps the call's own option. Tuning is derived through the shared
+        // mapping now, so the ≤0 → provider-default guard applies uniformly.
+        const temperature = this.byokConfig
+            ? invocation.callOptions.temperature
             : options.temperature;
         const maxOutputTokens =
-            this.byokConfig?.main?.maxOutputTokens ?? options.maxTokens;
-
-        // Thinking/reasoning budget — the effort tier also comes from the BYOK
-        // config (the org configured it); fall back to 'low' when unset.
-        const providerOptions = buildProviderOptions(functionId, undefined, {
-            reasoningEffort: this.byokConfig?.main?.reasoningEffort ?? 'low',
-            byokProvider: this.byokConfig?.main?.provider,
-            modelName: this.byokConfig?.main?.model,
-        });
+            invocation.callOptions.maxOutputTokens ?? options.maxTokens;
+        const providerOptions = invocation.providerOptions;
 
         // Single runtime: the analysis runs on the harness AiSdkAgentRunner, same
         // engine as code-review/conversation (and as the skill fetcher that
@@ -705,7 +702,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                             teamId: metadata?.teamId,
                             pullRequestId: metadata?.pullRequestId,
                             repositoryId: metadata?.repositoryId,
-                            provider: this.byokConfig?.main?.provider,
+                            provider: this.byokConfig?.provider,
                         }),
                     ),
                 },
@@ -730,10 +727,9 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             agentName: 'BusinessRulesValidation',
             phase: functionId,
             runName: functionId,
-            model: this.byokConfig?.main?.model,
-            // Real billing source: a BYOK org runs on its own key -> 'byok'.
-            // (The legacy code hardcoded 'system', misattributing BYOK cost.)
-            isByok: !!this.byokConfig,
+            // model + isByok derived once via the shared identity (a BYOK org
+            // runs on its own key -> billed 'byok', not 'system').
+            ...agentModelIdentity(this.byokConfig),
             usage: { ...usage, reasoningTokens: state.usage.reasoningTokens, cacheReadTokens: state.usage.cacheReadTokens },
             organizationId: metadata?.organizationId,
             teamId: metadata?.teamId,

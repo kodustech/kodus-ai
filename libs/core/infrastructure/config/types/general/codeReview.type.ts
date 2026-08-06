@@ -1,6 +1,5 @@
 import type { ContextLayer, ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -338,7 +337,7 @@ export type CodeReviewConfig = {
     directoryFolders?: Array<{ id: string; name: string; path: string }>;
     runOnDraft?: boolean;
     codeReviewVersion?: CodeReviewVersion;
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     /**
      * The single model slot the run resolved for the `codeReview` task via the
      * v2 resolver (`resolveTaskModel` / `StaticTaskStrategy`). This is the

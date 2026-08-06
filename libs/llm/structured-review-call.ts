@@ -13,7 +13,7 @@
  * (Reliability caveat accepted 2026-07-29; resilience is re-addressed in Phase 5.)
  */
 import { Output, type LanguageModel, type Schema } from 'ai';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
 import {
     buildModelFromSlot,
@@ -21,6 +21,7 @@ import {
     getLimiterForSlot,
 } from '@libs/llm/byok-to-vercel';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
+import { resolveSlotCallOptions } from '@libs/llm/slot-call-options';
 import {
     tracedGenerateText,
     timeoutSignal,
@@ -32,10 +33,12 @@ import {
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
+import { classifyLLMError } from '@libs/llm/error-classifier';
 import {
-    classifyLLMError,
-    LlmErrorCategory,
-} from '@libs/llm/error-classifier';
+    RETRYABLE_CATEGORY,
+    jitteredBackoffMs,
+    sleep,
+} from '@libs/llm/retry-policy';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 const logger = createLogger('StructuredReviewCall');
@@ -55,7 +58,7 @@ function isAbortOrHardTimeout(err: unknown): boolean {
 }
 
 export interface StructuredReviewCallParams<S extends z.ZodType | Schema> {
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     /** A zod schema, or an AI-SDK `jsonSchema()` Schema when the caller
      *  needs the wire JSON schema to differ from the parse validation
      *  (e.g. OpenAI-strict `required` semantics vs lenient providers). */
@@ -115,11 +118,9 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         }
     }
 
-    // The carrier's resolved main slot is read ONCE at THIS consumer boundary;
-    // the builder (`buildModelFromSlot`) and `getModelName` take that single slot
-    // and never read `.main`/`.fallback`. The `{main}` carrier itself is
-    // dismantled in a later cleanup wave (Pass B).
-    const mainSlot = byokConfig?.main;
+    // `byokConfig` is the bare resolved slot: the builder (`buildModelFromSlot`)
+    // and `getModelName` take that single slot directly.
+    const mainSlot = byokConfig;
     const mainModel = wrapByokModel(
         buildModelFromSlot(mainSlot, { structuredOutputs: true }),
         { byokConfig, organizationId, role: 'main' },
@@ -149,6 +150,11 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
                         system,
                         prompt: user,
                         output: Output.object({ schema: wireSchema as any }),
+                        // Honor the resolved slot's per-model tuning (RFC §4.1
+                        // "limits") through the SHARED mapping — same primitive
+                        // every consumer uses, so the review path can't silently
+                        // drop temperature / max-output again.
+                        ...resolveSlotCallOptions(mainSlot),
                         // Pin the AI SDK's OWN retry to 0 (default is 2 in
                         // ai@7 — verified against node_modules/ai). Without this
                         // the SDK silently retries UNDER the app-level D-00c
@@ -206,8 +212,12 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
 
         // The ONE bounded same-model re-issue: a transient (5xx / network) blip.
         // A RATE_LIMIT (429) is NOT re-fired immediately — it backs off via the
-        // limiter cooldown rather than an instant same-model retry.
-        if (category === LlmErrorCategory.TRANSIENT) {
+        // limiter cooldown rather than an instant same-model retry. Full-jitter
+        // backoff first (shared policy) so N parallel shards hitting the same blip
+        // don't re-fire in lockstep — the thundering-herd the immediate re-issue
+        // caused. One re-issue only; a re-issue failure still propagates.
+        if (category === RETRYABLE_CATEGORY) {
+            await sleep(jitteredBackoffMs(1));
             return await call(mainModel, mainModelName);
         }
         throw err;

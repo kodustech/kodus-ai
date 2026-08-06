@@ -156,10 +156,11 @@ describe('findModelReferences', () => {
 
         const refs = findModelReferences(config, 'model-a');
 
-        expect(refs).toContain('routing.defaultModelId');
-        expect(refs).toContain('routing.fallbackModelId');
-        expect(refs).toContain('routing.taskOverrides.codeReview');
-        expect(refs).not.toContain('routing.taskOverrides.prSummary');
+        // Human labels (the delete guard's message is user-facing).
+        expect(refs).toContain('your organization default model');
+        expect(refs).toContain('your fallback model');
+        expect(refs).toContain('the Code Review model');
+        expect(refs).not.toContain('the PR Summary model');
     });
 
     it('returns [] when no routing ref points at the model', () => {

@@ -9,7 +9,7 @@
 import { encrypt, decrypt } from '@libs/common/utils/crypto';
 import { migrateLegacyToV2 } from './migrate-byok-config';
 import { isByokConfig, type BYOKConfig } from './byok-config';
-import { normalizeByokConfig } from './normalize-byok-config';
+import { resolveDefaultSlot } from './resolve-model-slot';
 
 // A minimal legacy `{main,fallback}` slot with the sensitive apiKey ENCRYPTED,
 // mirroring how a real stored legacy blob looked.
@@ -146,8 +146,8 @@ describe('migrateLegacyToV2', () => {
                 expect(v2.version).toBe(2);
                 expect(v2.credentials).toHaveLength(0);
                 expect(v2.models).toHaveLength(0);
-                // resolves to {} (env/managed default) — no behavior change.
-                expect(normalizeByokConfig(v2)).toEqual({});
+                // resolves to null (env/managed default) — no behavior change.
+                expect(resolveDefaultSlot(v2)).toBeNull();
             }
         });
     });
@@ -177,11 +177,11 @@ describe('migrateLegacyToV2', () => {
             const main = legacySlot({ provider: 'anthropic', model: 'claude-x' });
             const v2 = migrateLegacyToV2({ main });
 
-            const normalized = normalizeByokConfig(v2);
-            expect(normalized.main?.provider).toBe('anthropic');
-            expect(normalized.main?.model).toBe('claude-x');
-            // ciphertext preserved end-to-end (normalize never decrypts).
-            expect(normalized.main?.apiKey).toBe(main.apiKey);
+            const slot = resolveDefaultSlot(v2);
+            expect(slot?.provider).toBe('anthropic');
+            expect(slot?.model).toBe('claude-x');
+            // ciphertext preserved end-to-end (resolution never decrypts).
+            expect(slot?.apiKey).toBe(main.apiKey);
         });
     });
 

@@ -123,12 +123,14 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
         retry: false,
     });
 
-    // Month-to-date spend + run-rate + per-scope breakdowns. Returns null when
-    // no enabled limit is configured yet (an expected "no limit" state), so the
-    // readouts fall back to $0 / 0% rather than erroring.
+    // Month-to-date spend + run-rate + per-scope breakdowns. The backend's global
+    // interceptor turns the "no limit configured" null into a 404, so we only ask
+    // for status once a limit is actually enabled — otherwise the readout has
+    // nothing to show anyway, and we avoid a noisy (handled) 404 on every load.
     const { data: status } = useQuery({
         queryKey: ["spend-limit-status", teamId],
         queryFn: () => getSpendLimitStatus(),
+        enabled: !!data?.enabled,
         retry: false,
     });
 
@@ -331,35 +333,7 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                 </Card>
             ) : (
                 <>
-                    <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2">
-                            <Label className="text-text-primary text-sm font-medium">
-                                Scope
-                            </Label>
-                            <span className="text-text-tertiary text-xs">
-                                Readout only — changing scope never turns alerts
-                                into a hard block.
-                            </span>
-                        </div>
-                        <ToggleGroup.Root
-                            type="single"
-                            value={scope}
-                            onValueChange={(value) => {
-                                if (!value) return;
-                                setScope(value as SpendLimitScope);
-                            }}
-                            className="bg-card-lv2 grid max-w-md grid-cols-3 gap-px overflow-hidden rounded-lg p-0.5">
-                            {SCOPE_OPTIONS.map((opt) => (
-                                <ToggleGroup.Item
-                                    key={opt.value}
-                                    value={opt.value}
-                                    className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 data-[state=on]:shadow-sm rounded-md px-2 py-1.5 text-xs font-medium transition-colors data-[state=on]:ring-1">
-                                    {opt.label}
-                                </ToggleGroup.Item>
-                            ))}
-                        </ToggleGroup.Root>
-                    </div>
-
+                    {/* ── The one action: turn on alerts + set the monthly limit ── */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between gap-6">
                             <div className="flex flex-col gap-1">
@@ -379,7 +353,7 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                                 onCheckedChange={setEnabled}
                             />
                         </CardHeader>
-                        <CardContent className="flex flex-col gap-3">
+                        <CardContent className="flex flex-col gap-4">
                             <div>
                                 <Label
                                     htmlFor="spend-limit-amount"
@@ -407,22 +381,50 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                                     </p>
                                 )}
                             </div>
-                            <p className="text-text-secondary text-sm tabular-nums">
-                                Projected this month:{" "}
-                                <span className="text-text-primary font-medium">
-                                    {formatUsd(projectedMonthly)}
-                                </span>{" "}
-                                <span className="text-text-tertiary text-xs">
-                                    (~{elapsedPct}% of the month elapsed)
-                                </span>
-                            </p>
+
+                            {/* Readout: spent + projected, with an optional
+                                breakdown view (grouping only — never changes
+                                what alerts fire on). */}
+                            <div className="border-card-lv2 flex flex-col gap-2 border-t pt-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-text-secondary text-sm tabular-nums">
+                                        Projected this month:{" "}
+                                        <span className="text-text-primary font-medium">
+                                            {formatUsd(projectedMonthly)}
+                                        </span>{" "}
+                                        <span className="text-text-tertiary text-xs">
+                                            (~{elapsedPct}% elapsed)
+                                        </span>
+                                    </p>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-text-tertiary text-xs">
+                                            Break down by
+                                        </span>
+                                        <ToggleGroup.Root
+                                            type="single"
+                                            value={scope}
+                                            onValueChange={(value) => {
+                                                if (!value) return;
+                                                setScope(
+                                                    value as SpendLimitScope,
+                                                );
+                                            }}
+                                            className="bg-card-lv2 flex gap-px overflow-hidden rounded-md p-0.5">
+                                            {SCOPE_OPTIONS.map((opt) => (
+                                                <ToggleGroup.Item
+                                                    key={opt.value}
+                                                    value={opt.value}
+                                                    className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary rounded px-2 py-1 text-xs font-medium transition-colors">
+                                                    {opt.label}
+                                                </ToggleGroup.Item>
+                                            ))}
+                                        </ToggleGroup.Root>
+                                    </div>
+                                </div>
+                                <ScopeBreakdown scope={scope} status={status ?? null} />
+                            </div>
                         </CardContent>
                     </Card>
-
-                    <ScopeBreakdown
-                        scope={scope}
-                        status={status ?? null}
-                    />
 
                     {!allPriceable && (
                         <Alert variant="warning">
@@ -435,37 +437,55 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                                 <strong className="text-text-primary">
                                     {unpriceableModels.join(", ")}
                                 </strong>
-                                . Enter the per-token prices below to enable the
-                                limit — spend can't be tracked for a model we
-                                can't price.
+                                . Open “Adjust model prices” below to enter the
+                                per-token prices — spend can't be tracked for a
+                                model we can't price.
                             </AlertDescription>
                         </Alert>
                     )}
 
-                    <div className="flex flex-col gap-2">
-                        <p className="text-text-secondary text-sm text-pretty">
-                            Prices we found per model. Check them against your
-                            provider and adjust if needed.
-                        </p>
-                        {models.map((model) => (
-                            <ModelPricingCard
-                                key={model.model}
-                                model={model}
-                                prices={
-                                    prices[model.model] ?? seedPrices(model)
-                                }
-                                monthlySpend={
-                                    scope === "per-model"
-                                        ? spendByModel.get(model.model)
-                                        : undefined
-                                }
-                                onChange={(field, value) =>
-                                    updatePrice(model.model, field, value)
-                                }
-                                onRevert={() => revertToCatalog(model)}
-                            />
-                        ))}
-                    </div>
+                    {/* ── Advanced: per-model price calibration (collapsed) ── */}
+                    <details
+                        className="group border-card-lv2 rounded-lg border"
+                        open={!allPriceable}>
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                            <span className="text-text-primary text-sm font-medium">
+                                Adjust model prices
+                            </span>
+                            <span className="text-text-tertiary text-xs">
+                                {models.length}{" "}
+                                {models.length === 1 ? "model" : "models"} ·{" "}
+                                {allPriceable
+                                    ? "from catalog"
+                                    : "action needed"}
+                            </span>
+                        </summary>
+                        <div className="flex flex-col gap-2 px-4 pb-4">
+                            <p className="text-text-tertiary text-xs text-pretty">
+                                Prices we found per model — used only to estimate
+                                spend. Check them against your provider and adjust
+                                if needed.
+                            </p>
+                            {models.map((model) => (
+                                <ModelPricingCard
+                                    key={model.model}
+                                    model={model}
+                                    prices={
+                                        prices[model.model] ?? seedPrices(model)
+                                    }
+                                    monthlySpend={
+                                        scope === "per-model"
+                                            ? spendByModel.get(model.model)
+                                            : undefined
+                                    }
+                                    onChange={(field, value) =>
+                                        updatePrice(model.model, field, value)
+                                    }
+                                    onRevert={() => revertToCatalog(model)}
+                                />
+                            ))}
+                        </div>
+                    </details>
 
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <Link

@@ -27,7 +27,7 @@ describe('GetLLMConfigStatusUseCase', () => {
     };
 
     // 04b-06: the legacy top-level {main,fallback} read is GONE. Status now derives
-    // solely from the shape via normalizeByokConfig (routing → model →
+    // solely from the shape via resolveDefaultSlot (routing → model →
     // credential). The former legacy-shape Bedrock cases exercised the raw
     // `.main` read that no longer exists and were deleted.
     describe('v2 shape (credentials + models + routing)', () => {

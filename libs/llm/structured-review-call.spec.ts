@@ -286,3 +286,45 @@ describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldow
         assertNoSecondModelBuilt();
     });
 });
+
+describe('runStructuredReviewCall — per-model tuning (RFC §4.1 model limits)', () => {
+    it('passes the resolved slot temperature + maxOutputTokens to the model call', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            byokConfig: {
+                provider: 'openai',
+                temperature: 0.3,
+                maxOutputTokens: 5000,
+            } as any,
+        });
+
+        expect(mockGenerate).toHaveBeenCalledWith(
+            expect.objectContaining({ temperature: 0.3, maxOutputTokens: 5000 }),
+        );
+    });
+
+    it('omits tuning when the slot does not set it (falls back to model defaults)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runStructuredReviewCall({ ...base }); // no slot at all
+
+        const args = mockGenerate.mock.calls[0][0];
+        expect(args).not.toHaveProperty('temperature');
+        expect(args).not.toHaveProperty('maxOutputTokens');
+    });
+
+    it('treats a non-positive maxOutputTokens as "use the model default" (dropped)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));
+
+        await runStructuredReviewCall({
+            ...base,
+            byokConfig: { provider: 'openai', maxOutputTokens: 0 } as any,
+        });
+
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty(
+            'maxOutputTokens',
+        );
+    });
+});

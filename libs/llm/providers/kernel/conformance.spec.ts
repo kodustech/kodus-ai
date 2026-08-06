@@ -27,6 +27,7 @@ import { openRouterModule } from '../openrouter/index';
 import { bedrockModule } from '../bedrock/index';
 import { novitaModule } from '../novita/index';
 import { moonshotModule } from '../moonshot/index';
+import { azureModule } from '../azure/index';
 
 import openaiPlain from '../openai/__fixtures__/plain.json';
 import openaiReasoning from '../openai/__fixtures__/reasoning.json';
@@ -37,6 +38,7 @@ import openrouterReasoning from '../openrouter/__fixtures__/reasoning.json';
 import bedrockPlain from '../bedrock/__fixtures__/plain.json';
 import novitaPlain from '../novita/__fixtures__/plain.json';
 import moonshotPlain from '../moonshot/__fixtures__/plain.json';
+import azurePlain from '../azure/__fixtures__/plain.json';
 
 interface ProviderCase {
     module: ProviderModule;
@@ -98,6 +100,11 @@ const CASES: ProviderCase[] = [
         module: moonshotModule,
         model: 'kimi-k2.7-code',
         fixtures: [{ name: 'plain', fixture: moonshotPlain as ProviderFixture }],
+    },
+    {
+        module: azureModule,
+        model: 'gpt-4o',
+        fixtures: [{ name: 'plain', fixture: azurePlain as ProviderFixture }],
     },
 ];
 

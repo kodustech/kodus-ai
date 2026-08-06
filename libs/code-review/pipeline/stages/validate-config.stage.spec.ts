@@ -175,14 +175,14 @@ describe('ValidateConfigStage — v2 routing', () => {
 
         const result = await stage.execute(buildContext(undefined));
 
-        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe(
+        expect(result.codeReviewConfig.byokConfig?.model).toBe(
             'gpt-5-mini',
         );
-        expect(result.codeReviewConfig.byokConfig?.main?.provider).toBe(
+        expect(result.codeReviewConfig.byokConfig?.provider).toBe(
             'openai',
         );
         // Slot carries ciphertext verbatim — the resolver never decrypts.
-        expect(result.codeReviewConfig.byokConfig?.main?.apiKey).toBe('enc-oa');
+        expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
     it('routes the codeReview task to the byokModelId id-override (top of precedence)', async () => {
@@ -193,10 +193,10 @@ describe('ValidateConfigStage — v2 routing', () => {
         // byokModelId 'm-B' is a models[] id → routes straight to that model.
         const result = await stage.execute(buildContext(undefined, 'm-B'));
 
-        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe(
+        expect(result.codeReviewConfig.byokConfig?.model).toBe(
             'gpt-5-mini',
         );
-        expect(result.codeReviewConfig.byokConfig?.main?.apiKey).toBe('enc-oa');
+        expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
     it('lets byokModelId (id) win over the legacy byokModel NAME', async () => {
@@ -207,7 +207,7 @@ describe('ValidateConfigStage — v2 routing', () => {
         // id 'm-B' (→ gpt-5-mini) wins over the NAME 'gpt-4o'.
         const result = await stage.execute(buildContext('gpt-4o', 'm-B'));
 
-        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe(
+        expect(result.codeReviewConfig.byokConfig?.model).toBe(
             'gpt-5-mini',
         );
     });
@@ -221,13 +221,13 @@ describe('ValidateConfigStage — v2 routing', () => {
         // chosen slot (default m-A, openai credential).
         const result = await stage.execute(buildContext('gpt-5-mini'));
 
-        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe(
+        expect(result.codeReviewConfig.byokConfig?.model).toBe(
             'gpt-5-mini',
         );
-        expect(result.codeReviewConfig.byokConfig?.main?.apiKey).toBe('enc-oa');
+        expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
-    it('materializes the fallback slot from routing.fallbackModelId', async () => {
+    it('resolves the main slot and ignores routing.fallbackModelId (single-slot carrier)', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue({
             configValue: v2({
                 defaultModelId: 'm-A',
@@ -237,10 +237,12 @@ describe('ValidateConfigStage — v2 routing', () => {
 
         const result = await stage.execute(buildContext(undefined));
 
-        expect(result.codeReviewConfig.byokConfig?.main?.model).toBe('gpt-4o');
-        expect(result.codeReviewConfig.byokConfig?.fallback?.model).toBe(
-            'gpt-5-mini',
-        );
+        // byokConfig is now the bare resolved slot — no `.fallback` carrier.
+        expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
+        expect(
+            (result.codeReviewConfig.byokConfig as { fallback?: unknown })
+                ?.fallback,
+        ).toBeUndefined();
     });
 
     it('degrades to the env/managed default (byokConfig undefined) on a BLOCKED verdict', async () => {

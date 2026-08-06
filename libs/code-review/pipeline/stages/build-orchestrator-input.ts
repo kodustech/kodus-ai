@@ -1,5 +1,6 @@
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import type { OrchestratorInput } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import { KODUS_DEFAULT_MODEL } from '@libs/llm/byok-to-vercel';
 
 /**
  * The stage-computed locals that the orchestrator input needs on top of the
@@ -96,9 +97,9 @@ export function buildOrchestratorInput(
         // graph (cli-review depends on code-review).
         defaultModelOverride:
             context.pipelineMetadata?.subscriptionStatus === 'trial'
-                ? 'deepseek-v4-flash'
+                ? KODUS_DEFAULT_MODEL
                 : (context as { isTrialMode?: boolean }).isTrialMode
-                  ? 'deepseek-v4-flash'
+                  ? KODUS_DEFAULT_MODEL
                   : undefined,
         // Per-repo/directory model override resolved by ValidateConfigStage.
         // byokModel = legacy NAME (window); byokModelId = id-based override

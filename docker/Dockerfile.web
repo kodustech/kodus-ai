@@ -48,7 +48,22 @@ COPY libs/identity/domain/permissions ./libs/identity/domain/permissions
 COPY release/features-snapshot.json ./release/features-snapshot.json
 
 WORKDIR /usr/src/app/apps/web
-RUN pnpm build
+# Turbopack persists its compiler artifacts to .next/cache, and since Next 16.3
+# that filesystem cache is on by default for `next build` too. Reusing it takes
+# the compile step from ~57s cold to ~9s after a source change (measured on this
+# app), so the mount keeps the directory alive across builds of this stage.
+#
+# Caveat: this only pays off where the BuildKit builder persists — local builds
+# (docker-compose.bench.yml) or a self-hosted runner. The prod/QA workflows run
+# `docker build` on ephemeral ubuntu-latest with a fresh builder, so the mount
+# is empty there every run, and cache mounts are not carried by layer-cache
+# export (`--cache-to type=gha`). Same limitation as the /pnpm-store mount above.
+#
+# `sharing=private` so two concurrent builds get separate caches instead of
+# racing on one. Nothing from here reaches the runtime image — the production
+# stage copies only .next/standalone, .next/static and public/.
+RUN --mount=type=cache,target=/usr/src/app/apps/web/.next/cache,sharing=private \
+    pnpm build
 
 # 2) Production stage: only the final artifacts
 FROM docker.io/library/node:22.22.2-slim AS production

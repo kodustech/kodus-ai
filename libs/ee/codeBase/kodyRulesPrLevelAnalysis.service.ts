@@ -1,7 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { TokenUsage } from '@libs/llm/token-usage';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
@@ -586,7 +586,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         // The resolved slot the run uses (already routed upstream by task).
         // Read limits off the slot, not the internal `{main,fallback}` shape.
         const byokSlot = context?.codeReviewConfig?.byokConfig;
-        const resolvedSlot = byokSlot?.main;
+        const resolvedSlot = byokSlot;
 
         const byokMaxInputTokens = resolvedSlot?.maxInputTokens;
 
@@ -993,7 +993,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                     prNumber,
                     chunkIndex,
                     filesCount: filesChunk.length,
-                    provider: byokConfigRef?.main?.provider ?? provider,
+                    provider: byokConfigRef?.provider ?? provider,
                     fallback: false,
                 },
                 observabilityService: this.observabilityService,
@@ -1044,7 +1044,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         language: string,
-        byokConfig: NormalizedByokConfig,
+        byokConfig: NormalizedModel,
     ): Promise<AIAnalysisResultPrLevel> {
         if (!allViolatedRules?.length) {
             this.logger.log({
@@ -1131,7 +1131,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         language: string,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        byokConfig: NormalizedByokConfig,
+        byokConfig: NormalizedModel,
     ): Promise<ISuggestionByPR[]> {
         if (!suggestions?.length) {
             return suggestions;
@@ -1254,7 +1254,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         language: string,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        byokConfig: NormalizedByokConfig,
+        byokConfig: NormalizedModel,
     ): Promise<ISuggestionByPR> {
         // Filtro rápido + fallback seguro
         if (!duplicatedSuggestions || duplicatedSuggestions.length === 0) {

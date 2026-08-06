@@ -1,4 +1,4 @@
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { type Tool, type LanguageModel } from 'ai';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
@@ -27,16 +27,17 @@ import {
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { resolveAgentModel } from '@libs/llm/agent-model';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
-import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { resolveModelInvocation } from '@libs/llm/model-invocation';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 import { connectMcpTools } from '../ai-sdk/mcp-tools';
 import { buildNativeTools } from '../ai-sdk/native-tools';
+import { agentRunUsage } from './agent-usage.util';
+import { systemCacheControl } from '@libs/llm/system-cache';
 import {
     CONVERSATION_FALLBACK_MESSAGE,
     CONVERSATION_PROVIDER_ERROR_MESSAGE,
@@ -68,7 +69,7 @@ interface ConversationThread {
  *
  * Replaces the former flow-engine orchestration (createOrchestration +
  * REACT planner + createMCPAdapter + createTool + callAgent) with a thin
- * native loop: `byokToVercelModel` resolves the BYOK model, MCP + sandbox
+ * native loop: `buildModelFromSlot` resolves the BYOK model, MCP + sandbox
  * tools are exposed as AI SDK tools, and `generateText` runs the tool-calling
  * loop until it answers or hits `CONVERSATION_MAX_STEPS`.
  */
@@ -131,40 +132,34 @@ export class ConversationAgentProvider {
             metadata: { organizationAndTeamData, thread, userLanguage },
         });
 
-        const resolvedByok =
-            await this.resolveBYOKConfig(organizationAndTeamData);
         // The resolved slot the conversation task uses — provider/model/params
-        // read off it, never the internal `{main,fallback}` shape.
-        const slot = resolvedByok?.main;
-        // Standard model setup (same as every agent): BYOK resolve + concurrency
-        // limiter + failure reporter.
-        const model = resolveAgentModel(slot, {
-            organizationId: organizationAndTeamData.organizationId?.toString(),
-            provider: slot?.provider,
-            reporter: this.byokErrorCounter
-                ? (e) => void this.byokErrorCounter!.record(e)
-                : undefined,
-        });
+        // read off it directly (no `{main,fallback}` carrier).
+        const slot = await this.resolveBYOKSlot(organizationAndTeamData);
 
-        // Per-call model params come straight from the resolved slot
-        // (temperature / maxOutputTokens / reasoningEffort) — NOT hardcoded. The
-        // old hardcoded `temperature: 0` overrode the config and broke models
-        // that only accept their own value (e.g. kimi-k2.7-code wants 1).
-        // `temperature` is passed through only when configured; omitting it lets
-        // the provider use its valid default.
-        const temperature = slot?.temperature;
+        // ONE resolution for model + tuning + reasoning, via the shared primitive
+        // every agent uses. It builds+wraps the model (limiter + failure
+        // reporter), derives `temperature`/`maxOutputTokens` from the slot, and
+        // maps the slot's reasoning (effort + reasoningConfigOverride) to
+        // providerOptions. Consolidating this here is what stops any single
+        // call-site from silently dropping one of them (the drift that broke the
+        // review path's tuning). `temperature` is passed through only when the
+        // slot configures it — omitting it lets models that reject a fixed value
+        // (e.g. kimi-k2.7-code wants 1) use their own default.
+        const { model, callOptions, providerOptions } = resolveModelInvocation(
+            slot,
+            {
+                runName: 'conversationAgent',
+                organizationId:
+                    organizationAndTeamData.organizationId?.toString(),
+                reporter: this.byokErrorCounter
+                    ? (e) => void this.byokErrorCounter!.record(e)
+                    : undefined,
+            },
+        );
+        const temperature = callOptions.temperature;
+        // Conversation keeps its own max-output default when the slot omits one.
         const maxOutputTokens =
-            slot?.maxOutputTokens ?? this.defaultLLMConfig.maxTokens;
-
-        // Thinking/reasoning budget. `buildProviderOptions` maps an effort tier
-        // to the right per-provider shape (Gemini thinkingBudget/thinkingLevel,
-        // Anthropic thinking, OpenAI reasoningEffort). The tier also comes from
-        // the resolved slot (the org configured it).
-        const providerOptions = buildProviderOptions('conversationAgent', undefined, {
-            reasoningEffort: slot?.reasoningEffort ?? 'low',
-            byokProvider: slot?.provider,
-            modelName: slot?.model,
-        });
+            callOptions.maxOutputTokens ?? this.defaultLLMConfig.maxTokens;
 
         // Tools: MCP (memory, integrations) + native sandbox tools (grep,
         // readFile, listDir, exec). Both are plain AI SDK tools, carried into
@@ -185,6 +180,14 @@ export class ConversationAgentProvider {
         // final text is the last assistant turn in RunState. maxSteps applies
         // the ReAct stop bound the legacy `stopWhen: stepCountIs` did.
         const runner = new AiSdkAgentRunner({ resolve: () => model });
+        // Anthropic prompt caching for the (static) system prompt — the multi-step
+        // loop (up to CONVERSATION_MAX_STEPS) re-sends it every step, so on Claude
+        // it's read from cache after the first write instead of re-billed. No-op on
+        // non-Anthropic models. Same primitive the code-review finder uses.
+        const systemCache = systemCacheControl({
+            provider: slot?.provider,
+            model: slot?.model,
+        });
         const spec: AgentSpec = {
             id: 'conversation',
             systemPrompt: this.buildSystemPrompt(userLanguage),
@@ -195,6 +198,7 @@ export class ConversationAgentProvider {
             ...(typeof temperature === 'number' ? { temperature } : {}),
             maxOutputTokens,
             ...(Object.keys(providerOptions).length ? { providerOptions } : {}),
+            ...(systemCache ? { systemProviderOptions: systemCache } : {}),
         };
 
         // Standard run context: signal + hard timeout, same guarantee as the
@@ -260,23 +264,22 @@ export class ConversationAgentProvider {
             // runAiSdkLLMInSpan wrapper.
             const finishReason = state.stopReason ?? state.status;
 
-            await this.observabilityService.recordAgentRunUsage({
-                agentName: 'ConversationalAgent',
-                phase: 'conversation',
-                spanName: 'ConversationalAgent::conversationAgent',
-                runName: 'conversationAgent',
-                model: slot?.model,
-                // Real billing source: a BYOK org runs on its own key -> 'byok'.
-                // (The legacy code hardcoded 'system', misattributing BYOK cost.)
-                isByok: !!resolvedByok,
-                usage: state.usage,
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-                steps: state.steps.length,
-                finishReason,
-                source: 'harness',
-                durationMs: Date.now() - startedAt,
-            });
+            // Cost record via the shared assembler: `model`/`isByok` from the
+            // slot, usage/steps/finishReason from the RunState — one shape, so the
+            // retry pass can't drift from this one (it once recorded the
+            // 'resolved' sentinel as the model). A BYOK org runs on its own key →
+            // isByok true → billed as 'byok', not 'system'.
+            await this.observabilityService.recordAgentRunUsage(
+                agentRunUsage(slot, state, {
+                    agentName: 'ConversationalAgent',
+                    phase: 'conversation',
+                    spanName: 'ConversationalAgent::conversationAgent',
+                    runName: 'conversationAgent',
+                    organizationAndTeamData,
+                    source: 'harness',
+                    durationMs: Date.now() - startedAt,
+                }),
+            );
 
             const answer = finalText(state);
 
@@ -317,7 +320,7 @@ export class ConversationAgentProvider {
                     ctx,
                     temperature,
                     maxOutputTokens,
-                    resolvedByok,
+                    slot,
                     organizationAndTeamData,
                 );
             }
@@ -375,9 +378,10 @@ export class ConversationAgentProvider {
         ctx: ToolContext,
         temperature: number | undefined,
         maxOutputTokens: number,
-        resolvedByok: unknown,
+        slot: NormalizedModel | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<string | null> {
+        const startedAt = Date.now();
         try {
             const runner = new AiSdkAgentRunner({ resolve: () => model });
             const spec: AgentSpec = {
@@ -402,19 +406,20 @@ export class ConversationAgentProvider {
             // Record the retry's token usage (the main path records at phase
             // 'conversation'; without this the forceAnswer call was invisible to
             // billing). Success path only — a thrown retry burned zero tokens.
-            await this.observabilityService.recordAgentRunUsage({
-                agentName: 'ConversationalAgent',
-                phase: 'conversation-retry',
-                spanName: 'ConversationalAgent::conversationAgent',
-                runName: 'conversationAgent',
-                model: (spec as { modelId?: string }).modelId,
-                isByok: !!resolvedByok,
-                usage: state.usage,
-                organizationId: organizationAndTeamData.organizationId,
-                teamId: organizationAndTeamData.teamId,
-                steps: state.steps.length,
-                finishReason: state.stopReason ?? state.status,
-            });
+            // Same assembler as the main pass, so `model` is the real resolved
+            // model (not the 'resolved' spec sentinel this once recorded) and the
+            // row carries the full billing attributes, not a partial record.
+            await this.observabilityService.recordAgentRunUsage(
+                agentRunUsage(slot, state, {
+                    agentName: 'ConversationalAgent',
+                    phase: 'conversation-retry',
+                    spanName: 'ConversationalAgent::conversationAgent',
+                    runName: 'conversationAgent',
+                    organizationAndTeamData,
+                    source: 'harness',
+                    durationMs: Date.now() - startedAt,
+                }),
+            );
 
             return normalizeConversationResponse(finalText(state));
         } catch (error) {
@@ -470,16 +475,16 @@ export class ConversationAgentProvider {
     }
 
     /**
-     * Resolve the BYOK carrier for the org's `conversation` task. native:
-     * source the raw config and route it through `resolveTaskSlot`
-     * (StaticTaskStrategy over `models[]`/`routing`), so a non-v2/managed/
-     * BLOCKED config yields `undefined` → the env/managed default.
+     * Resolve the BYOK model slot for the org's `conversation` task: source the
+     * raw config and route it through `resolveTaskSlot` (StaticTaskStrategy over
+     * `models[]`/`routing`), so a non-v2/managed/BLOCKED config yields
+     * `undefined` → the env/managed default.
      */
-    private async resolveBYOKConfig(
+    private async resolveBYOKSlot(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<NormalizedByokConfig | undefined> {
+    ): Promise<NormalizedModel | undefined> {
         return (
-            (await this.permissionValidationService.resolveTaskCarrier(
+            (await this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
                 LLM_TASK.conversation,
             )) ?? undefined

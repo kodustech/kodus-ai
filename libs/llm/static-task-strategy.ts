@@ -95,16 +95,6 @@ export class StaticTaskStrategy implements RoutingStrategy {
         config: BYOKConfig,
         _stats?: ModelRuntimeStats, // reserved for the Auto router — unused in v1
     ): RoutingVerdict {
-        // Parent-task inheritance: an internal helper call under BYOK inherits the
-        // parent's already-resolved (already capability-gated) model verbatim,
-        // without consulting this task's overrides.
-        if (ctx.parentTask && ctx.parentModelId) {
-            return {
-                modelId: ctx.parentModelId,
-                reason: `inherited resolved model from parent task "${ctx.parentTask}"`,
-            };
-        }
-
         const models = config.models ?? [];
         const byId = new Map<string, BYOKModelConfig>(
             models.filter((m) => m && m.id).map((m) => [m.id, m]),
@@ -121,7 +111,19 @@ export class StaticTaskStrategy implements RoutingStrategy {
         const requirement = TASK_CAPABILITY_REQUIREMENTS[task];
 
         const skips: string[] = [];
+        // Dedup exact (id + nameOverride) repeats so a model that is BOTH a higher
+        // tier and a lower one (e.g. the folder override id == defaultModelId) is
+        // gated once, not twice — no redundant capability lookup, no duplicated
+        // skip reason. First occurrence wins, so precedence order is untouched; the
+        // name-override variant stays distinct from the plain model (different
+        // effective model name).
+        const seen = new Set<string>();
         for (const candidate of [...primary, ...fallback]) {
+            const key = `${candidate.model.id}::${candidate.nameOverride ?? ''}`;
+            if (seen.has(key)) {
+                continue;
+            }
+            seen.add(key);
             const outcome = this.evaluate(task, candidate, creds, requirement);
             if (outcome.eligible && outcome.verdict) {
                 // Surface any skipped higher-precedence tiers on the winning

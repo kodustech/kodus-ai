@@ -1,5 +1,5 @@
 import { BYOKProvider } from '@libs/llm/model-providers';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import type {
     BYOKCredential,
@@ -7,10 +7,9 @@ import type {
 } from '@libs/llm/byok-config';
 
 /**
- * A single BYOK credential slot — the `main` (or `fallback`) block of a
- * stored BYOK config.
+ * A single BYOK credential slot — one resolved model of a stored BYOK config.
  */
-export type BYOKSlot = NormalizedByokConfig['main'];
+export type BYOKSlot = NormalizedModel;
 
 const asString = (value: unknown): string | undefined =>
     typeof value === 'string' && value.length > 0 ? value : undefined;

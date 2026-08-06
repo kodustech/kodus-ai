@@ -69,7 +69,7 @@ function tpmSlot(
 
 function wrap(model: any, slot?: NormalizedModel) {
     return wrapByokModel(model, {
-        byokConfig: slot ? ({ main: slot } as any) : undefined,
+        byokConfig: slot,
         organizationId: 'org-1',
         provider: 'openai',
     });

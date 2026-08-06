@@ -18,7 +18,14 @@ import { CuratedConnectPanel } from "./catalog/connect-panel";
 import { CuratedModelCard, PROVIDER_LABELS } from "./catalog/model-card";
 import { ProviderLogo } from "./provider-logo";
 
-type ProviderChoice = { id: string; label: string; modelCount: number };
+type ProviderChoice = {
+    id: string;
+    label: string;
+    modelCount: number;
+    /** Registry signal: the provider can enumerate its models (static catalog or
+     *  listable endpoint) vs. a custom endpoint that must be typed manually. */
+    autoListModels: boolean;
+};
 
 /**
  * The distinct providers in the curated catalog, in first-appearance order —
@@ -44,6 +51,9 @@ export const catalogProviders = (): ProviderChoice[] => {
                 m.providerDisplayName ??
                 m.provider,
             modelCount: 1,
+            // Curated providers always show a count, so this only matters as the
+            // registry-fetch fallback — a curated provider is listable.
+            autoListModels: true,
         });
     }
     return Array.from(byId.values());
@@ -86,6 +96,10 @@ export const registryProviders = (
                 id,
                 label: PROVIDER_LABELS[id] ?? module.label ?? id,
                 modelCount: curatedModelCount(id),
+                // The descriptor's flag is for the canonical id; the `*_compatible`
+                // aliases are custom endpoints (not auto-listable).
+                autoListModels:
+                    id === module.id ? module.autoListModels : false,
             });
         }
     }
@@ -235,17 +249,24 @@ export function ConnectProviderFlow({
                 ) : (
                     <div className="flex flex-col items-start gap-3">
                         <p className="text-text-tertiary text-sm text-pretty">
-                            No catalog models for {label}. Configure it manually
-                            to add one.
+                            {locked
+                                ? `Pick or type a ${label} model on the next screen — your key is already stored.`
+                                : `Set up ${label} on the next screen — add your key, then pick from its model list (or type a model ID).`}
                         </p>
                         <Button
                             type="button"
                             size="sm"
                             variant="primary"
                             onClick={() =>
-                                router.push("/organization/byok/manual")
+                                // Pre-scope the manual form to THIS provider (and
+                                // reuse a stored key). The manual screen lists the
+                                // provider's models when it can, or takes a typed
+                                // model id — driven by the registry per provider.
+                                router.push(
+                                    `/organization/byok/manual?provider=${encodeURIComponent(pickedProvider)}`,
+                                )
                             }>
-                            Configure manually
+                            Continue
                         </Button>
                     </div>
                 )}
@@ -296,7 +317,16 @@ export function ConnectProviderFlow({
                         <button
                             key={p.id}
                             type="button"
-                            onClick={() => setPickedProvider(p.id)}
+                            onClick={() =>
+                                // Curated providers open the in-place model cards;
+                                // everything else goes straight to the manual form
+                                // pre-scoped to the provider (no empty middle step).
+                                p.modelCount > 0
+                                    ? setPickedProvider(p.id)
+                                    : router.push(
+                                          `/organization/byok/manual?provider=${encodeURIComponent(p.id)}`,
+                                      )
+                            }
                             className="border-card-lv2 bg-card-lv2 hover:border-primary-light/60 hover:bg-card-lv3 flex items-center gap-2.5 rounded-lg border p-3 text-left transition-colors">
                             <ProviderLogo
                                 provider={p.id}
@@ -308,8 +338,11 @@ export function ConnectProviderFlow({
                                     {p.label}
                                 </span>
                                 <span className="text-text-tertiary text-xs tabular-nums">
-                                    {p.modelCount}{" "}
-                                    {p.modelCount === 1 ? "model" : "models"}
+                                    {p.modelCount > 0
+                                        ? `${p.modelCount} ${p.modelCount === 1 ? "model" : "models"}`
+                                        : p.autoListModels
+                                          ? "Lists all models"
+                                          : "Custom endpoint"}
                                 </span>
                             </span>
                         </button>

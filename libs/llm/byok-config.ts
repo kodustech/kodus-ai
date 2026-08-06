@@ -2,8 +2,8 @@
  * BYOK config — the persisted shape + the internal normalized shape.
  *
  * `BYOKConfig` (credentials + models + routing) is the single stored format.
- * `normalizeByokConfig` resolves it to `NormalizedByokConfig` — the internal
- * `{main,fallback}` shape the resolver family (byok-to-vercel.ts) consumes, with
+ * `resolveModelSlot` / `resolveTaskSlot` project it into a `NormalizedModel` —
+ * the flat runtime slot the resolver family (byok-to-vercel.ts) builds from, with
  * the apiKey kept as ENCRYPTED ciphertext so decryption happens once, downstream.
  * Provider ids are plain strings matching BYOKProvider values.
  */
@@ -139,16 +139,6 @@ export interface NormalizedModel {
     awsSecretAccessKey?: string;
     awsRegion?: string;
     awsSessionToken?: string;
-}
-
-/**
- * The internal shape the resolver family reads. `main` is OPTIONAL: a managed /
- * empty config yields absent `main` so byok-to-vercel's `if (!config)` env-default
- * branch runs with no call-site branch.
- */
-export interface NormalizedByokConfig {
-    main?: NormalizedModel;
-    fallback?: NormalizedModel;
 }
 
 /** Narrow an unknown blob to a valid BYOK config by its schema discriminant. */

@@ -5,18 +5,15 @@
  * into a Vercel AI SDK model instance that supports native function calling.
  */
 import type { LanguageModel } from 'ai';
-import { createOpenAI } from '@ai-sdk/openai';
-import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { decrypt } from '@libs/common/utils/crypto';
-import { vertexModelFromSaJson } from '@libs/llm/model-builders';
 // Provider registry (Phase 1): every BYOK provider resolves through REGISTRY.
 // Importing the barrel registers all provider modules via side effect. The
-// self-hosted / trial default-model paths below are NOT BYOK ids and still
-// build inline (they use vertexModelFromSaJson from the shared leaf).
+// self-hosted / trial default-model paths below are NOT BYOK ids; most route
+// through the registry too, with two inline exceptions in resolveManagedSlot
+// (self-hosted OpenAI-compatible + DeepSeek default) the modules can't reproduce.
 import { REGISTRY } from '@libs/llm/providers';
 
 // Wave 2: the concurrency / rpm / tpm-reservoir / cooldown limiter moved to
@@ -57,11 +54,19 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
 }
 
 /**
+ * The Kodus-funded model for the trial / no-BYOK (cloud) flow — the SINGLE
+ * source of truth for the managed default id. Every entitlement flow that forces
+ * "Kodus pays" (code-review trial/demo, Kody Rules generation, reference
+ * detection, PR summary) references this instead of re-typing the id.
+ */
+export const KODUS_DEFAULT_MODEL = 'deepseek-v4-flash';
+
+/**
  * Default model config when no BYOK is configured.
  */
 const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,
-    model: 'deepseek-v4-flash',
+    model: KODUS_DEFAULT_MODEL,
 };
 
 /**
@@ -367,116 +372,58 @@ export function getModelName(
 }
 
 /**
- * Get a cheap/fast model for internal operations (structuring, dedup).
+ * Get a cheap/fast model for internal / secondary-pass operations (dedup,
+ * severity, suggestion formatting, structured-output fallback). ONE resolution,
+ * shared with the main path — there is no hand-rolled provider tree here:
  *
- * Priority order:
- * 1. The resolved BYOK slot the caller passes (client is paying) — the caller
- *    owns which task-resolved slot an internal helper inherits; this builder
- *    never reads `.main`/`.fallback`.
- * 2. Self-hosted configured provider
- * 3. Cloud: OpenAI GPT-5-mini (best at structured output) → Gemini 2.5 Flash
+ * 1. A resolved BYOK slot the caller passes → the client key (client pays).
+ * 2. No slot → `resolveManagedSlot` (inside `buildModelFromSlot`): the
+ *    self-hosted env model, or — in cloud — the Kodus-funded default. The
+ *    Kodus-funded model is ALWAYS DeepSeek (`KODUS_DEFAULT_MODEL`); it is NEVER
+ *    gpt/gemini. Env + cloud provider selection lives in the single place
+ *    (`resolveManagedSlot`), so this stays a thin wrapper over the same builder.
+ *
+ * Fail-soft: returns null when no key backs the managed model, so a secondary
+ * pass skips (keeps agent values) instead of erroring on an empty-key call.
  */
-/**
- * Build a PLATFORM (Kodus-funded) chat model by explicit id — the managed path
- * for callers that need a SPECIFIC platform model rather than the default
- * managed model (e.g. the secondary-pass `gpt-5.4-mini`). Honors a forced base
- * URL (self-hosted/proxy) and returns null when no platform key is set, so the
- * caller fails soft. Keeps `createOpenAI` inside libs/llm — no consumer builds
- * a model directly.
- */
-export function buildPlatformModel(modelId: string): LanguageModel | null {
-    const openaiKey = process.env.API_OPEN_AI_API_KEY;
-    if (!openaiKey) return null;
-    return createOpenAI({
-        apiKey: openaiKey,
-        ...(process.env.API_OPENAI_FORCE_BASE_URL
-            ? { baseURL: process.env.API_OPENAI_FORCE_BASE_URL }
-            : {}),
-    })(modelId);
-}
 
 export function getInternalModel(
     slot?: NormalizedModel,
     options: ByokModelOptions = {},
 ): LanguageModel | null {
-    const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
-
-    // If a resolved BYOK slot is passed, build it directly (client is paying).
+    // BYOK slot → the client key, built through the same builder as everything.
     if (slot) {
         return buildModelFromSlot(slot, options);
     }
 
-    // Self-hosted mode: match buildModelFromSlot's provider selection so
-    // main and internal calls route through the same SDK.
-    if (envMode !== 'auto') {
-        const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
-        const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
-        const openaiKey = process.env.API_OPEN_AI_API_KEY;
-        const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL;
-        const vertexKey = process.env.API_VERTEX_AI_API_KEY;
-        const googleAiStudioKey =
+    // No slot → the SAME managed resolution the main no-BYOK path uses
+    // (resolveManagedSlot inside buildModelFromSlot): the self-hosted env model,
+    // or — in cloud — the Kodus-funded DeepSeek default. Fail-soft: null when no
+    // key backs that model, so the caller skips the pass instead of erroring.
+    if (!hasManagedModelKey()) {
+        return null;
+    }
+    return buildModelFromSlot(undefined, options, KODUS_DEFAULT_MODEL);
+}
+
+/**
+ * Fail-soft guard for the no-BYOK internal path: is there a key backing the
+ * managed model `resolveManagedSlot` would pick? Cloud → the Kodus-funded
+ * DeepSeek key; self-hosted → whichever provider key the env model needs. Kept
+ * deliberately coarse (any relevant key present) — the exact provider match is
+ * `resolveManagedSlot`'s job; this only decides skip-vs-run.
+ */
+function hasManagedModelKey(): boolean {
+    const selfHosted = (process.env.API_LLM_PROVIDER_MODEL ?? 'auto') !== 'auto';
+    if (selfHosted) {
+        return !!(
+            process.env.API_OPEN_AI_API_KEY ||
             process.env.API_GOOGLE_AI_API_KEY ||
-            process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-        const viaProxy = isProxyBaseURL(openaiBaseURL);
-
-        if (isGemini && !viaProxy) {
-            if (googleAiStudioKey) {
-                return createGoogleGenerativeAI({ apiKey: googleAiStudioKey })(
-                    envMode,
-                );
-            }
-            if (vertexKey) {
-                const vertexModel = vertexModelFromSaJson(
-                    vertexKey,
-                    envMode,
-                    process.env.API_VERTEX_AI_LOCATION,
-                );
-                if (vertexModel) return vertexModel;
-                return createGoogleGenerativeAI({ apiKey: vertexKey })(envMode);
-            }
-        }
-        if (isClaude && openaiKey && !viaProxy) {
-            return createAnthropic({
-                apiKey: openaiKey,
-                ...(openaiBaseURL ? { baseURL: openaiBaseURL } : {}),
-            })(envMode);
-        }
-        if (isClaude && vertexKey && !viaProxy) {
-            // Claude on Vertex (MaaS) — see byokToVercelModel for rationale.
-            const vertexModel = vertexModelFromSaJson(
-                vertexKey,
-                envMode,
-                process.env.API_VERTEX_AI_LOCATION,
-            );
-            if (vertexModel) return vertexModel;
-        }
-        if (openaiKey) {
-            return createOpenAICompatible({
-                name: 'self-hosted',
-                apiKey: openaiKey,
-                baseURL: openaiBaseURL || 'https://api.openai.com/v1',
-                supportsStructuredOutputs: options.structuredOutputs === true,
-            })(envMode);
-        }
-
-        return null;
+            process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+            process.env.API_VERTEX_AI_API_KEY
+        );
     }
-
-    // Cloud mode: prefer OpenAI GPT-5-mini (excellent structured output), fall back to Gemini
-    const openaiKey = process.env.API_OPEN_AI_API_KEY;
-    if (openaiKey) {
-        return createOpenAI({ apiKey: openaiKey })('gpt-5.4-mini');
-    }
-
-    const googleKey =
-        process.env.API_GOOGLE_AI_API_KEY ||
-        process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-
-    if (!googleKey) {
-        return null;
-    }
-
-    return createGoogleGenerativeAI({ apiKey: googleKey })('gemini-2.5-flash');
+    return !!(process.env.API_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY);
 }
 
 // ─── Structured-output retry-on-error ────────────────────────────────

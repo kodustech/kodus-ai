@@ -60,7 +60,7 @@ export class KodyRuleDetectorCompilerService
             // carrier for runStructuredReviewCall. A non-v2/managed/BLOCKED
             // config yields `null` → the managed/env default, exactly as before.
             const taskByok =
-                await this.permissionValidationService.resolveTaskCarrier(
+                await this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 );

@@ -5,13 +5,12 @@ import {
 } from '@libs/mcp-server/mcp-adapter';
 import { Injectable, Logger, Optional } from '@nestjs/common';
 
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import type { ToolRegistry } from '@libs/agent-harness/domain/contracts';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
@@ -118,7 +117,7 @@ export class GenericSkillRunnerService {
      */
     async createFetcherOrchestration(
         skillName: string,
-        byokConfig: NormalizedByokConfig | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<SkillFetcherRuntime> {
         const startedAt = Date.now();
@@ -305,7 +304,7 @@ export class GenericSkillRunnerService {
                             await this.observabilityService.runAiSdkLLMInSpan({
                                 spanName: `SkillFetcher::${skillName}`,
                                 runName: `kodus-${skillName}-fetcher`,
-                                model: byokConfig?.main?.model,
+                                model: byokConfig?.model,
                                 attrs: {
                                     type: 'agent',
                                     organizationId:
@@ -322,22 +321,11 @@ export class GenericSkillRunnerService {
                                         tools: toolRegistry,
                                         maxSteps:
                                             executionPolicy.fetcherMaxIterations,
-                                        providerOptions: buildProviderOptions(
-                                            `kodus-${skillName}-fetcher`,
-                                            undefined,
-                                            {
-                                                // Effort tier from the org's
-                                                // BYOK config; 'low' fallback.
-                                                reasoningEffort:
-                                                    byokConfig?.main
-                                                        ?.reasoningEffort ??
-                                                    'low',
-                                                byokProvider:
-                                                    byokConfig?.main?.provider,
-                                                modelName:
-                                                    byokConfig?.main?.model,
-                                            },
-                                        ),
+                                        // Model + tuning + reasoning are derived
+                                        // from byokConfig inside runMcpFetcherAgent
+                                        // (the shared resolveModelInvocation), so
+                                        // the caller no longer hand-builds
+                                        // providerOptions here.
                                         runId: ctx.runId,
                                         signal: ctx.signal,
                                         contextWindowTokens:
@@ -354,7 +342,7 @@ export class GenericSkillRunnerService {
                                                 organizationAndTeamData?.organizationId,
                                             teamId: organizationAndTeamData?.teamId,
                                             provider:
-                                                byokConfig?.main?.provider,
+                                                byokConfig?.provider,
                                         },
                                     }),
                             });

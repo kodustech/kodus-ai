@@ -40,7 +40,7 @@ import {
 import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
 import {
-    resolveAgentModel,
+    resolveReviewAgentModel,
     type AgentModelParams,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import {
@@ -196,7 +196,7 @@ export abstract class BaseCodeReviewAgentProvider {
 
         // Resolve BYOK config + model (org config → per-repo override → trial
         // default). Scoped locally to prevent cross-review races. → ModelFactory.
-        const { byokConfig, main: mainModel } = await resolveAgentModel(
+        const { byokConfig, main: mainModel } = await resolveReviewAgentModel(
             input,
             this.permissionValidationService,
         );
@@ -809,8 +809,8 @@ export abstract class BaseCodeReviewAgentProvider {
                 getClassification(error) ??
                 classifyLLMError(
                     error,
-                    typeof byokConfig?.main?.provider === 'string'
-                        ? byokConfig.main.provider
+                    typeof byokConfig?.provider === 'string'
+                        ? byokConfig.provider
                         : undefined,
                 );
             if (error instanceof Error) {

@@ -33,8 +33,9 @@ import openRouterReasoningFixture from '../openrouter/__fixtures__/reasoning.jso
 import bedrockPlainFixture from '../bedrock/__fixtures__/plain.json';
 import novitaPlainFixture from '../novita/__fixtures__/plain.json';
 import moonshotPlainFixture from '../moonshot/__fixtures__/plain.json';
+import azurePlainFixture from '../azure/__fixtures__/plain.json';
 
-/** The ten BYOKProvider ids the registry must fully cover (moonshot added). */
+/** The eleven BYOKProvider ids the registry must fully cover (azure added). */
 const ALL_IDS = [
     'openai',
     'openai_compatible',
@@ -46,6 +47,7 @@ const ALL_IDS = [
     'amazon_bedrock',
     'novita',
     'moonshot',
+    'azure',
 ];
 
 const EFFORTS: ReasoningEffort[] = ['none', 'low', 'medium', 'high'];
@@ -204,15 +206,15 @@ describe('01-02 ported modules — static conformance', () => {
     });
 });
 
-describe('registry covers all ten BYOKProvider ids', () => {
+describe('registry covers all eleven BYOKProvider ids', () => {
     it('every id resolves to a registered module', () => {
         for (const id of ALL_IDS) {
             expect(REGISTRY.has(id)).toBe(true);
             expect(REGISTRY.get(id)).toBeDefined();
         }
     });
-    it('registers exactly 8 distinct module objects for the 10 ids', () => {
-        expect(REGISTRY.all().length).toBe(8);
+    it('registers exactly 9 distinct module objects for the 11 ids', () => {
+        expect(REGISTRY.all().length).toBe(9);
         expect(new Set(REGISTRY.ids())).toEqual(new Set(ALL_IDS));
     });
 });
@@ -282,6 +284,16 @@ const CONFORMANCE_SAMPLES: Record<
         cfg: sampleConfig('moonshot', 'kimi-k2.7-code'),
         fixture: moonshotPlainFixture as ProviderFixture,
     },
+    azure: {
+        // model = deployment name; baseURL = resource endpoint (offline-safe:
+        // createAzure constructs without a network call).
+        cfg: sampleConfig(
+            'azure',
+            'gpt-4o',
+            'https://acme.openai.azure.com/openai',
+        ),
+        fixture: azurePlainFixture as ProviderFixture,
+    },
 };
 
 describe('registry-wide conformance sweep (D-05): no module regresses to the zero stub', () => {
@@ -293,8 +305,8 @@ describe('registry-wide conformance sweep (D-05): no module regresses to the zer
         }
     });
 
-    it('covers all 8 distinct registered modules', () => {
-        expect(modules.length).toBe(8);
+    it('covers all 9 distinct registered modules', () => {
+        expect(modules.length).toBe(9);
     });
 
     for (const module of modules) {

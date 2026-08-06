@@ -1,7 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import { PromptRole } from '@libs/llm/prompt-role';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
@@ -52,7 +52,7 @@ interface SafeguardPipelineParams {
     suggestions: any[];
     languageResultPrompt: string;
     reviewMode: ReviewModeResponse;
-    byokConfig: NormalizedByokConfig;
+    byokConfig: NormalizedModel;
     crossFileSnippets?: CrossFileContextSnippet[];
     remoteCommands?: RemoteCommands;
     memories?: Array<Partial<{ title?: string; rule?: string }>>;
@@ -487,7 +487,7 @@ export class SafeguardPipelineService {
             return {
                 suggestions: kept,
                 codeReviewModelUsed: {
-                    safeguard: byokConfig?.main?.provider || provider,
+                    safeguard: byokConfig?.provider || provider,
                 },
             };
         } catch (error) {
@@ -674,7 +674,7 @@ Evidence field in ${params.languageResultPrompt}.`;
         prNumber: number,
         memories?: Array<Partial<{ title?: string; rule?: string }>>,
         documentationContext?: DocumentationContextItem[],
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         verified: boolean;
         action: string;

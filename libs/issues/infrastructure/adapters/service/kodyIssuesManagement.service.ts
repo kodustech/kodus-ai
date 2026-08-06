@@ -1,4 +1,4 @@
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
 
 import { IKodyIssuesManagementService } from '@libs/code-review/domain/contracts/KodyIssuesManagement.contract';
@@ -177,7 +177,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         context: contextToGenerateIssues,
         filePath: string,
         newSuggestions: any[],
-        byokConfig: NormalizedByokConfig | null,
+        byokConfig: NormalizedModel | null,
     ): Promise<any> {
         const { organizationAndTeamData, repository, pullRequest } = context;
 
@@ -347,7 +347,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             'organizationAndTeamData' | 'repository' | 'pullRequest'
         >,
         files: any[],
-        byokConfig: NormalizedByokConfig | null,
+        byokConfig: NormalizedModel | null,
     ): Promise<void> {
         try {
             if (!files || files?.length === 0) {

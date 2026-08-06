@@ -7,7 +7,7 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 import { fileMatchesRulePath } from '@libs/common/utils/kody-rules/file-patterns';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { BaseCodeReviewAgentProvider } from '@libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
-import { resolveAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
+import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import {
@@ -161,7 +161,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         let shardsRun = 0;
         let shardsErrored = 0;
         if (semanticRules.length > 0) {
-            const { byokConfig, main } = await resolveAgentModel(
+            const { byokConfig, main } = await resolveReviewAgentModel(
                 input,
                 this.permissionValidationService,
             );

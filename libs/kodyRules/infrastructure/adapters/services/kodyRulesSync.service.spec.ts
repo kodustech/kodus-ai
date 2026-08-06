@@ -142,7 +142,7 @@ describe('KodyRulesSyncService FastBatch conversions — AI SDK migration parity
         const permissionValidationService = {
             // FastBatch parity test only exercises DTO mapping — the resolved
             // carrier is irrelevant, so null (env default) is fine.
-            resolveTaskCarrier: jest.fn().mockResolvedValue(null),
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
         };
         const observabilityService = {
             runAiSdkLLMInSpan: jest.fn(),

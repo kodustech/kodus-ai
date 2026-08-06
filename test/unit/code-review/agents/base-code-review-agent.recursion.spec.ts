@@ -121,11 +121,19 @@ import type { FileChange } from '@libs/core/infrastructure/config/types/general/
 
 class TestAgent extends BaseCodeReviewAgentProvider {
     constructor() {
-        // v2-native: resolveAgentModel reads getBYOKConfigV2Raw (null → env
-        // default). The base ctor dropped the leading promptRunnerService, so
-        // permissionValidationService is now the FIRST arg.
+        // Model resolution now goes through the task→model funnel
+        // (resolveReviewAgentModel → permissionService.resolveTaskModel). A null
+        // slot mirrors "no BYOK → env/managed default" (the old getBYOKConfigV2Raw
+        // null). The model itself is never invoked here — runAgentLoopViaCore is
+        // stubbed — so a placeholder model is fine. The base ctor takes the
+        // permissionValidationService as its FIRST arg.
         const permissionService: any = {
-            getBYOKConfigV2Raw: jest.fn().mockResolvedValue(null),
+            resolveTaskModel: jest.fn().mockResolvedValue({
+                model: {} as any,
+                modelName: 'env-default',
+                slot: null,
+                verdict: null,
+            }),
         };
         super(permissionService, null as any, null as any);
     }

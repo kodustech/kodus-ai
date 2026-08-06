@@ -11,7 +11,7 @@
  * declared so the Auto router lands without an interface change, but NOT populated
  * in v1 (RFC §4.2; router telemetry is Phase 5).
  *
- * Lives in libs/llm next to `getBYOKConfig`/`normalizeByokConfig` — routing is a
+ * Lives in libs/llm next to `getBYOKConfig`/`resolveModelSlot` — routing is a
  * resolver-layer concern, never smeared across pipeline stages.
  */
 import type { BYOKConfig, LlmTask } from './byok-config';
@@ -21,13 +21,9 @@ import type { BYOKConfig, LlmTask } from './byok-config';
  *  - `override`: a folder/repo model override (top of the precedence chain). Its
  *    `modelId` may be a v2 `models[]` id OR a legacy model NAME — see the
  *    id-THEN-name contract in StaticTaskStrategy (REQ-COMPAT-01 read window).
- *  - `parentTask`/`parentModelId`: an internal helper call under BYOK inherits
- *    the parent task's already-resolved model instead of re-resolving.
  */
 export interface RequestContext {
     override?: { modelId?: string };
-    parentTask?: LlmTask;
-    parentModelId?: string;
 }
 
 /**

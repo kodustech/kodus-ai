@@ -46,7 +46,7 @@ import { PermissionValidationService } from '@libs/ee/shared/services/permission
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
-import { resolveTaskCarrier } from '@libs/llm/resolve-task-model';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { hasNonManagedCredential, LLM_TASK } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import { tracedGenerateText } from '@libs/llm/llm-call';
@@ -2104,7 +2104,7 @@ export class KodyRulesSyncService {
         ]);
         // native carrier for the codeReview task (runStructuredReviewCall +
         // the raw-JSON fallback build); non-v2/managed/BLOCKED → env default.
-        const byokConfigValue = resolveTaskCarrier(rawV2, LLM_TASK.codeReview);
+        const byokConfigValue = resolveTaskSlot(rawV2, LLM_TASK.codeReview).slot;
 
         const effectiveDefaultStatus =
             options?.defaultStatus ??
@@ -2353,7 +2353,7 @@ export class KodyRulesSyncService {
                 // main model as the structured call above, plain-text output so a
                 // schema mismatch that broke Output.object still yields something
                 // extractJsonArray can salvage.
-                const mainSlot = byokConfigValue?.main;
+                const mainSlot = byokConfigValue;
                 const rawModel = wrapByokModel(
                     buildModelFromSlot(mainSlot, {}),
                     {
@@ -2434,7 +2434,7 @@ export class KodyRulesSyncService {
         // native carrier for the codeReview task; non-v2/managed/BLOCKED →
         // env default.
         const byokConfigValue =
-            await this.permissionValidationService.resolveTaskCarrier(
+            await this.permissionValidationService.resolveTaskSlot(
                 params.organizationAndTeamData,
                 LLM_TASK.codeReview,
             );
@@ -2491,7 +2491,7 @@ export class KodyRulesSyncService {
         } catch {
             const fbRun = `${mainRun}Raw`;
             try {
-                const mainSlot = byokConfigValue?.main;
+                const mainSlot = byokConfigValue;
                 const rawModel = wrapByokModel(
                     buildModelFromSlot(mainSlot, {}),
                     {
@@ -2563,7 +2563,7 @@ export class KodyRulesSyncService {
         // native carrier for the codeReview task; non-v2/managed/BLOCKED →
         // env default.
         const byokConfigValue =
-            await this.permissionValidationService.resolveTaskCarrier(
+            await this.permissionValidationService.resolveTaskSlot(
                 params.organizationAndTeamData,
                 LLM_TASK.codeReview,
             );
@@ -2615,7 +2615,7 @@ export class KodyRulesSyncService {
         } catch {
             const fbRun = `${mainRun}Raw`;
             try {
-                const mainSlot = byokConfigValue?.main;
+                const mainSlot = byokConfigValue;
                 const rawModel = wrapByokModel(
                     buildModelFromSlot(mainSlot, {}),
                     {
@@ -2809,7 +2809,7 @@ export class KodyRulesSyncService {
 
         // native carrier for the reference-detection chain (codeReview task).
         const [byokConfig, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.resolveTaskCarrier(
+            this.permissionValidationService.resolveTaskSlot(
                 detectionOrgData,
                 LLM_TASK.codeReview,
             ),

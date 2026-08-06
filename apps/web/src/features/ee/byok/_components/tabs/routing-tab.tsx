@@ -129,6 +129,36 @@ export const RoutingTab = ({
         );
     }
 
+    // Single-model degeneracy: default, fallback and all three per-agent rows can
+    // only resolve to the one model, so the whole grid is redundant (this is the
+    // "default == override" confusion). Routing needs ≥2 models to mean anything.
+    if (pool.length === 1) {
+        const only = pool[0];
+        return (
+            <Card color="lv1">
+                <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
+                    <p className="text-text-secondary text-sm text-balance">
+                        Every agent uses{" "}
+                        <strong className="text-text-primary">
+                            {only.label}
+                        </strong>{" "}
+                        — your only connected model.
+                    </p>
+                    <p className="text-text-tertiary text-xs text-balance">
+                        Connect a second model to route agents (Code Review, PR
+                        Summary, Chat) to different models.
+                    </p>
+                    <Button
+                        variant="primary"
+                        size="md"
+                        onClick={onGoToProviders}>
+                        Connect another model
+                    </Button>
+                </CardContent>
+            </Card>
+        );
+    }
+
     const nextRouting = (): BYOKRouting => ({
         mode: "manual",
         defaultModelId: defaultModelId || undefined,

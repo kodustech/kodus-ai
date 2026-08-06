@@ -47,7 +47,7 @@ import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/
 import { withStructuredOutputFallback } from '@libs/llm/byok-to-vercel';
 import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 
@@ -336,16 +336,14 @@ export async function extractFindingsWithRecovery(
 
 export async function recoverFindingsFromProse(
     prose: string,
-    byokConfig: NormalizedByokConfig | undefined,
+    byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
         const suggestions = await withStructuredOutputFallback(
             {
-                // Read the carrier's resolved main slot at this boundary; the
-                // helper is native and never reads `.main`/`.fallback`.
-                slot: byokConfig?.main,
+                slot: byokConfig,
                 organizationId,
                 label: 'finder-prose-recovery',
             },
@@ -811,7 +809,7 @@ export async function runRecallPasses(
         // between them) → run them CONCURRENTLY. Cuts heavy latency from
         // base+synthesis+N×finder to base+synthesis+~1×finder. Cost note: the
         // base run has already WRITTEN the Anthropic prompt cache (system prompt
-        // via anthropicSystemCacheControl), so the parallel re-runs both get
+        // via systemCacheControl), so the parallel re-runs both get
         // cache READS on the static prefix — the marginal cost of a re-run is
         // well under a full run's input price.
         await Promise.all(

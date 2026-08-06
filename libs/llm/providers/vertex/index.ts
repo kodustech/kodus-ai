@@ -10,6 +10,10 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { vertexModelFromSaJson } from '@libs/llm/model-builders';
 import { registerProvider } from '../kernel/registry';
+import {
+    anthropicEphemeralCacheHint,
+    isAnthropicModel,
+} from '../kernel/anthropic-cache';
 import { vertexModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -50,6 +54,15 @@ export const vertexModule: ProviderModule = {
             streaming: true,
             promptCaching: true,
         };
+    },
+
+    // Claude-on-Vertex (`@ai-sdk/google-vertex/anthropic`) honors the same inline
+    // `anthropic.cacheControl` marker as native Anthropic; Gemini-on-Vertex caches
+    // IMPLICITLY (no marker), so only Claude ids get the hint.
+    systemCacheControl(cfg: ProviderBuildConfig): Record<string, unknown> | undefined {
+        return isAnthropicModel(cfg.model)
+            ? anthropicEphemeralCacheHint()
+            : undefined;
     },
 
     build(cfg: ProviderBuildConfig): LanguageModel {

@@ -4,7 +4,7 @@ import { createLogger } from '@libs/core/log/logger';
  * © Kodus Tech. All rights reserved.
  */
 
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
@@ -42,7 +42,7 @@ export class FileReviewContextPreparation extends BaseFileReviewContextPreparati
      */
     protected async determineReviewMode(
         options?: ReviewModeOptions,
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<ReviewModeResponse> {
         return ReviewModeResponse.HEAVY_MODE;
     }
@@ -80,7 +80,7 @@ export class FileReviewContextPreparation extends BaseFileReviewContextPreparati
 
     private async getReviewMode(
         options: ReviewModeOptions,
-        byokConfig: NormalizedByokConfig,
+        byokConfig: NormalizedModel,
     ): Promise<ReviewModeResponse> {
         return ReviewModeResponse.HEAVY_MODE;
     }

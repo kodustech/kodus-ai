@@ -7,10 +7,12 @@
  *
  * Lives in @libs/llm (infra), not the harness — the engine stays model-agnostic.
  */
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import type { LanguageModel } from 'ai';
 
-import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
+import {
+    buildModelFromSlot,
+    type ByokModelOptions,
+} from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 
@@ -18,6 +20,10 @@ export interface ResolveAgentModelOptions {
     organizationId?: string;
     provider?: string;
     queueTimeoutMs?: number;
+    /** Model-build options forwarded to `buildModelFromSlot` — notably
+     *  `structuredOutputs` for the structured-output (generateObject) path.
+     *  Omit for the plain agentic loop. */
+    modelOptions?: ByokModelOptions;
     /** Wire to `ByokErrorCounter.record` so BYOK failures drive the
      *  `byok.llm_errors_threshold` notification — parity with code-review. */
     reporter?: (input: {
@@ -31,11 +37,9 @@ export function resolveAgentModel(
     slot: NormalizedModel | undefined,
     opts: ResolveAgentModelOptions = {},
 ): LanguageModel {
-    // Build the model from the ONE resolved slot. The limiter still keys off a
-    // `{main}` carrier, so reconstruct it here at the wrapper boundary — the
-    // builder itself never reads `.main`/`.fallback`.
-    return wrapByokModel(buildModelFromSlot(slot), {
-        byokConfig: slot ? ({ main: slot } as NormalizedByokConfig) : undefined,
+    // Build the model from the ONE resolved slot; the limiter keys off that slot.
+    return wrapByokModel(buildModelFromSlot(slot, opts.modelOptions), {
+        byokConfig: slot,
         organizationId: opts.organizationId,
         provider: opts.provider ?? slot?.provider,
         ...(opts.queueTimeoutMs != null

@@ -9,6 +9,10 @@ import type { LanguageModel } from 'ai';
 import { z } from 'zod';
 import { bedrockModelFromCredentials } from '@libs/llm/model-builders';
 import { registerProvider } from '../kernel/registry';
+import {
+    anthropicEphemeralCacheHint,
+    isAnthropicModel,
+} from '../kernel/anthropic-cache';
 import { bedrockModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -30,7 +34,7 @@ export const bedrockModule: ProviderModule = {
         awsSessionToken: z.string().optional(),
     }),
 
-    capabilities(_model: string): ModelCapabilities {
+    capabilities(model: string): ModelCapabilities {
         // Bedrock hosts many families; reasoning support is model-specific and
         // not advertised generically at this tier. Refined in 01-04.
         return {
@@ -40,7 +44,9 @@ export const bedrockModule: ProviderModule = {
             toolCalling: 'native',
             usageGranularity: 'output_only',
             streaming: true,
-            promptCaching: false,
+            // Only the Anthropic-family deployments accept inline cache markers;
+            // Nova/Llama/etc. on Bedrock don't (matches systemCacheControl below).
+            promptCaching: isAnthropicModel(model),
         };
     },
 
@@ -50,6 +56,16 @@ export const bedrockModule: ProviderModule = {
     },
 
     // No reasoning() — Bedrock has no native thinking mapping here (default: off).
+
+    // Claude-on-Bedrock honors the SAME `anthropic.cacheControl` marker as native
+    // Anthropic (per the AI SDK Bedrock docs). Non-Anthropic Bedrock models cache
+    // implicitly / not at all, so they get no inline hint. 5-minute ephemeral only
+    // (the 1h TTL is gated to specific Claude 4.5 deployments — not assumed here).
+    systemCacheControl(cfg: ProviderBuildConfig): Record<string, unknown> | undefined {
+        return isAnthropicModel(cfg.model)
+            ? anthropicEphemeralCacheHint()
+            : undefined;
+    },
 
     // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
     // @ai-sdk/amazon-bedrock maps Bedrock's usage onto the high-level ai@7

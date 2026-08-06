@@ -41,4 +41,20 @@ describe('GetByokProvidersUseCase', () => {
         expect(anthropic).toBeDefined();
         expect(anthropic?.aliases).toContain('anthropic_compatible');
     });
+
+    it('flags autoListModels per the module listing (drives the picker subtitle)', async () => {
+        const { providers } = await useCase.execute();
+        const by = (id: string) => providers.find((p) => p.id === id);
+
+        // http listing with a resolvable base URL (default) → listable.
+        expect(by('moonshot')?.autoListModels).toBe(true);
+        // static catalog → listable without a live call.
+        expect(by('amazon_bedrock')?.autoListModels).toBe(true);
+        // curated http provider → listable.
+        expect(by('openai')?.autoListModels).toBe(true);
+        // every descriptor carries the boolean flag.
+        for (const p of providers) {
+            expect(typeof p.autoListModels).toBe('boolean');
+        }
+    });
 });

@@ -215,6 +215,9 @@ export type ByokProviderDescriptor = {
     id: string;
     label: string;
     aliases: string[];
+    /** Whether the provider's models can be enumerated (vs. custom-endpoint /
+     *  manual). Drives the picker subtitle. */
+    autoListModels: boolean;
 };
 
 /**

@@ -144,12 +144,15 @@ export function DeleteRejectionAlert({
             </AlertTitle>
             <AlertDescription>
                 <p className="mb-2 text-sm">
-                    Remove these references first, then try again:
+                    It's still in use here — reassign or reset these first, then
+                    try again:
                 </p>
-                <ul className="space-y-0.5">
+                <ul className="list-disc space-y-0.5 pl-4">
                     {shown.map((reason, i) => (
-                        <li key={`${reason}-${i}`} className="text-xs">
-                            <code>{reason}</code>
+                        <li
+                            key={`${reason}-${i}`}
+                            className="text-text-secondary text-xs">
+                            {reason}
                         </li>
                     ))}
                     {remainder > 0 && (

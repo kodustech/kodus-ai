@@ -24,7 +24,7 @@ import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface
 
 import type { LanguageModel } from 'ai';
 import { BYOKProvider } from '@libs/llm/model-providers';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 
@@ -159,7 +159,7 @@ export interface ModelConfig {
     /**
      * When the caller has no BYOK config (e.g. the public-demo / trial
      * flow with `organizationId='trial'`), this overrides the hardcoded
-     * gemini-3.1-pro default that `byokToVercelModel` falls back to.
+     * gemini-3.1-pro default that `buildModelFromSlot` falls back to.
      * Used by the trial pipeline to force a cheaper, faster model
      * (`gemini-2.5-flash`) so anonymous reviews don't take 5 minutes.
      */
@@ -391,7 +391,7 @@ export interface AgentLoopSecrets {
      * is no sandbox available.
      */
     remoteCommands: RemoteCommands | undefined;
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;

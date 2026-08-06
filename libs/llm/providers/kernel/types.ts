@@ -17,7 +17,7 @@ import type {
     ModelCapabilities as BaseModelCapabilities,
     ReasoningConfig,
 } from '@libs/llm/providers/kernel/model-types';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 /**
  * Provider capability descriptor. Extends the reasoning-only base
@@ -44,7 +44,7 @@ export interface ModelCapabilities extends BaseModelCapabilities {
  * already DECRYPTED by the caller (byok-to-vercel decrypts before dispatch), so
  * modules never import crypto. `main` is a superset of `fallback`.
  */
-export type ProviderBuildConfig = NormalizedByokConfig['main'];
+export type ProviderBuildConfig = NormalizedModel;
 
 /** Mirrors byok-to-vercel's `ByokModelOptions` — per-call structured-output opt-in. */
 export interface ProviderBuildOptions {
@@ -167,6 +167,16 @@ export interface ProviderModule {
         cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions;
+    /** Optional system-prompt cache hint: the `providerOptions` to attach to the
+     *  system message so a multi-step loop reads the (static) system prompt from
+     *  cache instead of re-billing it. Provider-specific SHAPE lives here (only the
+     *  module knows its protocol), sibling to `reasoning()` — e.g. Anthropic emits
+     *  `{ anthropic: { cacheControl: { type: 'ephemeral' } } }`. Undefined/absent =
+     *  no inline hint (providers that cache implicitly, like OpenAI, don't need one).
+     *  Gated upstream by `capabilities().promptCaching`. */
+    systemCacheControl?(
+        cfg: ProviderBuildConfig,
+    ): Record<string, unknown> | undefined;
     /** UI fields for the BYOK settings screen. */
     uiFields: FieldDescriptor[];
     /** How to enumerate this provider's models, per requested id (a module may

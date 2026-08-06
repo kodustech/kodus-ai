@@ -1,5 +1,8 @@
 import { createLogger } from '@libs/core/log/logger';
-import { LLMModelProvider, MODEL_STRATEGIES } from '@libs/llm/model-providers';
+import {
+    LLMModelProvider,
+    MODEL_INPUT_MAX_TOKENS,
+} from '@libs/llm/model-providers';
 import { Injectable } from '@nestjs/common';
 import { encoding_for_model, TiktokenModel } from 'tiktoken';
 
@@ -238,17 +241,11 @@ export class TokenChunkingService {
             return inputMaxTokens;
         }
 
-        const strategy = MODEL_STRATEGIES[model as LLMModelProvider];
-        if (!strategy) {
-            return inputMaxTokens;
-        }
-
-        // If defaultMaxTokens is -1, it means no specific limit, use default
-        if (strategy.inputMaxTokens === -1) {
-            return inputMaxTokens;
-        }
-
-        return strategy.inputMaxTokens;
+        // Only a handful of managed models pin a window that differs from the
+        // caller default; everything else (incl. every BYOK model) uses it.
+        return (
+            MODEL_INPUT_MAX_TOKENS[model as LLMModelProvider] ?? inputMaxTokens
+        );
     }
 
     /**
@@ -364,7 +361,10 @@ export class TokenChunkingService {
      * Gets the OpenAI model name for tiktoken
      */
     private getOpenAIModelName(model: LLMModelProvider | string): string {
-        const strategy = MODEL_STRATEGIES[model as LLMModelProvider];
-        return strategy?.modelName || 'gpt-4o';
+        // The OpenAI enum values are `openai:<tiktoken-name>` (e.g.
+        // `openai:gpt-4o`), so the tiktoken model name is just the id's tail —
+        // no lookup table needed. Only reached for isOpenAIModel() members,
+        // which always carry the `openai:` prefix.
+        return String(model).split(':').pop() || 'gpt-4o';
     }
 }

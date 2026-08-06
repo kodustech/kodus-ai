@@ -10,7 +10,7 @@ import {
     type BYOKConfig,
     type BYOKCredential,
 } from '@libs/llm/byok-config';
-import { normalizeByokConfig } from '@libs/llm/normalize-byok-config';
+import { resolveDefaultSlot } from '@libs/llm/resolve-model-slot';
 // Barrel import (side-effect self-registers every provider module), so
 // REGISTRY.get(providerId).capabilities(model) resolves for all BYOKProvider ids.
 import { REGISTRY } from '@libs/llm/providers';
@@ -95,13 +95,12 @@ export class GetLLMConfigStatusUseCase implements IUseCase {
 
         const configValue = parameter?.configValue;
 
-        // v2-only (04b-06 — the legacy {main,fallback} read is GONE): derive the
-        // effective "main" slot via normalizeByokConfig, which resolves
-        // routing.defaultModelId → model → credential and yields absent `main` for
-        // a managed / non-v2 / empty config (so it falls to env/none).
-        const byokMain: Partial<BYOKSlot> | undefined = normalizeByokConfig(
-            configValue,
-        ).main as Partial<BYOKSlot> | undefined;
+        // Derive the effective default slot via resolveDefaultSlot, which
+        // resolves routing.defaultModelId → model → credential and yields null
+        // for a managed / non-v2 / empty config (so it falls to env/none).
+        const byokMain: Partial<BYOKSlot> | undefined =
+            (resolveDefaultSlot(configValue) as Partial<BYOKSlot> | null) ??
+            undefined;
 
         // Provider-aware: most providers gate on `apiKey`, but Amazon
         // Bedrock authenticates with `awsBearerToken` / IAM credentials

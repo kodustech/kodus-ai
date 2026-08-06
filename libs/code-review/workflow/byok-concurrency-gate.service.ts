@@ -4,7 +4,7 @@ import { createHash } from 'crypto';
 
 import { isByokConfig } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { resolveModelSlot } from '@libs/llm/normalize-byok-config';
+import { resolveModelSlot } from '@libs/llm/resolve-model-slot';
 import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';

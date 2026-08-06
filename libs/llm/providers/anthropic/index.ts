@@ -9,6 +9,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
 import { registerProvider } from '../kernel/registry';
+import { anthropicEphemeralCacheHint } from '../kernel/anthropic-cache';
 import { anthropicModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -104,6 +105,14 @@ export const anthropicModule: ProviderModule = {
                 thinking: { type: 'enabled', budgetTokens: EFFORT_TO_BUDGET[effort] },
             },
         };
+    },
+
+    // The anthropic protocol (native AND anthropic_compatible endpoints) accepts
+    // an ephemeral cacheControl on the system message → the long static system
+    // prompt is written to cache once and read on every subsequent loop step. A
+    // compatible upstream that doesn't honor it ignores the namespace (no-op).
+    systemCacheControl(): Record<string, unknown> {
+        return anthropicEphemeralCacheHint();
     },
 
     // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────

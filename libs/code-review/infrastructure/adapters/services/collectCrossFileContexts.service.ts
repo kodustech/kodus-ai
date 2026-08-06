@@ -1,6 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -84,7 +84,7 @@ export type CollectCrossFileContextsResult = {
 interface CollectContextsParams {
     remoteCommands: RemoteCommands;
     changedFiles: FileChange[];
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     organizationAndTeamData: OrganizationAndTeamData;
     prNumber: number;
     language: string;
@@ -294,7 +294,7 @@ export class CollectCrossFileContextsService {
     //#region Planner
     private async runPlanner(
         changedFiles: FileChange[],
-        byokConfig: NormalizedByokConfig | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         language: string,
@@ -313,12 +313,12 @@ export class CollectCrossFileContextsService {
             const changedFilenames = changedFiles.map((f) => f.filename);
 
             // Determine effective model for token counting
-            const effectiveModel = byokConfig?.main?.model
-                ? byokConfig.main.model
+            const effectiveModel = byokConfig?.model
+                ? byokConfig.model
                 : LLMModelProvider.CEREBRAS_GPT_OSS_120B;
 
             // Chunk diff items by token limits
-            const byokMaxInputTokens = byokConfig?.main?.maxInputTokens;
+            const byokMaxInputTokens = byokConfig?.maxInputTokens;
 
             const chunkingResult = this.tokenChunkingService.chunkDataByTokens({
                 model: effectiveModel,
@@ -406,7 +406,7 @@ export class CollectCrossFileContextsService {
         diffSummary: string,
         changedFilenames: string[],
         language: string,
-        byokConfig: NormalizedByokConfig | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
     ): Promise<CrossFileContextPlannerSchemaType['queries']> {
@@ -933,7 +933,7 @@ export class CollectCrossFileContextsService {
         remoteCommands: RemoteCommands;
         changedFilePaths: Set<string>;
         repoRoot: string;
-        byokConfig?: NormalizedByokConfig;
+        byokConfig?: NormalizedModel;
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         language: string;
@@ -960,7 +960,7 @@ export class CollectCrossFileContextsService {
         remoteCommands: RemoteCommands;
         changedFilePaths: Set<string>;
         repoRoot: string;
-        byokConfig?: NormalizedByokConfig;
+        byokConfig?: NormalizedModel;
         organizationAndTeamData: OrganizationAndTeamData;
         prNumber: number;
         language: string;
@@ -1103,7 +1103,7 @@ export class CollectCrossFileContextsService {
         currentContexts: CrossFileContextSnippet[],
         queryResultMap: Map<string, boolean>,
         language: string,
-        byokConfig: NormalizedByokConfig | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
     ): Promise<CrossFileContextSufficiencySchemaType | null> {

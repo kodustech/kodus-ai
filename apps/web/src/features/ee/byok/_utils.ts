@@ -199,6 +199,7 @@ export const PROVIDER_AVATAR: Record<string, string> = {
     moonshot: "bg-purple-500/15 text-purple-300",
     google_gemini: "bg-violet-500/15 text-violet-300",
     google_vertex: "bg-violet-500/15 text-violet-300",
+    azure: "bg-sky-500/15 text-sky-300",
 };
 
 /** Avatar tint for a provider, falling back to a neutral card tint. */

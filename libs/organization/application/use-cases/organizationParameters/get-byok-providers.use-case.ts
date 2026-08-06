@@ -3,6 +3,7 @@ import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 // REGISTRY.all() enumerates the full BYOKProvider set. This is the single
 // source of truth for the connectable-provider LIST the web picker renders.
 import { REGISTRY } from '@libs/llm/providers';
+import { describeProviderId } from '@libs/llm/providers/provider-ui-descriptor';
 import { Injectable } from '@nestjs/common';
 
 /**
@@ -15,6 +16,10 @@ export interface ByokProviderDescriptor {
     id: string;
     label: string;
     aliases: string[];
+    /** Whether this provider's models can be enumerated (static catalog, or an
+     *  HTTP listing with a resolvable base URL) vs. typed by hand. Lets the
+     *  picker show an honest subtitle instead of a blanket "Manual setup". */
+    autoListModels: boolean;
 }
 
 export interface ByokProvidersResult {
@@ -38,6 +43,9 @@ export class GetByokProvidersUseCase implements IUseCase {
                 id: m.id,
                 label: m.label,
                 aliases: m.aliases ?? [],
+                // Shared derivation (same source the connect form uses), keyed on
+                // the canonical id; aliases are custom endpoints (handled web-side).
+                autoListModels: describeProviderId(m, m.id).autoListModels,
             })),
         };
     }

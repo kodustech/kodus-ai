@@ -21,14 +21,13 @@ import type { LanguageModel } from 'ai';
 
 import {
     isByokConfig,
-    type NormalizedByokConfig,
     type BYOKConfig,
     type LlmTask,
     type NormalizedModel,
 } from './byok-config';
 import type { RequestContext, RoutingVerdict } from './routing-strategy';
 import { StaticTaskStrategy } from './static-task-strategy';
-import { resolveModelSlot } from './normalize-byok-config';
+import { resolveModelSlot } from './resolve-model-slot';
 import { buildModelFromSlot, getModelName } from './byok-to-vercel';
 
 // Manual routing policy (Phase 4). Stateless + dependency-free — instantiated once.
@@ -115,23 +114,4 @@ export function resolveTaskModel(
         : getModelName(undefined, options.defaultModelOverride);
 
     return { model, modelName, slot, verdict };
-}
-
-/**
- * Resolve `task` to the legacy `{ main }` carrier that most downstream consumers
- * (runStructuredReviewCall, the agent runners, telemetry, …) still take.
- *
- * This is the same decision as `resolveTaskSlot`, wrapped: a resolved slot →
- * `{ main: slot }`, no slot → `undefined` (caller degrades to the env/managed
- * default). It exists so consumers stop hand-wrapping the slot at the call site;
- * once the `NormalizedByokConfig` carrier is retired in favour of the bare slot, this
- * helper (and the `{ main }` shape) go away.
- */
-export function resolveTaskCarrier(
-    config: BYOKConfig | null | undefined,
-    task: LlmTask,
-    options: { ctx?: RequestContext } = {},
-): NormalizedByokConfig | undefined {
-    const slot = resolveTaskSlot(config, task, { ctx: options.ctx }).slot;
-    return slot ? { main: slot } : undefined;
 }

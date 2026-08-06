@@ -704,7 +704,7 @@ export class CreateOrUpdateKodyRulesUseCase {
 
                     // native carrier for the reference-detection chain.
                     const [byokConfig, subscriptionStatus] = await Promise.all([
-                        this.permissionValidationService.resolveTaskCarrier(
+                        this.permissionValidationService.resolveTaskSlot(
                             detectionOrgData,
                             LLM_TASK.codeReview,
                         ),

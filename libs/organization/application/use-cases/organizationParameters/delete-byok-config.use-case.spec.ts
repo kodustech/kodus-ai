@@ -98,9 +98,9 @@ describe('DeleteByokConfigUseCase — v2 referential-integrity guard (REQ-DELETE
             await useCase.execute(ORG, { modelId: 'm1' });
         } catch (err) {
             const msg = (err as BadRequestException).message;
-            expect(msg).toContain('routing.defaultModelId');
-            expect(msg).toContain('routing.fallbackModelId');
-            expect(msg).toContain('routing.taskOverrides.codeReview');
+            expect(msg).toContain('your organization default model');
+            expect(msg).toContain('your fallback model');
+            expect(msg).toContain('the Code Review model');
             expect(msg).toContain('cannot be deleted');
         }
         expect(deleteByokModel).not.toHaveBeenCalled();

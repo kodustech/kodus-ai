@@ -8,8 +8,6 @@
  */
 import { wrapLanguageModel, type LanguageModel } from 'ai';
 
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
-
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     runWithBYOKLimiter,
@@ -63,11 +61,11 @@ function extractUsageTotal(result: unknown): number | undefined {
 }
 
 export interface WrapByokModelOptions {
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     organizationId?: string;
     provider?: string;
     /** @deprecated No-op since 04b-02 — the limiter keys off the single resolved
-     *  slot (`byokConfig.main`), not a `main`/`fallback`/`internal` role. Kept on
+     *  slot, not a `main`/`fallback`/`internal` role. Kept on
      *  the type so existing callers passing `role: 'main'` still compile; remove
      *  in a later cleanup wave. */
     role?: 'main' | 'fallback' | 'internal';
@@ -109,9 +107,7 @@ export function wrapByokModel(
                             // admission; the reporter and rethrow below are
                             // untouched. Reuses the classify already computed in
                             // this catch — no re-classification.
-                            const cooldownSlot = opts.byokConfig?.main as
-                                | NormalizedModel
-                                | undefined;
+                            const cooldownSlot = opts.byokConfig;
                             const cooldownMs = cooldownSlot?.cooldownMs;
                             if (
                                 classified.category ===
@@ -142,11 +138,8 @@ export function wrapByokModel(
                 };
 
                 // The limiter keys off the ONE resolved slot the org configured
-                // for this task — the carrier `.main` read happens here at the
-                // wrapper boundary, not inside the limiter core.
-                const slot = opts.byokConfig?.main as
-                    | NormalizedModel
-                    | undefined;
+                // for this task.
+                const slot = opts.byokConfig;
 
                 // tpm reservoir (hybrid): this wrapper is the ONE seam with BOTH
                 // the pre-call prompt AND the post-call usage. Estimate the

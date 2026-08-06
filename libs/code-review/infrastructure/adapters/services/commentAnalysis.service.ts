@@ -1,5 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Output } from 'ai';
 import z from 'zod';
 import filteredLibraryKodyRules from '@libs/code-review/infrastructure/data/filtered-rules.json';
@@ -60,7 +60,7 @@ import {
  * resolves the self-hosted env model. Produced by `resolveKodyRulesModelPolicy`.
  */
 export interface KodyRulesModelSelection {
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     modelOverride?: string;
 }
 
@@ -74,7 +74,7 @@ export class CommentAnalysisService {
 
     /**
      * Runs a structured-output LLM call, resolving the model the SAME way the
-     * code-review agents do (see `resolveAgentModel` / model-factory):
+     * code-review agents do (see `resolveReviewAgentModel` / model-factory):
      * `resolveTaskModel(v2Config, LLM_TASK.codeReview, …)` over the org's raw config
      * — BYOK wins; self-hosted resolves the env model; cloud trial forces Kimi
      * via `modelOverride` (the default-model override); cloud without BYOK is
@@ -113,7 +113,7 @@ export class CommentAnalysisService {
                 { defaultModelOverride: modelConfig.modelOverride },
             );
         const model = wrapByokModel(resolved.model, {
-            byokConfig: resolved.slot ? { main: resolved.slot } : undefined,
+            byokConfig: resolved.slot ?? undefined,
             organizationId: organizationAndTeamData.organizationId,
             role: 'main',
         });

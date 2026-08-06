@@ -171,7 +171,7 @@ export class CrossFileAnalysisService {
         crossFileContexts?: CrossFileContextForPrompt[],
     ): Promise<CodeSuggestion[]> {
         const byokMaxInputTokens =
-            context?.codeReviewConfig?.byokConfig?.main?.maxInputTokens;
+            context?.codeReviewConfig?.byokConfig?.maxInputTokens;
 
         const chunkingResult = this.tokenChunkingService.chunkDataByTokens({
             model: provider,
@@ -200,7 +200,7 @@ export class CrossFileAnalysisService {
         const batchConfig = { ...this.DEFAULT_BATCH_CONFIG };
 
         const byokMaxConcurrent =
-            context?.codeReviewConfig?.byokConfig?.main?.maxConcurrentRequests;
+            context?.codeReviewConfig?.byokConfig?.maxConcurrentRequests;
         if (byokMaxConcurrent && byokMaxConcurrent > 0) {
             batchConfig.maxConcurrentChunks = Math.min(
                 batchConfig.maxConcurrentChunks,

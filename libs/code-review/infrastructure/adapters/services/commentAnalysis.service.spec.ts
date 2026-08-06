@@ -5,7 +5,7 @@
  * Proves the code-review comment-analysis consumer resolves its structured-LLM
  * model through the per-task entry point owned by the permission service
  * (`permissionService.resolveTaskModel(org, 'codeReview', …)`, matching
- * model-factory) instead of `byokToVercelModel(byokConfig, 'main', …)`:
+ * model-factory) instead of `buildModelFromSlot(byokConfig, 'main', …)`:
  *  - the org + task drive the resolution (no separate raw-config fetch);
  *  - `modelConfig.modelOverride` flows through as the default-model override
  *    (trial forces Kimi; off-BYOK still yields a model);
@@ -18,7 +18,7 @@
  * seam (NOT MockLanguageModelV4 over Output.object, which hangs).
  */
 
-// resolveAgentModel/commentAnalysis now call permissionService.resolveTaskModel;
+// resolveReviewAgentModel/commentAnalysis now call permissionService.resolveTaskModel;
 // this mock IS that method (wired into the permission-service stub below).
 const resolveTaskModel = jest.fn();
 
@@ -76,7 +76,7 @@ describe('CommentAnalysisService — native model resolution', () => {
         );
     });
 
-    it('resolves the codeReview slot from the raw config (not byokToVercelModel)', async () => {
+    it('resolves the codeReview slot from the raw config (not buildModelFromSlot)', async () => {
         await service.categorizeComments({
             comments: [{ id: 1, body: 'a comment' } as any],
             organizationAndTeamData: org,
@@ -108,12 +108,14 @@ describe('CommentAnalysisService — native model resolution', () => {
             organizationAndTeamData: org,
         });
 
-        // wrapByokModel is handed the ciphertext slot, wrapped as { main: slot }.
+        // wrapByokModel is handed the bare ciphertext slot (no `{ main }` carrier).
         expect(wrapByokModel).toHaveBeenCalledWith(
             { __model: true },
             expect.objectContaining({
                 byokConfig: {
-                    main: { provider: 'openai', apiKey: 'enc-oa', model: 'gpt-4o' },
+                    provider: 'openai',
+                    apiKey: 'enc-oa',
+                    model: 'gpt-4o',
                 },
                 role: 'main',
             }),

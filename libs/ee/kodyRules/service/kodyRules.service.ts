@@ -1418,7 +1418,7 @@ export class KodyRulesService implements IKodyRulesService {
             // native: resolve the codeReview task to a carrier for
             // runStructuredReviewCall; non-v2/managed/BLOCKED → env default.
             const byokConfigValue =
-                await this.permissionValidationService.resolveTaskCarrier(
+                await this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 );
@@ -1938,7 +1938,7 @@ Analyze the suggestions and recommend the most relevant rules.`;
         // native: resolve the codeReview task to a carrier for
         // runStructuredReviewCall; non-v2/managed/BLOCKED → env default.
         const byokConfigValue =
-            await this.permissionValidationService.resolveTaskCarrier(
+            await this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
                 LLM_TASK.codeReview,
             );

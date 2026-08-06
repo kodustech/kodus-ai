@@ -3,7 +3,7 @@ export const DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN = Symbol.for(
 );
 
 import { createLogger } from '@libs/core/log/logger';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import {
@@ -35,7 +35,7 @@ export class DocumentationLLMPlannerService {
     async planDocumentationByFile(params: {
         packages: RepositoryPackageReference[];
         changedFiles: FileChange[];
-        byokConfig?: NormalizedByokConfig;
+        byokConfig?: NormalizedModel;
         organizationAndTeamData?: OrganizationAndTeamData;
     }): Promise<Record<string, DocumentationQueryPlanByFile>> {
         const { packages, changedFiles, byokConfig, organizationAndTeamData } =

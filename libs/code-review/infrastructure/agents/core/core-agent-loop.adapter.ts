@@ -24,11 +24,13 @@
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
+import { OverflowRecoveringRunner } from './overflow-recovering-runner';
 import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
-import { anthropicSystemCacheControl } from '@libs/llm/system-cache';
+import { systemCacheControl } from '@libs/llm/system-cache';
 import {
     buildFinderAgentSpec,
     runFinderWithVerify,
@@ -106,9 +108,14 @@ export async function runAgentLoopViaCore(
     // from the legacy `withAnthropicCacheControl`. Cached across the loop's many
     // steps + every verifier run, so Claude models don't re-pay the system
     // prompt's input tokens each step. No-op for non-Anthropic models.
-    const systemProviderOptions = anthropicSystemCacheControl(
-        input.model,
-    );
+    // Registry-driven (protocol-aware): the resolved slot's provider decides,
+    // not a model-name regex — so a Claude via a non-anthropic protocol doesn't
+    // wrongly get the anthropic hint. Falls back to the built model's id only for
+    // the managed/env path that has no slot.
+    const systemProviderOptions = systemCacheControl({
+        provider: secrets.byokConfig?.provider,
+        model: secrets.byokConfig?.model ?? input.model,
+    });
 
     // Recall-pass gating — ported from the legacy loop: skip the heavy passes in
     // fast mode, self-contained (no tools) trial flow, or when the caller asks.
@@ -173,6 +180,31 @@ export async function runAgentLoopViaCore(
             }),
         );
 
+    // Overflow net (issue #1574): if a mis-sized window lets any finder sub-run
+    // overflow mid-loop, re-run THAT pass once at a tighter window instead of
+    // failing the review. Wrapping the shared runner covers every pass (base +
+    // resamples + synthesis-rescue) at one seam. Only when a window is known —
+    // otherwise `tighten` can't scale anything, so we skip the wrapper entirely.
+    const tightenCompression = (spec: typeof finderSpec, scale: number) =>
+        contextWindowTokens
+            ? {
+                  ...spec,
+                  policies: spec.policies.map((p) =>
+                      p.name === 'compression'
+                          ? new CompressionPolicy(
+                                new ContextWindowCompressor(
+                                    Math.floor(contextWindowTokens * scale),
+                                    { overheadTokens },
+                                ),
+                            )
+                          : p,
+                  ),
+              }
+            : spec;
+    const finderRunner = contextWindowTokens
+        ? new OverflowRecoveringRunner(runner, tightenCompression)
+        : runner;
+
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
     // business so every agent has the same cancellation/timeout guarantee.
@@ -183,7 +215,7 @@ export async function runAgentLoopViaCore(
 
     const r = await runFinderWithVerify(
         {
-            runner,
+            runner: finderRunner,
             finderSpec,
             makeResampleSpec,
             modelId: specModelId,

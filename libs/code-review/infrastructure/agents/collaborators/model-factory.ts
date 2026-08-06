@@ -11,7 +11,7 @@
 import type { LanguageModel } from 'ai';
 
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
 
@@ -44,7 +44,7 @@ export interface AgentModelParams {
 }
 
 export interface ResolvedAgentModel {
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     main: AgentModelParams;
 }
 
@@ -62,7 +62,7 @@ export interface ResolvedAgentModel {
  * Routing by task (not a collapsed always-main carrier) is preserved inside the
  * resolver (RESEARCH Pitfall 1).
  */
-export async function resolveAgentModel(
+export async function resolveReviewAgentModel(
     input: ModelInput,
     permissionService: PermissionValidationService,
 ): Promise<ResolvedAgentModel> {
@@ -95,10 +95,10 @@ export async function resolveAgentModel(
         openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
     };
 
-    // 1 model per task: no fallback slot is resolved or returned.
-    const byokConfig = (slot ? { main: slot } : undefined) as
-        | NormalizedByokConfig
-        | undefined;
+    // 1 model per task: no fallback slot is resolved or returned. No BYOK →
+    // null slot → `undefined` byokConfig (the optional-field contract; callers
+    // gate on `!!byokConfig`), matching a missing config.
+    const byokConfig = slot ?? undefined;
 
     return { byokConfig, main };
 }

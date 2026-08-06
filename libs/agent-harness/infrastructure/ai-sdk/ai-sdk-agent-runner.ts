@@ -43,6 +43,10 @@ import type {
 } from '../../domain/contracts/run-state.contract';
 import type { ToolContext } from '../../domain/contracts/tool.contract';
 import { isAiSdkToolSource } from './ai-sdk-tool-registry';
+import {
+    markLastToolForCache,
+    markLatestUserForCache,
+} from './prompt-cache';
 
 /**
  * Tool-call self-heal for the AI SDK `repairToolCall` seam. When a tool call's
@@ -83,6 +87,15 @@ export async function repairInvalidToolInput(opts: {
         return null;
     }
 }
+
+/**
+ * SDK-native per-step retry for the agentic loop. Distinct from the one-shot
+ * app-level re-issue (that lives in `@libs/llm/retry-policy`, with the error
+ * taxonomy + cooldown the harness intentionally stays free of). 3 retries
+ * (4 attempts) survives the fast empty-body responses some BYOK providers return
+ * (Neuralwatt/GLM, Synthetic, Z.AI) without extending the per-call timeout.
+ */
+const AGENT_STEP_MAX_RETRIES = 3;
 
 export class AiSdkAgentRunner implements AgentRunner {
     constructor(private readonly models: ModelResolver<LanguageModel>) {}
@@ -157,6 +170,23 @@ export class AiSdkAgentRunner implements AgentRunner {
         // (correct BYOK attribution — the repair must not fall to a system model).
         const model = this.models.resolve(spec.modelId);
 
+        // Broad prompt-cache breakpoints. `systemProviderOptions` is the opaque
+        // inline-cache hint the domain resolved from the provider registry —
+        // present ONLY for vendors that honor inline markers (Anthropic family);
+        // the implicit-cache ones (OpenAI/Gemini/Azure) leave it undefined, so
+        // this whole block is a no-op for them. Gate on a real multi-step loop:
+        // on a single call the write-side cache premium never pays back. The
+        // system prompt is marked below via `system`; here we add the two other
+        // breakpoints (last tool + latest user message) the harness owns.
+        const cacheHint =
+            spec.maxSteps > 1 ? spec.systemProviderOptions : undefined;
+        const callMessages = cacheHint
+            ? markLatestUserForCache(messages, cacheHint)
+            : messages;
+        const callTools = cacheHint
+            ? markLastToolForCache(toolMap, cacheHint)
+            : toolMap;
+
         try {
             result = await generateText({
                 model,
@@ -167,7 +197,7 @@ export class AiSdkAgentRunner implements AgentRunner {
                 // so extra retries don't burn meaningful timeout budget.
                 // At 3 retries (4 total attempts) the loop survives transient
                 // empty-body responses without changing the per-call timeout.
-                maxRetries: 3,
+                maxRetries: AGENT_STEP_MAX_RETRIES,
                 // When the domain supplies systemProviderOptions (e.g. Anthropic
                 // prompt caching), send the system prompt as a system message
                 // carrying those options; otherwise a plain string.
@@ -178,8 +208,8 @@ export class AiSdkAgentRunner implements AgentRunner {
                           providerOptions: spec.systemProviderOptions,
                       } as any)
                     : spec.systemPrompt,
-                messages,
-                tools: toolMap,
+                messages: callMessages,
+                tools: callTools,
                 // Tool-call self-heal (AI SDK stable): when the model emits a
                 // tool call whose input fails schema validation, re-ask the SAME
                 // model to fix the arguments against the tool's schema instead of

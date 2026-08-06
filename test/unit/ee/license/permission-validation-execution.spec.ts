@@ -48,9 +48,9 @@ const byokConfig = {
 // What `resolveByokCarrier` collapses the stored v2 blob to for the resolved
 // task: the routed slot under `main`. Extra NormalizedModel fields resolve to
 // `undefined` (no settings/reasoning), which `toEqual` ignores.
-const expectedByokCarrier = {
-    main: { provider: 'openai', model: 'gpt-4', apiKey: 'sk-test' },
-};
+// Flat NormalizedModel — the carrier `{ main: … }` shape was retired (single
+// format). `toEqual` ignores the undefined optional fields the slot also carries.
+const expectedByokSlot = { provider: 'openai', model: 'gpt-4', apiKey: 'sk-test' };
 
 function createMockLicenseService(overrides: any = {}) {
     return {
@@ -336,7 +336,7 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
         const result = await service.validateExecutionPermissions(orgData);
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(expectedByokCarrier);
+        expect(result.byokConfig).toEqual(expectedByokSlot);
     });
 
     it('blocks a *_byok trial with billing byok:true but no local config, and warns on the divergence', async () => {
@@ -381,7 +381,7 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         const result = await service.validateExecutionPermissions(orgData);
 
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(expectedByokCarrier);
+        expect(result.byokConfig).toEqual(expectedByokSlot);
         expect(divergenceWarned()).toBe(false);
     });
 
@@ -406,7 +406,7 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         );
 
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(expectedByokCarrier);
+        expect(result.byokConfig).toEqual(expectedByokSlot);
         expect(
             licenseService.consumeTrialReviewCredit,
         ).not.toHaveBeenCalled();

@@ -11,7 +11,7 @@ import {
  * REQUIRED legacy→v2 BYOK data migration (Phase 04b, plan 04b-07).
  *
  * The v2-only code (slices 04b-01..06) can no longer read a legacy
- * `{main,fallback}` blob — `normalizeByokConfig` returns `{}` for it, so a legacy
+ * `{main,fallback}` blob — slot resolution returns null for it, so a legacy
  * org would silently resolve to the env/managed default (losing its BYOK key)
  * until migrated. This migration MUST therefore run WITH or BEFORE the v2-only
  * deploy (deploy-coordination confirmed at the blocking checkpoint) — never

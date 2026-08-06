@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidateTag } from "next/cache";
+import { updateTag } from "next/cache";
 import { cookies } from "next/headers";
 import type { CookieName } from "src/core/utils/cookie";
 
@@ -12,5 +12,7 @@ export const setCockpitRepositoryCookie = async (repository: string) => {
         JSON.stringify(repository),
     );
 
-    revalidateTag("cockpit-repository-dependent");
+    // Read-your-writes: the cookie above drives the analytics fetches, so the
+    // next render has to see the new repository, not a stale-while-revalidate copy.
+    updateTag("cockpit-repository-dependent");
 };

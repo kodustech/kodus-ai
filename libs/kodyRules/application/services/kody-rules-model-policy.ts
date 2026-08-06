@@ -1,18 +1,18 @@
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { environment } from '@libs/ee/configs/environment';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
+import { KODUS_DEFAULT_MODEL } from '@libs/llm/byok-to-vercel';
 
 /**
- * The Kodus-funded model for Kody Rules generation when there's no BYOK:
- * DeepSeek V4 Flash via the DeepSeek official API (`API_DEEPSEEK_API_KEY`),
- * routed by the resolver's `deepseek-*` prefix detection. Gemini is dead
- * (project denied access) and must never be used here — see item 9 of
- * docs/plans/fix-kody-rules-generation.md.
+ * The Kodus-funded model for Kody Rules generation when there's no BYOK — the
+ * shared managed default (DeepSeek V4 Flash via `API_DEEPSEEK_API_KEY`, routed by
+ * the resolver's `deepseek-*` prefix). Gemini is dead (project denied access) and
+ * must never be used here — see item 9 of docs/plans/fix-kody-rules-generation.md.
  */
-export const KODY_RULES_KODUS_MODEL = 'deepseek-v4-flash';
+export const KODY_RULES_KODUS_MODEL = KODUS_DEFAULT_MODEL;
 
 /**
  * Resolved model policy for a Kody Rules generation run.
@@ -24,7 +24,7 @@ export const KODY_RULES_KODUS_MODEL = 'deepseek-v4-flash';
  */
 export interface KodyRulesModelPolicy {
     generate: boolean;
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     modelOverride?: string;
     /** Set when `generate` is false — human-readable reason for the skip. */
     skipReason?: string;
@@ -44,10 +44,10 @@ export async function resolveKodyRulesModelPolicy(
     permissionValidationService: PermissionValidationService,
     organizationAndTeamData: OrganizationAndTeamData,
 ): Promise<KodyRulesModelPolicy> {
-    // native: resolve the Kody Rules generation (codeReview) task to a
-    // `{main}` carrier. A non-v2 / managed / BLOCKED config yields `null` →
+    // native: resolve the Kody Rules generation (codeReview) task to a bare
+    // model slot. A non-v2 / managed / BLOCKED config yields `null` →
     // fall through to the self-hosted / trial / skip policy below.
-    const byokConfig = await permissionValidationService.resolveTaskCarrier(
+    const byokConfig = await permissionValidationService.resolveTaskSlot(
         organizationAndTeamData,
         LLM_TASK.codeReview,
     );

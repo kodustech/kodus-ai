@@ -94,11 +94,20 @@ export function validateByokConfigRefs(config: unknown): ByokRefValidationResult
     return { valid: errors.length === 0, errors };
 }
 
+/** Human labels for the routing tasks — the delete guard's message is shown to
+ *  the user, so it must read in product terms, not raw config paths. */
+const TASK_LABEL: Record<string, string> = {
+    codeReview: 'the Code Review model',
+    prSummary: 'the PR Summary model',
+    conversation: 'the Chat model',
+};
+
 /**
- * Which routing refs point at `modelId`. Returns dotted-path keys
- * (e.g. `routing.defaultModelId`, `routing.taskOverrides.codeReview`).
- * Used by the 04-06 delete guard to reject a delete that would orphan a ref.
- * A non-config (or an empty modelId) yields `[]`.
+ * Which routing refs point at `modelId`, as HUMAN labels (e.g. "your
+ * organization default model", "the Code Review model"). Used by the 04-06
+ * delete guard to reject a delete that would orphan a ref — and its message is
+ * user-facing, so it must not leak dotted config paths. A non-config (or an
+ * empty modelId) yields `[]`.
  */
 export function findModelReferences(
     config: unknown,
@@ -115,14 +124,14 @@ export function findModelReferences(
     }
 
     if (routing.defaultModelId === modelId) {
-        refs.push('routing.defaultModelId');
+        refs.push('your organization default model');
     }
     if (routing.fallbackModelId === modelId) {
-        refs.push('routing.fallbackModelId');
+        refs.push('your fallback model');
     }
     for (const [task, id] of Object.entries(routing.taskOverrides ?? {})) {
         if (id === modelId) {
-            refs.push(`routing.taskOverrides.${task}`);
+            refs.push(TASK_LABEL[task] ?? `the ${task} model`);
         }
     }
 

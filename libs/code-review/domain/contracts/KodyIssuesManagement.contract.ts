@@ -1,4 +1,4 @@
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { contextToGenerateIssues } from '@libs/issues/domain/interfaces/kodyIssuesManagement.interface';
@@ -17,7 +17,7 @@ export interface IKodyIssuesManagementService {
         >,
         filePath: string,
         newSuggestions: Partial<CodeSuggestion>[],
-        byokConfig: NormalizedByokConfig | null,
+        byokConfig: NormalizedModel | null,
     ): Promise<any>;
 
     createNewIssues(
@@ -34,6 +34,6 @@ export interface IKodyIssuesManagementService {
             'organizationAndTeamData' | 'repository' | 'pullRequest'
         >,
         files: any[],
-        byokConfig: NormalizedByokConfig | null,
+        byokConfig: NormalizedModel | null,
     ): Promise<void>;
 }

@@ -1,6 +1,6 @@
 import { ContextDependency } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import {
@@ -22,7 +22,11 @@ import {
     prompt_kodyrules_detect_references_user,
 } from '@libs/common/utils/prompts/kodyRulesExternalReferences';
 import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
-import { buildModelFromSlot, getModelName } from '@libs/llm/byok-to-vercel';
+import {
+    buildModelFromSlot,
+    getModelName,
+    KODUS_DEFAULT_MODEL,
+} from '@libs/llm/byok-to-vercel';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
 
 // Trial-only override: while the org is in the 14-day subscription trial
@@ -31,7 +35,7 @@ import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
 // dime. Off-trial callers get no override, so the resolver falls back
 // to the production default (cloud) or API_LLM_PROVIDER_MODEL (self-hosted).
 // Any BYOK config takes precedence over this in every case.
-const TRIAL_MODEL_OVERRIDE = 'deepseek-v4-flash';
+const TRIAL_MODEL_OVERRIDE = KODUS_DEFAULT_MODEL;
 
 /**
  * Kodus control markers are instructions to the sync engine, never file
@@ -87,7 +91,7 @@ export interface DetectReferencesParams {
     organizationAndTeamData: OrganizationAndTeamData;
     context?: 'rule' | 'instruction' | 'prompt';
     detectionMode?: 'rule' | 'prompt';
-    byokConfig?: NormalizedByokConfig;
+    byokConfig?: NormalizedModel;
     subscriptionStatus?: string;
 }
 
@@ -121,9 +125,8 @@ export class ReferenceDetectorService {
                 ? TRIAL_MODEL_OVERRIDE
                 : undefined;
 
-        // The caller passes the already-resolved carrier; build from its slot.
-        const byokCarrier = params.byokConfig;
-        const byokSlot = byokCarrier?.main;
+        // The caller passes the already-resolved slot; build from it.
+        const byokSlot = params.byokConfig;
 
         const model = buildModelFromSlot(byokSlot, {}, defaultModelOverride);
 
@@ -136,7 +139,7 @@ export class ReferenceDetectorService {
                 teamId: organizationAndTeamData.teamId,
                 requirementId: params.requirementId,
                 subscriptionStatus: params.subscriptionStatus,
-                hasByok: !!byokCarrier,
+                hasByok: !!byokSlot,
                 byokMainProvider: byokSlot?.provider,
                 byokMainModel: byokSlot?.model,
                 defaultModelOverride,

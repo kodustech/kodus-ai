@@ -1,6 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
@@ -244,7 +244,7 @@ export class SuggestionService implements ISuggestionService {
         suggestions: any[],
         languageResultPrompt: string,
         reviewMode: ReviewModeResponse,
-        byokConfig: NormalizedByokConfig,
+        byokConfig: NormalizedModel,
         crossFileSnippets?: CrossFileContextSnippet[],
         remoteCommands?: RemoteCommands,
         memories?: Array<Partial<IKodyRule>>,
@@ -709,7 +709,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -809,7 +809,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -876,7 +876,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -1576,7 +1576,7 @@ export class SuggestionService implements ISuggestionService {
         codeSuggestions: CodeSuggestion[],
         selectedCategories: ReviewOptions,
         codeReviewVersion: CodeReviewVersion,
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ) {
         try {
             if (!codeSuggestions?.length) {

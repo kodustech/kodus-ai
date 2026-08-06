@@ -1,0 +1,333 @@
+{
+  "repo": "kodustech/kodus-ai",
+  "apps": [
+    "apps/api",
+    "apps/worker",
+    "apps/webhooks",
+    "apps/web",
+    "apps/cli",
+    "apps/try",
+    "apps/mcp-manager",
+    "apps/analytics-cli",
+    "apps/ast-cli"
+  ],
+  "categories": [
+    {
+      "name": "Style & Validation",
+      "criteria": [
+        {
+          "name": "Linter Configured",
+          "applicableApps": 9,
+          "passingApps": 7,
+          "rationale": "Root ESLint covers apps/api, apps/worker, apps/webhooks, libs and Nest app code, while apps/web and apps/cli have their own ESLint configs. apps/try, apps/analytics-cli, and apps/ast-cli have no app-specific lint enforcement and root ESLint ignores apps/web only but does not prove try/CLI app coverage in CI.",
+          "action": "Add lint scripts/config coverage for apps/try, apps/analytics-cli, and apps/ast-cli, then run them from a PR workflow."
+        },
+        {
+          "name": "Code Formatter",
+          "applicableApps": 9,
+          "passingApps": 7,
+          "rationale": "Prettier is configured at the root and in apps/web/apps/cli, with root format scripts for backend/web. Formatting is not enforced for apps/try, apps/analytics-cli, or apps/ast-cli in CI.",
+          "action": "Add a CI `format:check` job that runs Prettier checks for root backend apps, apps/web, apps/cli, apps/try, apps/analytics-cli, and apps/ast-cli."
+        },
+        {
+          "name": "Type Checker / Strict Typing",
+          "applicableApps": 9,
+          "passingApps": 3,
+          "rationale": "apps/web, apps/try, and apps/cli use strict TypeScript configs. The root/Nest config used by api, worker, webhooks, mcp-manager, analytics-cli, and ast-cli disables strict null checks and noImplicitAny, and CI only has a narrow libs TS2304 gate.",
+          "action": "Create per-app `tsconfig.strict.json` or incremental strictness configs for backend apps and wire a non-emitting typecheck job that expands beyond `typecheck:libs-gate`."
+        },
+        {
+          "name": "Pre-commit Hooks",
+          "applicableApps": 9,
+          "passingApps": 0,
+          "rationale": ".husky exists, but pre-commit only runs `node scripts/dev/check-yalc.js`; lint/format/tests are not enforced before commit.",
+          "action": "Update `.husky/pre-commit` to run a fast changed-file lint/format check, e.g. via lint-staged or a repo script."
+        },
+        {
+          "name": "Dead Code Detection",
+          "applicableApps": 9,
+          "passingApps": 0,
+          "rationale": "ESLint catches unused imports, but no knip, ts-prune, depcheck, or equivalent unused export/dead-code gate is configured.",
+          "action": "Add `knip` with workspace-aware ignores and run it in advisory CI before making it required."
+        }
+      ]
+    },
+    {
+      "name": "Build System",
+      "criteria": [
+        {
+          "name": "Single Command Setup",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": "AGENTS.md documents `pnpm run setup`, and package.json provides the setup script for first-time project setup."
+        },
+        {
+          "name": "Dependencies Pinned",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": "The repo commits pnpm lockfiles at the root and for independent apps such as apps/web, apps/cli, and apps/mcp-manager."
+        },
+        {
+          "name": "Build Command Documented",
+          "applicableApps": 9,
+          "passingApps": 7,
+          "rationale": "AGENTS.md documents root build commands for Nest apps and apps/web/apps/cli have package scripts. apps/try and the analytics/ast CLIs are less clearly documented as independently buildable units.",
+          "action": "Add app-specific build/run notes for apps/try, apps/analytics-cli, and apps/ast-cli to AGENTS.md or per-app AGENTS.md files."
+        },
+        {
+          "name": "Task / Monorepo Tooling",
+          "applicableApps": 9,
+          "passingApps": 6,
+          "rationale": "Nest monorepo tooling in nest-cli.json covers api, worker, webhooks, mcp-manager, analytics-cli, and ast-cli. apps/web, apps/cli, and apps/try are independent pnpm projects rather than centrally orchestrated.",
+          "action": "Document the split workspace model and add root wrapper scripts for web, cli, and try build/test tasks so agents do not guess which package root to use."
+        },
+        {
+          "name": "CI Configured",
+          "applicableApps": 9,
+          "passingApps": 7,
+          "rationale": "GitHub Actions run backend tests, CLI tests, type gates, e2e checks, and deploy/build workflows. apps/try, apps/analytics-cli, and apps/ast-cli do not have clear PR build/test CI coverage as standalone apps.",
+          "action": "Add path-filtered PR CI jobs for apps/try, apps/analytics-cli, and apps/ast-cli that run install, typecheck/build, and available tests."
+        }
+      ]
+    },
+    {
+      "name": "Testing",
+      "criteria": [
+        {
+          "name": "Unit Tests Exist",
+          "applicableApps": 9,
+          "passingApps": 7,
+          "rationale": "There are many Jest/Vitest specs under apps/api, apps/worker, apps/webhooks, apps/web, apps/cli, apps/try, and apps/mcp-manager. No app-level specs were found under apps/analytics-cli or apps/ast-cli."
+          ,"action": "Add minimal unit tests for apps/analytics-cli and apps/ast-cli entrypoint behavior or move their logic behind tested libs if they are thin wrappers."
+        },
+        {
+          "name": "Tests Runnable",
+          "applicableApps": 9,
+          "passingApps": 7,
+          "rationale": "Root Jest and CLI Vitest commands are documented/run in CI, and web specs are included by the root Jest suite. apps/analytics-cli and apps/ast-cli lack dedicated runnable test commands."
+          ,"action": "Add `test:analytics-cli` and `test:ast-cli` scripts or document that their behavior is covered by specific root Jest test paths."
+        },
+        {
+          "name": "Integration / E2E Tests",
+          "applicableApps": 7,
+          "passingApps": 5,
+          "rationale": "Backend, CLI, webhooks/worker behavior, mcp-manager, and e2e suites have integration/e2e coverage. apps/try and web dashboard coverage appears mostly unit-level; analytics-cli and ast-cli are not counted as requiring integration tests here."
+          ,"action": "Add at least one smoke/integration test for apps/try and key apps/web user flows, preferably via the existing tests/e2e harness."
+        },
+        {
+          "name": "Test File Conventions",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": "Tests consistently use `*.spec.ts`, `*.spec.tsx`, `*.test.ts`, or `__tests__` directories across apps."
+        },
+        {
+          "name": "Coverage Thresholds",
+          "applicableApps": 9,
+          "passingApps": 0,
+          "rationale": "A `test:cov` script exists, but no enforced Jest/Vitest coverage threshold or CI coverage gate was found.",
+          "action": "Add coverage thresholds to `jest.config.ts` and `apps/cli/vitest.config.ts`, then run coverage in CI for the changed app set."
+        }
+      ]
+    },
+    {
+      "name": "Documentation",
+      "criteria": [
+        {
+          "name": "README",
+          "applicableApps": 9,
+          "passingApps": 3,
+          "rationale": "Root README exists and apps/web/apps/cli have READMEs. The backend apps, try, mcp-manager, analytics-cli, and ast-cli rely on broader docs rather than app READMEs."
+          ,"action": "Add short README files for apps/api, apps/worker, apps/webhooks, apps/try, apps/mcp-manager, apps/analytics-cli, and apps/ast-cli with purpose and local commands."
+        },
+        {
+          "name": "Agent Context File",
+          "applicableApps": 9,
+          "passingApps": 4,
+          "rationale": "Root AGENTS.md exists, and apps/api, apps/web, apps/webhooks, and apps/worker have app-specific AGENTS.md files. apps/cli, apps/try, apps/mcp-manager, analytics-cli, and ast-cli lack app-specific agent context."
+          ,"action": "Add concise AGENTS.md files for apps/cli, apps/try, apps/mcp-manager, apps/analytics-cli, and apps/ast-cli focused on commands and common mistakes."
+        },
+        {
+          "name": "Architecture Docs",
+          "applicableApps": 9,
+          "passingApps": 6,
+          "rationale": "Root AGENTS.md, docs-internal, libs READMEs, and app docs cover core architecture and several services. Thin CLI apps and apps/try have less architecture-specific documentation."
+          ,"action": "Add a repo architecture map that links each app to its owning libs, queues, databases, and deploy workflow."
+        },
+        {
+          "name": "API / Schema Docs",
+          "applicableApps": 4,
+          "passingApps": 3,
+          "rationale": "The API uses Swagger/OpenAPI tooling, apps/try has PUBLIC_API.md, and mcp-manager exposes Swagger docs. Webhooks do not appear to have maintained webhook contract/schema docs."
+          ,"action": "Add maintained webhook payload/response contract docs or generated schemas for apps/webhooks."
+        },
+        {
+          "name": "Documentation Freshness",
+          "applicableApps": 9,
+          "passingApps": 7,
+          "rationale": "Docs include recent plans, generated RBAC/env snippets, and CI checks for some generated docs. Some agent docs contain stale paths such as api AGENTS.md mentioning `libs/core/src/infrastructure/migrations` while migrations are under `libs/core/infrastructure/database/typeorm/migrations`."
+          ,"action": "Run a documentation freshness pass over AGENTS.md/README files and add a lightweight doc-link/path check for referenced repo paths."
+        }
+      ]
+    },
+    {
+      "name": "Development Environment",
+      "criteria": [
+        {
+          "name": "Environment Template",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": ".env.example and .env.schema exist, with env drift/coverage CI that checks generated outputs and env usage."
+        },
+        {
+          "name": "Local Services Setup",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": "docker-compose.dev.yml/test/prod/sim files and root docker scripts provide reproducible local dependencies for the monorepo."
+        },
+        {
+          "name": "Database Schema & Migrations",
+          "applicableApps": 6,
+          "passingApps": 6,
+          "rationale": "Database-using backend apps share TypeORM migrations, Mongo migration tooling, and migration scripts. Frontend/CLI-only apps are not applicable."
+        },
+        {
+          "name": "Dev Container",
+          "applicableApps": 9,
+          "passingApps": 0,
+          "rationale": "No `.devcontainer/devcontainer.json` or equivalent reproducible dev container config was found.",
+          "action": "Add `.devcontainer/devcontainer.json` that uses Node 22.22.0, pnpm 11.9.0, Docker-in-Docker or compose support, and documented postCreate setup."
+        }
+      ]
+    },
+    {
+      "name": "Observability",
+      "criteria": [
+        {
+          "name": "Structured Logging",
+          "applicableApps": 7,
+          "passingApps": 4,
+          "rationale": "Backend services use shared Pino logging patterns, but mcp-manager uses Nest Logger directly and frontend/CLI apps have no clear structured logging standard."
+          ,"action": "Standardize logging guidance and wrappers for apps/mcp-manager, apps/cli, apps/web, and apps/try, and add lint/review checks for required metadata on backend logs."
+        },
+        {
+          "name": "Health Checks",
+          "applicableApps": 5,
+          "passingApps": 4,
+          "rationale": "API health is used by workflows, webhooks has a health controller, worker has a health probe, and mcp-manager has a health controller. Frontend health/version checks exist for web; apps/try health readiness is not evident."
+          ,"action": "Add a simple `/api/version` or `/health` route/readiness check for apps/try and wire it to deploy smoke checks if try is deployed."
+        },
+        {
+          "name": "Metrics / Telemetry",
+          "applicableApps": 9,
+          "passingApps": 6,
+          "rationale": "Backend apps and web use OpenTelemetry/Langfuse/PostHog/Pyroscope patterns. apps/cli, apps/try, analytics-cli, and ast-cli do not show consistent metrics/telemetry instrumentation."
+          ,"action": "Define which CLI/demo apps need telemetry and add a minimal event/error reporting wrapper or explicitly document them as intentionally uninstrumented."
+        },
+        {
+          "name": "Error Tracking",
+          "applicableApps": 7,
+          "passingApps": 4,
+          "rationale": "api, worker, and webhooks initialize Sentry; web has telemetry but no clear Sentry setup in inspected files; mcp-manager/try/cli do not show error tracking setup."
+          ,"action": "Add Sentry or an intentional no-Sentry decision doc for apps/web, apps/try, apps/cli, and apps/mcp-manager."
+        },
+        {
+          "name": "Distributed Tracing",
+          "applicableApps": 6,
+          "passingApps": 3,
+          "rationale": "Backend code includes OpenTelemetry/Langfuse instrumentation and AI SDK span helpers. mcp-manager, webhooks, and frontend/demo paths do not show consistent distributed trace propagation coverage."
+          ,"action": "Create an observability map showing which apps emit traces and add tracing middleware/instrumentation for mcp-manager and webhooks if they are on request paths."
+        }
+      ]
+    },
+    {
+      "name": "Security",
+      "criteria": [
+        {
+          "name": "Secret Scanning",
+          "applicableApps": 9,
+          "passingApps": 0,
+          "rationale": "No gitleaks, trufflehog, detect-secrets, Semgrep secrets, or equivalent secret scanning workflow was found.",
+          "action": "Add a path-filtered `gitleaks` or `trufflehog` GitHub Actions workflow on pull_request and push."
+        },
+        {
+          "name": "Dependency Update Automation",
+          "applicableApps": 9,
+          "passingApps": 0,
+          "rationale": "Recent Dependabot PRs exist in history, but no `.github/dependabot.yml` or Renovate config is committed in this repo snapshot.",
+          "action": "Commit `.github/dependabot.yml` or `renovate.json` covering root, apps/web, apps/cli, apps/mcp-manager, and npm subprojects."
+        },
+        {
+          "name": "Gitignore Comprehensive",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": ".gitignore covers node_modules, dist, env files, logs, local caches, Claude/Cursor local state, test artifacts, and app-specific generated files."
+        },
+        {
+          "name": "Secrets Management",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": "CI and deploy workflows pull secrets from GitHub Secrets/AWS SSM and .env files are ignored; env schema/template tooling exists."
+        },
+        {
+          "name": "CODEOWNERS",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": ".github/CODEOWNERS is present."
+        }
+      ]
+    },
+    {
+      "name": "Agent Readiness",
+      "criteria": [
+        {
+          "name": "Agent Context Quality",
+          "applicableApps": 9,
+          "passingApps": 4,
+          "rationale": "Root and key backend/web AGENTS.md files are concise and include common mistakes. Several apps lack app-specific agent context, and at least one inspected note appears stale."
+          ,"action": "Add/update app-specific AGENTS.md files and run a path/command freshness check for all agent context files."
+        },
+        {
+          "name": "Skills / Reusable Context",
+          "applicableApps": 9,
+          "passingApps": 6,
+          "rationale": "The repo contains CLI skills, Claude skills, and `.agents/skills` reusable context. There is no Tessl plugin manifest and several app-specific workflows are not packaged as reusable skills."
+          ,"action": "Create a repo-local Tessl plugin or skill index for recurring Kodus workflows: backend logging, RBAC endpoints, Kody Rules sync, context compression, and Next.js dashboard work."
+        },
+        {
+          "name": "MCP Configuration",
+          "applicableApps": 9,
+          "passingApps": 4,
+          "rationale": "The repo includes mcp-manager app/config and some MCP-facing docs, but no project-level MCP server config for coding agents was found."
+          ,"action": "Add a project MCP configuration/runbook that tells agents which MCP servers are available, how to authenticate safely, and when to use them."
+        },
+        {
+          "name": "Editor / Agent Rules",
+          "applicableApps": 9,
+          "passingApps": 5,
+          "rationale": ".cursor commands/rules/hooks and .claude commands/skills are present, but `.cursor/rules/run.mdc` is effectively empty and several apps lack targeted rules."
+          ,"action": "Populate `.cursor/rules/run.mdc` and add targeted rules for logging, tests, RBAC guards, and Next.js app patterns."
+        },
+        {
+          "name": "Task Discovery",
+          "applicableApps": 9,
+          "passingApps": 9,
+          "rationale": "GitHub issue templates and PR template are present, and PR/title conventions plus changelog routing are documented."
+        }
+      ]
+    }
+  ],
+  "recommendations": [
+    {
+      "title": "Turn recurring review feedback into deterministic gates",
+      "detail": "Add lint/ast-grep checks for empty catch blocks, missing PinoLoggerService metadata, missing endpoint guards, and service changes without nearby tests."
+    },
+    {
+      "title": "Close CI coverage gaps for independent apps",
+      "detail": "Add path-filtered PR jobs for apps/try, apps/analytics-cli, and apps/ast-cli, and expand typecheck/lint/format checks beyond the current narrow gates."
+    },
+    {
+      "title": "Make agent context complete and fresh per app",
+      "detail": "Add app-specific AGENTS.md files and reusable skills for CLI, try, mcp-manager, analytics-cli, ast-cli, logging, RBAC, Kody Rules sync, and context compression."
+    }
+  ]
+}

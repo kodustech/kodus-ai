@@ -1,7 +1,7 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { Inject, Injectable } from '@nestjs/common';
@@ -225,7 +225,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         suggestions: AIAnalysisResult,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<AIAnalysisResult> {
         if (!suggestions?.codeSuggestions?.length) {
             return suggestions;
@@ -320,7 +320,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         suggestion: Partial<CodeSuggestion>,
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<string[]> {
         try {
             const runName = 'extractKodyRuleIdsFromContent';
@@ -588,7 +588,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
      */
     private runClassifier(
         context: KodyRulesExtendedContext,
-        byokConfig: NormalizedByokConfig | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationId: string | undefined,
         prNumber: number,
     ): Promise<KodyRulesClassifierSchema> {
@@ -615,7 +615,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
      */
     private async runUpdater(
         context: KodyRulesExtendedContext,
-        byokConfig: NormalizedByokConfig | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationId: string | undefined,
         prNumber: number,
     ): Promise<string> {
@@ -642,7 +642,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
      */
     private runGenerator(
         context: KodyRulesExtendedContext,
-        byokConfig: NormalizedByokConfig | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationId: string | undefined,
         prNumber: number,
     ): Promise<z.infer<typeof kodyRulesGeneratorSchema>> {

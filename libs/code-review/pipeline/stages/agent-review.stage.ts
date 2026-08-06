@@ -27,6 +27,7 @@ import {
     withStructuredOutputFallback,
     NoStructuredFallbackModelError,
     getModelName,
+    KODUS_DEFAULT_MODEL,
 } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
@@ -100,7 +101,6 @@ import {
 import {
     isSecondaryByok,
     resolveSecondaryPassModel,
-    SECONDARY_PASS_MODEL_ID,
 } from '@libs/code-review/infrastructure/agents/engine/secondary-pass-model';
 
 /**
@@ -1699,7 +1699,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
      * null so the caller vetoes (keeps both).
      */
     private buildDedupTiebreak(
-        byokConfig: any,
+        byokConfig: NormalizedModel | undefined,
         telemetryMeta: LangfuseTelemetryMetadata | undefined,
         prNumber: number,
     ): (
@@ -1723,14 +1723,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         }) as any,
                         prompt: buildTiebreakPrompt(a as any, b as any),
                     });
-                const tiebreakByok = secondaryByok
-                    ? byokConfig?.main
-                        ? { main: byokConfig.main }
-                        : byokConfig
-                    : byokConfig;
                 const res = await withStructuredOutputFallback(
                     {
-                        byokConfig: tiebreakByok,
+                        slot: secondaryByok ? byokConfig : undefined,
                         organizationId: telemetryMeta?.organizationId,
                         label: 'dedup-tiebreak',
                     },
@@ -1763,7 +1758,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         suggestions: Partial<CodeSuggestion>[],
         kodyRules: Partial<CodeSuggestion>[],
         prNumber: number,
-        byokConfig?: any,
+        byokConfig?: NormalizedModel,
         telemetryMeta?: LangfuseTelemetryMetadata,
     ): Promise<Partial<CodeSuggestion>[]> {
         const fileScopedRules = kodyRules.filter((r) => !!r.relevantFile);
@@ -1833,11 +1828,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         trace: DedupTraceSummary;
     }> {
         // The secondary-pass gate helpers (isSecondaryByok /
-        // resolveSecondaryPassModel) still consume the single-slot {main} carrier;
-        // wrap the resolved slot for them. withStructuredOutputFallback is already
-        // native (takes the resolved slot directly). Those gate helpers go
-        // native in 04b-05.
-        const dedupByokConfig = resolvedSlot ? { main: resolvedSlot } : undefined;
+        // resolveSecondaryPassModel) and withStructuredOutputFallback all take
+        // the bare resolved model slot directly.
+        const dedupSlot = resolvedSlot ?? undefined;
         if (suggestions.length <= 1) {
             return {
                 suggestions,
@@ -1860,8 +1853,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
         // Model resolution (same policy as severity/format):
         //   BYOK main → withStructuredOutputFallback (client key + schema retry)
-        //   else platform gpt-5.4-mini / getInternalModel (trial / no BYOK)
-        const secondaryByok = isSecondaryByok(dedupByokConfig);
+        //   else the Kodus-funded DeepSeek default / self-hosted env model
+        //   (getInternalModel — trial / no BYOK)
+        const secondaryByok = isSecondaryByok(dedupSlot);
 
         try {
             const runDedup = (model: any) =>
@@ -1883,8 +1877,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
 
             let dedupResult: any;
             if (secondaryByok) {
-                // The resolved codeReview slot is the secondary model — already
-                // wrapped as { main: resolvedSlot }, so no re-wrap needed.
+                // The resolved codeReview slot is the secondary model, passed
+                // through as the bare slot.
                 dedupResult = await withStructuredOutputFallback(
                     {
                         slot: resolvedSlot,
@@ -1900,7 +1894,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 // with json_object instead of failing open into keep-all
                 // after a thrown error further up — or worse, partial
                 // structured output that leaves true dups on the PR.
-                if (!resolveSecondaryPassModel(dedupByokConfig)) {
+                if (!resolveSecondaryPassModel(dedupSlot)) {
                     this.logger.warn({
                         message: `[DEDUP] PR#${prNumber}: no secondary model available, keeping all suggestions`,
                         context: this.stageName,
@@ -1945,7 +1939,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     runName: 'code-review-dedup',
                     model: secondaryByok
                         ? (resolvedSlot?.model ?? 'byok-dedup')
-                        : SECONDARY_PASS_MODEL_ID,
+                        : KODUS_DEFAULT_MODEL,
                     isByok: secondaryByok,
                     usage: {
                         inputTokens: dedupUsage.inputTokens,
@@ -1976,7 +1970,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // per suggestion for this dedup run.
             const embedCache = new Map<string, number[] | null>();
             const runTiebreak = this.buildDedupTiebreak(
-                dedupByokConfig,
+                dedupSlot,
                 telemetryMeta,
                 prNumber,
             );

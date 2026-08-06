@@ -1,11 +1,14 @@
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
-    resolveTaskCarrier as resolveCarrierFromV2,
-    resolveTaskModel as resolveModelFromV2,
+    resolveTaskModel as resolveTaskModelFromConfig,
+    resolveTaskSlot as resolveTaskSlotFromConfig,
     type ResolveTaskModelOptions,
     type ResolvedTaskModel,
 } from '@libs/llm/resolve-task-model';
-import type { RequestContext } from '@libs/llm/routing-strategy';
+import type {
+    RequestContext,
+    RoutingVerdict,
+} from '@libs/llm/routing-strategy';
 import {
     hasNonManagedCredential,
     isByokConfig,
@@ -57,7 +60,7 @@ export class ValidationError extends Error {
 
 export interface ValidationResult {
     allowed: boolean;
-    byokConfig?: NormalizedByokConfig | null;
+    byokConfig?: NormalizedModel | null;
     errorType?: ValidationErrorType;
     metadata?: Record<string, any>;
     // Subscription status of the org (e.g. 'trial', 'active'). Exposed so
@@ -191,11 +194,11 @@ export class PermissionValidationService {
             // 2. Trial skips user validation, but still honors BYOK and
             // billing-managed review credits when those fields are present.
             if (validation.subscriptionStatus === 'trial') {
-                let trialByokConfig: NormalizedByokConfig | null = null;
+                let trialByokConfig: NormalizedModel | null = null;
                 let byokLookupFailed = false;
 
                 try {
-                    trialByokConfig = await this.resolveTaskCarrier(
+                    trialByokConfig = await this.resolveTaskSlot(
                         organizationAndTeamData,
                         LLM_TASK.codeReview,
                     );
@@ -364,7 +367,7 @@ export class PermissionValidationService {
                 validation.planType,
             );
 
-            const byokConfig = await this.resolveTaskCarrier(
+            const byokConfig = await this.resolveTaskSlot(
                         organizationAndTeamData,
                         LLM_TASK.codeReview,
                     );
@@ -622,7 +625,7 @@ export class PermissionValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
         validation: OrganizationLicenseValidationResult,
         contextName?: string,
-    ): Promise<NormalizedByokConfig | null> {
+    ): Promise<NormalizedModel | null> {
         try {
             // Self-hosted sempre usa config das env vars (não usa BYOK)
             if (!this.isCloud) {
@@ -657,7 +660,7 @@ export class PermissionValidationService {
             // }
 
             // Free ou BYOK plans precisam de BYOK config
-            const byokConfig = await this.resolveTaskCarrier(
+            const byokConfig = await this.resolveTaskSlot(
                         organizationAndTeamData,
                         LLM_TASK.codeReview,
                     );
@@ -681,8 +684,8 @@ export class PermissionValidationService {
                 metadata: {
                     organizationAndTeamData,
                     planType: validation?.planType,
-                    provider: byokConfig?.main?.provider,
-                    model: byokConfig?.main?.model,
+                    provider: byokConfig?.provider,
+                    model: byokConfig?.model,
                 },
             });
 
@@ -799,13 +802,69 @@ export class PermissionValidationService {
      * re-implementing the two-step. `null` when there is no BYOK / non-v2 /
      * BLOCKED / non-UUID org → the caller degrades to the managed/env default.
      */
-    async resolveTaskCarrier(
+    async resolveTaskSlot(
         organizationAndTeamData: OrganizationAndTeamData,
         task: LlmTask,
         options: { ctx?: RequestContext } = {},
-    ): Promise<NormalizedByokConfig | null> {
-        const rawV2 = await this.getBYOKConfig(organizationAndTeamData);
-        return resolveCarrierFromV2(rawV2, task, options) ?? null;
+    ): Promise<NormalizedModel | null> {
+        const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
+        const { slot, verdict } = resolveTaskSlotFromConfig(rawConfig, task, {
+            ctx: options.ctx,
+        });
+        this.logRoutingVerdict(organizationAndTeamData, task, verdict);
+        return slot;
+    }
+
+    /**
+     * Emit the routing decision so a BYOK org's model choice is TRACEABLE — the
+     * `verdict` (which tier won, which tiers were skipped and why, whether it fell
+     * to the fallback) used to be computed here and thrown away. Logged at the ONE
+     * funnel every org-aware consumer passes through, so no call-site threads it.
+     *
+     * Deliberately quiet on the happy path: a clean primary/default resolution and
+     * a no-BYOK org (verdict null) emit nothing — only the events worth tracing do.
+     * A BLOCKED verdict on a BYOK org (its config couldn't route → silently on the
+     * managed default) is a WARN; a skipped tier / fallback is informational.
+     */
+    private logRoutingVerdict(
+        organizationAndTeamData: OrganizationAndTeamData,
+        task: LlmTask,
+        verdict: RoutingVerdict | null,
+    ): void {
+        // No config / non-v2 → nothing to route, nothing to trace.
+        if (!verdict) {
+            return;
+        }
+        const blocked = !verdict.modelId;
+        const skippedTier = verdict.reason.includes('→');
+        const usedFallback = /fallback/i.test(verdict.reason);
+        if (!blocked && !skippedTier && !usedFallback) {
+            return; // clean primary/default/override resolution — implicit, no noise.
+        }
+
+        const metadata = {
+            organizationId: organizationAndTeamData?.organizationId,
+            teamId: organizationAndTeamData?.teamId,
+            task,
+            resolvedModelId: verdict.modelId,
+            routingReason: verdict.reason, // never carries key material (by contract)
+            degradedToManagedDefault: blocked,
+            usedFallback,
+        };
+
+        if (blocked) {
+            this.logger.warn({
+                message: `[byok-routing] "${task}" BLOCKED — BYOK org fell back to the managed/env default`,
+                context: 'resolveTaskRouting',
+                metadata,
+            });
+        } else {
+            this.logger.log({
+                message: `[byok-routing] "${task}" → ${verdict.modelId}${usedFallback ? ' (via fallback)' : ''}`,
+                context: 'resolveTaskRouting',
+                metadata,
+            });
+        }
     }
 
     /**
@@ -819,8 +878,10 @@ export class PermissionValidationService {
         task: LlmTask,
         options: ResolveTaskModelOptions = {},
     ): Promise<ResolvedTaskModel> {
-        const rawV2 = await this.getBYOKConfig(organizationAndTeamData);
-        return resolveModelFromV2(rawV2, task, options);
+        const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
+        const resolved = resolveTaskModelFromConfig(rawConfig, task, options);
+        this.logRoutingVerdict(organizationAndTeamData, task, resolved.verdict);
+        return resolved;
     }
 
     /**
@@ -833,8 +894,8 @@ export class PermissionValidationService {
     async hasBYOK(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<boolean> {
-        const rawV2 = await this.getBYOKConfig(organizationAndTeamData);
-        return hasNonManagedCredential(rawV2);
+        const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
+        return hasNonManagedCredential(rawConfig);
     }
 
     /**

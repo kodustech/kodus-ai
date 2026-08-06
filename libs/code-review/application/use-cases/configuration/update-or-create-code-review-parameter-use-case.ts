@@ -1222,9 +1222,9 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             directoryId,
         );
 
-        // native carrier for the reference-detection chain (codeReview task).
+        // native slot for the reference-detection chain (codeReview task).
         const [byokConfig, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.resolveTaskCarrier(
+            this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
                 LLM_TASK.codeReview,
             ),

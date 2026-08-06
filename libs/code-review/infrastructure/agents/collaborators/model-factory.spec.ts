@@ -1,4 +1,4 @@
-// 04b-06: the legacy {main,fallback} branch is GONE — resolveAgentModel is
+// 04b-06: the legacy {main,fallback} branch is GONE — resolveReviewAgentModel is
 // native and always routes through resolveTaskModel (the runtime fallback was
 // removed in 04b-05, so it resolves ONE model). This byok-to-vercel mock is kept
 // only so the fallback-not-built assertion can inspect the (now-unused) seam.
@@ -17,7 +17,7 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
 // the returned slot onto AgentModelParams rather than re-implementing routing.
 const resolveTaskModelMock = jest.fn();
 
-import { resolveAgentModel } from './model-factory';
+import { resolveReviewAgentModel } from './model-factory';
 
 const orgTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
 
@@ -101,7 +101,7 @@ function resolvedRouted(overrides: any = {}) {
     };
 }
 
-describe('resolveAgentModel', () => {
+describe('resolveReviewAgentModel', () => {
     beforeEach(() => {
         // mock.calls accumulates across tests; the override test inspects calls
         // by role, so each case must start from a clean slate.
@@ -118,7 +118,7 @@ describe('resolveAgentModel', () => {
             });
             const svc = permissionServiceReturning(null);
 
-            const resolved = await resolveAgentModel(
+            const resolved = await resolveReviewAgentModel(
                 { organizationAndTeamData: orgTeam },
                 svc,
             );
@@ -146,7 +146,7 @@ describe('resolveAgentModel', () => {
             });
             const svc = permissionServiceReturning(null);
 
-            await resolveAgentModel(
+            await resolveReviewAgentModel(
                 {
                     organizationAndTeamData: orgTeam,
                     byokModel: '  gpt-override  ',
@@ -166,7 +166,7 @@ describe('resolveAgentModel', () => {
             const cfg = v2({ defaultModelId: 'm-A' });
             const svc = permissionServiceReturningV2(cfg);
 
-            await resolveAgentModel(
+            await resolveReviewAgentModel(
                 { organizationAndTeamData: orgTeam, byokModelId: 'm-B' },
                 svc,
             );
@@ -184,7 +184,7 @@ describe('resolveAgentModel', () => {
             resolveTaskModelMock.mockReturnValue(resolvedRouted());
             const svc = permissionServiceReturningV2(v2({ defaultModelId: 'm-A' }));
 
-            await resolveAgentModel(
+            await resolveReviewAgentModel(
                 {
                     organizationAndTeamData: orgTeam,
                     byokModelId: 'm-B',
@@ -202,7 +202,7 @@ describe('resolveAgentModel', () => {
             resolveTaskModelMock.mockReturnValue(resolvedRouted());
             const svc = permissionServiceReturningV2(v2({ defaultModelId: 'm-A' }));
 
-            await resolveAgentModel(
+            await resolveReviewAgentModel(
                 { organizationAndTeamData: orgTeam, byokModel: 'gpt-5-mini' },
                 svc,
             );
@@ -216,7 +216,7 @@ describe('resolveAgentModel', () => {
             resolveTaskModelMock.mockReturnValue(resolvedRouted());
             const svc = permissionServiceReturningV2(v2({ defaultModelId: 'm-A' }));
 
-            const resolved = await resolveAgentModel(
+            const resolved = await resolveReviewAgentModel(
                 { organizationAndTeamData: orgTeam },
                 svc,
             );
@@ -238,7 +238,7 @@ describe('resolveAgentModel', () => {
                 v2({ defaultModelId: 'm-A', fallbackModelId: 'm-B' }),
             );
 
-            const resolved = await resolveAgentModel(
+            const resolved = await resolveReviewAgentModel(
                 { organizationAndTeamData: orgTeam },
                 svc,
             );
@@ -260,7 +260,7 @@ describe('resolveAgentModel', () => {
                 v2({ defaultModelId: 'm-A' }),
             );
 
-            const resolved = await resolveAgentModel(
+            const resolved = await resolveReviewAgentModel(
                 { organizationAndTeamData: orgTeam },
                 svc,
             );

@@ -1,4 +1,3 @@
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     isByokConfig,
@@ -156,7 +155,6 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             );
 
         const existingConfig = getConfigValue?.configValue as
-            | NormalizedByokConfig
             | BYOKConfig
             | undefined;
 
@@ -205,7 +203,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
 
     private encryptByokConfigApiKey(
         configValue: any,
-        existingConfig?: NormalizedByokConfig | BYOKConfig,
+        existingConfig?: BYOKConfig,
     ): BYOKConfig {
         if (!configValue || typeof configValue !== 'object') {
             throw new Error('Invalid BYOK config value');
@@ -364,7 +362,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
      * model's credential (else the first model's). A non-config blob reports no
      * provider (it is rejected upstream at encrypt time).
      */
-    private describeByokForTelemetry(config: NormalizedByokConfig | BYOKConfig): {
+    private describeByokForTelemetry(config: BYOKConfig): {
         provider?: string;
         slot: 'main' | 'fallback';
     } {

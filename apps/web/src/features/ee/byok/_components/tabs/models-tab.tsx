@@ -15,7 +15,7 @@ import {
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
 import type { ByokModelCost } from "@services/usage/byok-cost";
-import { PlugIcon, PlusIcon, SettingsIcon } from "lucide-react";
+import { PlugIcon, PlusIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
@@ -146,7 +146,11 @@ export const ModelsTab = ({
             (m) => m.id === model.model,
         );
         if (!curated || !CURATED_PROVIDERS.has(credential.provider)) {
-            router.push("/organization/byok/manual");
+            // Non-curated model: the manual form edits it in place (pre-filled
+            // via ?model=<id>), not a blank "add" form.
+            router.push(
+                `/organization/byok/manual?model=${encodeURIComponent(model.id)}`,
+            );
             return;
         }
         setView({ mode: "edit", model, credential });
@@ -251,15 +255,27 @@ export const ModelsTab = ({
 
     return (
         <div className="flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-3">
-                <h2 className="text-text-primary text-sm font-semibold">
-                    Connected providers
-                </h2>
-                <span className="text-text-tertiary text-xs tabular-nums">
-                    {groups.length}{" "}
-                    {groups.length === 1 ? "provider" : "providers"} ·{" "}
-                    {totalModels} {totalModels === 1 ? "model" : "models"}
-                </span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-baseline gap-2">
+                    <h2 className="text-text-primary text-sm font-semibold">
+                        Connected providers
+                    </h2>
+                    <span className="text-text-tertiary text-xs tabular-nums">
+                        {groups.length}{" "}
+                        {groups.length === 1 ? "provider" : "providers"} ·{" "}
+                        {totalModels} {totalModels === 1 ? "model" : "models"}
+                    </span>
+                </div>
+                {/* List-level action lives in the section header (top-right) —
+                    always visible, and primary weight is right for the main
+                    "connect a provider" action. */}
+                <Button
+                    size="sm"
+                    variant="primary"
+                    leftIcon={<PlusIcon />}
+                    onClick={() => setView({ mode: "add" })}>
+                    Add another provider
+                </Button>
             </div>
 
             {groups.map(({ credential, models }) => (
@@ -288,10 +304,18 @@ export const ModelsTab = ({
                                 variant="helper"
                                 leftIcon={<PlusIcon />}
                                 onClick={() =>
-                                    setView({
-                                        mode: "add",
-                                        provider: credential.provider,
-                                    })
+                                    // Curated providers get the in-place model
+                                    // cards; a non-curated one goes straight to the
+                                    // manual form pre-scoped to it (key reused),
+                                    // skipping the empty "pick a model" middle step.
+                                    CURATED_PROVIDERS.has(credential.provider)
+                                        ? setView({
+                                              mode: "add",
+                                              provider: credential.provider,
+                                          })
+                                        : router.push(
+                                              `/organization/byok/manual?provider=${encodeURIComponent(credential.provider)}`,
+                                          )
                                 }>
                                 Add model
                             </Button>
@@ -300,26 +324,13 @@ export const ModelsTab = ({
                 </ProviderGroupHeader>
             ))}
 
-            <div className="border-card-lv2 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                <Button
-                    size="sm"
-                    variant="primary"
-                    leftIcon={<PlusIcon />}
-                    onClick={() => setView({ mode: "add" })}>
-                    Add another provider
-                </Button>
-                <Button
-                    size="sm"
-                    variant="helper"
-                    leftIcon={<SettingsIcon />}
-                    onClick={() => router.push("/organization/byok/manual")}>
-                    Configure manually
-                </Button>
-            </div>
-
             {/* Spend limit lives at the foot of the Providers tab (the Budget tab
-                was folded in): alert-only, you pay providers directly. */}
-            <SpendLimitSection teamId={teamId} />
+                was folded in): alert-only, you pay providers directly. A divider
+                separates it from the provider pool now that the add-provider
+                action moved up into the section header. */}
+            <div className="border-card-lv2 border-t pt-4">
+                <SpendLimitSection teamId={teamId} />
+            </div>
         </div>
     );
 };

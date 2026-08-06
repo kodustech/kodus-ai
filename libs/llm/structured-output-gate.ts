@@ -25,7 +25,7 @@ export const OPENROUTER_JSON_SCHEMA_PREFIXES = [
  * always saw.
  *
  * Self-hosted env mode (`API_LLM_PROVIDER_MODEL`) is handled by its own branch in
- * `byokToVercelModel`/`getInternalModel` — an explicit customer-controlled
+ * `buildModelFromSlot`/`getInternalModel` — an explicit customer-controlled
  * deployment, so the caller's opt-in is trusted there.
  */
 export function shouldEnableJsonSchema(

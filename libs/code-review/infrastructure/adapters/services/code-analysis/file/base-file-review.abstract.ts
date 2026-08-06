@@ -4,7 +4,7 @@ import { createLogger } from '@libs/core/log/logger';
  * © Kodus Tech. All rights reserved.
  */
 
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import {
@@ -94,7 +94,7 @@ export abstract class BaseFileReviewContextPreparation implements IFileReviewCon
      */
     protected abstract determineReviewMode(
         options?: ReviewModeOptions,
-        byokConfig?: NormalizedByokConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<ReviewModeResponse>;
 
     /**

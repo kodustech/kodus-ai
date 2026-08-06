@@ -38,9 +38,7 @@ import {
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { isByokConfig } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { resolveModelSlot } from '@libs/llm/normalize-byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
-import type { NormalizedByokConfig } from '@libs/llm/byok-config';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -123,22 +121,14 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             context = this.updateContext(context, (draft) => {
                 // Materialize the routed model into the resolved slot the pipeline
                 // threads downstream (the handle stages read their limit/telemetry
-                // metadata off) and mirror it into the `{main}` carrier the
-                // byok-to-vercel builder consumes. `routedMain` already has the
-                // id/NAME override applied and carries the ciphertext verbatim
-                // (resolveTaskSlot never decrypts — T-04-01-01). No routed slot
-                // (no BYOK / BLOCKED / absent config) → the env/managed default
-                // resolves downstream, matching a missing config.
+                // metadata off). `routedMain` already has the id/NAME override
+                // applied and carries the ciphertext verbatim (resolveTaskSlot
+                // never decrypts — T-04-01-01). No routed slot (no BYOK / BLOCKED /
+                // absent config) → the env/managed default resolves downstream,
+                // matching a missing config.
                 if (routedMain && isByokConfig(resolved)) {
-                    const fallback = resolveModelSlot(
-                        resolved,
-                        resolved.routing?.fallbackModelId,
-                    );
                     draft.codeReviewConfig.resolvedModelSlot = routedMain;
-                    draft.codeReviewConfig.byokConfig = {
-                        main: routedMain,
-                        ...(fallback ? { fallback } : {}),
-                    } as NormalizedByokConfig;
+                    draft.codeReviewConfig.byokConfig = routedMain;
                 } else {
                     draft.codeReviewConfig.resolvedModelSlot = undefined;
                     draft.codeReviewConfig.byokConfig = undefined;

@@ -15,7 +15,7 @@ const make = (compilerOutput: any) => {
     mockRun.mockResolvedValue(compilerOutput);
     const permissionValidationService: any = {
         // native: no carrier → managed/env default (system mode).
-        resolveTaskCarrier: jest.fn(async () => null),
+        resolveTaskSlot: jest.fn(async () => null),
     };
     const kodyRulesService: any = {
         updateRuleDetector: jest.fn(async () => ({})),

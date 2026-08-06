@@ -109,8 +109,11 @@ const context = {
     organizationAndTeamData,
 } as any;
 
+// Flat NormalizedModel (the single stored format) — the `{ main, fallback }`
+// carrier is retired, so `provider` sits on the slot directly.
 const byokConfig = {
-    main: { provider: 'openai', model: 'gpt-4o' },
+    provider: 'openai',
+    model: 'gpt-4o',
 } as any;
 
 describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK path)', () => {
@@ -136,7 +139,7 @@ describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK p
         expect(result).toEqual({
             codeSuggestions: MODEL_SUGGESTIONS.codeSuggestions,
             codeReviewModelUsed: {
-                // byokConfig.main.provider wins over the default provider.
+                // byokConfig.provider wins over the default provider.
                 generateSuggestions: 'openai',
             },
         });

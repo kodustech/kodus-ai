@@ -224,7 +224,7 @@ export class KodyRuleSummaryService {
                 // Model policy = the review's: resolve the codeReview task to a
                 // `{main}` carrier (BYOK main when configured; managed default
                 // only during trial). null ⇒ no BYOK ⇒ env default downstream.
-                this.permissionValidationService.resolveTaskCarrier(
+                this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 ),
@@ -233,7 +233,7 @@ export class KodyRuleSummaryService {
                 ),
             ]);
 
-            const hasByok = !!byokConfig?.main;
+            const hasByok = !!byokConfig;
             if (
                 !hasByok &&
                 POST_TRIAL_REQUIRES_BYOK.includes(
@@ -255,7 +255,7 @@ export class KodyRuleSummaryService {
 
             // Read the carrier's resolved main slot at THIS consumer boundary;
             // the builder never reads `.main`/`.fallback`.
-            const mainSlot = byokConfig?.main;
+            const mainSlot = byokConfig ?? undefined;
             const model = buildModelFromSlot(mainSlot, {});
             const modelName = getModelName(mainSlot);
             const runName = 'kody-rules.summary-generation';
@@ -460,7 +460,7 @@ export class KodyRuleSummaryService {
                 // Model policy = the review's: resolve the codeReview task to a
                 // `{main}` carrier (BYOK main when configured; managed default
                 // only during trial). null ⇒ no BYOK ⇒ env default downstream.
-                this.permissionValidationService.resolveTaskCarrier(
+                this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 ),
@@ -468,9 +468,9 @@ export class KodyRuleSummaryService {
                     organizationAndTeamData,
                 ),
             ]);
-            const hasByok = !!byokConfig?.main;
+            const hasByok = !!byokConfig;
             // The carrier's resolved main slot, read at this consumer boundary.
-            const mainSlot = byokConfig?.main;
+            const mainSlot = byokConfig ?? undefined;
             if (
                 !hasByok &&
                 POST_TRIAL_REQUIRES_BYOK.includes(

@@ -71,7 +71,7 @@ function build() {
     });
 
     const provider = new TestSkillProvider(
-        { resolveTaskCarrier: jest.fn().mockResolvedValue(null) } as any,
+        { resolveTaskSlot: jest.fn().mockResolvedValue(null) } as any,
         {} as any,
         { createFetcherOrchestration } as any,
     );

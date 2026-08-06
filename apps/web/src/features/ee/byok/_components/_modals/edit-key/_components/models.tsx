@@ -41,14 +41,17 @@ export const ByokModelSelect = () => {
     const { providers } = useSuspenseGetLLMProviders();
     const foundProvider = providers.find((p) => p.id === provider);
 
+    // Force manual model entry only when the provider's models can't be
+    // auto-listed (custom endpoint whose URL isn't known yet, or a `manual`
+    // listing) — driven by the registry, so a provider with a real listing +
+    // default base URL (e.g. Moonshot) shows the dropdown instead.
     const [manual, setManual] = useState<boolean>(
-        Boolean(foundProvider?.requiresBaseUrl),
+        !(foundProvider?.autoListModels ?? false),
     );
 
     useEffect(() => {
-        // Providers that require base URL force manual input
-        setManual(Boolean(foundProvider?.requiresBaseUrl));
-    }, [foundProvider?.requiresBaseUrl]);
+        setManual(!(foundProvider?.autoListModels ?? false));
+    }, [foundProvider?.autoListModels]);
 
     if (manual) {
         return (
@@ -84,6 +87,10 @@ const ModelInput = ({ onBackToSelect }: { onBackToSelect?: () => void }) => {
                     <FormControl.Input>
                         <Input
                             {...field}
+                            // Controlled from first render: the RHF field starts
+                            // undefined for a fresh add, which would flip the input
+                            // uncontrolled→controlled on first keystroke.
+                            value={field.value ?? ""}
                             size="md"
                             id={field.name}
                             className="w-full justify-between"

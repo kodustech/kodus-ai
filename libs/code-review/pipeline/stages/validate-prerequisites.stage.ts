@@ -295,10 +295,9 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     const healedByok = validationResult.byokConfig;
                     draft.codeReviewConfig.byokConfig = healedByok;
                     // Thread the resolved slot the downstream stages read their
-                    // limit/telemetry metadata off. Sourced here from the
-                    // permission service's collapsed main slot; the collapse is
-                    // removed with the {main,fallback} intermediate in 04b-06.
-                    draft.codeReviewConfig.resolvedModelSlot = (healedByok?.main ??
+                    // limit/telemetry metadata off. The permission service now
+                    // returns the bare model slot directly.
+                    draft.codeReviewConfig.resolvedModelSlot = (healedByok ??
                         undefined) as unknown as NormalizedModel | undefined;
                 }
                 if (validationResult.subscriptionStatus) {
@@ -577,14 +576,14 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 return false;
             }
 
-            // "Is BYOK configured?" = did the run resolve a non-managed carrier
-            // for the codeReview task (v2 resolver), rather than a legacy
-            // main-slot presence check. A null carrier means the env/managed
-            // default — no client BYOK — so the trial is provisioned without one.
-            // resolveTaskCarrier resolves without building the model (no decrypt
-            // / SDK client), so only the carrier's presence is inspected here.
+            // "Is BYOK configured?" = did the run resolve a non-managed slot
+            // for the codeReview task (v2 resolver). A null slot means the
+            // env/managed default — no client BYOK — so the trial is
+            // provisioned without one. resolveTaskSlot resolves without
+            // building the model (no decrypt / SDK client), so only the slot's
+            // presence is inspected here.
             const carrier =
-                await this.permissionValidationService.resolveTaskCarrier(
+                await this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
                 );

@@ -1,27 +1,33 @@
-import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
+import {
+    getBYOK,
+    getLLMConfigStatus,
+} from "@services/organizationParameters/fetch";
 
 import { ByokManualPageClient } from "./page.client";
 
 export default async function ByokManualPage({
     searchParams,
 }: {
-    searchParams: Promise<{ slot?: "main" | "fallback" }>;
+    // `model=<BYOKModelConfig.id>` opens the manual form in EDIT mode for that
+    // connected model (used by the Models tab for non-curated providers, whose
+    // models have no CuratedConnectPanel). `provider=<id>` pre-scopes an ADD to
+    // that provider (reusing its stored key). Absent ⇒ ADD a fresh model.
+    searchParams: Promise<{ model?: string; provider?: string }>;
 }) {
-    const { slot: slotParam } = await searchParams;
-    const slot = slotParam === "fallback" ? "fallback" : "main";
+    const { model: editModelId, provider: presetProvider } = await searchParams;
 
-    const llmConfigStatus = await getLLMConfigStatus().catch(() => null);
-
-    // The persisted blob is now the v2 shape ({credentials, models, routing}),
-    // which carries no legacy main/fallback slot — post-04b `byokConfig.main`
-    // was already undefined at runtime, so there is nothing to pre-fill here.
-    // The v2 manual edit pre-fill is rewired in 04-08.
-    const existingConfig = null;
+    // The full v2 config is needed so a save MERGES into it (add/edit a model
+    // in place) rather than overwriting — the whole blob is the intended config.
+    const [existing, llmConfigStatus] = await Promise.all([
+        getBYOK().catch(() => null),
+        getLLMConfigStatus().catch(() => null),
+    ]);
 
     return (
         <ByokManualPageClient
-            slot={slot}
-            existingConfig={existingConfig}
+            existing={existing}
+            editModelId={editModelId}
+            presetProvider={presetProvider}
             llmConfigStatus={llmConfigStatus}
         />
     );

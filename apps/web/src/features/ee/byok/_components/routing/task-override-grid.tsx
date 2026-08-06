@@ -178,7 +178,14 @@ export const TaskOverrideGrid = ({
     return (
         <div className="border-card-lv2 divide-card-lv2 flex flex-col divide-y rounded-lg border">
             {TASK_ROWS.map(({ task, label }) => {
-                const overrideId = taskOverrides[task];
+                const rawOverrideId = taskOverrides[task];
+                // An override equal to the default is redundant — render it as
+                // "uses default" so the two states never look identical (the
+                // default==override confusion).
+                const overrideId =
+                    rawOverrideId && rawOverrideId !== defaultModelId
+                        ? rawOverrideId
+                        : undefined;
                 const overrideModel = models.find((m) => m.id === overrideId);
                 const gate = overrideModel
                     ? capabilityGate(

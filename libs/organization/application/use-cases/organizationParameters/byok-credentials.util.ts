@@ -67,7 +67,7 @@ export async function resolveByokSlot(
     const config = parameter?.configValue;
 
     // v2 shape: the credential lives in credentials[], with the apiKey at the
-    // top level and the aws* secrets under settings. Unlike normalizeByokConfig
+    // top level and the aws* secrets under settings. Unlike resolveModelSlot
     // (which carries ciphertext by design and NEVER decrypts), the probe needs
     // plaintext — so this v2 branch reads credentials[] and safeDecrypt's the
     // secret fields (server-only path; DecryptedByokSlot never reaches a

@@ -155,18 +155,6 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
         });
     });
 
-    describe('parent-task inheritance', () => {
-        it('inherits the parent task modelId without consulting taskOverrides', () => {
-            const v = strategy.resolve(
-                'prSummary',
-                { parentTask: 'codeReview', parentModelId: 'm-INHERITED' },
-                cfg({ taskOverrides: { prSummary: 'm-A' }, defaultModelId: 'm-A' }),
-            );
-            expect(v.modelId).toBe('m-INHERITED');
-            expect(v.reason).toMatch(/inherit/i);
-        });
-    });
-
     describe('managed / unknown provider degrades (never throws)', () => {
         it('skips a managed credential and falls through', () => {
             const v = strategy.resolve(

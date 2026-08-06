@@ -25,7 +25,7 @@ lives here (NOT review/agent logic).
   timeout for providers that ignore AbortSignal).
 - **`preflight-context.ts`** — `assertPromptFitsInContext`: refuse a call whose
   estimated prompt won't fit the model's context window (avoids futile retries).
-- **`system-cache.ts`** — `anthropicSystemCacheControl`: provider options to cache
+- **`system-cache.ts`** — `systemCacheControl`: registry-driven provider options to cache
   the (large) system prompt on Anthropic models across an agent loop's steps.
 
 Consumed by `code-review`, `cli-review`, `organization`, … — any lib that needs to
