@@ -611,6 +611,31 @@ describe('RealApi config repository methods', () => {
         );
     });
 
+    it('surfaces the contextual endpoint message when a 403 has no JSON body', async () => {
+        // Non-JSON error bodies (gateway/CDN pages, empty bodies) used to
+        // surface the raw "Request failed with status 403" — a synthesized
+        // placeholder that masked the actionable per-endpoint message.
+        fetchMock.mockResolvedValue(
+            new Response('Forbidden', {
+                status: 403,
+                headers: { 'Content-Type': 'text/plain' },
+            }),
+        );
+
+        const api = new RealApi();
+
+        await expect(
+            api.config.getAvailableRepositories('kodus_team_key'),
+        ).rejects.toEqual(
+            expect.objectContaining({
+                name: 'ApiError',
+                statusCode: 403,
+                message:
+                    'Access denied for Kodus API endpoint (/cli/config/repositories/available).',
+            } satisfies Partial<ApiError>),
+        );
+    });
+
     it('sends X-Team-Key when getting repository settings', async () => {
         fetchMock.mockResolvedValue(
             new Response(

@@ -351,7 +351,7 @@ export async function request<T>(
     if (!response.ok) {
         const rawError = isJson
             ? await response.json().catch(() => ({ message: 'Request failed' }))
-            : { message: `Request failed with status ${response.status}` };
+            : {};
         const errorData: ApiErrorPayload =
             rawError &&
             typeof rawError === 'object' &&
@@ -495,7 +495,7 @@ export async function requestBinary(
         const isJson = contentType.includes('application/json');
         const rawError = isJson
             ? await response.json().catch(() => ({ message: 'Request failed' }))
-            : { message: `Request failed with status ${response.status}` };
+            : {};
         const errorData: ApiErrorPayload =
             rawError &&
             typeof rawError === 'object' &&
