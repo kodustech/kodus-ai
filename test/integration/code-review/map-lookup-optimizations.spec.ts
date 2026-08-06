@@ -156,17 +156,23 @@ describe('Map-based Lookup Optimizations - Integration Tests', () => {
                     implementedSuggestions,
                 );
 
-                await suggestionService.validateImplementedSuggestions(
-                    mockOrganizationAndTeamData,
-                    'code patch',
-                    savedSuggestions as any,
-                    123,
-                );
+                const result =
+                    await suggestionService.validateImplementedSuggestions(
+                        mockOrganizationAndTeamData,
+                        'code patch',
+                        savedSuggestions as any,
+                        123,
+                    );
 
                 // Should not call updateSuggestion since ID not found
                 expect(
                     mockPullRequestService.updateSuggestion,
                 ).not.toHaveBeenCalled();
+
+                // Only suggestions actually persisted should be returned, so a
+                // no-op verification doesn't trigger a spurious PR execution
+                // broadcast downstream.
+                expect(result).toEqual([]);
             });
 
             it('should handle large datasets efficiently with Map lookup', async () => {

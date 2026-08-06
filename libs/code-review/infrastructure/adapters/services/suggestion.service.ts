@@ -144,6 +144,8 @@ export class SuggestionService implements ISuggestionService {
                     savedSuggestions?.map((s) => [s.id, s]) ?? [],
                 );
 
+                const persistedSuggestions = [];
+
                 for (const suggestion of implementedSuggestions) {
                     const savedSuggestion = savedSuggestionsMap.get(
                         suggestion.id,
@@ -159,11 +161,15 @@ export class SuggestionService implements ISuggestionService {
                             },
                             organizationAndTeamData,
                         );
+
+                        persistedSuggestions.push(suggestion);
                     }
                 }
+
+                return persistedSuggestions;
             }
 
-            return implementedSuggestions;
+            return [];
         } catch (error) {
             this.logger.log({
                 message: `Error when trying to validate implemented suggestions for PR#${prNumber}`,

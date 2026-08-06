@@ -37,8 +37,8 @@ importers:
         specifier: ^3.0.0
         version: 3.0.0
       hunkdiff:
-        specifier: 0.12.1
-        version: 0.12.1(@opentui/core@0.1.107(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10))(@opentui/react@0.1.107(react-devtools-core@7.0.1)(react@19.2.7)(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0))(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.18.0-beta.0
+        version: 0.18.0-beta.0(@opentui/core@0.1.107(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10))(@opentui/react@0.1.107(react-devtools-core@7.0.1)(react@19.2.7)(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       latest-version:
         specifier: ^9.0.0
         version: 9.0.0
@@ -560,35 +560,15 @@ packages:
   '@oxc-project/types@0.138.0':
     resolution: {integrity: sha512-1a7ZKmrRTCoN1XMZ4L0PyyqrMnrNlLyPuOkdSX2MZg7IiIGRUyurNhAm73ptDOraoBcIordsIGKNPKUzy3ZmfA==}
 
-  '@pierre/diffs@1.2.12':
-    resolution: {integrity: sha512-pY/gmgWL03WnagqCyCnBi3QtRXUv4hCIY6FYqd5b1ZGaoI6a4Bsji8j+yRl2RfzPh/8Hf19rCl1GE80G6a1cLQ==}
+  '@pierre/diffs@1.2.2':
+    resolution: {integrity: sha512-MvWLv2oSOJOF8oYXWLdhicguHM11G/VNWu6OPR5ZETolp2NM2/KPQG3cZTnKpJ6ImqEHwvw6Gl6z2gmmy2FQmQ==}
     peerDependencies:
       react: ^18.3.1 || ^19.0.0
       react-dom: ^18.3.1 || ^19.0.0
 
-  '@pierre/theme@1.1.0':
-    resolution: {integrity: sha512-GC2OWTAfTIIWWYhPCygwG8t2EtePQkRfON4MI2rwIkJylmiyqIttJID2dCL8sUD8cNdEvYkEyfEHHKMeCiDLoQ==}
+  '@pierre/theme@1.0.3':
+    resolution: {integrity: sha512-sWHv11TMoqKxKDgTIk5VbhQjdPhs8DCcBxbjh3mRlS3YOM/OcrWoGX6MM8eBGn9cUu3M46Py0JnxsG2nJaFTuA==}
     engines: {vscode: ^1.0.0}
-
-  '@pierre/theming@0.0.2':
-    resolution: {integrity: sha512-QM1M4stXfnzfaE8I8YbjXSApV8c+2dBsXJj8eYg9WTpBR/cTmCZIcfGnN4p13iRrYu2Br/R/OJfEL7uR8Qjctw==}
-    peerDependencies:
-      '@pierre/theme': ^1.1.0
-      '@shikijs/themes': ^3.0.0 || ^4.0.0
-      react: ^18.3.1 || ^19.0.0
-      react-dom: ^18.3.1 || ^19.0.0
-      shiki: ^3.0.0 || ^4.0.0
-    peerDependenciesMeta:
-      '@pierre/theme':
-        optional: true
-      '@shikijs/themes':
-        optional: true
-      react:
-        optional: true
-      react-dom:
-        optional: true
-      shiki:
-        optional: true
 
   '@pnpm/config.env-replace@1.1.0':
     resolution: {integrity: sha512-htyl8TWnKL7K/ESFa1oW2UB5lVDxuF5DpM7tBi6Hu2LNL3mWkIzNLG6N4zoCUP1lCKNxWy/3iu8mS8MvToGd6w==}
@@ -703,37 +683,26 @@ packages:
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
 
-  '@shikijs/core@4.3.1':
-    resolution: {integrity: sha512-ANMDxuaPsNMdDC1m4vfvhlDmJweMwkE5XitTwrq2rWHx5jM+dlm4MmHt2PP6t0uejfR77SuhrhJ0zEijIF/uhA==}
-    engines: {node: '>=20'}
+  '@shikijs/core@3.23.0':
+    resolution: {integrity: sha512-NSWQz0riNb67xthdm5br6lAkvpDJRTgB36fxlo37ZzM2yq0PQFFzbd8psqC2XMPgCzo1fW6cVi18+ArJ44wqgA==}
 
-  '@shikijs/engine-javascript@4.3.1':
-    resolution: {integrity: sha512-JBItcnPuYq7jVJdZo/vMj94r+szT7XEjHFX+mvFDGSEIbVAXAGyHAHzhbWzpGOwYidCZrErJLLgn2PVeiokHnQ==}
-    engines: {node: '>=20'}
+  '@shikijs/engine-javascript@3.23.0':
+    resolution: {integrity: sha512-aHt9eiGFobmWR5uqJUViySI1bHMqrAgamWE1TYSUoftkAeCCAiGawPMwM+VCadylQtF4V3VNOZ5LmfItH5f3yA==}
 
-  '@shikijs/engine-oniguruma@4.3.1':
-    resolution: {integrity: sha512-OXyNMzg0pews+msMj4cHeqT4xiYKKvbnn6VbdAXxfoFl3SSx4fJTc8FadECuc5/H9p3BzhNAoAUXKwAu9rWYhg==}
-    engines: {node: '>=20'}
+  '@shikijs/engine-oniguruma@3.23.0':
+    resolution: {integrity: sha512-1nWINwKXxKKLqPibT5f4pAFLej9oZzQTsby8942OTlsJzOBZ0MWKiwzMsd+jhzu8YPCHAswGnnN1YtQfirL35g==}
 
-  '@shikijs/langs@4.3.1':
-    resolution: {integrity: sha512-m0l9nsDqgBHvbZbk7A0/kXz/impK3uB/c6rAn6Gpg/uPtdZRQ+alsN/17MU5thb68XTj/4DxkZAotrM0GGSpDQ==}
-    engines: {node: '>=20'}
+  '@shikijs/langs@3.23.0':
+    resolution: {integrity: sha512-2Ep4W3Re5aB1/62RSYQInK9mM3HsLeB91cHqznAJMuylqjzNVAVCMnNWRHFtcNHXsoNRayP9z1qj4Sq3nMqYXg==}
 
-  '@shikijs/primitive@4.3.1':
-    resolution: {integrity: sha512-CXQRQOYy1leqQ8ceTeJdmXv/bsUY++6QyLpXJ94LZAAYj5X2SKRdc5ipguv4NPyGVKItB2PPwUpRNe0Sjh5S1A==}
-    engines: {node: '>=20'}
+  '@shikijs/themes@3.23.0':
+    resolution: {integrity: sha512-5qySYa1ZgAT18HR/ypENL9cUSGOeI2x+4IvYJu4JgVJdizn6kG4ia5Q1jDEOi7gTbN4RbuYtmHh0W3eccOrjMA==}
 
-  '@shikijs/themes@4.3.1':
-    resolution: {integrity: sha512-dgpoJ4WqNi2yTmizQHBJ5zcX6j2lE6icN/0yt4l1kkf16jrY/pwPLoTb1ETsWMz0OBLf9ZNvwmxft+cH+N9qSA==}
-    engines: {node: '>=20'}
+  '@shikijs/transformers@3.23.0':
+    resolution: {integrity: sha512-F9msZVxdF+krQNSdQ4V+Ja5QemeAoTQ2jxt7nJCwhDsdF1JWS3KxIQXA3lQbyKwS3J61oHRUSv4jYWv3CkaKTQ==}
 
-  '@shikijs/transformers@4.3.1':
-    resolution: {integrity: sha512-z6ir0bGDgWcF2FduktEfPgIsdOtIlDiLAjFBgBzE42Q9xHbkkIXZtORHzlLVB71iZP9elEcqKg6keajvOUwE2A==}
-    engines: {node: '>=20'}
-
-  '@shikijs/types@4.3.1':
-    resolution: {integrity: sha512-CHFxE0jztBIZRHH6gxXE7DXUCFXjReEGxZ/j0rfSLGKZuwp2xBYycEP14875DSa9KLL/6700oxIq6oO6ef9K2g==}
-    engines: {node: '>=20'}
+  '@shikijs/types@3.23.0':
+    resolution: {integrity: sha512-3JZ5HXOZfYjsYSk0yPwBrkupyYSLpAE26Qc0HLghhZNGTZg/SKxXIIgoxOpmmeQP0RRSDJTk1/vPfw9tbw+jSQ==}
 
   '@shikijs/vscode-textmate@10.0.2':
     resolution: {integrity: sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg==}
@@ -1027,6 +996,10 @@ packages:
   chardet@2.2.0:
     resolution: {integrity: sha512-rddelWYNPRrXq6PtNEN2S3f6t9ILzvqaN5pVgi4kqt9jHQaXIial9PznB5iSPVlQSLNaaH22ItWz3EJtQ10+OA==}
 
+  chokidar@4.0.3:
+    resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
+    engines: {node: '>= 14.16.0'}
+
   cli-boxes@3.0.0:
     resolution: {integrity: sha512-/lzGpEWL/8PfI0BmBOPRwp0c/wFNX1RdUML3jK/RcSBA9T8mZDdQpqYBKtCFTOfQbwPqWEOpjqW+Fnayc0969g==}
     engines: {node: '>=10'}
@@ -1122,10 +1095,6 @@ packages:
 
   diff@8.0.4:
     resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
-    engines: {node: '>=0.3.1'}
-
-  diff@9.0.0:
-    resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
     engines: {node: '>=0.3.1'}
 
   dot-prop@9.0.0:
@@ -1329,43 +1298,38 @@ packages:
     resolution: {integrity: sha512-eKCa6bwnJhvxj14kZk5NCPc6Hb6BdsU9DZcOnmQKSnO1VKrfV0zCvtttPZUsBvjmNDn8rpcJfpwSYnHBjc95MQ==}
     engines: {node: '>=18.18.0'}
 
-  hunkdiff-darwin-arm64@0.12.1:
-    resolution: {integrity: sha512-ZDci4+rdLI2Lhu8eNtHz8Go5H+ovRl9hg1hjshpmbgXLtKB2/tpLkjbCSLaWPHlMAxjag9nGi1tRWJXsHip3Lg==}
+  hunkdiff-darwin-arm64@0.18.0-beta.0:
+    resolution: {integrity: sha512-mY9F/CGTqSxN5UbZnAiapwaXTrFQqqSNOxwxyGONy3Ut4ySJVain9fjvWjyghno12GV1T7CLXDHFBPleScT4eg==}
     cpu: [arm64]
     os: [darwin]
-    hasBin: true
 
-  hunkdiff-darwin-x64@0.12.1:
-    resolution: {integrity: sha512-joM9wXRTg6Tmd1pXL4nOHjmiLqOwBsJoIyoNOArtuolwyqK+TxeFbvH7z0iMPOQiAtoNIE8ltzvCPoM517Vm+g==}
+  hunkdiff-darwin-x64@0.18.0-beta.0:
+    resolution: {integrity: sha512-1xgbzofwa41lZJBeipB9N1H6qawiQzuYCdTHzWSQXP4yaMH135wIQYbPbcdbTUc51XGPX17bq3pMPt91R0K0lw==}
     cpu: [x64]
     os: [darwin]
-    hasBin: true
 
-  hunkdiff-linux-arm64@0.12.1:
-    resolution: {integrity: sha512-nnUG3hMbodR3fMxIG2DDscTRzlbO5nPlb9pbZ3Z8vYhztIHkNSn5Jc/gd7B4T0d+iLL4iCXK1EEvmIqNn2oigQ==}
+  hunkdiff-linux-arm64@0.18.0-beta.0:
+    resolution: {integrity: sha512-mN7vzGgusp1RZcMuxcIKzRGtC4/SysbiKIrqTNjBZHFslLtdokvi0g5l2FysADMD5pbVzV1txVk1uDM+g+6WlQ==}
     cpu: [arm64]
     os: [linux]
-    hasBin: true
 
-  hunkdiff-linux-x64@0.12.1:
-    resolution: {integrity: sha512-XsBRVQQsfH0SHhxk4wwo3QhuHV0FUmkfJuEJBf9/0E2PfrDXgLY+GvGY6bWlM4CNbyar14Plko/YOhPDW6QrZw==}
+  hunkdiff-linux-x64@0.18.0-beta.0:
+    resolution: {integrity: sha512-4vgxCkjGImKYI6LJyqPi0lVpqx7sWjdM0cOnLK9M4nRRFseUh57erzDNobL7441X49WTkqvkuVHi7ikCBKH4Lw==}
     cpu: [x64]
     os: [linux]
-    hasBin: true
 
-  hunkdiff-windows-x64@0.12.1:
-    resolution: {integrity: sha512-Xx7B9nUZeQMNFsdprF4ao+Z3GJPMb/aPi3NqNgUs4th6yxfGWWfEk1hFQ5e1oO4LiW2HiMoWvIhYUt96WNlh3w==}
+  hunkdiff-windows-x64@0.18.0-beta.0:
+    resolution: {integrity: sha512-+DvEw89phCfwZKa8i2D3AWll2xHp+jiwqd/rWJ7mivwKFiJ4yvlA1VHLMc0y59/rniBwGpUyUkeLvXe9EdeAbA==}
     cpu: [x64]
     os: [win32]
-    hasBin: true
 
-  hunkdiff@0.12.1:
-    resolution: {integrity: sha512-KUama+WAHtO3OZKKmZJBnQaE3e7upOW8YMWpq48EaZR4c1wpYew8sy6QxmtvgXWcmjgFFuamQa6/dgRd+1qkvw==}
+  hunkdiff@0.18.0-beta.0:
+    resolution: {integrity: sha512-REvVeT4R/spFbM/bMtXM5bW0WMdLiryWMhGqPmIbh6MvUS0bVmN4ZfiSay6SBpJo4FG1dVrGu1tz8zKNW3/8Rw==}
     engines: {node: '>=18'}
     hasBin: true
     peerDependencies:
-      '@opentui/core': ^0.1.88
-      '@opentui/react': ^0.1.88
+      '@opentui/core': ^0.4.3
+      '@opentui/react': ^0.4.3
       react: ^19.2.4
 
   iconv-lite@0.7.3:
@@ -1832,6 +1796,10 @@ packages:
     resolution: {integrity: sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ==}
     engines: {node: '>=0.10.0'}
 
+  readdirp@4.1.2:
+    resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
+    engines: {node: '>= 14.18.0'}
+
   regex-recursion@6.0.2:
     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}
 
@@ -1896,9 +1864,8 @@ packages:
     resolution: {integrity: sha512-Iov+JwFv/2HcTpcwNMKd8+IWNb8tboQJNQTkAY/LLVK7gGH9jy+LGkVqPxfekHl+yMmiqXszdGWXgkfml7hjqA==}
     engines: {node: '>= 0.4'}
 
-  shiki@4.3.1:
-    resolution: {integrity: sha512-oR+qDVi2OjX1tmDpyv+3KviX01KzO6Af+0NNnKnsp9491UEGz2YpxTuJboS/6VhYpTdqzmuJBuiTlrAWWJAssw==}
-    engines: {node: '>=20'}
+  shiki@3.23.0:
+    resolution: {integrity: sha512-55Dj73uq9ZXL5zyeRPzHQsK7Nbyt6Y10k5s7OjuFZGMhpp4r/rsLBH0o/0fstIzX1Lep9VxefWljK/SKCzygIA==}
 
   siginfo@2.0.0:
     resolution: {integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==}
@@ -2842,29 +2809,18 @@ snapshots:
 
   '@oxc-project/types@0.138.0': {}
 
-  '@pierre/diffs@1.2.12(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@pierre/diffs@1.2.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
-      '@pierre/theme': 1.1.0
-      '@pierre/theming': 0.0.2(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)
-      '@shikijs/transformers': 4.3.1
-      diff: 9.0.0
+      '@pierre/theme': 1.0.3
+      '@shikijs/transformers': 3.23.0
+      diff: 8.0.3
       hast-util-to-html: 9.0.5
       lru_map: 0.4.1
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
-      shiki: 4.3.1
-    transitivePeerDependencies:
-      - '@shikijs/themes'
+      shiki: 3.23.0
 
-  '@pierre/theme@1.1.0': {}
-
-  '@pierre/theming@0.0.2(@pierre/theme@1.1.0)(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(shiki@4.3.1)':
-    optionalDependencies:
-      '@pierre/theme': 1.1.0
-      '@shikijs/themes': 4.3.1
-      react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
-      shiki: 4.3.1
+  '@pierre/theme@1.0.3': {}
 
   '@pnpm/config.env-replace@1.1.0': {}
 
@@ -2931,45 +2887,38 @@ snapshots:
 
   '@sec-ant/readable-stream@0.4.1': {}
 
-  '@shikijs/core@4.3.1':
+  '@shikijs/core@3.23.0':
     dependencies:
-      '@shikijs/primitive': 4.3.1
-      '@shikijs/types': 4.3.1
+      '@shikijs/types': 3.23.0
       '@shikijs/vscode-textmate': 10.0.2
       '@types/hast': 3.0.4
       hast-util-to-html: 9.0.5
 
-  '@shikijs/engine-javascript@4.3.1':
+  '@shikijs/engine-javascript@3.23.0':
     dependencies:
-      '@shikijs/types': 4.3.1
+      '@shikijs/types': 3.23.0
       '@shikijs/vscode-textmate': 10.0.2
       oniguruma-to-es: 4.3.6
 
-  '@shikijs/engine-oniguruma@4.3.1':
+  '@shikijs/engine-oniguruma@3.23.0':
     dependencies:
-      '@shikijs/types': 4.3.1
+      '@shikijs/types': 3.23.0
       '@shikijs/vscode-textmate': 10.0.2
 
-  '@shikijs/langs@4.3.1':
+  '@shikijs/langs@3.23.0':
     dependencies:
-      '@shikijs/types': 4.3.1
+      '@shikijs/types': 3.23.0
 
-  '@shikijs/primitive@4.3.1':
+  '@shikijs/themes@3.23.0':
     dependencies:
-      '@shikijs/types': 4.3.1
-      '@shikijs/vscode-textmate': 10.0.2
-      '@types/hast': 3.0.4
+      '@shikijs/types': 3.23.0
 
-  '@shikijs/themes@4.3.1':
+  '@shikijs/transformers@3.23.0':
     dependencies:
-      '@shikijs/types': 4.3.1
+      '@shikijs/core': 3.23.0
+      '@shikijs/types': 3.23.0
 
-  '@shikijs/transformers@4.3.1':
-    dependencies:
-      '@shikijs/core': 4.3.1
-      '@shikijs/types': 4.3.1
-
-  '@shikijs/types@4.3.1':
+  '@shikijs/types@3.23.0':
     dependencies:
       '@shikijs/vscode-textmate': 10.0.2
       '@types/hast': 3.0.4
@@ -3310,6 +3259,10 @@ snapshots:
 
   chardet@2.2.0: {}
 
+  chokidar@4.0.3:
+    dependencies:
+      readdirp: 4.1.2
+
   cli-boxes@3.0.0: {}
 
   cli-cursor@5.0.0:
@@ -3389,8 +3342,6 @@ snapshots:
   diff@8.0.3: {}
 
   diff@8.0.4: {}
-
-  diff@9.0.0: {}
 
   dot-prop@9.0.0:
     dependencies:
@@ -3622,39 +3573,42 @@ snapshots:
 
   human-signals@8.0.1: {}
 
-  hunkdiff-darwin-arm64@0.12.1:
+  hunkdiff-darwin-arm64@0.18.0-beta.0:
     optional: true
 
-  hunkdiff-darwin-x64@0.12.1:
+  hunkdiff-darwin-x64@0.18.0-beta.0:
     optional: true
 
-  hunkdiff-linux-arm64@0.12.1:
+  hunkdiff-linux-arm64@0.18.0-beta.0:
     optional: true
 
-  hunkdiff-linux-x64@0.12.1:
+  hunkdiff-linux-x64@0.18.0-beta.0:
     optional: true
 
-  hunkdiff-windows-x64@0.12.1:
+  hunkdiff-windows-x64@0.18.0-beta.0:
     optional: true
 
-  hunkdiff@0.12.1(@opentui/core@0.1.107(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10))(@opentui/react@0.1.107(react-devtools-core@7.0.1)(react@19.2.7)(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0))(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
+  hunkdiff@0.18.0-beta.0(@opentui/core@0.1.107(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10))(@opentui/react@0.1.107(react-devtools-core@7.0.1)(react@19.2.7)(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0))(react-dom@19.2.7(react@19.2.7))(react@19.2.7):
     dependencies:
       '@opentui/core': 0.1.107(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10)
       '@opentui/react': 0.1.107(react-devtools-core@7.0.1)(react@19.2.7)(stage-js@1.0.2)(typescript@6.0.3)(web-tree-sitter@0.25.10)(ws@8.21.0)
-      '@pierre/diffs': 1.2.12(@shikijs/themes@4.3.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      '@pierre/diffs': 1.2.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       bun: 1.3.14
+      chokidar: 4.0.3
       commander: 14.0.3
       diff: 8.0.4
+      get-east-asian-width: 1.6.0
       react: 19.2.7
+      shell-quote: 1.9.0
+      string-width: 8.2.1
       zod: 4.4.3
     optionalDependencies:
-      hunkdiff-darwin-arm64: 0.12.1
-      hunkdiff-darwin-x64: 0.12.1
-      hunkdiff-linux-arm64: 0.12.1
-      hunkdiff-linux-x64: 0.12.1
-      hunkdiff-windows-x64: 0.12.1
+      hunkdiff-darwin-arm64: 0.18.0-beta.0
+      hunkdiff-darwin-x64: 0.18.0-beta.0
+      hunkdiff-linux-arm64: 0.18.0-beta.0
+      hunkdiff-linux-x64: 0.18.0-beta.0
+      hunkdiff-windows-x64: 0.18.0-beta.0
     transitivePeerDependencies:
-      - '@shikijs/themes'
       - react-dom
 
   iconv-lite@0.7.3:
@@ -4070,6 +4024,8 @@ snapshots:
 
   react@19.2.7: {}
 
+  readdirp@4.1.2: {}
+
   regex-recursion@6.0.2:
     dependencies:
       regex-utilities: 2.3.0
@@ -4141,14 +4097,14 @@ snapshots:
 
   shell-quote@1.9.0: {}
 
-  shiki@4.3.1:
+  shiki@3.23.0:
     dependencies:
-      '@shikijs/core': 4.3.1
-      '@shikijs/engine-javascript': 4.3.1
-      '@shikijs/engine-oniguruma': 4.3.1
-      '@shikijs/langs': 4.3.1
-      '@shikijs/themes': 4.3.1
-      '@shikijs/types': 4.3.1
+      '@shikijs/core': 3.23.0
+      '@shikijs/engine-javascript': 3.23.0
+      '@shikijs/engine-oniguruma': 3.23.0
+      '@shikijs/langs': 3.23.0
+      '@shikijs/themes': 3.23.0
+      '@shikijs/types': 3.23.0
       '@shikijs/vscode-textmate': 10.0.2
       '@types/hast': 3.0.4
 
