@@ -1,0 +1,16 @@
+id: github-paid-focus
+description: |
+    Minimal single cell to reproduce the command-review-focus hang on github
+    (review never posted on the PR within 25min) WITHOUT the full paid cell's
+    ~13 scenarios — so the job finishes well under the 60min timeout and the
+    failure-evidence collector actually uploads the worker log. onboarding runs
+    first (required to register the webhook); command-review-focus is the one
+    under test. Learning stays disabled for github-paid via the workflow env.
+scenarios:
+    - onboarding-webhook-registration
+    - command-review-focus
+
+cells:
+    - target: self-hosted
+      provider: github
+      license: license-paid
