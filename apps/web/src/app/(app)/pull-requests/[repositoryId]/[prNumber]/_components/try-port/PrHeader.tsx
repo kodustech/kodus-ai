@@ -25,8 +25,8 @@ export function PrHeader({
     tabs?: PrTab[];
 }) {
     return (
-        <header className="mb-6 fade-up">
-            <div className="flex items-center gap-2 mb-3">
+        <header className="mb-4 fade-up">
+            <div className="flex items-center gap-2 mb-2">
                 <StateBadge
                     state={pr.state}
                     merged={pr.merged}
@@ -37,7 +37,7 @@ export function PrHeader({
                 </span>
             </div>
 
-            <h1 className="text-[26px] sm:text-[30px] leading-[1.15] tracking-tight font-medium text-[var(--text)] mb-4 max-w-4xl">
+            <h1 className="text-[20px] sm:text-[22px] leading-[1.2] tracking-tight font-medium text-[var(--text)] mb-3 max-w-4xl">
                 {pr.title}
             </h1>
 
@@ -81,7 +81,9 @@ export function PrHeader({
                         {pr.changedFiles === 1 ? "" : "s"}
                     </span>
                     <span className="font-mono">
-                        <span className="text-[var(--green)]">
+                        {/* Diff additions get their own editor teal so status
+                            green stays reserved for review semantics. */}
+                        <span className="text-[#33b8a0]">
                             +{pr.additions}
                         </span>{" "}
                         <span className="text-[var(--red)]">
@@ -143,7 +145,7 @@ function Tabs({
         // lines on some viewports — cleaner to draw the baseline once
         // here and let the active indicator overlap via box-shadow.
         <nav
-            className="mt-5 flex items-center gap-1 relative"
+            className="mt-4 flex items-center gap-1 relative"
             style={{ boxShadow: "inset 0 -1px 0 0 rgba(255,255,255,0.06)" }}
         >
             {tabs.map((tab) => {

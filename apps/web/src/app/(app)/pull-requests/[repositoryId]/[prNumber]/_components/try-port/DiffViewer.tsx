@@ -1,6 +1,13 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+    memo,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type CSSProperties,
+} from "react";
 import { PatchDiff } from "@pierre/diffs/react";
 import { ErrorBoundary } from "react-error-boundary";
 import type { DiffFile, PrInfo, PromptContext, ReviewIssue } from "./types";
@@ -20,7 +27,7 @@ function RawPatch({ patch }: { patch: string }) {
         <pre className="overflow-x-auto p-4 font-mono text-xs leading-relaxed kodus-scroll">
             {patch.split("\n").map((line, i) => {
                 const color = line.startsWith("+")
-                    ? "text-[var(--green)]"
+                    ? "text-[#33b8a0]"
                     : line.startsWith("-")
                       ? "text-[var(--red)]"
                       : line.startsWith("@@")
@@ -74,6 +81,15 @@ function LazyDiff({
     // reserve absurd amounts of empty scroll.
     const estimated = Math.min(1400, Math.max(120, lineCount * 18));
 
+    // Pierre renders in a shadow root; only inherited custom properties reach
+    // it. Raise the gutter line-number foreground one step (its default is a
+    // dim 65% fg/bg mix that falls under ~3:1) for legibility. The +/- glyph
+    // Pierre draws on each changed line stays as the non-color cue.
+    const gutterVars = {
+        "--diffs-fg-number-override":
+            "color-mix(in lab, var(--diffs-fg) 82%, var(--diffs-bg))",
+    } as CSSProperties;
+
     useEffect(() => {
         if (show || isLarge) return;
         const el = ref.current;
@@ -101,7 +117,14 @@ function LazyDiff({
         <div
             ref={ref}
             className="pierre-diff-container overflow-x-auto"
-            style={show ? undefined : { minHeight: isLarge ? undefined : estimated }}>
+            style={
+                show
+                    ? gutterVars
+                    : {
+                          ...gutterVars,
+                          minHeight: isLarge ? undefined : estimated,
+                      }
+            }>
             {show ? (
                 <ErrorBoundary
                     fallback={<RawPatch patch={patch} />}
@@ -327,7 +350,7 @@ const FileBlock = memo(function FileBlock({
                             }
                         />
                     )}
-                    <span className="text-xs font-mono text-[var(--green)]">
+                    <span className="text-xs font-mono text-[#33b8a0]">
                         +{file.additions}
                     </span>
                     <span className="text-xs font-mono text-[var(--red)]">

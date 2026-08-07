@@ -170,8 +170,15 @@ const SubscriptionPaymentFailed = () => {
 };
 
 const SubscriptionSelfHosted = () => {
+    // Neutral ghost pill (grey stroke, transparent fill). The old "tertiary"
+    // variant is a solid red fill that competed with severity red elsewhere in
+    // the app — a plan-identity label shouldn't read as a danger signal.
     return (
-        <Button decorative size="sm" variant="tertiary">
+        <Button
+            decorative
+            size="sm"
+            variant="helper"
+            className="ring-card-lv3 text-text-secondary ring-1 [--button-background:transparent]">
             Self-hosted
         </Button>
     );
