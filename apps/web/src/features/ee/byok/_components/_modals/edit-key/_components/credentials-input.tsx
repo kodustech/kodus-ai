@@ -16,6 +16,7 @@ import { ExternalLinkIcon, InfoIcon, KeyRoundIcon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 
 import type { EditKeyForm } from "../_types";
+import { SecretInput } from "./secret-input";
 
 /**
  * Renders the credential inputs appropriate for the active provider:
@@ -42,20 +43,23 @@ export const ByokCredentialsInput = () => {
         <Controller
             name="apiKey"
             control={form.control}
-            render={({ field }) => (
+            render={({ field, fieldState }) => (
                 <FormControl.Root>
                     <FormControl.Label htmlFor={field.name}>
                         Key
                     </FormControl.Label>
                     <FormControl.Input>
-                        <Textarea
+                        <SecretInput
                             id={field.name}
-                            value={field.value}
+                            value={field.value ?? ""}
                             onChange={field.onChange}
-                            className="max-h-56 min-h-32"
+                            error={fieldState.error}
                             placeholder="Provide your key"
                         />
                     </FormControl.Input>
+                    <FormControl.Error>
+                        {fieldState.error?.message}
+                    </FormControl.Error>
                 </FormControl.Root>
             )}
         />

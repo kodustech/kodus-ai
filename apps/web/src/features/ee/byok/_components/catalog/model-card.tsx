@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
@@ -13,6 +14,7 @@ import {
     ActivityIcon,
     AlertTriangleIcon,
     CheckCircleIcon,
+    ChevronDownIcon,
     ClockIcon,
     DollarSignIcon,
     FileTextIcon,
@@ -112,6 +114,7 @@ export function CuratedModelCard({
     showConnect?: boolean;
     onSelect?: () => void;
 }) {
+    const [showDetails, setShowDetails] = useState(false);
     const latency = formatLatency(model.latencyP50Ms);
     const errorRate =
         model.errorRatePct != null ? `${model.errorRatePct}%` : null;
@@ -120,6 +123,11 @@ export function CuratedModelCard({
         : undefined;
     // With a dedicated Connect button, the whole-card click is redundant.
     const cardClickable = !!onSelect && !showConnect;
+    // Strengths/weaknesses live behind ONE consistent "Details" reveal so every
+    // card presents the same evidence structure at rest — a flagship with no
+    // bullets no longer looks worse than a card that happens to have them.
+    const hasEvidence =
+        model.strengths.length > 0 || model.weaknesses.length > 0;
 
     return (
         <Card
@@ -183,8 +191,8 @@ export function CuratedModelCard({
                         </TooltipTrigger>
                         <TooltipPortal>
                             <TooltipContent side="bottom">
-                                Benchmark score (0–100) on our code-review test
-                                suite
+                                Quality score out of 100 on our code-review
+                                benchmark
                             </TooltipContent>
                         </TooltipPortal>
                     </Tooltip>
@@ -200,7 +208,7 @@ export function CuratedModelCard({
                     <MetricTag
                         icon={<ClockIcon size={10} className="mr-1" />}
                         label={SPEED_LABELS[model.speed] ?? model.speed}
-                        tooltip="Response time based on p90 latency across benchmark tests"
+                        tooltip="Typical response speed"
                     />
                     {latency && (
                         <MetricTag
@@ -219,45 +227,70 @@ export function CuratedModelCard({
                     <MetricTag
                         icon={<FileTextIcon size={10} className="mr-1" />}
                         label={model.contextWindow}
-                        tooltip="Maximum input size per request (context window)"
+                        tooltip="Context window — how much it can read per request"
                     />
                     <MetricTag
                         icon={<DollarSignIcon size={10} className="mr-1" />}
                         label={model.costTier}
-                        tooltip="Relative cost per 1M tokens (input/output)"
+                        tooltip="Relative cost — $ is cheapest, $$$ is priciest"
                     />
                 </div>
 
-                {!compact && model.strengths.length > 0 && (
-                    <ul className="flex flex-col gap-0.5">
-                        {model.strengths.slice(0, 2).map((s) => (
-                            <li
-                                key={s}
-                                className="text-success flex items-start gap-1.5 text-xs">
-                                <CheckCircleIcon
-                                    size={12}
-                                    className="mt-0.5 shrink-0"
-                                />
-                                {s}
-                            </li>
-                        ))}
-                    </ul>
-                )}
+                {!compact && hasEvidence && (
+                    <div className="flex flex-col gap-2">
+                        <button
+                            type="button"
+                            aria-expanded={showDetails}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setShowDetails((v) => !v);
+                            }}
+                            className="text-text-tertiary hover:text-text-primary flex items-center gap-1 self-start text-xs transition-colors">
+                            <ChevronDownIcon
+                                size={12}
+                                className={cn(
+                                    "transition-transform",
+                                    showDetails && "rotate-180",
+                                )}
+                            />
+                            {showDetails ? "Hide details" : "Details"}
+                        </button>
 
-                {!compact && model.weaknesses.length > 0 && (
-                    <ul className="flex flex-col gap-0.5">
-                        {model.weaknesses.slice(0, 1).map((w) => (
-                            <li
-                                key={w}
-                                className="text-warning flex items-start gap-1.5 text-xs">
-                                <AlertTriangleIcon
-                                    size={12}
-                                    className="mt-0.5 shrink-0"
-                                />
-                                {w}
-                            </li>
-                        ))}
-                    </ul>
+                        {showDetails && (
+                            <div className="flex flex-col gap-1.5">
+                                {model.strengths.length > 0 && (
+                                    <ul className="flex flex-col gap-0.5">
+                                        {model.strengths.map((s) => (
+                                            <li
+                                                key={s}
+                                                className="text-success flex items-start gap-1.5 text-xs">
+                                                <CheckCircleIcon
+                                                    size={12}
+                                                    className="mt-0.5 shrink-0"
+                                                />
+                                                {s}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                                {model.weaknesses.length > 0 && (
+                                    <ul className="flex flex-col gap-0.5">
+                                        {model.weaknesses.map((w) => (
+                                            <li
+                                                key={w}
+                                                className="text-warning flex items-start gap-1.5 text-xs">
+                                                <AlertTriangleIcon
+                                                    size={12}
+                                                    className="mt-0.5 shrink-0"
+                                                />
+                                                {w}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {showConnect && (
@@ -273,6 +306,34 @@ export function CuratedModelCard({
                 )}
             </CardContent>
         </Card>
+    );
+}
+
+/**
+ * A one-time key for the glyphs on the model cards below it. Tooltips repeat
+ * this per-glyph, but a visible legend makes the shorthand ("★ 91", "$$$",
+ * "Fast") readable without hovering.
+ */
+export function ModelCardLegend() {
+    return (
+        <div className="text-text-tertiary flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+            <span className="flex items-center gap-1">
+                <StarIcon size={11} />
+                Quality score /100
+            </span>
+            <span className="flex items-center gap-1">
+                <ClockIcon size={11} />
+                Typical speed
+            </span>
+            <span className="flex items-center gap-1">
+                <FileTextIcon size={11} />
+                Context window
+            </span>
+            <span className="flex items-center gap-1">
+                <DollarSignIcon size={11} />
+                Relative cost ($–$$$)
+            </span>
+        </div>
     );
 }
 

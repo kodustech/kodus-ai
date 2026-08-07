@@ -194,10 +194,12 @@
             "contextWindow": "200K",
             "costTier": "$$$",
             "strengths": [
-                "Best cross-file detection (90.7%, +4.9pp above avg)",
-                "High coverage (85.0%, +5.2pp above avg)"
+                "Catches ~5% more cross-file issues than average",
+                "Broader coverage than most models"
             ],
-            "weaknesses": ["Noise generation at 10.8%"],
+            "weaknesses": [
+                "Slightly noisier — a few more low-value comments"
+            ],
             "apiKeyUrl": "https://console.anthropic.com/settings/keys",
             "defaults": {
                 "temperature": 0,
@@ -215,10 +217,10 @@
             "contextWindow": "1M",
             "costTier": "$$",
             "strengths": [
-                "Very low noise generation (4.3%)",
-                "Strong local logic detection (86.5%)"
+                "Very clean — few low-value comments",
+                "Strong at spotting logic bugs within a file"
             ],
-            "weaknesses": ["Coverage below average (78.0%)"],
+            "weaknesses": ["Catches fewer issues than average"],
             "apiKeyUrl": "https://aistudio.google.com/apikey",
             "defaults": {
                 "temperature": 0,
@@ -236,10 +238,10 @@
             "contextWindow": "200K",
             "costTier": "$",
             "strengths": [
-                "Highest coverage of all models (88.8%)",
-                "Fastest responses (p90: 16.7s)"
+                "Catches the most issues of any model",
+                "Fast — replies in ~17s"
             ],
-            "weaknesses": ["Higher noise generation (18.8%)"],
+            "weaknesses": ["Noisier — more low-value comments"],
             "apiKeyUrl": "https://console.anthropic.com/settings/keys",
             "defaults": {
                 "temperature": 0,
@@ -257,10 +259,10 @@
             "contextWindow": "256K",
             "costTier": "$",
             "strengths": [
-                "Best local logic detection (92.7%)",
-                "Highest pass rate / fewest errors"
+                "Best at spotting logic bugs within a file",
+                "Most reliable — rarely errors out"
             ],
-            "weaknesses": ["High noise generation (21.4%)"],
+            "weaknesses": ["Noisy — expect more low-value comments"],
             "apiKeyUrl": "https://openrouter.ai/keys",
             "defaults": {
                 "temperature": 0,
@@ -279,10 +281,10 @@
             "contextWindow": "1M",
             "costTier": "$",
             "strengths": [
-                "High pass rate (42.7%)",
-                "Low noise generation (9.8%)"
+                "Reliable — rarely errors out",
+                "Clean — few low-value comments"
             ],
-            "weaknesses": ["Coverage below average (77.6%)"],
+            "weaknesses": ["Catches fewer issues than average"],
             "apiKeyUrl": "https://aistudio.google.com/apikey",
             "defaults": {
                 "temperature": 0,
@@ -300,10 +302,10 @@
             "contextWindow": "200K",
             "costTier": "$",
             "strengths": [
-                "Lowest noise generation of all models (4.0%)",
+                "Cleanest of any model — very few low-value comments",
                 "Low cost via OpenRouter"
             ],
-            "weaknesses": ["Lowest coverage of all models (71.5%)"],
+            "weaknesses": ["Catches the fewest issues of any model"],
             "apiKeyUrl": "https://openrouter.ai/keys",
             "defaults": {
                 "temperature": 0,
@@ -321,10 +323,10 @@
             "contextWindow": "1M",
             "costTier": "$$$",
             "strengths": [
-                "Strong local logic (87.5%)",
-                "Low noise generation (8.7%)"
+                "Strong at spotting logic bugs within a file",
+                "Clean — few low-value comments"
             ],
-            "weaknesses": ["Weakest cross-file detection (80.5%)"],
+            "weaknesses": ["Weaker at cross-file issues than most"],
             "apiKeyUrl": "https://aistudio.google.com/apikey",
             "defaults": {
                 "temperature": 0,
@@ -342,10 +344,10 @@
             "contextWindow": "400K",
             "costTier": "$$$",
             "strengths": [
-                "Most consistent latency (p50-p99: 19s-34s)",
-                "Low noise generation (8.2%)"
+                "Very consistent response times",
+                "Clean — few low-value comments"
             ],
-            "weaknesses": ["Coverage well below average (74.6%)"],
+            "weaknesses": ["Catches noticeably fewer issues than average"],
             "apiKeyUrl": "https://platform.openai.com/api-keys",
             "defaults": {
                 "temperature": 0,

@@ -1,15 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@components/ui/button";
 import { SettingsIcon } from "lucide-react";
-import Link from "next/link";
 
 import curatedCatalog from "../../_data/curated-models.json";
 import type { CuratedModel } from "../../_data/curated-models.types";
 import type { BYOKConnectInput } from "../../_types";
 import { CuratedConnectPanel } from "./connect-panel";
-import { CuratedModelCard } from "./model-card";
+import { CuratedModelCard, ModelCardLegend } from "./model-card";
 
 export function CuratedCatalog({
     slot,
@@ -50,6 +50,7 @@ export function CuratedCatalog({
 
     return (
         <div className="flex flex-col gap-5">
+            <ModelCardLegend />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {recommended.map((model) => (
                     <CuratedModelCard

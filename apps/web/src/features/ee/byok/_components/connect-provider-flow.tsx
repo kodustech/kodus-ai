@@ -2,20 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
 import {
     listByokProviders,
     type ByokProviderDescriptor,
 } from "@services/organizationParameters/fetch";
-import { ArrowLeftIcon } from "lucide-react";
+import { ArrowLeftIcon, LinkIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import curatedCatalog from "../_data/curated-models.json";
 import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConnectInput } from "../_types";
 import { CuratedConnectPanel } from "./catalog/connect-panel";
-import { CuratedModelCard, PROVIDER_LABELS } from "./catalog/model-card";
+import {
+    CuratedModelCard,
+    ModelCardLegend,
+    PROVIDER_LABELS,
+} from "./catalog/model-card";
 import { ProviderLogo } from "./provider-logo";
 
 type ProviderChoice = {
@@ -236,15 +241,18 @@ export function ConnectProviderFlow({
                 </div>
 
                 {providerModels.length > 0 ? (
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {providerModels.map((model) => (
-                            <CuratedModelCard
-                                key={model.id}
-                                model={model}
-                                showConnect
-                                onSelect={() => setSelected(model)}
-                            />
-                        ))}
+                    <div className="flex flex-col gap-3">
+                        <ModelCardLegend />
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {providerModels.map((model) => (
+                                <CuratedModelCard
+                                    key={model.id}
+                                    model={model}
+                                    showConnect
+                                    onSelect={() => setSelected(model)}
+                                />
+                            ))}
+                        </div>
                     </div>
                 ) : (
                     <div className="flex flex-col items-start gap-3">
@@ -287,7 +295,7 @@ export function ConnectProviderFlow({
                         <Button
                             type="button"
                             size="sm"
-                            variant="cancel"
+                            variant="secondary"
                             onClick={onCancel}>
                             Cancel
                         </Button>
@@ -333,17 +341,29 @@ export function ConnectProviderFlow({
                                 label={p.label}
                                 className="size-8"
                             />
-                            <span className="flex min-w-0 flex-col">
+                            <span className="flex min-w-0 flex-col gap-1">
                                 <span className="text-text-primary truncate text-sm font-semibold">
                                     {p.label}
                                 </span>
+                                {/* One axis only: this line is always about the
+                                    provider's models. The "you must supply an
+                                    endpoint" signal is a separate tag below, so
+                                    the subtitle never mixes a count, a fetch
+                                    behaviour, and a setup requirement. */}
                                 <span className="text-text-tertiary text-xs tabular-nums">
                                     {p.modelCount > 0
                                         ? `${p.modelCount} ${p.modelCount === 1 ? "model" : "models"}`
-                                        : p.autoListModels
-                                          ? "Lists all models"
-                                          : "Custom endpoint"}
+                                        : "Browse models"}
                                 </span>
+                                {!p.autoListModels && p.modelCount === 0 && (
+                                    <Badge
+                                        variant="helper"
+                                        size="xs"
+                                        className="mt-0.5 self-start">
+                                        <LinkIcon size={10} className="mr-1" />
+                                        Needs endpoint URL
+                                    </Badge>
+                                )}
                             </span>
                         </button>
                     ))}

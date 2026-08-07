@@ -532,10 +532,38 @@ function ScopeBreakdown({
     scope: SpendLimitScope;
     status: {
         spentUsd: number;
+        byModel: { model: string; spentUsd: number }[];
         byCredential: { credentialId: string; spentUsd: number }[];
     } | null;
 }) {
-    if (scope === "per-model") return null;
+    if (scope === "per-model") {
+        // The per-model spend readout. The pricing-card annotations also carry
+        // it, but they live in a (usually collapsed) accordion, so this is the
+        // always-visible breakdown — mirrors the per-credential card below.
+        const byModel = status?.byModel ?? [];
+        return byModel.length === 0 ? (
+            <p className="text-text-tertiary text-sm">
+                No model spend recorded this month yet.
+            </p>
+        ) : (
+            <Card color="lv1">
+                <CardContent className="flex flex-col gap-1.5 py-3">
+                    {byModel.map((m) => (
+                        <div
+                            key={m.model}
+                            className="flex items-center justify-between gap-3 text-sm tabular-nums">
+                            <span className="text-text-secondary truncate">
+                                {m.model}
+                            </span>
+                            <span className="text-text-primary font-medium">
+                                {formatUsd(m.spentUsd)}
+                            </span>
+                        </div>
+                    ))}
+                </CardContent>
+            </Card>
+        );
+    }
 
     if (scope === "total") {
         return (
@@ -669,6 +697,11 @@ function ModelPricingCard({
                             );
                         })}
                     </div>
+                    <p className="text-text-tertiary text-xs text-pretty">
+                        Enter $0 for any token type your provider doesn't bill —
+                        cache writes are often free. To restore the catalog
+                        price for every field, use “Revert to catalog price”.
+                    </p>
                     {catalog && !matchesCatalog && (
                         <Button
                             type="button"

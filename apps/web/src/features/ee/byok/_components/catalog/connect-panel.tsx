@@ -5,7 +5,6 @@ import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
-import { Textarea } from "@components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
     testBYOK,
@@ -16,7 +15,6 @@ import {
     ArrowLeftIcon,
     CheckCircle2Icon,
     ExternalLinkIcon,
-    PlugIcon,
     SaveIcon,
     XCircleIcon,
 } from "lucide-react";
@@ -29,6 +27,7 @@ import type {
 } from "../../_data/curated-models.types";
 import type { BYOKConnectInput } from "../../_types";
 import { ByokAdvancedSettings } from "../_modals/edit-key/_components/advanced-settings";
+import { SecretInput } from "../_modals/edit-key/_components/secret-input";
 import type { EditKeyForm } from "../_modals/edit-key/_types";
 import { CuratedModelCard, PROVIDER_LABELS } from "./model-card";
 
@@ -324,14 +323,13 @@ export function CuratedConnectPanel({
                                     {providerLabel} API key
                                 </FormControl.Label>
                                 <FormControl.Input>
-                                    <Textarea
+                                    <SecretInput
                                         id={field.name}
                                         value={field.value ?? ""}
                                         onChange={(e) => {
                                             field.onChange(e);
                                             resetTestOnChange();
                                         }}
-                                        className="max-h-40 min-h-24"
                                         placeholder={`Paste your ${providerLabel} API key`}
                                         error={fieldState.error}
                                     />
@@ -372,45 +370,54 @@ export function CuratedConnectPanel({
                         defaultOpen={!!model.variants?.length}
                     />
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Button
-                            type="button"
-                            size="md"
-                            variant="cancel"
-                            onClick={onBack}>
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            size="md"
-                            variant="helper"
-                            leftIcon={<PlugIcon />}
-                            loading={testing}
-                            disabled={!isValid || !apiKey?.trim() || isSaving}
-                            onClick={() => {
-                                void runTest();
-                            }}>
-                            Test
-                        </Button>
-                        <Button
-                            type="button"
-                            size="md"
-                            variant="primary"
-                            leftIcon={<SaveIcon />}
-                            loading={testing || isSaving}
-                            disabled={
-                                !isValid ||
-                                (!apiKey?.trim() && !existingKey)
-                            }
-                            onClick={() => {
-                                void handleTestAndSave();
-                            }}>
-                            {existingKey && !apiKey?.trim() ? (
-                                "Save"
-                            ) : (
-                                <>Test &amp; save</>
-                            )}
-                        </Button>
+                    {/* One primary action: "Test & save" tests the key and, on
+                        success, saves it. "Just test the key" is a subtle
+                        secondary path for anyone who wants to validate without
+                        committing — a text link, not a second equal-weight
+                        button. It's only meaningful when there's a pasted key to
+                        test. */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        {apiKey?.trim() ? (
+                            <button
+                                type="button"
+                                disabled={!isValid || testing || isSaving}
+                                onClick={() => {
+                                    void runTest();
+                                }}
+                                className="text-text-secondary hover:text-text-primary text-sm transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-50">
+                                Just test the key
+                            </button>
+                        ) : (
+                            <span />
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                size="md"
+                                variant="cancel"
+                                onClick={onBack}>
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                size="md"
+                                variant="primary"
+                                leftIcon={<SaveIcon />}
+                                loading={testing || isSaving}
+                                disabled={
+                                    !isValid ||
+                                    (!apiKey?.trim() && !existingKey)
+                                }
+                                onClick={() => {
+                                    void handleTestAndSave();
+                                }}>
+                                {existingKey && !apiKey?.trim() ? (
+                                    "Save"
+                                ) : (
+                                    <>Test &amp; save</>
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
