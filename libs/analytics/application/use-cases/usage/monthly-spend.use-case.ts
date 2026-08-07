@@ -66,13 +66,33 @@ export class MonthlySpendUseCase {
             byModel.reduce((sum, m) => sum + m.spentUsd, 0),
         );
 
+        // Usage-derived model→credential map: keys on the SAME `tu.model` the
+        // spend rows use, so attribution no longer drifts against the config
+        // model-NAME on versioned response models (the `unattributed` leak).
+        const pairs = await this.tokenUsageService.getModelCredentialPairs({
+            organizationId,
+            start,
+            end,
+            byok: true,
+        });
+        const usageCredByModel = new Map<string, string>();
+        for (const { model, credentialId } of pairs) {
+            if (model && credentialId && !usageCredByModel.has(model)) {
+                usageCredByModel.set(model, credentialId);
+            }
+        }
+
         return {
             organizationId,
             periodKey,
             spentUsd,
             tokenUsage: this.aggregateTokenUsage(rows),
             byModel,
-            byCredential: this.rollupByCredential(byModel, byokConfig),
+            byCredential: this.rollupByCredential(
+                byModel,
+                byokConfig,
+                usageCredByModel,
+            ),
             runRate: this.computeRunRate(spentUsd, now, start, monthMs),
         };
     }
@@ -98,6 +118,11 @@ export class MonthlySpendUseCase {
     private rollupByCredential(
         byModel: ModelSpend[],
         byokConfig?: BYOKConfig | null,
+        // Usage-derived `tu.model → credentialId` map (preferred): the usage
+        // stamped the credential on the span, so it keys on the SAME model-name
+        // the spend rows use. Falls back to the config name-map for spend from
+        // legacy usage that predates the stamped credentialId.
+        usageCredByModel: Map<string, string> = new Map(),
     ): CredentialSpend[] {
         const modelToCredential = new Map<string, string>();
         if (isByokConfig(byokConfig)) {
@@ -113,7 +138,9 @@ export class MonthlySpendUseCase {
         const totals = new Map<string, number>();
         for (const { model, spentUsd } of byModel) {
             const credentialId =
-                modelToCredential.get(model) ?? UNATTRIBUTED_CREDENTIAL;
+                usageCredByModel.get(model) ??
+                modelToCredential.get(model) ??
+                UNATTRIBUTED_CREDENTIAL;
             totals.set(credentialId, (totals.get(credentialId) ?? 0) + spentUsd);
         }
 

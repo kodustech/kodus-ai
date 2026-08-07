@@ -349,6 +349,40 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         return merged;
     }
 
+    async getModelCredentialPairs(
+        query: TokenUsageQueryContract,
+    ): Promise<Array<{ model: string; credentialId: string }>> {
+        // Distinct (tu.model, tu.credentialId) the usage actually recorded — the
+        // usage-derived attribution map. Grouping only; no tokens/pricing, so it
+        // is cheap. Empty/absent credentialId (env/managed/legacy) is excluded so
+        // those fall back to the config name-map / unattributed in the caller.
+        return this.observabilityTelemetryModel
+            .aggregate<{ model: string; credentialId: string }>([
+                {
+                    $match: {
+                        ...this._tuMatch(query),
+                        'attributes.tu.credentialId': { $nin: ['', null] },
+                    },
+                },
+                {
+                    $group: {
+                        _id: {
+                            model: '$attributes.tu.model',
+                            credentialId: '$attributes.tu.credentialId',
+                        },
+                    },
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        model: '$_id.model',
+                        credentialId: '$_id.credentialId',
+                    },
+                },
+            ] as any)
+            .exec();
+    }
+
     async getUsageByPr(
         query: TokenUsageQueryContract,
     ): Promise<UsageByPrResultContract[]> {

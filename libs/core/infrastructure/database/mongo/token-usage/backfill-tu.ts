@@ -136,6 +136,9 @@ const SET_TU = {
             isByok: { $eq: [gf('type'), 'byok'] },
             sys: { $in: [gf('gen_ai.run.name'), BACKFILL_SYSTEM_RUN_NAMES] },
             model: modelExpr,
+            // Mirror of deriveTu's credentialId ('' when absent) — the per-key
+            // spend attribution dimension (backfilled from the span attribute).
+            credentialId: { $ifNull: [gf('credentialId'), ''] },
             input: { $ifNull: [gf('gen_ai.usage.input_tokens'), 0] },
             output: { $ifNull: [gf('gen_ai.usage.output_tokens'), 0] },
             total: { $ifNull: [gf('gen_ai.usage.total_tokens'), 0] },

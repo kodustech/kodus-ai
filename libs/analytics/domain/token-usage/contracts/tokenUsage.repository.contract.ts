@@ -22,6 +22,15 @@ export interface ITokenUsageRepository {
         query: TokenUsageQueryContract,
     ): Promise<DailyUsageResultContract[]>;
 
+    /** Distinct (model, credentialId) pairs the org's BYOK usage recorded in the
+     *  window (only non-empty credentialId). The usage-derived model→credential
+     *  map spend attribution uses — keying on the SAME model-name the usage
+     *  recorded, so it no longer drifts against the config name on versioned
+     *  response models (the `unattributed` leak). */
+    getModelCredentialPairs(
+        query: TokenUsageQueryContract,
+    ): Promise<Array<{ model: string; credentialId: string }>>;
+
     getUsageByPr(
         query: TokenUsageQueryContract,
     ): Promise<UsageByPrResultContract[]>;

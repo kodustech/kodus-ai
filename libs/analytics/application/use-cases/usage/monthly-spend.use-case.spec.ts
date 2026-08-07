@@ -2,14 +2,20 @@ import { MonthlySpendUseCase } from './monthly-spend.use-case';
 
 describe('MonthlySpendUseCase', () => {
     let useCase: MonthlySpendUseCase;
-    let tokenUsageService: { getDailyUsage: jest.Mock };
+    let tokenUsageService: {
+        getDailyUsage: jest.Mock;
+        getModelCredentialPairs: jest.Mock;
+    };
     let modelCostCalculator: { spendByModel: jest.Mock };
 
     // Mid-month, mid-day UTC — keeps the "month-to-date" window unambiguous.
     const NOW = new Date(Date.UTC(2026, 5, 15, 12, 30, 0)); // 2026-06-15
 
     beforeEach(() => {
-        tokenUsageService = { getDailyUsage: jest.fn().mockResolvedValue([]) };
+        tokenUsageService = {
+            getDailyUsage: jest.fn().mockResolvedValue([]),
+            getModelCredentialPairs: jest.fn().mockResolvedValue([]),
+        };
         modelCostCalculator = { spendByModel: jest.fn().mockResolvedValue([]) };
         useCase = new MonthlySpendUseCase(
             tokenUsageService as any,
@@ -202,6 +208,31 @@ describe('MonthlySpendUseCase', () => {
             expect(result.byCredential).toEqual([
                 { credentialId: 'cred-a', spentUsd: 4 },
                 { credentialId: 'unattributed', spentUsd: 2.5 },
+            ]);
+        });
+
+        it('prefers the usage-derived credential map when the config name misses (versioned model)', async () => {
+            // Usage recorded the response name `claude-3.5` under cred-b, but the
+            // config lists the model as `claude` — the config name-map would MISS
+            // and dump it to `unattributed`. The usage-derived map attributes it.
+            modelCostCalculator.spendByModel.mockResolvedValue([
+                { model: 'gpt-4o', spentUsd: 4 },
+                { model: 'claude-3.5', spentUsd: 6 },
+            ]);
+            tokenUsageService.getModelCredentialPairs.mockResolvedValue([
+                { model: 'claude-3.5', credentialId: 'cred-b' },
+            ]);
+
+            const result = await useCase.getMonthToDateSpend(
+                'org-1',
+                NOW,
+                undefined,
+                v2Config,
+            );
+
+            expect(result.byCredential).toEqual([
+                { credentialId: 'cred-a', spentUsd: 4 }, // gpt-4o via config map
+                { credentialId: 'cred-b', spentUsd: 6 }, // claude-3.5 via usage map
             ]);
         });
 
