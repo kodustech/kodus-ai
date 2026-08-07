@@ -188,9 +188,14 @@ export function resolveManagedSlot(
                 );
             }
             if (vertexKey) {
-                return managedSlot(BYOKProvider.GOOGLE_VERTEX, vertexKey, envMode, {
-                    vertexLocation: process.env.API_VERTEX_AI_LOCATION,
-                });
+                return managedSlot(
+                    BYOKProvider.GOOGLE_VERTEX,
+                    vertexKey,
+                    envMode,
+                    {
+                        vertexLocation: process.env.API_VERTEX_AI_LOCATION,
+                    },
+                );
             }
             // No Google-side key — fall through to the cloud Gemini default below.
         }
@@ -230,7 +235,8 @@ export function resolveManagedSlot(
                     // the first request. Default to api.openai.com to match the
                     // legacy v2 getChatGPT behavior when no endpoint is configured.
                     baseURL: openaiBaseURL || 'https://api.openai.com/v1',
-                    supportsStructuredOutputs: options.structuredOutputs === true,
+                    supportsStructuredOutputs:
+                        options.structuredOutputs === true,
                 })(envMode),
             };
         }
@@ -414,7 +420,8 @@ export function getInternalModel(
  * `resolveManagedSlot`'s job; this only decides skip-vs-run.
  */
 function hasManagedModelKey(): boolean {
-    const selfHosted = (process.env.API_LLM_PROVIDER_MODEL ?? 'auto') !== 'auto';
+    const selfHosted =
+        (process.env.API_LLM_PROVIDER_MODEL ?? 'auto') !== 'auto';
     if (selfHosted) {
         return !!(
             process.env.API_OPEN_AI_API_KEY ||

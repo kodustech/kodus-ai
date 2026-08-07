@@ -243,13 +243,15 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             });
         }
 
-        // Centralized permission validation
+        // Centralized permission validation. Consumption is deliberately OFF
+        // here: this stage only GATES (blocks when managed trial credits are
+        // exhausted). The credit is consumed only after the review reaches a
+        // successful terminal state (SUCCESS / PARTIAL_ERROR) in
+        // CodeReviewHandlerService — so a review that ends in ERROR or SKIPPED
+        // never costs the user a free trial review. The consume there rebuilds
+        // the same repo:pr usageKey, keeping it idempotent per PR.
         const validationOptions = {
-            consumeTrialReviewCredit: true,
-            trialReviewCreditUsageKey:
-                context.repository?.id && pullRequest?.number
-                    ? `${context.repository.id}:${pullRequest.number}`
-                    : undefined,
+            consumeTrialReviewCredit: false,
         };
 
         let validationResult =

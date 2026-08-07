@@ -54,9 +54,7 @@ export class KodyIssuesAnalysisService {
     public readonly isCloud: boolean;
     public readonly isDevelopment: boolean;
 
-    constructor(
-        private readonly observabilityService: ObservabilityService,
-    ) {
+    constructor(private readonly observabilityService: ObservabilityService) {
         this.isCloud = environment.API_CLOUD_MODE;
         this.isDevelopment = environment.API_DEVELOPMENT_MODE;
     }
@@ -105,7 +103,7 @@ export class KodyIssuesAnalysisService {
                 error,
                 metadata: {
                     organizationAndTeamData,
-                    prNumber: pullRequest.number,
+                    prNumber: pullRequest?.number,
                 },
             });
             throw error;
@@ -129,8 +127,7 @@ export class KodyIssuesAnalysisService {
                 system: prompt_kodyissues_resolve_issues_system(),
                 user: JSON.stringify(promptData),
                 runName: `${KodyIssuesAnalysisService.name}::${runName}`,
-                organizationId:
-                    context.organizationAndTeamData?.organizationId,
+                organizationId: context.organizationAndTeamData?.organizationId,
                 attrs: {
                     prNumber: context.pullRequest?.number,
                     fallback: false,
@@ -160,7 +157,7 @@ export class KodyIssuesAnalysisService {
                 error,
                 metadata: {
                     organizationAndTeamData: context.organizationAndTeamData,
-                    prNumber: context.pullRequest.number,
+                    prNumber: context.pullRequest?.number,
                 },
             });
             throw error;

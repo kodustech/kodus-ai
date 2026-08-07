@@ -11,12 +11,17 @@ jest.mock('exa-js', () => {
     }));
 });
 
-function buildObservabilityMock(): ObservabilityService {
+function buildObservabilityMock(params?: {
+    formattedResult?: string;
+}): ObservabilityService {
     return {
-        runLLMInSpan: jest.fn(async ({ exec }) => {
-            const result = await exec([]);
-            return { result };
-        }),
+        // The service formats docs via runAiSdkLLMInSpan. Return the text
+        // directly instead of running exec (which would hit the real LLM).
+        runAiSdkLLMInSpan: jest.fn(async () => ({
+            text:
+                params?.formattedResult ??
+                '## Summary\n- formatted doc snippet',
+        })),
     } as unknown as ObservabilityService;
 }
 
@@ -81,7 +86,10 @@ describe('DocumentationSearchExaService', () => {
         const service = new DocumentationSearchExaService(
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
-            buildObservabilityMock(),
+            buildObservabilityMock({
+                formattedResult:
+                    '## Summary\n- Use @Controller decorators correctly.',
+            }),
         );
 
         const result = await service.searchByFilePlan({

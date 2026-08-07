@@ -511,7 +511,7 @@ describe('ValidatePrerequisitesStage', () => {
     });
 
     describe('trial review credit consumption', () => {
-        it('asks to consume a managed trial credit keyed by repo:pr', async () => {
+        it('gates on trial credits WITHOUT consuming (consumption is deferred to a successful review)', async () => {
             const context = makeContext();
 
             mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
@@ -526,6 +526,10 @@ describe('ValidatePrerequisitesStage', () => {
 
             await stage.execute(context);
 
+            // Prerequisites only checks whether credits remain — it must NOT
+            // consume one up-front, or a review that later ERRORs/SKIPs would
+            // still cost the user a free trial review. The consume happens in
+            // CodeReviewHandlerService once the review reaches SUCCESS/PARTIAL_ERROR.
             expect(
                 mockPermissionValidationService.validateExecutionPermissions,
             ).toHaveBeenCalledWith(
@@ -533,8 +537,7 @@ describe('ValidatePrerequisitesStage', () => {
                 'user-1',
                 ValidatePrerequisitesStage.name,
                 {
-                    consumeTrialReviewCredit: true,
-                    trialReviewCreditUsageKey: 'repo-1:42',
+                    consumeTrialReviewCredit: false,
                 },
             );
         });

@@ -436,8 +436,7 @@ export class DocumentationSearchExaService {
             const response = await runStructuredReviewCall({
                 byokConfig: params.byokConfig,
                 schema: documentationSearchExaFormatSchema,
-                organizationId:
-                    params.organizationAndTeamData?.organizationId,
+                organizationId: params.organizationAndTeamData?.organizationId,
                 runName: `${DocumentationSearchExaService.name}::${runName}`,
                 attrs: {
                     provider: CACHE_PROVIDER,

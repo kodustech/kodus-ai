@@ -80,7 +80,9 @@ export interface StructuredReviewCallParams<S extends z.ZodType | Schema> {
  */
 export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     params: StructuredReviewCallParams<S>,
-): Promise<S extends z.ZodType ? z.infer<S> : S extends Schema<infer T> ? T : never> {
+): Promise<
+    S extends z.ZodType ? z.infer<S> : S extends Schema<infer T> ? T : never
+> {
     const {
         byokConfig,
         schema,
@@ -176,10 +178,7 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
                         ),
                     } as any),
             })
-            .then(
-                (r: any) =>
-                    (r.experimental_output ?? r.output) as any,
-            );
+            .then((r: any) => (r.experimental_output ?? r.output) as any);
 
     try {
         return await call(mainModel, mainModelName);
@@ -206,7 +205,12 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         // slot's limiter with cooldownMs. Never re-issue into a cooling slot
         // (arm-then-honor) — an immediate re-fire would just hammer the
         // rate-limited provider. The caller backs off instead.
-        if (getLimiterForSlot({ slot: mainSlot, organizationId })?.isInCooldown()) {
+        if (
+            getLimiterForSlot({
+                slot: mainSlot,
+                organizationId,
+            })?.isInCooldown()
+        ) {
             throw err;
         }
 

@@ -40,7 +40,10 @@ import {
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
-import { buildModelFromSlot, KODUS_DEFAULT_MODEL } from '@libs/llm/byok-to-vercel';
+import {
+    buildModelFromSlot,
+    KODUS_DEFAULT_MODEL,
+} from '@libs/llm/byok-to-vercel';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     attachClassification,
@@ -371,8 +374,7 @@ export class CommentManagerService implements ICommentManagerService {
 
                 if (fileChunks.length === 1) {
                     // Single chunk — normal path (no chunking needed)
-                    const userPrompt =
-                        `<changedFilesContext>${JSON.stringify(fileChunks[0]) || 'No files changed'}</changedFilesContext>`;
+                    const userPrompt = `<changedFilesContext>${JSON.stringify(fileChunks[0]) || 'No files changed'}</changedFilesContext>`;
 
                     result = await this.runSummaryPromptV5({
                         slot: byokConfigValue ?? null,
@@ -406,8 +408,7 @@ export class CommentManagerService implements ICommentManagerService {
                     // is small (2–4).
                     const chunkResults = await Promise.allSettled(
                         fileChunks.map((chunk, i) => {
-                            const chunkUserPrompt =
-                                `<changedFilesContext>${JSON.stringify(chunk)}</changedFilesContext>`;
+                            const chunkUserPrompt = `<changedFilesContext>${JSON.stringify(chunk)}</changedFilesContext>`;
 
                             const chunkRunName = `${runName}_chunk_${i + 1}`;
                             const chunkSpanName = `${CommentManagerService.name}::${chunkRunName}`;
@@ -644,9 +645,7 @@ You must always respond in ${languageResultPrompt}.`;
                             : new Error(String(error)),
                         classifyLLMError(
                             error,
-                            byokConfigValue?.provider as
-                                | string
-                                | undefined,
+                            byokConfigValue?.provider as string | undefined,
                         ),
                     );
                 }

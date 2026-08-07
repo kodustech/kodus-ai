@@ -90,38 +90,98 @@ describe('zodToStrictWireSchema', () => {
     // which degrades to the raw zod schema and 400s OpenAI-strict) fails here
     // BEFORE it 400s a BYOK-OpenAI customer's shards.
     const realSchemas: Array<[string, z.ZodType]> = [
-        ['kodyRulesIDEGeneratorSchema (guidance-file extraction)', kodyRulesIDEGeneratorSchema],
+        [
+            'kodyRulesIDEGeneratorSchema (guidance-file extraction)',
+            kodyRulesIDEGeneratorSchema,
+        ],
         ['kodyMemoryResolutionSchema', kodyMemoryResolutionSchema],
         ['compilerOutputSchema (detector compiler)', compilerOutputSchema],
-        ['kodyRulesRecommendationSchema (rule recommendation)', kodyRulesRecommendationSchema],
+        [
+            'kodyRulesRecommendationSchema (rule recommendation)',
+            kodyRulesRecommendationSchema,
+        ],
         ['decomposeOutputSchema (atom decomposition)', decomposeOutputSchema],
         // Phase 3 consumer-migration schemas (inline → exported).
-        ['LLMDecisionExtractionSchema (cli capture classifier)', llmDecisionExtractionSchemaCapture],
-        ['LLMDecisionExtractionSchema (cli session classifier)', llmDecisionExtractionSchemaSession],
-        ['repeatedClusteringSchema (comment clustering)', repeatedClusteringSchema],
+        [
+            'LLMDecisionExtractionSchema (cli capture classifier)',
+            llmDecisionExtractionSchemaCapture,
+        ],
+        [
+            'LLMDecisionExtractionSchema (cli session classifier)',
+            llmDecisionExtractionSchemaSession,
+        ],
+        [
+            'repeatedClusteringSchema (comment clustering)',
+            repeatedClusteringSchema,
+        ],
         ['codeReviewAnalysisSchema (llmAnalysis)', codeReviewAnalysisSchema],
         ['severityAnalysisSchema (llmAnalysis)', severityAnalysisSchema],
         ['validateImplementedSchema (llmAnalysis)', validateImplementedSchema],
-        ['documentationSearchExaFormatSchema (exa formatter)', documentationSearchExaFormatSchema],
-        ['safeguardFeatureExtractionSchema (safeguard features)', safeguardFeatureExtractionSchema],
-        ['safeguardVerificationSchema (safeguard verdict)', safeguardVerificationSchema],
+        [
+            'documentationSearchExaFormatSchema (exa formatter)',
+            documentationSearchExaFormatSchema,
+        ],
+        [
+            'safeguardFeatureExtractionSchema (safeguard features)',
+            safeguardFeatureExtractionSchema,
+        ],
+        [
+            'safeguardVerificationSchema (safeguard verdict)',
+            safeguardVerificationSchema,
+        ],
         ['agentTurnSchema (safeguard agent turn)', agentTurnSchema],
         ['kodyIssuesMergeSchema (kody issues merge)', kodyIssuesMergeSchema],
-        ['kodyIssuesResolveSchema (kody issues resolve)', kodyIssuesResolveSchema],
-        ['kodyRulesExtractIdSchema (rule id extraction)', kodyRulesExtractIdSchema],
-        ['kodyRulesUpdateSchema (update std suggestions)', kodyRulesUpdateSchema],
+        [
+            'kodyIssuesResolveSchema (kody issues resolve)',
+            kodyIssuesResolveSchema,
+        ],
+        [
+            'kodyRulesExtractIdSchema (rule id extraction)',
+            kodyRulesExtractIdSchema,
+        ],
+        [
+            'kodyRulesUpdateSchema (update std suggestions)',
+            kodyRulesUpdateSchema,
+        ],
         ['prLevelAnalyzerSchema (pr-level analyzer)', prLevelAnalyzerSchema],
         ['prLevelGroupSchema (pr-level grouping)', prLevelGroupSchema],
         // Phase 3 call sites reusing prompt-file schemas.
-        ['CrossFileContextPlannerSchema (cross-file planner)', CrossFileContextPlannerSchema],
-        ['CrossFileContextSufficiencySchema (cross-file sufficiency)', CrossFileContextSufficiencySchema],
-        ['CrossFileAnalysisSchema (cross-file analysis)', CrossFileAnalysisSchema],
-        ['DocumentationPlannerSchema (documentation planner)', DocumentationPlannerSchema],
-        ['validateCodeSemanticsSchema (semantic validator)', validateCodeSemanticsSchema],
-        ['checkSuggestionSimplicitySchema (simplicity check)', checkSuggestionSimplicitySchema],
-        ['classificationBatchSchema (pr classifier)', classificationBatchSchema],
-        ['kodyRulesClassifierSchema (rules classifier)', kodyRulesClassifierSchema],
-        ['kodyRulesGeneratorSchema (rules generator)', kodyRulesGeneratorSchema],
+        [
+            'CrossFileContextPlannerSchema (cross-file planner)',
+            CrossFileContextPlannerSchema,
+        ],
+        [
+            'CrossFileContextSufficiencySchema (cross-file sufficiency)',
+            CrossFileContextSufficiencySchema,
+        ],
+        [
+            'CrossFileAnalysisSchema (cross-file analysis)',
+            CrossFileAnalysisSchema,
+        ],
+        [
+            'DocumentationPlannerSchema (documentation planner)',
+            DocumentationPlannerSchema,
+        ],
+        [
+            'validateCodeSemanticsSchema (semantic validator)',
+            validateCodeSemanticsSchema,
+        ],
+        [
+            'checkSuggestionSimplicitySchema (simplicity check)',
+            checkSuggestionSimplicitySchema,
+        ],
+        [
+            'classificationBatchSchema (pr classifier)',
+            classificationBatchSchema,
+        ],
+        [
+            'kodyRulesClassifierSchema (rules classifier)',
+            kodyRulesClassifierSchema,
+        ],
+        [
+            'kodyRulesGeneratorSchema (rules generator)',
+            kodyRulesGeneratorSchema,
+        ],
     ];
 
     it.each(realSchemas)(
@@ -145,32 +205,34 @@ describe('zodToStrictWireSchema', () => {
     });
 
     it('validate(): strict-provider null fills round-trip to absent', () => {
-        const result = (zodToStrictWireSchema(compilerOutputSchema) as any)
-            .validate({
-                mechanical: false,
-                pattern: null,
-                flags: null,
-                reason: null,
-            });
+        const result = (
+            zodToStrictWireSchema(compilerOutputSchema) as any
+        ).validate({
+            mechanical: false,
+            pattern: null,
+            flags: null,
+            reason: null,
+        });
         expect(result.success).toBe(true);
         expect(result.value.pattern).toBeUndefined();
         expect(result.value.mechanical).toBe(false);
     });
 
     it('validate(): lenient providers that omit optional keys still parse', () => {
-        const result = (zodToStrictWireSchema(kodyRulesIDEGeneratorSchema) as any)
-            .validate({
-                rules: [
-                    {
-                        title: 't',
-                        rule: 'r',
-                        path: '**/*.rb',
-                        sourcePath: 'CLAUDE.md',
-                        severity: 'high',
-                        examples: [{ snippet: 's', isCorrect: true }],
-                    },
-                ],
-            });
+        const result = (
+            zodToStrictWireSchema(kodyRulesIDEGeneratorSchema) as any
+        ).validate({
+            rules: [
+                {
+                    title: 't',
+                    rule: 'r',
+                    path: '**/*.rb',
+                    sourcePath: 'CLAUDE.md',
+                    severity: 'high',
+                    examples: [{ snippet: 's', isCorrect: true }],
+                },
+            ],
+        });
         expect(result.success).toBe(true);
         expect(result.value.rules).toHaveLength(1);
     });
@@ -185,8 +247,9 @@ describe('zodToStrictWireSchema', () => {
     });
 
     it('validate(): real type errors still fail parse', () => {
-        const result = (zodToStrictWireSchema(compilerOutputSchema) as any)
-            .validate({ mechanical: 'yes' });
+        const result = (
+            zodToStrictWireSchema(compilerOutputSchema) as any
+        ).validate({ mechanical: 'yes' });
         expect(result.success).toBe(false);
     });
 });
@@ -211,7 +274,10 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
     // AI-SDK Schema objects passed directly to runStructuredReviewCall (they
     // bypass zodToStrictWireSchema). MUST already be OpenAI-strict compatible.
     const passThroughWireSchemas: Array<[string, any]> = [
-        ['shardViolationsWireSchema (sharded kody-rules judge)', shardViolationsWireSchema],
+        [
+            'shardViolationsWireSchema (sharded kody-rules judge)',
+            shardViolationsWireSchema,
+        ],
     ];
 
     it.each(passThroughWireSchemas)(
@@ -255,7 +321,10 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
             for (const entry of readdirSync(dir, { withFileTypes: true })) {
                 const abs = join(dir, entry.name);
                 if (entry.isDirectory()) {
-                    if (entry.name === 'node_modules' || entry.name === 'dist') {
+                    if (
+                        entry.name === 'node_modules' ||
+                        entry.name === 'dist'
+                    ) {
                         continue;
                     }
                     walk(abs);
