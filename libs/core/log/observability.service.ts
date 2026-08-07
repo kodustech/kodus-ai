@@ -46,6 +46,15 @@ export interface ObservabilityConfig {
 interface UsageSpanInput {
     runName?: string;
     model?: string;
+    /** BYOK v2 model id that resolved this call (stable id, not the versioned
+     *  response model-name). Per #1388 the LLM metadata must carry it. */
+    byokModelId?: string;
+    /** Credential the resolved model used — the per-key spend attribution key. */
+    credentialId?: string;
+    /** Routing task/route this call served (e.g. `codeReview`, `prSummary`). */
+    route?: string;
+    /** True when the org's fallback model served the call instead of the primary. */
+    usedFallback?: boolean;
     /** -> `agent.name` column. */
     agentName?: string;
     /** -> `agent.phase` column. */
@@ -101,6 +110,10 @@ function buildUsageSpanAttributes(p: UsageSpanInput): Record<string, any> {
             'gen_ai.usage.reasoning_tokens': u.reasoningTokens,
         }),
         ...(p.model && { 'gen_ai.response.model': p.model }),
+        ...(p.byokModelId && { byokModelId: p.byokModelId }),
+        ...(p.credentialId && { credentialId: p.credentialId }),
+        ...(p.route && { route: p.route }),
+        ...(p.usedFallback != null && { usedFallback: p.usedFallback }),
         ...(p.runName && { 'gen_ai.run.name': p.runName }),
         ...(p.agentName && { 'agent.name': p.agentName }),
         ...(p.phase && { 'agent.phase': p.phase }),
@@ -390,6 +403,10 @@ export class ObservabilityService implements OnModuleInit {
         spanName: string;
         runName?: string;
         model?: string;
+        byokModelId?: string;
+        credentialId?: string;
+        route?: string;
+        usedFallback?: boolean;
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
     }): Promise<T> {
@@ -403,6 +420,10 @@ export class ObservabilityService implements OnModuleInit {
                     buildUsageSpanAttributes({
                         runName: params.runName,
                         model: params.model,
+                        byokModelId: params.byokModelId,
+                        credentialId: params.credentialId,
+                        route: params.route,
+                        usedFallback: params.usedFallback,
                         agentName,
                         phase,
                         usage: {
@@ -477,6 +498,13 @@ export class ObservabilityService implements OnModuleInit {
         runName?: string;
         /** Resolved model -> `gen_ai.response.model`. */
         model?: string;
+        /** BYOK v2 model id (stable) + its credential — the spend attribution
+         *  keys, and part of the #1388 LLM-metadata contract. */
+        byokModelId?: string;
+        credentialId?: string;
+        /** Routing task/route + whether the fallback served this call. */
+        route?: string;
+        usedFallback?: boolean;
         /** byok config present -> `type: 'byok'`, else `'system'`. */
         isByok: boolean;
         usage: {
@@ -506,6 +534,10 @@ export class ObservabilityService implements OnModuleInit {
                     runName:
                         params.runName ?? `${params.agentName}-${params.phase}`,
                     model: params.model,
+                    byokModelId: params.byokModelId,
+                    credentialId: params.credentialId,
+                    route: params.route,
+                    usedFallback: params.usedFallback,
                     agentName: params.agentName,
                     phase: params.phase,
                     type: params.isByok ? 'byok' : 'system',

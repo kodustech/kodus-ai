@@ -46,6 +46,10 @@ function slotFromModel(
         provider: provider as BYOKProvider,
         apiKey, // ciphertext — NOT decrypted here
         model: model.model,
+        // Stable attribution ids carried from the config model that resolved —
+        // used to stamp the usage span (spend attributes by id, not model-name).
+        byokModelId: STR(model.id),
+        credentialId: STR(model.credentialId),
         baseURL: STR(s.baseURL),
         vertexLocation: STR(s.vertexLocation),
         awsBearerToken: STR(s.awsBearerToken),

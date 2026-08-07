@@ -50,7 +50,13 @@ const byokConfig = {
 // `undefined` (no settings/reasoning), which `toEqual` ignores.
 // Flat NormalizedModel — the carrier `{ main: … }` shape was retired (single
 // format). `toEqual` ignores the undefined optional fields the slot also carries.
-const expectedByokSlot = { provider: 'openai', model: 'gpt-4', apiKey: 'sk-test' };
+const expectedByokSlot = {
+    provider: 'openai',
+    model: 'gpt-4',
+    apiKey: 'sk-test',
+    byokModelId: 'm-A',
+    credentialId: 'c-oa',
+};
 
 function createMockLicenseService(overrides: any = {}) {
     return {

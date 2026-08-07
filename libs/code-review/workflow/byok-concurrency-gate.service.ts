@@ -2,7 +2,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 
-import { isByokConfig } from '@libs/llm/byok-config';
+import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelSlot } from '@libs/llm/resolve-model-slot';
 import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
@@ -228,7 +228,11 @@ export class ByokConcurrencyGateService {
             if (!isByokConfig(rawConfig)) {
                 return null;
             }
-            const verdict = routingStrategy.resolve('codeReview', {}, rawConfig);
+            const verdict = routingStrategy.resolve(
+                LLM_TASK.codeReview,
+                {},
+                rawConfig,
+            );
             const mainConfig = verdict.modelId
                 ? resolveModelSlot(rawConfig, verdict.modelId)
                 : null;

@@ -11,7 +11,7 @@
 import type { LanguageModel } from 'ai';
 
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import type { LlmTask, NormalizedModel } from '@libs/llm/byok-config';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
 
@@ -65,15 +65,20 @@ export interface ResolvedAgentModel {
 export async function resolveReviewAgentModel(
     input: ModelInput,
     permissionService: PermissionValidationService,
+    // Which routing task this agent resolves. Defaults to `codeReview` (the
+    // bug/perf/security/generalist agents); the Kody-Rules agent passes
+    // `kodyRulesReview` so an org can route it to its own model (it inherits
+    // `codeReview` when unset — TASK_ROUTING_FALLBACK).
+    task: LlmTask = LLM_TASK.codeReview,
 ): Promise<ResolvedAgentModel> {
-    // Resolve the codeReview MAIN model through the single task→model entry point
+    // Resolve the MAIN model for `task` through the single task→model entry point
     // (slice 04b). byokModelId (id) wins over the legacy byokModel NAME;
     // resolveTaskModel handles the id-THEN-name match, the capability gate, and
     // the null-slot → env/managed default degrade (no BYOK too).
     const overrideRef = input.byokModelId?.trim() || input.byokModel?.trim();
     const resolved = await permissionService.resolveTaskModel(
         input.organizationAndTeamData,
-        LLM_TASK.codeReview,
+        task,
         {
             ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
             defaultModelOverride: input.defaultModelOverride,

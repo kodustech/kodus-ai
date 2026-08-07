@@ -13,6 +13,7 @@ import {
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { resolveAgentModel } from '@libs/llm/agent-model';
+import { LLM_TASK, type LlmTask } from '@libs/llm/byok-config';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { resolveModelInvocation } from '@libs/llm/model-invocation';
 import { agentModelIdentity } from '../agent-usage.util';
@@ -206,6 +207,14 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         ctx: BusinessRulesContext,
     ): 'cache_first' | 'agent_first' {
         return ctx.prepareContext?.taskContextResolutionMode ?? 'cache_first';
+    }
+
+    // Route this agent to its own model. `businessValidation` inherits the org's
+    // `conversation` (chat) model when it has no explicit override — the same
+    // model this agent resolved before the task existed, so behavior is unchanged
+    // until an org picks a dedicated model.
+    protected getLlmTask(): LlmTask {
+        return LLM_TASK.businessValidation;
     }
 
     protected resolveUserLanguage(

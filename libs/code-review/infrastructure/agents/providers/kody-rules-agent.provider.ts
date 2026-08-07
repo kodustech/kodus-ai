@@ -6,6 +6,7 @@ import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { fileMatchesRulePath } from '@libs/common/utils/kody-rules/file-patterns';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { BaseCodeReviewAgentProvider } from '@libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
@@ -164,6 +165,9 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             const { byokConfig, main } = await resolveReviewAgentModel(
                 input,
                 this.permissionValidationService,
+                // Route the Kody-Rules review agent to its own task — falls back
+                // to the org's codeReview model when no override is set.
+                LLM_TASK.kodyRulesReview,
             );
             this.shardLogger.log({
                 message: `[AGENT] ${this.getIdentity().name} (sharded) using model: ${main.modelName} for PR#${input.prNumber} (${semanticRules.length} semantic, ${mechanicalRules.length} mechanical rules)`,

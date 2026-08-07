@@ -22,6 +22,7 @@
 // even if nothing else in the process has loaded byok-to-vercel yet.
 import { REGISTRY } from './providers';
 import type { ModelCapabilities } from './providers/kernel/types';
+import { TASK_ROUTING_FALLBACK } from './byok-config';
 import type {
     BYOKConfig,
     BYOKCredential,
@@ -54,18 +55,31 @@ type CapabilityRequirement = {
  *  - prSummary: no hard requirement (free-form text).
  *  - conversation: native tool calling (the agent invokes tools mid-turn).
  */
-const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
-    codeReview: {
-        capability: 'structuredOutput',
-        satisfied: (c) =>
-            c.structuredOutput !== 'none' || c.toolCalling === 'native',
-    },
-    prSummary: null,
-    conversation: {
-        capability: 'toolCalling',
-        satisfied: (c) => c.toolCalling === 'native',
-    },
+// A model good enough to drive `generateObject` for review — native json_schema
+// OR a tool-calling path — is the bar for every structured review-family task.
+const STRUCTURED_OUTPUT_REQUIREMENT: CapabilityRequirement = {
+    capability: 'structuredOutput',
+    satisfied: (c) => c.structuredOutput !== 'none' || c.toolCalling === 'native',
 };
+// A tool-using agent loop (chat + the business-rules validator) needs native
+// tool calling to invoke tools mid-turn.
+const TOOL_CALLING_REQUIREMENT: CapabilityRequirement = {
+    capability: 'toolCalling',
+    satisfied: (c) => c.toolCalling === 'native',
+};
+
+const TASK_CAPABILITY_REQUIREMENTS: Record<LlmTask, CapabilityRequirement> = {
+    codeReview: STRUCTURED_OUTPUT_REQUIREMENT,
+    // Kody-Rules review + rule generation drive structured output (findings /
+    // rule objects) via generateObject, like the main review.
+    kodyRulesReview: STRUCTURED_OUTPUT_REQUIREMENT,
+    ruleGeneration: STRUCTURED_OUTPUT_REQUIREMENT,
+    // Business validation runs the agent loop with tools — same bar as chat.
+    businessValidation: TOOL_CALLING_REQUIREMENT,
+    prSummary: null,
+    conversation: TOOL_CALLING_REQUIREMENT,
+};
+
 
 /** One candidate the precedence chain will try, in order. */
 interface Candidate {
@@ -158,9 +172,23 @@ export class StaticTaskStrategy implements RoutingStrategy {
     ): Candidate[] {
         const candidates: Candidate[] = [];
 
-        // The task's routing target (taskOverride > default) — also the base slot
-        // a legacy NAME override applies onto.
-        const routedId = routing.taskOverrides?.[task] ?? routing.defaultModelId;
+        // The task's routing target: its own override, else the override of the
+        // task it inherits from (TASK_ROUTING_FALLBACK — e.g. kodyRulesReview
+        // borrows codeReview's model when unset), else the org default. Also the
+        // base slot a legacy NAME override applies onto.
+        const inheritedTask = TASK_ROUTING_FALLBACK[task];
+        const ownOverrideId = routing.taskOverrides?.[task];
+        const inheritedOverrideId = inheritedTask
+            ? routing.taskOverrides?.[inheritedTask]
+            : undefined;
+        const taskOverrideId = ownOverrideId ?? inheritedOverrideId;
+        // Mark in the trace when the target came from the inherited task, so the
+        // reason reads "resolved via taskOverride(inherited:codeReview)".
+        const taskOverrideTier =
+            !ownOverrideId && inheritedOverrideId
+                ? `taskOverride(inherited:${inheritedTask})`
+                : 'taskOverride';
+        const routedId = taskOverrideId ?? routing.defaultModelId;
         const routedModel = routedId ? byId.get(routedId) : undefined;
 
         const overrideRef = ctx.override?.modelId?.trim();
@@ -180,13 +208,13 @@ export class StaticTaskStrategy implements RoutingStrategy {
             }
         }
 
-        // taskOverride, then default (skip a tier already queued as the override base).
-        const taskOverrideId = routing.taskOverrides?.[task];
+        // taskOverride (own or inherited), then default (skip a tier already
+        // queued as the override base).
         const taskOverrideModel = taskOverrideId
             ? byId.get(taskOverrideId)
             : undefined;
         if (taskOverrideModel) {
-            candidates.push({ model: taskOverrideModel, tier: 'taskOverride' });
+            candidates.push({ model: taskOverrideModel, tier: taskOverrideTier });
         }
 
         const defaultModel = routing.defaultModelId

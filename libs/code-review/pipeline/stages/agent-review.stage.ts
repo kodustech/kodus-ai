@@ -1941,6 +1941,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         ? (resolvedSlot?.model ?? 'byok-dedup')
                         : KODUS_DEFAULT_MODEL,
                     isByok: secondaryByok,
+                    byokModelId: resolvedSlot?.byokModelId,
+                    credentialId: resolvedSlot?.credentialId,
                     usage: {
                         inputTokens: dedupUsage.inputTokens,
                         outputTokens: dedupUsage.outputTokens,

@@ -4,7 +4,7 @@
  * finalText extraction -> recordAgentRunUsage. Guards the migration from silent
  * regressions (spec building, output extraction, cost emission, fallback).
  */
-import { MockLanguageModelV3 } from 'ai/test';
+import { mockTextModel } from './__test-utils__/mock-model';
 
 // resolveAgentModel is mocked to return our mock model, so the agent's real
 // loop runs without touching BYOK / a provider.
@@ -27,16 +27,7 @@ jest.mock('@langfuse/tracing', () => ({
 import { ConversationAgentProvider } from './conversationAgent';
 import { CONVERSATION_FALLBACK_MESSAGE } from './conversation-response.util';
 
-function makeModel(text: string) {
-    return new MockLanguageModelV3({
-        doGenerate: async () => ({
-            content: text ? [{ type: 'text', text }] : [],
-            finishReason: 'stop',
-            usage: { inputTokens: 10, outputTokens: 5 },
-            warnings: [],
-        }),
-    });
-}
+const makeModel = (text: string) => mockTextModel(text);
 
 function build() {
     const recordAgentRunUsage = jest.fn().mockResolvedValue(undefined);

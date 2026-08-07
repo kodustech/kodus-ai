@@ -9,6 +9,7 @@
 import type { ObservabilityService } from '@libs/core/log/observability.service';
 import { propagateAttributes, startActiveObservation } from '@langfuse/tracing';
 import { pullRequestSessionId, shouldTrace } from '@libs/core/log/langfuse';
+import type { LlmTask } from '@libs/llm/byok-config';
 
 export interface AgentTraceMeta {
     traceName: string;
@@ -87,6 +88,15 @@ export interface RecordAgentUsageParams {
     modelName: string;
     /** byokConfig present → 'byok', else 'system'. */
     isByok: boolean;
+    /** #1388 LLM-metadata + spend attribution keys, from the resolved slot
+     *  (undefined on the env/managed-default path). */
+    byokModelId?: string;
+    credentialId?: string;
+    /** Routing task this run served — constrained to the LLM_TASK taxonomy at
+     *  this (code-review) boundary. The core/log sink keeps `route?: string`
+     *  on purpose: it's the lower layer and must not import libs/llm. */
+    route?: LlmTask;
+    usedFallback?: boolean;
     categoryLabel: string;
     identityName: string;
     organizationId?: string;
@@ -132,6 +142,10 @@ export async function recordAgentUsageSpans(
         runName: `code-review-${p.categoryLabel}`,
         model: p.modelName,
         isByok: p.isByok,
+        byokModelId: p.byokModelId,
+        credentialId: p.credentialId,
+        route: p.route,
+        usedFallback: p.usedFallback,
         usage: {
             inputTokens: mainInputTokens,
             outputTokens: mainOutputTokens,
@@ -163,6 +177,10 @@ export async function recordAgentUsageSpans(
             runName: `code-review-${p.categoryLabel}-verify`,
             model: p.modelName,
             isByok: p.isByok,
+            byokModelId: p.byokModelId,
+            credentialId: p.credentialId,
+            route: p.route,
+            usedFallback: p.usedFallback,
             usage: {
                 inputTokens: vUsage.inputTokens ?? 0,
                 outputTokens: vUsage.outputTokens ?? 0,

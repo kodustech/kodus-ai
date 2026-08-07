@@ -25,6 +25,7 @@ import {
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
@@ -672,6 +673,9 @@ export abstract class BaseCodeReviewAgentProvider {
                 agentResult,
                 modelName: effectiveModelName,
                 isByok: !!byokConfig,
+                byokModelId: byokConfig?.byokModelId,
+                credentialId: byokConfig?.credentialId,
+                route: LLM_TASK.codeReview,
                 categoryLabel: this.getCategoryLabel(),
                 identityName: identity.name,
                 organizationId: input.organizationAndTeamData?.organizationId,

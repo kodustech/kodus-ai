@@ -29,10 +29,27 @@ describe('agentModelIdentity — the drift-prone {model, isByok} pair, derived o
         expect(agentModelIdentity(undefined)).toEqual({
             model: undefined,
             isByok: false,
+            byokModelId: undefined,
+            credentialId: undefined,
         });
         expect(agentModelIdentity(null)).toEqual({
             model: undefined,
             isByok: false,
+            byokModelId: undefined,
+            credentialId: undefined,
+        });
+    });
+
+    it('carries the stable attribution ids (byokModelId + credentialId) from the slot', () => {
+        expect(
+            agentModelIdentity(
+                slot({ byokModelId: 'm-kimi', credentialId: 'c-moonshot' }),
+            ),
+        ).toEqual({
+            model: 'gpt-x',
+            isByok: true,
+            byokModelId: 'm-kimi',
+            credentialId: 'c-moonshot',
         });
     });
 });

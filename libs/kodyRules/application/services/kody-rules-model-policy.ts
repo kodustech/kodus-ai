@@ -44,12 +44,15 @@ export async function resolveKodyRulesModelPolicy(
     permissionValidationService: PermissionValidationService,
     organizationAndTeamData: OrganizationAndTeamData,
 ): Promise<KodyRulesModelPolicy> {
-    // native: resolve the Kody Rules generation (codeReview) task to a bare
-    // model slot. A non-v2 / managed / BLOCKED config yields `null` →
-    // fall through to the self-hosted / trial / skip policy below.
+    // native: resolve the Kody Rules generation task to a bare model slot. The
+    // `ruleGeneration` task inherits the org's `codeReview` model when it has no
+    // explicit override (TASK_ROUTING_FALLBACK), so this stays behavior-compatible
+    // while letting an org route rule *generation* to its own model. A non-v2 /
+    // managed / BLOCKED config yields `null` → fall through to the self-hosted /
+    // trial / skip policy below.
     const byokConfig = await permissionValidationService.resolveTaskSlot(
         organizationAndTeamData,
-        LLM_TASK.codeReview,
+        LLM_TASK.ruleGeneration,
     );
     if (byokConfig) {
         return { generate: true, byokConfig };

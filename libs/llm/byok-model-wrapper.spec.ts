@@ -21,7 +21,12 @@ const estimateMock = estimateTextTokens as unknown as jest.Mock;
 // call the wrapped model's `doGenerate` (which invokes middleware.wrapGenerate).
 // NOT a MockLanguageModelV4 — a plain fake whose doGenerate we control.
 
-const PROMPT = [
+// The prompt type the wrapped model's `doGenerate` expects, derived from the
+// SDK so the literal `role`/`type` narrow to the required unions.
+type Prompt = Parameters<
+    ReturnType<typeof wrapByokModel>['doGenerate']
+>[0]['prompt'];
+const PROMPT: Prompt = [
     { role: 'user', content: [{ type: 'text', text: 'hello world' }] },
 ];
 
@@ -67,6 +72,8 @@ function tpmSlot(
     } as NormalizedModel;
 }
 
+// `wrapByokModel` returns the concrete wrapped model (a `LanguageModelV*`), so
+// the tests drive it directly via `.doGenerate` — no cast needed.
 function wrap(model: any, slot?: NormalizedModel) {
     return wrapByokModel(model, {
         byokConfig: slot,
@@ -104,7 +111,7 @@ describe('wrapByokModel — tpm admission gate (fake timers)', () => {
 
         // Call 2: estimate 900 > reservoir 100 ⇒ HELD (not fired immediately).
         const p2 = wrapped.doGenerate({ prompt: PROMPT });
-        p2.catch(() => undefined);
+        Promise.resolve(p2).catch(() => undefined);
         await flushMicrotasks();
         expect(model.doGenerate).toHaveBeenCalledTimes(1); // still held
 
@@ -160,7 +167,7 @@ describe('wrapByokModel — tpm admission gate (fake timers)', () => {
 
         // Call 2: estimate 200 > reservoir 100 ⇒ HELD until +100 refills.
         const p2 = wrapped.doGenerate({ prompt: PROMPT });
-        p2.catch(() => undefined);
+        Promise.resolve(p2).catch(() => undefined);
         await flushMicrotasks();
         expect(model.doGenerate).toHaveBeenCalledTimes(1);
 
@@ -187,8 +194,8 @@ describe('wrapByokModel — tpm admission gate (fake timers)', () => {
 
         const p1 = wrapped.doGenerate({ prompt: PROMPT });
         const p2 = wrapped.doGenerate({ prompt: PROMPT });
-        p1.catch(() => undefined);
-        p2.catch(() => undefined);
+        Promise.resolve(p1).catch(() => undefined);
+        Promise.resolve(p2).catch(() => undefined);
 
         await flushMicrotasks();
         expect(starts.length).toBe(1); // rpm gate blocks the 2nd start
@@ -237,7 +244,7 @@ describe('wrapByokModel — tpm admission gate (fake timers)', () => {
         // have a full 1000 and admit; the SHARED reservoir (100) HOLDS it instead.
         estimateMock.mockReturnValue(200);
         const p2 = wrap(model, second).doGenerate({ prompt: PROMPT });
-        p2.catch(() => undefined);
+        Promise.resolve(p2).catch(() => undefined);
         await flushMicrotasks();
         expect(model.doGenerate).toHaveBeenCalledTimes(1); // held ⇒ shared limiter
 

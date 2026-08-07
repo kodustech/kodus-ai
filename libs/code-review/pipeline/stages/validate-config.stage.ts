@@ -36,7 +36,7 @@ import {
     processExpression,
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
-import { isByokConfig } from '@libs/llm/byok-config';
+import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 
@@ -98,7 +98,7 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             // the producer stays side-effect free). A null/absent config yields a
             // null slot → the env/managed default downstream.
             const { slot: routedMain, verdict } = isByokConfig(resolved)
-                ? resolveTaskSlot(resolved, 'codeReview', {
+                ? resolveTaskSlot(resolved, LLM_TASK.codeReview, {
                       // The strategy handles the id-THEN-name match (REQ-COMPAT-01).
                       ctx: overrideRef
                           ? { override: { modelId: overrideRef } }

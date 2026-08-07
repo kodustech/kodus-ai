@@ -5,7 +5,7 @@
  * Symmetric to conversationAgent.spec; the existing agent spec mocks above
  * callLLM, so this is what covers the runner wiring.
  */
-import { MockLanguageModelV3 } from 'ai/test';
+import { mockTextModel } from '../__test-utils__/mock-model';
 
 const modelRef: { model: any } = { model: null };
 jest.mock('@libs/llm/agent-model', () => ({
@@ -23,16 +23,8 @@ jest.mock('@langfuse/tracing', () => ({
 
 import { BusinessRulesValidationAgentProvider } from './businessRulesValidationAgent';
 
-function makeModel(text: string) {
-    return new MockLanguageModelV3({
-        doGenerate: async () => ({
-            content: text ? [{ type: 'text', text }] : [],
-            finishReason: 'stop',
-            usage: { inputTokens: 12, outputTokens: 6 },
-            warnings: [],
-        }),
-    });
-}
+const makeModel = (text: string) =>
+    mockTextModel(text, { inputTokens: 12, outputTokens: 6 });
 
 function build() {
     const recordAgentRunUsage = jest.fn().mockResolvedValue(undefined);

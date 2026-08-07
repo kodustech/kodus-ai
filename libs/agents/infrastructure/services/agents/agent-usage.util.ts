@@ -26,8 +26,18 @@ import type {
 export function agentModelIdentity(slot: NormalizedModel | null | undefined): {
     model: string | undefined;
     isByok: boolean;
+    byokModelId: string | undefined;
+    credentialId: string | undefined;
 } {
-    return { model: slot?.model, isByok: !!slot };
+    return {
+        model: slot?.model,
+        isByok: !!slot,
+        // Stable attribution ids from the resolved slot (undefined on the
+        // env/managed-default path). Stamped on the usage span so spend
+        // attributes by id, not the versioned response model-name.
+        byokModelId: slot?.byokModelId,
+        credentialId: slot?.credentialId,
+    };
 }
 
 /** Call-site labels + pass-through attributes for a cost record — everything the
@@ -43,6 +53,11 @@ export interface AgentUsageMeta {
     prNumber?: number;
     source?: string;
     durationMs?: number;
+    /** Routing task/route this run served + whether the fallback model was used
+     *  — #1388 LLM-metadata the slot alone doesn't carry (known at the call-site
+     *  from the routing verdict). Optional: omitted where unknown. */
+    route?: string;
+    usedFallback?: boolean;
     extraAttributes?: Record<string, unknown>;
 }
 

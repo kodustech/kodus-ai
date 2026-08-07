@@ -8,6 +8,13 @@
  */
 import { wrapLanguageModel, type LanguageModel } from 'ai';
 
+// The wrapped model and its generate-result type, derived FROM `wrapLanguageModel`
+// so they track whichever AI SDK version is installed (no hand-imported V-suffixed
+// names to drift). `WrappedModel` is `LanguageModelV*` — a subtype of the public
+// `LanguageModel`, so callers are unaffected while `.doGenerate` stays visible.
+type WrappedModel = ReturnType<typeof wrapLanguageModel>;
+type ByokGenerateResult = Awaited<ReturnType<WrappedModel['doGenerate']>>;
+
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     runWithBYOKLimiter,
@@ -80,7 +87,7 @@ export interface WrapByokModelOptions {
 export function wrapByokModel(
     model: LanguageModel,
     opts: WrapByokModelOptions,
-): LanguageModel {
+): WrappedModel {
     return wrapLanguageModel({
         model: model as any,
         middleware: {
@@ -152,7 +159,11 @@ export function wrapByokModel(
                     ? estimatePromptTokens(params?.prompt)
                     : undefined;
 
-                return runWithBYOKLimiter(
+                // Pin T to the SDK's generate-result type so inference doesn't
+                // collapse to `unknown` (the middleware return type would then
+                // reject it). `run` yields exactly this, and `extractUsageTotal`
+                // takes `unknown`, so nothing else constrains T.
+                return runWithBYOKLimiter<ByokGenerateResult>(
                     {
                         slot,
                         organizationId: opts.organizationId,

@@ -85,6 +85,61 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
         });
     });
 
+    describe('task-inheritance fallback', () => {
+        it('resolves kodyRulesReview to the codeReview override when it has none of its own', () => {
+            const v = strategy.resolve(
+                'kodyRulesReview',
+                NO_CTX,
+                cfg({ taskOverrides: { codeReview: 'm-B' }, defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-B');
+            expect(v.reason).toMatch(/inherited:codeReview/);
+        });
+
+        it('resolves ruleGeneration to the codeReview override when it has none of its own', () => {
+            const v = strategy.resolve(
+                'ruleGeneration',
+                NO_CTX,
+                cfg({ taskOverrides: { codeReview: 'm-B' }, defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-B');
+        });
+
+        it('resolves businessValidation to the conversation override, NOT codeReview', () => {
+            const v = strategy.resolve(
+                'businessValidation',
+                NO_CTX,
+                cfg({
+                    taskOverrides: { codeReview: 'm-A', conversation: 'm-ANT' },
+                    defaultModelId: 'm-A',
+                }),
+            );
+            expect(v.modelId).toBe('m-ANT');
+            expect(v.reason).toMatch(/inherited:conversation/);
+        });
+
+        it("prefers the task's OWN override over the inherited one", () => {
+            const v = strategy.resolve(
+                'kodyRulesReview',
+                NO_CTX,
+                cfg({
+                    taskOverrides: { codeReview: 'm-A', kodyRulesReview: 'm-B' },
+                    defaultModelId: 'm-A',
+                }),
+            );
+            expect(v.modelId).toBe('m-B');
+        });
+
+        it('falls all the way to defaultModelId when neither own nor inherited override exists', () => {
+            const v = strategy.resolve(
+                'kodyRulesReview',
+                NO_CTX,
+                cfg({ defaultModelId: 'm-A' }),
+            );
+            expect(v.modelId).toBe('m-A');
+        });
+    });
+
     describe('single fallback', () => {
         it('returns routing.fallbackModelId with reason "fallback" when the chosen tier fails the gate', () => {
             const v = strategy.resolve(

@@ -1,5 +1,5 @@
 import { LLMModelProvider } from '@libs/llm/model-providers';
-import type { NormalizedModel } from '@libs/llm/byok-config';
+import type { LlmTask, NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -34,14 +34,26 @@ export abstract class BaseAgentProvider {
     ) {}
 
     /**
+     * The routing task this agent resolves its model from. Defaults to
+     * `conversation` (the chat agent); a concrete agent overrides it to route to
+     * its own model — e.g. the business-rules validation agent returns
+     * `businessValidation` (which inherits `conversation`'s model when unset via
+     * TASK_ROUTING_FALLBACK in the resolver). One hook, so every agent that
+     * extends this base picks its task without touching fetchBYOKConfig.
+     */
+    protected getLlmTask(): LlmTask {
+        return LLM_TASK.conversation;
+    }
+
+    /**
      * Fetches BYOK configuration for the organization.
      *
-     * Skill agents run the `conversation` task. Resolution goes through the
-     * permission service's per-task entry point (`resolveTaskSlot(org,
-     * conversation, …)`), which sources the FULL config and routes by task
-     * to the bare model slot (RESEARCH Pitfall 1). A non-v2 / managed / BLOCKED
-     * config resolves to `undefined` → the env/managed default (matches a
-     * missing config today; never throws).
+     * Resolution goes through the permission service's per-task entry point
+     * (`resolveTaskSlot(org, this.getLlmTask(), …)`) — the `conversation` task by
+     * default, or whatever a subclass's getLlmTask() returns — which sources the
+     * FULL config and routes by task to the bare model slot (RESEARCH Pitfall 1).
+     * A non-v2 / managed / BLOCKED config resolves to `undefined` → the
+     * env/managed default (matches a missing config today; never throws).
      *
      * `byokModelOverride` is the legacy per-repository/directory model NAME
      * resolved by the code review pipeline (`codeReviewConfig.byokModel`).
@@ -63,7 +75,7 @@ export abstract class BaseAgentProvider {
         this.byokConfig =
             (await this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
-                LLM_TASK.conversation,
+                this.getLlmTask(),
                 {
                     ctx: overrideRef
                         ? { override: { modelId: overrideRef } }

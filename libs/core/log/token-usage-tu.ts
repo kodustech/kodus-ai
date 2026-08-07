@@ -31,6 +31,11 @@ export interface TokenUsageTu {
     isByok: boolean;
     sys: boolean;
     model: string;
+    /** BYOK credential the spend attributes to — the per-key dimension the store
+     *  otherwise lacked (spend rolled up by model-NAME, which breaks on versioned
+     *  response names). `''` for env/managed/legacy usage → falls back to the
+     *  name-based rollup. Mirrored by backfill-tu.ts (asserted equal by the spec). */
+    credentialId: string;
     input: number;
     output: number;
     total: number;
@@ -146,10 +151,15 @@ export function deriveTu(
     const input = n(attrs['gen_ai.usage.input_tokens']);
     const runName = attrs['gen_ai.run.name'];
 
+    const credentialId = attrs['credentialId'];
     return {
         isByok: attrs['type'] === 'byok',
         sys: typeof runName === 'string' && SYSTEM_RUN_NAMES.has(runName),
         model,
+        credentialId:
+            typeof credentialId === 'string' && credentialId
+                ? credentialId
+                : '',
         input,
         output: n(attrs['gen_ai.usage.output_tokens']),
         total,
