@@ -85,7 +85,6 @@ describe('ValidatePrerequisitesStage', () => {
             teamAutomationId: 'automation-1',
             origin: 'opened',
             action: 'opened',
-            dryRun: { enabled: false },
             errors: [],
             preparedFileContexts: [],
             validSuggestions: [],

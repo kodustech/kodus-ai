@@ -22,7 +22,6 @@ import { MetricsModule } from '@libs/core/infrastructure/metrics/metrics.module'
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
-import { DryRunModule } from '@libs/dryRun/dry-run.module';
 import { CodeReviewSettingsLogModule } from '@libs/ee/codeReviewSettingsLog/codeReviewSettingsLog.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
@@ -128,7 +127,6 @@ import { NotificationController } from './controllers/notification.controller';
         PullRequestMessagesModule,
         IntegrationModule,
         IntegrationConfigModule,
-        DryRunModule,
         AnalyticsModule,
         SpendLimitModule,
         AnalyticsWarehouseModule.forRoot(),

@@ -2,7 +2,6 @@ import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable, forwardRef } from '@nestjs/common';
 
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { extractOrganizationAndTeamData } from '@libs/common/utils/helpers';
 import { IntegrationCategory } from '@libs/core/domain/enums/integration-category.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
@@ -649,7 +648,6 @@ export class CodeManagementService implements ICodeManagementService {
             lineComment: any;
             commit: any;
             language: string;
-            dryRun?: CodeReviewPipelineContext['dryRun'];
             suggestionCopyPrompt?: boolean;
         },
         type?: PlatformType,
@@ -696,7 +694,6 @@ export class CodeManagementService implements ICodeManagementService {
             repository: { name: string; id: string };
             prNumber: number;
             body: string;
-            dryRun?: CodeReviewPipelineContext['dryRun'];
             suggestion?: ISuggestionByPR;
         },
         type?: PlatformType,
@@ -746,7 +743,6 @@ export class CodeManagementService implements ICodeManagementService {
             commentId: number;
             noteId?: number;
             threadId?: number;
-            dryRun?: CodeReviewPipelineContext['dryRun'];
         },
         type?: PlatformType,
     ) {
@@ -849,7 +845,6 @@ export class CodeManagementService implements ICodeManagementService {
             repository: { name: string; id: string };
             prNumber: number;
             summary: string;
-            dryRun?: CodeReviewPipelineContext['dryRun'];
         },
         type?: PlatformType,
     ) {

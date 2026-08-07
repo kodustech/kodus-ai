@@ -53,7 +53,6 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             platformType: undefined,
             initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
             changedFiles: [],
-            dryRun: { enabled: false },
             lineComments,
             // Both messages ACTIVE → the branch that calls
             // processEndReviewMessageTemplate.
@@ -145,7 +144,6 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
             platformType: undefined,
             initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
             changedFiles: [],
-            dryRun: { enabled: false },
             lineComments: [],
             // A frozen, already-initialized errors array — the realistic
             // shape. The old code's `context.errors.push(...)` throws on it.

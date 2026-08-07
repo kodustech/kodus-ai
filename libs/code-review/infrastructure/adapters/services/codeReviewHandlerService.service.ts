@@ -195,9 +195,6 @@ export class CodeReviewHandlerService {
                 correlationId,
                 workflowJobId,
                 parentSignal,
-                dryRun: {
-                    enabled: false,
-                },
                 statusInfo: {
                     status: AutomationStatus.IN_PROGRESS,
                     message: 'Pipeline started',

@@ -8,7 +8,6 @@ import { IPipeline } from '@libs/core/infrastructure/pipeline/interfaces/pipelin
 import { Provider } from '@nestjs/common';
 import { CODE_REVIEW_PIPELINE_TOKEN } from './code-review-pipeline.provider.ee';
 import { PipelineFactory } from '../infrastructure/pipeline/services/pipeline-factory.service';
-import { DryRunCodeReviewPipeline } from '@libs/dryRun/infrastructure/adapters/services/dryRunPipeline';
 
 export const PIPELINE_PROVIDER_TOKEN = 'PIPELINE_PROVIDER';
 
@@ -16,13 +15,11 @@ export const pipelineProvider: Provider = {
     provide: PIPELINE_PROVIDER_TOKEN,
     useFactory: (
         codeReviewPipeline: IPipeline<CodeReviewPipelineContext>,
-        dryRunPipeline: IPipeline<CodeReviewPipelineContext>,
     ): PipelineFactory<PipelineContext> => {
         const factory = new PipelineFactory<PipelineContext>([
             codeReviewPipeline,
-            dryRunPipeline,
         ]);
         return factory;
     },
-    inject: [CODE_REVIEW_PIPELINE_TOKEN, DryRunCodeReviewPipeline],
+    inject: [CODE_REVIEW_PIPELINE_TOKEN],
 };
