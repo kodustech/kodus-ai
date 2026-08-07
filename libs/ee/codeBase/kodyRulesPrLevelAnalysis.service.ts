@@ -1528,8 +1528,12 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                     brokenKodyRulesIds: [rule.uuid!],
                     deliveryStatus: DeliveryStatus.NOT_SENT,
                     files: {
-                        violatedFileSha: violation?.violatedFileSha || [],
-                        relatedFileSha: violation?.relatedFileSha || [],
+                        violatedFileSha: this.normalizeShaList(
+                            violation?.violatedFileSha,
+                        ),
+                        relatedFileSha: this.normalizeShaList(
+                            violation?.relatedFileSha,
+                        ),
                     },
                 };
 

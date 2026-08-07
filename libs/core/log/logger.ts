@@ -72,8 +72,7 @@ let pinoLogger: pino.Logger | null = null;
 
 let globalLogProcessors: SupportedLogProcessor[] = [];
 let spanContextProvider:
-    | (() => { traceId: string; spanId: string } | undefined)
-    | null = null;
+    (() => { traceId: string; spanId: string } | undefined) | null = null;
 let observabilityContextProvider:
     | (() =>
           | {
@@ -550,18 +549,16 @@ export class SimpleLogger {
                     };
                     if (error) {
                         fallbackPayload.errorName = (error as Error)?.name;
-                        fallbackPayload.errorMessage = (
-                            error as Error
-                        )?.message;
+                        fallbackPayload.errorMessage = (error as Error)
+                            ?.message;
                     }
                     const loggerErrAsError = loggerErr as Error | undefined;
                     fallbackPayload.loggerErrorName = loggerErrAsError?.name;
                     fallbackPayload.loggerErrorMessage =
                         loggerErrAsError?.message;
-                    // eslint-disable-next-line no-console
+
                     console.error(JSON.stringify(fallbackPayload));
                 } catch {
-                    // eslint-disable-next-line no-console
                     console.error(
                         '[logger:fallback-failed] level=' +
                             level +
@@ -572,7 +569,7 @@ export class SimpleLogger {
             }
         }
 
-        let safeProcessorMetadata: Record<string, unknown> = {};
+        let safeProcessorMetadata: Record<string, unknown>;
         try {
             safeProcessorMetadata = deepSanitize({
                 ...metadata,
@@ -598,7 +595,11 @@ export class SimpleLogger {
                 }
 
                 processor.process(level, message, safeProcessorMetadata, error);
-            } catch {}
+            } catch {
+                // A failing processor must never break the caller's log call,
+                // and must not be reported through the logger itself (that
+                // would re-enter this same loop). Skip it and keep going.
+            }
         }
     }
 
