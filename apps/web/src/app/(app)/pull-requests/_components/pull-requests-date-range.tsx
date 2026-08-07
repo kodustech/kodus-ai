@@ -76,7 +76,7 @@ export const PullRequestsDateRange = ({ from, to, onChange }: Props) => {
     )?.label;
 
     const triggerLabel = !hasRange
-        ? "Any date"
+        ? "Date"
         : (presetLabel ??
           `${formatDate(parseISO(from!), "dd/LLL", { locale: enUS })} – ${formatDate(
               parseISO(to!),

@@ -35,7 +35,11 @@ export const PageRoot = ({
             {...props}
             className={cn(
                 "relative flex w-full flex-1 flex-col gap-6 pt-10 pb-16",
-                (!hasSidebar || scrollable === undefined) && "overflow-auto",
+                // Scroll on the shell by default. A page can opt out with
+                // `scrollable={false}` (regardless of sidebar) when it owns an
+                // internal scroll region — e.g. a virtualized table — so the app
+                // doesn't end up with two nested scrollbars.
+                scrollable !== false && "overflow-auto",
                 props.className,
             )}>
             <PageScrollableContext.Provider value={scrollable ?? true}>

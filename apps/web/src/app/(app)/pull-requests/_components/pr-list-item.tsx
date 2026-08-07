@@ -22,9 +22,11 @@ import {
 import {
     AlertTriangleIcon,
     ArrowRightIcon,
+    CheckIcon,
     ChevronDownIcon,
     ClockIcon,
     ExternalLinkIcon,
+    FilterIcon,
     FolderIcon,
     GitBranchIcon,
     GitPullRequestIcon,
@@ -43,7 +45,11 @@ interface PrListItemProps {
 // pr-data-table.tsx, so the two stay aligned. Fixed trailing columns are
 // deterministic across every virtualized row (same container width → same
 // widths), and the identity column flexes + truncates. Columns:
-// chevron | pull request (identity) | reviews | suggestions | status.
+// chevron | pull request (identity, grows) | reviews | suggestions | status.
+// Identity takes all free space so the three metric columns sit flush at the
+// right edge and the grid always fits its container (no trailing slack track,
+// which on wide viewports left a large dead zone on the right). Rows and the
+// header share this template, so they stay aligned.
 export const PR_ROW_GRID =
     "grid grid-cols-[1.25rem_minmax(0,1fr)_8rem_6.5rem_8.5rem] items-center gap-x-4";
 
@@ -169,7 +175,7 @@ const formatDuration = (start: string, end?: string | null) => {
 // The review-run status (automation_execution / code_review_execution share the
 // same AutomationStatus enum). PR merge-state is rendered separately — it must
 // not mask whether the review itself succeeded or errored.
-const getStatusBadge = (status: string) => {
+const getStatusBadge = (status: string, errorMessage?: string | null) => {
     // Mirrors the automation_execution status values verbatim.
     switch (status) {
         case "success":
@@ -178,12 +184,26 @@ const getStatusBadge = (status: string) => {
                     Success
                 </Badge>
             );
-        case "error":
-            return (
-                <Badge variant="error" className="whitespace-nowrap">
-                    Error
+        case "error": {
+            // Muted outline red — a failed review shouldn't be the loudest thing
+            // in the row. When we know why it failed, surface the cause on hover.
+            const badge = (
+                <Badge
+                    variant="helper"
+                    className="bg-danger/10 text-danger ring-danger/40 whitespace-nowrap ring-1">
+                    Review failed
                 </Badge>
             );
+            if (!errorMessage) return badge;
+            return (
+                <Tooltip>
+                    <TooltipTrigger asChild>{badge}</TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-xs normal-case">
+                        {errorMessage}
+                    </TooltipContent>
+                </Tooltip>
+            );
+        }
         case "in_progress":
             return (
                 <Badge variant="in-progress" className="whitespace-nowrap">
@@ -411,6 +431,21 @@ export const PrListItem = ({ group }: PrListItemProps) => {
     // entry points costs nothing extra.
     const prefetchThisReview = () =>
         prefetchReview(latest.repositoryId, latest.prNumber);
+
+    // Status cue on the row's leading edge so a failed review is caught on the
+    // first downward scan, not last (it lives in the far-right STATUS column).
+    // Saturated color is reserved for actionable failures — every other state
+    // (success / merged / skipped / pending) keeps a transparent edge so the
+    // list stays quiet and the red/amber bars are the only things that pop.
+    const rowStatus = latest.merged
+        ? "merged"
+        : latest.automationExecution?.status || "pending";
+    const rowAccent =
+        rowStatus === "error"
+            ? "border-l-danger/70"
+            : rowStatus === "partial_error"
+              ? "border-l-warning/70"
+              : "border-l-transparent";
     const [isOpen, setIsOpen] = useState(false);
     const [collapsedReviews, setCollapsedReviews] = useState<Set<number>>(
         () => new Set(executions.slice(1).map((_, i) => i + 1)),
@@ -430,12 +465,12 @@ export const PrListItem = ({ group }: PrListItemProps) => {
     };
 
     return (
-        <div className="border-card-lv3/30 border-b">
+        <div className={cn("border-card-lv3/30 border-b border-l-2", rowAccent)}>
             <div
                 role="button"
                 tabIndex={0}
                 className={cn(
-                    "cursor-pointer px-5 py-4",
+                    "cursor-pointer px-5 py-3",
                     PR_ROW_GRID,
                     isOpen
                         ? "bg-card-lv2/40 hover:bg-card-lv2/50"
@@ -465,30 +500,45 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                                 Pull request number
                             </TooltipContent>
                         </Tooltip>
-                        {/* Native title attribute instead of a Radix tooltip:
-                            the tooltip rendered the full title in a box directly
-                            over the title itself (redundant + overlapping). The
-                            browser tooltip only surfaces when the text is actually
-                            truncated and never overlaps the row. */}
-                        {/* External link to the PR on the provider. The ↗ is
-                            always visible (not hover-revealed) so the title
-                            reads as a link at rest; hover adds the DS accent +
-                            underline. Title stays text-primary so the list isn't
-                            a wall of accent color — the icon carries the "opens
-                            elsewhere" signal. */}
-                        <Link
-                            href={prUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        {/* Title is the row's PRIMARY action: it routes to the
+                            internal review-detail view, so it gets the accent
+                            link treatment (accent color + underline on hover)
+                            and prefetches that screen on intent. stopPropagation
+                            keeps a title click a navigation, not a row-expand.
+                            The native title attribute surfaces the full text
+                            only when it's truncated. */}
+                        <NextLink
+                            href={`/pull-requests/${latest.repositoryId}/${latest.prNumber}`}
                             title={latest.title}
-                            className="text-text-primary hover:text-primary-light group/title flex min-w-0 items-center gap-1.5 text-sm font-semibold hover:underline"
-                            onClick={(e) => e.stopPropagation()}>
-                            <span className="truncate">{latest.title}</span>
-                            <ExternalLinkIcon className="text-text-tertiary group-hover/title:text-primary-light size-3.5 shrink-0 transition-colors" />
-                        </Link>
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseEnter={prefetchThisReview}
+                            onFocus={prefetchThisReview}
+                            className="text-primary-light min-w-0 truncate text-sm font-semibold hover:underline">
+                            {latest.title}
+                        </NextLink>
+                        {/* Secondary escape hatch: open the PR on its Git
+                            provider. Muted at rest so it reads as secondary to
+                            the internal title link; labeled for screen readers
+                            and hover. */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <a
+                                    href={prUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label="Open on Git provider"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="text-text-tertiary hover:text-primary-light shrink-0 transition-colors">
+                                    <ExternalLinkIcon className="size-3.5" />
+                                </a>
+                            </TooltipTrigger>
+                            <TooltipContent className="text-xs">
+                                Open on Git provider
+                            </TooltipContent>
+                        </Tooltip>
                     </div>
 
-                    <div className="text-text-secondary mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                    <div className="text-text-secondary mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                         {/* Field-name tooltips on the icon-only metadata. The
                             shared TooltipContent now portals to <body>, so these
                             no longer clip against the scroll container / sticky
@@ -567,7 +617,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                         </TooltipContent>
                     </Tooltip>
                     {latest.automationExecution?.createdAt && (
-                        <span className="text-text-tertiary truncate">
+                        <span className="text-text-secondary truncate">
                             <TimeAgoDisplay
                                 dateString={
                                     latest.automationExecution.createdAt
@@ -588,19 +638,38 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                     onMouseEnter={prefetchThisReview}
                     onFocus={prefetchThisReview}
                     className="hover:bg-card-lv3/40 flex w-fit items-center gap-1.5 rounded-md px-1 py-1 transition-colors">
+                    {/* Delivered — check icon disambiguates it from the
+                        held-back chip beside it. Green only when there's
+                        something to celebrate; a 0 is neutral grey, not green. */}
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <span className="bg-success/10 text-success inline-flex min-w-7 items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium tabular-nums">
+                            <span
+                                className={cn(
+                                    "inline-flex min-w-7 items-center justify-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium tabular-nums",
+                                    latest.suggestionsCount.sent > 0
+                                        ? "bg-success/10 text-success"
+                                        : "bg-card-lv3/40 text-text-tertiary",
+                                )}>
+                                <CheckIcon className="size-3 shrink-0" />
                                 {latest.suggestionsCount.sent}
                             </span>
                         </TooltipTrigger>
                         <TooltipContent className="text-xs">
-                            Suggestions delivered on this PR
+                            Delivered on this PR
                         </TooltipContent>
                     </Tooltip>
+                    {/* Held back by config — filter icon. Muted red only when
+                        non-zero; a 0 is neutral grey. */}
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <span className="bg-danger/10 text-danger inline-flex min-w-7 items-center justify-center rounded-md px-2 py-0.5 text-xs font-medium tabular-nums">
+                            <span
+                                className={cn(
+                                    "inline-flex min-w-7 items-center justify-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium tabular-nums",
+                                    latest.suggestionsCount.filtered > 0
+                                        ? "bg-danger/10 text-danger"
+                                        : "bg-card-lv3/40 text-text-tertiary",
+                                )}>
+                                <FilterIcon className="size-3 shrink-0" />
                                 {latest.suggestionsCount.filtered}
                             </span>
                         </TooltipTrigger>
@@ -623,6 +692,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                     ) : (
                         getStatusBadge(
                             latest.automationExecution?.status || "pending",
+                            latest.automationExecution?.errorMessage,
                         )
                     )}
                     {latest.heavy && (
