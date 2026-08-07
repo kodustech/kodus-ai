@@ -2,6 +2,7 @@ import {
     CrossProcessEventsBridge,
     resolvePgSslOption,
 } from '@libs/core/workflow/infrastructure/cross-process-events.bridge';
+import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -147,6 +148,25 @@ describe('CrossProcessEventsBridge', () => {
             'kodus_cross_process_events',
             '100,101,102',
         ]);
+    });
+
+    /**
+     * FORWARDED_EVENTS holds string literals, while the SSE producer and its
+     * API-side consumer share the PR_EXECUTION_UPDATED_EVENT constant. Nothing
+     * else ties the two together: renaming the constant would silently drop
+     * the event from the bridge and re-introduce #1500 (worker emits, API's
+     * SSE never sees it) with every other test still green. This is that tie.
+     */
+    it('forwards the event name the SSE producer/consumer actually use', () => {
+        const { bridge } = makeBridge();
+
+        expect(
+            bridge.shouldReemit({
+                instanceId: 'some-other-process',
+                name: PR_EXECUTION_UPDATED_EVENT,
+                payload: {},
+            }),
+        ).toBe(true);
     });
 
     it('does NOT re-forward bridged payloads (no ping-pong)', async () => {
