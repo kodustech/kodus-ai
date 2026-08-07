@@ -21,10 +21,12 @@ export type CapabilityGateResult = {
 /**
  * Pure client mirror of TASK_CAPABILITY_REQUIREMENTS
  * (libs/llm/static-task-strategy.ts). KEEP IN SYNC with the backend:
- *  - codeReview   requires structured output — natively (structuredOutput !==
+ *  - codeReview / kodyRulesReview / ruleGeneration
+ *                 require structured output — natively (structuredOutput !==
  *                 'none') OR via native tool calling (generateObject emits the
  *                 object through a tool call for tool-native providers)
- *  - conversation requires toolCalling === 'native'
+ *  - conversation / businessValidation
+ *                 require toolCalling === 'native' (tool-using agent loop)
  *  - prSummary    has no requirement (always ok)
  *
  * This is the LIVE pre-save warning (resolved 2026-07-29): the grid disables an
@@ -32,6 +34,20 @@ export type CapabilityGateResult = {
  * every route and remains the authoritative backstop, so an undefined caps
  * (unknown/unregistered provider) is a SOFT-OK — we never hard-block on unknown.
  */
+/** What each task demands of a model — a task-keyed record (mirror of the
+ *  backend TASK_CAPABILITY_REQUIREMENTS shape) rather than ad-hoc `task === …`
+ *  lists. Because LlmTask is exhaustive here, a NEW task is a compile error until
+ *  it declares its requirement — it can't silently fall through the gate. */
+type Requirement = "structuredOutput" | "toolCalling" | null;
+const TASK_REQUIREMENT: Record<LlmTask, Requirement> = {
+    codeReview: "structuredOutput",
+    kodyRulesReview: "structuredOutput",
+    ruleGeneration: "structuredOutput",
+    businessValidation: "toolCalling",
+    conversation: "toolCalling",
+    prSummary: null,
+};
+
 export const capabilityGate = (
     task: LlmTask,
     caps: SurfacedCapabilities | undefined,
@@ -40,21 +56,25 @@ export const capabilityGate = (
     // Unknown capabilities → soft-OK: let the user save; the backend decides.
     if (!caps) return { ok: true, unknown: true };
 
+    const requirement = TASK_REQUIREMENT[task];
+
+    // Structured output — natively OR via native tool calling (generateObject
+    // emits the object through a tool call for tool-native providers).
     if (
-        task === "codeReview" &&
+        requirement === "structuredOutput" &&
         caps.structuredOutput === "none" &&
         caps.toolCalling !== "native"
     ) {
         return {
             ok: false,
-            reason: `${modelLabel} can't do structured output (natively or via tools), which code review requires.`,
+            reason: `${modelLabel} can't do structured output (natively or via tools), which this task requires.`,
         };
     }
 
-    if (task === "conversation" && caps.toolCalling !== "native") {
+    if (requirement === "toolCalling" && caps.toolCalling !== "native") {
         return {
             ok: false,
-            reason: `${modelLabel} can't do native tool calling, which conversation requires.`,
+            reason: `${modelLabel} can't do native tool calling, which this task requires.`,
         };
     }
 

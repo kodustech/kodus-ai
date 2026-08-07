@@ -49,6 +49,8 @@ type ModelsTabProps = {
     periodLabel?: string;
     costRangeQuery?: string;
     llmConfigStatus: LLMConfigStatus | null;
+    /** Deep-link a model's "Used in" chip to its Routing-tab row. */
+    onOpenRouting?: (anchor: string) => void;
 };
 
 /** Providers with curated catalog entries — decides inline edit vs. the manual
@@ -82,6 +84,7 @@ export const ModelsTab = ({
     teamId,
     periodLabel,
     costRangeQuery,
+    onOpenRouting,
 }: ModelsTabProps) => {
     const router = useRouter();
     const [view, setView] = useState<View>({ mode: "list" });
@@ -296,6 +299,7 @@ export const ModelsTab = ({
                                 costRangeQuery={costRangeQuery}
                                 onEdit={() => openEdit(model, credential)}
                                 onDeleted={handleDeleted}
+                                onOpenRouting={onOpenRouting}
                             />
                         ))}
                         <div className="flex justify-end">

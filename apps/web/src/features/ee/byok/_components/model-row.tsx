@@ -1,14 +1,15 @@
 "use client";
 
+import type { ComponentProps, ReactNode } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
+import { cn } from "src/core/utils/components";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { formatUsd } from "@services/usage/format";
 import {
     ArrowUpRightIcon,
     BrainCircuitIcon,
     CoinsIcon,
-    KeyRoundIcon,
     LinkIcon,
     PencilIcon,
     ThermometerIcon,
@@ -24,7 +25,7 @@ import type {
     LlmTask,
     ReasoningEffort,
 } from "../_types";
-import { maskKey, TASK_LABELS } from "../_utils";
+import { TASK_LABELS } from "../_utils";
 import { PROVIDER_LABELS } from "./catalog/model-card";
 import { DeleteRejectionAlert, useDeleteModel } from "./delete-model-flow";
 import { ProviderLogo } from "./provider-logo";
@@ -36,6 +37,50 @@ const formatThinking = (effort?: ReasoningEffort): string | null => {
 
 const AMBER_TINT =
     "[--button-background:#2a1d10] [--button-foreground:var(--color-warning)]";
+
+/**
+ * A "Used in" chip. Read-only by default (STATUS_CHIP neutralises the Badge's
+ * inherited pointer/hover), but when `onOpenRouting` is supplied it becomes a
+ * real deep-link: it presents as clickable and jumps to the matching row on the
+ * Routing tab (`anchor` = "default" | "fallback" | `task:${LlmTask}`).
+ */
+function UsageChip({
+    anchor,
+    onOpenRouting,
+    variant,
+    className,
+    children,
+}: {
+    anchor: string;
+    onOpenRouting?: (anchor: string) => void;
+    variant?: ComponentProps<typeof Badge>["variant"];
+    className?: string;
+    children: ReactNode;
+}) {
+    const badge = (
+        <Badge
+            size="xs"
+            variant={variant}
+            className={cn(className, onOpenRouting ? "cursor-pointer" : STATUS_CHIP)}>
+            {children}
+        </Badge>
+    );
+    if (!onOpenRouting) return badge;
+    return (
+        <button
+            type="button"
+            onClick={() => onOpenRouting(anchor)}
+            title="Open in Routing"
+            className="focus-visible:ring-primary/50 rounded-full focus-visible:ring-2 focus-visible:outline-none">
+            {badge}
+        </button>
+    );
+}
+
+// The "Used in" chips are STATUS, not controls — the decorative Badge (a span)
+// otherwise inherits the button's pointer cursor + hover brightness and reads as
+// clickable. Neutralise both so they present as read-only labels.
+const STATUS_CHIP = "cursor-default button-hover:brightness-100";
 
 /**
  * A single model row inside a provider group. Shows a provider-tinted avatar,
@@ -53,6 +98,7 @@ export function ModelRow({
     costRangeQuery,
     onEdit,
     onDeleted,
+    onOpenRouting,
 }: {
     model: BYOKModelConfig;
     config?: BYOKConfig | null;
@@ -61,6 +107,8 @@ export function ModelRow({
     costRangeQuery?: string;
     onEdit?: () => void;
     onDeleted?: () => void;
+    /** Deep-link a "Used in" chip to its row on the Routing tab. */
+    onOpenRouting?: (anchor: string) => void;
 }) {
     const curated = (curatedCatalog.models as CuratedModel[]).find(
         (m) => m.id === model.model,
@@ -78,7 +126,6 @@ export function ModelRow({
     const settings = (credential?.settings ?? {}) as Record<string, unknown>;
     const baseURL =
         typeof settings.baseURL === "string" ? settings.baseURL : undefined;
-    const keyMask = maskKey(credential?.apiKey);
 
     // "USED IN" — where routing points at THIS model slot (BYOKModelConfig.id).
     const routing = config?.routing;
@@ -88,7 +135,7 @@ export function ModelRow({
         Object.entries(routing?.taskOverrides ?? {}) as [LlmTask, string][]
     )
         .filter(([, id]) => id === model.id)
-        .map(([task]) => TASK_LABELS[task] ?? task);
+        .map(([task]) => ({ task, label: TASK_LABELS[task] ?? task }));
     const hasUsage = isDefault || isFallback || taskUsages.length > 0;
 
     const { confirmAndDelete, rejectionReasons } = useDeleteModel({
@@ -126,12 +173,6 @@ export function ModelRow({
                             )}
 
                             <div className="text-text-secondary flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                                {keyMask && (
-                                    <span className="flex items-center gap-1.5 font-mono">
-                                        <KeyRoundIcon size={12} />
-                                        {keyMask}
-                                    </span>
-                                )}
                                 {baseURL && (
                                     <span className="flex items-center gap-1.5 font-mono break-all">
                                         <LinkIcon size={12} />
@@ -223,19 +264,29 @@ export function ModelRow({
                             Used in
                         </span>
                         {isDefault && (
-                            <Badge size="xs" className={AMBER_TINT}>
+                            <UsageChip
+                                anchor="default"
+                                onOpenRouting={onOpenRouting}
+                                className={AMBER_TINT}>
                                 Org default
-                            </Badge>
+                            </UsageChip>
                         )}
-                        {taskUsages.map((label) => (
-                            <Badge key={label} size="xs" variant="success">
+                        {taskUsages.map(({ task, label }) => (
+                            <UsageChip
+                                key={task}
+                                anchor={`task:${task}`}
+                                onOpenRouting={onOpenRouting}
+                                variant="success">
                                 {label}
-                            </Badge>
+                            </UsageChip>
                         ))}
                         {isFallback && (
-                            <Badge size="xs" variant="secondary">
+                            <UsageChip
+                                anchor="fallback"
+                                onOpenRouting={onOpenRouting}
+                                variant="secondary">
                                 Fallback
-                            </Badge>
+                            </UsageChip>
                         )}
                     </div>
                 )}

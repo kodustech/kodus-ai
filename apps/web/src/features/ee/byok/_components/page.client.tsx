@@ -146,6 +146,15 @@ export const ByokPageClient = ({
     // "Go to Providers") can switch tabs via a callback — no DOM scraping.
     const [tab, setTab] = useState("providers");
 
+    // Deep-link target for the Providers-tab "Used in" chips: clicking one
+    // switches to Routing and scrolls to the matching row. RoutingTab consumes
+    // `routingAnchor` on mount, then clears it via `onScrolled`.
+    const [routingAnchor, setRoutingAnchor] = useState<string | null>(null);
+    const openRouting = (anchor: string) => {
+        setRoutingAnchor(anchor);
+        setTab("routing");
+    };
+
     return (
         <Page.Root>
             <Page.Header>
@@ -156,7 +165,7 @@ export const ByokPageClient = ({
                     <Page.Description className="flex flex-col gap-2 text-pretty">
                         <span>
                             Connect the providers your team uses, then choose
-                            which model reviews each thing.
+                            which model runs each task.
                         </span>
                         <span className="flex items-center gap-2">
                             <span className="w-9 shrink-0">
@@ -222,6 +231,7 @@ export const ByokPageClient = ({
                             periodLabel={periodLabel}
                             costRangeQuery={costRangeQuery}
                             llmConfigStatus={llmConfigStatus}
+                            onOpenRouting={openRouting}
                         />
                     </TabsContent>
 
@@ -229,7 +239,10 @@ export const ByokPageClient = ({
                         <RoutingTab
                             config={config}
                             llmConfigStatus={llmConfigStatus}
+                            teamId={teamId}
                             onGoToProviders={() => setTab("providers")}
+                            scrollAnchor={routingAnchor}
+                            onScrolled={() => setRoutingAnchor(null)}
                         />
                     </TabsContent>
                 </Tabs>

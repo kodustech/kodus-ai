@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
@@ -17,14 +17,17 @@ import {
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { ChevronsUpDownIcon } from "lucide-react";
+import { ChevronsUpDownIcon, SlidersHorizontalIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { TASK_ROUTING_FALLBACK } from "@libs/llm/byok-config";
 
 import curatedCatalog from "../../_data/curated-models.json";
 import type { CuratedModel } from "../../_data/curated-models.types";
 import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
 import { groupModelsByProvider } from "../../_utils";
 import { buildByokBlob } from "../byok-write";
+import { PerRepositoryPanel } from "../per-repository-panel";
+import { ProviderAvatar } from "../provider-avatar";
 import {
     ModelCombobox,
     TaskOverrideGrid,
@@ -34,9 +37,16 @@ import {
 type RoutingTabProps = {
     config: BYOKConfig | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
+    /** Drives the read-only Per-repository mirror (listModelOverrides). */
+    teamId?: string;
     /** Switch the parent BYOK Tabs to the Providers panel (empty-state
      *  affordance). Supplied by the controlled Tabs in page.client. */
     onGoToProviders: () => void;
+    /** Deep-link target set when a Providers-tab "Used in" chip is clicked:
+     *  "default" | "fallback" | `task:${LlmTask}`. Scrolled to + flashed on
+     *  mount, then cleared via `onScrolled`. */
+    scrollAnchor?: string | null;
+    onScrolled?: () => void;
 };
 
 const AUTO_TOOLTIP =
@@ -47,14 +57,30 @@ const modelDisplayName = (modelId: string): string =>
     (curatedCatalog.models as CuratedModel[]).find((m) => m.id === modelId)
         ?.displayName ?? modelId;
 
-/** Strip undefined task-override entries so the persisted routing is clean. */
+/**
+ * Strip task-override entries that shouldn't persist: empty ids AND overrides
+ * equal to what the row would inherit anyway — the org default, OR (for a task
+ * that inherits another) its parent task's model. Such an override is displayed
+ * as "inherited" by the grid, so persisting it would silently re-pin the row if
+ * the inherited source later moves (e.g. a child pinned to Code Review's current
+ * model would strand as "Custom" when Code Review changes). Mirroring the grid's
+ * collapse-to-inherited here keeps the saved blob matching what the UI shows.
+ * Applied to both the serialized routing and the dirty-check baseline so the two
+ * stay consistent.
+ */
 const cleanOverrides = (
     overrides: Partial<Record<LlmTask, string>>,
+    defaultModelId?: string,
 ): Partial<Record<LlmTask, string>> => {
     const out: Partial<Record<LlmTask, string>> = {};
     (Object.keys(overrides) as LlmTask[]).forEach((task) => {
         const id = overrides[task];
-        if (id) out[task] = id;
+        if (!id) return;
+        const parent = TASK_ROUTING_FALLBACK[task];
+        const inheritedId = parent
+            ? (overrides[parent] ?? defaultModelId)
+            : defaultModelId;
+        if (id !== inheritedId) out[task] = id;
     });
     return out;
 };
@@ -70,9 +96,38 @@ const cleanOverrides = (
 export const RoutingTab = ({
     config,
     llmConfigStatus,
+    teamId,
     onGoToProviders,
+    scrollAnchor,
+    onScrolled,
 }: RoutingTabProps) => {
     const router = useRouter();
+
+    // Scroll to (and briefly flash) the row a "Used in" chip deep-linked to.
+    // Runs on mount because the tab switch remounts this panel with the anchor
+    // already set; a rAF lets layout settle before scrollIntoView. The captured
+    // element drives the flash-off timer, so clearing `scrollAnchor` in the
+    // parent (via onScrolled) can't strand the ring.
+    const rowsRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!scrollAnchor) return;
+        const FLASH = ["ring-primary/60", "ring-2", "rounded-lg"];
+        // The flash-off timer lives INSIDE the rAF and is intentionally not torn
+        // down by cleanup: `onScrolled` clears the anchor in the parent, which
+        // would otherwise re-run cleanup and strip the ring the instant it lands.
+        const raf = requestAnimationFrame(() => {
+            const el = rowsRef.current?.querySelector<HTMLElement>(
+                `[data-routing-anchor="${scrollAnchor}"]`,
+            );
+            el?.scrollIntoView({ behavior: "smooth", block: "center" });
+            el?.classList.add(...FLASH);
+            setTimeout(() => el?.classList.remove(...FLASH), 1600);
+            onScrolled?.();
+        });
+        return () => cancelAnimationFrame(raf);
+        // Only re-run when the requested anchor changes.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [scrollAnchor]);
 
     // The connected pool, each model joined to its surfaced capabilities from the
     // (already-fetched) status response, matched by BYOKModelConfig.id.
@@ -84,6 +139,7 @@ export const RoutingTab = ({
             group.models.map((m) => ({
                 id: m.id,
                 label: modelDisplayName(m.model),
+                provider: group.credential.provider,
                 capabilities: capsById.get(m.id),
             })),
         );
@@ -106,6 +162,8 @@ export const RoutingTab = ({
 
     const labelFor = (id?: string) =>
         pool.find((m) => m.id === id)?.label ?? id;
+    const providerOf = (id?: string) =>
+        pool.find((m) => m.id === id)?.provider;
 
     // Empty state — the Routing tab stays reachable at first-run, so this shows
     // whenever no model is connected yet. Routing needs at least one model to
@@ -129,8 +187,8 @@ export const RoutingTab = ({
         );
     }
 
-    // Single-model degeneracy: default, fallback and all three per-agent rows can
-    // only resolve to the one model, so the whole grid is redundant (this is the
+    // Single-model degeneracy: default, fallback and every per-task row can only
+    // resolve to the one model, so the whole grid is redundant (this is the
     // "default == override" confusion). Routing needs ≥2 models to mean anything.
     if (pool.length === 1) {
         const only = pool[0];
@@ -138,15 +196,15 @@ export const RoutingTab = ({
             <Card color="lv1">
                 <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
                     <p className="text-text-secondary text-sm text-balance">
-                        Every agent uses{" "}
+                        Every task uses{" "}
                         <strong className="text-text-primary">
                             {only.label}
                         </strong>{" "}
                         — your only connected model.
                     </p>
                     <p className="text-text-tertiary text-xs text-balance">
-                        Connect a second model to route agents (Code Review, PR
-                        Summary, Chat) to different models.
+                        Connect a second model to route different tasks (code
+                        review, Kody Rules, chat, and more) to different models.
                     </p>
                     <Button
                         variant="primary"
@@ -164,7 +222,7 @@ export const RoutingTab = ({
         defaultModelId: defaultModelId || undefined,
         fallbackModelId:
             showFallback && fallbackModelId ? fallbackModelId : undefined,
-        taskOverrides: cleanOverrides(taskOverrides),
+        taskOverrides: cleanOverrides(taskOverrides, defaultModelId || undefined),
     });
 
     const dirty =
@@ -173,7 +231,10 @@ export const RoutingTab = ({
             mode: "manual",
             defaultModelId: routing.defaultModelId || undefined,
             fallbackModelId: routing.fallbackModelId || undefined,
-            taskOverrides: cleanOverrides(routing.taskOverrides ?? {}),
+            taskOverrides: cleanOverrides(
+                routing.taskOverrides ?? {},
+                routing.defaultModelId || undefined,
+            ),
         });
 
     const handleSave = async () => {
@@ -194,7 +255,7 @@ export const RoutingTab = ({
 
     return (
         <TooltipProvider>
-            <div className="flex flex-col gap-6">
+            <div ref={rowsRef} className="flex flex-col gap-6">
                 {/* ── Policy chooser: Manual (active) / Auto (coming soon) ── */}
                 <div className="flex flex-col gap-2">
                     <span className="text-text-primary text-sm font-medium">
@@ -212,13 +273,13 @@ export const RoutingTab = ({
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <span
-                                    className="inline-flex"
+                                    className="inline-flex opacity-50"
                                     tabIndex={0}
                                     aria-disabled>
                                     <ToggleGroup.Item
                                         value="auto"
                                         disabled
-                                        className="text-text-tertiary flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-medium disabled:cursor-not-allowed">
+                                        className="text-text-tertiary flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-normal disabled:cursor-not-allowed">
                                         Auto · Kodus optimizes
                                         <Badge variant="helper">
                                             Coming soon
@@ -233,44 +294,71 @@ export const RoutingTab = ({
                     </ToggleGroup.Root>
                 </div>
 
-                {/* ── Default + Fallback ── */}
+                {/* ── Defaults: one model for everything + fallback ── */}
                 <div className="flex flex-col gap-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div
+                        data-routing-anchor="default"
+                        className="flex flex-wrap items-center justify-between gap-3 scroll-mt-4">
                         <div className="flex flex-col">
                             <span className="text-text-primary text-sm font-medium">
-                                Default model
+                                Model for all tasks
                             </span>
                             <span className="text-text-tertiary text-xs">
-                                Used when a task has no override.
+                                Runs every task unless you set one per agent below.
                             </span>
                         </div>
                         <ModelCombobox
                             models={pool}
                             value={defaultModelId}
-                            onSelect={setDefaultModelId}
+                            onSelect={(id) => {
+                                setDefaultModelId(id);
+                                // Drop per-task overrides that now equal the new
+                                // default — they inherit, so they must not stay
+                                // pinned (else they'd re-surface if it moves again).
+                                setTaskOverrides((prev) => {
+                                    const next = { ...prev };
+                                    (Object.keys(next) as LlmTask[]).forEach(
+                                        (task) => {
+                                            if (next[task] === id)
+                                                delete next[task];
+                                        },
+                                    );
+                                    return next;
+                                });
+                            }}
                             trigger={
                                 <Button
                                     variant="helper"
                                     size="md"
                                     role="combobox"
-                                    className="min-w-56 justify-between"
+                                    className="min-w-64 justify-between gap-2"
                                     rightIcon={
                                         <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                     }>
-                                    {labelFor(defaultModelId) ??
-                                        "Select a model"}
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        <ProviderAvatar
+                                            provider={providerOf(defaultModelId)}
+                                        />
+                                        <span className="truncate">
+                                            {labelFor(defaultModelId) ??
+                                                "Select a model"}
+                                        </span>
+                                    </span>
                                 </Button>
                             }
                         />
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div
+                        data-routing-anchor="fallback"
+                        className="flex flex-wrap items-center justify-between gap-3 scroll-mt-4">
                         <div className="flex flex-col">
                             <span className="text-text-primary text-sm font-medium">
                                 Fallback (optional)
                             </span>
                             <span className="text-text-tertiary text-xs">
-                                Used if the resolved model fails.
+                                Used automatically if the main model is
+                                unavailable.
                             </span>
                         </div>
                         {showFallback ? (
@@ -284,12 +372,21 @@ export const RoutingTab = ({
                                             variant="helper"
                                             size="md"
                                             role="combobox"
-                                            className="min-w-56 justify-between"
+                                            className="min-w-56 justify-between gap-2"
                                             rightIcon={
                                                 <ChevronsUpDownIcon className="-mr-2 opacity-50" />
                                             }>
-                                            {labelFor(fallbackModelId) ??
-                                                "Select a model"}
+                                            <span className="flex min-w-0 items-center gap-2">
+                                                <ProviderAvatar
+                                                    provider={providerOf(
+                                                        fallbackModelId,
+                                                    )}
+                                                />
+                                                <span className="truncate">
+                                                    {labelFor(fallbackModelId) ??
+                                                        "Select a model"}
+                                                </span>
+                                            </span>
                                         </Button>
                                     }
                                 />
@@ -319,11 +416,19 @@ export const RoutingTab = ({
                     </div>
                 </div>
 
-                {/* ── Per-task override grid (live capability warning) ── */}
-                <div className="flex flex-col gap-2">
-                    <span className="text-text-primary text-sm font-medium">
-                        Per-agent models
-                    </span>
+                {/* ── Per agent — different tasks can run different models ── */}
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-0.5">
+                        <span className="text-text-primary flex items-center gap-2 text-sm font-medium">
+                            <SlidersHorizontalIcon className="text-success size-4" />
+                            Per agent
+                        </span>
+                        <span className="text-text-tertiary text-xs">
+                            Different Kody tasks can run different models — a
+                            pricier model for deep review, a cheaper one for
+                            summaries.
+                        </span>
+                    </div>
                     <TaskOverrideGrid
                         models={pool}
                         defaultModelId={defaultModelId}
@@ -349,6 +454,9 @@ export const RoutingTab = ({
                         Save routing
                     </Button>
                 </div>
+
+                {/* ── Per repository (read-only mirror of Code Review Settings) ── */}
+                <PerRepositoryPanel teamId={teamId} />
             </div>
         </TooltipProvider>
     );

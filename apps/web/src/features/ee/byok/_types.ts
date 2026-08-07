@@ -9,8 +9,12 @@ export type ReasoningEffort = "none" | "low" | "medium" | "high";
 // `firstTwo...lastThree` shape (e.g. `sk...def`), or `••••` for a short/
 // unreadable value — and the client never receives a real key.
 
-/** LLM task taxonomy for routing (mirror of libs/llm LlmTask). */
-export type LlmTask = "codeReview" | "prSummary" | "conversation";
+/** LLM task taxonomy for routing. Sourced from the bundle-safe leaf in libs/llm
+ *  so the union has ONE source of truth across front and back (type-only import
+ *  → erased at build, no runtime coupling). Imported for local use in this file
+ *  AND re-exported so existing `import { LlmTask } from "../../_types"` keep working. */
+import type { LlmTask } from "@libs/llm/byok-config";
+export type { LlmTask };
 
 /**
  * A connected provider credential. Connected once, referenced by many models
