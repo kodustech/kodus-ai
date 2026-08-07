@@ -159,7 +159,7 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
  */
 const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,
-    model: 'kimi-k2.7-code',
+    model: 'deepseek-v4-flash',
 };
 
 /**
@@ -363,10 +363,26 @@ export function byokToVercelModel(
             // (it'll fail fast on the API call instead of here).
         }
 
-        // Kimi (Moonshot AI) — used by the public-demo trial flow.
+        // DeepSeek — the managed default model for the trial / no-BYOK flow.
         // Detected by model-name prefix so we don't need a new BYOK
         // provider entry just for the default-only path. Wires through
-        // the OpenAI-compatible adapter pointed at Moonshot's endpoint.
+        // the OpenAI-compatible adapter pointed at DeepSeek's endpoint.
+        if (/^deepseek[-_.]/i.test(defaultModel)) {
+            const deepseekKey =
+                process.env.API_DEEPSEEK_API_KEY ||
+                process.env.DEEPSEEK_API_KEY ||
+                '';
+            return createOpenAICompatible({
+                name: 'deepseek',
+                apiKey: deepseekKey,
+                baseURL:
+                    process.env.API_DEEPSEEK_BASE_URL ||
+                    'https://api.deepseek.com/v1',
+            })(defaultModel);
+        }
+
+        // Kimi (Moonshot AI) — legacy managed default, kept for any lingering
+        // `kimi-*` override still in flight. New default is DeepSeek above.
         if (/^kimi[-_.]/i.test(defaultModel)) {
             const moonshotKey =
                 process.env.API_MOONSHOT_API_KEY ||
