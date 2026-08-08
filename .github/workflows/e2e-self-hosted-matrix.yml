@@ -22,7 +22,8 @@ permissions:
 #   keep_running Optional — leave droplets alive after each cell for debug
 #
 # Required secrets:
-#   DIGITALOCEAN_TOKEN
+#   AWS_E2E_ACCESS_KEY_ID, AWS_E2E_SECRET_ACCESS_KEY  (default provider)
+#   DIGITALOCEAN_TOKEN                                (fallback provider)
 #   GH_TEST_TOKEN, GL_TEST_TOKEN, BB_TEST_USER, BB_TEST_APP_PASSWORD,
 #   AZ_TEST_TOKEN, and their *_TEST_REPO / *_TEST_PR_NUMBER companions
 #   SH_LICENSE_KEY_PAID, SH_LICENSE_KEY_FREE
@@ -218,7 +219,21 @@ jobs:
                   SOURCE_MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
                   LICENSE_MODE: ${{ matrix.cell.license }}
                   KODUS_INSTALLER_PATH: ${{ github.workspace }}/kodus-installer
-                  TEST_VM_PROVIDER: digitalocean
+                  # AWS by default: Kodus has credit there, and DigitalOcean
+                  # was the direct cause of two failure classes — 504s on
+                  # droplet create (which is also how orphans appear: DO may
+                  # create it anyway and the script dies before recording the
+                  # id) and a reaper watching the wrong name prefix.
+                  #
+                  # vars.E2E_VM_PROVIDER flips it back to `digitalocean`
+                  # without a code change if AWS misbehaves.
+                  TEST_VM_PROVIDER: ${{ vars.E2E_VM_PROVIDER || 'aws' }}
+                  # Region-boxed agent credential (us-east-2). It cannot reach
+                  # us-east-1, where prod and QA live, and an IAM guardrail
+                  # caps instance families at t3/t3a/t4g.
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_E2E_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_E2E_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: us-east-2
                   TEST_KEEP_RUNNING: ${{ inputs.keep_running && '1' || '0' }}
 
                   DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
