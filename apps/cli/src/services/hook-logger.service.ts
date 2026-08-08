@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { LogLevel, LogComponent, LogEntry } from '../types/session.js';
+import { redactDeep } from './trace/redaction.js';
 import { hookLogPath } from './trace/store-paths.js';
 
 class HookLoggerService {
@@ -62,8 +63,11 @@ class HookLoggerService {
             return;
         }
 
+        // Callers pass prompts, task descriptions and tool inputs in here, so
+        // the log gets the same redaction as the record. A diagnostic file is
+        // not a reason to keep a credential on disk.
         const entry: LogEntry = {
-            ...fields,
+            ...redactDeep(fields ?? {}),
             time: new Date().toISOString(),
             level,
             msg,

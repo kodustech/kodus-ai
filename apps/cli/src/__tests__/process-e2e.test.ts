@@ -710,6 +710,29 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
         expect(record).not.toContain(secret);
         expect(record).toContain('[REDACTED]');
 
+        // Nowhere else in the store either — the hook log carries the same
+        // prompt and is just as much a file on the developer's disk.
+        const storeOffenders: string[] = [];
+        const walkStore = async (dir: string): Promise<void> => {
+            for (const entry of await fs.readdir(dir, {
+                withFileTypes: true,
+            })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    await walkStore(full);
+                    continue;
+                }
+                const content = await fs
+                    .readFile(full, 'utf-8')
+                    .catch(() => '');
+                if (content.includes(secret)) {
+                    storeOffenders.push(full);
+                }
+            }
+        };
+        await walkStore(path.join(homeDir, '.kodus'));
+        expect(storeOffenders).toEqual([]);
+
         // Nothing anywhere under the repository working tree, either.
         const offenders: string[] = [];
         const walk = async (dir: string): Promise<void> => {
