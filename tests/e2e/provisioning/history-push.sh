@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Append this run's results to the durable history log and push it.
 #
-# The log lives on an ORPHAN BRANCH (default `e2e-history`) in this repo —
+# The log lives on an ORPHAN BRANCH (default `e2e-history`) in this repo --
 # not in the product database, and not in a table that ships to self-hosted
 # installs. CI results are CI data. An orphan branch also needs no new
 # secret: GITHUB_TOKEN with `contents: write` on this job is enough, whereas
 # a gist would require a separate PAT.
 #
 # Idempotent and concurrency-safe: on a rejected push we re-fetch, re-apply
-# our rows on top, and retry — two matrices finishing at once must not lose
+# our rows on top, and retry -- two matrices finishing at once must not lose
 # one of their runs.
 #
 # Never fails the job. A reporting gap is not a release gate; turning one
@@ -24,7 +24,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 if [ -z "${GITHUB_ACTIONS:-}" ] && [ -z "${E2E_HISTORY_FORCE_PUSH:-}" ]; then
-    echo "[history] not in CI — skipping push (set E2E_HISTORY_FORCE_PUSH=1 to override)"
+    echo "[history] not in CI -- skipping push (set E2E_HISTORY_FORCE_PUSH=1 to override)"
     exit 0
 fi
 
@@ -32,10 +32,10 @@ fi
 # re-apply them onto a freshly fetched branch without re-reading evidence.
 ROWS="$TMP/rows.jsonl"
 ( cd "$E2E_DIR" && ./node_modules/.bin/tsx cli/history-append.ts --history "$ROWS" ) \
-    || { echo "[history] could not build rows — skipping"; exit 0; }
+    || { echo "[history] could not build rows -- skipping"; exit 0; }
 
 if [ ! -s "$ROWS" ]; then
-    echo "[history] no rows produced — nothing to push"
+    echo "[history] no rows produced -- nothing to push"
     exit 0
 fi
 
@@ -49,7 +49,7 @@ for attempt in 1 2 3; do
             echo "[history] worktree add failed"; exit 0; }
     else
         # First ever run: create the orphan branch from nothing.
-        echo "[history] branch $BRANCH does not exist yet — creating it"
+        echo "[history] branch $BRANCH does not exist yet -- creating it"
         git worktree add --detach "$TMP/wt" >/dev/null 2>&1 || exit 0
         ( cd "$TMP/wt" && git checkout --orphan "$BRANCH" >/dev/null 2>&1 && git rm -rfq --cached . 2>/dev/null; rm -rf "$TMP/wt"/* )
     fi
@@ -65,10 +65,10 @@ for attempt in 1 2 3; do
         git push -q origin "HEAD:$BRANCH" 2>&1
     ) && { echo "[history] pushed $(wc -l < "$ROWS" | tr -d ' ') row(s) to $BRANCH"; git worktree remove --force "$TMP/wt" 2>/dev/null; exit 0; }
 
-    echo "[history] push attempt $attempt rejected (concurrent run?) — retrying"
+    echo "[history] push attempt $attempt rejected (concurrent run?) -- retrying"
     git worktree remove --force "$TMP/wt" 2>/dev/null
     sleep $((attempt * 3))
 done
 
-echo "[history] could not push after 3 attempts — results are still in the artifact"
+echo "[history] could not push after 3 attempts -- results are still in the artifact"
 exit 0

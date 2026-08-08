@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Seed the durable history log from the CI artifacts that still exist.
 #
-# The matrix has always written result.json into an artifact — it just
-# expires (14–30 days) and cannot be queried across runs. This pulls whatever
+# The matrix has always written result.json into an artifact -- it just
+# expires (14-30 days) and cannot be queried across runs. This pulls whatever
 # is still there into history/e2e-history.jsonl so `e2e:report` has something
 # to show on day one instead of waiting a month to become useful.
 #
@@ -26,7 +26,7 @@ command -v unzip >/dev/null || { echo "unzip required" >&2; exit 1; }
 mkdir -p "$(dirname "$HISTORY_FILE")"
 touch "$HISTORY_FILE"
 
-# runIds already in the log — so a re-run doesn't double-count.
+# runIds already in the log -- so a re-run doesn't double-count.
 SEEN="$TMP/seen.txt"
 node -e '
   const fs=require("fs");
@@ -38,7 +38,7 @@ node -e '
   console.log([...ids].join("\n"));
 ' "$HISTORY_FILE" > "$SEEN"
 
-echo "Backfilling from up to $MAX e2e artifacts on $REPO…"
+echo "Backfilling from up to $MAX e2e artifacts on $REPO..."
 
 gh api "/repos/$REPO/actions/artifacts?per_page=100" \
     --jq ".artifacts[] | select(.name|test(\"^e2e-\")) | select(.expired==false) | \"\(.id)\t\(.name)\t\(.workflow_run.id)\"" \
@@ -75,5 +75,5 @@ done < "$TMP/list.tsv"
 # Keep the log sorted by timestamp so appends stay roughly chronological.
 sort -t'"' -k4 "$HISTORY_FILE" -o "$HISTORY_FILE" 2>/dev/null || true
 
-echo "Backfilled $count run(s) → $HISTORY_FILE"
+echo "Backfilled $count run(s) -> $HISTORY_FILE"
 echo "Now run: pnpm --dir tests/e2e run report"
