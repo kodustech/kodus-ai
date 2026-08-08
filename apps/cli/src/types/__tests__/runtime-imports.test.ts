@@ -28,6 +28,6 @@ describe('Runtime and command type consumers', () => {
         const filePath = path.resolve(process.cwd(), file);
         const contents = fs.readFileSync(filePath, 'utf-8');
 
-        expect(contents).not.toContain("types/index.js");
+        expect(contents).not.toContain('types/index.js');
     });
 });

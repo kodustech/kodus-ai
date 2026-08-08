@@ -7,7 +7,7 @@ description: Use when starting work in an area of the codebase, to recall prior 
 
 ## Goal
 
-Before editing files, load the decisions that previous agents (and humans) recorded about those paths. Decision memory explains *why* the code looks the way it does.
+Before editing files, load the decisions that previous agents (and humans) recorded about those paths. Decision memory explains _why_ the code looks the way it does.
 
 ## When to use
 
