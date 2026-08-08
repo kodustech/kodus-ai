@@ -13,6 +13,14 @@ export async function handleHook(
     hookName: string,
 ): Promise<void> {
     try {
+        // Distillation shells out to the agent CLI from inside the repository,
+        // so that subprocess fires these very hooks. Capturing it would file
+        // the distillation prompt as a session and feed it back into the next
+        // distillation.
+        if (process.env.KODUS_TRACE_SKIP) {
+            return;
+        }
+
         const isRepo = await gitService.isGitRepository();
         if (!isRepo) {
             return;

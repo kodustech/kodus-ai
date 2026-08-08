@@ -113,6 +113,14 @@ export async function runAgentCli(
         input: prompt,
         timeout: options.timeoutMs ?? 180_000,
         reject: true,
+        env: {
+            ...process.env,
+            // The agent CLI runs inside the repository, so it picks up the very
+            // hooks this feature installed and its own distillation prompt is
+            // captured as a session — which then feeds the next distillation.
+            // This tells the hooks it is Kodus' own subprocess.
+            KODUS_TRACE_SKIP: '1',
+        },
     });
     return result.stdout;
 }
