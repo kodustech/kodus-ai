@@ -21,6 +21,11 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any, // pullRequestManagerService — unused when summary is off
+            {
+                execute: jest
+                    .fn()
+                    .mockResolvedValue({ action: 'skipped', reason: 'no-decisions' }),
+            } as any, // postTracePrCommentUseCase
         );
         return { stage, commentManagerService };
     };
@@ -126,6 +131,11 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any,
+            {
+                execute: jest
+                    .fn()
+                    .mockResolvedValue({ action: 'skipped', reason: 'no-decisions' }),
+            } as any, // postTracePrCommentUseCase
         );
         return { stage, commentManagerService };
     };
