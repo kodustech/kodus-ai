@@ -32,7 +32,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/_common.sh"
 
+# Droplet name prefixes this script owns.
+#
+# `kodus-selfhosted-` is what provision.sh creates for manual/SSO droplets.
+# `kodus-e2e-` is what the MATRIX creates — and it was missing here, so every
+# matrix droplet was invisible to the reaper. Eight of them accumulated over
+# 05-07/08/2026 until DigitalOcean started refusing to create new ones and the
+# self-hosted matrix failed in provisioning ("Creating server..." then a jq
+# parse error on a non-JSON error response).
+#
+# PREFIX stays defined as the primary one: it is used to rebuild a full name
+# from a local state-file instance id, which only provision.sh writes.
 PREFIX="kodus-selfhosted-"
+PREFIXES=("kodus-selfhosted-" "kodus-e2e-")
+
+# Fail-closed name guard. Anything not matching one of our prefixes is never
+# deleted — prod (kodus-web-new) can never match.
+matches_prefix() {
+    local name="$1" p
+    for p in "${PREFIXES[@]}"; do
+        case "$name" in "$p"*) return 0 ;; esac
+    done
+    return 1
+}
+
+# Strip whichever prefix this droplet carries, for state-file lookups.
+strip_prefix() {
+    local name="$1" p
+    for p in "${PREFIXES[@]}"; do
+        case "$name" in "$p"*) printf '%s' "${name#$p}"; return 0 ;; esac
+    done
+    printf '%s' "$name"
+}
 TTL_HOURS=6
 ASSUME_YES=0
 DRY_RUN=0
@@ -77,7 +108,7 @@ is_kept() {
     return 1
 }
 
-log "Reaping ${PREFIX}* droplets on DigitalOcean"
+log "Reaping ${PREFIXES[*]} droplets on DigitalOcean"
 if [ "$REAP_ALL" = "1" ]; then
     log "Mode: ALL (ignoring TTL)"
 else
@@ -93,9 +124,10 @@ DROPLETS_JSON=$(curl -fsS \
     || { err "Failed to list droplets from DigitalOcean"; exit 1; }
 
 # name<TAB>id<TAB>created_at, filtered to our prefix.
+PREFIX_JSON=$(printf '%s\n' "${PREFIXES[@]}" | jq -R . | jq -sc .)
 MATCHES=$(echo "$DROPLETS_JSON" | jq -r \
-    --arg p "$PREFIX" \
-    '.droplets[] | select(.name | startswith($p)) | "\(.name)\t\(.id)\t\(.created_at)"')
+    --argjson ps "$PREFIX_JSON" \
+    '.droplets[] | select([.name | startswith($ps[])] | any) | "\(.name)\t\(.id)\t\(.created_at)"')
 
 LIVE_NAMES=$(echo "$DROPLETS_JSON" | jq -r '.droplets[].name')
 
@@ -107,7 +139,7 @@ SKIPPED_YOUNG=0
 if [ -n "$MATCHES" ]; then
     while IFS=$'\t' read -r name id created; do
         [ -n "$name" ] || continue
-        short="${name#$PREFIX}"
+        short="$(strip_prefix "$name")"
         if is_kept "$short"; then
             dim "  keep   $name (exempt)"
             continue
@@ -173,20 +205,17 @@ for short in ${TO_REAP[@]+"${TO_REAP[@]}"}; do
             -H "Authorization: Bearer ${DIGITALOCEAN_TOKEN}" \
             "https://api.digitalocean.com/v2/droplets/$id" 2>/dev/null \
             | jq -r '.droplet.name // ""' 2>/dev/null || echo "")
-        case "$live_name" in
-            "${PREFIX}"*)
+        if matches_prefix "$live_name"; then
                 log "orphan delete id=$id ($live_name)"
                 curl -fsS -X DELETE \
                     -H "Authorization: Bearer ${DIGITALOCEAN_TOKEN}" \
                     "https://api.digitalocean.com/v2/droplets/$id" >/dev/null \
                     && ok "Destroyed orphan droplet $id ($live_name)" \
                     || { warn "Could not destroy orphan $id"; rc=1; }
-                ;;
-            *)
-                err "SAFETY: orphan id=$id live name '$live_name' is not ${PREFIX}* — skipping."
+        else
+                err "SAFETY: orphan id=$id live name '$live_name' matches none of ${PREFIXES[*]} — skipping."
                 rc=1
-                ;;
-        esac
+        fi
     fi
 done
 
