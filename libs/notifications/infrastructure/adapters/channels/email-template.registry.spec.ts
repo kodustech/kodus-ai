@@ -1,5 +1,8 @@
 import { NotificationEvent } from '../../../domain/catalog/events';
-import { EMAIL_TEMPLATE_REGISTRY } from './email-template.registry';
+import {
+    EMAIL_TEMPLATE_REGISTRY,
+    normaliseRuleList,
+} from './email-template.registry';
 
 describe('EMAIL_TEMPLATE_REGISTRY', () => {
     const CTX = { webUrl: 'https://app.example.com' };
@@ -166,5 +169,44 @@ describe('EMAIL_TEMPLATE_REGISTRY', () => {
             ]!(EMAIL_PAYLOADS[NotificationEvent.ORG_MEMBER_REMOVED]!, CTX);
             expect(result.subject).toContain('Acme');
         });
+    });
+});
+
+describe('normaliseRuleList', () => {
+    // Regression: the producer sent {title, rule, severity} objects into a
+    // template typed `string[]`. React threw "Objects are not valid as a React
+    // child" at render, inside the worker, and the delivery retried 5x while
+    // the execution sat in `partial_error` — which surfaced in e2e as a review
+    // that "completed UNHEALTHY".
+    it('reduces rule objects to their title', () => {
+        expect(
+            normaliseRuleList([
+                { title: 'Avoid nested ternaries', rule: '...', severity: 'medium' },
+                { title: 'Prefer early returns', rule: '...', severity: 'low' },
+            ]),
+        ).toEqual(['Avoid nested ternaries', 'Prefer early returns']);
+    });
+
+    it('passes plain strings through', () => {
+        expect(normaliseRuleList(['already a string'])).toEqual([
+            'already a string',
+        ]);
+    });
+
+    it('drops entries it cannot render instead of crashing the email', () => {
+        expect(
+            normaliseRuleList([
+                'keep',
+                { rule: 'no title here' },
+                null,
+                42,
+                { title: 123 },
+            ]),
+        ).toEqual(['keep']);
+    });
+
+    it('tolerates a missing or non-array payload', () => {
+        expect(normaliseRuleList(undefined)).toEqual([]);
+        expect(normaliseRuleList('not an array')).toEqual([]);
     });
 });
