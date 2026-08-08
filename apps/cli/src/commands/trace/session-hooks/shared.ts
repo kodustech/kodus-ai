@@ -38,7 +38,7 @@ export async function handleHook(
         if (process.env.KODUS_VERBOSE === 'true') {
             const message =
                 error instanceof Error ? error.message : String(error);
-            console.error(`[decisions] hook error: ${message}`);
+            console.error(`[trace] hook error: ${message}`);
         }
     }
 }

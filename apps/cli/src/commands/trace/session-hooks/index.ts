@@ -28,8 +28,5 @@ sessionHooksCommand
 sessionHooksCommand
     .command('codex')
     .description('Handle Codex CLI lifecycle hooks')
-    .argument(
-        '<hook-name>',
-        'Hook event name (AfterAgent, AfterToolUse)',
-    )
+    .argument('<hook-name>', 'Hook event name (AfterAgent, AfterToolUse)')
     .action(codexHookAction);

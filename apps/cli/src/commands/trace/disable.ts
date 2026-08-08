@@ -1,13 +1,15 @@
 import chalk from 'chalk';
 import { gitService } from '../../services/git.service.js';
-import {
-    removeClaudeCompatibleHooks,
-    removeCodexNotify,
-    resolveCodexConfigPath,
-} from './hooks.js';
+import { resolveCodexConfigPath } from './hooks.js';
 import { removeSessionHooks } from './session-hooks-install.js';
 import { removeCursorSessionHooks } from './session-hooks-install-cursor.js';
 import { removeCodexSessionHooks } from './session-hooks-install-codex.js';
+import {
+    stripLegacyClaudeSettings,
+    stripLegacyCursorHooks,
+    stripLegacyCodexConfig,
+} from '../../services/legacy-hooks-strip.service.js';
+import { gitHooksService } from '../../services/git-hooks.service.js';
 import { exitWithCode } from '../../utils/cli-exit.js';
 import { cliError, cliInfo } from '../../utils/logger.js';
 import type { GlobalOptions } from '../../types/cli.js';
@@ -26,7 +28,7 @@ export async function disableAction(
     options: { dryRun?: boolean } = {},
     globalOpts?: GlobalOptions,
 ): Promise<void> {
-    const ctx = createCommandContext('decisions disable', {
+    const ctx = createCommandContext('trace disable', {
         format: globalOpts?.format ?? 'terminal',
         output: globalOpts?.output,
         verbose: globalOpts?.verbose ?? false,
@@ -44,12 +46,13 @@ export async function disableAction(
 
         if (options.dryRun) {
             const payload = {
-                action: 'decisions disable',
+                action: 'trace disable',
                 repositoryRoot: gitRoot,
-                removeClaudeCompatibleHooks: true,
-                removeCodexNotify: true,
-                removePostMergeHookBlock: true,
-                preserveKodyData: true,
+                removeSessionHooks: true,
+                removeCursorSessionHooks: true,
+                removeCodexSessionHooks: true,
+                removeGitHooks: true,
+                stripLegacyDecisionsHooks: true,
                 codexConfigPath: resolveCodexConfigPath(),
             };
 
@@ -70,18 +73,27 @@ export async function disableAction(
             return;
         }
 
-        const claudeResult = await removeClaudeCompatibleHooks(gitRoot);
         const sessionResult = await removeSessionHooks(gitRoot);
         const cursorResult = await removeCursorSessionHooks(gitRoot);
         const codexConfigPath = resolveCodexConfigPath();
-        const codexResult = await removeCodexNotify(codexConfigPath);
         const codexSessionResult =
             await removeCodexSessionHooks(codexConfigPath);
 
-        cliInfo(chalk.green('\u2713 Decision hooks removed.'));
-        cliInfo(
-            `  Decision capture hooks: ${claudeResult.removed ? 'removed' : 'not found'}`,
-        );
+        // Also strip any leftover legacy decisions hooks
+        await stripLegacyClaudeSettings(gitRoot);
+        await stripLegacyCursorHooks(gitRoot);
+        await stripLegacyCodexConfig(codexConfigPath);
+
+        let gitHookRemoved = false;
+        try {
+            const hooksDir = await gitService.getHooksDir();
+            const result = await gitHooksService.uninstall(hooksDir);
+            gitHookRemoved = result.removed.length > 0;
+        } catch {
+            // fail-open
+        }
+
+        cliInfo(chalk.green('\u2713 Trace hooks removed.'));
         cliInfo(
             `  Claude Code session hooks: ${sessionResult.removed ? 'removed' : 'not found'}`,
         );
@@ -89,11 +101,9 @@ export async function disableAction(
             `  Cursor session hooks: ${cursorResult.removed ? 'removed' : 'not found'}`,
         );
         cliInfo(
-            `  Codex notify: ${codexResult.removed ? 'removed' : 'not found'}`,
-        );
-        cliInfo(
             `  Codex session hooks: ${codexSessionResult.removed ? 'removed' : 'not found'}`,
         );
+        cliInfo(`  Git hooks: ${gitHookRemoved ? 'removed' : 'not found'}`);
     } catch (error) {
         const normalized = normalizeCommandError(error);
         if (ctx.isAgent) {

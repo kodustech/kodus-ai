@@ -8,8 +8,8 @@ const FILES = [
     'src/commands/schema.ts',
     'src/commands/hook/install.ts',
     'src/commands/hook/uninstall.ts',
-    'src/commands/memory/index.ts',
-    'src/commands/memory/disable.ts',
+    'src/commands/trace/index.ts',
+    'src/commands/trace/disable.ts',
     'src/formatters/json.ts',
     'src/formatters/markdown.ts',
     'src/formatters/prompt.ts',
@@ -19,7 +19,7 @@ const FILES = [
     'src/utils/credentials.ts',
     'src/utils/input-validation.ts',
     'src/utils/rate-limit.ts',
-    'src/services/api/memory.api.ts',
+    'src/services/api/sessions.api.ts',
     'src/services/api/trial.api.ts',
 ] as const;
 

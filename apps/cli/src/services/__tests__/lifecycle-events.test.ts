@@ -15,6 +15,7 @@ import {
     buildTurnEndEvent,
     buildTurnStartEvent,
 } from '../lifecycle-events.js';
+import { redactText } from '../redaction.service.js';
 
 const agentType: AgentType = 'claude-code';
 const timestamp = '2026-03-14T12:00:00.000Z';
@@ -48,7 +49,7 @@ describe('lifecycle event builders', () => {
             sessionId: 'sess-1',
             branch: 'main',
             turnId: 'turn-1',
-            prompt: 'Fix auth bug',
+            prompt: redactText('Fix auth bug'),
             commitBefore: 'abc123',
             timestamp,
         });
@@ -81,7 +82,7 @@ describe('lifecycle event builders', () => {
             sessionId: 'sess-1',
             branch: 'main',
             turnId: 'turn-1',
-            response: 'Done',
+            response: redactText('Done'),
             toolCalls,
             filesModified,
             filesRead: ['src/old.ts'],

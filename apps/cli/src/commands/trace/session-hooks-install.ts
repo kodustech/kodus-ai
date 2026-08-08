@@ -1,7 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
+import {
+    isLegacyDecisionsCommand,
+    stripLegacyDecisionsFromHooksObject,
+} from '../../services/legacy-hooks-strip.service.js';
 
-const SESSIONS_HOOK_PREFIX = 'kodus decisions hooks';
+const SESSIONS_HOOK_PREFIX = 'kodus trace hooks';
+const LEGACY_SESSIONS_HOOK_PREFIX = 'kodus decisions hooks';
 
 type JsonObject = Record<string, unknown>;
 
@@ -10,7 +15,11 @@ function isRecord(value: unknown): value is JsonObject {
 }
 
 function isSessionsHookCommand(command: string): boolean {
-    return command.includes(SESSIONS_HOOK_PREFIX);
+    return (
+        command.includes(SESSIONS_HOOK_PREFIX) ||
+        command.includes(LEGACY_SESSIONS_HOOK_PREFIX) ||
+        isLegacyDecisionsCommand(command)
+    );
 }
 
 async function readJsonObject(filePath: string): Promise<JsonObject> {
@@ -77,7 +86,7 @@ function upsertHook(
             return false;
         }
 
-        // Replace existing sessions hook command if present
+        // Replace existing sessions / legacy hook command if present
         for (const hookValue of hooksArray) {
             if (
                 !isRecord(hookValue) ||
@@ -111,10 +120,12 @@ export async function installSessionHooks(
     const settings = await readJsonObject(settingsPath);
     const hooks = ensureObject(settings, 'hooks');
 
+    // Strip any remaining legacy decisions hooks first
+    let changed = stripLegacyDecisionsFromHooksObject(hooks);
+
     const cmd = (hookEvent: string) =>
         `${SESSIONS_HOOK_PREFIX} ${agentName} ${hookEvent}`;
 
-    let changed = false;
     changed =
         upsertHook(hooks, 'SessionStart', '', cmd('session-start')) || changed;
     changed =

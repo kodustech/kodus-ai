@@ -1,7 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const SESSION_HOOK_MARKER = 'kodus decisions hooks codex';
+const SESSION_HOOK_MARKER = 'kodus trace hooks codex';
+const LEGACY_SESSION_HOOK_MARKER = 'kodus decisions hooks codex';
 
 /**
  * Installs Codex session tracking hooks into ~/.codex/config.toml.
@@ -9,9 +10,7 @@ const SESSION_HOOK_MARKER = 'kodus decisions hooks codex';
  * Codex uses TOML [[hooks]] arrays:
  *   [[hooks]]
  *   event = "AfterAgent"
- *   command = "kodus decisions hooks codex AfterAgent"
- *
- * Currently only AfterAgent is useful (maps to TurnEnd).
+ *   command = "kodus trace hooks codex AfterAgent"
  */
 export async function installCodexSessionHooks(
     configPath: string,
@@ -25,7 +24,16 @@ export async function installCodexSessionHooks(
         }
     }
 
-    // Check if already installed
+    // Replace legacy marker if present
+    if (content.includes(LEGACY_SESSION_HOOK_MARKER)) {
+        content = content
+            .split(LEGACY_SESSION_HOOK_MARKER)
+            .join(SESSION_HOOK_MARKER);
+        await fs.mkdir(path.dirname(configPath), { recursive: true });
+        await fs.writeFile(configPath, content, 'utf-8');
+        return { configPath, changed: true };
+    }
+
     if (content.includes(SESSION_HOOK_MARKER)) {
         return { configPath, changed: false };
     }
@@ -59,13 +67,13 @@ export async function removeCodexSessionHooks(
         return { configPath, removed: false };
     }
 
-    if (!content.includes(SESSION_HOOK_MARKER)) {
+    if (
+        !content.includes(SESSION_HOOK_MARKER) &&
+        !content.includes(LEGACY_SESSION_HOOK_MARKER)
+    ) {
         return { configPath, removed: false };
     }
 
-    // Remove [[hooks]] blocks that contain our marker command.
-    // A hook block starts with [[hooks]] and ends before the next
-    // [[something]] or end of file.
     const lines = content.split('\n');
     const resultLines: string[] = [];
     let i = 0;
@@ -74,16 +82,24 @@ export async function removeCodexSessionHooks(
         const line = lines[i];
 
         if (line.trim() === '[[hooks]]') {
-            // Peek ahead — if this block contains our marker, skip it
             const blockLines = getTomlBlock(lines, i);
-            if (blockLines.some((l) => l.includes(SESSION_HOOK_MARKER))) {
+            if (
+                blockLines.some(
+                    (l) =>
+                        l.includes(SESSION_HOOK_MARKER) ||
+                        l.includes(LEGACY_SESSION_HOOK_MARKER),
+                )
+            ) {
                 i += blockLines.length;
                 continue;
             }
+            resultLines.push(...blockLines);
+            i += blockLines.length;
+            continue;
         }
 
         resultLines.push(line);
-        i++;
+        i += 1;
     }
 
     const nextContent = resultLines
@@ -101,14 +117,12 @@ export async function removeCodexSessionHooks(
     return { configPath, removed: true };
 }
 
-function getTomlBlock(lines: string[], startIndex: number): string[] {
-    const block: string[] = [lines[startIndex]];
-    for (let i = startIndex + 1; i < lines.length; i++) {
-        const trimmed = lines[i].trim();
-        if (trimmed.startsWith('[[') || trimmed.startsWith('[')) {
-            break;
-        }
+function getTomlBlock(lines: string[], startIdx: number): string[] {
+    const block = [lines[startIdx]];
+    let i = startIdx + 1;
+    while (i < lines.length && !lines[i].trim().startsWith('[[')) {
         block.push(lines[i]);
+        i += 1;
     }
     return block;
 }

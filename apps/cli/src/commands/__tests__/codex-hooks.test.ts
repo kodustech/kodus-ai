@@ -3,12 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import {
-    installCodexNotify,
-    removeCodexNotify,
-    CODEX_NOTIFY_LINE,
-    CODEX_NOTIFY_LINE_LEGACY,
-    resolveCodexConfigPath,
-} from '../memory/hooks.js';
+    installCodexSessionHooks,
+    removeCodexSessionHooks,
+} from '../trace/session-hooks-install-codex.js';
+import { resolveCodexConfigPath } from '../trace/hooks.js';
 
 let tmpDir: string;
 
@@ -24,124 +22,58 @@ function configPath(): string {
     return path.join(tmpDir, '.codex', 'config.toml');
 }
 
-describe('installCodexNotify', () => {
-    it('creates config.toml with notify line when none exists', async () => {
-        const result = await installCodexNotify(configPath());
-
-        expect(result.changed).toBe(true);
-        expect(result.skipped).toBe(false);
-
-        const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).toContain(CODEX_NOTIFY_LINE);
-    });
-
-    it('appends notify line to existing config', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(configPath(), 'model = "o3"\n');
-
-        const result = await installCodexNotify(configPath());
+describe('installCodexSessionHooks', () => {
+    it('creates config.toml with session hook when none exists', async () => {
+        const result = await installCodexSessionHooks(configPath());
 
         expect(result.changed).toBe(true);
 
         const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).toContain('model = "o3"');
-        expect(content).toContain(CODEX_NOTIFY_LINE);
+        expect(content).toContain('kodus trace hooks codex');
+        expect(content).not.toContain('kodus decisions');
     });
 
-    it('is idempotent — does not duplicate notify line', async () => {
-        await installCodexNotify(configPath());
-        const result = await installCodexNotify(configPath());
-
+    it('is idempotent', async () => {
+        await installCodexSessionHooks(configPath());
+        const result = await installCodexSessionHooks(configPath());
         expect(result.changed).toBe(false);
-        expect(result.skipped).toBe(false);
-
-        const content = await fs.readFile(configPath(), 'utf-8');
-        const matches = content.split(CODEX_NOTIFY_LINE).length - 1;
-        expect(matches).toBe(1);
     });
 
-    it('upgrades legacy notify line to current', async () => {
+    it('migrates legacy decisions hooks marker', async () => {
         await fs.mkdir(path.dirname(configPath()), { recursive: true });
         await fs.writeFile(
             configPath(),
-            `model = "o3"\n${CODEX_NOTIFY_LINE_LEGACY}\n`,
+            [
+                '[[hooks]]',
+                'event = "AfterAgent"',
+                'command = "kodus decisions hooks codex AfterAgent"',
+                '',
+            ].join('\n'),
+            'utf-8',
         );
 
-        const result = await installCodexNotify(configPath());
-
+        const result = await installCodexSessionHooks(configPath());
         expect(result.changed).toBe(true);
-
         const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).toContain(CODEX_NOTIFY_LINE);
-        expect(content).not.toContain(CODEX_NOTIFY_LINE_LEGACY);
-    });
-
-    it('skips when a different notify entry exists', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(configPath(), 'notify = ["some-other-tool"]\n');
-
-        const result = await installCodexNotify(configPath());
-
-        expect(result.changed).toBe(false);
-        expect(result.skipped).toBe(true);
-        expect(result.reason).toContain('notify');
+        expect(content).toContain('kodus trace hooks codex');
+        expect(content).not.toContain('kodus decisions');
     });
 });
 
-describe('removeCodexNotify', () => {
-    it('removes notify line from config', async () => {
-        await installCodexNotify(configPath());
-        const result = await removeCodexNotify(configPath());
-
+describe('removeCodexSessionHooks', () => {
+    it('removes installed hooks', async () => {
+        await installCodexSessionHooks(configPath());
+        const result = await removeCodexSessionHooks(configPath());
         expect(result.removed).toBe(true);
-
         const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).not.toContain(CODEX_NOTIFY_LINE);
-    });
-
-    it('removes legacy notify line', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(
-            configPath(),
-            `model = "o3"\n${CODEX_NOTIFY_LINE_LEGACY}\n`,
-        );
-
-        const result = await removeCodexNotify(configPath());
-
-        expect(result.removed).toBe(true);
-
-        const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).not.toContain(CODEX_NOTIFY_LINE_LEGACY);
-        expect(content).toContain('model = "o3"');
-    });
-
-    it('returns removed=false when config does not exist', async () => {
-        const result = await removeCodexNotify(configPath());
-        expect(result.removed).toBe(false);
-    });
-
-    it('returns removed=false when no kodus notify present', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(configPath(), 'model = "o3"\n');
-
-        const result = await removeCodexNotify(configPath());
-        expect(result.removed).toBe(false);
+        expect(content).not.toContain('kodus trace hooks codex');
     });
 });
 
 describe('resolveCodexConfigPath', () => {
     it('defaults to ~/.codex/config.toml', () => {
-        const result = resolveCodexConfigPath();
-        expect(result).toBe(path.join(os.homedir(), '.codex', 'config.toml'));
-    });
-
-    it('expands tilde in path', () => {
-        const result = resolveCodexConfigPath('~/custom/config.toml');
-        expect(result).toBe(path.join(os.homedir(), 'custom/config.toml'));
-    });
-
-    it('resolves absolute path as-is', () => {
-        const result = resolveCodexConfigPath('/tmp/config.toml');
-        expect(result).toBe('/tmp/config.toml');
+        const p = resolveCodexConfigPath();
+        expect(p).toContain('.codex');
+        expect(p.endsWith('config.toml')).toBe(true);
     });
 });

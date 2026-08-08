@@ -95,7 +95,7 @@ async function runHook(
     return new Promise<RunResult>((resolve) => {
         const child = spawn(
             process.execPath,
-            [cliEntryPoint, 'decisions', 'hooks', agent, hookName],
+            [cliEntryPoint, 'trace', 'hooks', agent, hookName],
             {
                 cwd,
                 stdio: ['pipe', 'pipe', 'pipe'],
@@ -105,6 +105,7 @@ async function runHook(
                     KODUS_API_URL: `http://127.0.0.1:${mockServerPort}`,
                     KODUS_TEAM_KEY: 'kodus_test_key_e2e_12345',
                     HOME: tmpDir,
+                    KODUS_HOME: path.join(tmpDir, '.kodus'),
                     KODUS_VERBOSE: 'true',
                     NO_UPDATE_NOTIFIER: '1',
                     NODE_OPTIONS: '',
@@ -290,6 +291,14 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
             r.url?.includes('/cli/sessions/events'),
         );
         expect(eventRequests.length).toBeGreaterThanOrEqual(4);
+
+        // Lifecycle path only — never the legacy capture endpoints
+        const legacyCapture = capturedRequests.filter(
+            (r) =>
+                r.url?.includes('/cli/session-capture') ||
+                r.url?.includes('/cli/memory/captures'),
+        );
+        expect(legacyCapture).toHaveLength(0);
 
         const eventTypes = eventRequests.map((r) => r.body.type);
         expect(eventTypes).toContain('session_start');

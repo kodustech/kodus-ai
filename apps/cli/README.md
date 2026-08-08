@@ -107,20 +107,23 @@ kodus pr business-validation --branch main --task-id KC-1441
 kodus pr business-validation src/service.ts src/use-case.ts --task-id KC-1441
 ```
 
-### Decision Memory
+### Kodus Trace
 
 AI agents make dozens of decisions per session — architecture choices, trade-offs, why approach X was picked over Y. Without a record, that reasoning vanishes when the session ends.
 
-Kodus captures agent decisions into your repo as structured markdown. When you or another agent return to the code, the full context is there.
+Kodus Trace captures that reasoning locally first (`~/.kodus/sessions/`), optionally ships distilled decisions on an orphan branch (`kodus/trace/v1`), and surfaces them during review.
 
 ```bash
-kodus decisions enable           # Install hooks + initialize config
-kodus decisions status           # See what's been captured
-kodus decisions show [name]      # View PR or module memory
-kodus decisions promote          # Promote decisions to long-term memory
+kodus trace enable                    # Install lifecycle hooks + push refspec
+kodus trace status                    # Sessions, decisions, hook install state
+kodus trace src/billing/invoice.ts    # Recall decisions for paths (offline)
+kodus trace pin <id>                  # Keep a decision in the review context pack
+kodus trace forget <id>               # Drop a bad decision from recall
+kodus trace ui                        # Local SPA for session browsing (no auth)
+kodus trace disable                   # Remove hooks
 ```
 
-Stored in `.kody/pr/by-sha/<head-sha>.md` — versioned with your code, readable by humans and agents. [More on decision memory](#decision-memory-1)
+[More on Kodus Trace](#kodus-trace-1)
 
 ---
 
@@ -160,7 +163,7 @@ Once installed, your AI agent can autonomously:
 
 This creates a tight feedback loop: the agent writes, reviews, and fixes — all without leaving your IDE.
 
-Beyond reviews, Kodus also captures **what your agent decided and why** via [Decision Memory](#decision-memory). Every reasoning step is saved into your repo — so when you (or another agent) pick up the work later, the full context is already there. No more re-explaining what was done or losing decisions between sessions.
+Beyond reviews, Kodus also captures **what your agent decided and why** via [Kodus Trace](#decision-memory). Every reasoning step is saved into your repo — so when you (or another agent) pick up the work later, the full context is already there. No more re-explaining what was done or losing decisions between sessions.
 
 ### Setup: Claude Code
 
@@ -364,9 +367,7 @@ kodus pr suggestions --agent --pr-url https://github.com/org/repo/pull/42 --fiel
 ```bash
 kodus hook install --dry-run
 kodus hook uninstall --dry-run
-kodus decisions enable --dry-run
-kodus decisions disable --dry-run
-kodus decisions promote --dry-run
+kodus trace disable --dry-run
 ```
 
 Dry-run prints the planned actions and does not mutate local hooks/config/files.
@@ -451,34 +452,35 @@ kodus review src/index.ts src/utils.ts # Specific files
 
 </details>
 
-## Decision Memory
+## Kodus Trace
 
-Full reference for the decision capture system ([intro above](#decision-memory)).
+Full reference for local-first decision memory ([intro above](#kodus-trace)).
 
 ```bash
-# Enable with specific agents
-kodus decisions enable --agents claude,cursor,codex
+# Enable with specific agents (lifecycle hooks only)
+kodus trace enable --agents claude,cursor,codex
 
 # Custom Codex config path
-kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
+kodus trace enable --agents codex --codex-config ~/.codex/config.toml
 
-# Overwrite existing config
-kodus decisions enable --force
+# Status: sessions, decisions, last capture, hook install
+kodus trace status
 
-# Check what's been captured on current branch
-kodus decisions status
+# Path-positional recall (local sessions + orphan branch, offline)
+kodus trace src/billing/invoice.ts src/billing/
 
-# View decisions for a PR or specific module
-kodus decisions show [name]
+# Correct the store
+kodus trace pin <decision-id>
+kodus trace forget <decision-id>
 
-# Promote PR-level decisions to long-term module memory
-kodus decisions promote --branch feat/auth --modules auth,users
+# Local UI (no auth, localhost only)
+kodus trace ui
 
-# Disable hooks (preserves all captured data in .kody/)
-kodus decisions disable
+# Remove hooks (keeps ~/.kodus/sessions/)
+kodus trace disable
 ```
 
-**How it works:** Hooks fire on agent turn-complete events and persist decisions to `.kody/pr/by-sha/<head-sha>.md`. Files are committed to your repo, versioned with your code, readable by humans and agents.
+**How it works:** Agent lifecycle hooks write sessions under `~/.kodus/sessions/` (never inside the repo). On push, a detached pre-push hook distills branch decisions onto the orphan branch `kodus/trace/v1` with a `Kodus-Trace` commit trailer. Review injects a path-scoped context pack and a sticky PR comment when decisions exist.
 
 **Supported agents:** Claude Code, Cursor, Codex.
 

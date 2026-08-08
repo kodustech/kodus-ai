@@ -6,6 +6,7 @@ import type {
     ToolCall,
 } from '../types/session.js';
 import type { SessionApiEvent } from '../types/session-events.js';
+import type { RedactedString } from './redaction.service.js';
 
 export function buildSessionStartEvent(input: {
     sessionId: string;
@@ -28,11 +29,15 @@ export function buildSessionStartEvent(input: {
     };
 }
 
+/**
+ * Build a turn_start event. `prompt` MUST be a RedactedString so an unredacted
+ * transcript cannot reach the model / network by accident (signature-level).
+ */
 export function buildTurnStartEvent(input: {
     sessionId: string;
     branch: string;
     turnId: string;
-    prompt: string;
+    prompt: RedactedString;
     commitBefore: string;
     timestamp: string;
 }): SessionApiEvent {
@@ -47,11 +52,14 @@ export function buildTurnStartEvent(input: {
     };
 }
 
+/**
+ * Build a turn_end event. `response` MUST be a RedactedString.
+ */
 export function buildTurnEndEvent(input: {
     sessionId: string;
     branch: string;
     turnId: string;
-    response: string;
+    response: RedactedString;
     toolCalls: ToolCall[];
     filesModified: FileChange[];
     filesRead: string[];

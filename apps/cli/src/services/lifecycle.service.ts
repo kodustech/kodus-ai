@@ -8,6 +8,8 @@ import {
     removeLocal,
     listStaleSessions,
 } from './session-local.service.js';
+import { pruneOldSessions } from './local-session-store.service.js';
+import { redactText } from './redaction.service.js';
 import { api } from './api/index.js';
 import type {
     LifecycleEvent,
@@ -86,8 +88,10 @@ class LifecycleService {
             transcript_path: event.sessionRef,
         });
 
-        // Clean up stale sessions from previous crashes (> 30 min old)
+        // Clean up stale turn-state from previous crashes (> 30 min old)
         await this.cleanupStaleSessions(repoRoot, agentType);
+        // Prune full session records older than 90 days (89-day kept)
+        await pruneOldSessions(repoRoot).catch(() => {});
 
         const [branch, baseCommit, gitRemote] = await Promise.all([
             getBranchSafe(gitService),
@@ -118,10 +122,14 @@ class LifecycleService {
         agentType: AgentType,
         event: LifecycleEvent,
     ): Promise<void> {
+        // Redact before logging so secrets never land in ~/.kodus/logs
+        const redactedPromptPreview = redactText(
+            (event.prompt ?? '').slice(0, 200),
+        );
         await hookLogger.info('turn-start', 'lifecycle', {
             agent: agentType,
             model_session_id: event.sessionId,
-            prompt: event.prompt?.slice(0, 200),
+            prompt: redactedPromptPreview,
         });
 
         const [branch, commitBefore] = await Promise.all([
@@ -147,7 +155,7 @@ class LifecycleService {
                 branch,
                 timestamp: new Date().toISOString(),
                 turnId,
-                prompt: event.prompt ?? '',
+                prompt: redactText(event.prompt ?? ''),
                 commitBefore,
             }),
             repoRoot,
@@ -228,7 +236,7 @@ class LifecycleService {
                     branch,
                     timestamp: new Date().toISOString(),
                     turnId,
-                    prompt: '',
+                    prompt: redactText(''),
                     commitBefore: commitAfter,
                 }),
                 repoRoot,
@@ -252,7 +260,7 @@ class LifecycleService {
                 branch,
                 timestamp: new Date().toISOString(),
                 turnId,
-                response,
+                response: redactText(response),
                 toolCalls,
                 filesModified,
                 filesRead,

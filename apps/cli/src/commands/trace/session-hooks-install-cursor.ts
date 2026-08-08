@@ -1,7 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { isLegacyDecisionsCommand } from '../../services/legacy-hooks-strip.service.js';
 
-const SESSIONS_HOOK_PREFIX = 'kodus decisions hooks cursor';
+const SESSIONS_HOOK_PREFIX = 'kodus trace hooks cursor';
 
 type JsonObject = Record<string, unknown>;
 
@@ -20,7 +21,11 @@ function isRecord(value: unknown): value is JsonObject {
 }
 
 function isSessionsHookCommand(command: string): boolean {
-    return command.includes('kodus decisions hooks');
+    return (
+        command.includes('kodus trace hooks') ||
+        command.includes('kodus decisions hooks') ||
+        isLegacyDecisionsCommand(command)
+    );
 }
 
 async function readCursorHooksConfig(
@@ -33,7 +38,6 @@ async function readCursorHooksConfig(
             return { version: 1, hooks: {} };
         }
         const rawHooks = isRecord(parsed.hooks) ? parsed.hooks : {};
-        // Validate that each hook value is an array of objects with `command`
         const hooks: Record<string, CursorHookEntry[]> = {};
         for (const [key, value] of Object.entries(rawHooks)) {
             if (Array.isArray(value)) {
@@ -43,15 +47,13 @@ async function readCursorHooksConfig(
             }
         }
         return {
-            version:
-                typeof parsed.version === 'number' ? parsed.version : 1,
+            version: typeof parsed.version === 'number' ? parsed.version : 1,
             hooks,
         };
     } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
             return { version: 1, hooks: {} };
         }
-        // Malformed JSON — start fresh rather than crashing
         if (error instanceof SyntaxError) {
             return { version: 1, hooks: {} };
         }
@@ -67,12 +69,10 @@ function upsertHook(
     const entries = hooks[eventName] ?? [];
     hooks[eventName] = entries;
 
-    // Check if exact command already exists
     if (entries.some((e) => e.command === command)) {
         return false;
     }
 
-    // Replace existing kodus sessions hook if present
     for (const entry of entries) {
         if (isSessionsHookCommand(entry.command)) {
             entry.command = command;
@@ -90,9 +90,25 @@ export async function installCursorSessionHooks(
     const settingsPath = path.join(repoRoot, '.cursor', 'hooks.json');
     const config = await readCursorHooksConfig(settingsPath);
 
+    // Strip legacy decisions hooks
+    let changed = false;
+    for (const eventName of Object.keys(config.hooks)) {
+        const entries = config.hooks[eventName];
+        const filtered = entries.filter(
+            (e) => !isLegacyDecisionsCommand(e.command),
+        );
+        if (filtered.length < entries.length) {
+            changed = true;
+            if (filtered.length === 0) {
+                delete config.hooks[eventName];
+            } else {
+                config.hooks[eventName] = filtered;
+            }
+        }
+    }
+
     const cmd = (hookEvent: string) => `${SESSIONS_HOOK_PREFIX} ${hookEvent}`;
 
-    let changed = false;
     changed =
         upsertHook(config.hooks, 'sessionStart', cmd('sessionStart')) ||
         changed;

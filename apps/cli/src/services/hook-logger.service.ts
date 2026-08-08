@@ -1,11 +1,15 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { LogLevel, LogComponent, LogEntry } from '../types/session.js';
+import { ensureDir, getKodusHome, hashPath } from './kodus-paths.service.js';
+import { redactText } from './redaction.service.js';
 
-const LOG_FILE = '.kody/logs/hooks.jsonl';
-
+/**
+ * Hook logger — writes under ~/.kodus/logs/<repo-hash>/hooks.jsonl
+ * so a session never dirties the repository working tree.
+ * String fields are redacted before write so secrets never land on disk.
+ */
 class HookLoggerService {
-    private logDir: string | null = null;
     private logPath: string | null = null;
 
     /**
@@ -13,9 +17,10 @@ class HookLoggerService {
      * Must be called before any log methods.
      */
     async init(repoRoot: string): Promise<void> {
-        this.logDir = path.join(repoRoot, '.kody', 'logs');
-        this.logPath = path.join(repoRoot, LOG_FILE);
-        await fs.mkdir(this.logDir, { recursive: true });
+        const key = hashPath(path.resolve(repoRoot));
+        const logDir = path.join(getKodusHome(), 'logs', key);
+        await ensureDir(logDir);
+        this.logPath = path.join(logDir, 'hooks.jsonl');
     }
 
     async info(
@@ -50,6 +55,23 @@ class HookLoggerService {
         await this.log('DEBUG', msg, component, fields);
     }
 
+    private redactFields(
+        fields?: Record<string, unknown>,
+    ): Record<string, unknown> | undefined {
+        if (!fields) {
+            return fields;
+        }
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(fields)) {
+            if (typeof v === 'string') {
+                out[k] = redactText(v);
+            } else {
+                out[k] = v;
+            }
+        }
+        return out;
+    }
+
     private async log(
         level: LogLevel,
         msg: string,
@@ -61,7 +83,7 @@ class HookLoggerService {
         }
 
         const entry: LogEntry = {
-            ...fields,
+            ...this.redactFields(fields),
             time: new Date().toISOString(),
             level,
             msg,

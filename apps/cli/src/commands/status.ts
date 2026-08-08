@@ -13,13 +13,7 @@ const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
 
 const KODUS_HOOK_MARKER = '# kodus-hook';
-const DECISIONS_CAPTURE_COMMAND_PREFIX = 'kodus decisions capture';
-const CODEX_NOTIFY_LINE =
-    'notify = ["kodus", "decisions", "capture", "--capture-agent", "codex", "--event", "stop"]';
-const CODEX_NOTIFY_LINE_STOP_LEGACY =
-    'notify = ["kodus", "decisions", "capture", "--agent", "codex", "--event", "stop"]';
-const CODEX_NOTIFY_LINE_LEGACY =
-    'notify = ["kodus", "decisions", "capture", "--agent", "codex", "--event", "agent-turn-complete"]';
+const TRACE_HOOK_MARKER = 'kodus trace hooks';
 
 interface RepoStatus {
     label: string;
@@ -78,9 +72,7 @@ async function getPrePushHookStatus(repoRoot: string | null): Promise<string> {
     }
 }
 
-async function getDecisionHooksStatus(
-    repoRoot: string | null,
-): Promise<string> {
+async function getTraceHooksStatus(repoRoot: string | null): Promise<string> {
     const configured: string[] = [];
 
     if (repoRoot) {
@@ -89,8 +81,20 @@ async function getDecisionHooksStatus(
                 path.join(repoRoot, '.claude', 'settings.json'),
                 'utf-8',
             );
-            if (claudeSettings.includes(DECISIONS_CAPTURE_COMMAND_PREFIX)) {
-                configured.push('claude/cursor');
+            if (claudeSettings.includes(TRACE_HOOK_MARKER)) {
+                configured.push('claude');
+            }
+        } catch {
+            // Not configured.
+        }
+
+        try {
+            const cursorSettings = await fs.readFile(
+                path.join(repoRoot, '.cursor', 'hooks.json'),
+                'utf-8',
+            );
+            if (cursorSettings.includes(TRACE_HOOK_MARKER)) {
+                configured.push('cursor');
             }
         } catch {
             // Not configured.
@@ -102,11 +106,7 @@ async function getDecisionHooksStatus(
             path.join(os.homedir(), '.codex', 'config.toml'),
             'utf-8',
         );
-        if (
-            codexConfig.includes(CODEX_NOTIFY_LINE) ||
-            codexConfig.includes(CODEX_NOTIFY_LINE_STOP_LEGACY) ||
-            codexConfig.includes(CODEX_NOTIFY_LINE_LEGACY)
-        ) {
+        if (codexConfig.includes('kodus trace hooks codex')) {
             configured.push('codex');
         }
     } catch {
@@ -123,9 +123,9 @@ export async function statusAction(): Promise<void> {
         listBundledSkills(),
     ]);
 
-    const [hookStatus, decisionsStatus] = await Promise.all([
+    const [hookStatus, traceStatus] = await Promise.all([
         getPrePushHookStatus(repository.root),
-        getDecisionHooksStatus(repository.root),
+        getTraceHooksStatus(repository.root),
     ]);
 
     // Team-key auth is separate from (and mutually exclusive with) a logged-in
@@ -143,7 +143,7 @@ export async function statusAction(): Promise<void> {
     cliInfo(`${chalk.dim('Team key:')} ${teamKeyStatus}`);
     cliInfo(`${chalk.dim('Repository:')} ${repository.label}`);
     cliInfo(`${chalk.dim('Pre-push hook:')} ${hookStatus}`);
-    cliInfo(`${chalk.dim('Decision hooks:')} ${decisionsStatus}`);
+    cliInfo(`${chalk.dim('Trace hooks:')} ${traceStatus}`);
     cliInfo(`${chalk.dim('Bundled skills:')} ${skills.length}`);
 }
 

@@ -205,7 +205,7 @@ describe('utility commands', () => {
         expect(output).toContain('Auth:');
         expect(output).toContain('Repository:');
         expect(output).toContain('Pre-push hook:');
-        expect(output).toContain('Decision hooks:');
+        expect(output).toContain('Trace hooks:');
     });
 
     it('lists bundled skills via skills list', async () => {
@@ -714,19 +714,19 @@ describe('hook integration', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Decision commands — enable and capture
+// Trace commands — enable / status / disable (lifecycle only)
 // ---------------------------------------------------------------------------
-describe('decisions integration', () => {
-    it('kodus decisions enable configures .claude/settings.json and ~/.codex/config.toml', async () => {
+describe('trace integration', () => {
+    it('kodus trace enable configures lifecycle hooks only (one kodus cmd/event)', async () => {
         const { stdout, stderr, exitCode } = await runCli([
-            'decisions',
+            'trace',
             'enable',
             '--agents',
             'claude,codex',
         ]);
         expect(exitCode).toBe(0);
         const output = stdout + stderr;
-        expect(output).toContain('Decisions enabled');
+        expect(output).toMatch(/Trace enabled/i);
 
         const claudeSettingsPath = path.join(
             gitRepoDir,
@@ -740,95 +740,46 @@ describe('decisions integration', () => {
         expect(claudeSettings).toHaveProperty('hooks');
         expect(claudeSettings.hooks).toHaveProperty('UserPromptSubmit');
         expect(claudeSettings.hooks).toHaveProperty('Stop');
+        expect(claudeSettings.hooks).toHaveProperty('SessionStart');
 
-        const userPromptSubmitJson = JSON.stringify(
-            claudeSettings.hooks.UserPromptSubmit,
-        );
-        const stopJson = JSON.stringify(claudeSettings.hooks.Stop);
-        expect(userPromptSubmitJson).toContain(
-            'kodus decisions capture --capture-agent claude-compatible --event user-prompt-submit',
-        );
-        expect(stopJson).toContain(
-            'kodus decisions capture --capture-agent claude-compatible --event stop',
-        );
+        const blob = JSON.stringify(claudeSettings.hooks);
+        expect(blob).toContain('kodus trace hooks');
+        expect(blob).not.toContain('kodus decisions');
+        expect(blob).not.toContain(' capture ');
 
         const codexConfigPath = path.join(tmpHome, '.codex', 'config.toml');
         const codexConfig = await fs.readFile(codexConfigPath, 'utf-8');
-        expect(codexConfig).toContain(
-            'notify = ["kodus", "decisions", "capture", "--capture-agent", "codex", "--event", "stop"]',
-        );
+        expect(codexConfig).toContain('kodus trace hooks codex');
+        expect(codexConfig).not.toContain('decisions');
     });
 
-    it('kodus decisions capture exits cleanly for non-stop events (no local storage)', async () => {
-        const payload = JSON.stringify({
-            session_id: 'session-1',
-            turn_id: 'turn-1',
-            prompt: 'Use idempotent cache key',
-            last_assistant_message: 'Done with fallback behavior',
-        });
-
-        const { exitCode } = await runCli([
-            'decisions',
-            'capture',
-            payload,
-            '--agent',
-            'codex',
-            '--event',
-            'agent-turn-complete',
-            '--summary',
-            'architectural decision',
-        ]);
+    it('kodus trace status exits zero with plain empty state', async () => {
+        const { exitCode, stdout, stderr } = await runCli(['trace', 'status']);
         expect(exitCode).toBe(0);
-
-        // No local file should be created — capture only sends to API on stop
-        const memoryDir = path.join(gitRepoDir, '.kody', 'pr');
-        await expect(fs.access(memoryDir)).rejects.toThrow();
+        const output = stdout + stderr;
+        expect(output.length).toBeGreaterThan(0);
     });
 
-    it('kodus decisions capture exits cleanly with claude-compatible agent and Cursor env vars', async () => {
-        const payload = JSON.stringify({
-            session_id: 'session-2',
-            prompt: 'add retry with backoff',
-        });
-
-        const { exitCode } = await runCli(
-            [
-                'decisions',
-                'capture',
-                payload,
-                '--agent',
-                'claude-compatible',
-                '--event',
-                'user-prompt-submit',
-            ],
-            {
-                env: {
-                    CURSOR_VERSION: '1.0.0',
-                },
-            },
-        );
+    it('kodus trace path recall exits zero with empty result', async () => {
+        const { exitCode } = await runCli(['trace', 'src/example.ts']);
         expect(exitCode).toBe(0);
-
-        // No local file should be created — capture only sends to API on stop
-        const memoryDir = path.join(gitRepoDir, '.kody', 'pr');
-        await expect(fs.access(memoryDir)).rejects.toThrow();
     });
 
-    it('kodus decisions disable --agent returns structured error outside git repo', async () => {
+    it('kodus trace disable --agent returns structured error outside git repo', async () => {
         const nonRepoDir = await fs.mkdtemp(
             path.join(os.tmpdir(), 'kodus-non-repo-'),
         );
 
         try {
             const { stdout, exitCode } = await runCli(
-                ['decisions', 'disable', '--agent'],
+                ['trace', 'disable', '--agent'],
                 { cwd: nonRepoDir },
             );
 
             expect(exitCode).toBe(1);
             const json = parseFirstJsonObject(stdout);
             expect(json.ok).toBe(false);
-            expect(json.command).toBe('decisions disable');
+            expect(json.command).toBe('trace disable');
             expect(json.error.code).toBe('NOT_IN_GIT_REPO');
         } finally {
             await fs.rm(nonRepoDir, { recursive: true, force: true });
