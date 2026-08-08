@@ -206,3 +206,23 @@ test("runRollups: one row per run, newest first, applicable excludes n/a", () =>
     assert.equal(rollups[0].executed, 1);
     assert.equal(rollups[0].infraSkipped, 1);
 });
+
+// Dry runs mark every cell `passed` without contacting a provider. The
+// hermetic PR check produces one on every push, so letting them in would
+// reset last-green for the whole matrix on any commit.
+test("toHistoryRows: dry-run results never enter the history", () => {
+    const rows = toHistoryRows(
+        {
+            runId: "dry",
+            startedAt: "2026-08-08T11:00:00Z",
+            finishedAt: "2026-08-08T11:00:01Z",
+            results: [
+                scenarioResult({ evidence: { dryRun: true, wouldRun: true } }),
+                scenarioResult({ scenarioId: "real", evidence: {} }),
+            ],
+        },
+        { matrixId: "fast" },
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].scenario, "real");
+});

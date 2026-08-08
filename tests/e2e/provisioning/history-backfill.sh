@@ -41,7 +41,7 @@ node -e '
 echo "Backfilling from up to $MAX e2e artifacts on $REPO..."
 
 gh api "/repos/$REPO/actions/artifacts?per_page=100" \
-    --jq ".artifacts[] | select(.name|test(\"^e2e-\")) | select(.expired==false) | \"\(.id)\t\(.name)\t\(.workflow_run.id)\"" \
+    --jq ".artifacts[] | select(.name|test(\"^e2e-\")) | select(.name|test(\"dry-run\")|not) | select(.expired==false) | \"\(.id)\t\(.name)\t\(.workflow_run.id)\"" \
     | head -n "$MAX" > "$TMP/list.tsv"
 
 count=0

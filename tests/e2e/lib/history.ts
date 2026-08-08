@@ -1,5 +1,5 @@
-import type { EvidenceBundle } from "./evidence.js";
-import type { RunVerdict, ScenarioResult, SkipKind } from "./types.js";
+import type { EvidenceBundle } from './evidence.js';
+import type { RunVerdict, ScenarioResult, SkipKind } from './types.js';
 
 /**
  * One durable row per scenario result.
@@ -24,7 +24,7 @@ export interface HistoryRow {
     provider: string;
     license: string;
     scenario: string;
-    status: ScenarioResult["status"];
+    status: ScenarioResult['status'];
     skipKind?: SkipKind;
     flaky?: boolean;
     durationMs: number;
@@ -45,35 +45,48 @@ export interface RunMeta {
 
 /** Stable identity of a matrix cell — the unit every aggregation groups by. */
 export function cellKey(
-    r: Pick<HistoryRow, "scenario" | "target" | "provider" | "license">,
+    r: Pick<HistoryRow, 'scenario' | 'target' | 'provider' | 'license'>,
 ): string {
     return `${r.scenario} × ${r.target} × ${r.provider} × ${r.license}`;
 }
 
+/**
+ * Dry runs record every cell as `passed` without touching a provider — they
+ * exist to prove the matrix loads, nothing more. They must never enter the
+ * history: a fabricated pass would reset last-green and dilute every rate,
+ * and the hermetic PR check produces one on every push. (Found by backfilling
+ * real artifacts: the `e2e-suite-dry-run-evidence` runs showed up as two
+ * flawless 62/62 runs at the top of the report.)
+ */
 export function toHistoryRows(
     bundle: EvidenceBundle,
     meta: RunMeta,
 ): HistoryRow[] {
-    return bundle.results.map((r) => ({
-        ts: bundle.finishedAt,
-        runId: bundle.runId,
-        matrixId: meta.matrixId,
-        target: r.cell.target,
-        provider: r.cell.provider,
-        license: r.cell.license,
-        scenario: r.scenarioId,
-        status: r.status,
-        ...(r.skipKind ? { skipKind: r.skipKind } : {}),
-        ...(r.flaky ? { flaky: true } : {}),
-        durationMs: r.durationMs,
-        ...(meta.verdict ? { verdict: meta.verdict } : {}),
-        ...(meta.ref ? { ref: meta.ref } : {}),
-        ...(meta.ciRunId ? { ciRunId: meta.ciRunId } : {}),
-    }));
+    return bundle.results
+        .filter((r) => r.evidence?.dryRun !== true)
+        .map((r) => ({
+            ts: bundle.finishedAt,
+            runId: bundle.runId,
+            matrixId: meta.matrixId,
+            target: r.cell.target,
+            provider: r.cell.provider,
+            license: r.cell.license,
+            scenario: r.scenarioId,
+            status: r.status,
+            ...(r.skipKind ? { skipKind: r.skipKind } : {}),
+            ...(r.flaky ? { flaky: true } : {}),
+            durationMs: r.durationMs,
+            ...(meta.verdict ? { verdict: meta.verdict } : {}),
+            ...(meta.ref ? { ref: meta.ref } : {}),
+            ...(meta.ciRunId ? { ciRunId: meta.ciRunId } : {}),
+        }));
 }
 
 export function serializeRows(rows: HistoryRow[]): string {
-    return rows.map((r) => JSON.stringify(r)).join("\n") + (rows.length ? "\n" : "");
+    return (
+        rows.map((r) => JSON.stringify(r)).join('\n') +
+        (rows.length ? '\n' : '')
+    );
 }
 
 /**
@@ -83,12 +96,13 @@ export function serializeRows(rows: HistoryRow[]): string {
  */
 export function parseHistory(text: string): HistoryRow[] {
     const rows: HistoryRow[] = [];
-    for (const line of text.split("\n")) {
+    for (const line of text.split('\n')) {
         const t = line.trim();
         if (!t) continue;
         try {
             const parsed = JSON.parse(t) as HistoryRow;
-            if (parsed && typeof parsed.scenario === "string") rows.push(parsed);
+            if (parsed && typeof parsed.scenario === 'string')
+                rows.push(parsed);
         } catch {
             // ignore — see doc comment
         }
@@ -140,7 +154,10 @@ export function cellHealth(
     for (const r of rows) {
         if (cutoff && r.ts < cutoff) continue;
         // not-applicable rows are noise here: the cell was never meant to run.
-        if (r.status === "skipped" && (r.skipKind ?? "not-applicable") === "not-applicable") {
+        if (
+            r.status === 'skipped' &&
+            (r.skipKind ?? 'not-applicable') === 'not-applicable'
+        ) {
             continue;
         }
         const key = cellKey(r);
@@ -164,17 +181,17 @@ export function cellHealth(
             };
             byCell.set(key, h);
         }
-        if (r.status === "passed" || r.status === "failed") {
+        if (r.status === 'passed' || r.status === 'failed') {
             h.executed++;
             if (!h.lastRun || r.ts > h.lastRun) h.lastRun = r.ts;
         }
-        if (r.status === "passed") {
+        if (r.status === 'passed') {
             h.passed++;
             if (r.flaky) h.flaky++;
             if (!h.lastGreen || r.ts > h.lastGreen) h.lastGreen = r.ts;
         }
-        if (r.status === "failed") h.failed++;
-        if (r.status === "skipped" && r.skipKind === "infra") h.unverified++;
+        if (r.status === 'failed') h.failed++;
+        if (r.status === 'skipped' && r.skipKind === 'infra') h.unverified++;
     }
 
     for (const h of byCell.values()) {
@@ -207,9 +224,7 @@ export function quarantineCandidates(
                 h.executed >= minRuns &&
                 h.flakeRate + h.failRate >= minFlakeRate,
         )
-        .sort(
-            (a, b) => b.flakeRate + b.failRate - (a.flakeRate + a.failRate),
-        );
+        .sort((a, b) => b.flakeRate + b.failRate - (a.flakeRate + a.failRate));
 }
 
 export interface RunRollup {
@@ -251,14 +266,14 @@ export function runRollups(rows: HistoryRow[]): RunRollup[] {
         }
         u.total++;
         const notApplicable =
-            r.status === "skipped" &&
-            (r.skipKind ?? "not-applicable") === "not-applicable";
+            r.status === 'skipped' &&
+            (r.skipKind ?? 'not-applicable') === 'not-applicable';
         if (!notApplicable) u.applicable++;
-        if (r.status === "passed" || r.status === "failed") u.executed++;
-        if (r.status === "passed") u.passed++;
-        if (r.status === "failed") u.failed++;
-        if (r.status === "skipped" && r.skipKind === "infra") u.infraSkipped++;
-        if (r.status === "skipped" && r.skipKind === "setup") u.setupSkipped++;
+        if (r.status === 'passed' || r.status === 'failed') u.executed++;
+        if (r.status === 'passed') u.passed++;
+        if (r.status === 'failed') u.failed++;
+        if (r.status === 'skipped' && r.skipKind === 'infra') u.infraSkipped++;
+        if (r.status === 'skipped' && r.skipKind === 'setup') u.setupSkipped++;
         if (r.flaky) u.flaky++;
     }
     return [...byRun.values()].sort((a, b) => (a.ts < b.ts ? 1 : -1));
