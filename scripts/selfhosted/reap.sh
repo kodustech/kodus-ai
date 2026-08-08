@@ -213,10 +213,14 @@ reap_aws_ec2() {
         --query 'Reservations[].Instances[].[InstanceId,LaunchTime,Tags[?Key==`Name`]|[0].Value]' \
         --output text 2>/dev/null) || { warn "Could not list EC2 instances in $region"; return 1; }
 
-    [ -n "$rows" ] || { ok "No tagged EC2 instances in $region."; return 0; }
+    # NOTE: do not return early when there are no instances — orphaned key
+    # pairs are precisely the case where nothing is running, and an early
+    # return skipped the cleanup below entirely.
+    [ -n "$rows" ] || ok "No tagged EC2 instances in $region."
 
-    local id launched name age age_h
+    local id launched name age age_h launched_epoch
     while read -r id launched name; do
+        [ -n "$rows" ] || break
         [ -n "${id:-}" ] || continue
         launched_epoch=$(iso_to_epoch "$launched")
         if [ -z "$launched_epoch" ]; then
