@@ -376,6 +376,12 @@ provision_ssh_key "kodus-e2e-$RUN_ID" "$PUBKEY"
 log "Creating server..."
 USER_DATA=$(cat <<'CLOUDINIT'
 #cloud-config
+# DigitalOcean's Ubuntu images allow root SSH; AWS's do not (they force you to
+# the `ubuntu` user). Rather than thread a per-provider SSH user through every
+# ssh_vm/scp call, let cloud-init install the same key for root — the two
+# providers then behave identically from here on, which is the point. No-op on
+# DigitalOcean, where root is already enabled.
+disable_root: false
 package_update: true
 packages:
   - git
