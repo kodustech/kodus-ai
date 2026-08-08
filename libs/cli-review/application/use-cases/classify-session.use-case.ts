@@ -30,6 +30,7 @@ const LLMDecisionSchema = z.object({
     rationale: z.string().max(1000).optional(),
     confidence: z.number().min(0).max(1).optional(),
     evidence: z.array(z.string().max(300)).max(5).optional(),
+    scope: z.array(z.string().max(300)).max(20).optional(),
 });
 
 const LLMDecisionExtractionSchema = z.object({
@@ -308,7 +309,7 @@ export class ClassifySessionUseCase {
             '- "filesModified": files the agent changed',
             '',
             'Return ONLY JSON with shape:',
-            '{ "decisions": [ { "type": "...", "origin": "...", "decision": "...", "rationale": "...", "confidence": 0.0, "evidence": ["..."] } ] }',
+            '{ "decisions": [ { "type": "...", "origin": "...", "decision": "...", "rationale": "...", "confidence": 0.0, "evidence": ["..."], "scope": ["path/from/filesModified.ts"] } ] }',
             '',
             'Allowed decision types:',
             '- architectural_decision: high-level structure or system choice',
@@ -328,6 +329,7 @@ export class ClassifySessionUseCase {
             '- Keep each "decision" concise and self-contained.',
             '- confidence must be between 0 and 1.',
             '- Use the turn structure to determine origin: if the decision came from a prompt, it is "human". If it appeared first in a response without being asked, it is "agent". If the human asked something general and the agent made the specific technical choice, it is "collaborative".',
+            '- "scope" lists the paths the decision applies to. Draw them from filesModified (a directory prefix is fine); omit paths that do not appear there.',
             '- If nothing useful exists, return { "decisions": [] }.',
         ].join('\n');
 
@@ -385,6 +387,10 @@ export class ClassifySessionUseCase {
                     .map((item) => this.trim(item, 300))
                     .filter(Boolean)
                     .slice(0, 5),
+                scope: this.normalizeScope(
+                    decision.scope,
+                    aggregated.filesModified,
+                ),
                 autoPromoteCandidate: this.shouldAutoPromote(
                     normalizedType,
                     normalizedConfidence,
@@ -430,6 +436,9 @@ export class ClassifySessionUseCase {
                 decision: this.trim(sentence, 500),
                 confidence,
                 evidence,
+                // Without a model there is nothing to scope a sentence to
+                // beyond the files the session touched.
+                scope: aggregated.filesModified.slice(0, 20),
                 autoPromoteCandidate: this.shouldAutoPromote(type, confidence),
             };
         });
@@ -487,6 +496,48 @@ export class ClassifySessionUseCase {
             confidence >= 0.7 &&
             ['architectural_decision', 'convention', 'tradeoff'].includes(type)
         );
+    }
+
+    /**
+     * Keep model-invented paths out of the store: a scope entry only counts if
+     * it is, or prefixes, a path the session actually modified.
+     */
+    private normalizeScope(
+        rawScope: string[] | undefined,
+        filesModified: string[],
+    ): string[] {
+        const candidates = filesModified.map((entry) =>
+            this.normalizePath(entry),
+        );
+
+        const requested = (rawScope ?? [])
+            .map((entry) => this.normalizePath(entry))
+            .filter(Boolean);
+
+        const valid = requested.filter((entry) =>
+            candidates.some(
+                (candidate) =>
+                    candidate === entry || candidate.startsWith(`${entry}/`),
+            ),
+        );
+
+        // A decision with no usable scope still belongs to the files the
+        // session touched — otherwise it can never reach a review.
+        const resolved = valid.length > 0 ? valid : candidates;
+
+        return [...new Set(resolved)].slice(0, 20);
+    }
+
+    private normalizePath(value: string): string {
+        if (typeof value !== 'string') {
+            return '';
+        }
+        return value
+            .trim()
+            .replace(/\\/g, '/')
+            .replace(/^\.\//, '')
+            .replace(/^\/+/, '')
+            .replace(/\/+$/, '');
     }
 
     private normalizeConfidence(value?: number): number | undefined {

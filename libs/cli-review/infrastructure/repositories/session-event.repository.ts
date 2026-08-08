@@ -33,6 +33,52 @@ export class SessionEventRepository {
         });
     }
 
+    /**
+     * Every classified decision recorded for an organization, newest first.
+     *
+     * Used to build the review context pack. Scoped to `session_end` rows,
+     * which are the only ones classification writes to.
+     */
+    async findClassifiedDecisions(params: {
+        organizationId: string;
+        branch?: string;
+        limit?: number;
+    }): Promise<
+        Array<
+            CliSessionClassifiedDecision & {
+                scope?: string[];
+                pinned?: boolean;
+                branch?: string;
+                sessionId?: string;
+            }
+        >
+    > {
+        const query = this.repo
+            .createQueryBuilder('se')
+            .where('se.organization_id = :organizationId', {
+                organizationId: params.organizationId,
+            })
+            .andWhere("se.type = 'session_end'")
+            .andWhere("se.classification_status = 'COMPLETED'")
+            .andWhere('se.decisions IS NOT NULL')
+            .orderBy('se.classified_at', 'DESC')
+            .limit(params.limit ?? 200);
+
+        if (params.branch) {
+            query.andWhere('se.branch = :branch', { branch: params.branch });
+        }
+
+        const rows = await query.getMany();
+
+        return rows.flatMap((row) =>
+            (row.decisions ?? []).map((decision) => ({
+                ...decision,
+                branch: row.branch,
+                sessionId: row.sessionId,
+            })),
+        );
+    }
+
     async markClassificationProcessing(uuid: string): Promise<void> {
         await this.repo.update(uuid, {
             classificationStatus: 'PROCESSING',

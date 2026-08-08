@@ -8,6 +8,7 @@ import {
 } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
@@ -200,6 +201,8 @@ export interface CodeReviewPipelineContext extends PipelineContext {
 
     /** Bloco com conteúdos de arquivos externos referenciados pelos prompts. */
     externalPromptContext?: IExternalPromptContext;
+    /** Decisions recorded by Kodus Trace, scoped to the changed files. */
+    traceDecisions?: TraceContextDecision[];
     /** Camadas já formatadas para incluir no ContextPack (ex.: arquivos, instruções). */
     externalPromptLayers?: ContextLayer[];
 

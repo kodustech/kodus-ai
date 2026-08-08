@@ -1,6 +1,7 @@
 import { CloneParamsResolverService } from './services/clone-params-resolver.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
+import { TraceContextModule } from '@libs/cli-review/trace-context.module';
 
 // Stages
 import { AggregateResultsStage } from './stages/aggregate-result.stage';
@@ -118,6 +119,8 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         SandboxModule,
         NotificationModule,
         UserCoreModule,
+        // Read side of Kodus Trace: recorded decisions for the context pack.
+        TraceContextModule,
     ],
     providers: [
         // Strategy
