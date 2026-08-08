@@ -22,11 +22,7 @@ interface CliReviewEnqueueResponse {
 interface CliReviewJobStatusResponse {
     jobId: string;
     status:
-        | 'PENDING'
-        | 'PROCESSING'
-        | 'COMPLETED'
-        | 'FAILED'
-        | 'WAITING_FOR_EVENT';
+        'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'WAITING_FOR_EVENT';
     result?: ReviewResult;
     error?: string;
     createdAt?: string;
@@ -39,7 +35,9 @@ const POLL_MAX_DELAY_MS = 5_000;
 const POLL_MAX_WAIT_MS = 30 * 60 * 1000;
 
 export class RealReviewApi implements IReviewApi {
-    constructor(private readonly requester: RequestWithRetry = requestWithRetry) {}
+    constructor(
+        private readonly requester: RequestWithRetry = requestWithRetry,
+    ) {}
 
     async analyze(
         diff: string,

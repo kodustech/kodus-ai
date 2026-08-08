@@ -27,9 +27,7 @@ describe('buildNoChangesMessages', () => {
     });
 
     it('suggests checking the requested files', () => {
-        expect(
-            buildNoChangesMessages(['src/a.ts', 'src/b.ts'], {}),
-        ).toEqual([
+        expect(buildNoChangesMessages(['src/a.ts', 'src/b.ts'], {})).toEqual([
             'None of the requested files have diff content in the selected scope.',
             'Check the file paths or try running `kodus review` without explicit files.',
         ]);

@@ -1,8 +1,4 @@
-import type {
-    ReviewIssue,
-    ReviewResult,
-    Severity,
-} from '../types/review.js';
+import type { ReviewIssue, ReviewResult, Severity } from '../types/review.js';
 
 function getSeverityEmoji(severity: Severity): string {
     switch (severity) {

@@ -449,10 +449,7 @@ describe('RealApi config repository methods', () => {
         );
 
         const api = new RealApi();
-        await api.config.getCodeReviewParameter(
-            'eyJ.test.token',
-            'team-1',
-        );
+        await api.config.getCodeReviewParameter('eyJ.test.token', 'team-1');
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, options] = fetchMock.mock.calls[0];
@@ -483,17 +480,14 @@ describe('RealApi config repository methods', () => {
         );
 
         const api = new RealApi();
-        await api.config.createOrUpdateCodeReviewParameter(
-            'eyJ.test.token',
-            {
-                teamId: 'team-1',
-                repositoryId: 'repo-1',
-                configValue: {
-                    automatedReviewActive: true,
-                    pullRequestApprovalActive: false,
-                },
+        await api.config.createOrUpdateCodeReviewParameter('eyJ.test.token', {
+            teamId: 'team-1',
+            repositoryId: 'repo-1',
+            configValue: {
+                automatedReviewActive: true,
+                pullRequestApprovalActive: false,
             },
-        );
+        });
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, options] = fetchMock.mock.calls[0];
@@ -538,7 +532,9 @@ describe('RealApi config repository methods', () => {
 
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, options] = fetchMock.mock.calls[0];
-        expect(url).toContain('/parameters/update-code-review-parameter-repositories');
+        expect(url).toContain(
+            '/parameters/update-code-review-parameter-repositories',
+        );
         expect(options.method).toBe('POST');
         expect(options.headers.Authorization).toBe('Bearer eyJ.test.token');
         expect(options.body).toBe(
@@ -649,7 +645,8 @@ describe('RealApi config repository methods', () => {
                     statusCode: 404,
                     path: '/cli/config/repositories/repo-1/settings',
                     error: 'Not Found',
-                    message: 'Cannot GET /cli/config/repositories/repo-1/settings',
+                    message:
+                        'Cannot GET /cli/config/repositories/repo-1/settings',
                 }),
                 {
                     status: 404,

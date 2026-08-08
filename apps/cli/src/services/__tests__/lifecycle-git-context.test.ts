@@ -11,7 +11,9 @@ describe('lifecycle git context helpers', () => {
         const git = {
             getCurrentBranch: vi.fn().mockResolvedValue('feature/test\n'),
             getHeadSha: vi.fn().mockResolvedValue('abc123'),
-            getRemoteUrl: vi.fn().mockResolvedValue('git@github.com:org/repo.git'),
+            getRemoteUrl: vi
+                .fn()
+                .mockResolvedValue('git@github.com:org/repo.git'),
         };
 
         await expect(getBranchSafe(git)).resolves.toBe('feature/test');

@@ -5,7 +5,11 @@ import {
     clearCredentials,
 } from '../utils/credentials.js';
 import { loadConfig, clearConfig } from '../utils/config.js';
-import type { StoredCredentials, AuthResponse, UserInfo } from '../types/auth.js';
+import type {
+    StoredCredentials,
+    AuthResponse,
+    UserInfo,
+} from '../types/auth.js';
 import { AuthError } from '../types/errors.js';
 import { loginViaBrowser } from './browser-login.service.js';
 import {
@@ -234,7 +238,9 @@ interface DecodedJwtClaims {
 function decodeJwtClaims(token: string): DecodedJwtClaims {
     try {
         const parts = token.split('.');
-        if (parts.length !== 3) {return {};}
+        if (parts.length !== 3) {
+            return {};
+        }
         const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
         const expiresIn =
             typeof payload.exp === 'number'

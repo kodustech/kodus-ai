@@ -96,7 +96,9 @@ async function pollUntilTerminal(
 
         // Pending: keep the requested interval, no backoff.
         delay = Math.max(intervalSec, 1) * 1000;
-        if (delay < POLL_FALLBACK_INTERVAL_MS) {delay = POLL_FALLBACK_INTERVAL_MS;}
+        if (delay < POLL_FALLBACK_INTERVAL_MS) {
+            delay = POLL_FALLBACK_INTERVAL_MS;
+        }
     }
 
     throw new Error('Authorization timed out before the user approved it');

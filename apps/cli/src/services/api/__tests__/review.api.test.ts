@@ -23,20 +23,17 @@ describe('RealReviewApi', () => {
         const api = new RealReviewApi(requestWithRetry);
         await api.analyze('diff --git a/file b/file', token);
 
-        expect(requestWithRetry).toHaveBeenCalledWith(
-            '/cli/review',
-            {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'X-Kodus-Async': '1',
-                },
-                body: JSON.stringify({
-                    diff: 'diff --git a/file b/file',
-                    config: undefined,
-                }),
+        expect(requestWithRetry).toHaveBeenCalledWith('/cli/review', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'X-Kodus-Async': '1',
             },
-        );
+            body: JSON.stringify({
+                diff: 'diff --git a/file b/file',
+                config: undefined,
+            }),
+        });
     });
 
     it('uses X-Team-Key for pull request suggestions with team key auth', async () => {
