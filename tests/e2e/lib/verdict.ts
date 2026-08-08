@@ -59,10 +59,24 @@ export function computeVerdict(input: {
     blocked: number;
     targetCrashed: boolean;
     unverifiedP0: number;
+    /**
+     * Cells this run was supposed to check (total minus appliesTo skips).
+     * Zero means the run verified NOTHING — see below.
+     */
+    applicable?: number;
 }): RunVerdict {
     if (input.gatingFailures > 0 || input.blocked > 0 || input.targetCrashed) {
         return "red";
     }
     if (input.unverifiedP0 > 0) return "inconclusive";
+    // A run with nothing applicable is not a pass — it is a run that did not
+    // happen. Found live: the self-hosted `github × license-free` cell has no
+    // applicable scenario in fast.yml, so it provisioned a droplet, skipped
+    // all 12 scenarios as not-applicable, and reported GREEN. That is the
+    // exact ambiguity this verdict exists to remove, so it must not survive
+    // inside the verdict itself.
+    if (input.applicable !== undefined && input.applicable === 0) {
+        return "inconclusive";
+    }
     return "green";
 }

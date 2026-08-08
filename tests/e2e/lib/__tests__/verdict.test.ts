@@ -101,3 +101,45 @@ test("computeVerdict: blocked cells and a crashed target are red on their own", 
         "red",
     );
 });
+
+// Found live on 2026-08-08: the self-hosted `github × license-free` cell has
+// no applicable scenario in fast.yml, so the job provisioned a droplet,
+// skipped all 12 scenarios as not-applicable and reported GREEN. A run that
+// verified nothing is not a pass.
+test("computeVerdict: a run with nothing applicable is INCONCLUSIVE", () => {
+    assert.equal(
+        computeVerdict({
+            gatingFailures: 0,
+            blocked: 0,
+            targetCrashed: false,
+            unverifiedP0: 0,
+            applicable: 0,
+        }),
+        "inconclusive",
+    );
+});
+
+test("computeVerdict: one applicable cell that passed is green", () => {
+    assert.equal(
+        computeVerdict({
+            gatingFailures: 0,
+            blocked: 0,
+            targetCrashed: false,
+            unverifiedP0: 0,
+            applicable: 1,
+        }),
+        "green",
+    );
+});
+
+test("computeVerdict: omitting applicable keeps the old behaviour", () => {
+    assert.equal(
+        computeVerdict({
+            gatingFailures: 0,
+            blocked: 0,
+            targetCrashed: false,
+            unverifiedP0: 0,
+        }),
+        "green",
+    );
+});

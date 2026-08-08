@@ -375,6 +375,7 @@ async function main() {
         blocked: summary.blocked,
         targetCrashed,
         unverifiedP0: unverified.length,
+        applicable: summary.applicable,
     });
 
     const notify = {
