@@ -1,0 +1,149 @@
+name: "E2E: cloud matrix on a disposable AWS environment"
+
+# Runs the cloud matrix against an environment this workflow creates and
+# destroys, instead of the shared qa.web.kodus.io.
+#
+# Why: shared QA is a bottleneck and a false signal. On 2026-07-31 and
+# 2026-08-07 the release train stopped at the cloud gate for reasons unrelated
+# to the change under test, and self-hosted validation was skipped as
+# collateral damage. An environment per run cannot be poisoned by someone
+# else's merge.
+#
+# SEPARATE from e2e-cloud.yml on purpose. That workflow gates releases; this
+# path is new and its coverage is still partial (see the caveat below), so it
+# must prove itself before anything depends on it.
+#
+# KNOWN COVERAGE GAP — read before trusting a green run here:
+#   cli/cloud/setup-tenants.ts seeds tenants on the FREE tier. Promoting a
+#   tenant to paid/trial needs Stripe automation that does not exist yet (see
+#   the TODO in ensureLicenseTier). Until it does, cells that require a paid or
+#   trial tier cannot pass against a fresh environment, so this workflow runs a
+#   reduced matrix rather than pretending otherwise.
+
+permissions:
+    contents: read
+    packages: write
+
+on:
+    workflow_dispatch:
+        inputs:
+            matrix_file:
+                description: "Matrix YAML to run"
+                required: false
+                default: matrix/cloud-aws.yml
+                type: string
+            image_tag:
+                description: "Existing cloud-* image tag (blank = build one)"
+                required: false
+                default: ""
+                type: string
+            keep_env:
+                description: "Leave the environment running for debugging"
+                required: false
+                default: false
+                type: boolean
+
+jobs:
+    images:
+        name: Cloud-mode images
+        if: ${{ inputs.image_tag == '' }}
+        uses: ./.github/workflows/e2e-cloud-images.yml
+        secrets: inherit
+
+    run:
+        name: Cloud matrix on AWS
+        needs: [images]
+        # `always()`: the images job is skipped when a tag was supplied.
+        if: ${{ always() && (needs.images.result == 'success' || needs.images.result == 'skipped') }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 120
+        env:
+            IMAGE_TAG: ${{ inputs.image_tag || needs.images.outputs.image_tag }}
+            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_E2E_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_E2E_SECRET_ACCESS_KEY }}
+            AWS_DEFAULT_REGION: us-east-2
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            # Fail before spending an instance if the matrix file is
+            # incoherent — same gate the self-hosted plan job runs.
+            - name: Validate matrix configuration
+              working-directory: tests/e2e
+              run: ./node_modules/.bin/tsx cli/run-matrix.ts "${{ inputs.matrix_file || 'matrix/cloud-aws.yml' }}" --validate
+
+            - name: Provision environment
+              id: env
+              env:
+                  TEST_VM_PROVIDER: aws
+                  KODUS_ENV_STATE_DIR: ${{ github.workspace }}/.e2e-envs
+                  GH_APP_ID: ${{ secrets.GH_APP_ID }}
+                  GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+              run: |
+                  set -uo pipefail
+                  bash tests/e2e/provisioning/cloud/aws-env.sh up | tee /tmp/env.out
+                  # The script prints TARGET_* lines; lift them into outputs so
+                  # teardown can find the instance even if a later step dies.
+                  for k in TARGET_WEB_URL TARGET_BASE_URL TARGET_TUNNEL_URL SERVER_ID; do
+                      v=$(grep -oE "^\s*${k}=.*" /tmp/env.out | head -1 | cut -d= -f2-)
+                      echo "${k}=${v}" >> "$GITHUB_OUTPUT"
+                  done
+
+            - name: Seed cloud tenants
+              env:
+                  CLOUD_WEB_URL: ${{ steps.env.outputs.TARGET_WEB_URL }}
+                  GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  GH_TEST_REPO: ${{ secrets.GH_TEST_REPO_CLOUD }}
+              working-directory: tests/e2e
+              run: ./node_modules/.bin/tsx cli/cloud/setup-tenants.ts
+
+            - name: Run cloud matrix
+              id: matrix
+              timeout-minutes: 75
+              env:
+                  CLOUD_WEB_BASE_URL: ${{ steps.env.outputs.TARGET_WEB_URL }}
+                  MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/cloud-aws.yml' }}
+                  GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
+                  GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+                  GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
+                  GH_APP_ID: ${{ secrets.GH_APP_ID }}
+                  GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+                  GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
+                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
+                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+              working-directory: tests/e2e
+              run: ./node_modules/.bin/tsx cli/run-matrix.ts "$MATRIX_FILE" --target cloud --skip-missing-tokens
+
+            - name: Upload evidence
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-cloud-aws
+                  path: tests/e2e/evidence/
+                  if-no-files-found: warn
+                  retention-days: 30
+
+            # Always, and independent of every earlier step: an environment
+            # that outlives its run is a bill and, eventually, a quota wall.
+            # The reaper is the backstop, not the plan.
+            - name: Destroy environment
+              if: ${{ always() && !inputs.keep_env }}
+              run: |
+                  ID="${{ steps.env.outputs.SERVER_ID }}"
+                  if [ -z "$ID" ]; then
+                      echo "::warning::No instance id recorded — check the EC2 console in us-east-2"
+                      exit 0
+                  fi
+                  bash tests/e2e/provisioning/cloud/aws-env.sh down "$ID" || \
+                      echo "::warning::Teardown failed for $ID — the reaper will collect it"

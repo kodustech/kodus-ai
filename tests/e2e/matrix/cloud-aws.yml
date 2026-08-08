@@ -1,0 +1,37 @@
+id: cloud-aws
+description: |
+    Cloud matrix against a DISPOSABLE AWS environment (see
+    .github/workflows/e2e-cloud-aws.yml), rather than the shared QA.
+
+    Deliberately reduced. cli/cloud/setup-tenants.ts can only seed tenants on
+    the FREE tier — promoting one to paid/trial needs Stripe automation that
+    does not exist yet (TODO in ensureLicenseTier). So this file carries only
+    scenarios that either provision their own org or work on a free tenant.
+    Listing the paid-tier scenarios here would produce a red run that says
+    nothing about the product.
+
+    Grow this file as tier seeding lands; `run-matrix --validate` refuses any
+    cell or scenario that cannot actually run, so it cannot grow wrong.
+
+scenarios:
+    # Signs up its own throwaway org and provisions one user per role — needs
+    # nothing seeded.
+    - rbac-authorization
+    - rbac-frontend-routes
+    # Fresh org per run, so the 14-day trial window is always open.
+    - trial-entitlement-gate
+    - trial-credits-consume
+    # Anonymous and tenant-free: only touches /cli/public/*.
+    - public-pr-demo
+
+cells:
+    # Both cells exist to SELECT scenarios, not to supply a seeded tenant:
+    # every scenario listed above signs up its own throwaway org (or needs no
+    # tenant at all), which is exactly why they are the ones that can run
+    # against a fresh environment.
+    - target: cloud
+      provider: github-app
+      license: paid
+    - target: cloud
+      provider: github-app
+      license: trial
