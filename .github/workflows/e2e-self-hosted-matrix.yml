@@ -214,6 +214,19 @@ jobs:
                   # the secret is set.
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
                   GH_TEST_TOKEN_2: ${{ secrets.GH_TEST_TOKEN_FREE }}
+                  # GitHub App installation token: 5000/h of its own, immune to
+                  # the abuse flags that cap the bot PATs at ~60/h. The cloud
+                  # workflow has passed these for a while; self-hosted could not
+                  # use them because seat assignment needs GET /user, which an
+                  # installation token cannot make. provider.currentUserId() now
+                  # resolves that single call from the durable PAT, so the App
+                  # works here too -- but the secrets were never wired in, which
+                  # is why run 31270321822 still burned the PAT quota on the
+                  # FIRST scenario and reported 8 P0 cells unverified.
+                  # All three unset -> the PAT pool behaves exactly as before.
+                  GH_APP_ID: ${{ secrets.GH_APP_ID }}
+                  GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+                  GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
                   # Dedicated account for the PRODUCT's stored GitHub
                   # integration credential, separate from the harness driver
                   # pool above. The self-hosted product uses this for all its

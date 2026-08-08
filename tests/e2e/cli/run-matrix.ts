@@ -422,12 +422,21 @@ async function main() {
         process.exit(EXIT_RED);
     }
     if (verdict === "inconclusive") {
-        log.err(
-            `Run is INCONCLUSIVE: ${unverified.length} P0 cell(s) never ran (infra). This is NOT a pass:`,
-        );
-        for (const r of unverified) {
+        // Two different ways to end up here, and they need different words.
+        // Reporting the empty-run case with the infra wording printed the
+        // nonsense "INCONCLUSIVE: 0 P0 cell(s) never ran".
+        if (unverified.length > 0) {
             log.err(
-                `  - ${describeCell(r)} — ${firstLine(String(r.evidence?.skipReason ?? ""))}`,
+                `Run is INCONCLUSIVE: ${unverified.length} P0 cell(s) never ran (infra). This is NOT a pass:`,
+            );
+            for (const r of unverified) {
+                log.err(
+                    `  - ${describeCell(r)} — ${firstLine(String(r.evidence?.skipReason ?? ""))}`,
+                );
+            }
+        } else {
+            log.err(
+                `Run is INCONCLUSIVE: nothing was applicable to this cell — ${summary.total} scenario(s), all excluded by appliesTo. Nothing was verified, so this is NOT a pass. Either give this cell a scenario that covers it, or drop it from the matrix file.`,
             );
         }
         process.exit(EXIT_INCONCLUSIVE);
