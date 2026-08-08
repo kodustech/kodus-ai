@@ -32,6 +32,13 @@ import {
     getRemoteSafe,
 } from './lifecycle-git-context.js';
 import { createTurnLocalState } from './lifecycle-local-turn-state.js';
+import { redact } from './trace/redaction.js';
+import {
+    appendRecordLine,
+    pruneOldSessions,
+    SESSION_RETENTION_MS,
+} from './trace/session-store.js';
+import type { TraceToolCallRecord } from '../types/trace.js';
 
 const require = createRequire(import.meta.url);
 const pkg = require('../../package.json') as { version: string };
@@ -39,6 +46,55 @@ const pkg = require('../../package.json') as { version: string };
 function sendEvent(event: SessionApiEvent, repoRoot: string): void {
     // Fire and forget — never blocks the agent
     api.sessions.sendEvent(event, repoRoot).catch(() => {});
+}
+
+/**
+ * Local capture is the product, not a cache of the API. Every write here is
+ * best-effort so a full disk cannot take the agent down with it, but it happens
+ * unconditionally — with no token, with no network, with the API returning 500.
+ */
+async function recordLocally(
+    repoRoot: string,
+    sessionId: string,
+    line: Parameters<typeof appendRecordLine>[2],
+): Promise<void> {
+    try {
+        await appendRecordLine(repoRoot, sessionId, line);
+    } catch {
+        // Capture must never block the agent.
+    }
+}
+
+function toTraceToolCalls(toolCalls: ToolCall[]): TraceToolCallRecord[] {
+    return toolCalls.slice(0, 200).map((call) => ({
+        toolName: call.toolName,
+        summary: summarizeToolInput(call),
+        fileAffected: call.fileAffected,
+    }));
+}
+
+function summarizeToolInput(call: ToolCall): string | undefined {
+    const input = call.input ?? {};
+    const candidate =
+        pickInputString(input, 'command') ??
+        pickInputString(input, 'file_path') ??
+        pickInputString(input, 'path') ??
+        pickInputString(input, 'pattern') ??
+        pickInputString(input, 'description');
+
+    if (!candidate) {
+        return undefined;
+    }
+
+    return redact(candidate.slice(0, 300));
+}
+
+function pickInputString(
+    input: Record<string, unknown>,
+    key: string,
+): string | undefined {
+    const value = input[key];
+    return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 class LifecycleService {
@@ -89,11 +145,26 @@ class LifecycleService {
         // Clean up stale sessions from previous crashes (> 30 min old)
         await this.cleanupStaleSessions(repoRoot, agentType);
 
+        // Retention: session-start is the only moment this feature reliably
+        // runs on an otherwise idle machine, so the prune rides along here.
+        await pruneOldSessions(repoRoot, SESSION_RETENTION_MS).catch(() => []);
+
         const [branch, baseCommit, gitRemote] = await Promise.all([
             getBranchSafe(gitService),
             getHeadSafe(gitService),
             getRemoteSafe(gitService),
         ]);
+
+        await recordLocally(repoRoot, event.sessionId, {
+            kind: 'session-start',
+            sessionId: event.sessionId,
+            agentType,
+            branch,
+            baseCommit,
+            gitRemote,
+            cliVersion: pkg.version,
+            timestamp: new Date().toISOString(),
+        });
 
         sendEvent(
             buildSessionStartEvent({
@@ -141,13 +212,24 @@ class LifecycleService {
 
         await saveLocal(repoRoot, event.sessionId, localTurnState);
 
+        const timestamp = new Date().toISOString();
+        const prompt = redact(event.prompt ?? '');
+
+        await recordLocally(repoRoot, event.sessionId, {
+            kind: 'turn-start',
+            turnId,
+            prompt,
+            commitBefore,
+            timestamp,
+        });
+
         sendEvent(
             buildTurnStartEvent({
                 sessionId: event.sessionId,
                 branch,
-                timestamp: new Date().toISOString(),
+                timestamp,
                 turnId,
-                prompt: event.prompt ?? '',
+                prompt,
                 commitBefore,
             }),
             repoRoot,
@@ -228,7 +310,7 @@ class LifecycleService {
                     branch,
                     timestamp: new Date().toISOString(),
                     turnId,
-                    prompt: '',
+                    prompt: redact(''),
                     commitBefore: commitAfter,
                 }),
                 repoRoot,
@@ -246,13 +328,30 @@ class LifecycleService {
             turnCompleted: true,
         });
 
+        const timestamp = new Date().toISOString();
+        const redactedResponse = redact(response);
+        const redactedCommands = commands.map((command) => redact(command));
+
+        await recordLocally(repoRoot, event.sessionId, {
+            kind: 'turn-end',
+            turnId,
+            response: redactedResponse,
+            toolCalls: toTraceToolCalls(toolCalls),
+            filesModified,
+            filesRead,
+            commands: redactedCommands,
+            tokenUsage,
+            commitAfter,
+            timestamp,
+        });
+
         sendEvent(
             buildTurnEndEvent({
                 sessionId: event.sessionId,
                 branch,
-                timestamp: new Date().toISOString(),
+                timestamp,
                 turnId,
-                response,
+                response: redactedResponse,
                 toolCalls,
                 filesModified,
                 filesRead,
@@ -279,17 +378,23 @@ class LifecycleService {
         });
 
         const branch = await getBranchSafe(gitService);
+        const timestamp = new Date().toISOString();
+
+        await recordLocally(repoRoot, event.sessionId, {
+            kind: 'session-end',
+            timestamp,
+        });
 
         sendEvent(
             buildSessionEndEvent({
                 sessionId: event.sessionId,
                 branch,
-                timestamp: new Date().toISOString(),
+                timestamp,
             }),
             repoRoot,
         );
 
-        // Clean up local session file
+        // Clean up the ephemeral turn state. The durable record stays.
         await removeLocal(repoRoot, event.sessionId);
     }
 

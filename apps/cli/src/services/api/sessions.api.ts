@@ -1,11 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { pendingEventsPath } from '../trace/store-paths.js';
 import { request } from './api.real.js';
 import { ApiError } from '../../types/errors.js';
 import type { SessionApiEvent } from '../../types/session-events.js';
 import type { ISessionsApi } from './api.interface.js';
 
-const PENDING_FILE = '.kody/pending-events.jsonl';
 const MAX_BUFFER_LINES = 1000;
 const ENDPOINT = '/cli/sessions/events';
 
@@ -25,8 +25,12 @@ function buildHeaders(token: string): Record<string, string> {
         : { Authorization: `Bearer ${token}` };
 }
 
+/**
+ * The offline buffer holds raw prompts, so it lives in the out-of-tree trace
+ * store — never in the repository root, where a developer could commit it.
+ */
 async function pendingPath(repoRoot: string): Promise<string> {
-    return path.join(repoRoot, PENDING_FILE);
+    return pendingEventsPath(repoRoot);
 }
 
 async function readPending(repoRoot: string): Promise<string[]> {

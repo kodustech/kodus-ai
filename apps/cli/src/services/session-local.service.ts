@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { turnStateDir } from './trace/store-paths.js';
 
 export interface LocalSessionData {
     turnId: string;
@@ -9,14 +10,20 @@ export interface LocalSessionData {
     turnCompleted?: boolean;
 }
 
-const SESSION_DIR = '.kody/sessions';
+/**
+ * Per-turn bookkeeping lives in the out-of-tree trace store, keyed by the git
+ * root. Nothing this module writes ever lands inside the working tree.
+ */
+export function sessionStateDir(repoRoot: string): string {
+    return turnStateDir(repoRoot);
+}
 
 function sessionPath(repoRoot: string, sessionId: string): string {
     // Prevent path traversal attacks by ensuring sessionId is a simple filename.
     if (path.basename(sessionId) !== sessionId) {
         throw new Error(`Invalid sessionId: ${sessionId}`);
     }
-    return path.join(repoRoot, SESSION_DIR, `${sessionId}.json`);
+    return path.join(turnStateDir(repoRoot), `${sessionId}.json`);
 }
 
 export async function saveLocal(
@@ -85,7 +92,7 @@ export async function listStaleSessions(
     repoRoot: string,
     maxAgeMs: number,
 ): Promise<StaleSession[]> {
-    const dir = path.join(repoRoot, SESSION_DIR);
+    const dir = turnStateDir(repoRoot);
     let entries: string[];
     try {
         entries = await fs.readdir(dir);
@@ -105,7 +112,9 @@ export async function listStaleSessions(
 
     const stale: StaleSession[] = [];
     for (const result of results) {
-        if (result.status !== 'fulfilled') {continue;}
+        if (result.status !== 'fulfilled') {
+            continue;
+        }
         const ageMs = now - result.value.mtimeMs;
         if (ageMs > maxAgeMs) {
             stale.push({
