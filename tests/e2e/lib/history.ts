@@ -242,14 +242,23 @@ export interface RunRollup {
     flaky: number;
 }
 
-/** One row per run, newest first. The "last N runs" strip. */
+/**
+ * One row per run, newest first. The "last N runs" strip.
+ *
+ * Grouped by CI run, NOT by the runner's own runId: the self-hosted matrix
+ * fans out one GitHub job per cell and each job's runner mints its own runId,
+ * so grouping on that showed a single matrix execution as four or five
+ * separate "runs" of 2 cells each. `ciRunId` is the one identifier that spans
+ * the fan-out. Falls back to runId for local runs and pre-ciRunId rows.
+ */
 export function runRollups(rows: HistoryRow[]): RunRollup[] {
     const byRun = new Map<string, RunRollup>();
     for (const r of rows) {
-        let u = byRun.get(r.runId);
+        const key = r.ciRunId ?? r.runId;
+        let u = byRun.get(key);
         if (!u) {
             u = {
-                runId: r.runId,
+                runId: key,
                 ts: r.ts,
                 matrixId: r.matrixId,
                 verdict: r.verdict,
@@ -262,8 +271,9 @@ export function runRollups(rows: HistoryRow[]): RunRollup[] {
                 setupSkipped: 0,
                 flaky: 0,
             };
-            byRun.set(r.runId, u);
+            byRun.set(key, u);
         }
+        if (r.ts > u.ts) u.ts = r.ts;
         u.total++;
         const notApplicable =
             r.status === 'skipped' &&

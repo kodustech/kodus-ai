@@ -226,3 +226,20 @@ test("toHistoryRows: dry-run results never enter the history", () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].scenario, "real");
 });
+
+// The self-hosted matrix runs one GitHub job per cell and each job's runner
+// mints its own runId, so one execution used to render as several "runs".
+test("runRollups: a fanned-out matrix is ONE run, grouped by ciRunId", () => {
+    const rollups = runRollups([
+        row({ runId: "cellA", ciRunId: "777", ts: day(1) }),
+        row({ runId: "cellB", ciRunId: "777", ts: day(1) }),
+        row({ runId: "cellC", ciRunId: "778", ts: day(2) }),
+    ]);
+    assert.equal(rollups.length, 2);
+    assert.equal(rollups[0].runId, "777");
+    assert.equal(rollups[0].total, 2, "both cell jobs roll into one run");
+});
+
+test("runRollups: rows without ciRunId still group by runId", () => {
+    assert.equal(runRollups([row({ runId: "local" })]).length, 1);
+});
