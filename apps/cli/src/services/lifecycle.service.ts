@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { createRequire } from 'node:module';
 import { gitService } from './git.service.js';
 import { hookLogger } from './hook-logger.service.js';
@@ -65,11 +66,39 @@ async function recordLocally(
     }
 }
 
-function toTraceToolCalls(toolCalls: ToolCall[]): TraceToolCallRecord[] {
+/**
+ * Agents report file paths as absolute. Everything downstream — decision scope,
+ * `kodus trace <path>`, the review context pack — matches repo-relative paths,
+ * so an absolute path here silently never matches anything.
+ */
+export function toRepoRelative(repoRoot: string, filePath: string): string {
+    if (!filePath) {
+        return filePath;
+    }
+
+    let value = filePath;
+    if (path.isAbsolute(value)) {
+        const relative = path.relative(repoRoot, value);
+        // A path outside the repository stays as it was: rewriting it to
+        // `../../etc` would be worse than leaving it alone.
+        if (relative && !relative.startsWith('..')) {
+            value = relative;
+        }
+    }
+
+    return value.split(path.sep).join('/');
+}
+
+function toTraceToolCalls(
+    repoRoot: string,
+    toolCalls: ToolCall[],
+): TraceToolCallRecord[] {
     return toolCalls.slice(0, 200).map((call) => ({
         toolName: call.toolName,
         summary: summarizeToolInput(call),
-        fileAffected: call.fileAffected,
+        fileAffected: call.fileAffected
+            ? toRepoRelative(repoRoot, call.fileAffected)
+            : undefined,
     }));
 }
 
@@ -332,11 +361,17 @@ class LifecycleService {
         const redactedResponse = redact(response);
         const redactedCommands = commands.map((command) => redact(command));
 
+        filesModified = filesModified.map((change) => ({
+            ...change,
+            path: toRepoRelative(repoRoot, change.path),
+        }));
+        filesRead = filesRead.map((file) => toRepoRelative(repoRoot, file));
+
         await recordLocally(repoRoot, event.sessionId, {
             kind: 'turn-end',
             turnId,
             response: redactedResponse,
-            toolCalls: toTraceToolCalls(toolCalls),
+            toolCalls: toTraceToolCalls(repoRoot, toolCalls),
             filesModified,
             filesRead,
             commands: redactedCommands,

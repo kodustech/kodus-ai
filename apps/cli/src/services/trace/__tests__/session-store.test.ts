@@ -16,6 +16,7 @@ import {
     sessionRecordPath,
     sessionsRoot,
 } from '../store-paths.js';
+import { toRepoRelative } from '../../lifecycle.service.js';
 
 let traceHome: string;
 let repoA: string;
@@ -180,6 +181,28 @@ describe('local session store', () => {
         expect(await lastCaptureAt(repoA)).toBeNull();
         await writeSession(repoA, 'sess-1');
         expect(await lastCaptureAt(repoA)).toMatch(/^\d{4}-/);
+    });
+});
+
+describe('toRepoRelative', () => {
+    it('rewrites an absolute path inside the repository', () => {
+        expect(toRepoRelative('/repo', '/repo/src/billing/invoice.ts')).toBe(
+            'src/billing/invoice.ts',
+        );
+    });
+
+    it('leaves a repo-relative path alone', () => {
+        expect(toRepoRelative('/repo', 'src/billing/invoice.ts')).toBe(
+            'src/billing/invoice.ts',
+        );
+    });
+
+    it('leaves a path outside the repository alone', () => {
+        expect(toRepoRelative('/repo', '/etc/hosts')).toBe('/etc/hosts');
+    });
+
+    it('handles empty input', () => {
+        expect(toRepoRelative('/repo', '')).toBe('');
     });
 });
 
