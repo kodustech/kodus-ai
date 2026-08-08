@@ -40,6 +40,21 @@ fi
 TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-digitalocean}"
 MATRIX_FILE="${MATRIX_FILE:-matrix/fast.yml}"
 LICENSE_MODE="${LICENSE_MODE:-license-paid}"
+# Which product topology this stack runs.
+#
+#   self-hosted  license-key gated, API_CLOUD_MODE compiled OFF (default)
+#   cloud        multi-tenant, API_CLOUD_MODE compiled ON — requires images
+#                built by .github/workflows/e2e-cloud-images.yml, because the
+#                flag is baked at build time and cannot be set from .env.
+#
+# The provisioning itself is IDENTICAL either way, which is the point: cloud
+# and self-hosted share a topology on purpose, so the e2e environment for one
+# should not be a second implementation of the other.
+KODUS_STACK_MODE="${KODUS_STACK_MODE:-self-hosted}"
+# Provision and stop: bring the stack up, print its URLs, leave it running.
+# Used by provisioning/cloud/aws-env.sh, which needs an environment rather
+# than a matrix run.
+PROVISION_ONLY="${PROVISION_ONLY:-0}"
 TEST_TIMEOUT_REVIEW="${TEST_TIMEOUT_REVIEW:-600}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 
@@ -346,6 +361,10 @@ if [ ! -d "$KODUS_INSTALLER_PATH" ]; then
 fi
 
 case "$LICENSE_MODE" in
+    cloud-none)
+        # cloud mode has no license key — entitlement comes from billing.
+        LICENSE_KEY_TO_INJECT=""
+        ;;
     license-paid)
         LICENSE_KEY_TO_INJECT="${SH_LICENSE_KEY_PAID:-}"
         ;;
@@ -632,6 +651,35 @@ export TEST_TIMEOUT_REVIEW
 # without the flag it crashes with ENOENT and reds the whole cell. The
 # matrix YAML already documents this scenario as "skipped automatically when
 # SH_LICENSE_KEY_PATH isn't available"; the flag is what makes that true.
+if [ "$PROVISION_ONLY" = "1" ]; then
+    ok "Stack is up (mode=$KODUS_STACK_MODE)"
+    echo ""
+    echo "  TARGET_WEB_URL=http://$SERVER_IP:3000"
+    echo "  TARGET_BASE_URL=http://$SERVER_IP:3001"
+    echo "  TARGET_TUNNEL_URL=$SERVER_TUNNEL_URL"
+    echo "  SERVER_ID=$SERVER_ID"
+    echo "  SERVER_IP=$SERVER_IP"
+    echo ""
+    # State file so `aws-env.sh down` can find the instance later, and so a
+    # human can SSH in without digging through CI logs.
+    STATE_DIR="${KODUS_ENV_STATE_DIR:-$HOME/.kodus-dev/e2e-envs}"
+    mkdir -p "$STATE_DIR"
+    cat > "$STATE_DIR/$SERVER_ID.env" <<STATE
+SERVER_ID=$SERVER_ID
+SERVER_IP=$SERVER_IP
+TARGET_WEB_URL=http://$SERVER_IP:3000
+TARGET_BASE_URL=http://$SERVER_IP:3001
+TARGET_TUNNEL_URL=$SERVER_TUNNEL_URL
+KODUS_STACK_MODE=$KODUS_STACK_MODE
+IMAGE_TAG=$IMAGE_TAG
+SSH_KEY=$LOCAL_SSH_KEY
+STATE
+    ok "State: $STATE_DIR/$SERVER_ID.env"
+    # Suppress the teardown trap: the caller owns this environment now.
+    TEST_KEEP_RUNNING=1
+    exit 0
+fi
+
 ok "Run matrix runner: ./node_modules/.bin/tsx cli/run-matrix.ts $MATRIX_FILE --target self-hosted --skip-missing-tokens"
 # NOT `exec`: exec would replace this shell and bypass the EXIT trap, so a
 # scenario failure would (a) leave the droplet alive forever — no teardown —
