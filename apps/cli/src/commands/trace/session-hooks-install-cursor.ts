@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const SESSIONS_HOOK_PREFIX = 'kodus decisions hooks cursor';
+const SESSIONS_HOOK_PREFIX = 'kodus trace hooks cursor';
 
 type JsonObject = Record<string, unknown>;
 
@@ -20,7 +20,10 @@ function isRecord(value: unknown): value is JsonObject {
 }
 
 function isSessionsHookCommand(command: string): boolean {
-    return command.includes('kodus decisions hooks');
+    return (
+        command.includes('kodus trace hooks') ||
+        command.trimStart().startsWith('kodus decisions ')
+    );
 }
 
 async function readCursorHooksConfig(
@@ -43,8 +46,7 @@ async function readCursorHooksConfig(
             }
         }
         return {
-            version:
-                typeof parsed.version === 'number' ? parsed.version : 1,
+            version: typeof parsed.version === 'number' ? parsed.version : 1,
             hooks,
         };
     } catch (error) {

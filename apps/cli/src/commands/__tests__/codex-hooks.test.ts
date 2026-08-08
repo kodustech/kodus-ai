@@ -3,12 +3,10 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import {
-    installCodexNotify,
     removeCodexNotify,
-    CODEX_NOTIFY_LINE,
-    CODEX_NOTIFY_LINE_LEGACY,
+    CODEX_NOTIFY_LINE_LEGACY_VARIANTS,
     resolveCodexConfigPath,
-} from '../memory/hooks.js';
+} from '../trace/hooks.js';
 
 let tmpDir: string;
 
@@ -24,95 +22,54 @@ function configPath(): string {
     return path.join(tmpDir, '.codex', 'config.toml');
 }
 
-describe('installCodexNotify', () => {
-    it('creates config.toml with notify line when none exists', async () => {
-        const result = await installCodexNotify(configPath());
+async function writeConfig(content: string): Promise<void> {
+    await fs.mkdir(path.dirname(configPath()), { recursive: true });
+    await fs.writeFile(configPath(), content, 'utf-8');
+}
 
-        expect(result.changed).toBe(true);
-        expect(result.skipped).toBe(false);
-
-        const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).toContain(CODEX_NOTIFY_LINE);
-    });
-
-    it('appends notify line to existing config', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(configPath(), 'model = "o3"\n');
-
-        const result = await installCodexNotify(configPath());
-
-        expect(result.changed).toBe(true);
-
-        const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).toContain('model = "o3"');
-        expect(content).toContain(CODEX_NOTIFY_LINE);
-    });
-
-    it('is idempotent — does not duplicate notify line', async () => {
-        await installCodexNotify(configPath());
-        const result = await installCodexNotify(configPath());
-
-        expect(result.changed).toBe(false);
-        expect(result.skipped).toBe(false);
-
-        const content = await fs.readFile(configPath(), 'utf-8');
-        const matches = content.split(CODEX_NOTIFY_LINE).length - 1;
-        expect(matches).toBe(1);
-    });
-
-    it('upgrades legacy notify line to current', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(
-            configPath(),
-            `model = "o3"\n${CODEX_NOTIFY_LINE_LEGACY}\n`,
-        );
-
-        const result = await installCodexNotify(configPath());
-
-        expect(result.changed).toBe(true);
-
-        const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).toContain(CODEX_NOTIFY_LINE);
-        expect(content).not.toContain(CODEX_NOTIFY_LINE_LEGACY);
-    });
-
-    it('skips when a different notify entry exists', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(configPath(), 'notify = ["some-other-tool"]\n');
-
-        const result = await installCodexNotify(configPath());
-
-        expect(result.changed).toBe(false);
-        expect(result.skipped).toBe(true);
-        expect(result.reason).toContain('notify');
-    });
-});
-
+/**
+ * `notify` was the transport for the duplicate capture pipeline, which is gone.
+ * Codex lifecycle capture now runs through `[[hooks]]`, so the only thing left
+ * to do with a Kodus `notify` line is remove it.
+ */
 describe('removeCodexNotify', () => {
-    it('removes notify line from config', async () => {
-        await installCodexNotify(configPath());
-        const result = await removeCodexNotify(configPath());
+    for (const [
+        index,
+        legacyLine,
+    ] of CODEX_NOTIFY_LINE_LEGACY_VARIANTS.entries()) {
+        it(`removes legacy notify variant ${index}`, async () => {
+            await writeConfig(`model = "o3"\n${legacyLine}\n`);
 
-        expect(result.removed).toBe(true);
+            const result = await removeCodexNotify(configPath());
 
-        const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).not.toContain(CODEX_NOTIFY_LINE);
-    });
+            expect(result.removed).toBe(true);
 
-    it('removes legacy notify line', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(
-            configPath(),
-            `model = "o3"\n${CODEX_NOTIFY_LINE_LEGACY}\n`,
+            const content = await fs.readFile(configPath(), 'utf-8');
+            expect(content).not.toContain('notify =');
+            expect(content).toContain('model = "o3"');
+        });
+    }
+
+    it('removes an unrecognised kodus notify line', async () => {
+        await writeConfig(
+            'model = "o3"\nnotify = ["kodus", "something", "new"]\n',
         );
 
         const result = await removeCodexNotify(configPath());
 
         expect(result.removed).toBe(true);
-
         const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).not.toContain(CODEX_NOTIFY_LINE_LEGACY);
-        expect(content).toContain('model = "o3"');
+        expect(content).not.toContain('notify =');
+    });
+
+    it('leaves another tool’s notify entry alone', async () => {
+        await writeConfig('notify = ["some-other-tool"]\n');
+
+        const result = await removeCodexNotify(configPath());
+
+        expect(result.removed).toBe(false);
+        const content = await fs.readFile(configPath(), 'utf-8');
+        expect(content).toContain('notify = ["some-other-tool"]');
     });
 
     it('returns removed=false when config does not exist', async () => {
@@ -121,8 +78,7 @@ describe('removeCodexNotify', () => {
     });
 
     it('returns removed=false when no kodus notify present', async () => {
-        await fs.mkdir(path.dirname(configPath()), { recursive: true });
-        await fs.writeFile(configPath(), 'model = "o3"\n');
+        await writeConfig('model = "o3"\n');
 
         const result = await removeCodexNotify(configPath());
         expect(result.removed).toBe(false);

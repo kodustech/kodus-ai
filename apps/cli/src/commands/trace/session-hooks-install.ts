@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const SESSIONS_HOOK_PREFIX = 'kodus decisions hooks';
+const SESSIONS_HOOK_PREFIX = 'kodus trace hooks';
 
 type JsonObject = Record<string, unknown>;
 
@@ -10,7 +10,12 @@ function isRecord(value: unknown): value is JsonObject {
 }
 
 function isSessionsHookCommand(command: string): boolean {
-    return command.includes(SESSIONS_HOOK_PREFIX);
+    // Also matches hooks written by the previous release so a re-run replaces
+    // them instead of leaving two Kodus commands on the same event.
+    return (
+        command.includes(SESSIONS_HOOK_PREFIX) ||
+        command.trimStart().startsWith('kodus decisions ')
+    );
 }
 
 async function readJsonObject(filePath: string): Promise<JsonObject> {

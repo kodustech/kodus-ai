@@ -6,6 +6,7 @@ import type {
     ToolCall,
 } from '../types/session.js';
 import type { SessionApiEvent } from '../types/session-events.js';
+import { redact, redactDeep, type Redacted } from './trace/redaction.js';
 
 export function buildSessionStartEvent(input: {
     sessionId: string;
@@ -28,11 +29,15 @@ export function buildSessionStartEvent(input: {
     };
 }
 
+/**
+ * `prompt` is `Redacted`, not `string`, so an unredacted transcript cannot
+ * reach the API by accident — the only way to produce that type is `redact()`.
+ */
 export function buildTurnStartEvent(input: {
     sessionId: string;
     branch: string;
     turnId: string;
-    prompt: string;
+    prompt: Redacted;
     commitBefore: string;
     timestamp: string;
 }): SessionApiEvent {
@@ -47,11 +52,12 @@ export function buildTurnStartEvent(input: {
     };
 }
 
+/** `response` is `Redacted` for the same reason as `buildTurnStartEvent`. */
 export function buildTurnEndEvent(input: {
     sessionId: string;
     branch: string;
     turnId: string;
-    response: string;
+    response: Redacted;
     toolCalls: ToolCall[];
     filesModified: FileChange[];
     filesRead: string[];
@@ -67,10 +73,16 @@ export function buildTurnEndEvent(input: {
         timestamp: input.timestamp,
         turnId: input.turnId,
         response: input.response,
-        toolCalls: input.toolCalls,
+        // Tool inputs and shell commands are free text the agent assembled, so
+        // they get the same treatment as the prompt rather than being trusted.
+        toolCalls: input.toolCalls.map((call) => ({
+            ...call,
+            input: redactDeep(call.input),
+            output: call.output ? redact(call.output) : call.output,
+        })),
         filesModified: input.filesModified,
         filesRead: input.filesRead,
-        commands: input.commands,
+        commands: input.commands.map((command) => redact(command)),
         tokenUsage: input.tokenUsage,
         commitAfter: input.commitAfter,
     };
@@ -120,7 +132,7 @@ export function buildSubagentStartEvent(input: {
         timestamp: input.timestamp,
         toolUseId: input.event.toolUseId ?? '',
         subagentType,
-        taskDescription,
+        taskDescription: redact(taskDescription),
     };
 }
 

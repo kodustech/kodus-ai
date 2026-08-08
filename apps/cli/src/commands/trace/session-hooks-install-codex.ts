@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const SESSION_HOOK_MARKER = 'kodus decisions hooks codex';
+const SESSION_HOOK_MARKER = 'kodus trace hooks codex';
 
 /**
  * Installs Codex session tracking hooks into ~/.codex/config.toml.
@@ -9,7 +9,7 @@ const SESSION_HOOK_MARKER = 'kodus decisions hooks codex';
  * Codex uses TOML [[hooks]] arrays:
  *   [[hooks]]
  *   event = "AfterAgent"
- *   command = "kodus decisions hooks codex AfterAgent"
+ *   command = "kodus trace hooks codex AfterAgent"
  *
  * Currently only AfterAgent is useful (maps to TurnEnd).
  */
