@@ -42,11 +42,23 @@ on:
                 required: false
                 default: false
                 type: boolean
+    # Own cadence — Tue/Thu 04:00 UTC (01:00 BRT).
+    #
+    # Until now the ONLY automatic caller was the release train, where this
+    # job sits BEHIND the cloud gate. So whenever cloud QA had an infra
+    # problem (WAF, slow rollout) the train stopped at the gate and the
+    # self-hosted matrix never ran at all — on 2026-07-31 and 2026-08-07 it
+    # was skipped outright. Self-hosted validation must not depend on the
+    # health of the cloud QA environment: different target, different infra,
+    # different failure modes. The scheduled run resolves its own image tag
+    # (see the `plan` job) and reports independently.
+    schedule:
+        - cron: "0 4 * * 2,4"
     workflow_dispatch:
         inputs:
             image_tag:
-                description: "Image tag (e.g. selfhosted-1.42.0-rc.1)"
-                required: true
+                description: "Image tag (e.g. selfhosted-1.42.0-rc.1). Blank on the cron — resolved from the newest release."
+                required: false
                 type: string
             matrix_file:
                 description: "Matrix YAML path under tests/e2e/"
@@ -71,7 +83,7 @@ on:
                     - azure-devops
 
 concurrency:
-    group: e2e-self-hosted-matrix-${{ inputs.image_tag }}
+    group: e2e-self-hosted-matrix-${{ inputs.image_tag || github.run_id }}
     cancel-in-progress: true
 
 jobs:
@@ -83,7 +95,33 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             cells: ${{ steps.gen.outputs.cells }}
+            image_tag: ${{ steps.tag.outputs.image_tag }}
         steps:
+            # The release train passes the RC tag it just built. The cron has
+            # no tag to pass, so it tests the newest published self-hosted
+            # release — "is the thing customers actually run still working?",
+            # which is the question a scheduled self-hosted run should answer.
+            - name: Resolve image tag
+              id: tag
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  INPUT_TAG: ${{ inputs.image_tag }}
+              run: |
+                  set -uo pipefail
+                  if [ -n "${INPUT_TAG:-}" ]; then
+                      echo "image_tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+                      echo "Using caller-provided tag: $INPUT_TAG"
+                      exit 0
+                  fi
+                  TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 30 \
+                      --json tagName --jq '[.[] | select(.tagName | startswith("selfhosted-")) | select(.tagName | contains("-rc.") | not)] | .[0].tagName' 2>/dev/null || true)
+                  if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+                      echo "::error::No published selfhosted-* release found to test against."
+                      exit 1
+                  fi
+                  echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+                  echo "Scheduled run — testing newest release: $TAG"
+
             - id: gen
               env:
                   ONLY: ${{ inputs.only_provider || 'all' }}
@@ -145,8 +183,8 @@ jobs:
 
             - name: Run provisioning + matrix runner
               env:
-                  IMAGE_TAG: ${{ inputs.image_tag }}
-                  SOURCE_MATRIX_FILE: ${{ inputs.matrix_file }}
+                  IMAGE_TAG: ${{ needs.plan.outputs.image_tag }}
+                  SOURCE_MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
                   LICENSE_MODE: ${{ matrix.cell.license }}
                   KODUS_INSTALLER_PATH: ${{ github.workspace }}/kodus-installer
                   TEST_VM_PROVIDER: digitalocean
@@ -334,7 +372,7 @@ jobs:
     aggregate:
         name: Aggregate evidence
         runs-on: ubuntu-latest
-        needs: matrix
+        needs: [plan, matrix]
         if: always()
         steps:
             - name: Download all evidence
@@ -367,5 +405,41 @@ jobs:
                   status: failure
                   title: "❌ E2E self-hosted matrix failed"
                   description: |
-                      `${{ inputs.matrix_file }}` failed against image `${{ inputs.image_tag }}`.
+                      `${{ inputs.matrix_file || 'matrix/fast.yml' }}` failed against image `${{ needs.plan.outputs.image_tag }}`.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    # Durable history — same rationale as the cloud workflow: a separate job
+    # so `contents: write` never touches the job that holds provider tokens.
+    # Without this the self-hosted matrix leaves no trace after 30 days, which
+    # is why nobody could say when a self-hosted cell last passed.
+    history:
+        name: Append run to e2e history
+        runs-on: ubuntu-latest
+        needs: aggregate
+        if: always()
+        permissions:
+            contents: write
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            - name: Download combined evidence
+              uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  name: e2e-self-hosted-matrix
+                  path: tests/e2e/evidence
+
+            - name: Append + push history
+              env:
+                  MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
+              run: bash tests/e2e/provisioning/history-push.sh

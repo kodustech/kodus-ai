@@ -8,6 +8,7 @@ import type {
     Scenario,
     ScenarioResult,
     ScenarioStatus,
+    SkipKind,
     Target,
     TargetContext,
     TenantCredentials,
@@ -377,12 +378,19 @@ async function resolveTenantForCell(
 // "Kody posted one", wrong subscriptionStatus — deliberately do NOT
 // match: re-running cannot change a wrong value, it only burns an LLM
 // review and 10 minutes.
+// NOTE on the first entry: a BARE /timeout/i used to head this list. It
+// matched any message containing the word — including deterministic
+// mismatches like "expected timeout config 30, got 60" — so a wrong value
+// bought itself a retry and a second LLM review. Transport timeouts are
+// already covered by the network shapes below (ETIMEDOUT, "operation was
+// aborted"), so the bare word is gone and only the phrasings that actually
+// denote a waited-and-nothing-came failure remain.
 const TRANSIENT_FAILURE_PATTERNS: RegExp[] = [
-    /\btimed?\s?-?out\b|timeout/i,
     /within \d+\s*s/i,
     /after \d+\s*s/i,
+    /within timeout/i,
     /no review activity|none arrived|never arrived|never (reached|registered|woke|started)|did not (arrive|appear|start)/i,
-    /HTTP 5\d\d|HTTP 429|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang ?up|network error|Recv failure|operation was aborted/i,
+    /HTTP 5\d\d|HTTP 429|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang ?up|network error|Recv failure|operation was aborted|(connection|request|socket) timed ?-?out/i,
 ];
 
 export function isTransientFailure(message: string): boolean {
@@ -568,7 +576,9 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
 
             if (!appliesToCell(scenario, cell)) {
                 log.info(`SKIP  ${cellLabel}`);
-                results.push(makeResult(scenario, cell, 'skipped', 0, {}));
+                results.push(
+                    makeSkip(scenario, cell, 0, 'not-applicable'),
+                );
                 continue;
             }
 
@@ -577,10 +587,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     `SKIP  ${cellLabel}: GitHub rate limit already tripped this cell — short-circuiting (quota resets hourly, NOT a product pass)`,
                 );
                 results.push(
-                    makeResult(scenario, cell, 'skipped', 0, {
-                        skipReason:
-                            'github-rate-limit: cell circuit breaker (a prior scenario exhausted the account quota)',
-                    }),
+                    makeSkip(
+                        scenario,
+                        cell,
+                        0,
+                        'infra',
+                        'github-rate-limit: cell circuit breaker (a prior scenario exhausted the account quota)',
+                    ),
                 );
                 continue;
             }
@@ -612,13 +625,17 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
             }
             // GitHub App installation token (opt-in via GH_APP_* envs):
             // 5000/h of its own, immune to the bot-account abuse flags that
-            // cap the PATs at ~60/h. CLOUD cells only — installation tokens
-            // can't call GET /user, which self-hosted needs for seat
-            // assignment (provider.currentUserId). Resolved per scenario so
-            // the ~1h token auto-refreshes across long runs. A configured-
-            // but-broken App fails the mint loudly; we surface it and fall
-            // back to the PAT so one bad secret doesn't zero the coverage.
-            if (cell.provider === "github" && cell.target === "cloud") {
+            // cap the PATs at ~60/h. Resolved per scenario so the ~1h token
+            // auto-refreshes across long runs. A configured-but-broken App
+            // fails the mint loudly; we surface it and fall back to the PAT
+            // so one bad secret doesn't zero the coverage.
+            //
+            // Self-hosted used to be excluded because installation tokens
+            // cannot call GET /user and seat assignment needs the user id.
+            // provider.currentUserId() now resolves that ONE call from the
+            // durable PAT, so both targets can put their heavy traffic on
+            // the App budget — which is where the quota SKIPs came from.
+            if (cell.provider === "github") {
                 try {
                     const appToken = await githubAppToken();
                     if (appToken) {
@@ -714,8 +731,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     log.ok(
                         `PASS  ${cellLabel}  (${(duration / 1000).toFixed(1)}s)${retriedAfter ? ' [on retry]' : ''}`,
                     );
-                    results.push(
-                        makeResult(
+                    results.push({
+                        ...makeResult(
                             scenario,
                             cell,
                             'passed',
@@ -724,7 +741,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                                 ? { ...evidence, retriedAfter }
                                 : evidence,
                         ),
-                    );
+                        // A cell that only passes on attempt 2 is a flake.
+                        // It still counts as passed, but it is counted
+                        // SEPARATELY — an intermittent product bug that the
+                        // retry keeps absorbing is exactly what nobody was
+                        // able to see before.
+                        ...(retriedAfter ? { flaky: true } : {}),
+                    });
                     break;
                 } catch (err) {
                     const duration = Date.now() - t0;
@@ -742,9 +765,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     ) {
                         log.info(`SKIP  ${cellLabel}  (${e.message})`);
                         results.push(
-                            makeResult(scenario, cell, 'skipped', duration, {
-                                skipReason: e.message,
-                            }),
+                            makeSkip(
+                                scenario,
+                                cell,
+                                duration,
+                                'setup',
+                                e.message,
+                            ),
                         );
                         break;
                     }
@@ -761,9 +788,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                             `SKIP  ${cellLabel}: GitHub rate limit — quota exhausted, NOT a product pass (${e.message.slice(0, 160)})`,
                         );
                         results.push(
-                            makeResult(scenario, cell, 'skipped', duration, {
-                                skipReason: `github-rate-limit: ${e.message.slice(0, 200)}`,
-                            }),
+                            makeSkip(
+                                scenario,
+                                cell,
+                                duration,
+                                'infra',
+                                `github-rate-limit: ${e.message.slice(0, 200)}`,
+                            ),
                         );
                         break;
                     }
@@ -791,9 +822,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                             `SKIP  ${cellLabel}: target unreachable after failure — INCONCLUSIVE, not a product fail (${e.message.slice(0, 140)})`,
                         );
                         results.push(
-                            makeResult(scenario, cell, 'skipped', duration, {
-                                skipReason: `target-unreachable: ${e.message.slice(0, 200)}`,
-                            }),
+                            makeSkip(
+                                scenario,
+                                cell,
+                                duration,
+                                'infra',
+                                `target-unreachable: ${e.message.slice(0, 200)}`,
+                            ),
                         );
                         break;
                     }
@@ -853,5 +888,27 @@ function makeResult(
         errorStack,
         startedAt: now,
         finishedAt: now,
+    };
+}
+
+// Every `skipped` result goes through here so it CANNOT be recorded without
+// saying why. `not-applicable` is the only silent kind; `setup` and `infra`
+// both mean a check we believe we have did not actually run.
+function makeSkip(
+    scenario: Scenario,
+    cell: MatrixCell,
+    durationMs: number,
+    kind: SkipKind,
+    reason?: string,
+): ScenarioResult {
+    return {
+        ...makeResult(
+            scenario,
+            cell,
+            'skipped',
+            durationMs,
+            reason ? { skipReason: reason } : {},
+        ),
+        skipKind: kind,
     };
 }

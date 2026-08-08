@@ -2,13 +2,25 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { allScenarios, resolveScenarios } from "../scenarios/index.js";
+import { resolveScenarios } from "../scenarios/index.js";
+import {
+    computeVerdict,
+    describeCell,
+    isQuarantined,
+    priorityOf,
+    unverifiedP0,
+} from "../lib/verdict.js";
 import { runMatrix } from "../lib/runner.js";
 import { summarize, writeAll } from "../lib/evidence.js";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "../lib/log.js";
-import type { MatrixCell, ScenarioResult, Target } from "../lib/types.js";
+import type {
+    MatrixCell,
+    RunVerdict,
+    ScenarioResult,
+    Target,
+} from "../lib/types.js";
 
 const log = logger("cli:matrix");
 
@@ -308,7 +320,10 @@ async function main() {
             ? ` — ${preSkipped.length} cells SKIPPED upfront (missing tokens)`
             : "";
     log.info(
-        `Result: ${summary.passed}/${summary.total} passed (failed=${summary.failed}, skipped=${summary.skipped}, blocked=${summary.blocked})${preSkippedNote}`,
+        `Result: ${summary.passed}/${summary.executed} passed — executed ${summary.executed}/${summary.applicable} applicable (${summary.total} cells)${preSkippedNote}`,
+    );
+    log.info(
+        `        NOT verified: ${summary.infraSkipped} infra, ${summary.setupSkipped} setup · failed=${summary.failed} blocked=${summary.blocked} flaky=${summary.passedOnRetry}`,
     );
     log.info(`Evidence: ${artifactDir}`);
 
@@ -345,13 +360,37 @@ async function main() {
             r.status === "passed" &&
             (r.evidence as Record<string, unknown>)?.retriedAfter,
     );
+    // ---- Verdict ---------------------------------------------------------
+    // RED           a P0 gate broke, a cell was blocked, or a whole target
+    //               crashed. Release must not proceed.
+    // INCONCLUSIVE  nothing failed, but a P0 scenario went UNVERIFIED —
+    //               GitHub quota exhausted or the target went unreachable
+    //               mid-run. This used to report GREEN, which is how a
+    //               release train shipped on runs where entire cells never
+    //               executed a single scenario.
+    // GREEN         every applicable P0 cell actually ran and passed.
+    const unverified = unverifiedP0(allResults);
+    const verdict: RunVerdict = computeVerdict({
+        gatingFailures: gating.length,
+        blocked: summary.blocked,
+        targetCrashed,
+        unverifiedP0: unverified.length,
+    });
+
     const notify = {
         runId,
+        verdict,
         total: summary.total,
+        applicable: summary.applicable,
+        executed: summary.executed,
         passed: summary.passed,
         failed: summary.failed,
         skipped: summary.skipped,
         blocked: summary.blocked,
+        notApplicable: summary.notApplicable,
+        setupSkipped: summary.setupSkipped,
+        infraSkipped: summary.infraSkipped,
+        passedOnRetry: summary.passedOnRetry,
         preSkippedCells: preSkipped.length,
         targetCrashed,
         gatingFailures: gating.map((r) => ({
@@ -364,6 +403,13 @@ async function main() {
             quarantined: isQuarantined(r),
             error: firstLine(r.errorMessage),
         })),
+        // P0 cells we could NOT verify. The whole point of the inconclusive
+        // verdict — these are named so the Discord message can say which
+        // coverage went missing instead of just reporting a pass count.
+        unverified: unverified.map((r) => ({
+            cell: describeCell(r),
+            reason: firstLine(String(r.evidence?.skipReason ?? "")),
+        })),
         retriedCells: retried.map((r) => describeCell(r)),
     };
     writeFileSync(
@@ -371,8 +417,19 @@ async function main() {
         JSON.stringify(notify, null, 2),
     );
 
-    if (gating.length > 0 || summary.blocked > 0 || targetCrashed) {
-        process.exit(1);
+    if (verdict === "red") {
+        process.exit(EXIT_RED);
+    }
+    if (verdict === "inconclusive") {
+        log.err(
+            `Run is INCONCLUSIVE: ${unverified.length} P0 cell(s) never ran (infra). This is NOT a pass:`,
+        );
+        for (const r of unverified) {
+            log.err(
+                `  - ${describeCell(r)} — ${firstLine(String(r.evidence?.skipReason ?? ""))}`,
+            );
+        }
+        process.exit(EXIT_INCONCLUSIVE);
     }
     if (advisory.length > 0) {
         log.info(
@@ -381,31 +438,15 @@ async function main() {
     }
 }
 
-// Cells under investigation: they still RUN and REPORT (advisory) but never
-// gate the release. Format: "scenario-id" (all cells) or
-// "scenario-id×provider×license" (one cell). Keep entries SHORT-LIVED —
-// every entry must have an open issue; quarantine is a parking lot, not a
-// graveyard.
-const QUARANTINED: string[] = [];
+// Exit codes are the contract with CI: the workflow branches on them to pick
+// which Discord message to send, so they must stay distinct.
+//   0  green
+//   1  red — a gate broke
+//   2  usage error (bad args, every cell skipped) — pre-existing
+//   3  inconclusive — nothing broke, but P0 coverage did not run
+const EXIT_RED = 1;
+const EXIT_INCONCLUSIVE = 3;
 
-function isQuarantined(r: ScenarioResult): boolean {
-    return (
-        QUARANTINED.includes(r.scenarioId) ||
-        QUARANTINED.includes(
-            `${r.scenarioId}×${r.cell.provider}×${r.cell.license}`,
-        )
-    );
-}
-
-// Priority lookup from the scenario registry. Unknown id → P0
-// (conservative: an unregistered scenario should gate, not slip through).
-function priorityOf(scenarioId: string): string {
-    return allScenarios[scenarioId]?.priority ?? "P0";
-}
-
-function describeCell(r: ScenarioResult): string {
-    return `${r.scenarioId} × ${r.cell.target} × ${r.cell.provider} × ${r.cell.license}`;
-}
 
 function firstLine(message?: string): string {
     return (message ?? "").split("\n")[0].slice(0, 300);

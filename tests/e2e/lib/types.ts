@@ -1,3 +1,7 @@
+import type { ChangedFile, InlineCommentRef } from './diff-position.js';
+
+export type { ChangedFile, InlineCommentRef };
+
 export type Target = 'cloud' | 'self-hosted';
 
 export type ProviderName =
@@ -69,6 +73,14 @@ export interface ReviewSignal {
     issueComments: number;
     reviews: number;
     sample?: string;
+    /**
+     * Anchors of the inline comments Kody posted, when the provider can report
+     * them. Counting comments proves a review happened; these prove it landed
+     * on the right lines — the check that the GitLab "comments only on added
+     * lines" bug slipped past. Providers that don't populate it leave the
+     * placement assertion self-skipping.
+     */
+    inlineComments?: InlineCommentRef[];
     // Set when Kody posted a license-related notification (e.g. "Your
     // trial has ended! Activate your plan…" or a BYOK prompt) instead of
     // a real review. Scenarios that expect the entitlement gate to
@@ -188,6 +200,11 @@ export interface Provider {
         pr: { number: number },
         opts: { sinceIso: string; timeoutSec?: number },
     ): Promise<boolean>;
+    // Optional: the files this PR changes, with their unified-diff patches.
+    // Feeds the review-placement assertion (lib/diff-position.ts) — without
+    // the diff there is nothing to validate a comment's anchor against.
+    // Providers that don't implement it make the assertion self-skip.
+    listChangedFiles?(pr: { number: number }): Promise<ChangedFile[]>;
     // Idempotent pre-flight sweep — closes/abandons every PR (or MR) on
     // the fixture repo whose title starts with `[e2e]` and is still
     // open. Called once per (provider, target) pair at matrix start,
@@ -267,6 +284,26 @@ export class ScenarioSkipError extends Error {
 
 export type ScenarioStatus = 'passed' | 'failed' | 'skipped' | 'blocked';
 
+// WHY a result is `skipped`. Before this existed, four unrelated outcomes
+// collapsed into one number and the run reported green either way:
+//
+//   not-applicable  the scenario's appliesTo excludes this cell. EXPECTED —
+//                   it is the matrix being sparse by design, not a gap.
+//   setup           a required secret/fixture/license file is absent, so the
+//                   scenario cannot run here. A COVERAGE GAP: the check we
+//                   believe we have is not actually running.
+//   infra           the scenario SHOULD have run and we could not verify it —
+//                   GitHub quota exhausted, target unreachable. NOT a pass.
+//
+// Only `not-applicable` is silent. `setup` is reported; `infra` on a P0
+// scenario makes the whole run INCONCLUSIVE (see cli/run-matrix.ts).
+export type SkipKind = 'not-applicable' | 'setup' | 'infra';
+
+// A run's bottom line. `inconclusive` is the state the matrix could not
+// express before: nothing failed, but we did not verify enough to call it
+// green either.
+export type RunVerdict = 'green' | 'inconclusive' | 'red';
+
 export interface ScenarioResult {
     scenarioId: string;
     cell: {
@@ -275,6 +312,16 @@ export interface ScenarioResult {
         license: LicenseMode;
     };
     status: ScenarioStatus;
+    /** Set whenever `status === 'skipped'`. See SkipKind. */
+    skipKind?: SkipKind;
+    /**
+     * True when the scenario failed on attempt 1 and passed on the retry.
+     * `status` stays `passed` (it did pass), but a cell that only passes on
+     * the second try is a flake, and a flake that nobody counts is how an
+     * intermittent product bug stays invisible. `lib/history.ts` carries this
+     * into the durable log so `e2e:report` can compute a real flake rate.
+     */
+    flaky?: boolean;
     durationMs: number;
     evidence: Record<string, unknown>;
     errorMessage?: string;
