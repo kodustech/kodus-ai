@@ -493,6 +493,7 @@ ssh_vm "cd /opt/kodus-installer && cp .env.example .env && ./scripts/generate-se
 #
 # The PEM is escaped HERE, in normal script context. Doing it inside the remote
 # heredoc means fighting three layers of backslash expansion for no benefit.
+APP_ID_VALUE="${GH_APP_ID:-}"
 APP_PEM_ESCAPED=""
 if [ -n "${GH_APP_PRIVATE_KEY:-}" ]; then
     APP_PEM_ESCAPED=$(printf '%s' "$GH_APP_PRIVATE_KEY" | awk 'BEGIN{ORS=""} {print $0 "\\n"}')
@@ -551,8 +552,8 @@ env_set API_MG_DB_PASSWORD "\$(openssl rand -hex 16)"
 env_set API_DATABASE_DISABLE_SSL "true"
 env_set API_PG_DB_SSL "false"
 env_set WORKER_ROLE "code-review"
-if [ -n "${GH_APP_ID:-}" ]; then
-    env_set API_GITHUB_APP_ID "${GH_APP_ID}"
+if [ -n "$APP_ID_VALUE" ]; then
+    env_set API_GITHUB_APP_ID "$APP_ID_VALUE"
 fi
 if [ -n "$APP_PEM_ESCAPED" ]; then
     env_set API_GITHUB_PRIVATE_KEY "\"$APP_PEM_ESCAPED\""
