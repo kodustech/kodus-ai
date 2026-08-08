@@ -205,6 +205,15 @@ describe('normaliseRuleList', () => {
         ).toEqual(['keep']);
     });
 
+    // Deliberate, not an oversight: an empty title renders as a blank bullet
+    // and would still be counted in the "N new rules" headline. Keeping it out
+    // of the list keeps the list and the count telling the same story.
+    it('drops empty titles rather than rendering a blank bullet', () => {
+        expect(
+            normaliseRuleList([{ title: '' }, '', { title: 'Prefer early returns' }]),
+        ).toEqual(['Prefer early returns']);
+    });
+
     it('tolerates a missing or non-array payload', () => {
         expect(normaliseRuleList(undefined)).toEqual([]);
         expect(normaliseRuleList('not an array')).toEqual([]);

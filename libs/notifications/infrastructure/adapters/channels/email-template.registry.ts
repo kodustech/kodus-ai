@@ -109,6 +109,10 @@ export type EmailTemplateBuilder = (
  * one line in an email; letting a non-string through costs the whole
  * execution, because React throws on an object child and the delivery retries
  * five times before giving up.
+ *
+ * An empty title is dropped on the same terms, deliberately: it would render
+ * as a blank bullet and still count toward the "N new rules" headline, which
+ * reads as a bug to whoever opens the email.
  */
 export function normaliseRuleList(value: unknown): string[] {
     if (!Array.isArray(value)) return [];
