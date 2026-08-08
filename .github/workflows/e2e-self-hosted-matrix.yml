@@ -14,8 +14,10 @@ permissions:
 # an RC build, before any promotion is allowed.
 #
 # Inputs:
-#   image_tag    DOCKER image tag to test against (REQUIRED, e.g. 1.42.0-rc.1 —
-#                the ghcr tag, NOT the selfhosted-* git tag)
+#   image_tag    DOCKER image tag to test against (e.g. 2.1.30 or
+#                2.1.30-rc.117) - the GHCR tag, NOT the `selfhosted-*` git
+#                tag. Optional on the cron, which resolves it from the newest
+#                published release and strips the prefix.
 #   matrix_file  Path to a matrix YAML file in tests/e2e/matrix/ (default fast.yml)
 #   keep_running Optional — leave droplets alive after each cell for debug
 #
@@ -57,7 +59,7 @@ on:
     workflow_dispatch:
         inputs:
             image_tag:
-                description: "Image tag (e.g. selfhosted-1.42.0-rc.1). Blank on the cron — resolved from the newest release."
+                description: "GHCR image tag, NOT the git tag (e.g. 2.1.30 or 2.1.30-rc.117). Blank on the cron - resolved from the newest release."
                 required: false
                 type: string
             matrix_file:
@@ -119,8 +121,16 @@ jobs:
                       echo "::error::No published selfhosted-* release found to test against."
                       exit 1
                   fi
-                  echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
-                  echo "Scheduled run — testing newest release: $TAG"
+                  # The GIT tag is `selfhosted-2.1.30`; the GHCR tag that
+                  # selfhosted-promote.yml actually writes is `2.1.30`. Passing
+                  # the git tag straight through yields
+                  # `kodus-ai-api:selfhosted-2.1.30: not found` and every cell
+                  # dies in provisioning -- which is exactly how the 2026-08-07
+                  # dispatch failed too, because the input hint below used to
+                  # suggest the git tag.
+                  IMAGE="${TAG#selfhosted-}"
+                  echo "image_tag=$IMAGE" >> "$GITHUB_OUTPUT"
+                  echo "Scheduled run - newest release $TAG -> image tag $IMAGE"
 
             - id: gen
               env:

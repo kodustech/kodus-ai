@@ -11,8 +11,11 @@
 # our rows on top, and retry -- two matrices finishing at once must not lose
 # one of their runs.
 #
-# Never fails the job. A reporting gap is not a release gate; turning one
-# into a red build would be its own kind of bad signal.
+# Never FAILS the job -- a reporting gap is not a release gate -- but every
+# no-op path emits a ::warning:: so it is visible in the run summary. A silent
+# green here would be the same disease this whole change is fixing: the first
+# real run reported "Append run to e2e history: success" while pushing
+# nothing, because the cells had died before writing any evidence.
 set -uo pipefail
 
 cd "$(dirname "$0")/../../.." # repo root
@@ -35,7 +38,7 @@ ROWS="$TMP/rows.jsonl"
     || { echo "[history] could not build rows -- skipping"; exit 0; }
 
 if [ ! -s "$ROWS" ]; then
-    echo "[history] no rows produced -- nothing to push"
+    echo "::warning::[history] no rows produced -- the matrix wrote no evidence (cells likely died before running), so this run leaves no trace in the history log"
     exit 0
 fi
 
@@ -46,7 +49,7 @@ for attempt in 1 2 3; do
     rm -rf "$TMP/wt"
     if git fetch origin "$BRANCH" --depth=1 2>/dev/null; then
         git worktree add --detach "$TMP/wt" FETCH_HEAD >/dev/null 2>&1 || {
-            echo "[history] worktree add failed"; exit 0; }
+            echo "::warning::[history] worktree add failed -- run not recorded"; exit 0; }
     else
         # First ever run: create the orphan branch from nothing.
         echo "[history] branch $BRANCH does not exist yet -- creating it"
@@ -70,5 +73,5 @@ for attempt in 1 2 3; do
     sleep $((attempt * 3))
 done
 
-echo "[history] could not push after 3 attempts -- results are still in the artifact"
+echo "::warning::[history] could not push after 3 attempts -- this run is missing from the history log (results are still in the artifact)"
 exit 0
