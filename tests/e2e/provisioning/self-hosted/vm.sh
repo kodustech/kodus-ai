@@ -90,8 +90,15 @@ provision_server() {
     local name=$1 user_data=$2
     case "$TEST_VM_PROVIDER" in
         digitalocean)
-            local resp
-            resp=$(curl -sS -X POST \
+            local resp code body
+            # Capture the status code alongside the body. Without this, a
+            # non-JSON response (gateway HTML, plain-text 5xx, a block page)
+            # made the `jq` below exit non-zero, and `set -e` killed the
+            # script INSIDE the command substitution -- before the error
+            # handler that prints the response could ever run. The whole
+            # failure surfaced as a bare "jq: parse error", with the one piece
+            # of information needed to diagnose it discarded.
+            resp=$(curl -sS -w $'\n%{http_code}' -X POST \
                 -H "Authorization: Bearer ${DIGITALOCEAN_TOKEN}" \
                 -H "Content-Type: application/json" \
                 "$DO_API/droplets" \
@@ -101,9 +108,18 @@ provision_server() {
                     --argjson key "$SSH_KEY_ID" --arg ud "$user_data" \
                     '{name:$name, region:$region, size:$size, image:$image,
                       ssh_keys:[$key], user_data:$ud, ipv6:false,
-                      monitoring:false, backups:false}')")
-            SERVER_ID=$(echo "$resp" | jq -r '.droplet.id // empty')
-            [ -n "$SERVER_ID" ] || { err "DO droplet create failed: $resp"; exit 1; }
+                      monitoring:false, backups:false}')") || {
+                err "DO droplet create: curl failed"; exit 1; }
+            code=${resp##*$'\n'}
+            body=${resp%$'\n'*}
+            if ! echo "$body" | jq -e . >/dev/null 2>&1; then
+                err "DO droplet create returned HTTP $code with a non-JSON body:"
+                err "${body:0:800}"
+                exit 1
+            fi
+            SERVER_ID=$(echo "$body" | jq -r '.droplet.id // empty')
+            [ -n "$SERVER_ID" ] || {
+                err "DO droplet create failed (HTTP $code): ${body:0:800}"; exit 1; }
             for i in $(seq 1 60); do
                 local s
                 s=$(curl -sS -H "Authorization: Bearer ${DIGITALOCEAN_TOKEN}" \
