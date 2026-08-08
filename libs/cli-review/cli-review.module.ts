@@ -9,7 +9,6 @@ import { PrepareCliFilesStage } from './pipeline/stages/prepare-cli-files.stage'
 import { CliReviewPipelineStrategy } from './pipeline/strategy/cli-review-pipeline.strategy';
 
 // Use Cases
-import { ClassifyCliSessionCaptureUseCase } from './application/use-cases/classify-cli-session-capture.use-case';
 import { ClassifySessionUseCase } from './application/use-cases/classify-session.use-case';
 import { EnqueueCliReviewUseCase } from './application/use-cases/enqueue-cli-review.use-case';
 import { PublicPrReviewUseCase } from './application/use-cases/public-pr-review.use-case';
@@ -21,7 +20,6 @@ import { GetCliReviewByIdUseCase } from './application/use-cases/dashboard/get-c
 import { GetCliReviewsUseCase } from './application/use-cases/dashboard/get-cli-reviews.use-case';
 import { GetCliReviewJobStatusUseCase } from './application/use-cases/get-cli-review-job-status.use-case';
 import { IngestSessionEventUseCase } from './application/use-cases/ingest-session-event.use-case';
-import { SubmitCliSessionCaptureUseCase } from './application/use-cases/submit-cli-session-capture.use-case';
 import { WaitForCliReviewJobUseCase } from './application/use-cases/wait-for-cli-review-job.use-case';
 
 // Workflow
@@ -138,8 +136,6 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
         GetCliReviewsUseCase,
         GetCliReviewJobStatusUseCase,
         WaitForCliReviewJobUseCase,
-        SubmitCliSessionCaptureUseCase,
-        ClassifyCliSessionCaptureUseCase,
         IngestSessionEventUseCase,
         ClassifySessionUseCase,
 
@@ -211,7 +207,6 @@ import { OutboxMessageModel } from '@libs/core/workflow/infrastructure/repositor
         GetCliReviewsUseCase,
         GetCliReviewJobStatusUseCase,
         WaitForCliReviewJobUseCase,
-        SubmitCliSessionCaptureUseCase,
         IngestSessionEventUseCase,
         ClassifySessionUseCase,
         CliReviewJobProcessorService,

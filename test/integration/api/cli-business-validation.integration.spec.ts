@@ -16,7 +16,6 @@ import { ExecuteCliReviewUseCase } from '@libs/cli-review/application/use-cases/
 import { EnqueueCliReviewUseCase } from '@libs/cli-review/application/use-cases/enqueue-cli-review.use-case';
 import { GetCliReviewJobStatusUseCase } from '@libs/cli-review/application/use-cases/get-cli-review-job-status.use-case';
 import { WaitForCliReviewJobUseCase } from '@libs/cli-review/application/use-cases/wait-for-cli-review-job.use-case';
-import { SubmitCliSessionCaptureUseCase } from '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case';
 import { AUTHENTICATED_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/authenticated-rate-limiter.service.contract';
 import { TRIAL_RATE_LIMITER_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/trial-rate-limiter.service.contract';
 import { GITHUB_PUBLIC_PR_SERVICE_TOKEN } from '@libs/cli-review/domain/contracts/github-public-pr.service.contract';
@@ -74,10 +73,6 @@ describe('CLI business-validation integration', () => {
                 },
                 {
                     provide: WaitForCliReviewJobUseCase,
-                    useValue: { execute: jest.fn() },
-                },
-                {
-                    provide: SubmitCliSessionCaptureUseCase,
                     useValue: { execute: jest.fn() },
                 },
                 {
