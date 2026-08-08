@@ -18,9 +18,12 @@ scenarios:
     # nothing seeded.
     - rbac-authorization
     - rbac-frontend-routes
-    # Fresh org per run, so the 14-day trial window is always open.
-    - trial-entitlement-gate
-    - trial-credits-consume
+    # trial-entitlement-gate / trial-credits-consume are NOT here, and the
+    # reason is concrete rather than cautious: both call POST /billing/trial,
+    # which returns HTTP 500 on a fresh environment because Stripe is not
+    # configured there. Verified on 2026-08-08 against i-01adbad9b85f5ab41 —
+    # the rest of this file passed on the same run. Add them back together
+    # with Stripe test-mode wiring, not before.
     # Anonymous and tenant-free: only touches /cli/public/*.
     - public-pr-demo
 
