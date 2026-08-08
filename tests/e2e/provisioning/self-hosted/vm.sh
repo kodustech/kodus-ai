@@ -55,6 +55,19 @@ DO_REGION="${DO_REGION:-nyc3}"
 DO_SIZE="${DO_SIZE:-s-2vcpu-4gb}"
 DO_IMAGE="${DO_IMAGE:-ubuntu-24-04-x64}"
 
+# AWS (us-east-2 only — the kodus-devops-agent credential is region-boxed and
+# refuses anything else, which is what keeps prod in us-east-1 out of reach).
+# The instance family is also boxed to t3/t3a/t4g by an IAM guardrail; asking
+# for anything bigger comes back UnauthorizedOperation, not a bill.
+AWS_REGION_E2E="${AWS_REGION_E2E:-us-east-2}"
+AWS_INSTANCE_TYPE="${AWS_INSTANCE_TYPE:-t3.large}"
+# Resolved from the Canonical AMI catalogue at provision time when unset, so
+# the script does not rot as AMIs are republished.
+AWS_AMI_ID="${AWS_AMI_ID:-}"
+# Reused across runs: creating one per run would leak security groups.
+AWS_SECURITY_GROUP="${AWS_SECURITY_GROUP_E2E:-kodus-e2e-ssh}"
+AWS_SG_ID=""
+
 HCLOUD_API="https://api.hetzner.cloud/v1"
 HCLOUD_LOCATION="${HCLOUD_LOCATION:-nbg1}"
 HCLOUD_SERVER_TYPE="${HCLOUD_SERVER_TYPE:-cx22}"
@@ -83,7 +96,60 @@ provision_ssh_key() {
             SSH_KEY_ID=$(echo "$resp" | jq -r '.ssh_key.id // empty')
             [ -n "$SSH_KEY_ID" ] || { err "Hetzner key upload failed: $resp"; exit 1; }
             ;;
+        aws)
+            # EC2 key pairs are named, not numbered: SSH_KEY_ID doubles as the
+            # KeyName passed to run-instances and as the delete handle.
+            aws ec2 import-key-pair \
+                --region "$AWS_REGION_E2E" \
+                --key-name "$name" \
+                --public-key-material "fileb:///dev/stdin" <<< "$pubkey" \
+                >/dev/null || { err "AWS key import failed for $name"; exit 1; }
+            SSH_KEY_ID="$name"
+            ;;
     esac
+}
+
+# Idempotent SSH-ingress security group. Created once and reused: a per-run
+# group would accumulate exactly the way the orphaned droplets did.
+aws_ensure_security_group() {
+    AWS_SG_ID=$(aws ec2 describe-security-groups \
+        --region "$AWS_REGION_E2E" \
+        --filters "Name=group-name,Values=$AWS_SECURITY_GROUP" \
+        --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "None")
+    if [ "$AWS_SG_ID" != "None" ] && [ -n "$AWS_SG_ID" ]; then
+        return 0
+    fi
+    log "Creating security group $AWS_SECURITY_GROUP..."
+    AWS_SG_ID=$(aws ec2 create-security-group \
+        --region "$AWS_REGION_E2E" \
+        --group-name "$AWS_SECURITY_GROUP" \
+        --description "Kodus e2e ephemeral VMs (SSH in, all out)" \
+        --query 'GroupId' --output text) \
+        || { err "Could not create security group $AWS_SECURITY_GROUP"; exit 1; }
+    # SSH only. The stack itself is reached through the cloudflared tunnel, not
+    # through open ports, so nothing else needs to be exposed.
+    aws ec2 authorize-security-group-ingress \
+        --region "$AWS_REGION_E2E" \
+        --group-id "$AWS_SG_ID" \
+        --protocol tcp --port 22 --cidr 0.0.0.0/0 >/dev/null 2>&1 || true
+}
+
+# Newest Canonical Ubuntu 24.04 for the instance architecture. t4g is Graviton
+# (arm64); everything else in the allowed families is x86_64.
+aws_resolve_ami() {
+    [ -n "$AWS_AMI_ID" ] && return 0
+    local arch="amd64"
+    case "$AWS_INSTANCE_TYPE" in t4g.*) arch="arm64" ;; esac
+    AWS_AMI_ID=$(aws ec2 describe-images \
+        --region "$AWS_REGION_E2E" \
+        --owners 099720109477 \
+        --filters "Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-${arch}-server-*" \
+                  "Name=state,Values=available" \
+        --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text) \
+        || { err "Could not resolve an Ubuntu 24.04 $arch AMI in $AWS_REGION_E2E"; exit 1; }
+    [ -n "$AWS_AMI_ID" ] && [ "$AWS_AMI_ID" != "None" ] \
+        || { err "No Ubuntu 24.04 $arch AMI found in $AWS_REGION_E2E"; exit 1; }
+    log "AMI $AWS_AMI_ID (ubuntu 24.04 $arch)"
 }
 
 provision_server() {
@@ -150,6 +216,39 @@ provision_server() {
             [ -n "$SERVER_ID" ] && [ -n "$SERVER_IP" ] \
                 || { err "Hetzner server create failed: $resp"; exit 1; }
             ;;
+        aws)
+            aws_resolve_ami
+            aws_ensure_security_group
+            # Tags, not the name, are how the reaper finds these. Name-prefix
+            # matching is what let eight DigitalOcean droplets survive for days
+            # because the reaper watched a different prefix.
+            local tagspec
+            tagspec="ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=Project,Value=kodus-e2e},{Key=CreatedAt,Value=$(date -u +%Y-%m-%dT%H:%M:%SZ)}]"
+            SERVER_ID=$(aws ec2 run-instances \
+                --region "$AWS_REGION_E2E" \
+                --image-id "$AWS_AMI_ID" \
+                --instance-type "$AWS_INSTANCE_TYPE" \
+                --key-name "$SSH_KEY_ID" \
+                --security-group-ids "$AWS_SG_ID" \
+                --associate-public-ip-address \
+                --user-data "$user_data" \
+                --tag-specifications "$tagspec" \
+                --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}' \
+                --instance-initiated-shutdown-behavior terminate \
+                --query 'Instances[0].InstanceId' --output text) \
+                || { err "AWS run-instances failed"; exit 1; }
+            [ -n "$SERVER_ID" ] && [ "$SERVER_ID" != "None" ] \
+                || { err "AWS run-instances returned no instance id"; exit 1; }
+            log "Instance $SERVER_ID starting..."
+            aws ec2 wait instance-running \
+                --region "$AWS_REGION_E2E" --instance-ids "$SERVER_ID" \
+                || { err "Instance $SERVER_ID never reached running"; exit 1; }
+            SERVER_IP=$(aws ec2 describe-instances \
+                --region "$AWS_REGION_E2E" --instance-ids "$SERVER_ID" \
+                --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+            [ -n "$SERVER_IP" ] && [ "$SERVER_IP" != "None" ] \
+                || { err "Instance $SERVER_ID has no public IP"; exit 1; }
+            ;;
     esac
 }
 
@@ -170,6 +269,12 @@ destroy_server() {
                 && ok "Destroyed Hetzner server $SERVER_ID" \
                 || warn "Could not destroy server $SERVER_ID — check at hetzner.cloud"
             ;;
+        aws)
+            aws ec2 terminate-instances \
+                --region "$AWS_REGION_E2E" --instance-ids "$SERVER_ID" >/dev/null \
+                && ok "Terminated EC2 instance $SERVER_ID" \
+                || warn "Could not terminate $SERVER_ID — check the EC2 console in $AWS_REGION_E2E"
+            ;;
     esac
 }
 
@@ -185,6 +290,10 @@ destroy_ssh_key() {
             curl -sS -X DELETE \
                 -H "Authorization: Bearer ${HCLOUD_TOKEN}" \
                 "$HCLOUD_API/ssh_keys/$SSH_KEY_ID" >/dev/null || true
+            ;;
+        aws)
+            aws ec2 delete-key-pair \
+                --region "$AWS_REGION_E2E" --key-name "$SSH_KEY_ID" >/dev/null 2>&1 || true
             ;;
     esac
 }
@@ -277,7 +386,7 @@ packages:
 runcmd:
   - curl -fsSL https://get.docker.com | sh
   - systemctl enable --now docker
-  - curl -fsSL -o /usr/local/bin/cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+  - ARCH=$(dpkg --print-architecture); curl -fsSL -o /usr/local/bin/cloudflared "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH}"
   - chmod +x /usr/local/bin/cloudflared
   - touch /var/lib/cloud/instance/kodus-ready
 CLOUDINIT
