@@ -29,9 +29,16 @@ cells:
     # every scenario listed above signs up its own throwaway org (or needs no
     # tenant at all), which is exactly why they are the ones that can run
     # against a fresh environment.
+    #
+    # `github` rather than `github-app` for now, and the reason is mundane:
+    # the github-app provider requires GH_APP_TEST_REPO, which does not exist
+    # as a secret, so those cells are pre-skipped and the run ends with nothing
+    # executed. None of the scenarios here performs a code review, so the auth
+    # mode is not what they exercise — flip both to github-app once the secret
+    # is in place and the App is installed on the fixture repo.
     - target: cloud
-      provider: github-app
+      provider: github
       license: paid
     - target: cloud
-      provider: github-app
+      provider: github
       license: trial
