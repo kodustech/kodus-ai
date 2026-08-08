@@ -2,14 +2,21 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import type { LifecycleEvent, TranscriptParseResult } from '../../types/session.js';
+import type {
+    LifecycleEvent,
+    TranscriptParseResult,
+} from '../../types/session.js';
 import type { SessionApiEvent } from '../../types/session-events.js';
 
 // ---------------------------------------------------------------------------
 // Captured events & logs
 // ---------------------------------------------------------------------------
 const sentEvents: SessionApiEvent[] = [];
-const logEntries: Array<{ level: string; msg: string; data: Record<string, unknown> }> = [];
+const logEntries: Array<{
+    level: string;
+    msg: string;
+    data: Record<string, unknown>;
+}> = [];
 
 // ---------------------------------------------------------------------------
 // Mocks — only external boundaries
@@ -28,15 +35,33 @@ vi.mock('../git.service.js', () => ({
 vi.mock('../hook-logger.service.js', () => ({
     hookLogger: {
         init: vi.fn().mockResolvedValue(undefined),
-        info: vi.fn(async (msg: string, component: string, data: Record<string, unknown>) => {
-            logEntries.push({ level: 'info', msg, data });
-        }),
-        warn: vi.fn(async (msg: string, component: string, data: Record<string, unknown>) => {
-            logEntries.push({ level: 'warn', msg, data });
-        }),
-        error: vi.fn(async (msg: string, component: string, data: Record<string, unknown>) => {
-            logEntries.push({ level: 'error', msg, data });
-        }),
+        info: vi.fn(
+            async (
+                msg: string,
+                component: string,
+                data: Record<string, unknown>,
+            ) => {
+                logEntries.push({ level: 'info', msg, data });
+            },
+        ),
+        warn: vi.fn(
+            async (
+                msg: string,
+                component: string,
+                data: Record<string, unknown>,
+            ) => {
+                logEntries.push({ level: 'warn', msg, data });
+            },
+        ),
+        error: vi.fn(
+            async (
+                msg: string,
+                component: string,
+                data: Record<string, unknown>,
+            ) => {
+                logEntries.push({ level: 'error', msg, data });
+            },
+        ),
     },
 }));
 
@@ -101,21 +126,34 @@ vi.mock('../transcript.service.js', () => ({
 }));
 
 // NOTE: session-local.service is NOT mocked — we use the REAL implementation
-// with a temp directory to test actual file-based state management.
+// under KODUS_HOME (outside the repo) to test actual file-based state management.
 
 // ---------------------------------------------------------------------------
 // Import the real lifecycle service (after mocks are set up)
 // ---------------------------------------------------------------------------
 const { lifecycleService } = await import('../lifecycle.service.js');
+const { getSessionsDir } = await import('../kodus-paths.service.js');
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 let tmpRepoRoot: string;
+let tmpKodusHome: string;
+let prevKodusHome: string | undefined;
 
 async function createTmpRepoRoot(): Promise<string> {
     return fs.mkdtemp(path.join(os.tmpdir(), 'lifecycle-e2e-'));
+}
+
+async function stateFile(repoRoot: string, sessionId: string): Promise<string> {
+    const dir = await getSessionsDir(repoRoot);
+    return path.join(dir, '_state', `${sessionId}.json`);
+}
+
+async function stateDir(repoRoot: string): Promise<string> {
+    const dir = await getSessionsDir(repoRoot);
+    return path.join(dir, '_state');
 }
 
 function eventsByType(type: string): SessionApiEvent[] {
@@ -140,11 +178,25 @@ describe('Lifecycle E2E — full session flow', () => {
         logEntries.length = 0;
         vi.clearAllMocks();
         tmpRepoRoot = await createTmpRepoRoot();
+        tmpKodusHome = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'kodus-home-e2e-'),
+        );
+        prevKodusHome = process.env.KODUS_HOME;
+        process.env.KODUS_HOME = tmpKodusHome;
     });
 
     afterEach(async () => {
-        // Clean up temp dir
-        await fs.rm(tmpRepoRoot, { recursive: true, force: true }).catch(() => {});
+        if (prevKodusHome === undefined) {
+            delete process.env.KODUS_HOME;
+        } else {
+            process.env.KODUS_HOME = prevKodusHome;
+        }
+        await fs
+            .rm(tmpRepoRoot, { recursive: true, force: true })
+            .catch(() => {});
+        await fs
+            .rm(tmpKodusHome, { recursive: true, force: true })
+            .catch(() => {});
     });
 
     it('exercises a complete session lifecycle: start → turns → dedup → new turn → end', async () => {
@@ -189,8 +241,7 @@ describe('Lifecycle E2E — full session flow', () => {
         }
 
         // Verify local state file was created on disk
-        const sessionsDir = path.join(tmpRepoRoot, '.kody', 'sessions');
-        const localFile = path.join(sessionsDir, `${sessionId}.json`);
+        const localFile = await stateFile(tmpRepoRoot, sessionId);
         const localContent = JSON.parse(await fs.readFile(localFile, 'utf-8'));
         expect(localContent.turnId).toBe(firstTurnId);
         expect(localContent.transcriptPath).toBe(transcriptPath);
@@ -218,8 +269,12 @@ describe('Lifecycle E2E — full session flow', () => {
                 'Bash',
             ]);
             expect(turnEnd.filesModified).toHaveLength(2);
-            expect(turnEnd.filesModified.map((f) => f.path)).toContain('src/auth.ts');
-            expect(turnEnd.filesModified.map((f) => f.path)).toContain('src/config.ts');
+            expect(turnEnd.filesModified.map((f) => f.path)).toContain(
+                'src/auth.ts',
+            );
+            expect(turnEnd.filesModified.map((f) => f.path)).toContain(
+                'src/config.ts',
+            );
             expect(turnEnd.filesRead).toEqual(['src/auth.ts']);
             expect(turnEnd.commands).toEqual(['npm test']);
             expect(turnEnd.tokenUsage.inputTokens).toBe(1200);
@@ -245,7 +300,9 @@ describe('Lifecycle E2E — full session flow', () => {
         expect(eventsByType('turn_end')).toHaveLength(1);
 
         // Verify dedup was logged
-        const dedupLog = logEntries.find((l) => l.msg === 'turn-end-dedup-skipped');
+        const dedupLog = logEntries.find(
+            (l) => l.msg === 'turn-end-dedup-skipped',
+        );
         expect(dedupLog).toBeDefined();
         expect(dedupLog!.data.turn_id).toBe(firstTurnId);
 
@@ -270,7 +327,9 @@ describe('Lifecycle E2E — full session flow', () => {
         }
 
         // Local state should have been overwritten (new turn, not completed)
-        const localSecondTurn = JSON.parse(await fs.readFile(localFile, 'utf-8'));
+        const localSecondTurn = JSON.parse(
+            await fs.readFile(localFile, 'utf-8'),
+        );
         expect(localSecondTurn.turnId).toBe(secondTurnId);
         expect(localSecondTurn.turnCompleted).toBeUndefined();
 
@@ -305,11 +364,13 @@ describe('Lifecycle E2E — stale session cleanup', () => {
     });
 
     afterEach(async () => {
-        await fs.rm(tmpRepoRoot, { recursive: true, force: true }).catch(() => {});
+        await fs
+            .rm(tmpRepoRoot, { recursive: true, force: true })
+            .catch(() => {});
     });
 
     it('sends synthetic session_end for stale sessions and cleans up files', async () => {
-        const sessionsDir = path.join(tmpRepoRoot, '.kody', 'sessions');
+        const sessionsDir = await stateDir(tmpRepoRoot);
         await fs.mkdir(sessionsDir, { recursive: true });
 
         // Create two stale session files with old modification times
@@ -363,12 +424,14 @@ describe('Lifecycle E2E — stale session cleanup', () => {
         await expect(fs.access(staleFile2)).rejects.toThrow();
 
         // Verify cleanup was logged
-        const cleanupLogs = logEntries.filter((l) => l.msg === 'stale-session-cleanup');
+        const cleanupLogs = logEntries.filter(
+            (l) => l.msg === 'stale-session-cleanup',
+        );
         expect(cleanupLogs).toHaveLength(2);
     });
 
     it('does not clean up sessions that are still fresh', async () => {
-        const sessionsDir = path.join(tmpRepoRoot, '.kody', 'sessions');
+        const sessionsDir = await stateDir(tmpRepoRoot);
         await fs.mkdir(sessionsDir, { recursive: true });
 
         // Create a fresh session file (just created, not stale)
@@ -407,10 +470,25 @@ describe('Lifecycle E2E — synthetic turn_start', () => {
         logEntries.length = 0;
         vi.clearAllMocks();
         tmpRepoRoot = await createTmpRepoRoot();
+        tmpKodusHome = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'kodus-home-e2e-'),
+        );
+        prevKodusHome = process.env.KODUS_HOME;
+        process.env.KODUS_HOME = tmpKodusHome;
     });
 
     afterEach(async () => {
-        await fs.rm(tmpRepoRoot, { recursive: true, force: true }).catch(() => {});
+        if (prevKodusHome === undefined) {
+            delete process.env.KODUS_HOME;
+        } else {
+            process.env.KODUS_HOME = prevKodusHome;
+        }
+        await fs
+            .rm(tmpRepoRoot, { recursive: true, force: true })
+            .catch(() => {});
+        await fs
+            .rm(tmpKodusHome, { recursive: true, force: true })
+            .catch(() => {});
     });
 
     it('sends a synthetic turn_start before turn_end when TurnStart was never dispatched', async () => {
@@ -440,23 +518,23 @@ describe('Lifecycle E2E — synthetic turn_start', () => {
         }
 
         // The turn_end should use the same turnId as the synthetic turn_start
-        if (turnStarts[0].type === 'turn_start' && turnEnds[0].type === 'turn_end') {
+        if (
+            turnStarts[0].type === 'turn_start' &&
+            turnEnds[0].type === 'turn_end'
+        ) {
             expect(turnEnds[0].turnId).toBe(turnStarts[0].turnId);
         }
 
         // Should log a warning about the missing turn_start
-        const warnLog = logEntries.find((l) => l.msg === 'turn-end-without-turn-start');
+        const warnLog = logEntries.find(
+            (l) => l.msg === 'turn-end-without-turn-start',
+        );
         expect(warnLog).toBeDefined();
         expect(warnLog!.data.model_session_id).toBe(sessionId);
 
         // Local state file should exist with turnCompleted (saved even for
         // synthetic turns to prevent dedup issues)
-        const localFile = path.join(
-            tmpRepoRoot,
-            '.kody',
-            'sessions',
-            `${sessionId}.json`,
-        );
+        const localFile = await stateFile(tmpRepoRoot, sessionId);
         const localData = JSON.parse(await fs.readFile(localFile, 'utf-8'));
         expect(localData.turnCompleted).toBe(true);
     });

@@ -303,9 +303,8 @@ describe('LifecycleService.dispatch', () => {
     });
 
     it('saves turnCompleted before sending turn_end', async () => {
-        const { loadLocal, saveLocal } = await import(
-            '../session-local.service.js'
-        );
+        const { loadLocal, saveLocal } =
+            await import('../session-local.service.js');
 
         vi.mocked(loadLocal).mockResolvedValueOnce({
             turnId: '12345',
@@ -324,16 +323,19 @@ describe('LifecycleService.dispatch', () => {
             '/tmp/repo',
         );
         // turnCompleted saved via saveLocal (not markTurnCompleted)
-        expect(saveLocal).toHaveBeenCalledWith('/tmp/repo', 'sess-1', expect.objectContaining({
-            turnId: '12345',
-            turnCompleted: true,
-        }));
+        expect(saveLocal).toHaveBeenCalledWith(
+            '/tmp/repo',
+            'sess-1',
+            expect.objectContaining({
+                turnId: '12345',
+                turnCompleted: true,
+            }),
+        );
     });
 
     it('sends synthetic session_end for stale sessions on session_start', async () => {
-        const { listStaleSessions, removeLocal } = await import(
-            '../session-local.service.js'
-        );
+        const { listStaleSessions, removeLocal } =
+            await import('../session-local.service.js');
         const { hookLogger } = await import('../hook-logger.service.js');
 
         vi.mocked(listStaleSessions).mockResolvedValueOnce([

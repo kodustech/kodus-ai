@@ -13,15 +13,26 @@ import {
 
 describe('session-local.service', () => {
     let tmpDir: string;
+    let kodusHome: string;
+    let prevKodusHome: string | undefined;
 
     beforeEach(async () => {
         tmpDir = await fs.mkdtemp(
             path.join(os.tmpdir(), 'session-local-test-'),
         );
+        kodusHome = await fs.mkdtemp(path.join(os.tmpdir(), 'kodus-home-'));
+        prevKodusHome = process.env.KODUS_HOME;
+        process.env.KODUS_HOME = kodusHome;
     });
 
     afterEach(async () => {
+        if (prevKodusHome === undefined) {
+            delete process.env.KODUS_HOME;
+        } else {
+            process.env.KODUS_HOME = prevKodusHome;
+        }
         await fs.rm(tmpDir, { recursive: true, force: true });
+        await fs.rm(kodusHome, { recursive: true, force: true });
     });
 
     const sampleData: LocalSessionData = {
@@ -123,6 +134,12 @@ describe('session-local.service', () => {
     describe('listStaleSessions', () => {
         const ONE_HOUR_MS = 60 * 60 * 1000;
 
+        async function stateDirFor(repoRoot: string): Promise<string> {
+            const { getSessionsDir } =
+                await import('../kodus-paths.service.js');
+            return path.join(await getSessionsDir(repoRoot), '_state');
+        }
+
         it('finds sessions with old mtime', async () => {
             // Create two session files
             await saveLocal(tmpDir, 'old-sess-1', sampleData);
@@ -130,7 +147,7 @@ describe('session-local.service', () => {
 
             // Set their mtime to 2 hours ago
             const twoHoursAgo = new Date(Date.now() - 2 * ONE_HOUR_MS);
-            const sessDir = path.join(tmpDir, '.kody', 'sessions');
+            const sessDir = await stateDirFor(tmpDir);
             await fs.utimes(
                 path.join(sessDir, 'old-sess-1.json'),
                 twoHoursAgo,
@@ -158,8 +175,7 @@ describe('session-local.service', () => {
         });
 
         it('returns empty array for empty sessions directory', async () => {
-            // Create the directory but no files
-            const sessDir = path.join(tmpDir, '.kody', 'sessions');
+            const sessDir = await stateDirFor(tmpDir);
             await fs.mkdir(sessDir, { recursive: true });
 
             const stale = await listStaleSessions(tmpDir, ONE_HOUR_MS);
@@ -173,7 +189,7 @@ describe('session-local.service', () => {
 
         it('ignores non-json files in the directory', async () => {
             await saveLocal(tmpDir, 'real-sess', sampleData);
-            const sessDir = path.join(tmpDir, '.kody', 'sessions');
+            const sessDir = await stateDirFor(tmpDir);
             await fs.writeFile(
                 path.join(sessDir, 'README.txt'),
                 'not a session',
