@@ -1,6 +1,7 @@
 import { CloneParamsResolverService } from './services/clone-params-resolver.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
+import { CliReviewModule } from '@libs/cli-review/cli-review.module';
 
 // Stages
 import { AggregateResultsStage } from './stages/aggregate-result.stage';
@@ -107,6 +108,9 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         forwardRef(() => ForgejoModule),
         forwardRef(() => PermissionValidationModule),
         forwardRef(() => LicenseModule),
+        // Kodus Trace decisions for review context pack + sticky comment.
+        // forwardRef: CliReviewModule already imports CodeReviewPipelineModule.
+        forwardRef(() => CliReviewModule),
         // AgentReviewStage injects KodyRuleSummaryService (long-rule summary
         // swap for the shard judge). forwardRef: the kodyRules module reaches
         // back into code-review via CODE_BASE_CONFIG_SERVICE_TOKEN.

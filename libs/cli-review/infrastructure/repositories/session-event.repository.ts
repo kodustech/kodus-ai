@@ -33,6 +33,27 @@ export class SessionEventRepository {
         });
     }
 
+    /**
+     * Classified session_end events for a branch (decisions already extracted).
+     * Used by the review pipeline to build the Kodus Trace context pack.
+     */
+    async findClassifiedByBranch(
+        organizationId: string,
+        branch: string,
+        limit = 50,
+    ): Promise<SessionEventModel[]> {
+        return this.repo.find({
+            where: {
+                organizationId,
+                branch,
+                type: 'session_end',
+                classificationStatus: 'COMPLETED',
+            },
+            order: { classifiedAt: 'DESC' },
+            take: limit,
+        });
+    }
+
     async markClassificationProcessing(uuid: string): Promise<void> {
         await this.repo.update(uuid, {
             classificationStatus: 'PROCESSING',

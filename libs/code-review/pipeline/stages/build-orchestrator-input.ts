@@ -71,7 +71,14 @@ export function buildOrchestratorInput(
             message: c.commit?.message ?? '',
         })),
         // Free-text steering directive from `@kody review <directive>`.
-        reviewDirective: context.reviewDirective,
+        // When Kodus Trace has path-scoped decisions for the PR, append the
+        // rendered context pack so the finder treats deliberate tradeoffs as
+        // intentional (empty pack leaves the directive byte-identical).
+        reviewDirective: context.traceContextPack
+            ? [context.reviewDirective, context.traceContextPack]
+                  .filter(Boolean)
+                  .join('\n\n')
+            : context.reviewDirective,
         kodyRules: computed.kodyRules ?? context.codeReviewConfig?.kodyRules,
         reviewOptions: computed.reviewOptions,
         onAgentProgress: computed.onAgentProgress,

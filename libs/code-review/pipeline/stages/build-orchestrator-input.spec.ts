@@ -51,6 +51,32 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
         ).toBeUndefined();
     });
 
+    it('appends traceContextPack into reviewDirective so the agent sees decisions', () => {
+        const pack =
+            '## Kodus Trace — decisions for changed files\n\n- use JWT';
+        const input = buildOrchestratorInput(
+            makeContext({
+                reviewDirective: 'focus on auth',
+                traceContextPack: pack,
+            }),
+            computed,
+        );
+        expect(input.reviewDirective).toContain('focus on auth');
+        expect(input.reviewDirective).toContain('Kodus Trace');
+        expect(input.reviewDirective).toContain('use JWT');
+    });
+
+    it('is inert when traceContextPack is empty — directive unchanged', () => {
+        const input = buildOrchestratorInput(
+            makeContext({
+                reviewDirective: 'focus on auth',
+                traceContextPack: '',
+            }),
+            computed,
+        );
+        expect(input.reviewDirective).toBe('focus on auth');
+    });
+
     it('maps the load-bearing prompt fields from context', () => {
         const input = buildOrchestratorInput(
             makeContext({

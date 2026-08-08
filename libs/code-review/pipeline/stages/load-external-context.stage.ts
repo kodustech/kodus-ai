@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { ContextLayer } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 
 import { ILoadExternalContextStage } from './contracts/loadExternalContextStage.contract';
@@ -16,6 +16,13 @@ import {
     PROMPT_CONTEXT_LOADER_SERVICE_TOKEN,
 } from '@libs/ai-engine/domain/prompt/contracts/promptContextLoader.contract';
 import { CodeReviewContextPackService } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service';
+import {
+    injectTraceContextPack,
+    renderTraceContextPack,
+    selectTraceContextPack,
+    type TraceDecision,
+} from '@libs/cli-review/application/use-cases/trace-context-pack';
+import { GetTraceDecisionsForReviewUseCase } from '@libs/cli-review/application/use-cases/get-trace-decisions-for-review.use-case';
 
 @Injectable()
 export class LoadExternalContextStage
@@ -34,6 +41,8 @@ export class LoadExternalContextStage
         @Inject(PROMPT_CONTEXT_LOADER_SERVICE_TOKEN)
         private readonly promptContextLoader: IPromptContextLoaderService,
         private readonly contextPackService: CodeReviewContextPackService,
+        @Optional()
+        private readonly getTraceDecisions?: GetTraceDecisionsForReviewUseCase,
     ) {
         super();
     }
@@ -139,12 +148,61 @@ export class LoadExternalContextStage
                 }
             }
 
+            // --- Kodus Trace: load decisions for this branch and inject pack ---
+            const branch =
+                context.pullRequest?.head?.ref ||
+                context.branch ||
+                context.pullRequest?.base?.ref ||
+                '';
+            let loadedDecisions: TraceDecision[] = context.traceDecisions ?? [];
+            if (
+                loadedDecisions.length === 0 &&
+                this.getTraceDecisions &&
+                organizationId &&
+                branch
+            ) {
+                loadedDecisions = await this.getTraceDecisions.execute({
+                    organizationId,
+                    branch,
+                });
+            }
+
+            const changedPaths = (context.changedFiles ?? [])
+                .map(
+                    (f: { filename?: string; path?: string }) =>
+                        f.filename || f.path || '',
+                )
+                .filter(Boolean);
+            const selected = selectTraceContextPack(
+                loadedDecisions,
+                changedPaths,
+            );
+            const pack = renderTraceContextPack(selected);
+
+            // externalPromptContext: only mutated when pack is non-empty (inert otherwise)
+            let nextExternal = externalContext;
+            if (pack && nextExternal && typeof nextExternal === 'object') {
+                const asRecord = nextExternal as Record<string, unknown>;
+                const existingPrompt =
+                    typeof asRecord.traceContext === 'string'
+                        ? (asRecord.traceContext as string)
+                        : '';
+                nextExternal = {
+                    ...asRecord,
+                    traceContext: injectTraceContextPack(existingPrompt, pack),
+                };
+            } else if (pack) {
+                nextExternal = { traceContext: pack };
+            }
+
             return {
                 ...context,
                 codeReviewConfig: updatedCodeReviewConfig,
-                externalPromptContext: externalContext,
+                externalPromptContext: nextExternal,
                 externalPromptLayers: contextLayers,
                 sharedContextPack,
+                traceDecisions: selected,
+                traceContextPack: pack || undefined,
             };
         } catch (error) {
             this.logger.error({

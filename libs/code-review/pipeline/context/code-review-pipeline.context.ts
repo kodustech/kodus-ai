@@ -96,6 +96,25 @@ export interface CodeReviewPipelineContext extends PipelineContext {
     /** Arquivos filtrados COM conteúdo - após aplicar ignorePaths no FetchChangedFilesStage */
     changedFiles?: FileChange[];
 
+    /**
+     * Kodus Trace decisions loaded for the PR branch (from session_events).
+     * Path-scoped into the review context pack; empty means inert (no prompt change).
+     */
+    traceDecisions?: Array<{
+        id: string;
+        type: string;
+        decision: string;
+        rationale?: string;
+        confidence?: number;
+        evidence?: string[];
+        paths?: string[];
+        pinned?: boolean;
+        forgotten?: boolean;
+    }>;
+
+    /** Rendered context-pack block for agent prompt injection (empty when none). */
+    traceContextPack?: string;
+
     /** List of files ignored by configuration patterns */
     ignoredFiles?: string[];
 
