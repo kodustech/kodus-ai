@@ -1,14 +1,9 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import type { MatrixCell, Scenario } from "../types.js";
-
-function appliesToCell(scenario: Scenario, cell: MatrixCell): boolean {
-    const at = scenario.appliesTo;
-    if (at.target && !at.target.includes(cell.target)) return false;
-    if (at.provider && !at.provider.includes(cell.provider)) return false;
-    if (at.license && !at.license.includes(cell.license)) return false;
-    return true;
-}
+// Import the SHIPPED implementation. This file used to re-declare its own
+// copy, so the test could stay green while the real matcher drifted.
+import { appliesToCell } from "../runner.js";
 
 const dummyRun = async () => ({});
 

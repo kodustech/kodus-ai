@@ -99,6 +99,27 @@ jobs:
             cells: ${{ steps.gen.outputs.cells }}
             image_tag: ${{ steps.tag.outputs.image_tag }}
         steps:
+            # Validate the matrix file BEFORE anything is provisioned. A cell
+            # whose appliesTo excludes every scenario has nothing to run, and
+            # used to surface only at the END of the job -- after a droplet had
+            # been created and ~15 minutes spent -- as an inconclusive run with
+            # zero results. Here it costs seconds and names the cell.
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            - name: Validate matrix configuration
+              working-directory: tests/e2e
+              run: ./node_modules/.bin/tsx cli/run-matrix.ts "${{ inputs.matrix_file || 'matrix/fast.yml' }}" --validate
+
             # The release train passes the RC tag it just built. The cron has
             # no tag to pass, so it tests the newest published self-hosted
             # release — "is the thing customers actually run still working?",

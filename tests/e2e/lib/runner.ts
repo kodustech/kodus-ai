@@ -18,6 +18,7 @@ import { makeProvider } from "../providers/index.js";
 import {
     makeGithubTokenPicker,
     preflightGithubRateLimits,
+    preflightIntegrationToken,
 } from "./github-token-pool.js";
 import { githubAppToken } from "./github-app-token.js";
 import {
@@ -53,7 +54,10 @@ export interface RunOutcome {
     results: ScenarioResult[];
 }
 
-function appliesToCell(scenario: Scenario, cell: MatrixCell): boolean {
+export function appliesToCell(
+    scenario: Scenario,
+    cell: MatrixCell,
+): boolean {
     const at = scenario.appliesTo;
     if (at.target && !at.target.includes(cell.target)) return false;
     if (at.provider && !at.provider.includes(cell.provider)) return false;
@@ -530,6 +534,12 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // visible before the cells run instead of as an opaque mid-run 403 cascade.
     if (!opts.dryRun && opts.cells.some((c) => c.provider === "github")) {
         await preflightGithubRateLimits(log);
+        // …and the credential the PRODUCT stores, which the pool preflight
+        // never looked at. It is a DIFFERENT account (or, when
+        // GH_INTEGRATION_TOKEN is unset, silently the same one), and it is the
+        // one /code-management/auth-integration validates against GitHub —
+        // the exact call that exhausted run 31270321822 on its first scenario.
+        await preflightIntegrationToken(log);
     }
 
     // Cloud tenants are seeded ONCE (setup-tenants) and persist their BYOK

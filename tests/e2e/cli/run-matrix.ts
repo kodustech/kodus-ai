@@ -10,7 +10,7 @@ import {
     priorityOf,
     unverifiedP0,
 } from "../lib/verdict.js";
-import { runMatrix } from "../lib/runner.js";
+import { appliesToCell, runMatrix } from "../lib/runner.js";
 import { summarize, writeAll } from "../lib/evidence.js";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -36,6 +36,7 @@ function parseArgs(): {
     targetFilter?: Target;
     dryRun: boolean;
     skipMissingTokens: boolean;
+    validate: boolean;
 } {
     const args = process.argv.slice(2);
     const positional: string[] = [];
@@ -43,7 +44,7 @@ function parseArgs(): {
     // Flags that take no value — treat them as booleans even if a positional
     // follows. Without this list the naive lookahead consumes the matrix path
     // as the value of `--skip-missing-tokens`.
-    const booleanFlags = new Set(["dry-run", "skip-missing-tokens"]);
+    const booleanFlags = new Set(["dry-run", "skip-missing-tokens", "validate"]);
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
         if (a.startsWith("--")) {
@@ -62,7 +63,7 @@ function parseArgs(): {
     const matrixPath = (flags.matrix as string) ?? positional[0];
     if (!matrixPath) {
         console.error(
-            "usage: run-matrix <matrix.yml> [--target cloud|self-hosted] [--dry-run] [--skip-missing-tokens]",
+            "usage: run-matrix <matrix.yml> [--target cloud|self-hosted] [--dry-run] [--skip-missing-tokens] [--validate]",
         );
         process.exit(2);
     }
@@ -71,6 +72,7 @@ function parseArgs(): {
         targetFilter: flags.target as Target | undefined,
         dryRun: Boolean(flags["dry-run"]),
         skipMissingTokens: Boolean(flags["skip-missing-tokens"]),
+        validate: Boolean(flags.validate),
     };
 }
 
@@ -162,7 +164,8 @@ function missingScenarioRequirements(scenarioId: string): string[] {
 }
 
 async function main() {
-    const { matrixPath, targetFilter, dryRun, skipMissingTokens } = parseArgs();
+    const { matrixPath, targetFilter, dryRun, skipMissingTokens, validate } =
+        parseArgs();
     const raw = readFileSync(matrixPath, "utf8");
     const matrix = parseYaml(raw) as MatrixFile;
 
@@ -170,6 +173,46 @@ async function main() {
     let cells = targetFilter
         ? matrix.cells.filter((c) => c.target === targetFilter)
         : matrix.cells;
+
+    // ---- Config validation (cheap, no provisioning) ----------------------
+    // A cell whose appliesTo excludes every scenario has nothing to run. That
+    // is a matrix CONFIG error, not a test result — but until now the only way
+    // it surfaced was at the END of a run: the self-hosted job provisioned a
+    // droplet, waited ~15 minutes, skipped all 13 scenarios and reported
+    // INCONCLUSIVE. Catch it here, before anything is provisioned, and say
+    // exactly which cell and what to do about it.
+    //
+    // `--validate` makes this the whole job: the workflow's plan step runs it
+    // and fails fast, so a mis-specified matrix never costs a droplet.
+    const emptyCells = cells.filter(
+        (cell) => !scenarios.some((s) => appliesToCell(s, cell)),
+    );
+    if (emptyCells.length > 0) {
+        log.err(
+            `Matrix ${matrix.id}: ${emptyCells.length} cell(s) have ZERO applicable scenarios. They would provision, run nothing, and report inconclusive:`,
+        );
+        for (const cell of emptyCells) {
+            log.err(
+                `  - ${cell.target} × ${cell.provider} × ${cell.license} — 0/${scenarios.length} scenarios apply`,
+            );
+        }
+        log.err(
+            "Fix the matrix file: either give one of its scenarios an appliesTo that covers this cell, or remove the cell.",
+        );
+        process.exit(EXIT_CONFIG);
+    }
+    if (validate) {
+        log.ok(
+            `Matrix ${matrix.id} is coherent: every one of the ${cells.length} cell(s) has at least one applicable scenario.`,
+        );
+        for (const cell of cells) {
+            const n = scenarios.filter((s) => appliesToCell(s, cell)).length;
+            log.info(
+                `  ${cell.target} × ${cell.provider} × ${cell.license}: ${n}/${scenarios.length}`,
+            );
+        }
+        return;
+    }
 
     let preSkipped: Array<{ cell: MatrixCell; missing: string[] }> = [];
     let scenarioSkipped: Array<{ scenarioId: string; missing: string[] }> = [];
@@ -456,6 +499,9 @@ async function main() {
 //   3  inconclusive — nothing broke, but P0 coverage did not run
 const EXIT_RED = 1;
 const EXIT_INCONCLUSIVE = 3;
+// Matrix file is mis-specified — a cell nothing can run. Same class as bad
+// args, so it shares the usage exit code.
+const EXIT_CONFIG = 2;
 
 
 function firstLine(message?: string): string {
