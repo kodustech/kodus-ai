@@ -18,11 +18,17 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             updateOverallComment: jest.fn().mockResolvedValue(undefined),
             createComment: jest.fn().mockResolvedValue(undefined),
         } as any;
+        const codeManagementService = {
+            getAllCommentsInPullRequest: jest.fn().mockResolvedValue([]),
+            createIssueComment: jest.fn().mockResolvedValue(undefined),
+            updateIssueComment: jest.fn().mockResolvedValue(undefined),
+        } as any;
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any, // pullRequestManagerService — unused when summary is off
+            codeManagementService,
         );
-        return { stage, commentManagerService };
+        return { stage, commentManagerService, codeManagementService };
     };
 
     const lineComments = [
@@ -228,5 +234,111 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         // summary still rendered "review completed" (#1568).
         const args = commentManagerService.updateOverallComment.mock.calls[0];
         expect(args[13]).toBe(true); // reviewHasPartialErrors
+    });
+});
+
+
+describe('UpdateCommentsAndGenerateSummaryStage - Kodus Trace sticky', () => {
+    const makeStage = () => {
+        const commentManagerService = {
+            processEndReviewMessageTemplate: jest
+                .fn()
+                .mockResolvedValue('rendered body'),
+            updateOverallComment: jest.fn().mockResolvedValue(undefined),
+            createComment: jest.fn().mockResolvedValue(undefined),
+        } as any;
+        const codeManagementService = {
+            getAllCommentsInPullRequest: jest.fn().mockResolvedValue([]),
+            createIssueComment: jest.fn().mockResolvedValue(undefined),
+            updateIssueComment: jest.fn().mockResolvedValue(undefined),
+        } as any;
+        const stage = new UpdateCommentsAndGenerateSummaryStage(
+            commentManagerService,
+            {} as any,
+            codeManagementService,
+        );
+        return { stage, codeManagementService };
+    };
+
+    const baseContext = (over: Record<string, unknown> = {}) =>
+        frozenContext({
+            lastExecution: undefined,
+            errors: [],
+            codeReviewConfig: { languageResultPrompt: 'en-US' },
+            repository: { id: 'r', name: 'repo' },
+            pullRequest: { number: 7, head: { ref: 'feat/x' } },
+            organizationAndTeamData: { organizationId: 'o', teamId: 't' },
+            platformType: 'GITHUB',
+            initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
+            changedFiles: [],
+            dryRun: { enabled: false },
+            lineComments: [],
+            pullRequestMessagesConfig: {
+                startReviewMessage: {
+                    status: PullRequestMessageStatus.ACTIVE,
+                    content: 'start',
+                },
+                endReviewMessage: {
+                    status: PullRequestMessageStatus.ACTIVE,
+                    content: 'end',
+                },
+            },
+            ...over,
+        }) as any;
+
+    it('does not post a sticky comment when there are no trace decisions', async () => {
+        const { stage, codeManagementService } = makeStage();
+        await (stage as any).executeStage(
+            baseContext({ traceDecisions: [] }),
+        );
+        expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
+        expect(codeManagementService.updateIssueComment).not.toHaveBeenCalled();
+    });
+
+    it('creates a sticky comment when decisions exist and no marker is present', async () => {
+        const { stage, codeManagementService } = makeStage();
+        await (stage as any).executeStage(
+            baseContext({
+                traceDecisions: [
+                    {
+                        id: 'd1',
+                        type: 'tradeoff',
+                        decision: 'Chose consistency',
+                        paths: ['src/a.ts'],
+                    },
+                ],
+            }),
+        );
+        expect(codeManagementService.createIssueComment).toHaveBeenCalled();
+        const body =
+            codeManagementService.createIssueComment.mock.calls[0][0].body;
+        expect(body).toContain('kodus-trace-decisions');
+        expect(body).toContain('Chose consistency');
+    });
+
+    it('updates the existing marker comment in place on re-runs', async () => {
+        const { stage, codeManagementService } = makeStage();
+        codeManagementService.getAllCommentsInPullRequest.mockResolvedValue([
+            {
+                id: 99,
+                body: '<!-- kodus-trace-decisions -->\nold body',
+            },
+        ]);
+        await (stage as any).executeStage(
+            baseContext({
+                traceDecisions: [
+                    {
+                        id: 'd2',
+                        type: 'convention',
+                        decision: 'New decision',
+                    },
+                ],
+            }),
+        );
+        expect(codeManagementService.updateIssueComment).toHaveBeenCalled();
+        expect(
+            codeManagementService.updateIssueComment.mock.calls[0][0].commentId,
+        ).toBe(99);
+        expect(codeManagementService.createIssueComment).not.toHaveBeenCalled();
     });
 });

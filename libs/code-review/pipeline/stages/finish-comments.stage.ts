@@ -22,6 +22,8 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { planTraceStickyComment } from '@libs/cli-review/application/use-cases/trace-sticky-comment';
 
 @Injectable()
 export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -38,6 +40,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         private readonly commentManagerService: ICommentManagerService,
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
         private readonly pullRequestManagerService: IPullRequestManagerService,
+        private readonly codeManagementService: CodeManagementService,
     ) {
         super();
     }
@@ -45,6 +48,7 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
     protected async executeStage(
         context: CodeReviewPipelineContext,
     ): Promise<CodeReviewPipelineContext> {
+        try {
         const {
             lastExecution,
             codeReviewConfig,
@@ -386,5 +390,110 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         }
 
         return context;
+        } finally {
+            // Always attempt sticky post/update (fail-open inside helper).
+            await this.postOrUpdateTraceStickyComment(context);
+        }
+    }
+
+    /**
+     * Posts or updates the sticky Kodus Trace comment on the PR.
+     * Fail-open: never blocks the review pipeline.
+     */
+    private async postOrUpdateTraceStickyComment(
+        context: CodeReviewPipelineContext,
+    ): Promise<void> {
+        try {
+            if (context.dryRun?.enabled) {
+                return;
+            }
+
+            const decisions = (context.traceDecisions ?? []).map((d) => ({
+                id: d.id,
+                type: d.type,
+                decision: d.decision,
+                rationale: d.rationale,
+                paths: d.paths,
+            }));
+
+            let existingComments: Array<{ id: string | number; body: string }> =
+                [];
+            try {
+                const raw =
+                    await this.codeManagementService.getAllCommentsInPullRequest(
+                        {
+                            organizationAndTeamData:
+                                context.organizationAndTeamData,
+                            repository: context.repository,
+                            prNumber: context.pullRequest.number,
+                        },
+                        context.platformType,
+                    );
+                existingComments = (raw ?? [])
+                    .map((c: any) => ({
+                        id: c?.id ?? c?.commentId ?? c?.noteId,
+                        body: String(c?.body ?? c?.note ?? c?.content ?? ''),
+                    }))
+                    .filter((c) => c.id != null);
+            } catch {
+                existingComments = [];
+            }
+
+            const plan = planTraceStickyComment({
+                decisions,
+                existingComments,
+                branch:
+                    context.pullRequest?.head?.ref ||
+                    context.branch ||
+                    undefined,
+            });
+
+            if (plan.action === 'skip') {
+                return;
+            }
+
+            if (plan.action === 'update') {
+                await this.codeManagementService.updateIssueComment(
+                    {
+                        organizationAndTeamData:
+                            context.organizationAndTeamData,
+                        repository: {
+                            name: context.repository.name,
+                            id: String(context.repository.id),
+                        },
+                        prNumber: context.pullRequest.number,
+                        body: plan.body,
+                        commentId: Number(plan.commentId),
+                        dryRun: context.dryRun,
+                    },
+                    context.platformType,
+                );
+                return;
+            }
+
+            await this.codeManagementService.createIssueComment(
+                {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    repository: {
+                        name: context.repository.name,
+                        id: String(context.repository.id),
+                    },
+                    prNumber: context.pullRequest.number,
+                    body: plan.body,
+                    dryRun: context.dryRun,
+                },
+                context.platformType,
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to post/update Kodus Trace sticky comment (fail-open)',
+                context: this.stageName,
+                error: error instanceof Error ? error.message : String(error),
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+        }
     }
 }
