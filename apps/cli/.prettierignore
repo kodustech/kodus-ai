@@ -4,3 +4,8 @@ coverage
 .vitest
 .DS_Store
 install.ps1
+
+# pnpm owns these. Reformatting them makes `pnpm check` fight `pnpm install`,
+# and the reformatted lockfile is a 9k-line diff nobody can review.
+pnpm-lock.yaml
+pnpm-workspace.yaml
