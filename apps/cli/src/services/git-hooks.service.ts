@@ -1,37 +1,52 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-const KODY_CHECKPOINT_MARKER = '# kodus-session-hooks';
-const KODY_CHECKPOINT_END_MARKER = '# /kodus-session-hooks';
+export const TRACE_HOOK_MARKER = '# kodus-trace';
+export const TRACE_HOOK_END_MARKER = '# /kodus-trace';
 
+/** Hook blocks written by the release this work replaces. */
+const LEGACY_MARKERS = ['# kodus-session-hooks'];
+const LEGACY_END_MARKERS = ['# /kodus-session-hooks'];
+
+/**
+ * Commit linkage uses a trailer rather than git notes: notes are not pushed or
+ * fetched without extra refspec configuration and are orphaned by rebase, while
+ * a trailer is part of the message and is therefore rewritten with it.
+ */
 const PREPARE_COMMIT_MSG_SCRIPT = `
-${KODY_CHECKPOINT_MARKER}
-# Add Kody-Checkpoint trailer to commit messages
-KODY_SESSION_DIR="$(git rev-parse --git-common-dir 2>/dev/null)/kody-sessions"
-if [ -d "$KODY_SESSION_DIR" ]; then
-  ACTIVE_SESSION=$(ls -t "$KODY_SESSION_DIR"/*.json 2>/dev/null | head -1)
-  if [ -n "$ACTIVE_SESSION" ]; then
-    SESSION_ID=$(basename "$ACTIVE_SESSION" .json)
-    SHORT_ID=$(echo "$SESSION_ID" | cut -c1-12)
-    if ! grep -q "Kody-Checkpoint:" "$1" 2>/dev/null; then
-      echo "" >> "$1"
-      echo "Kody-Checkpoint: $SHORT_ID" >> "$1"
+${TRACE_HOOK_MARKER}
+# Add the Kodus-Trace trailer linking this commit to its captured session.
+if command -v kodus >/dev/null 2>&1; then
+  if ! grep -q '^Kodus-Trace:' "$1" 2>/dev/null; then
+    KODUS_TRACE_TRAILER="$(kodus trace commit-trailer 2>/dev/null)"
+    if [ -n "$KODUS_TRACE_TRAILER" ]; then
+      printf '\\n%s\\n' "$KODUS_TRACE_TRAILER" >> "$1"
     fi
   fi
 fi
-${KODY_CHECKPOINT_END_MARKER}
+${TRACE_HOOK_END_MARKER}
 `.trimStart();
 
-const POST_COMMIT_SCRIPT = `
-${KODY_CHECKPOINT_MARKER}
-# Notify kodus of git commit for checkpoint condensation
-kodus sessions hooks claude-code stop 2>/dev/null &
-${KODY_CHECKPOINT_END_MARKER}
+/**
+ * Distillation runs here, not in the commit hook, so `git commit` stays fast —
+ * and it is detached so `git push` never waits on a model.
+ */
+const PRE_PUSH_SCRIPT = `
+${TRACE_HOOK_MARKER}
+# Distill the pushed branch into decisions. Detached: the push does not wait.
+if [ -z "$KODUS_TRACE_SKIP" ] && command -v kodus >/dev/null 2>&1; then
+  KODUS_TRACE_BRANCH="$(git symbolic-ref --short HEAD 2>/dev/null)"
+  if [ -n "$KODUS_TRACE_BRANCH" ]; then
+    (kodus trace distill --branch "$KODUS_TRACE_BRANCH" >/dev/null 2>&1 &) </dev/null
+  fi
+fi
+${TRACE_HOOK_END_MARKER}
 `.trimStart();
 
 class GitHooksService {
     /**
-     * Install prepare-commit-msg and post-commit hooks for checkpoint tracking.
+     * Install the prepare-commit-msg (trailer) and pre-push (distillation)
+     * hooks.
      *
      * `hooksDir` must be the directory git actually executes hooks from —
      * resolve it with `gitService.getHooksDir()` rather than joining
@@ -55,37 +70,32 @@ class GitHooksService {
             installed.push('prepare-commit-msg');
         }
 
-        const postResult = await this.installHook(
+        const pushResult = await this.installHook(
             hooksDir,
-            'post-commit',
-            POST_COMMIT_SCRIPT,
+            'pre-push',
+            PRE_PUSH_SCRIPT,
         );
-        if (postResult.alreadyInstalled) {
-            alreadyInstalled.push('post-commit');
+        if (pushResult.alreadyInstalled) {
+            alreadyInstalled.push('pre-push');
         } else {
-            installed.push('post-commit');
+            installed.push('pre-push');
         }
 
         return { installed, alreadyInstalled };
     }
 
-    /**
-     * Remove kodus session hooks from prepare-commit-msg and post-commit.
-     */
+    /** Remove kodus trace blocks (and any left by the previous release). */
     async uninstall(hooksDir: string): Promise<{ removed: string[] }> {
         const removed: string[] = [];
 
-        const prepareResult = await this.removeHook(
-            hooksDir,
+        for (const hookName of [
             'prepare-commit-msg',
-        );
-        if (prepareResult) {
-            removed.push('prepare-commit-msg');
-        }
-
-        const postResult = await this.removeHook(hooksDir, 'post-commit');
-        if (postResult) {
-            removed.push('post-commit');
+            'pre-push',
+            'post-commit',
+        ]) {
+            if (await this.removeHook(hooksDir, hookName)) {
+                removed.push(hookName);
+            }
         }
 
         return { removed };
@@ -107,16 +117,18 @@ class GitHooksService {
             }
         }
 
-        if (existing.includes(KODY_CHECKPOINT_MARKER)) {
+        // A hook from the previous release has to go before ours lands, or the
+        // file ends up running both.
+        existing = stripBlocks(existing, LEGACY_MARKERS, LEGACY_END_MARKERS);
+
+        if (existing.includes(TRACE_HOOK_MARKER)) {
             return { hookPath, alreadyInstalled: true };
         }
 
-        let content: string;
-        if (existing.trim().length === 0) {
-            content = `#!/bin/sh\n${script}`;
-        } else {
-            content = `${existing.replace(/\s*$/, '')}\n\n${script}`;
-        }
+        const content =
+            existing.trim().length === 0
+                ? `#!/bin/sh\n${script}`
+                : `${existing.replace(/\s*$/, '')}\n\n${script}`;
 
         await fs.mkdir(path.dirname(hookPath), { recursive: true });
         await fs.writeFile(hookPath, content, { mode: 0o755 });
@@ -137,32 +149,15 @@ class GitHooksService {
             return false;
         }
 
-        if (!content.includes(KODY_CHECKPOINT_MARKER)) {
+        const markers = [TRACE_HOOK_MARKER, ...LEGACY_MARKERS];
+        if (!markers.some((marker) => content.includes(marker))) {
             return false;
         }
 
-        const lines = content.split('\n');
-        const startIdx = lines.findIndex(
-            (line) => line.trim() === KODY_CHECKPOINT_MARKER,
-        );
-        if (startIdx === -1) {
-            return false;
-        }
-
-        const endIdx = lines.findIndex(
-            (line, idx) =>
-                idx > startIdx && line.trim() === KODY_CHECKPOINT_END_MARKER,
-        );
-
-        const filtered =
-            endIdx === -1
-                ? lines.slice(0, startIdx)
-                : [...lines.slice(0, startIdx), ...lines.slice(endIdx + 1)];
-
-        const remaining = filtered
-            .join('\n')
-            .replace(/\n{3,}/g, '\n\n')
-            .replace(/\n*$/, '\n');
+        const remaining = stripBlocks(content, markers, [
+            TRACE_HOOK_END_MARKER,
+            ...LEGACY_END_MARKERS,
+        ]);
 
         if (remaining.trim() === '#!/bin/sh' || remaining.trim() === '') {
             await fs.unlink(hookPath);
@@ -174,4 +169,46 @@ class GitHooksService {
     }
 }
 
+/**
+ * Remove every `<marker> … <endMarker>` block from a hook script, leaving any
+ * hand-written content around it intact.
+ */
+export function stripBlocks(
+    content: string,
+    markers: string[],
+    endMarkers: string[],
+): string {
+    if (!content) {
+        return content;
+    }
+
+    let lines = content.split('\n');
+
+    // A hook file can hold more than one of our blocks (an upgrade path that
+    // appended twice, say), so keep going until none are left.
+    for (;;) {
+        const startIdx = lines.findIndex((line) =>
+            markers.includes(line.trim()),
+        );
+        if (startIdx === -1) {
+            break;
+        }
+
+        const endIdx = lines.findIndex(
+            (line, idx) => idx > startIdx && endMarkers.includes(line.trim()),
+        );
+
+        lines =
+            endIdx === -1
+                ? lines.slice(0, startIdx)
+                : [...lines.slice(0, startIdx), ...lines.slice(endIdx + 1)];
+    }
+
+    return lines
+        .join('\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/\n*$/, '\n');
+}
+
 export const gitHooksService = new GitHooksService();
+export { PREPARE_COMMIT_MSG_SCRIPT, PRE_PUSH_SCRIPT };
