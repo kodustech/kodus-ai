@@ -95,19 +95,28 @@ function toTraceToolCalls(
 ): TraceToolCallRecord[] {
     return toolCalls.slice(0, 200).map((call) => ({
         toolName: call.toolName,
-        summary: summarizeToolInput(call),
+        summary: summarizeToolInput(repoRoot, call),
         fileAffected: call.fileAffected
             ? toRepoRelative(repoRoot, call.fileAffected)
             : undefined,
     }));
 }
 
-function summarizeToolInput(call: ToolCall): string | undefined {
+function summarizeToolInput(
+    repoRoot: string,
+    call: ToolCall,
+): string | undefined {
     const input = call.input ?? {};
+
+    // A shell command is quoted verbatim; a path is rewritten repo-relative
+    // like every other path this feature stores.
+    const command = pickInputString(input, 'command');
+    const filePath =
+        pickInputString(input, 'file_path') ?? pickInputString(input, 'path');
+
     const candidate =
-        pickInputString(input, 'command') ??
-        pickInputString(input, 'file_path') ??
-        pickInputString(input, 'path') ??
+        command ??
+        (filePath ? toRepoRelative(repoRoot, filePath) : undefined) ??
         pickInputString(input, 'pattern') ??
         pickInputString(input, 'description');
 
