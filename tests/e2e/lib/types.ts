@@ -349,6 +349,18 @@ export interface MatrixCell {
     target: Target;
     provider: ProviderName;
     license: LicenseMode;
+    /**
+     * Restrict this cell to a specific set of scenarios.
+     *
+     * Exists for CANARY cells: once the matrix moves to GitHub App auth, one
+     * cell stays on a PAT purely to prove the token path still works, and it
+     * should run a single review scenario rather than the whole suite. Without
+     * this the only way to express that was a separate matrix file, which
+     * drifts from the real one.
+     *
+     * Omitted → every scenario whose appliesTo matches the cell.
+     */
+    only?: string[];
 }
 
 export interface MatrixConfig {

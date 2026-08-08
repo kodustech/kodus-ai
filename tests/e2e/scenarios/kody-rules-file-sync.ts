@@ -91,7 +91,7 @@ export const kodyRulesFileSync: Scenario = {
     priority: 'P0',
     appliesTo: {
         target: ['cloud', 'self-hosted'],
-        provider: ['github'],
+        provider: ['github', 'github-app'],
         license: ['paid', 'license-paid'],
     },
     timeoutSec: 1800,

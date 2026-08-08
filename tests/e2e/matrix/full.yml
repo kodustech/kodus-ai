@@ -111,7 +111,22 @@ scenarios:
     - conversation-vertex-byok
 
 cells:
-    # ---------- self-hosted (mirrors fast.yml) ----------
+    # ---------- self-hosted ----------
+    # NOTE: self-hosted github stays on a PAT, and that is a constraint, not a
+    # preference.
+    #
+    # A GitHub App's webhook URL is configured ONCE at App-registration level
+    # and GitHub delivers to it for every installation. Self-hosted cells boot
+    # an ephemeral droplet behind a fresh cloudflared tunnel each run, so an
+    # App would deliver events to whatever URL the App happens to point at —
+    # not to this run's stack. Making it work needs either PATCH /app/hook/config
+    # per run (which serialises every self-hosted cell onto one App) or a
+    # repo-level hook created by the installation. Until one of those exists,
+    # the PAT is the only auth mode that can receive events here.
+    #
+    # The quota pain is already halved regardless: the HARNESS drives on an App
+    # installation token (see runner.ts), so only the product's integration
+    # credential and PR authorship still spend PAT budget.
     - target: self-hosted
       provider: github
       license: license-paid
@@ -124,39 +139,36 @@ cells:
     - target: self-hosted
       provider: azure-devops
       license: license-paid
-    - target: self-hosted
-      provider: github
-      license: license-free
-
-    # ---------- cloud (mirrors fast.yml) ----------
-    - target: cloud
-      provider: github
-      license: paid
-    - target: cloud
-      provider: gitlab
-      license: paid
-    - target: cloud
-      provider: bitbucket
-      license: paid
-    - target: cloud
-      provider: azure-devops
-      license: paid
-    - target: cloud
-      provider: github
-      license: free
-    - target: cloud
-      provider: github
-      license: trial
-    # Community plan: post-trial tenant that configured its own LLM API
-    # key (BYOK). Free in Stripe terms but reviews still work (with the
-    # 10-rule limit). Distinct from `free` (= trial expired, no BYOK,
-    # gate blocks).
-    - target: cloud
-      provider: github
-      license: community-byok
-    # GitHub App (OAuth installation) variant. Same rationale as in
-    # fast.yml — covers the authenticateWithCodeOauth code path that
-    # the PAT cells don't exercise. Cloud-only.
+    # ---------- cloud ----------
     - target: cloud
       provider: github-app
       license: paid
+    - target: cloud
+      provider: gitlab
+      license: paid
+    - target: cloud
+      provider: bitbucket
+      license: paid
+    - target: cloud
+      provider: azure-devops
+      license: paid
+    - target: cloud
+      provider: github-app
+      license: free
+    - target: cloud
+      provider: github-app
+      license: trial
+    # Community plan: post-trial tenant that configured its own LLM API key
+    # (BYOK). Free in Stripe terms but reviews still work (with the 10-rule
+    # limit). Distinct from `free` (= trial expired, no BYOK, gate blocks).
+    - target: cloud
+      provider: github-app
+      license: community-byok
+    # PAT canary, cloud side. Same rationale as the self-hosted one: the
+    # cloud auth path (authenticateWithToken) differs from the App path
+    # (authenticateWithCodeOauth), so both need a live check.
+    - target: cloud
+      provider: github
+      license: paid
+      only:
+          - code-review-basic

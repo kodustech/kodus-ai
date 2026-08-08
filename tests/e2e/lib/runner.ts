@@ -58,6 +58,10 @@ export function appliesToCell(
     scenario: Scenario,
     cell: MatrixCell,
 ): boolean {
+    // A cell may pin itself to a subset of scenarios (canary cells — see
+    // MatrixCell.only). Checked first: it narrows, never widens, so a scenario
+    // whose appliesTo excludes the cell still cannot run here.
+    if (cell.only && !cell.only.includes(scenario.id)) return false;
     const at = scenario.appliesTo;
     if (at.target && !at.target.includes(cell.target)) return false;
     if (at.provider && !at.provider.includes(cell.provider)) return false;

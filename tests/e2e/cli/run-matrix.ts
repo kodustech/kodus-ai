@@ -201,6 +201,27 @@ async function main() {
         );
         process.exit(EXIT_CONFIG);
     }
+    // The mirror check: a scenario listed in the matrix that NO cell can run.
+    // Silent coverage loss, and the exact thing that just happened — moving the
+    // cloud github cells to the App orphaned stripe-billing, which is pinned to
+    // `github`. The cell-side check would never have caught it: every cell still
+    // had work, the scenario just stopped having a home.
+    const orphanScenarios = scenarios.filter(
+        (s) => !cells.some((cell) => appliesToCell(s, cell)),
+    );
+    if (orphanScenarios.length > 0) {
+        log.err(
+            `Matrix ${matrix.id}: ${orphanScenarios.length} scenario(s) have ZERO cells to run on. They are listed but never execute:`,
+        );
+        for (const s of orphanScenarios) {
+            log.err(`  - ${s.id} (appliesTo: ${JSON.stringify(s.appliesTo)})`);
+        }
+        log.err(
+            "Fix the matrix file: widen the scenario's appliesTo, or add a cell it matches, or drop it from the scenario list.",
+        );
+        process.exit(EXIT_CONFIG);
+    }
+
     if (validate) {
         log.ok(
             `Matrix ${matrix.id} is coherent: every one of the ${cells.length} cell(s) has at least one applicable scenario.`,

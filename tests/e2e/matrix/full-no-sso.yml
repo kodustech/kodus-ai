@@ -71,9 +71,6 @@ cells:
     - target: self-hosted
       provider: azure-devops
       license: license-paid
-    - target: self-hosted
-      provider: github
-      license: license-free
 
     # ---------- cloud (mirrors fast.yml) ----------
     - target: cloud
@@ -91,9 +88,6 @@ cells:
     - target: cloud
       provider: github
       license: free
-    - target: cloud
-      provider: github
-      license: trial
     # Community plan: post-trial tenant that configured its own LLM API
     # key (BYOK). Free in Stripe terms but reviews still work (with the
     # 10-rule limit). Distinct from `free` (= trial expired, no BYOK,

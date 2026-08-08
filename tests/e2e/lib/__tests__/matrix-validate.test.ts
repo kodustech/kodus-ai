@@ -31,18 +31,6 @@ const MATRIX_DIR = join(import.meta.dirname, "../../matrix");
  *     cloud × github × trial — these files carry a narrowed scenario list
  *     that happens to exclude every trial-scoped scenario.
  */
-const KNOWN_UNCOVERED: Record<string, string[]> = {
-    "fast.yml": ["self-hosted × github × license-free"],
-    "full.yml": ["self-hosted × github × license-free"],
-    "full-no-sso.yml": [
-        "self-hosted × github × license-free",
-        "cloud × github × trial",
-    ],
-    "repaired-cells.yml": ["self-hosted × github × license-free"],
-    "cloud-reflake.yml": ["cloud × github × trial"],
-    "cloud-reflake-2.yml": ["cloud × github × trial"],
-};
-
 function cellsWithNoScenario(file: string): string[] {
     const m = parse(readFileSync(join(MATRIX_DIR, file), "utf8")) as {
         scenarios: string[];
@@ -56,32 +44,65 @@ function cellsWithNoScenario(file: string): string[] {
         .map((c) => `${c.target} × ${c.provider} × ${c.license}`);
 }
 
-test("no matrix file grows a new cell that nothing can run", () => {
+test("every cell in every matrix file has something to run", () => {
     const files = readdirSync(MATRIX_DIR).filter((f) => f.endsWith(".yml"));
     assert.ok(files.length > 0, "no matrix files found");
 
-    const actual: Record<string, string[]> = {};
+    const offenders: string[] = [];
     for (const file of files) {
-        const uncovered = cellsWithNoScenario(file);
-        if (uncovered.length) actual[file] = uncovered;
+        for (const cell of cellsWithNoScenario(file)) {
+            offenders.push(`${file}: ${cell}`);
+        }
     }
 
     assert.deepEqual(
-        actual,
-        KNOWN_UNCOVERED,
-        "matrix coverage changed. A cell that appeared here provisions and runs nothing — " +
-            "cover it or remove it. A cell that disappeared is fixed — drop it from KNOWN_UNCOVERED.",
+        offenders,
+        [],
+        `these cells would provision infrastructure and run nothing:\n${offenders.join("\n")}\n` +
+            "Cover the cell with a scenario, or remove it from the matrix file.",
     );
 });
 
-test("the release-gating matrices are the ones that matter", () => {
-    // fast.yml and full.yml gate releases; the rest are ad-hoc debug files.
-    // Kept as a separate assertion so the gap that actually costs a red
-    // release run is called out by name.
-    assert.deepEqual(cellsWithNoScenario("fast.yml"), [
-        "self-hosted × github × license-free",
-    ]);
-    assert.deepEqual(cellsWithNoScenario("full.yml"), [
-        "self-hosted × github × license-free",
-    ]);
+test("the release-gating matrices are clean", () => {
+    // fast.yml and full.yml gate releases; called out separately so a
+    // regression there is unmistakable in the failure output.
+    assert.deepEqual(cellsWithNoScenario("fast.yml"), []);
+    assert.deepEqual(cellsWithNoScenario("full.yml"), []);
+});
+
+/**
+ * The mirror of the check above: a scenario listed in a matrix that no cell can
+ * run. The cell-side check cannot catch it — every cell still has work, the
+ * scenario just has no home — and it is silent coverage loss, which is the
+ * failure mode this whole area exists to eliminate.
+ *
+ * Caught live: moving the cloud github cells to the GitHub App orphaned
+ * `stripe-billing`, which was pinned to `provider: ["github"]`.
+ */
+function scenariosWithNoCell(file: string): string[] {
+    const m = parse(readFileSync(join(MATRIX_DIR, file), "utf8")) as {
+        scenarios: string[];
+        cells: MatrixCell[];
+    };
+    return m.scenarios.filter((id) => {
+        const s = allScenarios[id];
+        if (!s) return false;
+        return !m.cells.some((cell) => appliesToCell(s, cell));
+    });
+}
+
+test("every scenario in every matrix file has a cell to run on", () => {
+    const files = readdirSync(MATRIX_DIR).filter((f) => f.endsWith(".yml"));
+    const offenders: string[] = [];
+    for (const file of files) {
+        for (const id of scenariosWithNoCell(file)) {
+            offenders.push(`${file}: ${id}`);
+        }
+    }
+    assert.deepEqual(
+        offenders,
+        [],
+        `these scenarios are listed but can never execute:\n${offenders.join("\n")}\n` +
+            "Widen the scenario's appliesTo, add a cell it matches, or drop it from the list.",
+    );
 });

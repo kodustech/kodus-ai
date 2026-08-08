@@ -452,6 +452,22 @@ ok "Tunnel: $SERVER_TUNNEL_URL"
 log "Writing .env on VM..."
 ssh_vm "cd /opt/kodus-installer && cp .env.example .env && ./scripts/generate-secrets.sh" >/dev/null
 
+# GitHub App credentials for the PRODUCT's own GitHub calls.
+#
+# Without these the backend's assertGithubAppEnv() throws, which is why the
+# `github-app` provider was cloud-only and every self-hosted github cell stayed
+# on a PAT — and the e2e bot PATs are abuse-flagged to ~60 req/h, the direct
+# cause of the quota SKIPs. Same App the harness uses; authorship still goes
+# through the user PAT (authorHeaders in providers/github.ts), so the product
+# never ends up ignoring its own PRs.
+#
+# The PEM is escaped HERE, in normal script context. Doing it inside the remote
+# heredoc means fighting three layers of backslash expansion for no benefit.
+APP_PEM_ESCAPED=""
+if [ -n "${GH_APP_PRIVATE_KEY:-}" ]; then
+    APP_PEM_ESCAPED=$(printf '%s' "$GH_APP_PRIVATE_KEY" | awk 'BEGIN{ORS=""} {print $0 "\\n"}')
+fi
+
 ssh_vm bash -s <<REMOTE
 set -e
 cd /opt/kodus-installer
@@ -505,6 +521,12 @@ env_set API_MG_DB_PASSWORD "\$(openssl rand -hex 16)"
 env_set API_DATABASE_DISABLE_SSL "true"
 env_set API_PG_DB_SSL "false"
 env_set WORKER_ROLE "code-review"
+if [ -n "${GH_APP_ID:-}" ]; then
+    env_set API_GITHUB_APP_ID "${GH_APP_ID}"
+fi
+if [ -n "$APP_PEM_ESCAPED" ]; then
+    env_set API_GITHUB_PRIVATE_KEY "\"$APP_PEM_ESCAPED\""
+fi
 # Analytics worker (Cockpit). When ANALYTICS_WORKER=1 is passed to vm.sh,
 # enable the \`analytics\` compose profile so the installer's worker-analytics
 # service (role=analytics) comes up alongside the code-review worker, and point
