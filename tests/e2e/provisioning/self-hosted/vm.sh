@@ -131,22 +131,33 @@ aws_ensure_security_group() {
         --region "$AWS_REGION_E2E" \
         --filters "Name=group-name,Values=$AWS_SECURITY_GROUP" \
         --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "None")
-    if [ "$AWS_SG_ID" != "None" ] && [ -n "$AWS_SG_ID" ]; then
-        return 0
+    if [ -z "${AWS_SG_ID:-}" ] || [ "$AWS_SG_ID" = "None" ]; then
+        log "Creating security group $AWS_SECURITY_GROUP..."
+        AWS_SG_ID=$(aws ec2 create-security-group \
+            --region "$AWS_REGION_E2E" \
+            --group-name "$AWS_SECURITY_GROUP" \
+            --description "Kodus e2e ephemeral VMs" \
+            --query 'GroupId' --output text) \
+            || { err "Could not create security group $AWS_SECURITY_GROUP"; exit 1; }
     fi
-    log "Creating security group $AWS_SECURITY_GROUP..."
-    AWS_SG_ID=$(aws ec2 create-security-group \
-        --region "$AWS_REGION_E2E" \
-        --group-name "$AWS_SECURITY_GROUP" \
-        --description "Kodus e2e ephemeral VMs (SSH in, all out)" \
-        --query 'GroupId' --output text) \
-        || { err "Could not create security group $AWS_SECURITY_GROUP"; exit 1; }
-    # SSH only. The stack itself is reached through the cloudflared tunnel, not
-    # through open ports, so nothing else needs to be exposed.
-    aws ec2 authorize-security-group-ingress \
-        --region "$AWS_REGION_E2E" \
-        --group-id "$AWS_SG_ID" \
-        --protocol tcp --port 22 --cidr 0.0.0.0/0 >/dev/null 2>&1 || true
+    # SSH plus the three stack ports.
+    #
+    # The ports are NOT optional: the readiness probe curls
+    # http://$SERVER_IP:{3000,3001,3332} FROM THE RUNNER, not from inside the
+    # VM. DigitalOcean droplets have no firewall by default, so this was
+    # invisible there — on AWS the first run booted a healthy stack and then
+    # failed "Health check failed for: web:3000 api:3001 webhooks:3332" purely
+    # because the security group blocked the probe.
+    #
+    # Same exposure the DigitalOcean droplets always had, on a VM that lives
+    # for one run and holds only test fixtures. Authorize is idempotent-ish:
+    # a duplicate rule errors, which is why failures are swallowed.
+    for port in 22 3000 3001 3332; do
+        aws ec2 authorize-security-group-ingress \
+            --region "$AWS_REGION_E2E" \
+            --group-id "$AWS_SG_ID" \
+            --protocol tcp --port "$port" --cidr 0.0.0.0/0 >/dev/null 2>&1 || true
+    done
 }
 
 # Newest Canonical Ubuntu 24.04 for the instance architecture. t4g is Graviton
