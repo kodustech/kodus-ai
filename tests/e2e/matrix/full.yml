@@ -140,6 +140,15 @@ cells:
       provider: azure-devops
       license: license-paid
     # ---------- cloud ----------
+    # App on the PAID cell ONLY, and the limit is structural: GitHubAppProvider
+    # pins its whole surface to GH_APP_TEST_REPO and ignores the per-tenant
+    # repoFullName, so every github-app cell would drive the SAME repo. Four
+    # cloud tenants sharing one repo is precisely the 2026-06-03..05 incident
+    # documented in .github/workflows/e2e-cloud.yml — webhook fan-out
+    # collisions and phantom "review never started" flakes.
+    #
+    # Widening this needs one App-installed repo PER TENANT and a provider that
+    # honours it; until then the other tiers stay on PATs.
     - target: cloud
       provider: github-app
       license: paid
@@ -153,16 +162,16 @@ cells:
       provider: azure-devops
       license: paid
     - target: cloud
-      provider: github-app
+      provider: github
       license: free
     - target: cloud
-      provider: github-app
+      provider: github
       license: trial
     # Community plan: post-trial tenant that configured its own LLM API key
     # (BYOK). Free in Stripe terms but reviews still work (with the 10-rule
     # limit). Distinct from `free` (= trial expired, no BYOK, gate blocks).
     - target: cloud
-      provider: github-app
+      provider: github
       license: community-byok
     # PAT canary, cloud side. Same rationale as the self-hosted one: the
     # cloud auth path (authenticateWithToken) differs from the App path
