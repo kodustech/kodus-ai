@@ -154,15 +154,35 @@ jobs:
                   echo "image_tag=$IMAGE" >> "$GITHUB_OUTPUT"
                   echo "Scheduled run - newest release $TAG -> image tag $IMAGE"
 
+            # Cells come from the MATRIX FILE, not from a list kept here.
+            #
+            # They used to be hardcoded, which made this a second source of
+            # truth: removing the uncovered `license-free` cell from fast.yml
+            # left the workflow still fanning out a job for it, and that job
+            # provisioned a droplet to run zero scenarios (run 31318234481).
+            # Deriving them means the matrix file cannot disagree with the jobs
+            # that run it.
             - id: gen
+              working-directory: tests/e2e
               env:
                   ONLY: ${{ inputs.only_provider || 'all' }}
+                  MATRIX: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
               run: |
-                  ALL='[{"provider":"github","license":"license-paid"},{"provider":"gitlab","license":"license-paid"},{"provider":"bitbucket","license":"license-paid"},{"provider":"azure-devops","license":"license-paid"},{"provider":"github","license":"license-free"}]'
-                  if [ "$ONLY" = "all" ] || [ -z "$ONLY" ]; then
-                      CELLS="$ALL"
-                  else
-                      CELLS=$(printf '%s' "$ALL" | jq -c --arg p "$ONLY" '[.[] | select(.provider == $p)]')
+                  set -euo pipefail
+                  CELLS=$(ONLY="$ONLY" MATRIX="$MATRIX" ./node_modules/.bin/tsx -e '
+                    import { parse } from "yaml";
+                    import { readFileSync } from "node:fs";
+                    const m: any = parse(readFileSync(process.env.MATRIX!, "utf8"));
+                    const only = process.env.ONLY;
+                    const cells = m.cells
+                        .filter((c: any) => c.target === "self-hosted")
+                        .filter((c: any) => !only || only === "all" || c.provider === only)
+                        .map((c: any) => ({ provider: c.provider, license: c.license }));
+                    process.stdout.write(JSON.stringify(cells));
+                  ')
+                  if [ "$CELLS" = "[]" ]; then
+                      echo "::error::No self-hosted cells in $MATRIX${ONLY:+ for provider $ONLY}"
+                      exit 1
                   fi
                   echo "Selected cells: $CELLS"
                   echo "cells=$CELLS" >> "$GITHUB_OUTPUT"

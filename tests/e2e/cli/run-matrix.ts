@@ -202,13 +202,19 @@ async function main() {
         process.exit(EXIT_CONFIG);
     }
     // The mirror check: a scenario listed in the matrix that NO cell can run.
+    //
+    // ONLY under --validate. During a real run the matrix may be a generated
+    // single-cell SHARD (provisioning/self-hosted/vm.sh builds one per job,
+    // carrying every scenario but one cell), where most scenarios legitimately
+    // have no cell — they simply do not execute. Enforcing it there fails a
+    // perfectly good run, which is what happened to run 31318234481.
     // Silent coverage loss, and the exact thing that just happened — moving the
     // cloud github cells to the App orphaned stripe-billing, which is pinned to
     // `github`. The cell-side check would never have caught it: every cell still
     // had work, the scenario just stopped having a home.
-    const orphanScenarios = scenarios.filter(
-        (s) => !cells.some((cell) => appliesToCell(s, cell)),
-    );
+    const orphanScenarios = validate
+        ? scenarios.filter((s) => !cells.some((cell) => appliesToCell(s, cell)))
+        : [];
     if (orphanScenarios.length > 0) {
         log.err(
             `Matrix ${matrix.id}: ${orphanScenarios.length} scenario(s) have ZERO cells to run on. They are listed but never execute:`,
