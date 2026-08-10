@@ -349,6 +349,10 @@ export interface AgentLoopInput {
     /** BYOK provider type — needed to map reasoning effort to the correct
      *  provider-specific format in providerOptions. */
     byokProvider?: BYOKProvider | string;
+    /** Model id for this attempt, as `provider:model`. The provider alone is
+     *  not enough to shape the reasoning payload: Anthropic changed its
+     *  thinking API twice, and each generation rejects the others' shape. */
+    modelName?: string;
     /** Which BYOK role this attempt is running as. Selects the concurrency
      *  limiter bucket in the model wrapper ('main' vs 'fallback'). Defaults to
      *  'main' when omitted. */

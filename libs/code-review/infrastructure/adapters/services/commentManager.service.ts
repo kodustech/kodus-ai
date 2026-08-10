@@ -64,6 +64,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
+import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
 
 interface ClusteredSuggestion {
     id: string;
@@ -142,7 +143,11 @@ export class CommentManagerService implements ICommentManagerService {
                 // silently failed for kimi users while reviews kept working. The
                 // finder omits temperature for the same reason (finder.agent.ts),
                 // letting the provider default apply.
-                const configuredTemperature = byokConfig?.main?.temperature;
+                // Also withheld on Anthropic 4.7+, which removed sampling
+                // params and 400s the request when one is present.
+                const configuredTemperature = resolveByokTemperature(
+                    byokConfig?.main,
+                );
                 return await tracedGenerateText({
                     model: model as any,
                     system: systemPrompt,

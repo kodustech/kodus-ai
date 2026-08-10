@@ -258,3 +258,53 @@ describe("isTeamsOrEnterprisePlan", () => {
         ).toBe(false);
     });
 });
+
+describe("anthropicRejectsTemperature", () => {
+    const check = async (provider?: string, model?: string) => {
+        const { anthropicRejectsTemperature } = await import("./_utils");
+        return anthropicRejectsTemperature(provider, model);
+    };
+
+    it("never hides the field for non-Anthropic providers", async () => {
+        // anthropic_compatible endpoints speak the Anthropic protocol but do
+        // accept temperature — kimi-k2.7-code even requires temperature=1.
+        expect(await check("anthropic_compatible", "kimi-k2.7-code")).toBe(
+            false,
+        );
+        expect(await check("openai", "gpt-5.2")).toBe(false);
+        expect(await check(undefined, "claude-opus-5")).toBe(false);
+    });
+
+    it("hides the field on Claude 4.7 and newer", async () => {
+        for (const model of [
+            "claude-opus-4-7",
+            "claude-opus-4-8",
+            "claude-opus-5",
+            "claude-sonnet-5",
+            "claude-fable-5",
+            "anthropic.claude-opus-5",
+            "claude-opus-4-8@20260101",
+        ]) {
+            expect(await check("anthropic", model)).toBe(true);
+        }
+    });
+
+    it("keeps the field on Claude models that still accept temperature", async () => {
+        for (const model of [
+            "claude-3-7-sonnet-20250219",
+            "claude-opus-4-20250514",
+            "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5",
+            "claude-opus-4-6",
+        ]) {
+            expect(await check("anthropic", model)).toBe(false);
+        }
+    });
+
+    it("treats an unknown Claude as new, matching the backend", async () => {
+        expect(await check("anthropic", "")).toBe(true);
+        expect(await check("anthropic", "claude-something-unreleased")).toBe(
+            true,
+        );
+    });
+});

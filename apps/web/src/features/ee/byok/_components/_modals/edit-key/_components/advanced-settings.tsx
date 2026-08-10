@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
     Collapsible,
     CollapsibleContent,
@@ -20,6 +21,7 @@ import {
 import { Controller, useFormContext, useWatch } from "react-hook-form";
 
 import type { EditKeyForm } from "../_types";
+import { anthropicRejectsTemperature } from "../../../../_utils";
 
 const THINKING_OPTIONS = [
     { value: "none", label: "Off" },
@@ -30,7 +32,9 @@ const THINKING_OPTIONS = [
 ] as const;
 
 const CUSTOM_PLACEHOLDERS: Record<string, string> = {
-    anthropic: `{\n  "thinking": { "type": "enabled", "budgetTokens": 25000 }\n}`,
+    // Adaptive is the shape every Claude from 4.6 on accepts; the older
+    // budgetTokens form is a 400 on 4.7+, so it makes a poor default example.
+    anthropic: `{\n  "thinking": { "type": "adaptive" },\n  "effort": "high"\n}`,
     google_gemini: `{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}`,
     google_vertex: `{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}`,
     openai: `{\n  "reasoningEffort": "high",\n  "serviceTier": "flex"\n}`,
@@ -111,7 +115,7 @@ export const ByokAdvancedSettings = ({
 }: {
     defaultOpen?: boolean;
 }) => {
-    const { control } = useFormContext<EditKeyForm>();
+    const { control, setValue } = useFormContext<EditKeyForm>();
     // useWatch (a hook), not watch(): the React Compiler is enabled for this
     // app and memoizes `watch("name")` — a plain call on a stable function
     // with a constant argument — so its result froze at the first render and
@@ -123,8 +127,23 @@ export const ByokAdvancedSettings = ({
     });
     const isCustom = currentEffort === "custom";
     const currentProvider = useWatch({ control, name: "provider" });
+    const currentModel = useWatch({ control, name: "model" });
     const isOpenRouter = currentProvider === "open_router";
     const customPlaceholder = getCustomPlaceholder(currentProvider);
+
+    // Claude 4.7+ rejects sampling params outright, so the field is hidden
+    // rather than shown-but-ignored. Clearing the stored value matters as much
+    // as hiding the input: a config saved before the model was switched would
+    // otherwise keep submitting a temperature the provider 400s on.
+    const temperatureUnsupported = anthropicRejectsTemperature(
+        currentProvider,
+        currentModel,
+    );
+    useEffect(() => {
+        if (temperatureUnsupported) {
+            setValue("temperature", null, { shouldDirty: true });
+        }
+    }, [temperatureUnsupported, setValue]);
 
     return (
         <Collapsible
@@ -244,12 +263,14 @@ export const ByokAdvancedSettings = ({
 
                     {/* ── Model Parameters ──────────────────── */}
                     <div className="grid grid-cols-2 gap-4">
-                        <NumberField
-                            name="temperature"
-                            label="Temperature"
-                            placeholder="Default"
-                            helper="0 = deterministic, 2 = creative"
-                        />
+                        {!temperatureUnsupported && (
+                            <NumberField
+                                name="temperature"
+                                label="Temperature"
+                                placeholder="Default"
+                                helper="0 = deterministic, 2 = creative"
+                            />
+                        )}
                         <NumberField
                             name="maxOutputTokens"
                             label="Max output tokens"
@@ -257,6 +278,14 @@ export const ByokAdvancedSettings = ({
                             helper="Empty uses model default"
                         />
                     </div>
+
+                    {temperatureUnsupported && (
+                        <p className="text-text-tertiary text-xs text-pretty">
+                            Claude 4.7 and newer removed temperature — the
+                            provider rejects any request that sets it. Steer the
+                            model with the thinking level above instead.
+                        </p>
+                    )}
 
                     <Separator className="bg-card-lv2" />
 
