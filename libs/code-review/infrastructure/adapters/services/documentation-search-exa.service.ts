@@ -3,13 +3,7 @@ export const DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN = Symbol.for(
 );
 
 import { createLogger } from '@libs/core/log/logger';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import {
     DocumentationItem,
@@ -17,8 +11,13 @@ import {
     DocumentationQueryTask,
 } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { tracedGenerateText } from '@libs/llm/llm-call';
+import {
+    buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
+} from '@libs/core/log/langfuse';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Exa from 'exa-js';
@@ -70,7 +69,6 @@ export class DocumentationSearchExaService {
     constructor(
         private readonly configService: ConfigService,
         private readonly documentationSearchCacheService: DocumentationSearchCacheService,
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
     ) {
         const apiKey = this.configService.get<string>('API_EXA_KEY');
@@ -430,60 +428,54 @@ export class DocumentationSearchExaService {
             const runName = 'documentationSearchExaFormat';
             const spanName = `${DocumentationSearchExaService.name}::${runName}`;
 
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                LLMModelProvider.GEMINI_3_FLASH_PREVIEW,
-                LLMModelProvider.GEMINI_3_FLASH_PREVIEW,
-                params.byokConfig,
-            );
-
-            const { result: response } =
-                await this.observabilityService.runLLMInSpan({
+            const result = await this.observabilityService.runAiSdkLLMInSpan<any>(
+                {
                     spanName,
                     runName,
-                    byokConfig: params.byokConfig,
+                    model:
+                        params.byokConfig?.main?.model ?? 'deepseek-v4-flash',
                     attrs: {
-                        type: promptRunner.executeMode,
                         organizationId:
                             params.organizationAndTeamData?.organizationId,
                         prNumber: params.prNumber,
                         packageName: params.packageName,
                     },
-                    exec: (callbacks) =>
-                        promptRunner
-                            .builder()
-                            .setParser(ParserType.STRING)
-                            .setPayload(params)
-                            .addPrompt({
-                                role: PromptRole.SYSTEM,
-                                prompt: prompt_code_review_documentation_formatter_system,
-                            })
-                            .addPrompt({
-                                role: PromptRole.USER,
-                                prompt: prompt_code_review_documentation_formatter_user,
-                            })
-                            .addMetadata({
-                                context: DocumentationSearchExaService.name,
-                                runName,
-                                metadata: {
-                                    provider: CACHE_PROVIDER,
-                                    packageName: params.packageName,
-                                    query: params.query,
-                                    rawSearchContentLength:
-                                        params.rawSearchContent.length,
-                                    hasByokConfig: Boolean(params.byokConfig),
-                                    organizationAndTeamData:
-                                        params.organizationAndTeamData,
-                                    prNumber: params.prNumber,
-                                },
-                            })
-                            .setTemperature(0)
-                            .setRunName(runName)
-                            .addCallbacks(callbacks)
-                            .execute(),
-                });
+                    exec: async () => {
+                        // BYOK model when the org configured one; otherwise our
+                        // managed trial default (deepseek-v4-flash). Only pin
+                        // temperature when BYOK sets one — some managed models
+                        // reject a non-default temperature.
+                        const model = byokToVercelModel(
+                            params.byokConfig ?? undefined,
+                            'main',
+                            {},
+                            'deepseek-v4-flash',
+                        );
+                        const configuredTemperature =
+                            params.byokConfig?.main?.temperature;
+                        return await tracedGenerateText({
+                            model: model as any,
+                            system: prompt_code_review_documentation_formatter_system,
+                            prompt: prompt_code_review_documentation_formatter_user(
+                                params,
+                            ),
+                            ...(configuredTemperature !== undefined
+                                ? { temperature: configuredTemperature }
+                                : {}),
+                            ...toAiSdkTelemetryArgs(
+                                buildLangfuseTelemetry(runName, {
+                                    organizationId:
+                                        params.organizationAndTeamData
+                                            ?.organizationId,
+                                    pullRequestId: params.prNumber,
+                                }),
+                            ),
+                        });
+                    },
+                },
+            );
 
-            return this.extractPromptExecutionText(response);
+            return (result?.text ?? '').trim();
         } catch (error) {
             this.logger.warn({
                 message:
@@ -501,25 +493,6 @@ export class DocumentationSearchExaService {
 
             return '';
         }
-    }
-
-    private extractPromptExecutionText(response: unknown): string {
-        if (typeof response === 'string') {
-            return response.trim();
-        }
-
-        if (typeof response === 'object' && response !== null) {
-            const resultValue = (response as Record<string, unknown>).result;
-            if (typeof resultValue === 'string') {
-                return resultValue.trim();
-            }
-
-            if (resultValue != null) {
-                return String(resultValue).trim();
-            }
-        }
-
-        return '';
     }
 
     private deduplicateByQuery(

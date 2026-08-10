@@ -3,7 +3,6 @@ import { CreateFileCommentsStage } from '@/code-review/pipeline/stages/create-fi
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@/code-review/domain/contracts/CommentManagerService.contract';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { SUGGESTION_SERVICE_TOKEN } from '@/code-review/domain/contracts/SuggestionService.contract';
-import { DRY_RUN_SERVICE_TOKEN } from '@/dryRun/domain/contracts/dryRun.service.contract';
 import { CodeManagementService } from '@/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@/core/domain/enums';
@@ -40,10 +39,6 @@ describe('CreateFileCommentsStage', () => {
         extractRepriorizedSuggestions: jest.fn(),
     };
 
-    const mockDryRunService = {
-        addFilesToDryRun: jest.fn(),
-    };
-
     const mockCodeManagementService = {
         getCommitsForPullRequestForCodeReview: jest.fn(),
         getPullRequestReviewThreads: jest.fn(),
@@ -59,7 +54,6 @@ describe('CreateFileCommentsStage', () => {
     const createBaseContext = (
         overrides: Partial<CodeReviewPipelineContext> = {},
     ) => ({
-        dryRun: { enabled: false },
         organizationAndTeamData: mockOrganizationAndTeamData as any,
         repository: {
             id: 'repo-1',
@@ -111,7 +105,6 @@ describe('CreateFileCommentsStage', () => {
                     provide: SUGGESTION_SERVICE_TOKEN,
                     useValue: mockSuggestionService,
                 },
-                { provide: DRY_RUN_SERVICE_TOKEN, useValue: mockDryRunService },
                 {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
@@ -478,84 +471,6 @@ describe('CreateFileCommentsStage', () => {
         });
     });
 
-    describe('dry run mode', () => {
-        it('should add files to dry run when enabled', async () => {
-            const validSuggestions = [
-                { id: 's1', relevantFile: 'test.ts', severity: 'high' },
-            ];
-
-            mockSuggestionService.sortAndPrioritizeSuggestions.mockResolvedValue(
-                {
-                    sortedPrioritizedSuggestions: validSuggestions,
-                    allDiscardedSuggestions: [],
-                },
-            );
-
-            mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
-                commentResults: [],
-            });
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
-            const context = createBaseContext({
-                dryRun: { enabled: true, id: 'dry-run-1' },
-                validSuggestions,
-                changedFiles: [{ filename: 'test.ts' } as any],
-            });
-
-            await (stage as any).executeStage(context);
-
-            expect(mockDryRunService.addFilesToDryRun).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    id: 'dry-run-1',
-                }),
-            );
-        });
-
-        it('should not save to database when dry run is enabled', async () => {
-            const validSuggestions = [
-                { id: 's1', relevantFile: 'test.ts', severity: 'high' },
-            ];
-
-            mockSuggestionService.sortAndPrioritizeSuggestions.mockResolvedValue(
-                {
-                    sortedPrioritizedSuggestions: validSuggestions,
-                    allDiscardedSuggestions: [],
-                },
-            );
-
-            mockCommentManagerService.createLineComments.mockResolvedValue({
-                lastAnalyzedCommit: 'abc123',
-                commentResults: [],
-            });
-
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
-            const context = createBaseContext({
-                dryRun: { enabled: true, id: 'dry-run-1' },
-                validSuggestions,
-                changedFiles: [{ filename: 'test.ts' } as any],
-            });
-
-            await (stage as any).executeStage(context);
-
-            expect(
-                mockPullRequestService.aggregateAndSaveDataStructure,
-            ).not.toHaveBeenCalled();
-        });
-    });
-
     describe('error handling', () => {
         it('should handle errors in line comments creation gracefully', async () => {
             const validSuggestions = [
@@ -620,30 +535,6 @@ describe('CreateFileCommentsStage', () => {
     });
 
     describe('resolving implemented suggestions', () => {
-        it('should not resolve comments when dry run is enabled', async () => {
-            mockPullRequestService.findByNumberAndRepositoryName.mockResolvedValue(
-                {
-                    number: 123,
-                    files: [],
-                },
-            );
-
-            mockCodeManagementService.getCommitsForPullRequestForCodeReview.mockResolvedValue(
-                [{ sha: 'abc123' }],
-            );
-
-            const context = createBaseContext({
-                dryRun: { enabled: true, id: 'dry-run-1' },
-                validSuggestions: [],
-            });
-
-            await (stage as any).executeStage(context);
-
-            expect(
-                mockCodeManagementService.markReviewCommentAsResolved,
-            ).not.toHaveBeenCalled();
-        });
-
         it('should resolve comments for implemented suggestions on GitHub', async () => {
             const prEntity = {
                 number: 123,

@@ -1,0 +1,86 @@
+name: DI Graph Gate (api)
+
+# Builds the real ApiModule dependency graph and fails the PR if Nest cannot
+# resolve it. This is the class of bug nothing else in CI can see:
+#
+#   - `nest build` and `tsc --noEmit` only compile. A constructor parameter
+#     whose provider is not registered in that module is valid TypeScript.
+#   - The unit suites instantiate classes directly or build purpose-made
+#     testing modules; none of them assemble the real ApiModule graph.
+#
+# The miss that motivated this gate: a class registered by TWO modules gains a
+# constructor dependency, and only one of the two modules gets the matching
+# `imports:` entry. Build green, tests green, container dead on boot.
+#
+# Nest's `preview: true` walks the graph and resolves every constructor's
+# dependencies without instantiating a single provider, so this opens no
+# database, Redis, RabbitMQ or HTTP connection and needs no real credentials.
+# See scripts/ci/validate-di-graph.ts.
+
+on:
+    pull_request:
+        paths:
+            - "apps/api/**"
+            - "libs/**"
+            - "packages/**"
+            - "scripts/ci/validate-di-graph.ts"
+            - ".github/workflows/di-graph-gate.yml"
+            - "tsconfig*.json"
+            - "package.json"
+            - "pnpm-lock.yaml"
+
+permissions:
+    contents: read
+
+jobs:
+    api-di-graph:
+        name: ApiModule DI graph resolves
+        runs-on: ubuntu-latest
+        # The graph build itself takes ~150ms; the rest is install + transpile.
+        # If this ever approaches the limit, something started doing real I/O.
+        timeout-minutes: 10
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v6.0.2
+
+            - uses: pnpm/action-setup@v4
+
+            - name: Set up Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+                  cache: "pnpm"
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Create environment.ts
+              # libs/ee/configs/environment/environment.ts is gitignored and
+              # generated per-target (Dockerfile does it with sed). The dev
+              # values are fine here: nothing is instantiated, so nothing reads
+              # them for real.
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+
+            - name: Validate ApiModule dependency graph
+              # Every value below is a throwaway placeholder, NOT a secret. They
+              # exist only to satisfy import-time guards and the Joi env schema
+              # that run before the graph is built:
+              #   - API_CRYPTO_KEY / CODE_MANAGEMENT_SECRET are parsed as 32-byte
+              #     hex at module scope (libs/common/utils/crypto.ts and
+              #     webhooks/webhookTokenCrypto.ts).
+              #   - CODE_MANAGEMENT_WEBHOOK_TOKEN is asserted non-empty there too.
+              #   - API_PORT is the only Joi-required key (config.schema.ts).
+              # No DB/broker host is set: providers are never instantiated, so
+              # nothing connects. Do not add real credentials here.
+              env:
+                  API_CRYPTO_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+                  CODE_MANAGEMENT_SECRET: "0000000000000000000000000000000000000000000000000000000000000000"
+                  CODE_MANAGEMENT_WEBHOOK_TOKEN: "ci-placeholder"
+                  API_PORT: "3001"
+              run: pnpm run ci:validate-di-graph
