@@ -1,0 +1,136 @@
+name: "E2E: self-hosted on demand"
+
+# One button for "run the self-hosted matrix against THIS code".
+#
+# Before this, testing unreleased code meant either cutting an RC (a release
+# artifact, freezing main, permanent in the release history) or dispatching two
+# workflows and copying an image tag between them. Neither is something a person
+# does casually, so in practice nobody did, and self-hosted regressions were
+# found at release time.
+#
+# How to use it:
+#   - add the `e2e:self-hosted` label to a PR, or
+#   - dispatch it with a ref.
+#
+# Opt-in on purpose: a run costs an image build, a VM and real LLM calls, so it
+# must be asked for rather than fired on every push.
+#
+# It skips the image build when the PR only touches `tests/e2e/**` — harness
+# changes need no new image, and the build is by far the slowest step.
+
+permissions:
+    contents: read
+    packages: write
+
+on:
+    pull_request:
+        types: [labeled]
+    workflow_dispatch:
+        inputs:
+            ref:
+                description: "Git ref to test (blank = this branch)"
+                required: false
+                default: ""
+                type: string
+            matrix_file:
+                description: "Matrix YAML"
+                required: false
+                default: matrix/fast.yml
+                type: string
+            only_provider:
+                description: "Narrow to one provider (cheaper: one VM)"
+                required: false
+                default: github
+                type: choice
+                options:
+                    - github
+                    - all
+                    - gitlab
+                    - bitbucket
+                    - azure-devops
+
+concurrency:
+    # One run per PR (or per dispatch). A second push should supersede the
+    # first rather than race it for the same fixture repos.
+    group: e2e-sh-ondemand-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    decide:
+        name: Decide what to run
+        # The label event fires for EVERY label; only ours should start a run.
+        if: >-
+            github.event_name == 'workflow_dispatch' ||
+            github.event.label.name == 'e2e:self-hosted'
+        runs-on: ubuntu-latest
+        outputs:
+            needs_build: ${{ steps.check.outputs.needs_build }}
+            ref: ${{ steps.check.outputs.ref }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6.0.2
+              with:
+                  ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
+                  fetch-depth: 0
+
+            - name: Does this change need a new image?
+              id: check
+              env:
+                  BASE: ${{ github.event.pull_request.base.sha }}
+              run: |
+                  set -uo pipefail
+                  echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+                  # Dispatch: always build. The caller named a ref precisely
+                  # because they want THAT code tested.
+                  if [ -z "${BASE:-}" ]; then
+                      echo "needs_build=true" >> "$GITHUB_OUTPUT"
+                      echo "Manual dispatch — building images."
+                      exit 0
+                  fi
+
+                  # Harness-only changes cannot alter the product image, and the
+                  # build is the slowest step by a wide margin.
+                  CHANGED=$(git diff --name-only "$BASE"...HEAD)
+                  if [ -z "$CHANGED" ]; then
+                      echo "needs_build=true" >> "$GITHUB_OUTPUT"
+                      exit 0
+                  fi
+                  if echo "$CHANGED" | grep -qvE '^tests/e2e/'; then
+                      echo "needs_build=true" >> "$GITHUB_OUTPUT"
+                      echo "Product code changed — building images."
+                  else
+                      echo "needs_build=false" >> "$GITHUB_OUTPUT"
+                      echo "Only tests/e2e/** changed — reusing the published release."
+                  fi
+                  echo "$CHANGED" | head -20
+
+    images:
+        name: Build images
+        needs: decide
+        if: needs.decide.outputs.needs_build == 'true'
+        uses: ./.github/workflows/e2e-test-images.yml
+        with:
+            ref: ${{ needs.decide.outputs.ref }}
+            mode: self-hosted
+            registry_owner: ${{ vars.E2E_IMAGE_OWNER }}
+        secrets: inherit
+
+    matrix:
+        name: Self-hosted matrix
+        needs: [decide, images]
+        # `always()`: the images job is skipped for harness-only changes, and a
+        # skipped dependency would otherwise cancel this one.
+        if: >-
+            always() && needs.decide.result == 'success' &&
+            (needs.images.result == 'success' || needs.images.result == 'skipped')
+        uses: ./.github/workflows/e2e-self-hosted-matrix.yml
+        with:
+            # Empty when no build happened → the matrix resolves the newest
+            # published release, which is the right baseline for a
+            # harness-only change.
+            image_tag: ${{ needs.images.outputs.image_tag || '' }}
+            registry: ${{ needs.images.result == 'success' && format('ghcr.io/{0}', vars.E2E_IMAGE_OWNER || github.repository_owner) || '' }}
+            matrix_file: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
+            only_provider: ${{ inputs.only_provider || 'github' }}
+        secrets: inherit

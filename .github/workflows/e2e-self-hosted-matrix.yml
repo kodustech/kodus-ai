@@ -31,14 +31,28 @@ permissions:
 on:
     workflow_call:
         inputs:
+            # Not required: an on-demand run whose PR only touched the harness
+            # has no image to build, and an empty tag makes the plan job resolve
+            # the newest published release — the right baseline for that case.
             image_tag:
-                description: "Image tag (e.g. selfhosted-1.42.0-rc.1 or 1.42.0-rc.1)"
-                required: true
+                description: "GHCR image tag (e.g. 2.1.30 or test-a1b2c3d). Blank = newest published release."
+                required: false
+                default: ""
+                type: string
+            registry:
+                description: "Image registry override (e.g. ghcr.io/<user>). Blank = the published images."
+                required: false
+                default: ""
                 type: string
             matrix_file:
                 description: "Matrix YAML path under tests/e2e/"
                 required: false
                 default: matrix/fast.yml
+                type: string
+            only_provider:
+                description: "Narrow to one provider. 'all' runs every self-hosted cell."
+                required: false
+                default: all
                 type: string
             keep_running:
                 description: "Skip droplet teardown"

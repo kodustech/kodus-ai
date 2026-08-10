@@ -271,8 +271,35 @@ case "$MODE" in
                 AZ_TEST_TOKEN \
                 CLOUD_TENANT_PAID_PASSWORD CLOUD_TENANT_FREE_PASSWORD CLOUD_TENANT_TRIAL_PASSWORD
         else
+            # Self-hosted provisions a VM. Which credentials that needs depends
+            # on the provider, and the default is AWS to match CI — a local
+            # default of `digitalocean` while CI runs on AWS is how "works in CI,
+            # fails on my machine" gets manufactured.
+            export TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-aws}"
+            case "$TEST_VM_PROVIDER" in
+                aws)
+                    resolve_op_refs AWS_E2E_ACCESS_KEY_ID AWS_E2E_SECRET_ACCESS_KEY
+                    # vm.sh reads the standard names; ~/.kodus-dev/config keeps
+                    # the e2e credential under AWS_E2E_* so it never shadows a
+                    # personal AWS profile.
+                    export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${AWS_E2E_ACCESS_KEY_ID:-}}"
+                    export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${AWS_E2E_SECRET_ACCESS_KEY:-}}"
+                    export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${AWS_E2E_REGION:-us-east-2}}"
+                    if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+                        err "TEST_VM_PROVIDER=aws but no AWS credential found."
+                        err "  Add to ~/.kodus-dev/config:"
+                        err "    AWS_E2E_ACCESS_KEY_ID=..."
+                        err "    AWS_E2E_SECRET_ACCESS_KEY=..."
+                        err "    AWS_E2E_REGION=us-east-2"
+                        err "  Or set TEST_VM_PROVIDER=digitalocean to use the old provider."
+                        exit 1
+                    fi
+                    ;;
+                digitalocean) resolve_op_refs DIGITALOCEAN_TOKEN ;;
+                hetzner)      resolve_op_refs HCLOUD_TOKEN ;;
+                *) err "Unknown TEST_VM_PROVIDER: $TEST_VM_PROVIDER (aws|digitalocean|hetzner)"; exit 1 ;;
+            esac
             resolve_op_refs \
-                DIGITALOCEAN_TOKEN HCLOUD_TOKEN \
                 SH_LICENSE_KEY GH_DEV_TOKEN \
                 GH_TEST_TOKEN GL_TEST_TOKEN \
                 BB_TEST_USER BB_TEST_APP_PASSWORD \
