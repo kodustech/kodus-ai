@@ -49,6 +49,7 @@ export class ClassifyOrphanedSessionsCronProvider {
                         error instanceof Error
                             ? error
                             : new Error(String(error)),
+                    metadata: { lockKey: LOCK_KEY },
                 });
                 return null;
             });
@@ -165,6 +166,7 @@ export class ClassifyOrphanedSessionsCronProvider {
                         error instanceof Error
                             ? error
                             : new Error(String(error)),
+                    metadata: { lockKey: LOCK_KEY },
                 });
             });
         }

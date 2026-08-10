@@ -87,6 +87,7 @@ export class CodeReviewFeedbackCronProvider {
                         error instanceof Error
                             ? error
                             : new Error(String(error)),
+                    metadata: { lockKey: LOCK_KEY },
                 });
                 return null;
             });
@@ -322,6 +323,7 @@ export class CodeReviewFeedbackCronProvider {
                         error instanceof Error
                             ? error
                             : new Error(String(error)),
+                    metadata: { lockKey: LOCK_KEY },
                 });
             });
         }
