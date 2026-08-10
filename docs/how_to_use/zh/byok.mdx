@@ -147,7 +147,7 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
 
 <Steps>
   <Step title="选择提供商">
-    从 OpenAI、Anthropic、Google Gemini、Google Vertex AI、Amazon Bedrock、OpenRouter、Novita、**OpenAI Compatible**(用于任意 OpenAI 格式的端点)或 **Anthropic-compatible**(用于任意 Anthropic Messages 格式的端点)中选择。
+    从 OpenAI、Anthropic、Google Gemini、Google Vertex AI、Amazon Bedrock、OpenRouter、OrcaRouter、Novita、**OpenAI Compatible**(用于任意 OpenAI 格式的端点)或 **Anthropic-compatible**(用于任意 Anthropic Messages 格式的端点)中选择。
 
     Vertex 和 Bedrock 标记为 **Beta**,需要提供商特定的凭证而非单一密钥 —— 参见下方的[支持的提供商](#支持的提供商)。
   </Step>
@@ -233,6 +233,19 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
     </Warning>
   </Tab>
 
+  <Tab title="OrcaRouter">
+    **最适合:**通过一个计费关系、经由单一 OpenAI 兼容端点访问多个模型。
+
+    **获取 API 密钥:**
+    1. 在 [OrcaRouter](https://www.orcarouter.ai) 创建账号
+    2. 添加积分
+    3. 在设置中生成密钥(密钥以 `sk-orca-` 开头)
+
+    <Info>
+      OrcaRouter 是一个 OpenAI 兼容的网关:一个密钥即可在单个 `https://api.orcarouter.ai/v1` 端点背后解锁 OpenAI、Anthropic、Google、DeepSeek、Qwen、MiniMax 和 xAI 的 150+ 模型。它还在同一端点上为 AI 智能体提供网关级零信任安全——以默认拒绝为基础审查每个提示/响应并管控每个工具调用,无需任何应用代码改动。
+    </Info>
+  </Tab>
+
   <Tab title="Google Vertex AI">
     <Info>**Beta。** 较新的集成,认证路径比"单一密钥"的常规方式更复杂。</Info>
 
@@ -313,6 +326,7 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
 | **Google**(Gemini 3.1 Pro) | `thinkingConfig: { thinkingLevel: "medium" }` |
 | **OpenAI**(GPT-5.4) | `reasoningEffort: "medium"` |
 | **OpenRouter** | `reasoning: { effort: "medium" }` |
+| **OrcaRouter** | `thinking: { type: "enabled" }` — 二元开关,级别被忽略 |
 | **OpenAI 兼容**(Kimi K2.6 / GLM 5.1) | `thinking: { type: "enabled" }` — 二元开关,级别被忽略 |
 
 <Note>
@@ -395,6 +409,16 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
     ```
   </Tab>
 
+  <Tab title="OrcaRouter">
+    OrcaRouter 兼容 OpenAI,因此适用 OpenAI 兼容的写法:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+  </Tab>
+
   <Tab title="OpenAI 兼容(Kimi、GLM 等)">
     启用 thinking 并带上预算提示:
 
@@ -439,6 +463,7 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
 | `google_gemini` / `google_vertex` | `google` |
 | `openai` | `openai` |
 | `open_router` | `openrouter` |
+| `orcarouter` | `openaiCompatible` |
 | `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### 注意事项

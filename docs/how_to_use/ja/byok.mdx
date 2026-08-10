@@ -147,7 +147,7 @@ Z.ai と Moonshot はどちらも、ペイパートークンの Developer API �
 
 <Steps>
   <Step title="プロバイダーを選択">
-    OpenAI、Anthropic、Google Gemini、Google Vertex AI、Amazon Bedrock、OpenRouter、Novita、**OpenAI Compatible**（任意の OpenAI フォーマットのエンドポイント向け）、**Anthropic-compatible**（任意の Anthropic Messages フォーマットのエンドポイント向け）から選択します。
+    OpenAI、Anthropic、Google Gemini、Google Vertex AI、Amazon Bedrock、OpenRouter、OrcaRouter、Novita、**OpenAI Compatible**（任意の OpenAI フォーマットのエンドポイント向け）、**Anthropic-compatible**（任意の Anthropic Messages フォーマットのエンドポイント向け）から選択します。
 
     Vertex と Bedrock は **Beta** と表示され、単一キーではなくプロバイダー固有の認証情報を求められます — 下記の[対応プロバイダー](#対応プロバイダー)を参照してください。
   </Step>
@@ -233,6 +233,19 @@ Z.ai と Moonshot はどちらも、ペイパートークンの Developer API �
     </Warning>
   </Tab>
 
+  <Tab title="OrcaRouter">
+    **おすすめの用途:** 単一の OpenAI 互換エンドポイントで多くのモデルにアクセスできる、1つの請求関係。
+
+    **APIキーの取得方法:**
+    1. [OrcaRouter](https://www.orcarouter.ai) でアカウントを作成
+    2. クレジットを追加
+    3. 設定でキーを生成（キーは `sk-orca-` で始まります）
+
+    <Info>
+      OrcaRouter は OpenAI 互換のゲートウェイです。1つのキーで OpenAI、Anthropic、Google、DeepSeek、Qwen、MiniMax、xAI の150以上のモデルを単一の `https://api.orcarouter.ai/v1` エンドポイントで利用できます。また、同じエンドポイント上で AI エージェント向けのゲートウェイレベルのゼロトラストセキュリティを実行し、すべてのプロンプト/レスポンスをスクリーニングし、すべてのツール呼び出しをデフォルト拒否で制御します。アプリケーションコードの変更は不要です。
+    </Info>
+  </Tab>
+
   <Tab title="Google Vertex AI">
     <Info>**ベータ。** 新しめの統合で、単一キーが基本の他プロバイダーより認証の手順が複雑です。</Info>
 
@@ -313,6 +326,7 @@ Low / Medium / High を選択すると、Kodus はそのレベルを各プロバ
 | **Google** (Gemini 3.1 Pro) | `thinkingConfig: { thinkingLevel: "medium" }` |
 | **OpenAI** (GPT-5.4) | `reasoningEffort: "medium"` |
 | **OpenRouter** | `reasoning: { effort: "medium" }` |
+| **OrcaRouter** | `thinking: { type: "enabled" }` — バイナリの on/off、レベルは無視 |
 | **OpenAI-compatible** (Kimi K2.6 / GLM 5.1) | `thinking: { type: "enabled" }` — バイナリの on/off、レベルは無視 |
 
 <Note>
@@ -395,6 +409,16 @@ Thinking トグルで **Custom** を選択すると JSON テキストエリア�
     ```
   </Tab>
 
+  <Tab title="OrcaRouter">
+    OrcaRouter は OpenAI 互換のため、OpenAI-compatible と同じ形式が適用されます:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+  </Tab>
+
   <Tab title="OpenAI-compatible (Kimi、GLM など)">
     予算ヒント付きで thinking を有効化：
 
@@ -439,6 +463,7 @@ JSON にすでに既知の名前空間キー（`anthropic`、`google`、`openai`
 | `google_gemini` / `google_vertex` | `google` |
 | `openai` | `openai` |
 | `open_router` | `openrouter` |
+| `orcarouter` | `openaiCompatible` |
 | `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### 注意点

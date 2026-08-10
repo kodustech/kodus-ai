@@ -147,7 +147,7 @@ When the model you want isn't in the curated list (custom endpoint, self-hosted 
 
 <Steps>
   <Step title="Pick a provider">
-    Choose from OpenAI, Anthropic, Google Gemini, Google Vertex AI, Amazon Bedrock, OpenRouter, Novita, **OpenAI-compatible** (for any OpenAI-format endpoint), or **Anthropic-compatible** (for any Anthropic Messages-format endpoint).
+    Choose from OpenAI, Anthropic, Google Gemini, Google Vertex AI, Amazon Bedrock, OpenRouter, OrcaRouter, Novita, **OpenAI-compatible** (for any OpenAI-format endpoint), or **Anthropic-compatible** (for any Anthropic Messages-format endpoint).
 
     Vertex and Bedrock are marked **Beta** and ask for provider-specific credentials instead of a single key — see [Supported Providers](#supported-providers) below.
   </Step>
@@ -231,6 +231,19 @@ When the model you want isn't in the curated list (custom endpoint, self-hosted 
     <Warning>
       OpenRouter routes each request to a different upstream provider by default, which can cause quality and latency drift between calls. **Pin specific upstreams** under Advanced settings → OpenRouter routing to keep behavior stable. See [Pinning OpenRouter providers](#pinning-openrouter-providers).
     </Warning>
+  </Tab>
+
+  <Tab title="OrcaRouter">
+    **Best for:** One billing relationship across many models through a single OpenAI-compatible endpoint.
+
+    **Get an API key:**
+    1. Create an account at [OrcaRouter](https://www.orcarouter.ai)
+    2. Add credits
+    3. Generate a key in settings (keys start with `sk-orca-`)
+
+    <Info>
+      OrcaRouter is an OpenAI-compatible gateway: one key unlocks 150+ models from OpenAI, Anthropic, Google, DeepSeek, Qwen, MiniMax and xAI behind a single `https://api.orcarouter.ai/v1` endpoint. It also runs gateway-level, zero-trust security for AI agents on the same endpoint — screening every prompt/response and governing every tool call on a default-deny basis, with no application code changes.
+    </Info>
   </Tab>
 
   <Tab title="Google Vertex AI">
@@ -325,6 +338,7 @@ When you pick Low / Medium / High, Kodus translates the level to each provider's
 | **Google** (Gemini 3.1 Pro) | `thinkingConfig: { thinkingLevel: "medium" }` |
 | **OpenAI** (GPT-5.4) | `reasoningEffort: "medium"` |
 | **OpenRouter** | `reasoning: { effort: "medium" }` |
+| **OrcaRouter** | `thinking: { type: "enabled" }` — binary on/off, level ignored |
 | **OpenAI-compatible** (Kimi K2.6 / GLM 5.1) | `thinking: { type: "enabled" }` — binary on/off, level ignored |
 
 <Note>
@@ -407,6 +421,16 @@ Use this when:
     ```
   </Tab>
 
+  <Tab title="OrcaRouter">
+    OrcaRouter is OpenAI-compatible, so the OpenAI-compatible shape applies:
+
+    ```json
+    {
+      "thinking": { "type": "enabled", "budget_tokens": 25000 }
+    }
+    ```
+  </Tab>
+
   <Tab title="OpenAI-compatible (Kimi, GLM, etc.)">
     Enable thinking with a budget hint:
 
@@ -451,6 +475,7 @@ Under the hood, these are the namespace mappings Kodus uses:
 | `google_gemini` / `google_vertex` | `google` |
 | `openai` | `openai` |
 | `open_router` | `openrouter` |
+| `orcarouter` | `openaiCompatible` |
 | `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### Gotchas

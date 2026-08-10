@@ -63,6 +63,14 @@ export class ProviderService {
             requiresApiKey: true,
             requiresBaseUrl: false,
         },
+        [BYOKProvider.ORCAROUTER]: {
+            id: BYOKProvider.ORCAROUTER,
+            name: 'OrcaRouter',
+            description: 'Multiple models through OrcaRouter',
+            supported: true,
+            requiresApiKey: true,
+            requiresBaseUrl: false,
+        },
         [BYOKProvider.NOVITA]: {
             id: BYOKProvider.NOVITA,
             name: 'Novita',

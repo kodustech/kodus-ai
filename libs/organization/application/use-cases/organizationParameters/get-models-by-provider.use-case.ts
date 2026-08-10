@@ -130,6 +130,11 @@ export class GetModelsByProviderUseCase {
                     creds?.apiKey ?? process.env.API_OPEN_ROUTER_API_KEY,
                 );
 
+            case BYOKProvider.ORCAROUTER:
+                return this.getOrcaRouterModels(
+                    creds?.apiKey ?? process.env.API_ORCA_ROUTER_API_KEY,
+                );
+
             case BYOKProvider.NOVITA:
                 return this.getNovitaModels(
                     creds?.apiKey ?? process.env.API_NOVITA_AI_API_KEY,
@@ -379,6 +384,32 @@ export class GetModelsByProviderUseCase {
         } catch (error) {
             throw new BadRequestException(
                 `Error fetching OpenRouter models: ${(error as Error).message}`,
+            );
+        }
+    }
+
+    private async getOrcaRouterModels(apiKey?: string): Promise<ModelResponse> {
+        try {
+            const response = await axios.get<OpenAIResponse>(
+                'https://api.orcarouter.ai/v1/models',
+                {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                },
+            );
+
+            return {
+                provider: BYOKProvider.ORCAROUTER,
+                models: response.data.data.map((model: OpenAIModel) => ({
+                    id: model.id,
+                    name: model.id,
+                })),
+            };
+        } catch (error) {
+            throw new BadRequestException(
+                `Error fetching OrcaRouter models: ${(error as Error).message}`,
             );
         }
     }

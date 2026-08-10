@@ -72,7 +72,7 @@ probe asserts that two outbound requests were captured, first with
 
 The gate is in `shouldEnableJsonSchema(provider, model, baseURL)`:
 
-- **OPEN_ROUTER**: model prefix in `OPENROUTER_JSON_SCHEMA_PREFIXES`
+- **OPEN_ROUTER / ORCAROUTER**: model prefix in `GATEWAY_JSON_SCHEMA_PREFIXES`
   (`openai/`, `anthropic/`, `google/`, `moonshotai/`)
 - **OPENAI_COMPATIBLE**: `baseURL` contains `:8000/` (vLLM heuristic),
   or matches any substring listed in
@@ -82,7 +82,7 @@ The gate is in `shouldEnableJsonSchema(provider, model, baseURL)`:
 To add a model:
 1. Add a scenario to `SCENARIOS` in `repro.ts` with the expected outcome.
 2. If the model legitimately supports `json_schema`, add its prefix to
-   `OPENROUTER_JSON_SCHEMA_PREFIXES`.
+   `GATEWAY_JSON_SCHEMA_PREFIXES`.
 3. Re-run the matrix.
 
 If you're not sure — leave the prefix out. The retry-on-error wrapper

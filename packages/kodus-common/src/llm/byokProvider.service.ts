@@ -16,6 +16,7 @@ export enum BYOKProvider {
     OPENAI_COMPATIBLE = 'openai_compatible',
     ANTHROPIC_COMPATIBLE = 'anthropic_compatible',
     OPEN_ROUTER = 'open_router',
+    ORCAROUTER = 'orcarouter',
     NOVITA = 'novita',
 }
 
@@ -150,7 +151,9 @@ export class BYOKProviderService {
                     ? baseURL
                     : provider === BYOKProvider.OPEN_ROUTER
                       ? 'https://openrouter.ai/api/v1'
-                      : undefined,
+                      : provider === BYOKProvider.ORCAROUTER
+                        ? 'https://api.orcarouter.ai/v1'
+                        : undefined,
             options: {
                 temperature: options?.temperature,
                 maxTokens: options?.maxTokens,
@@ -272,6 +275,7 @@ export class BYOKProviderService {
             [BYOKProvider.OPENAI_COMPATIBLE]: 'OpenAI Compatible',
             [BYOKProvider.ANTHROPIC_COMPATIBLE]: 'Anthropic Compatible',
             [BYOKProvider.OPEN_ROUTER]: 'OpenRouter',
+            [BYOKProvider.ORCAROUTER]: 'OrcaRouter',
             [BYOKProvider.NOVITA]: 'Novita',
         };
 

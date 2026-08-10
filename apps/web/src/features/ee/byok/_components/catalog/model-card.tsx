@@ -33,6 +33,7 @@ const PROVIDER_LABELS: Record<string, string> = {
     openai: "OpenAI",
     google_gemini: "Google",
     openrouter: "OpenRouter",
+    orcarouter: "OrcaRouter",
     novita: "Novita",
     openai_compatible: "OpenAI-compatible",
 };

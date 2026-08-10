@@ -47,6 +47,7 @@ const CURATED_PROVIDERS = new Set([
     "anthropic_compatible",
     "google_gemini",
     "openrouter",
+    "orcarouter",
 ]);
 
 const isEditableInCatalog = (config: BYOKConfig | undefined): boolean =>

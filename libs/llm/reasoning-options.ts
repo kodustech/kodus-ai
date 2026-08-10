@@ -119,6 +119,7 @@ const PROVIDER_OPTIONS_NAMESPACE: Partial<Record<string, string>> = {
     [BYOKProvider.GOOGLE_VERTEX]: 'google',
     [BYOKProvider.OPENAI]: 'openai',
     [BYOKProvider.OPEN_ROUTER]: 'openrouter',
+    [BYOKProvider.ORCAROUTER]: 'openaiCompatible',
     [BYOKProvider.OPENAI_COMPATIBLE]: 'openaiCompatible',
     [BYOKProvider.NOVITA]: 'openaiCompatible',
 };
@@ -187,6 +188,7 @@ function mergeOpenRouterOptions(
  *   - Google Gemini 2.5: thinkingConfig.thinkingBudget
  *   - OpenAI o-series: reasoningEffort (low/medium/high)
  *   - OpenRouter: reasoning.effort (normalized across providers)
+ *   - OrcaRouter: thinking.type enabled/disabled (OpenAI-compatible gateway)
  *   - Kimi/GLM/others via OPENAI_COMPATIBLE: thinking.type enabled/disabled
  *
  * Defaults when nothing configured: thinking stays OFF for all providers.
@@ -273,7 +275,10 @@ export function buildReasoningProviderOptions(
                 openrouter: { reasoning: { effort } },
             };
 
+        case BYOKProvider.ORCAROUTER:
         case BYOKProvider.OPENAI_COMPATIBLE: {
+            // OrcaRouter is an OpenAI-compatible gateway — send the standard
+            // OpenAI-compatible thinking param and let it forward upstream.
             // Kimi K2.5: thinking ON by default, only need to send disable
             // GLM-5/5.1: thinking.type = enabled/disabled
             // For compatible providers that support thinking, send the

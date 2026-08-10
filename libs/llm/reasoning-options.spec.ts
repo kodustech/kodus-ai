@@ -240,6 +240,16 @@ describe('buildReasoningProviderOptions', () => {
         });
     });
 
+    describe('OrcaRouter', () => {
+        it('emits thinking.type=enabled under openaiCompatible key (effort ignored)', () => {
+            expect(
+                buildReasoningProviderOptions(BYOKProvider.ORCAROUTER, 'high'),
+            ).toEqual({
+                openaiCompatible: { thinking: { type: 'enabled' } },
+            });
+        });
+    });
+
     describe('OpenAI-Compatible', () => {
         it('emits thinking.type=enabled (effort ignored)', () => {
             expect(

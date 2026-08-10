@@ -128,6 +128,7 @@
 | `API_CEREBRAS_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_CEREBRAS_API_KEY` | – | secret | ☁️ Cloud |  |
 | `API_OPEN_ROUTER_API_KEY` | – | secret | ☁️ Cloud | OpenRouter API key. Used by BYOK provider in libs/organization/.../get-models-by-provider.use-case.ts. |
+| `API_ORCA_ROUTER_API_KEY` | – | secret | ☁️ Cloud | OrcaRouter API key (keys start with sk-orca-). Used by BYOK provider in libs/organization/.../get-models-by-provider.use-case.ts. |
 | `API_MORPHLLM_API_KEY` | – | secret | ⚙️ Both (opt-in) | MorphLLM (fast-apply model). When set, the review pipeline uses MorphLLM to apply LLM-suggested code edits automatically and reliably (better than letting the main LLM rewrite files). Used in libs/code-review/pipeline/stages/validate-suggestions.stage.ts. Without it, the "apply suggested fix" feature falls back to the main LLM with lower accuracy. |
 | `API_EXA_KEY` | – | secret | ⚙️ Both (opt-in) | Exa (semantic web search). When set, code-review agents can search external documentation during review (e.g. fetch docs about a library API the PR uses). Used in libs/code-review/infrastructure/adapters/services/documentation- search-exa.service.ts and the agent providers. Without it, agents skip the documentation-fetching loop and review using only repo context. |
 

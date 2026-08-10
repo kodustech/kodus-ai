@@ -673,6 +673,15 @@ export class TestByokConnectionUseCase {
                     },
                 };
 
+            case BYOKProvider.ORCAROUTER:
+                return {
+                    url: 'https://api.orcarouter.ai/v1/models',
+                    headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                };
+
             case BYOKProvider.NOVITA:
                 return {
                     url: 'https://api.novita.ai/v3/openai/models',

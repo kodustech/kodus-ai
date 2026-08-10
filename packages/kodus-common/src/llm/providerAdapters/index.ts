@@ -20,6 +20,7 @@ export function getAdapter(providerId: string): ProviderAdapter {
             return new OpenAIAdapter();
         case 'openai_compatible':
         case 'open_router':
+        case 'orcarouter':
             return new OpenAIAdapter();
         case 'anthropic':
         case 'anthropic_compatible':

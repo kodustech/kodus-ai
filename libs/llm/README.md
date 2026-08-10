@@ -18,7 +18,7 @@ lives here (NOT review/agent logic).
   through the process-wide BYOK concurrency limiter and reports BYOK failures
   (model-level, via AI SDK `wrapLanguageModel`; the failure reporter is injected).
 - **`reasoning-options.ts`** — builds provider-specific reasoning/thinking
-  `providerOptions` (Anthropic / Gemini / OpenAI / OpenRouter / compatible) from a
+  `providerOptions` (Anthropic / Gemini / OpenAI / OpenRouter / OrcaRouter / compatible) from a
   normalized `ReasoningEffort`, plus OpenRouter provider-pinning.
 - **`llm-call.ts`** — call timeouts (`AGENT_TIMEOUT_MS`, `LLM_CALL_TIMEOUT_MS`,
   `timeoutSignal`, `hardTimeout`) and `tracedGenerateText` (generateText + hard

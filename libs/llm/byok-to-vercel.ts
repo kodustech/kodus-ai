@@ -171,6 +171,7 @@ const DEFAULT_MODEL = {
  * - GOOGLE_GEMINI → @ai-sdk/google
  * - GOOGLE_VERTEX → @ai-sdk/google-vertex
  * - OPEN_ROUTER → @ai-sdk/openai-compatible (OpenRouter is OpenAI-compatible)
+ * - ORCAROUTER → @ai-sdk/openai-compatible (OrcaRouter is OpenAI-compatible)
  * - OPENAI_COMPATIBLE → @ai-sdk/openai-compatible
  * - NOVITA → @ai-sdk/openai-compatible
  *
@@ -196,7 +197,11 @@ export type ByokModelOptions = {
     structuredOutputs?: boolean;
 };
 
-const OPENROUTER_JSON_SCHEMA_PREFIXES = [
+// Shared upstream-prefix allowlist for routers that translate
+// `response_format: json_schema` into each upstream's native format
+// (OpenRouter, OrcaRouter). Models outside these prefixes keep the
+// conservative `json_object` path.
+const GATEWAY_JSON_SCHEMA_PREFIXES = [
     'openai/',
     'anthropic/',
     'google/',
@@ -219,8 +224,11 @@ function shouldEnableJsonSchema(
     model: string,
     baseURL?: string,
 ): boolean {
-    if (provider === BYOKProvider.OPEN_ROUTER) {
-        return OPENROUTER_JSON_SCHEMA_PREFIXES.some((p) =>
+    if (
+        provider === BYOKProvider.OPEN_ROUTER ||
+        provider === BYOKProvider.ORCAROUTER
+    ) {
+        return GATEWAY_JSON_SCHEMA_PREFIXES.some((p) =>
             model.toLowerCase().startsWith(p),
         );
     }
@@ -440,6 +448,16 @@ export function byokToVercelModel(
                 name: 'open-router',
                 apiKey,
                 baseURL: baseURL || 'https://openrouter.ai/api/v1',
+                supportsStructuredOutputs:
+                    options.structuredOutputs === true &&
+                    shouldEnableJsonSchema(provider, model, baseURL),
+            })(model);
+
+        case BYOKProvider.ORCAROUTER:
+            return createOpenAICompatible({
+                name: 'orcarouter',
+                apiKey,
+                baseURL: baseURL || 'https://api.orcarouter.ai/v1',
                 supportsStructuredOutputs:
                     options.structuredOutputs === true &&
                     shouldEnableJsonSchema(provider, model, baseURL),
