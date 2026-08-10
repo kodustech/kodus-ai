@@ -160,7 +160,7 @@ export class GetPRsByRepoUseCase implements IUseCase {
 
         if (!repository) {
             this.logger.warn({
-                message: 'Repository not found for dry run',
+                message: 'Repository not found for the requested id',
                 context: GetPRsByRepoUseCase.name,
                 serviceName: GetPRsByRepoUseCase.name,
                 metadata: {
