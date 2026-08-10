@@ -14,11 +14,18 @@ name: "E2E: build test images"
 #                PR #1666 merged 2026-08-08 but selfhosted-2.1.30 predates it,
 #                so the matrix kept faithfully reproducing a fixed bug.
 #
-# Destination: `registry_owner` (default: this repo's owner). Point it at a
-# personal namespace to keep throwaway builds out of the production registry —
-# that is what kodustech/kodus-installer#48 (KODUS_REGISTRY) enables. Pushing
-# outside this org needs GHCR_PUBLISH_TOKEN, a PAT with write:packages; the
-# built-in GITHUB_TOKEN cannot.
+# Destination: this repo's owner by default, using the built-in GITHUB_TOKEN —
+# the same auth the release train already uses to push images, so a contributor
+# needs no secret and no setup to run this.
+#
+# Keeping the org registry tidy is handled by RETENTION, not by isolation:
+# e2e-images-cleanup.yml prunes `test-*` / `cloud-*` versions on a schedule.
+# Publishing them to a personal namespace instead was considered and rejected —
+# it ties shared infrastructure to one person's PAT, breaks on rotation or
+# turnover, and gives every contributor a different setup.
+#
+# `registry_owner` + GHCR_PUBLISH_TOKEN (a PAT with write:packages) remain as an
+# escape hatch for pushing outside this org; the built-in token cannot.
 #
 # Why this exists: `API_CLOUD_MODE` is baked at BUILD time
 # (libs/ee/configs/environment/environment.template.ts — "Once compiled, the
