@@ -17,7 +17,7 @@ import {
     ExternalLinkIcon,
     Settings2Icon,
 } from "lucide-react";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
 
 import type { EditKeyForm } from "../_types";
 
@@ -65,7 +65,9 @@ const NumberField = ({
             control={control}
             render={({ field, fieldState }) => (
                 <FormControl.Root>
-                    <FormControl.Label htmlFor={name}>{label}</FormControl.Label>
+                    <FormControl.Label htmlFor={name}>
+                        {label}
+                    </FormControl.Label>
                     <FormControl.Input>
                         <Input
                             id={name}
@@ -109,10 +111,18 @@ export const ByokAdvancedSettings = ({
 }: {
     defaultOpen?: boolean;
 }) => {
-    const { control, watch } = useFormContext<EditKeyForm>();
-    const currentEffort = watch("reasoningEffort");
-    const isCustom = currentEffort === ("custom" as string);
-    const currentProvider = watch("provider");
+    const { control } = useFormContext<EditKeyForm>();
+    // useWatch (a hook), not watch(): the React Compiler is enabled for this
+    // app and memoizes `watch("name")` — a plain call on a stable function
+    // with a constant argument — so its result froze at the first render and
+    // the Custom textarea never appeared when the toggle changed.
+    const currentEffort = useWatch({ control, name: "reasoningEffort" });
+    const configOverride = useWatch({
+        control,
+        name: "reasoningConfigOverride",
+    });
+    const isCustom = currentEffort === "custom";
+    const currentProvider = useWatch({ control, name: "provider" });
     const isOpenRouter = currentProvider === "open_router";
     const customPlaceholder = getCustomPlaceholder(currentProvider);
 
@@ -152,9 +162,7 @@ export const ByokAdvancedSettings = ({
                                     className="bg-card-lv2 grid grid-cols-5 gap-px overflow-hidden rounded-lg p-0.5"
                                     value={
                                         field.value ??
-                                        (watch("reasoningConfigOverride")
-                                            ? "custom"
-                                            : "none")
+                                        (configOverride ? "custom" : "none")
                                     }
                                     onValueChange={(value) => {
                                         if (!value) return;
@@ -166,7 +174,7 @@ export const ByokAdvancedSettings = ({
                                         <ToggleGroup.Item
                                             key={opt.value}
                                             value={opt.value}
-                                            className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 data-[state=on]:shadow-sm rounded-md px-2 py-1.5 text-xs font-medium transition-colors data-[state=on]:ring-1">
+                                            className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 rounded-md px-2 py-1.5 text-xs font-medium transition-colors data-[state=on]:shadow-sm data-[state=on]:ring-1">
                                             {opt.label}
                                         </ToggleGroup.Item>
                                     ))}
@@ -196,9 +204,9 @@ export const ByokAdvancedSettings = ({
                                         <FormControl.Helper>
                                             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                                 <span>
-                                                    Paste the options directly
-                                                    — Kodus wraps them under
-                                                    the active provider's
+                                                    Paste the options directly —
+                                                    Kodus wraps them under the
+                                                    active provider&apos;s
                                                     namespace automatically.
                                                 </span>
                                                 <a
@@ -221,13 +229,15 @@ export const ByokAdvancedSettings = ({
                             />
                         )}
 
-                        {!isCustom && currentEffort && currentEffort !== "none" && (
-                            <p className="text-text-tertiary text-xs">
-                                Mapped automatically to your provider (Claude
-                                extended thinking, Gemini thinking level, OpenAI
-                                reasoning effort).
-                            </p>
-                        )}
+                        {!isCustom &&
+                            currentEffort &&
+                            currentEffort !== "none" && (
+                                <p className="text-text-tertiary text-xs">
+                                    Mapped automatically to your provider
+                                    (Claude extended thinking, Gemini thinking
+                                    level, OpenAI reasoning effort).
+                                </p>
+                            )}
                     </div>
 
                     <Separator className="bg-card-lv2" />
