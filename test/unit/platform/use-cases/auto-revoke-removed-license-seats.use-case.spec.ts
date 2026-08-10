@@ -324,6 +324,22 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
             );
         });
 
+        // Reaching the write proves the config existed, so an empty re-read means
+        // an admin deleted it mid-sweep. Recreating it from defaults would drop
+        // allowedUsers/revokeGraceDays and resurrect a deleted row.
+        it('does not resurrect a config deleted while the sweep was running', async () => {
+            mockOrganizationParametersService.findByKey
+                .mockResolvedValueOnce(configValue())
+                .mockResolvedValueOnce(null);
+
+            const result = await useCase.execute({ organizationAndTeamData });
+
+            expect(result.status).toBe('ok');
+            expect(
+                mockOrganizationParametersService.createOrUpdateConfig,
+            ).not.toHaveBeenCalled();
+        });
+
         it('does not rewrite the config when nothing changed', async () => {
             mockOrganizationParametersService.findByKey.mockResolvedValue(
                 configValue({

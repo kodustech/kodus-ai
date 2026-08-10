@@ -155,12 +155,23 @@ export class AutoRevokeRemovedLicenseSeatsUseCase {
             organizationAndTeamData,
         );
 
-        const config: OrganizationParametersAutoAssignConfig =
-            current?.configValue ?? { enabled: false, ignoredUsers: [] };
+        // execute() already proved the config existed, so an empty re-read means
+        // it was deleted during the sweep. Writing here would resurrect it from
+        // defaults and silently drop allowedUsers/revokeGraceDays. Dropping the
+        // timers instead is harmless: with no config the next sweep is a no-op.
+        if (!current?.configValue) {
+            this.logger.warn({
+                message:
+                    'Auto license assignment config disappeared mid-sweep; not persisting revocation timers',
+                context: AutoRevokeRemovedLicenseSeatsUseCase.name,
+                metadata: { ...organizationAndTeamData },
+            });
+            return;
+        }
 
         await this.organizationParametersService.createOrUpdateConfig(
             OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
-            { ...config, pendingRevocations: next },
+            { ...current.configValue, pendingRevocations: next },
             organizationAndTeamData,
         );
     }
