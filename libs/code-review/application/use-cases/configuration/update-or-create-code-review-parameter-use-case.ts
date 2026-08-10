@@ -760,6 +760,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             deepDifference(parentConfig, newResolvedConfig),
         );
 
+        // An empty byok model override means "inherit" — it must never be stored
+        // as a scope-level key. deepDifference keeps it (parent has no key, so
+        // "" !== undefined), which would persist a phantom override: the value
+        // correctly inherits, but the settings badge reads the leftover repo/dir
+        // key as "Overridden". Drop the empty leaves so clearing truly inherits.
+        for (const key of ['byokModelId', 'byokModel'] as const) {
+            if ((newDelta as Record<string, unknown>)[key] === '') {
+                delete (newDelta as Record<string, unknown>)[key];
+            }
+        }
+
         const pathsChanged = !!previousFolders && previousFolders.length > 0;
         const isSelectionOnlyPayload =
             this.isSelectionOnlyConfigPayload(sanitizedIncomingConfig) &&
