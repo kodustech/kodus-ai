@@ -10,12 +10,14 @@ import { ProfileConfigKey } from '@libs/identity/domain/profile-configs/enum/pro
 // `findOne({ profile: { uuid }, configKey })` path AND as the DB-level
 // guard against the race that ProfileConfigService.createOrUpdateConfig
 // used to hit (two concurrent callers each seeing null on findOne and
-// both taking the create branch — duplicate rows). Ships in a dedicated
-// migration because a preflight de-dup step is required before the
-// UNIQUE can be built on existing data.
+// both taking the create branch — duplicate rows). Actual `CREATE
+// UNIQUE INDEX CONCURRENTLY` (with preflight de-dup) lives in the
+// paired migration; this declaration is only doc + a marker for
+// developers grepping models. `synchronize: false` at the entity level
+// (kept out of the decorator options because TypeORM's `@Index(name,
+// fields, options)` overload doesn't accept it).
 @Index('UQ_profile_configs_profile_key', ['profile', 'configKey'], {
     unique: true,
-    synchronize: false,
 })
 export class ProfileConfigModel extends CoreModel {
     @Column({
