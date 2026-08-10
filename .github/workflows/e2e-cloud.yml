@@ -294,7 +294,7 @@ jobs:
                   # secret + model the self-hosted matrix injects, so both
                   # targets review with one debuggable configuration.
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'gpt-5.6-luna' }}
                   # Org-Administration token (QA environment secret) used ONLY
                   # by trial-managed-review to create/delete its throwaway repo
                   # per run. Absent → that scenario is SKIPPED, not failed

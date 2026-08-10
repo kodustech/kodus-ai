@@ -91,7 +91,7 @@ jobs:
                   GH_APP_ID: ${{ secrets.GH_APP_ID }}
                   GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'gpt-5.6-luna' }}
               run: |
                   set -uo pipefail
                   bash tests/e2e/provisioning/cloud/aws-env.sh up | tee /tmp/env.out
@@ -123,7 +123,7 @@ jobs:
                   GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
                   GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'gpt-5.6-luna' }}
               working-directory: tests/e2e
               run: ./node_modules/.bin/tsx cli/run-matrix.ts "$MATRIX_FILE" --target cloud --skip-missing-tokens
 

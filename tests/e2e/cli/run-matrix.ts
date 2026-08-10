@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { resolveScenarios } from "../scenarios/index.js";
+import { llmPreflight, describeLlmPreflight } from "../lib/llm-preflight.js";
 import {
     computeVerdict,
     describeCell,
@@ -286,6 +287,28 @@ async function main() {
                 "All cells were skipped due to missing provider tokens. Set at least one provider's env vars and re-run.",
             );
             process.exit(2);
+        }
+    }
+
+    // Check the review LLM before spending the run on it. Three consecutive
+    // runs were burned discovering at minute ~40 that the key had no budget;
+    // the scenarios failed exactly as designed and the verdict read like a
+    // product regression. One token answers it up front.
+    //
+    // A dead LLM makes the run INCONCLUSIVE, not red: we could not verify the
+    // product, which is a different statement from "the product is broken".
+    if (!dryRun) {
+        const llm = await llmPreflight();
+        if (llm.status === "ok") {
+            log.info(describeLlmPreflight(llm));
+        } else if (llm.status === "unknown") {
+            log.info(describeLlmPreflight(llm));
+        } else {
+            log.err(describeLlmPreflight(llm));
+            log.err(
+                "Refusing to run: every review scenario would fail for this reason, and the result would say nothing about the product.",
+            );
+            process.exit(EXIT_INCONCLUSIVE);
         }
     }
 

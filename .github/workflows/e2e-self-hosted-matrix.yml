@@ -373,7 +373,7 @@ jobs:
                   # configures (setup-tenants configureByok), so cloud and
                   # self-hosted run the identical model — one variable to debug.
                   API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'gpt-5.6-luna' }}
 
                   TARGET_FILTER_PROVIDER: ${{ matrix.cell.provider }}
 
