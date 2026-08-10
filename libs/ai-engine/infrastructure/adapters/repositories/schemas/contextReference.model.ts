@@ -12,12 +12,23 @@ import {
 // (`find({ entityType, entityId })`) — the table had zero indexes and
 // was doing a Seq Scan for every one of the ~2.5M queries/day this
 // path emits. Added after the 2026-08-06 pool-exhaustion incident.
-// `synchronize: false` like its siblings below: the CONCURRENTLY build
-// is owned by migration CronPoolReliefIndexes2026080600000000, and
-// leaving TypeORM out of it keeps migration:generate from emitting a
-// second, non-concurrent CREATE for the same name.
+// Declared with its columns (unlike the siblings below) because this
+// one is a plain btree that the decorator CAN express, so keeping it in
+// the entity documents the shape and lets migration:generate diff it.
+// It matches migration CronPoolReliefIndexes2026080600000000 name-for-
+// name and column-for-column, so generate sees no drift.
+//
+// `concurrent` is honoured by the postgres driver (createIndexSql emits
+// CREATE INDEX CONCURRENTLY when it is set), so a generated migration
+// would match how the hand-written one builds it. In this app it never
+// fires — synchronize is off and the migration owns the build — so treat
+// it as documenting intent.
+//
+// `synchronize: false` is NOT available on this overload: TypeORM only
+// accepts it on the name-only forms of @Index, which is why the two
+// below can use it and this one cannot.
 @Index('IDX_context_references_entity', ['entityType', 'entityId'], {
-    synchronize: false,
+    concurrent: true,
 })
 // Partial: covers `find({ parentReferenceId })` while skipping the
 // many-null rows a full-column btree would waste space on. Same
