@@ -10,6 +10,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { resolveAgentModel } from '@libs/llm/agent-model';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
@@ -611,8 +612,10 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         // models that only accept their configured value (e.g. kimi-k2.7-code
         // wants 1). For a BYOK model we honor the config (omit when unset →
         // provider default); for a system model we keep the call's option.
+        // Withheld entirely on Anthropic 4.7+, which removed sampling params
+        // and 400s the whole request when one is present.
         const temperature = this.byokConfig?.main
-            ? this.byokConfig.main.temperature
+            ? resolveByokTemperature(this.byokConfig.main)
             : options.temperature;
         const maxOutputTokens =
             this.byokConfig?.main?.maxOutputTokens ?? options.maxTokens;
