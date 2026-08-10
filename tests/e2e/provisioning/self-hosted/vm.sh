@@ -493,6 +493,13 @@ ssh_vm "cd /opt/kodus-installer && cp .env.example .env && ./scripts/generate-se
 #
 # The PEM is escaped HERE, in normal script context. Doing it inside the remote
 # heredoc means fighting three layers of backslash expansion for no benefit.
+# Registry the stack pulls images from. The installer's compose reads
+# ${KODUS_REGISTRY:-ghcr.io/kodustech} (kodustech/kodus-installer#48), so
+# leaving this unset keeps pulling the published images exactly as before.
+# Set it to test UNRELEASED code without publishing next to the production
+# images — the matrix otherwise only ever sees the newest release, which is
+# how it kept reproducing a bug that was already fixed on main.
+REGISTRY_VALUE="${KODUS_REGISTRY:-}"
 APP_ID_VALUE="${GH_APP_ID:-}"
 APP_PEM_ESCAPED=""
 if [ -n "${GH_APP_PRIVATE_KEY:-}" ]; then
@@ -552,6 +559,9 @@ env_set API_MG_DB_PASSWORD "\$(openssl rand -hex 16)"
 env_set API_DATABASE_DISABLE_SSL "true"
 env_set API_PG_DB_SSL "false"
 env_set WORKER_ROLE "code-review"
+if [ -n "$REGISTRY_VALUE" ]; then
+    env_set KODUS_REGISTRY "$REGISTRY_VALUE"
+fi
 if [ -n "$APP_ID_VALUE" ]; then
     env_set API_GITHUB_APP_ID "$APP_ID_VALUE"
 fi

@@ -63,6 +63,11 @@ on:
                 description: "GHCR image tag, NOT the git tag (e.g. 2.1.30 or 2.1.30-rc.117). Blank on the cron - resolved from the newest release."
                 required: false
                 type: string
+            registry:
+                description: "Image registry override (e.g. ghcr.io/<user>) for testing unreleased builds. Blank = the published images."
+                required: false
+                default: ""
+                type: string
             matrix_file:
                 description: "Matrix YAML path under tests/e2e/"
                 required: false
@@ -248,6 +253,8 @@ jobs:
                   # vars.E2E_VM_PROVIDER flips it back to `digitalocean`
                   # without a code change if AWS misbehaves.
                   TEST_VM_PROVIDER: ${{ vars.E2E_VM_PROVIDER || 'aws' }}
+                  # Empty = the published images, i.e. today's behaviour.
+                  KODUS_REGISTRY: ${{ inputs.registry }}
                   # Region-boxed agent credential (us-east-2). It cannot reach
                   # us-east-1, where prod and QA live, and an IAM guardrail
                   # caps instance families at t3/t3a/t4g.
