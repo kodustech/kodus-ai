@@ -348,6 +348,46 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
         }
     }
 
+    async findByOrganizationAndConfigKey(
+        organizationId: string,
+        configKey: IntegrationConfigKey,
+    ): Promise<IntegrationConfigEntity[]> {
+        try {
+            // Single JOIN query on integration_configs → integrations →
+            // organization. Callers that need "every config of a given key
+            // for this org" previously issued one find({ integration: {
+            // uuid } }) per integration inside a sequential loop
+            // (context-resolution.service), a textbook N+1 on the
+            // code-review hot path. Passing the nested object literal
+            // straight to TypeORM (matching the other JOIN queries in
+            // this file, e.g. findOneIntegrationConfigWithIntegrations)
+            // collapses it into one query.
+            const integrationConfigModels =
+                await this.integrationConfigRepository.find({
+                    where: {
+                        configKey,
+                        integration: {
+                            organization: { uuid: organizationId } as any,
+                            status: true,
+                        } as any,
+                    },
+                    relations: [
+                        'integration',
+                        'integration.organization',
+                        'team',
+                    ],
+                });
+
+            return mapSimpleModelsToEntities(
+                integrationConfigModels,
+                IntegrationConfigEntity,
+            );
+        } catch (error) {
+            console.log(error);
+            return [];
+        }
+    }
+
     async findOneIntegrationConfigWithIntegrations(
         configKey: IntegrationConfigKey,
         organizationAndTeamData: OrganizationAndTeamData,

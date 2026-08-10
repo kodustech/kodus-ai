@@ -280,51 +280,58 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     context.organizationAndTeamData,
                 );
 
-            for (const suggestion of unmatchedSuggestions) {
-                await this.issuesService.create({
-                    title: suggestion.oneSentenceSummary,
-                    description: suggestion.suggestionContent,
-                    filePath: suggestion.relevantFile,
-                    language: suggestion.language,
-                    label: suggestion?.label as LabelType,
-                    severity: suggestion?.severity as SeverityLevel,
-                    contributingSuggestions: [
-                        {
-                            id: suggestion.id,
-                            prNumber: context.pullRequest.number,
-                            prAuthor: {
-                                id: pullRequest?.user?.id.toString() || '',
-                                name: pullRequest?.user?.name || '',
+            // Each create is independent — parallelize instead of
+            // sequential await. Cuts latency of this step from N × RTT
+            // to max(RTT) on the code-review hot path when a PR has
+            // many unmatched suggestions.
+            await Promise.all(
+                unmatchedSuggestions.map((suggestion) =>
+                    this.issuesService.create({
+                        title: suggestion.oneSentenceSummary,
+                        description: suggestion.suggestionContent,
+                        filePath: suggestion.relevantFile,
+                        language: suggestion.language,
+                        label: suggestion?.label as LabelType,
+                        severity: suggestion?.severity as SeverityLevel,
+                        contributingSuggestions: [
+                            {
+                                id: suggestion.id,
+                                prNumber: context.pullRequest.number,
+                                prAuthor: {
+                                    id:
+                                        pullRequest?.user?.id.toString() || '',
+                                    name: pullRequest?.user?.name || '',
+                                },
+                                ...(suggestion.brokenKodyRulesIds?.length
+                                    ? {
+                                          brokenKodyRulesIds:
+                                              suggestion.brokenKodyRulesIds,
+                                      }
+                                    : {}),
                             },
-                            ...(suggestion.brokenKodyRulesIds?.length
-                                ? {
-                                      brokenKodyRulesIds:
-                                          suggestion.brokenKodyRulesIds,
-                                  }
-                                : {}),
+                        ],
+                        repository: {
+                            id: context.repository.id,
+                            name: context.repository.name,
+                            full_name: context.repository.full_name,
+                            platform: context.repository.platform,
                         },
-                    ],
-                    repository: {
-                        id: context.repository.id,
-                        name: context.repository.name,
-                        full_name: context.repository.full_name,
-                        platform: context.repository.platform,
-                    },
-                    organizationId:
-                        context.organizationAndTeamData.organizationId,
-                    status: IssueStatus.OPEN,
-                    owner: {
-                        gitId: pullRequest.user.id,
-                        username: pullRequest.user.username,
-                    },
-                    reporter: {
-                        gitId: 'kodus',
-                        username: 'Kodus',
-                    },
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                });
-            }
+                        organizationId:
+                            context.organizationAndTeamData.organizationId,
+                        status: IssueStatus.OPEN,
+                        owner: {
+                            gitId: pullRequest.user.id,
+                            username: pullRequest.user.username,
+                        },
+                        reporter: {
+                            gitId: 'kodus',
+                            username: 'Kodus',
+                        },
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    }),
+                ),
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error creating new issues',
@@ -416,11 +423,17 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     );
 
                 if (llmResult?.issueVerificationResults) {
+                    // Push into the existing `updatePromises` array
+                    // instead of awaiting sequentially — the outer
+                    // Promise.all below then runs every updateStatus
+                    // in parallel. Was N × RTT, becomes max(RTT).
                     for (const resolution of llmResult.issueVerificationResults) {
                         if (!resolution.isIssuePresentInCode) {
-                            await this.issuesService.updateStatus(
-                                resolution.issueId,
-                                IssueStatus.RESOLVED,
+                            updatePromises.push(
+                                this.issuesService.updateStatus(
+                                    resolution.issueId,
+                                    IssueStatus.RESOLVED,
+                                ),
                             );
                         }
                     }
