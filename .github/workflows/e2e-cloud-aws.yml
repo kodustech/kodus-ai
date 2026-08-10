@@ -90,8 +90,17 @@ jobs:
                   KODUS_ENV_STATE_DIR: ${{ github.workspace }}/.e2e-envs
                   GH_APP_ID: ${{ secrets.GH_APP_ID }}
                   GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
-                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'gpt-5.4-mini' }}
+                  # E2E_LLM_API_KEY is the key for whatever vendor E2E_LLM_BASE_URL
+                  # points at (Fireworks today). Falls back to the OpenAI secret so
+                  # nothing breaks before it is set.
+                  API_OPEN_AI_API_KEY: ${{ secrets.E2E_LLM_API_KEY || secrets.BYOK_OPENAI_API_KEY }}
+                  # DeepSeek V4 Flash via Fireworks. The harness writes these
+                  # into the tenant's byok_config (runner.ts:applyByokToTenant),
+                  # which the product reads BEFORE the env fallback — so the
+                  # provider is stated, never inferred from the model name.
+                  API_LLM_PROVIDER: ${{ vars.E2E_LLM_PROVIDER || 'openai_compatible' }}
+                  API_OPENAI_FORCE_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
               run: |
                   set -uo pipefail
                   bash tests/e2e/provisioning/cloud/aws-env.sh up | tee /tmp/env.out
@@ -122,8 +131,17 @@ jobs:
                   GH_APP_ID: ${{ secrets.GH_APP_ID }}
                   GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
                   GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
-                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'gpt-5.4-mini' }}
+                  # E2E_LLM_API_KEY is the key for whatever vendor E2E_LLM_BASE_URL
+                  # points at (Fireworks today). Falls back to the OpenAI secret so
+                  # nothing breaks before it is set.
+                  API_OPEN_AI_API_KEY: ${{ secrets.E2E_LLM_API_KEY || secrets.BYOK_OPENAI_API_KEY }}
+                  # DeepSeek V4 Flash via Fireworks. The harness writes these
+                  # into the tenant's byok_config (runner.ts:applyByokToTenant),
+                  # which the product reads BEFORE the env fallback — so the
+                  # provider is stated, never inferred from the model name.
+                  API_LLM_PROVIDER: ${{ vars.E2E_LLM_PROVIDER || 'openai_compatible' }}
+                  API_OPENAI_FORCE_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
               working-directory: tests/e2e
               run: ./node_modules/.bin/tsx cli/run-matrix.ts "$MATRIX_FILE" --target cloud --skip-missing-tokens
 
