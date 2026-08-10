@@ -34,12 +34,11 @@ import {
     useCodeReviewModelData,
 } from "src/app/(app)/settings/_components/context";
 import { useCurrentConfigLevel } from "src/app/(app)/settings/_hooks";
-import { OverrideIndicatorForm } from "src/app/(app)/settings/code-review/_components/override";
+import { OverrideIndicator } from "src/app/(app)/settings/code-review/_components/override";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
 
-const INHERIT_ITEM = "__inherit__";
 const MANUAL_ITEM = "__manual__";
 
 /**
@@ -168,7 +167,28 @@ export const BYOKModelSelectorSection = () => {
                                     Code review model
                                 </Heading>
 
-                                <OverrideIndicatorForm fieldName="byokModelId" />
+                                {/* Drive the badge from the SAME leaf and value
+                                    the description text uses (`byokModelId ??
+                                    byokModel`, plus the Controller's field
+                                    value) so the two indicators can never
+                                    disagree. The generic OverrideIndicatorForm
+                                    read only `byokModelId` via useWatch, so a
+                                    legacy `byokModel` override — or the transient
+                                    post-save window before the refetch lands —
+                                    made the badge vanish while the text still
+                                    announced the override. */}
+                                <OverrideIndicator
+                                    currentValue={currentValue}
+                                    initialState={
+                                        leaf ?? {
+                                            value: "",
+                                            level: FormattedConfigLevel.DEFAULT,
+                                        }
+                                    }
+                                    handleRevert={() =>
+                                        selectModel(parentValue)
+                                    }
+                                />
                             </div>
 
                             <p className="text-text-secondary text-sm">
@@ -232,10 +252,7 @@ export const BYOKModelSelectorSection = () => {
                                         className="w-[var(--radix-popover-trigger-width)] p-0">
                                         <Command
                                             filter={(value, search) => {
-                                                if (
-                                                    value === INHERIT_ITEM ||
-                                                    value === MANUAL_ITEM
-                                                ) {
+                                                if (value === MANUAL_ITEM) {
                                                     return 1;
                                                 }
                                                 const model = models.find(
@@ -261,26 +278,14 @@ export const BYOKModelSelectorSection = () => {
                                                     No model found.
                                                 </CommandEmpty>
 
-                                                <CommandItem
-                                                    key={INHERIT_ITEM}
-                                                    value={INHERIT_ITEM}
-                                                    onSelect={() =>
-                                                        selectModel(parentValue)
-                                                    }>
-                                                    <span className="flex flex-col">
-                                                        <span>
-                                                            Use inherited model
-                                                        </span>
-                                                        {inheritedModelId && (
-                                                            <span className="text-text-tertiary text-xs">
-                                                                {modelName(
-                                                                    inheritedModelId,
-                                                                )}
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                </CommandItem>
-
+                                                {/* Just the connected models, one
+                                                    row each. Reverting to the
+                                                    inherited model is the ↺ button
+                                                    next to the "Overridden" badge —
+                                                    no separate "inherit" row that
+                                                    restates a model already listed.
+                                                    Everything keys off the stable
+                                                    model id; no name matching. */}
                                                 {ArrayHelpers.sortAlphabetically(
                                                     models,
                                                     "name",

@@ -173,3 +173,48 @@ describe("BYOKModelSelectorSection — byokModelId re-key", () => {
         expect(screen.getByText("GPT Legacy")).toBeInTheDocument();
     });
 });
+
+describe("BYOKModelSelectorSection — badge/text parity", () => {
+    // Regression: the "Overridden" badge read ONLY config.byokModelId while the
+    // description text read `config.byokModelId ?? config.byokModel`. A repo
+    // override stored under the legacy `byokModel` leaf (any override created
+    // before the id migration, and the transient post-save window before the
+    // background refetch replaces the config) made the badge vanish while the
+    // text still announced the override — the two indicators disagreed.
+    it("shows the Overridden badge for a repository-level legacy byokModel override", () => {
+        render(
+            <Harness
+                config={scopedConfig({
+                    byokModel: {
+                        value: "gpt-legacy",
+                        level: FormattedConfigLevel.REPOSITORY,
+                    },
+                })}
+            />,
+        );
+
+        // The description treats it as an override (it is not the inherited
+        // model), so the badge MUST agree.
+        expect(
+            screen.getByText(/run(s)? (with|for)/i),
+        ).toBeInTheDocument();
+        expect(screen.getByText("Overridden")).toBeInTheDocument();
+    });
+
+    it("does NOT show the Overridden badge when the value is inherited", () => {
+        render(
+            <Harness
+                config={scopedConfig({
+                    byokModelId: {
+                        value: "gpt-4o",
+                        level: FormattedConfigLevel.GLOBAL,
+                    },
+                })}
+            />,
+        );
+
+        // Inherited (level is the parent GLOBAL, not the current REPOSITORY
+        // scope) — no override, so no badge.
+        expect(screen.queryByText("Overridden")).not.toBeInTheDocument();
+    });
+});
