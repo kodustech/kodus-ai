@@ -25,9 +25,13 @@ export async function installCodexSessionHooks(
         }
     }
 
-    // Check if already installed
-    if (content.includes(SESSION_HOOK_MARKER)) {
+    const markerCount = content.split(SESSION_HOOK_MARKER).length - 1;
+    if (markerCount === 1) {
         return { configPath, changed: false };
+    }
+    if (markerCount > 1) {
+        await removeCodexSessionHooks(configPath);
+        content = await fs.readFile(configPath, 'utf-8').catch(() => '');
     }
 
     const hookBlock = [

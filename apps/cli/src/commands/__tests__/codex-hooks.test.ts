@@ -30,7 +30,8 @@ async function writeConfig(content: string): Promise<void> {
 /**
  * `notify` was the transport for the duplicate capture pipeline, which is gone.
  * Codex lifecycle capture now runs through `[[hooks]]`, so the only thing left
- * to do with a Kodus `notify` line is remove it.
+ * to do with a legacy `kodus decisions` notify line is remove it. Other Kodus
+ * commands have separate ownership and must be preserved.
  */
 describe('removeCodexNotify', () => {
     for (const [
@@ -50,16 +51,16 @@ describe('removeCodexNotify', () => {
         });
     }
 
-    it('removes an unrecognised kodus notify line', async () => {
+    it('preserves a Kodus notify line owned by another feature', async () => {
         await writeConfig(
             'model = "o3"\nnotify = ["kodus", "something", "new"]\n',
         );
 
         const result = await removeCodexNotify(configPath());
 
-        expect(result.removed).toBe(true);
+        expect(result.removed).toBe(false);
         const content = await fs.readFile(configPath(), 'utf-8');
-        expect(content).not.toContain('notify =');
+        expect(content).toContain('notify = ["kodus", "something", "new"]');
     });
 
     it('leaves another tool’s notify entry alone', async () => {

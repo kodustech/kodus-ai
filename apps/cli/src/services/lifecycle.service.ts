@@ -102,14 +102,14 @@ function toTraceToolCalls(
     }));
 }
 
-function summarizeToolInput(
+export function summarizeToolInput(
     repoRoot: string,
     call: ToolCall,
 ): string | undefined {
     const input = call.input ?? {};
 
-    // A shell command is quoted verbatim; a path is rewritten repo-relative
-    // like every other path this feature stores.
+    // A path is rewritten repo-relative like every other path this feature
+    // stores. The selected value is redacted in full before truncation below.
     const command = pickInputString(input, 'command');
     const filePath =
         pickInputString(input, 'file_path') ?? pickInputString(input, 'path');
@@ -124,7 +124,27 @@ function summarizeToolInput(
         return undefined;
     }
 
-    return redact(candidate.slice(0, 300));
+    return truncateRedacted(redact(candidate), 300);
+}
+
+function truncateRedacted(value: string, maxLength: number): string {
+    if (value.length <= maxLength) {
+        return value;
+    }
+
+    const truncated = value.slice(0, maxLength);
+    const placeholder = '[REDACTED]';
+    for (
+        let prefixLength = 1;
+        prefixLength < placeholder.length;
+        prefixLength += 1
+    ) {
+        const prefix = placeholder.slice(0, prefixLength);
+        if (truncated.endsWith(prefix)) {
+            return `${truncated.slice(0, maxLength - placeholder.length)}${placeholder}`;
+        }
+    }
+    return truncated;
 }
 
 function pickInputString(
@@ -230,7 +250,7 @@ class LifecycleService {
         await hookLogger.info('turn-start', 'lifecycle', {
             agent: agentType,
             model_session_id: event.sessionId,
-            prompt: event.prompt?.slice(0, 200),
+            prompt: redact(event.prompt ?? '').slice(0, 200),
         });
 
         const [branch, commitBefore] = await Promise.all([
@@ -456,7 +476,7 @@ class LifecycleService {
             model_session_id: event.sessionId,
             tool_use_id: event.toolUseId,
             subagent_type: event.subagentType,
-            task_description: event.taskDescription?.slice(0, 200),
+            task_description: redact(event.taskDescription ?? '').slice(0, 200),
         });
 
         if (!event.toolUseId) {

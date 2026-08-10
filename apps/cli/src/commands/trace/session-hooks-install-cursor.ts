@@ -69,20 +69,16 @@ function upsertHook(
     const entries = hooks[eventName] ?? [];
     hooks[eventName] = entries;
 
-    // Check if exact command already exists
-    if (entries.some((e) => e.command === command)) {
+    const managed = entries.filter((entry) =>
+        isSessionsHookCommand(entry.command),
+    );
+    if (managed.length === 1 && managed[0].command === command) {
         return false;
     }
-
-    // Replace existing kodus sessions hook if present
-    for (const entry of entries) {
-        if (isSessionsHookCommand(entry.command)) {
-            entry.command = command;
-            return true;
-        }
-    }
-
-    entries.push({ command });
+    hooks[eventName] = [
+        ...entries.filter((entry) => !isSessionsHookCommand(entry.command)),
+        { command },
+    ];
     return true;
 }
 

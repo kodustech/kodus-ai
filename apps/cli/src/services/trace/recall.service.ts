@@ -86,8 +86,15 @@ export async function recallDecisions(
         readOverrides(gitRoot),
     ]);
 
-    const forgotten = new Set(overrides.forgotten);
-    const pinned = new Set(overrides.pinned);
+    const allRecords = [...localRecords, ...branchRecords];
+    const forgotten = new Set([
+        ...overrides.forgotten,
+        ...allRecords.flatMap((record) => record.corrections?.forgotten ?? []),
+    ]);
+    const pinned = new Set([
+        ...overrides.pinned,
+        ...allRecords.flatMap((record) => record.corrections?.pinned ?? []),
+    ]);
 
     const collected = new Map<string, TraceRecalledDecision>();
 

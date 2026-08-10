@@ -8,10 +8,16 @@ import { listSessions, readSessionRecord } from './session-store.js';
 import { saveLocalBranchRecord } from './local-decisions.js';
 import {
     pushTraceBranch,
+    readBranchRecord,
     writeBranchRecord,
 } from './decision-branch.service.js';
 import { recordIncident } from './incidents.js';
 import { redact } from './redaction.js';
+import { readOverrides } from './overrides.js';
+import {
+    applyRecordCorrections,
+    mergeOverrides,
+} from './record-corrections.js';
 import {
     TRACE_DECISION_TYPES,
     type TraceBranchRecord,
@@ -31,6 +37,8 @@ export type AgentRunner = (prompt: string) => Promise<string>;
 
 export interface DistillOptions {
     branch: string;
+    /** Exact pushed object. Set by pre-push so a concurrent checkout is safe. */
+    head?: string;
     defaultBranch?: string;
     remote?: string;
     runAgent: AgentRunner;
@@ -109,10 +117,12 @@ export async function distillBranch(
     const defaultBranch =
         options.defaultBranch ?? (await resolveDefaultBranch(gitRoot, remote));
 
-    const head = (await git(gitRoot, ['rev-parse', 'HEAD'])).trim();
+    const head = options.head
+        ? (await git(gitRoot, ['rev-parse', '--verify', options.head])).trim()
+        : (await git(gitRoot, ['rev-parse', 'HEAD'])).trim();
     const mergeBase =
         (
-            await gitQuiet(gitRoot, ['merge-base', defaultBranch, 'HEAD'])
+            await gitQuiet(gitRoot, ['merge-base', defaultBranch, head])
         )?.trim() ?? head;
 
     const range =
@@ -146,7 +156,16 @@ export async function distillBranch(
         createdAt: now().toISOString(),
     });
 
-    const record: TraceBranchRecord = {
+    const [sharedPrevious, localOverrides] = await Promise.all([
+        readBranchRecord(gitRoot, options.branch, remote).catch(() => null),
+        readOverrides(gitRoot),
+    ]);
+    const corrections = mergeOverrides(
+        sharedPrevious?.corrections,
+        localOverrides,
+    );
+
+    const record: TraceBranchRecord = applyRecordCorrections({
         version: 1,
         branch: options.branch,
         mergeBase,
@@ -154,7 +173,8 @@ export async function distillBranch(
         commits: range,
         updatedAt: now().toISOString(),
         decisions,
-    };
+        corrections,
+    });
 
     await saveLocalBranchRecord(gitRoot, record);
 
@@ -164,7 +184,7 @@ export async function distillBranch(
     );
 
     try {
-        await writeBranchRecord(gitRoot, record, { indexFile });
+        const written = await writeBranchRecord(gitRoot, record, { indexFile });
 
         if (options.push === false) {
             return {
@@ -179,6 +199,7 @@ export async function distillBranch(
         const outcome = await pushTraceBranch(gitRoot, record, {
             remote,
             indexFile,
+            sourceCommit: written.commit,
         });
 
         if (!outcome.pushed && outcome.error) {
@@ -278,7 +299,8 @@ async function summarizeCommit(
     const files = filesOutput
         .split('\n')
         .map((line) => line.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .map((file) => redact(file));
 
     const prompt = [
         'Summarize one commit for a decision log. Reply with JSON only:',
@@ -309,10 +331,10 @@ async function summarizeCommit(
 
     return {
         sha,
-        subject,
+        subject: redact(subject),
         files,
-        summary: summary || subject,
-        points,
+        summary: redact(summary || subject),
+        points: points.map((point) => redact(point)),
     };
 }
 

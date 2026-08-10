@@ -1,10 +1,9 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { PlatformModule } from '@libs/platform/modules/platform.module';
 import { BuildTraceContextPackUseCase } from './application/use-cases/build-trace-context-pack.use-case';
 import { PostTracePrCommentUseCase } from './application/use-cases/post-trace-pr-comment.use-case';
-import { SessionEventRepository } from './infrastructure/repositories/session-event.repository';
-import { SessionEventModel } from './infrastructure/repositories/schemas/session-event.model';
+import { TRACE_DECISION_BRANCH_READER_TOKEN } from './domain/contracts/trace-decision-branch-reader.contract';
+import { TraceDecisionBranchReaderService } from './infrastructure/adapters/trace-decision-branch-reader.service';
 
 /**
  * The read side of Kodus Trace, split out of `CliReviewModule` so the code
@@ -12,12 +11,13 @@ import { SessionEventModel } from './infrastructure/repositories/schemas/session
  * CLI review surface (and without the module cycle that would create).
  */
 @Module({
-    imports: [
-        TypeOrmModule.forFeature([SessionEventModel]),
-        forwardRef(() => PlatformModule),
-    ],
+    imports: [forwardRef(() => PlatformModule)],
     providers: [
-        SessionEventRepository,
+        TraceDecisionBranchReaderService,
+        {
+            provide: TRACE_DECISION_BRANCH_READER_TOKEN,
+            useExisting: TraceDecisionBranchReaderService,
+        },
         BuildTraceContextPackUseCase,
         PostTracePrCommentUseCase,
     ],

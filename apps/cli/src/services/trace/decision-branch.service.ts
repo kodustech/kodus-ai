@@ -1,6 +1,11 @@
 import crypto from 'node:crypto';
 import { execa } from 'execa';
 import type { TraceBranchRecord } from '../../types/trace.js';
+import { redactDeep } from './redaction.js';
+import {
+    applyRecordCorrections,
+    mergeOverrides,
+} from './record-corrections.js';
 
 export const TRACE_BRANCH = 'kodus/trace/v1';
 export const TRACE_REF = `refs/heads/${TRACE_BRANCH}`;
@@ -43,14 +48,18 @@ async function gitQuiet(
 
 export async function resolveTraceRef(
     gitRoot: string,
-    remote = 'origin',
+    remote?: string,
 ): Promise<string | null> {
     const local = await gitQuiet(gitRoot, ['rev-parse', '--verify', TRACE_REF]);
     if (local) {
         return TRACE_REF;
     }
 
-    const remoteRef = `refs/remotes/${remote}/${TRACE_BRANCH}`;
+    const selectedRemote = remote ?? (await resolveRemoteName(gitRoot));
+    if (!selectedRemote) {
+        return null;
+    }
+    const remoteRef = `refs/remotes/${selectedRemote}/${TRACE_BRANCH}`;
     const fromRemote = await gitQuiet(gitRoot, [
         'rev-parse',
         '--verify',
@@ -66,7 +75,7 @@ export async function resolveTraceRef(
  */
 export async function readAllBranchRecords(
     gitRoot: string,
-    remote = 'origin',
+    remote?: string,
 ): Promise<TraceBranchRecord[]> {
     const ref = await resolveTraceRef(gitRoot, remote);
     if (!ref) {
@@ -111,13 +120,21 @@ export async function readAllBranchRecords(
 export async function readBranchRecord(
     gitRoot: string,
     branchName: string,
-    remote = 'origin',
+    remote?: string,
 ): Promise<TraceBranchRecord | null> {
     const ref = await resolveTraceRef(gitRoot, remote);
     if (!ref) {
         return null;
     }
 
+    return readBranchRecordAtRef(gitRoot, branchName, ref);
+}
+
+async function readBranchRecordAtRef(
+    gitRoot: string,
+    branchName: string,
+    ref: string,
+): Promise<TraceBranchRecord | null> {
     const raw = await gitQuiet(gitRoot, [
         'show',
         `${ref}:${recordPathForBranch(branchName)}`,
@@ -145,7 +162,10 @@ export async function writeBranchRecord(
     options: { parentRef?: string | null; indexFile: string },
 ): Promise<{ commit: string }> {
     const recordPath = recordPathForBranch(record.branch);
-    const payload = `${JSON.stringify(record, null, 2)}\n`;
+    // Model output is untrusted free text. Sanitize the complete record at the
+    // last boundary as well as during normalization so future fields inherit
+    // the same guarantee.
+    const payload = `${JSON.stringify(redactDeep(record), null, 2)}\n`;
 
     const blob = (
         await git(gitRoot, ['hash-object', '-w', '--stdin'], {
@@ -219,13 +239,29 @@ export interface PushOutcome {
 export async function pushTraceBranch(
     gitRoot: string,
     record: TraceBranchRecord,
-    options: { remote?: string; indexFile: string },
+    options: {
+        remote?: string;
+        indexFile: string;
+        /** Immutable commit created for this operation (avoids local-ref races). */
+        sourceCommit?: string;
+        /** Corrections merge with a concurrent distillation of the same shard. */
+        mergeRemoteDecisions?: boolean;
+    },
 ): Promise<PushOutcome> {
     const remote = options.remote ?? 'origin';
+    let sourceCommit = options.sourceCommit ?? TRACE_REF;
 
     const attempt = async (): Promise<string | null> => {
         try {
-            await git(gitRoot, ['push', remote, `${TRACE_REF}:${TRACE_REF}`]);
+            await git(
+                gitRoot,
+                ['push', remote, `${sourceCommit}:${TRACE_REF}`],
+                {
+                    // Defense in depth. The installed hook also ignores the Trace
+                    // ref, but this protects older/custom hooks during upgrades.
+                    env: { KODUS_TRACE_SKIP: '1' },
+                },
+            );
             return null;
         } catch (error) {
             return error instanceof Error ? error.message : String(error);
@@ -251,10 +287,29 @@ export async function pushTraceBranch(
     }
 
     try {
-        await writeBranchRecord(gitRoot, record, {
+        const remoteRecord = await readBranchRecordAtRef(
+            gitRoot,
+            record.branch,
+            `refs/remotes/${remote}/${TRACE_BRANCH}`,
+        );
+        const rebasedRecord = applyRecordCorrections({
+            ...record,
+            decisions: options.mergeRemoteDecisions
+                ? mergeDecisions(
+                      remoteRecord?.decisions ?? [],
+                      record.decisions,
+                  )
+                : record.decisions,
+            corrections: mergeOverrides(
+                remoteRecord?.corrections,
+                record.corrections,
+            ),
+        });
+        const rewritten = await writeBranchRecord(gitRoot, rebasedRecord, {
             parentRef: `refs/remotes/${remote}/${TRACE_BRANCH}`,
             indexFile: options.indexFile,
         });
+        sourceCommit = rewritten.commit;
     } catch (error) {
         return {
             pushed: false,
@@ -271,6 +326,17 @@ export async function pushTraceBranch(
     return { pushed: false, retried: true, error: secondError };
 }
 
+function mergeDecisions(
+    remote: TraceBranchRecord['decisions'],
+    local: TraceBranchRecord['decisions'],
+): TraceBranchRecord['decisions'] {
+    const byId = new Map(remote.map((decision) => [decision.id, decision]));
+    for (const decision of local) {
+        byId.set(decision.id, decision);
+    }
+    return [...byId.values()];
+}
+
 /**
  * Make sure the decision branch is fetched by a plain `git fetch` in this
  * clone. The default wildcard already covers it; adding the explicit refspec is
@@ -278,15 +344,21 @@ export async function pushTraceBranch(
  */
 export async function configureTraceRefspec(
     gitRoot: string,
-    remote = 'origin',
+    remote?: string,
 ): Promise<{ configured: boolean; reason?: string }> {
     const remotes = await gitQuiet(gitRoot, ['remote']);
-    if (!remotes || !remotes.split('\n').includes(remote)) {
-        return { configured: false, reason: `no "${remote}" remote` };
+    const names = remotes?.split('\n').filter(Boolean) ?? [];
+    const selectedRemote =
+        remote ?? (names.includes('origin') ? 'origin' : names[0]);
+    if (!selectedRemote || !names.includes(selectedRemote)) {
+        return {
+            configured: false,
+            reason: remote ? `no "${remote}" remote` : 'no git remote',
+        };
     }
 
-    const key = `remote.${remote}.fetch`;
-    const desired = `+${TRACE_REF}:refs/remotes/${remote}/${TRACE_BRANCH}`;
+    const key = `remote.${selectedRemote}.fetch`;
+    const desired = `+${TRACE_REF}:refs/remotes/${selectedRemote}/${TRACE_BRANCH}`;
 
     const existing =
         (await gitQuiet(gitRoot, ['config', '--get-all', key])) ?? '';
@@ -296,4 +368,10 @@ export async function configureTraceRefspec(
 
     await git(gitRoot, ['config', '--add', key, desired]);
     return { configured: true };
+}
+
+async function resolveRemoteName(gitRoot: string): Promise<string | null> {
+    const remotes = await gitQuiet(gitRoot, ['remote']);
+    const names = remotes?.split('\n').filter(Boolean) ?? [];
+    return names.includes('origin') ? 'origin' : (names[0] ?? null);
 }

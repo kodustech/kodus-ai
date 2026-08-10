@@ -35,11 +35,16 @@ export async function resolveCommitTrailer(): Promise<string | null> {
             return null;
         }
 
-        // listSessions is newest-first. Prefer a session on this branch; fall
-        // back to the newest session overall for a detached HEAD.
-        const match =
-            sessions.find((entry) => branch && entry.branch === branch) ??
-            sessions[0];
+        // listSessions is newest-first. A named branch may only link to a
+        // session captured on that same branch. Detached HEAD has no branch
+        // identity, so only there do we use the newest captured session.
+        const match = branch
+            ? sessions.find((entry) => entry.branch === branch)
+            : sessions[0];
+
+        if (!match) {
+            return null;
+        }
 
         const id = match.sessionId.slice(0, 12);
         return id ? `${TRACE_TRAILER_KEY}: ${id}` : null;

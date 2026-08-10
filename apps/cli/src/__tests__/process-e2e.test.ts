@@ -114,9 +114,8 @@ async function runHook(
         NODE_PATH: process.env.NODE_PATH,
         KODUS_API_URL: `http://127.0.0.1:${mockServerPort}`,
         KODUS_TEAM_KEY: 'kodus_test_key_e2e_12345',
-        // HOME lives outside the repository, as it does on a real machine:
-        // the local store must never land in the working tree.
-        HOME: homeDir,
+        // Use the dedicated Trace seam. Never repurpose HOME in a process
+        // test: doing so can redirect unrelated tools and configuration.
         KODUS_TRACE_HOME: path.join(homeDir, '.kodus'),
         KODUS_VERBOSE: 'true',
         NO_UPDATE_NOTIFIER: '1',
@@ -685,6 +684,9 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
 
     it('a planted secret never reaches a captured request, the local store, or the repository', async () => {
         const sessionId = `secret-${Date.now()}`;
+        // Force every sanitized request into the pending retry buffer too, so
+        // this one flow searches both transport and offline persistence.
+        mockServerStatus = 500;
         // Assembled rather than written as a literal: a literal with this
         // shape trips GitHub's push protection on a string that was never a
         // credential.

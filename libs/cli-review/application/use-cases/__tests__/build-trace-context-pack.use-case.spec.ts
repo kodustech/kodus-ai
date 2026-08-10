@@ -4,7 +4,7 @@ import {
     matchesAnyPath,
     renderTraceContextPack,
 } from '../build-trace-context-pack.use-case';
-import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
+import { ITraceDecisionBranchReader } from '@libs/cli-review/domain/contracts/trace-decision-branch-reader.contract';
 import {
     estimateTokens,
     TRACE_CONTEXT_PACK_TOKEN_BUDGET,
@@ -24,6 +24,8 @@ const ORG = {
     organizationId: 'org-1',
     teamId: 'team-1',
 };
+const REPOSITORY = { id: 'repo-1', name: 'billing' };
+const BRANCH = 'feat/billing';
 
 function decision(
     overrides: Partial<TraceContextDecision> = {},
@@ -38,22 +40,21 @@ function decision(
 }
 
 describe('BuildTraceContextPackUseCase', () => {
-    let repository: jest.Mocked<Pick<
-        SessionEventRepository,
-        'findClassifiedDecisions'
-    >>;
+    let reader: jest.Mocked<ITraceDecisionBranchReader>;
     let useCase: BuildTraceContextPackUseCase;
 
     beforeEach(() => {
-        repository = {
-            findClassifiedDecisions: jest.fn().mockResolvedValue([]),
+        reader = {
+            read: jest.fn().mockResolvedValue(null),
         };
-        useCase = new BuildTraceContextPackUseCase(repository as any);
+        useCase = new BuildTraceContextPackUseCase(reader);
     });
 
     it('returns an empty pack when nothing has been recorded', async () => {
         const result = await useCase.execute({
             organizationAndTeamData: ORG,
+            repository: REPOSITORY,
+            branch: BRANCH,
             changedFilePaths: ['src/billing/invoice.ts'],
         });
 
@@ -65,35 +66,47 @@ describe('BuildTraceContextPackUseCase', () => {
     });
 
     it('returns an empty pack when the diff touches nothing', async () => {
-        repository.findClassifiedDecisions.mockResolvedValue([decision()]);
+        reader.read.mockResolvedValue({
+            version: 1,
+            branch: BRANCH,
+            decisions: [decision()],
+        });
 
         const result = await useCase.execute({
             organizationAndTeamData: ORG,
+            repository: REPOSITORY,
+            branch: BRANCH,
             changedFilePaths: [],
         });
 
         expect(result.decisions).toEqual([]);
-        expect(repository.findClassifiedDecisions).not.toHaveBeenCalled();
+        expect(reader.read).not.toHaveBeenCalled();
     });
 
     it('includes decisions for the changed area and none from unrelated ones', async () => {
-        repository.findClassifiedDecisions.mockResolvedValue([
-            decision({
-                decision: 'billing decision',
-                scope: ['src/billing'],
-            }),
-            decision({
-                decision: 'auth decision',
-                scope: ['src/auth/login.ts'],
-            }),
-            decision({
-                decision: 'infra decision',
-                scope: ['infra/terraform'],
-            }),
-        ]);
+        reader.read.mockResolvedValue({
+            version: 1,
+            branch: BRANCH,
+            decisions: [
+                decision({
+                    decision: 'billing decision',
+                    scope: ['src/billing'],
+                }),
+                decision({
+                    decision: 'auth decision',
+                    scope: ['src/auth/login.ts'],
+                }),
+                decision({
+                    decision: 'infra decision',
+                    scope: ['infra/terraform'],
+                }),
+            ],
+        });
 
         const result = await useCase.execute({
             organizationAndTeamData: ORG,
+            repository: REPOSITORY,
+            branch: BRANCH,
             changedFilePaths: ['src/billing/invoice.ts'],
         });
 
@@ -110,24 +123,32 @@ describe('BuildTraceContextPackUseCase', () => {
     it('scopes the query to the branch when one is given', async () => {
         await useCase.execute({
             organizationAndTeamData: ORG,
+            repository: REPOSITORY,
             changedFilePaths: ['src/billing/invoice.ts'],
             branch: 'feat/billing',
         });
 
-        expect(repository.findClassifiedDecisions).toHaveBeenCalledWith({
-            organizationId: 'org-1',
+        expect(reader.read).toHaveBeenCalledWith({
+            organizationAndTeamData: ORG,
+            repository: REPOSITORY,
             branch: 'feat/billing',
         });
     });
 
     it('deduplicates the same decision recorded across sessions', async () => {
-        repository.findClassifiedDecisions.mockResolvedValue([
-            decision({ confidence: 0.4 }),
-            decision({ confidence: 0.9 }),
-        ]);
+        reader.read.mockResolvedValue({
+            version: 1,
+            branch: BRANCH,
+            decisions: [
+                decision({ confidence: 0.4 }),
+                decision({ confidence: 0.9 }),
+            ],
+        });
 
         const result = await useCase.execute({
             organizationAndTeamData: ORG,
+            repository: REPOSITORY,
+            branch: BRANCH,
             changedFilePaths: ['src/billing/invoice.ts'],
         });
 
@@ -136,12 +157,12 @@ describe('BuildTraceContextPackUseCase', () => {
     });
 
     it('returns an empty pack rather than failing when the store is unavailable', async () => {
-        repository.findClassifiedDecisions.mockRejectedValue(
-            new Error('database is down'),
-        );
+        reader.read.mockRejectedValue(new Error('provider is down'));
 
         const result = await useCase.execute({
             organizationAndTeamData: ORG,
+            repository: REPOSITORY,
+            branch: BRANCH,
             changedFilePaths: ['src/billing/invoice.ts'],
         });
 

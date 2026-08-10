@@ -5,6 +5,7 @@ import { request } from './api.real.js';
 import { ApiError } from '../../types/errors.js';
 import type { SessionApiEvent } from '../../types/session-events.js';
 import type { ISessionsApi } from './api.interface.js';
+import { redactDeep } from '../trace/redaction.js';
 
 const MAX_BUFFER_LINES = 1000;
 const ENDPOINT = '/cli/sessions/events';
@@ -25,10 +26,7 @@ function buildHeaders(token: string): Record<string, string> {
         : { Authorization: `Bearer ${token}` };
 }
 
-/**
- * The offline buffer holds raw prompts, so it lives in the out-of-tree trace
- * store — never in the repository root, where a developer could commit it.
- */
+/** The sanitized retry buffer lives outside the repository working tree. */
 async function pendingPath(repoRoot: string): Promise<string> {
     return pendingEventsPath(repoRoot);
 }
@@ -68,10 +66,11 @@ async function appendPending(
 }
 
 async function postEvent(event: SessionApiEvent, token: string): Promise<void> {
+    const sanitizedEvent = redactDeep(event);
     await request<void>(ENDPOINT, {
         method: 'POST',
         headers: buildHeaders(token),
-        body: JSON.stringify(event),
+        body: JSON.stringify(sanitizedEvent),
     });
 }
 
@@ -115,6 +114,10 @@ async function flushPending(repoRoot: string, token: string): Promise<void> {
 
 export class RealSessionsApi implements ISessionsApi {
     async sendEvent(event: SessionApiEvent, repoRoot: string): Promise<void> {
+        // This is the final shared boundary for both transport and retry. Keep
+        // it even though lifecycle builders already sanitize their fields: a
+        // newly-added event field must not silently bypass redaction.
+        const sanitizedEvent = redactDeep(event);
         const token = await getAuthToken();
 
         if (!token) {
@@ -136,7 +139,7 @@ export class RealSessionsApi implements ISessionsApi {
 
         // Send current event
         try {
-            await postEvent(event, token);
+            await postEvent(sanitizedEvent, token);
         } catch (error) {
             if (
                 error instanceof ApiError &&
@@ -153,7 +156,7 @@ export class RealSessionsApi implements ISessionsApi {
                 return;
             }
             // Network or retryable — buffer locally
-            await appendPending(repoRoot, event).catch(() => {});
+            await appendPending(repoRoot, sanitizedEvent).catch(() => {});
         }
     }
 }

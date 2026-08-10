@@ -141,6 +141,11 @@ export interface TraceBranchRecord {
     commits: string[];
     updatedAt: string;
     decisions: TraceDecision[];
+    /**
+     * Human corrections shared with every clone. Forgotten ids are durable
+     * tombstones so re-distillation cannot resurrect the same stable id.
+     */
+    corrections?: TraceOverrides;
 }
 
 export type TraceDecisionSource = 'local' | 'branch';

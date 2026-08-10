@@ -71,20 +71,58 @@ function applyPatterns(input: string): string {
     let output = input;
 
     for (const { pattern, group } of SECRET_PATTERNS) {
-        pattern.lastIndex = 0;
-        output = output.replace(pattern, (match, ...groups) => {
-            if (!group) {
-                return REDACTION_PLACEHOLDER;
-            }
-            const captured = groups[group - 1];
-            if (typeof captured !== 'string' || !captured) {
-                return match;
-            }
-            return match.replace(captured, REDACTION_PLACEHOLDER);
-        });
+        if (!group) {
+            pattern.lastIndex = 0;
+            output = output.replace(pattern, REDACTION_PLACEHOLDER);
+            continue;
+        }
+
+        output = replaceCaptureAtPosition(output, pattern, group);
     }
 
     return output;
+}
+
+/**
+ * Replace a capture by its absolute match indices. Searching for the captured
+ * value is unsafe: in `user:user@host`, replacing the first equal string leaks
+ * the password and redacts the username instead.
+ */
+function replaceCaptureAtPosition(
+    input: string,
+    pattern: RegExp,
+    group: number,
+): string {
+    const indexed = new RegExp(
+        pattern.source,
+        pattern.flags.includes('d') ? pattern.flags : `${pattern.flags}d`,
+    );
+    const chunks: string[] = [];
+    let cursor = 0;
+
+    for (;;) {
+        const match = indexed.exec(input);
+        if (!match) {
+            break;
+        }
+
+        const range = match.indices?.[group];
+        if (!range || range[0] === range[1]) {
+            if (match[0].length === 0) {
+                indexed.lastIndex += 1;
+            }
+            continue;
+        }
+
+        chunks.push(input.slice(cursor, range[0]), REDACTION_PLACEHOLDER);
+        cursor = range[1];
+    }
+
+    if (cursor === 0) {
+        return input;
+    }
+    chunks.push(input.slice(cursor));
+    return chunks.join('');
 }
 
 /**

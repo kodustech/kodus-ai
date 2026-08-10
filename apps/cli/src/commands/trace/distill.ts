@@ -12,6 +12,7 @@ import type { GlobalOptions } from '../../types/cli.js';
 
 export interface DistillActionOptions {
     branch?: string;
+    head?: string;
     agentCli?: string;
     remote?: string;
     push?: boolean;
@@ -66,6 +67,7 @@ export async function distillAction(
     try {
         const result = await distillBranch(gitRoot, {
             branch,
+            head: options.head?.trim(),
             remote: options.remote,
             push: options.push !== false,
             runAgent: (prompt) =>

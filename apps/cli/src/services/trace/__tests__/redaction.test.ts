@@ -75,6 +75,23 @@ describe('redact', () => {
         expect(redacted).toContain('db.internal');
     });
 
+    it('redacts the password by position when username and password are equal', () => {
+        const redacted = redact(
+            'DATABASE_URL=postgres://postgres:postgres@localhost:5432/db',
+        );
+        expect(redacted).toContain('postgres://postgres:[REDACTED]@localhost');
+        expect(redacted).not.toContain(':postgres@');
+    });
+
+    it('removes percent-encoded URL credentials', () => {
+        const redacted = redact(
+            'postgres://service:p%40ss%3Aword@db.internal:5432/app',
+        );
+        expect(redacted).toBe(
+            'postgres://service:[REDACTED]@db.internal:5432/app',
+        );
+    });
+
     it('removes the credential from an Authorization header', () => {
         const redacted = redact('Authorization: Bearer abcdef1234567890ABCDEF');
         expect(redacted).not.toContain('abcdef1234567890ABCDEF');
@@ -85,6 +102,22 @@ describe('redact', () => {
         const prose =
             'We chose the repository pattern because the service layer was doing too much.';
         expect(redact(prose)).toBe(prose);
+    });
+
+    it('leaves a harmless URL without credentials unchanged', () => {
+        const url = 'https://example.test/docs/path?section=trace';
+        expect(redact(url)).toBe(url);
+    });
+
+    it('redacts several different secrets in one string', () => {
+        const value = `${SECRETS.openai} then ${SECRETS.githubToken} and token=${SECRETS.aws}`;
+        const redacted = redact(value);
+        expect(redacted).not.toContain(SECRETS.openai);
+        expect(redacted).not.toContain(SECRETS.githubToken);
+        expect(redacted).not.toContain(SECRETS.aws);
+        expect(redacted.match(/\[REDACTED\]/g)?.length).toBeGreaterThanOrEqual(
+            3,
+        );
     });
 
     it('is idempotent', () => {

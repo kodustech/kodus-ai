@@ -1,7 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
+import {
+    ITraceDecisionBranchReader,
+    TRACE_DECISION_BRANCH_READER_TOKEN,
+} from '@libs/cli-review/domain/contracts/trace-decision-branch-reader.contract';
 import {
     estimateTokens,
     TRACE_CONTEXT_PACK_TOKEN_BUDGET,
@@ -10,10 +13,11 @@ import {
 
 export interface BuildTraceContextPackInput {
     organizationAndTeamData: OrganizationAndTeamData;
+    repository: { id: string; name: string };
     /** Repo-relative paths touched by the pull request. */
     changedFilePaths: string[];
-    /** Restricts the lookup to one branch when known. */
-    branch?: string;
+    /** Destination branch key used by the CLI's shared record. */
+    branch: string;
     tokenBudget?: number;
 }
 
@@ -38,7 +42,8 @@ export class BuildTraceContextPackUseCase {
     private readonly logger = createLogger(BuildTraceContextPackUseCase.name);
 
     constructor(
-        private readonly sessionEventRepository: SessionEventRepository,
+        @Inject(TRACE_DECISION_BRANCH_READER_TOKEN)
+        private readonly decisionBranchReader: ITraceDecisionBranchReader,
     ) {}
 
     async execute(
@@ -60,23 +65,27 @@ export class BuildTraceContextPackUseCase {
 
         let recorded: TraceContextDecision[];
         try {
-            recorded = await this.sessionEventRepository.findClassifiedDecisions(
-                {
-                    organizationId:
-                        input.organizationAndTeamData.organizationId,
-                    branch: input.branch,
-                },
-            );
+            const record = await this.decisionBranchReader.read({
+                organizationAndTeamData: input.organizationAndTeamData,
+                repository: input.repository,
+                branch: input.branch,
+            });
+            recorded = record?.decisions ?? [];
         } catch (error) {
             // A review must not fail because the decision store is unavailable.
             this.logger.warn({
-                message: 'Failed to load recorded decisions for the context pack',
+                message:
+                    'Failed to load recorded decisions for the context pack',
                 context: BuildTraceContextPackUseCase.name,
                 metadata: {
                     organizationId:
                         input.organizationAndTeamData.organizationId,
+                    teamId: input.organizationAndTeamData.teamId,
+                    repositoryId: input.repository?.id,
+                    branch: input.branch,
+                    errorName:
+                        error instanceof Error ? error.name : 'UnknownError',
                 },
-                error,
             });
             return empty;
         }
@@ -205,7 +214,10 @@ function dedupe(decisions: TraceContextDecision[]): TraceContextDecision[] {
         }
         const key = `${decision.decision}|${(decision.scope ?? []).slice().sort().join(',')}`;
         const existing = seen.get(key);
-        if (!existing || (decision.confidence ?? 0) > (existing.confidence ?? 0)) {
+        if (
+            !existing ||
+            (decision.confidence ?? 0) > (existing.confidence ?? 0)
+        ) {
             seen.set(key, decision);
         }
     }

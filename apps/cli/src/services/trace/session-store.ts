@@ -11,6 +11,7 @@ import type {
     TraceSessionSummary,
     TraceTurn,
 } from '../../types/trace.js';
+import { redactDeep } from './redaction.js';
 
 /**
  * The durable half of capture: a JSONL file per session under
@@ -27,7 +28,11 @@ export async function appendRecordLine(
 ): Promise<void> {
     const filePath = sessionRecordPath(gitRoot, sessionId);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.appendFile(filePath, `${JSON.stringify(line)}\n`, 'utf-8');
+    await fs.appendFile(
+        filePath,
+        `${JSON.stringify(redactDeep(line))}\n`,
+        'utf-8',
+    );
 }
 
 export async function readSessionRecord(

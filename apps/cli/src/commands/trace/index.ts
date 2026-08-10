@@ -93,6 +93,7 @@ traceCommand
     .command('distill', { hidden: true })
     .description('Internal: distill a branch into decisions (run by pre-push)')
     .option('--branch <branch>', 'Branch to distill (default: current)')
+    .option('--head <sha>', 'Exact local object id supplied by pre-push')
     .option(
         '--agent-cli <name>',
         'Force an agent CLI: claude, codex, gemini, cursor',

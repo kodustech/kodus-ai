@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import http from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { startTraceUiServer, type TraceUiServer } from '../ui-server.js';
 import { appendRecordLine } from '../session-store.js';
@@ -32,6 +33,34 @@ async function getJson<T>(pathname: string): Promise<T> {
     const response = await fetch(`${server.url}${pathname}`);
     expect(response.status).toBe(200);
     return (await response.json()) as T;
+}
+
+async function requestWithHost(
+    pathname: string,
+    host: string,
+): Promise<{ status: number; body: string }> {
+    return new Promise((resolve, reject) => {
+        const request = http.request(
+            {
+                hostname: '127.0.0.1',
+                port: server.port,
+                path: pathname,
+                headers: { Host: host },
+            },
+            (response) => {
+                const chunks: Buffer[] = [];
+                response.on('data', (chunk: Buffer) => chunks.push(chunk));
+                response.on('end', () =>
+                    resolve({
+                        status: response.statusCode ?? 0,
+                        body: Buffer.concat(chunks).toString('utf-8'),
+                    }),
+                );
+            },
+        );
+        request.on('error', reject);
+        request.end();
+    });
 }
 
 async function seed(sessionId: string): Promise<void> {
@@ -82,6 +111,25 @@ describe('trace ui server', () => {
 
         const html = await response.text();
         expect(html).toContain('Kodus Trace');
+    });
+
+    it('rejects an untrusted Host header before routing', async () => {
+        const response = await requestWithHost(
+            '/api/sessions',
+            'attacker.test',
+        );
+        expect(response.status).toBe(421);
+        expect(JSON.parse(response.body)).toEqual({
+            error: 'Untrusted Host header',
+        });
+    });
+
+    it('accepts the loopback Host with the actual bound port', async () => {
+        const response = await requestWithHost(
+            '/api/sessions',
+            `127.0.0.1:${server.port}`,
+        );
+        expect(response.status).toBe(200);
     });
 
     it('makes no external network call — the page is self-contained', async () => {
@@ -184,6 +232,29 @@ describe('trace ui server', () => {
 
         expect(payload.session.turns).toHaveLength(1);
         expect(payload.session.corruptLines).toBe(1);
+    });
+
+    it('redacts legacy record content again before returning UI JSON', async () => {
+        const secret = ['sk-', 'Q'.repeat(32)].join('');
+        const recordPath = sessionRecordPath(repoRoot, 'legacy-secret');
+        await fs.mkdir(path.dirname(recordPath), { recursive: true });
+        await fs.writeFile(
+            recordPath,
+            `${JSON.stringify({
+                kind: 'turn-start',
+                turnId: 't1',
+                prompt: `legacy ${secret}`,
+                commitBefore: 'abc',
+                timestamp: '2026-02-01T10:00:00.000Z',
+            })}\n`,
+        );
+
+        const response = await fetch(
+            `${server.url}/api/sessions/legacy-secret`,
+        );
+        const raw = await response.text();
+        expect(raw).not.toContain(secret);
+        expect(raw).toContain('[REDACTED]');
     });
 
     it('answers with an empty detail rather than erroring for a missing record', async () => {

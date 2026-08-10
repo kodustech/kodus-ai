@@ -75,29 +75,29 @@ function upsertHook(
             matcherValue.hooks = hooksArray;
         }
 
-        const alreadyExists = hooksArray.some(
-            (h) => isRecord(h) && h.type === 'command' && h.command === command,
+        const managed = hooksArray.filter(
+            (h) =>
+                isRecord(h) &&
+                h.type === 'command' &&
+                typeof h.command === 'string' &&
+                isSessionsHookCommand(h.command),
         );
-        if (alreadyExists) {
+        if (
+            managed.length === 1 &&
+            isRecord(managed[0]) &&
+            managed[0].command === command
+        ) {
             return false;
         }
 
-        // Replace existing sessions hook command if present
-        for (const hookValue of hooksArray) {
-            if (
+        matcherValue.hooks = hooksArray.filter(
+            (hookValue) =>
                 !isRecord(hookValue) ||
                 hookValue.type !== 'command' ||
-                typeof hookValue.command !== 'string'
-            ) {
-                continue;
-            }
-            if (isSessionsHookCommand(hookValue.command)) {
-                hookValue.command = command;
-                return true;
-            }
-        }
-
-        hooksArray.push({ type: 'command', command });
+                typeof hookValue.command !== 'string' ||
+                !isSessionsHookCommand(hookValue.command),
+        );
+        (matcherValue.hooks as unknown[]).push({ type: 'command', command });
         return true;
     }
 

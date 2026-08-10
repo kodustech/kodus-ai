@@ -62,6 +62,10 @@ export class LoadExternalContextStage
 
             const pack = await this.buildTraceContextPackUseCase.execute({
                 organizationAndTeamData: context.organizationAndTeamData,
+                repository: {
+                    id: String(context.repository.id),
+                    name: context.repository.name,
+                },
                 changedFilePaths,
                 branch: context.pullRequest?.head?.ref,
             });

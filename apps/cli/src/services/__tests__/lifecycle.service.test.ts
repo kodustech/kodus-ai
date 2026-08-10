@@ -58,8 +58,8 @@ vi.mock('../api/index.js', () => ({
     },
 }));
 
-import { lifecycleService } from '../lifecycle.service.js';
-import type { LifecycleEvent } from '../../types/session.js';
+import { lifecycleService, summarizeToolInput } from '../lifecycle.service.js';
+import type { LifecycleEvent, ToolCall } from '../../types/session.js';
 
 function makeEvent(overrides: Partial<LifecycleEvent>): LifecycleEvent {
     return {
@@ -387,5 +387,36 @@ describe('LifecycleService.dispatch', () => {
         // Should remove stale local state files
         expect(removeLocal).toHaveBeenCalledWith('/tmp/repo', 'stale-sess-1');
         expect(removeLocal).toHaveBeenCalledWith('/tmp/repo', 'stale-sess-2');
+    });
+});
+
+describe('summarizeToolInput', () => {
+    const makeCall = (command: string): ToolCall => ({
+        toolName: 'Bash',
+        toolUseId: 'tool-1',
+        timestamp: '2026-08-10T00:00:00.000Z',
+        input: { command },
+        isMcp: false,
+    });
+
+    it('redacts a bearer token crossing the truncation boundary', () => {
+        const token = `boundaryBearer${'A'.repeat(40)}`;
+        const command = `${'x'.repeat(275)} Authorization: Bearer ${token}`;
+        const summary = summarizeToolInput('/tmp/repo', makeCall(command));
+
+        expect(summary).toHaveLength(300);
+        expect(summary).not.toContain(token);
+        expect(summary).not.toContain(token.slice(0, 10));
+        expect(summary).toContain('[REDACTED]');
+    });
+
+    it('redacts an API key crossing the truncation boundary', () => {
+        const key = `boundaryApiKey${'B'.repeat(40)}`;
+        const command = `${'y'.repeat(280)} api_key=${key}`;
+        const summary = summarizeToolInput('/tmp/repo', makeCall(command));
+
+        expect(summary).not.toContain(key);
+        expect(summary).not.toContain(key.slice(0, 10));
+        expect(summary).toContain('[REDACTED]');
     });
 });

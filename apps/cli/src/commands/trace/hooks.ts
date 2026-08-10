@@ -266,7 +266,8 @@ export async function removeCodexNotify(
     const hasLegacy = CODEX_NOTIFY_LINE_LEGACY_VARIANTS.some((line) =>
         content.includes(line),
     );
-    const hasGenericKodusNotify = /^notify\s*=\s*\[\s*"kodus"/m.test(content);
+    const hasGenericKodusNotify =
+        /^notify\s*=\s*\[\s*"kodus"\s*,\s*"decisions"/m.test(content);
 
     if (!hasLegacy && !hasGenericKodusNotify) {
         return { configPath, removed: false };
@@ -279,7 +280,9 @@ export async function removeCodexNotify(
             if (CODEX_NOTIFY_LINE_LEGACY_VARIANTS.includes(trimmed)) {
                 return false;
             }
-            return !/^notify\s*=\s*\[\s*"kodus"/.test(trimmed);
+            return !/^notify\s*=\s*\[\s*"kodus"\s*,\s*"decisions"/.test(
+                trimmed,
+            );
         })
         .join('\n')
         .replace(/\n{3,}/g, '\n\n')

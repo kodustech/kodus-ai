@@ -5,6 +5,7 @@ import { execa } from 'execa';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
     distillBranch,
+    decisionId,
     parseJsonObject,
     readCachedSummary,
 } from '../distill.service.js';
@@ -12,6 +13,7 @@ import {
     readAllBranchRecords,
     readBranchRecord,
     recordPathForBranch,
+    configureTraceRefspec,
     TRACE_BRANCH,
     TRACE_REF,
 } from '../decision-branch.service.js';
@@ -19,6 +21,7 @@ import { readAllLocalBranchRecords } from '../local-decisions.js';
 import { readIncidents } from '../incidents.js';
 import { appendRecordLine } from '../session-store.js';
 import { recallDecisions } from '../recall.service.js';
+import { updateSharedDecisionCorrection } from '../shared-corrections.js';
 
 const GIT_ENV = {
     GIT_AUTHOR_NAME: 'Test',
@@ -113,6 +116,20 @@ const BILLING_DECISIONS = [
 ];
 
 describe('distillBranch', () => {
+    it('keeps decision ids stable for the documented branch/text/scope tuple', () => {
+        expect(
+            decisionId('feat/billing', 'cache totals', [
+                'src/billing',
+                'src/shared',
+            ]),
+        ).toBe(
+            decisionId('feat/billing', 'cache totals', [
+                'src/shared',
+                'src/billing',
+            ]),
+        );
+    });
+
     it('produces one deduplicated decision set for the whole range', async () => {
         await commitFile(repoRoot, 'src/billing/invoice.ts', 'a\n', 'feat: a');
         await commitFile(repoRoot, 'src/billing/invoice.ts', 'b\n', 'feat: b');
@@ -266,6 +283,30 @@ describe('distillBranch', () => {
         expect(record?.decisions[0].decision).toContain('Invoice totals');
     });
 
+    it('works when the only remote is not named origin', async () => {
+        await git(repoRoot, ['remote', 'rename', 'origin', 'upstream']);
+        await commitFile(repoRoot, 'src/billing/invoice.ts', 'a\n', 'feat: a');
+
+        const refspec = await configureTraceRefspec(repoRoot);
+        expect(refspec.configured).toBe(true);
+        expect(
+            await git(repoRoot, [
+                'config',
+                '--get-all',
+                'remote.upstream.fetch',
+            ]),
+        ).toContain('refs/remotes/upstream/kodus/trace/v1');
+
+        const result = await distillBranch(repoRoot, {
+            branch: 'feat/billing',
+            defaultBranch: 'main',
+            remote: 'upstream',
+            runAgent: makeAgent(BILLING_DECISIONS).run,
+        });
+        expect(result.pushed).toBe(true);
+        expect(await readBranchRecord(repoRoot, 'feat/billing')).not.toBeNull();
+    });
+
     it('never checks the orphan branch out — the working tree is untouched', async () => {
         await commitFile(repoRoot, 'src/billing/invoice.ts', 'a\n', 'feat: a');
 
@@ -313,6 +354,143 @@ describe('distillBranch', () => {
             expect(recalled.decisions.map((d) => d.source)).toEqual(['branch']);
         } finally {
             await fs.rm(cloneDir, { recursive: true, force: true });
+        }
+    });
+
+    it('shares pin and forget across clones and preserves them on re-distillation', async () => {
+        await commitFile(repoRoot, 'src/billing/invoice.ts', 'a\n', 'feat: a');
+        const twoDecisions = [
+            ...BILLING_DECISIONS,
+            {
+                type: 'tradeoff',
+                decision: 'Keep tax rounding at invoice scope',
+                confidence: 0.7,
+                scope: ['src/billing'],
+            },
+        ];
+        const first = await distillBranch(repoRoot, {
+            branch: 'feat/billing',
+            defaultBranch: 'main',
+            runAgent: makeAgent(twoDecisions).run,
+        });
+        const [pinnedId, forgottenId] = first.record.decisions.map(
+            (entry) => entry.id,
+        );
+
+        const cloneDir = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'distill-correction-clone-'),
+        );
+        const cloneHome = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'distill-correction-home-'),
+        );
+        try {
+            await execa('git', ['clone', '-q', originDir, cloneDir], {
+                env: GIT_ENV,
+            });
+            await git(cloneDir, [
+                'fetch',
+                'origin',
+                `${TRACE_REF}:refs/remotes/origin/${TRACE_BRANCH}`,
+            ]);
+            process.env.KODUS_TRACE_HOME = cloneHome;
+            expect((await recallDecisions(cloneDir)).decisions).toHaveLength(2);
+
+            process.env.KODUS_TRACE_HOME = traceHome;
+            expect(
+                await updateSharedDecisionCorrection(repoRoot, pinnedId, 'pin'),
+            ).toMatchObject({ found: true, pushed: true });
+            expect(
+                await updateSharedDecisionCorrection(
+                    repoRoot,
+                    forgottenId,
+                    'forget',
+                ),
+            ).toMatchObject({ found: true, pushed: true });
+
+            await git(cloneDir, [
+                'fetch',
+                'origin',
+                `${TRACE_REF}:refs/remotes/origin/${TRACE_BRANCH}`,
+            ]);
+            process.env.KODUS_TRACE_HOME = cloneHome;
+            const corrected = await recallDecisions(cloneDir);
+            expect(corrected.decisions.map((entry) => entry.id)).toEqual([
+                pinnedId,
+            ]);
+            expect(corrected.decisions[0].pinned).toBe(true);
+
+            process.env.KODUS_TRACE_HOME = traceHome;
+            const redistilled = await distillBranch(repoRoot, {
+                branch: 'feat/billing',
+                defaultBranch: 'main',
+                runAgent: makeAgent(twoDecisions).run,
+            });
+            expect(
+                redistilled.record.decisions.map((entry) => entry.id),
+            ).toEqual([pinnedId]);
+            expect(redistilled.record.decisions[0].pinned).toBe(true);
+            expect(redistilled.record.corrections?.forgotten).toContain(
+                forgottenId,
+            );
+        } finally {
+            process.env.KODUS_TRACE_HOME = traceHome;
+            await fs.rm(cloneDir, { recursive: true, force: true });
+            await fs.rm(cloneHome, { recursive: true, force: true });
+        }
+    });
+
+    it('keeps a concurrent remote correction when stale distillation retries', async () => {
+        await commitFile(repoRoot, 'src/billing/invoice.ts', 'a\n', 'feat: a');
+        const first = await distillBranch(repoRoot, {
+            branch: 'feat/billing',
+            defaultBranch: 'main',
+            runAgent: makeAgent(BILLING_DECISIONS).run,
+        });
+        const decisionId = first.record.decisions[0].id;
+
+        const otherDir = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'distill-correction-race-clone-'),
+        );
+        const otherHome = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'distill-correction-race-home-'),
+        );
+        try {
+            await execa('git', ['clone', '-q', originDir, otherDir], {
+                env: GIT_ENV,
+            });
+            await git(otherDir, [
+                'fetch',
+                'origin',
+                `${TRACE_REF}:refs/remotes/origin/${TRACE_BRANCH}`,
+            ]);
+            process.env.KODUS_TRACE_HOME = otherHome;
+            expect(
+                await updateSharedDecisionCorrection(
+                    otherDir,
+                    decisionId,
+                    'pin',
+                ),
+            ).toMatchObject({ found: true, pushed: true });
+
+            // repoRoot still has the pre-correction local Trace ref. Its first
+            // push loses the race, then the NFF retry must merge from the
+            // freshly fetched remote ref rather than rereading that stale ref.
+            process.env.KODUS_TRACE_HOME = traceHome;
+            const redistilled = await distillBranch(repoRoot, {
+                branch: 'feat/billing',
+                defaultBranch: 'main',
+                runAgent: makeAgent(BILLING_DECISIONS).run,
+            });
+            expect(redistilled.pushRetried).toBe(true);
+            expect(redistilled.pushed).toBe(true);
+            expect(
+                (await readBranchRecord(repoRoot, 'feat/billing'))?.decisions[0]
+                    .pinned,
+            ).toBe(true);
+        } finally {
+            process.env.KODUS_TRACE_HOME = traceHome;
+            await fs.rm(otherDir, { recursive: true, force: true });
+            await fs.rm(otherHome, { recursive: true, force: true });
         }
     });
 
@@ -451,6 +629,48 @@ describe('distillBranch', () => {
         });
 
         expect(result.record.decisions).toEqual([]);
+    });
+
+    it('redacts secrets returned by the model before every decision store', async () => {
+        await commitFile(repoRoot, 'src/billing/invoice.ts', 'a\n', 'feat: a');
+        const secret = ['sk-', 'Q'.repeat(32)].join('');
+
+        const result = await distillBranch(repoRoot, {
+            branch: 'feat/billing',
+            defaultBranch: 'main',
+            runAgent: async (prompt) =>
+                prompt.startsWith('Summarize one commit')
+                    ? JSON.stringify({
+                          summary: `summary ${secret}`,
+                          points: [`point ${secret}`],
+                      })
+                    : JSON.stringify({
+                          decisions: [
+                              {
+                                  type: 'convention',
+                                  decision: `never store ${secret}`,
+                                  rationale: `because ${secret} is private`,
+                                  evidence: [`observed ${secret}`],
+                                  confidence: 0.9,
+                                  scope: ['src/billing'],
+                              },
+                          ],
+                      }),
+        });
+
+        expect(JSON.stringify(result.record)).not.toContain(secret);
+        expect(JSON.stringify(result.record)).toContain('[REDACTED]');
+
+        const head = (await git(repoRoot, ['rev-parse', 'HEAD'])).trim();
+        expect(
+            JSON.stringify(await readCachedSummary(repoRoot, head)),
+        ).not.toContain(secret);
+        expect(
+            JSON.stringify(await readBranchRecord(repoRoot, 'feat/billing')),
+        ).not.toContain(secret);
+        expect(
+            JSON.stringify(await readAllLocalBranchRecords(repoRoot)),
+        ).not.toContain(secret);
     });
 });
 

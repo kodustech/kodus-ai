@@ -23,7 +23,7 @@ import {
 
 const KODUS_MARKER = '# kodus-hook';
 
-function extractTraceBlock(content: string | null): string | null {
+export function extractTraceBlock(content: string | null): string | null {
     if (!content) {
         return null;
     }

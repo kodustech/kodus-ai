@@ -34,13 +34,56 @@ const GIT_IDENTITY = {
 function hookEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
     return {
         PATH: binDir,
-        HOME: traceHome,
         KODUS_TRACE_HOME: traceHome,
         NO_UPDATE_NOTIFIER: '1',
         NODE_OPTIONS: '',
         ...GIT_IDENTITY,
         ...extra,
     };
+}
+
+async function waitFor(
+    predicate: () => Promise<boolean>,
+    timeoutMs = 20_000,
+): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        if (await predicate()) {
+            return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error(`condition not met within ${timeoutMs}ms`);
+}
+
+async function installFakeAgent(): Promise<{
+    command: string;
+    logPath: string;
+}> {
+    const agentPath = path.join(binDir, `trace-agent-${Date.now()}`);
+    const logPath = path.join(traceHome, 'agent-calls.log');
+    await fs.writeFile(
+        agentPath,
+        [
+            '#!/bin/sh',
+            'INPUT="$(cat)"',
+            'printf \'call\\n\' >> "$KODUS_AGENT_LOG"',
+            'case "$INPUT" in',
+            '  *"Summarize one commit"*) printf \'%s\\n\' \'{"summary":"summary","points":["point"]}\' ;;',
+            '  *) printf \'%s\\n\' \'{"decisions":[{"type":"convention","decision":"keep the pushed behavior","confidence":0.9,"scope":["src/pushed.ts"]}]}\' ;;',
+            'esac',
+            '',
+        ].join('\n'),
+        { mode: 0o755 },
+    );
+    return { command: agentPath, logPath };
+}
+
+async function agentCallCount(logPath: string): Promise<number> {
+    return fs
+        .readFile(logPath, 'utf-8')
+        .then((value) => value.split('\n').filter(Boolean).length)
+        .catch(() => 0);
 }
 
 async function git(
@@ -239,6 +282,15 @@ describe('Trace git E2E', { timeout: 120_000 }, () => {
         expect(message).not.toContain('Kodus-Trace');
     });
 
+    it('does not link a commit to a session captured on another branch', async () => {
+        await runCli(repoRoot, ['trace', 'enable', '--agents', 'claude']);
+        await seedSession(repoRoot, 'sess-other-0001', 'feature/other');
+        await commitFile(repoRoot, 'src/branch.ts', 'main\n', 'feat: main');
+
+        const message = await git(repoRoot, ['log', '-1', '--format=%B']);
+        expect(message).not.toContain('Kodus-Trace');
+    });
+
     it('runs distillation from pre-push without the push waiting on it', async () => {
         await runCli(repoRoot, ['trace', 'enable', '--agents', 'claude']);
         await git(repoRoot, ['checkout', '-q', '-b', 'feat/push']);
@@ -255,6 +307,138 @@ describe('Trace git E2E', { timeout: 120_000 }, () => {
         expect(
             (await git(repoRoot, ['rev-parse', 'origin/feat/push'])).trim(),
         ).toBe((await git(repoRoot, ['rev-parse', 'HEAD'])).trim());
+    });
+
+    it('distills a non-checked-out branch at the exact pushed commit and does not recurse', async () => {
+        await runCli(repoRoot, ['trace', 'enable', '--agents', 'claude']);
+        const agent = await installFakeAgent();
+
+        await git(repoRoot, ['checkout', '-q', '-b', 'feature-x']);
+        await commitFile(
+            repoRoot,
+            'src/pushed.ts',
+            'feature\n',
+            'feat: pushed',
+        );
+        const pushedHead = (await git(repoRoot, ['rev-parse', 'HEAD'])).trim();
+        await git(repoRoot, ['checkout', '-q', 'main']);
+
+        await git(repoRoot, ['push', '-q', 'origin', 'feature-x'], {
+            KODUS_TRACE_AGENT_CMD: agent.command,
+            KODUS_AGENT_LOG: agent.logPath,
+        });
+
+        const recordPath = `refs/heads/${TRACE_BRANCH}:${(
+            await import('../services/trace/decision-branch.service.js')
+        ).recordPathForBranch('feature-x')}`;
+        await waitFor(async () =>
+            git(repoRoot, ['show', recordPath])
+                .then(() => true)
+                .catch(() => false),
+        );
+
+        const record = JSON.parse(
+            await git(repoRoot, ['show', recordPath]),
+        ) as { branch: string; head: string };
+        expect(record.branch).toBe('feature-x');
+        expect(record.head).toBe(pushedHead);
+        expect((await git(repoRoot, ['branch', '--show-current'])).trim()).toBe(
+            'main',
+        );
+
+        await waitFor(async () => (await agentCallCount(agent.logPath)) >= 2);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        expect(await agentCallCount(agent.logPath)).toBe(2);
+
+        // Even an explicit user push of the shared ref must not start another
+        // distillation. The internal push also sets KODUS_TRACE_SKIP.
+        await git(
+            repoRoot,
+            [
+                'push',
+                '-q',
+                'origin',
+                `refs/heads/${TRACE_BRANCH}:refs/heads/${TRACE_BRANCH}`,
+            ],
+            {
+                KODUS_TRACE_AGENT_CMD: agent.command,
+                KODUS_AGENT_LOG: agent.logPath,
+            },
+        );
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        expect(await agentCallCount(agent.logPath)).toBe(2);
+    });
+
+    it('keys HEAD:renamed-feature by the destination branch', async () => {
+        await runCli(repoRoot, ['trace', 'enable', '--agents', 'claude']);
+        const agent = await installFakeAgent();
+        await git(repoRoot, ['checkout', '-q', '-b', 'source-feature']);
+        await commitFile(
+            repoRoot,
+            'src/pushed.ts',
+            'renamed\n',
+            'feat: rename',
+        );
+        const pushedHead = (await git(repoRoot, ['rev-parse', 'HEAD'])).trim();
+
+        await git(repoRoot, ['push', '-q', 'origin', 'HEAD:renamed-feature'], {
+            KODUS_TRACE_AGENT_CMD: agent.command,
+            KODUS_AGENT_LOG: agent.logPath,
+        });
+
+        const { recordPathForBranch } =
+            await import('../services/trace/decision-branch.service.js');
+        const destinationRecord = `refs/heads/${TRACE_BRANCH}:${recordPathForBranch('renamed-feature')}`;
+        await waitFor(async () =>
+            git(repoRoot, ['show', destinationRecord])
+                .then(() => true)
+                .catch(() => false),
+        );
+        const record = JSON.parse(
+            await git(repoRoot, ['show', destinationRecord]),
+        ) as { branch: string; head: string };
+        expect(record).toMatchObject({
+            branch: 'renamed-feature',
+            head: pushedHead,
+        });
+    });
+
+    it('distills every branch in a multi-ref push once', async () => {
+        await runCli(repoRoot, ['trace', 'enable', '--agents', 'claude']);
+        const agent = await installFakeAgent();
+        await git(repoRoot, ['checkout', '-q', '-b', 'multi-one']);
+        await commitFile(repoRoot, 'src/pushed.ts', 'one\n', 'feat: one');
+        await git(repoRoot, ['checkout', '-q', '-b', 'multi-two', 'main']);
+        await commitFile(repoRoot, 'src/pushed.ts', 'two\n', 'feat: two');
+        await git(repoRoot, ['checkout', '-q', 'main']);
+
+        await git(
+            repoRoot,
+            ['push', '-q', 'origin', 'multi-one', 'multi-two'],
+            {
+                KODUS_TRACE_AGENT_CMD: agent.command,
+                KODUS_AGENT_LOG: agent.logPath,
+            },
+        );
+
+        const { recordPathForBranch } =
+            await import('../services/trace/decision-branch.service.js');
+        for (const branch of ['multi-one', 'multi-two']) {
+            const ref = `refs/heads/${TRACE_BRANCH}:${recordPathForBranch(branch)}`;
+            await waitFor(async () =>
+                git(repoRoot, ['show', ref])
+                    .then(() => true)
+                    .catch(() => false),
+            );
+            const record = JSON.parse(await git(repoRoot, ['show', ref])) as {
+                branch: string;
+            };
+            expect(record.branch).toBe(branch);
+        }
+
+        await waitFor(async () => (await agentCallCount(agent.logPath)) >= 4);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        expect(await agentCallCount(agent.logPath)).toBe(4);
     });
 
     it('skips distillation with a clear message and exit code 0 when no agent CLI is on PATH', async () => {

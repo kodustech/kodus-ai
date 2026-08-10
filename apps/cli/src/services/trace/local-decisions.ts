@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { localDecisionsDir } from './store-paths.js';
 import type { TraceBranchRecord } from '../../types/trace.js';
+import { redactDeep } from './redaction.js';
 
 function fileNameForBranch(branchName: string): string {
     const hash = crypto
@@ -27,7 +28,7 @@ export async function saveLocalBranchRecord(
     const filePath = path.join(dir, fileNameForBranch(record.branch));
     await fs.writeFile(
         filePath,
-        `${JSON.stringify(record, null, 2)}\n`,
+        `${JSON.stringify(redactDeep(record), null, 2)}\n`,
         'utf-8',
     );
     return filePath;

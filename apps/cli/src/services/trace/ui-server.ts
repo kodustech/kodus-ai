@@ -4,6 +4,7 @@ import { readAllLocalBranchRecords } from './local-decisions.js';
 import { readAllBranchRecords } from './decision-branch.service.js';
 import { renderTraceUiHtml } from './ui-html.js';
 import type { TraceDecision } from '../../types/trace.js';
+import { redactDeep } from './redaction.js';
 
 export interface TraceUiServer {
     url: string;
@@ -21,9 +22,21 @@ export async function startTraceUiServer(
     options: { port?: number; host?: string } = {},
 ): Promise<TraceUiServer> {
     const host = options.host ?? '127.0.0.1';
+    let decisionIndex: Promise<Map<string, TraceDecision[]>> | null = null;
+    const decisionsForSession = async (
+        sessionId: string,
+    ): Promise<TraceDecision[]> => {
+        decisionIndex ??= loadDecisionIndex(gitRoot);
+        return (await decisionIndex).get(sessionId) ?? [];
+    };
 
+    let boundPort = 0;
     const server = http.createServer((req, res) => {
-        void handleRequest(gitRoot, req, res);
+        if (!isAllowedHost(req.headers.host, boundPort)) {
+            sendJson(res, 421, { error: 'Untrusted Host header' });
+            return;
+        }
+        void handleRequest(gitRoot, req, res, decisionsForSession);
     });
 
     const port = await new Promise<number>((resolve, reject) => {
@@ -37,6 +50,7 @@ export async function startTraceUiServer(
             }
         });
     });
+    boundPort = port;
 
     return {
         port,
@@ -52,6 +66,7 @@ async function handleRequest(
     gitRoot: string,
     req: http.IncomingMessage,
     res: http.ServerResponse,
+    decisionsForSession: (sessionId: string) => Promise<TraceDecision[]>,
 ): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
 
@@ -81,7 +96,7 @@ async function handleRequest(
 
             sendJson(res, 200, {
                 session,
-                decisions: await decisionsForSession(gitRoot, sessionId),
+                decisions: await decisionsForSession(sessionId),
             });
             return;
         }
@@ -94,25 +109,31 @@ async function handleRequest(
     }
 }
 
-async function decisionsForSession(
+async function loadDecisionIndex(
     gitRoot: string,
-    sessionId: string,
-): Promise<TraceDecision[]> {
+): Promise<Map<string, TraceDecision[]>> {
     const [local, branch] = await Promise.all([
         readAllLocalBranchRecords(gitRoot),
         readAllBranchRecords(gitRoot).catch(() => []),
     ]);
 
-    const byId = new Map<string, TraceDecision>();
+    const bySession = new Map<string, Map<string, TraceDecision>>();
     for (const record of [...local, ...branch]) {
         for (const decision of record.decisions ?? []) {
-            if (decision.sessionIds?.includes(sessionId)) {
+            for (const sessionId of decision.sessionIds ?? []) {
+                const byId = bySession.get(sessionId) ?? new Map();
                 byId.set(decision.id, decision);
+                bySession.set(sessionId, byId);
             }
         }
     }
 
-    return [...byId.values()];
+    return new Map(
+        [...bySession.entries()].map(([sessionId, byId]) => [
+            sessionId,
+            [...byId.values()],
+        ]),
+    );
 }
 
 function send(
@@ -137,6 +158,20 @@ function sendJson(
         res,
         status,
         'application/json; charset=utf-8',
-        JSON.stringify(payload),
+        JSON.stringify(redactDeep(payload)),
     );
+}
+
+export function isAllowedHost(
+    hostHeader: string | undefined,
+    port: number,
+): boolean {
+    if (!hostHeader || !Number.isInteger(port) || port <= 0) {
+        return false;
+    }
+    return new Set([
+        `127.0.0.1:${port}`,
+        `localhost:${port}`,
+        `[::1]:${port}`,
+    ]).has(hostHeader.toLowerCase());
 }
