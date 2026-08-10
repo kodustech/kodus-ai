@@ -1,9 +1,0 @@
-{
-    "server": "YOUR_AWS_FIXED_IP",
-    "server_port": 8388,
-    "password": "YOUR_SHADOWSOCKS_PASSWORD",
-    "method": "aes-256-gcm",
-    "local_address": "0.0.0.0",
-    "local_port": 1080,
-    "mode": "tcp_only"
-}
