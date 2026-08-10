@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { gitService } from '../../services/git.service.js';
 import {
+    isLegacyDecisionsCommand,
     parseAgents,
     removeClaudeCompatibleHooks,
     removeCodexNotify,
@@ -43,7 +44,10 @@ export async function enableAction(options: EnableOptions): Promise<void> {
     // 1. Clear anything the previous release wrote. This has to happen before
     //    the install, or a settings file ends up running both the dead
     //    `kodus decisions` hooks and the new ones on the same events.
-    const legacyClaude = await removeClaudeCompatibleHooks(gitRoot);
+    const legacyClaude = await removeClaudeCompatibleHooks(
+        gitRoot,
+        isLegacyDecisionsCommand,
+    );
     const legacyCursor = await removeCursorLegacyHooks(gitRoot);
     const legacyCodexNotify = await removeCodexNotify(codexConfigPath);
     const legacyRemoved =

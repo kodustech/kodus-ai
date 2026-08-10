@@ -261,10 +261,17 @@ describe('enableAction', () => {
         const codexConfig = path.join(tmpDir, '.codex', 'config.toml');
 
         await enableAction({ codexConfig });
+        vi.mocked(console.log).mockClear();
         await enableAction({ codexConfig });
 
         const calls = vi.mocked(console.log).mock.calls.flat().join('\n');
-        expect(calls).toContain('already configured');
+        expect(calls).toContain(
+            'Claude Code session hooks: already configured',
+        );
+        expect(calls).toContain('Cursor session hooks: already configured');
+        expect(calls).toContain('Codex session hooks: already configured');
+        expect(calls).toContain('Git hooks: already configured');
+        expect(calls).not.toContain('Removed hooks from the previous release');
     });
 
     it('--agents claude skips codex', async () => {
