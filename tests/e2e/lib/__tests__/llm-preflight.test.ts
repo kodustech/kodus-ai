@@ -77,3 +77,17 @@ test("each class points at where the fix lives", () => {
         /E2E_LLM_MODEL/,
     );
 });
+
+// Our own probe caps the response; a reasoning model spends output budget
+// before emitting text and returns 400 for it. That is the request SUCCEEDING
+// as far as key and model are concerned — treating it as a failure would have
+// the preflight block runs on nothing.
+test("ok: hitting our own output cap is not a failure", () => {
+    assert.equal(
+        classifyLlmError(
+            400,
+            '{"error":{"message":"Could not finish the message because max_tokens or model output limit was reached. Please try again with higher max_tokens.","type":"invalid_request_error"}}',
+        ),
+        "ok",
+    );
+});

@@ -32,6 +32,15 @@ export function classifyLlmError(
     body: string,
 ): LlmPreflightStatus {
     const lower = (body ?? "").toLowerCase();
+    // The request was accepted and the model ran; it just could not fit an
+    // answer in the cap WE set. That says the key and the model are fine,
+    // which is the whole question this probe asks.
+    if (
+        lower.includes("max_tokens or model output limit was reached") ||
+        lower.includes("could not finish the message")
+    ) {
+        return "ok";
+    }
     // Order matters: a 404 for an unknown model and a 401 for a bad key both
     // carry generic wording, so match on the specific codes first.
     if (
@@ -98,7 +107,11 @@ export async function llmPreflight(
             body: {
                 model,
                 messages: [{ role: "user", content: "ping" }],
-                max_completion_tokens: 1,
+                // Not 1. A reasoning model spends output budget before it
+                // emits any text, so a 1-token cap returns HTTP 400 "could not
+                // finish the message" — the probe failing on itself, which is
+                // exactly the false alarm this file exists to prevent.
+                max_completion_tokens: 64,
             },
             timeoutMs: 30_000,
         });
