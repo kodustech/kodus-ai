@@ -1,2 +1,0 @@
-# Fast, infra-free gate first — catch .env schema drift before the slow suite.
-pnpm run env:check && node scripts/dev/pre-push-run-tests.js

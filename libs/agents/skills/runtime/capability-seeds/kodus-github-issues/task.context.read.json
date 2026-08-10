@@ -1,5 +1,0 @@
-{
-    "providerType": "kodus-github-issues",
-    "capability": "task.context.read",
-    "tools": ["KODUS_LIST_ISSUES", "KODUS_GET_ISSUE"]
-}
