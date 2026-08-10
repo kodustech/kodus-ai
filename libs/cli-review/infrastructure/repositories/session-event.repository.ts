@@ -6,6 +6,7 @@ import {
     ClassificationSource,
 } from './schemas/session-event.model';
 import { CliSessionClassifiedDecision } from '@libs/cli-review/domain/types/cli-session-capture.types';
+import { sanitizeForJsonb } from '@libs/common/utils/jsonb-safe';
 
 @Injectable()
 export class SessionEventRepository {
@@ -15,7 +16,16 @@ export class SessionEventRepository {
     ) {}
 
     async create(data: Partial<SessionEventModel>): Promise<SessionEventModel> {
-        const model = this.repo.create(data);
+        // `payload` is whatever the CLI sent us — conversation text, tool
+        // output, LLM responses. It regularly carries U+0000 and unpaired
+        // surrogates, both of which the jsonb column refuses, and the
+        // rejected INSERT drops the event. Sanitising at the repository
+        // rather than in the use case keeps every writer covered.
+        const model = this.repo.create(
+            data.payload
+                ? { ...data, payload: sanitizeForJsonb(data.payload) }
+                : data,
+        );
         return this.repo.save(model);
     }
 
