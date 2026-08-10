@@ -18,8 +18,8 @@ remotes. They do not use the developer's real `~/.kodus` or agent settings.
 RUN  v4.1.9 /Users/gabrielmalinosqui/orca/workspaces/kodus-ai/thresher/apps/cli
 
 Test Files  120 passed (120)
-     Tests  930 passed (930)
-  Duration  80.61s (transform 748ms, setup 0ms, import 2.82s, tests 70.73s, environment 5ms)
+     Tests  931 passed (931)
+  Duration  78.53s (transform 719ms, setup 0ms, import 2.72s, tests 68.92s, environment 5ms)
 ```
 
 ### `apps/cli: pnpm test:integration`
@@ -29,7 +29,7 @@ RUN  v4.1.9 /Users/gabrielmalinosqui/orca/workspaces/kodus-ai/thresher/apps/cli
 
 Test Files  1 passed (1)
      Tests  44 passed (44)
-  Duration  14.69s (transform 28ms, setup 0ms, import 44ms, tests 14.58s, environment 0ms)
+  Duration  14.78s (transform 29ms, setup 0ms, import 45ms, tests 14.68s, environment 0ms)
 ```
 
 ### Repository root: `pnpm test`
