@@ -1,4 +1,7 @@
-import { ParametersKey, OrganizationParametersKey } from '@libs/core/domain/enums';
+import {
+    ParametersKey,
+    OrganizationParametersKey,
+} from '@libs/core/domain/enums';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -43,7 +46,9 @@ export class KodyRulesSyncListener {
      * rules. When true, merged changes to its rule files must also refresh the
      * org-wide global scope.
      */
-    private async isGlobalSourceRepo(event: PullRequestClosedEvent): Promise<boolean> {
+    private async isGlobalSourceRepo(
+        event: PullRequestClosedEvent,
+    ): Promise<boolean> {
         try {
             const parameter =
                 await this.organizationParametersService.findByKey(
@@ -51,8 +56,7 @@ export class KodyRulesSyncListener {
                     event.organizationAndTeamData,
                 );
             const config = parameter?.configValue as
-                | GlobalRulesSourceConfig
-                | undefined;
+                GlobalRulesSourceConfig | undefined;
             return (config?.repositories ?? []).some(
                 (r) => String(r.id) === String(event.repository.id),
             );
@@ -168,7 +172,15 @@ export class KodyRulesSyncListener {
                 });
             }
         } finally {
-            await lock.release();
+            // DistributedLock.release() logs a failed pg_advisory_unlock and
+            // then rethrows it. Letting that escape from `finally` would
+            // either mask the sync error that got us here or turn a
+            // successful sync into a rejected handler — and for this
+            // listener a rejected handler means redelivery, which is exactly
+            // the duplicate-rules failure the lock exists to prevent. The
+            // pinned connection is already back in the pool by that point,
+            // and the TTL (or session teardown) frees the advisory lock.
+            await lock.release().catch(() => undefined);
         }
     }
 
