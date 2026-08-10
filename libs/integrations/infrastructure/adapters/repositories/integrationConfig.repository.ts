@@ -383,8 +383,16 @@ export class IntegrationConfigRepository implements IIntegrationConfigRepository
                 IntegrationConfigEntity,
             );
         } catch (error) {
+            // Deliberately NOT the `console.log(error)` + swallow used by the
+            // older methods in this file. The only caller
+            // (ContextResolutionService) turns an empty array into
+            // `throw new Error('No active integrations found for
+            // organization')`, so swallowing here would report a DB outage as
+            // a configuration problem and send the operator hunting for an
+            // integration that exists. Empty result and failed query have to
+            // stay distinguishable.
             console.log(error);
-            return [];
+            throw error;
         }
     }
 
