@@ -34,11 +34,17 @@ import { DistributedLockService } from '@libs/core/workflow/infrastructure/distr
 const API_CRON_SYNC_CODE_REVIEW_REACTIONS =
     process.env.API_CRON_SYNC_CODE_REVIEW_REACTIONS;
 
-// Max DB queries in flight per rajada. Each team.map() spawns 1 query;
-// without a cap, N teams = N parallel conns, which starves the pool
-// during scale-down (2026-08-06 incident). The API pool is 25
+// Max DB queries in flight. Applies only to the two fan-outs that are
+// actually database work — teamAutomation/find and
+// automationExecution/findByPeriod — where each team.map() entry is one
+// query, so N teams meant N simultaneous connections and starved the
+// pool during the 2026-08-06 incident. The API pool is 25
 // (api.module.ts passes poolSize: 25, overriding the factory default),
 // so 5 leaves 20 slots for request traffic.
+//
+// The third fan-out (publish to RabbitMQ) is deliberately left
+// unthrottled: it issues no queries, so gating it on a DB budget would
+// only make the cron slower.
 const DB_CONCURRENCY = 5;
 
 const LOCK_KEY = 'CRON:SYNC_CODE_REVIEW_REACTIONS';
@@ -215,9 +221,13 @@ export class CodeReviewFeedbackCronProvider {
                 return;
             }
 
+            // NOT wrapped in `limit`: this fan-out only formats messages
+            // and hands them to RabbitMQ via publishSyncCodeReviewReactionsTasks
+            // — it never touches Postgres, so throttling it against the DB
+            // pool budget would cost wall-clock and buy nothing.
             const publishResults = await Promise.allSettled(
                 teamsToProcess.map(({ team, executions }) =>
-                    limit(async () => {
+                    (async () => {
                         const automationExecutionsPRs = executions
                             .map(
                                 (execution) =>
@@ -249,7 +259,7 @@ export class CodeReviewFeedbackCronProvider {
                             team,
                             executionsCount: executions.length,
                         };
-                    }),
+                    })(),
                 ),
             );
 

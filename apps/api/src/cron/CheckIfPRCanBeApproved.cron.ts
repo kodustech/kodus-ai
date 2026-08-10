@@ -58,26 +58,35 @@ import { IPullRequestWithDeliveredSuggestions } from '@libs/platformData/domain/
 const API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED =
     process.env.API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED;
 
-// Cron runs every 6 minutes and fans out ONE query per team across
-// 4 different rajadas (parameters/find, teamAutomation/find, main
-// teams.map, and PR-level for each eligible PR). Without a cap, ~40
-// teams = 40 parallel conns per rajada, which starved the pool during
-// the 2026-08-06 incident.
+// The pool budget these two numbers spend against is 25, not 50 —
+// api.module.ts passes `poolSize: 25` to SharedPostgresModule.forRoot,
+// which overrides the factory's env-based default.
 //
-// Budget: the API pool is 25, not 50 — api.module.ts passes
-// `poolSize: 25` to SharedPostgresModule.forRoot, which overrides the
-// factory default. 10 leaves 15 slots for request traffic, and the cron
-// still finishes well before the next 6-min tick.
+// Team level is the one that caused the 2026-08-06 incident: the two
+// prep rajadas (parameters/findOne, teamAutomation/find) and the main
+// teams.map body are pure DB work, one to two queries each, so ~40
+// teams meant ~40 simultaneous connections — more than the pool holds.
+// Capping at 10 makes those fan-outs map to at most 10 connections and
+// leaves 15 for request traffic.
 const TEAM_CONCURRENCY = 10;
-// Both limiters are created ONCE per run, so this is a global cap and
-// not a per-team one: at most 3 PR-level queries are in flight across
-// all teams, and the worst case for the whole cron is
-// TEAM_CONCURRENCY + PR_CONCURRENCY = 13 of the 25 slots.
+// PR level is a different animal and must NOT be tuned like the team
+// level. Of the five awaits in the per-PR path, exactly one hits the
+// database (automationExecutionService.findLatestExecutionByFilters);
+// the other four are git-provider HTTP calls (getPullRequest,
+// getPullRequestReviewThreads, getPullRequestReviewComments,
+// checkIfPullRequestShouldBeApproved). A task parked on an HTTP round
+// trip holds no pool connection at all, so throttling here buys almost
+// no pool safety and costs wall-clock directly.
 //
-// Do NOT move the pLimit() call inside the teams.map() callback to get
-// 3-per-team — that reads like the obvious fix, but it means 10 x 3 =
-// 30 concurrent queries, which is more than the whole pool.
-const PR_CONCURRENCY = 3;
+// This limiter is created once per run, so the value is a GLOBAL cap
+// across all teams — and because teamLimit wraps the whole per-team
+// body including this loop, a low value here stalls the team slots too:
+// at 3, ten team tasks would queue behind three PR slots and the
+// effective parallelism of the entire cron collapses to 3. The cron
+// runs every 6 minutes and is expected to finish in seconds, so that
+// trade is wrong. 15 keeps the git-provider work wide while the DB
+// slice of it stays around a fifth of that in practice.
+const PR_CONCURRENCY = 15;
 
 @Injectable()
 export class CheckIfPRCanBeApprovedCronProvider {
@@ -192,12 +201,11 @@ export class CheckIfPRCanBeApprovedCronProvider {
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             const now = new Date();
 
-            // Cap DB fan-out across every teams.map()/prs.map() below.
-            // Old behavior spawned N teams (~40) queries in parallel per
-            // rajada across 4 rajadas — enough to starve the API pool
-            // (see 2026-08-06 incident). Both limiters are global for
-            // the run: 10 team-level + 3 PR-level = 13 in flight at
-            // worst, against a pool of 25.
+            // Both limiters are global for the run. teamLimit is the one
+            // that bounds real connection usage — the team fan-outs are
+            // pure DB. prLimit sits over mostly-HTTP work, so it is set
+            // wide on purpose; see the constants above for why the two
+            // are not tuned the same way.
             const teamLimit = pLimit(TEAM_CONCURRENCY);
             const prLimit = pLimit(PR_CONCURRENCY);
 
