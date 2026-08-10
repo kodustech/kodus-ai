@@ -92,8 +92,11 @@ The process-level evidence is executable and lives beside the implementation:
 
 - Cross-branch trailer linkage reproduced; fixed by requiring an exact branch
   match except on detached HEAD.
-- Duplicate `turn_end` not reproduced by dispatching a completed turn again;
-  the production guard and persist-before-send ordering already prevent it.
+- Duplicate `turn_end` dispatch remains prevented by the lifecycle guard and
+  persist-before-send ordering. A separate duplicate `turn-start` parser path
+  was reproduced after the first validation pass; the parser now retains one
+  turn, attaches the eventual end event to it, and marks the duplicate line as
+  corrupt instead of rendering a ghost turn.
 - Orphan-branch record loss reproduced as a mutable local-ref race during a
   multi-ref push; fixed by pushing each immutable commit SHA. A second stale
   same-shard scenario exposed remote correction loss during NFF retry; the

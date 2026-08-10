@@ -118,6 +118,56 @@ describe('local session store', () => {
         expect(session!.corruptLines).toBe(1);
     });
 
+    it('keeps one turn when a turn-start event is duplicated', () => {
+        const lines = [
+            {
+                kind: 'turn-start',
+                turnId: 'duplicate-turn',
+                prompt: 'first prompt',
+                commitBefore: 'abc123',
+                timestamp: '2026-01-01T00:00:01.000Z',
+            },
+            {
+                kind: 'turn-start',
+                turnId: 'duplicate-turn',
+                prompt: 'duplicate prompt',
+                commitBefore: 'abc123',
+                timestamp: '2026-01-01T00:00:01.100Z',
+            },
+            {
+                kind: 'turn-end',
+                turnId: 'duplicate-turn',
+                response: 'done',
+                toolCalls: [],
+                filesModified: [],
+                filesRead: [],
+                commands: [],
+                tokenUsage: {
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    cacheCreationTokens: 0,
+                    cacheReadTokens: 0,
+                    apiCallCount: 0,
+                },
+                commitAfter: 'def456',
+                timestamp: '2026-01-01T00:00:02.000Z',
+            },
+        ];
+
+        const session = parseSessionRecord(
+            'duplicate-session',
+            `${lines.map((line) => JSON.stringify(line)).join('\n')}\n`,
+        );
+
+        expect(session.turns).toHaveLength(1);
+        expect(session.turns[0]).toMatchObject({
+            turnId: 'duplicate-turn',
+            prompt: 'first prompt',
+            response: 'done',
+        });
+        expect(session.corruptLines).toBe(1);
+    });
+
     it('returns null for a session that was never recorded', async () => {
         await expect(readSessionRecord(repoA, 'nope')).resolves.toBeNull();
     });

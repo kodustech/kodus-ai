@@ -91,6 +91,13 @@ export function parseSessionRecord(
                 break;
 
             case 'turn-start': {
+                if (turnsById.has(line.turnId)) {
+                    // Lifecycle events are retried and some agents can emit
+                    // overlapping start signals. Keep the first turn object so
+                    // its eventual turn-end cannot become detached from the UI.
+                    session.corruptLines += 1;
+                    break;
+                }
                 const turn: TraceTurn = {
                     turnId: line.turnId,
                     prompt: line.prompt ?? '',
