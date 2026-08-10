@@ -1,0 +1,230 @@
+name: "E2E: build test images"
+
+# Publishes images from an arbitrary ref so the e2e environments can run code
+# that is not in a release yet — WITHOUT cutting an RC. Producing a release tag
+# every time someone wants to test is the wrong trade: RCs are release
+# artifacts, they freeze main, and they land in the release history forever.
+#
+# Two modes:
+#   cloud        API_CLOUD_MODE=true,  tag `cloud-<sha>`  — the disposable
+#                cloud environment (provisioning/cloud/aws-env.sh).
+#   self-hosted  API_CLOUD_MODE=false, tag `test-<sha>`   — the self-hosted
+#                matrix against unreleased code. Needed because the matrix
+#                otherwise only ever sees the newest RELEASE: the fix in
+#                PR #1666 merged 2026-08-08 but selfhosted-2.1.30 predates it,
+#                so the matrix kept faithfully reproducing a fixed bug.
+#
+# Destination: `registry_owner` (default: this repo's owner). Point it at a
+# personal namespace to keep throwaway builds out of the production registry —
+# that is what kodustech/kodus-installer#48 (KODUS_REGISTRY) enables. Pushing
+# outside this org needs GHCR_PUBLISH_TOKEN, a PAT with write:packages; the
+# built-in GITHUB_TOKEN cannot.
+#
+# Why this exists: `API_CLOUD_MODE` is baked at BUILD time
+# (libs/ee/configs/environment/environment.template.ts — "Once compiled, the
+# value is hardcoded and cannot be changed using .env"). The published
+# self-hosted images on GHCR are compiled with it OFF, so no amount of env
+# tweaking turns one of those droplets into a cloud stack.
+#
+# QA's cloud images already exist, but they go to ECR in the account/region
+# where prod lives. The e2e AWS credential is deliberately boxed to us-east-2
+# and cannot read them — which is the whole point of that boundary. Building
+# our own to GHCR keeps the e2e environment inside its own blast radius and
+# needs no new AWS permission.
+#
+# Tag scheme: `cloud-<sha>` plus `cloud-latest`. Distinct from the
+# `selfhosted-*` tags so nothing can confuse a cloud-mode image for a
+# self-hosted one — they differ in behaviour, not just in name.
+
+permissions:
+    contents: read
+    packages: write
+
+on:
+    # Branch-scoped push trigger for BRING-UP ONLY.
+    #
+    # workflow_dispatch is unavailable until a workflow exists on the default
+    # branch, which makes it impossible to produce cloud-mode images from the
+    # branch that introduces them — a chicken-and-egg that would otherwise
+    # force this to be merged unproven. A push trigger has no such rule.
+    #
+    # REMOVE THIS BLOCK before merge: once the workflow is on main, dispatch
+    # and workflow_call cover every real use, and rebuilding images on every
+    # push to a branch is pure waste.
+    push:
+        branches:
+            - fix/e2e-matrix-signal
+        paths:
+            - "docker-bake.hcl"
+            - ".github/workflows/e2e-test-images.yml"
+    workflow_call:
+        inputs:
+            ref:
+                description: "Git ref to build"
+                required: false
+                default: ""
+                type: string
+            mode:
+                description: "Topology the images are compiled for"
+                required: false
+                default: cloud
+                type: string
+            registry_owner:
+                description: "GHCR namespace to publish to"
+                required: false
+                default: ""
+                type: string
+        outputs:
+            image_tag:
+                description: "GHCR tag the images were published under"
+                value: ${{ jobs.build.outputs.image_tag }}
+    workflow_dispatch:
+        inputs:
+            ref:
+                description: "Git ref to build (blank = this branch)"
+                required: false
+                default: ""
+                type: string
+            mode:
+                description: "Topology the images are compiled for"
+                required: false
+                default: self-hosted
+                type: choice
+                options:
+                    - self-hosted
+                    - cloud
+            registry_owner:
+                description: "GHCR namespace to publish to (blank = this repo's owner)"
+                required: false
+                default: ""
+                type: string
+
+jobs:
+    build:
+        name: Build cloud-mode images
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+        outputs:
+            image_tag: ${{ steps.tag.outputs.image_tag }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6.0.2
+              with:
+                  ref: ${{ inputs.ref || github.ref }}
+
+            - name: Resolve tag, mode and destination
+              id: tag
+              env:
+                  MODE: ${{ inputs.mode || 'self-hosted' }}
+                  OWNER_IN: ${{ inputs.registry_owner }}
+              run: |
+                  set -euo pipefail
+                  SHA=$(git rev-parse --short HEAD)
+                  OWNER="${OWNER_IN:-${GITHUB_REPOSITORY%%/*}}"
+                  if [ "$MODE" = "cloud" ]; then
+                      PREFIX=cloud; CLOUD=true
+                  else
+                      PREFIX=test;  CLOUD=false
+                  fi
+                  {
+                      echo "image_tag=${PREFIX}-${SHA}"
+                      echo "cloud_mode=$CLOUD"
+                      echo "owner=$OWNER"
+                      echo "registry=ghcr.io/$OWNER"
+                  } >> "$GITHUB_OUTPUT"
+                  echo "mode=$MODE tag=${PREFIX}-${SHA} -> ghcr.io/$OWNER"
+
+            - name: Set up QEMU
+              uses: docker/setup-qemu-action@v3
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v4.0.0
+
+            # GHCR_PUBLISH_TOKEN when publishing outside this org (a personal
+            # namespace); the built-in token only works for the repo's owner.
+            - name: Login to GHCR
+              uses: docker/login-action@v4.1.0
+              with:
+                  registry: ghcr.io
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GHCR_PUBLISH_TOKEN || secrets.GITHUB_TOKEN }}
+
+            - name: Build and push (api/webhooks/worker/web)
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  CACHE_TYPE: registry
+                  CACHE_REF: ghcr.io/${{ github.repository_owner }}/kodus-ai-buildcache:cloud
+                  OWNER: ${{ steps.tag.outputs.owner }}
+                  TAG: ${{ steps.tag.outputs.image_tag }}
+                  CLOUD_MODE: ${{ steps.tag.outputs.cloud_mode }}
+                  MODE: ${{ inputs.mode || 'self-hosted' }}
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  set -euo pipefail
+                  # amd64 only: the e2e EC2 instances are t3 (x86). Building
+                  # both arches here would double an already slow step for an
+                  # image nothing consumes.
+                  docker buildx bake -f docker-bake.hcl \
+                    --set base.args.RELEASE_VERSION="$TAG" \
+                    --set base.args.API_CLOUD_MODE="$CLOUD_MODE" \
+                    --set '*.platform=linux/amd64' \
+                    --set api.tags="ghcr.io/$OWNER/kodus-ai-api:$TAG" \
+                    --set webhooks.tags="ghcr.io/$OWNER/kodus-ai-webhook:$TAG" \
+                    --set worker.tags="ghcr.io/$OWNER/kodus-ai-worker:$TAG" \
+                    --set web.tags="ghcr.io/$OWNER/kodus-ai-web:$TAG" \
+                    --push \
+                    api webhooks worker web
+
+                  # The self-hosted compose pins ONE tag across five services plus a
+                  # fixed-tag rabbitmq, and only four are built from this repo.
+                  # Mirror the rest into the destination namespace, otherwise
+                  # overriding KODUS_REGISTRY yields a stack that cannot pull
+                  # half of itself.
+                  if [ "$MODE" = "self-hosted" ]; then
+                      BASE=$(gh release list --limit 30 --json tagName \
+                          --jq '[.[] | select(.tagName | startswith("selfhosted-")) | select(.tagName | contains("-rc.") | not)] | .[0].tagName' \
+                          | sed 's/^selfhosted-//')
+                      echo "Mirroring unbuilt services from release $BASE"
+                      docker buildx imagetools create \
+                          -t "ghcr.io/$OWNER/kodus-mcp-manager:$TAG" \
+                          "ghcr.io/kodustech/kodus-mcp-manager:$BASE" || \
+                          echo "::warning::could not mirror kodus-mcp-manager:$BASE"
+                      docker buildx imagetools create \
+                          -t "ghcr.io/$OWNER/kodus-rabbitmq:4.2.2-kodus" \
+                          "ghcr.io/kodustech/kodus-rabbitmq:4.2.2-kodus" || \
+                          echo "::warning::could not mirror kodus-rabbitmq"
+                  else
+                      for image in kodus-ai-api kodus-ai-webhook kodus-ai-worker kodus-ai-web; do
+                          docker buildx imagetools create \
+                              -t "ghcr.io/$OWNER/$image:cloud-latest" \
+                              "ghcr.io/$OWNER/$image:$TAG"
+                      done
+                  fi
+
+            - name: Summary
+              env:
+                  TAG: ${{ steps.tag.outputs.image_tag }}
+                  REGISTRY: ${{ steps.tag.outputs.registry }}
+                  MODE: ${{ inputs.mode || 'self-hosted' }}
+              run: |
+                  {
+                      echo "### Test images published ($MODE)"
+                      echo ""
+                      echo "- tag: \`$TAG\`"
+                      echo "- registry: \`$REGISTRY\`"
+                      echo ""
+                      if [ "$MODE" = "self-hosted" ]; then
+                          echo "Run the matrix against them — dispatch **E2E: self-hosted matrix** with:"
+                          echo ""
+                          echo "| input | value |"
+                          echo "|---|---|"
+                          echo "| image_tag | \`$TAG\` |"
+                          echo "| registry | \`$REGISTRY\` |"
+                          echo ""
+                          echo "> Images in a personal namespace are PRIVATE by default. Either make them public, or set KODUS_REGISTRY_USER / KODUS_REGISTRY_TOKEN so the VM can log in."
+                      else
+                          echo '```'
+                          echo "IMAGE_TAG=$TAG bash tests/e2e/provisioning/cloud/aws-env.sh up"
+                          echo '```'
+                      fi
+                  } >> "$GITHUB_STEP_SUMMARY"

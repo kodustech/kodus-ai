@@ -500,6 +500,12 @@ ssh_vm "cd /opt/kodus-installer && cp .env.example .env && ./scripts/generate-se
 # images — the matrix otherwise only ever sees the newest release, which is
 # how it kept reproducing a bug that was already fixed on main.
 REGISTRY_VALUE="${KODUS_REGISTRY:-}"
+# Credentials for that registry, needed only when it is NOT the public one.
+# Images pushed to a personal GHCR namespace are PRIVATE by default, and the
+# VM pulls anonymously — so without a login the stack dies on `docker pull`
+# with a 401 that reads like the tag does not exist.
+REGISTRY_USER_VALUE="${KODUS_REGISTRY_USER:-}"
+REGISTRY_TOKEN_VALUE="${KODUS_REGISTRY_TOKEN:-}"
 APP_ID_VALUE="${GH_APP_ID:-}"
 APP_PEM_ESCAPED=""
 if [ -n "${GH_APP_PRIVATE_KEY:-}" ]; then
@@ -561,6 +567,13 @@ env_set API_PG_DB_SSL "false"
 env_set WORKER_ROLE "code-review"
 if [ -n "$REGISTRY_VALUE" ]; then
     env_set KODUS_REGISTRY "$REGISTRY_VALUE"
+fi
+if [ -n "$REGISTRY_USER_VALUE" ] && [ -n "$REGISTRY_TOKEN_VALUE" ]; then
+    # Piped through stdin so the token never lands in the process list.
+    printf '%s' "$REGISTRY_TOKEN_VALUE" \
+        | docker login ghcr.io -u "$REGISTRY_USER_VALUE" --password-stdin \
+        && echo "[provision] logged in to ghcr.io as $REGISTRY_USER_VALUE" \
+        || echo "[provision] WARNING: ghcr.io login failed — private images will not pull"
 fi
 if [ -n "$APP_ID_VALUE" ]; then
     env_set API_GITHUB_APP_ID "$APP_ID_VALUE"

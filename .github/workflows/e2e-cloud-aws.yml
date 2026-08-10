@@ -47,7 +47,9 @@ jobs:
     images:
         name: Cloud-mode images
         if: ${{ inputs.image_tag == '' }}
-        uses: ./.github/workflows/e2e-cloud-images.yml
+        uses: ./.github/workflows/e2e-test-images.yml
+        with:
+            mode: cloud
         secrets: inherit
 
     run:
