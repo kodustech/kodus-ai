@@ -35,6 +35,7 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
+import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
 @Injectable()
 export class CodeReviewHandlerService {
@@ -79,6 +80,7 @@ export class CodeReviewHandlerService {
         private readonly organizationService: IOrganizationService,
         @Inject(USER_SERVICE_TOKEN)
         private readonly usersService: IUsersService,
+        private readonly permissionValidationService: PermissionValidationService,
     ) {}
 
     /**
@@ -195,9 +197,6 @@ export class CodeReviewHandlerService {
                 correlationId,
                 workflowJobId,
                 parentSignal,
-                dryRun: {
-                    enabled: false,
-                },
                 statusInfo: {
                     status: AutomationStatus.IN_PROGRESS,
                     message: 'Pipeline started',
@@ -307,6 +306,26 @@ export class CodeReviewHandlerService {
                     repository,
                     pullRequest?.number,
                     platformType,
+                );
+            }
+
+            // Consume a managed trial review credit only now that the review
+            // reached a delivered outcome. SUCCESS and PARTIAL_ERROR both post a
+            // review (PARTIAL_ERROR = comments delivered, an auxiliary stage
+            // failed), so both charge; ERROR and SKIPPED never do. The service
+            // no-ops for anything that isn't a managed-credit trial without
+            // BYOK, and is idempotent per repo:pr.
+            if (
+                classifiedStatus.status === AutomationStatus.SUCCESS ||
+                classifiedStatus.status === AutomationStatus.PARTIAL_ERROR
+            ) {
+                const trialReviewCreditUsageKey =
+                    repository?.id && pullRequest?.number
+                        ? `${repository.id}:${pullRequest.number}`
+                        : undefined;
+                await this.permissionValidationService.consumeTrialReviewCreditOnSuccess(
+                    organizationAndTeamData,
+                    trialReviewCreditUsageKey,
                 );
             }
 

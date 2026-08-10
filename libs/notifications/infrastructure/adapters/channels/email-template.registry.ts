@@ -100,6 +100,34 @@ export type EmailTemplateBuilder = (
  *   3. Add the React Email template under `@libs/common/email/templates`.
  *   4. Register the builder here. No changes to the channel adapter.
  */
+
+/**
+ * Coerce a rule list into the plain strings the email template renders.
+ *
+ * Anything that is not a string is reduced to its `title` (the shape the
+ * producer used to send) and, failing that, dropped. Dropping an entry costs
+ * one line in an email; letting a non-string through costs the whole
+ * execution, because React throws on an object child and the delivery retries
+ * five times before giving up.
+ *
+ * An empty title is dropped on the same terms, deliberately: it would render
+ * as a blank bullet and still count toward the "N new rules" headline, which
+ * reads as a bug to whoever opens the email.
+ */
+export function normaliseRuleList(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .map((entry) => {
+            if (typeof entry === 'string') return entry;
+            if (entry && typeof entry === 'object') {
+                const title = (entry as { title?: unknown }).title;
+                if (typeof title === 'string') return title;
+            }
+            return undefined;
+        })
+        .filter((entry): entry is string => Boolean(entry));
+}
+
 export const EMAIL_TEMPLATE_REGISTRY: Partial<
     Record<NotificationEvent, EmailTemplateBuilder>
 > = {
@@ -146,7 +174,15 @@ export const EMAIL_TEMPLATE_REGISTRY: Partial<
     },
 
     [NotificationEvent.KODY_RULES_GENERATED]: (metadata, { webUrl }) => {
-        const rules = metadata.rules as string[];
+        // `as string[]` used to be a blind cast. The producer was sending
+        // `{title, rule, severity}` objects, the template rendered each entry
+        // as a React child, and the email threw at render — retried 5x per
+        // recipient and left the whole execution in `partial_error`.
+        //
+        // The producer now sends titles, but normalise here too: notification
+        // payloads are persisted and replayed, so an already-queued delivery
+        // from before the fix must not keep crashing the worker.
+        const rules = normaliseRuleList(metadata.rules);
         const organizationName = metadata.organizationName as string;
         const userName = (metadata as { userName?: string }).userName ?? '';
         return {

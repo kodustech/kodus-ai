@@ -1,4 +1,7 @@
-import { ParametersKey, OrganizationParametersKey } from '@libs/core/domain/enums';
+import {
+    ParametersKey,
+    OrganizationParametersKey,
+} from '@libs/core/domain/enums';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -9,16 +12,21 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { GlobalRulesSourceConfig } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
 import { Inject, Injectable } from '@nestjs/common';
-import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
 import { KodyRulesSyncService } from '../services/kodyRulesSync.service';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { createLogger } from '@libs/core/log/logger';
 import {
     IDE_RULES_SYNC_DISABLED_EVENT,
     IdeRulesSyncDisabledEvent,
 } from '@libs/kodyRules/domain/events/ide-rules-sync.events';
+
+// Advisory-lock TTL: 5 min covers the worst observed sync (large repo +
+// global scan + LLM per file). If a process crashes mid-sync the lock is
+// released either by the TTL or by pg dropping the pinned session — a
+// redelivery retry then re-acquires and re-runs.
+const SYNC_LOCK_TTL_MS = 5 * 60 * 1000;
 
 @Injectable()
 export class KodyRulesSyncListener {
@@ -30,8 +38,7 @@ export class KodyRulesSyncListener {
         private readonly parametersService: IParametersService,
         @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
         private readonly organizationParametersService: IOrganizationParametersService,
-        @InjectDataSource()
-        private readonly dataSource: DataSource,
+        private readonly distributedLockService: DistributedLockService,
     ) {}
 
     /**
@@ -39,7 +46,9 @@ export class KodyRulesSyncListener {
      * rules. When true, merged changes to its rule files must also refresh the
      * org-wide global scope.
      */
-    private async isGlobalSourceRepo(event: PullRequestClosedEvent): Promise<boolean> {
+    private async isGlobalSourceRepo(
+        event: PullRequestClosedEvent,
+    ): Promise<boolean> {
         try {
             const parameter =
                 await this.organizationParametersService.findByKey(
@@ -47,8 +56,7 @@ export class KodyRulesSyncListener {
                     event.organizationAndTeamData,
                 );
             const config = parameter?.configValue as
-                | GlobalRulesSourceConfig
-                | undefined;
+                GlobalRulesSourceConfig | undefined;
             return (config?.repositories ?? []).some(
                 (r) => String(r.id) === String(event.repository.id),
             );
@@ -63,52 +71,6 @@ export class KodyRulesSyncListener {
                 },
             });
             return false;
-        }
-    }
-
-    /**
-     * Cross-process idempotency claim. The pull-request.closed event reaches
-     * every process that hosts this listener (local emit in the webhook
-     * consumer + CrossProcessEventsBridge re-emits elsewhere), and in
-     * production there are N worker replicas — without a shared claim each
-     * of them imports the same rule files concurrently and the sync creates
-     * DUPLICATE rules (observed live: two identical rules from one merge).
-     * First INSERT wins; everyone else skips. On infrastructure failure we
-     * choose availability: proceed (worst case a duplicate, never a lost
-     * sync).
-     */
-    private async claimSyncRun(claimKey: string): Promise<boolean> {
-        try {
-            // Concurrent CREATE IF NOT EXISTS can still race (duplicate
-            // relation) — tolerated: the table exists either way.
-            await this.dataSource
-                .query(
-                    `CREATE TABLE IF NOT EXISTS kodus_event_claims (
-                    claim_key text PRIMARY KEY,
-                    created_at timestamptz NOT NULL DEFAULT now()
-                )`,
-                )
-                .catch(() => undefined);
-            // Opportunistic TTL sweep so the table never grows unbounded.
-            await this.dataSource.query(
-                `DELETE FROM kodus_event_claims WHERE created_at < now() - interval '7 days'`,
-            );
-            const rows: unknown[] = await this.dataSource.query(
-                `INSERT INTO kodus_event_claims (claim_key) VALUES ($1)
-                 ON CONFLICT (claim_key) DO NOTHING
-                 RETURNING claim_key`,
-                [claimKey],
-            );
-            return rows.length > 0;
-        } catch (error) {
-            this.logger.warn({
-                message:
-                    'Sync claim check failed — proceeding without dedupe (availability over exactly-once)',
-                context: KodyRulesSyncListener.name,
-                error,
-                metadata: { claimKey },
-            });
-            return true;
         }
     }
 
@@ -165,14 +127,27 @@ export class KodyRulesSyncListener {
             return;
         }
 
-        const claimKey = `kody-rules-sync:${event.organizationAndTeamData?.organizationId}:${event.repository.id}:${event.pullRequestNumber}`;
-        if (!(await this.claimSyncRun(claimKey))) {
+        // Cross-process idempotency via pg_try_advisory_lock. The
+        // pull-request.closed event reaches every process that hosts
+        // this listener (local emit in the webhook consumer +
+        // CrossProcessEventsBridge re-emits elsewhere); without a
+        // shared claim they'd all import the same files concurrently
+        // and produce DUPLICATE rules (observed live: two identical
+        // rules from one merge). First acquirer wins; the others get
+        // null and skip. Auto-release on TTL or on error via
+        // try/finally, so a redelivery retry can re-run.
+        const lockKey = `KODY_RULES:SYNC:${event.organizationAndTeamData?.organizationId}:${event.repository.id}:${event.pullRequestNumber}`;
+        const lock = await this.distributedLockService.acquire(lockKey, {
+            ttl: SYNC_LOCK_TTL_MS,
+        });
+
+        if (!lock) {
             this.logger.log({
                 message:
                     'Sync already claimed by another process for this merge — skipping duplicate run',
                 context: KodyRulesSyncListener.name,
                 metadata: {
-                    claimKey,
+                    lockKey,
                     prNumber: event.pullRequestNumber,
                 },
             });
@@ -196,16 +171,16 @@ export class KodyRulesSyncListener {
                     repository: event.repository,
                 });
             }
-        } catch (error) {
-            // Release the claim so a redelivery/retry can sync this merge —
-            // a stale claim would turn one transient failure into a
-            // permanently lost sync.
-            await this.dataSource
-                .query(`DELETE FROM kodus_event_claims WHERE claim_key = $1`, [
-                    claimKey,
-                ])
-                .catch(() => undefined);
-            throw error;
+        } finally {
+            // DistributedLock.release() logs a failed pg_advisory_unlock and
+            // then rethrows it. Letting that escape from `finally` would
+            // either mask the sync error that got us here or turn a
+            // successful sync into a rejected handler — and for this
+            // listener a rejected handler means redelivery, which is exactly
+            // the duplicate-rules failure the lock exists to prevent. The
+            // pinned connection is already back in the pool by that point,
+            // and the TTL (or session teardown) frees the advisory lock.
+            await lock.release().catch(() => undefined);
         }
     }
 

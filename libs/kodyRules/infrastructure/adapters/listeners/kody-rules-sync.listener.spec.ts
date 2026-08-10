@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getDataSourceToken } from '@nestjs/typeorm';
 
 import { ParametersKey } from '@libs/core/domain/enums';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -35,8 +35,16 @@ describe('KodyRulesSyncListener', () => {
         findByKey: jest.fn().mockResolvedValue(null),
     };
 
+    // Default: lock acquired (sync runs); tests can override.
+    const distributedLockServiceMock = {
+        acquire: jest.fn(),
+    };
+
     beforeEach(async () => {
         jest.clearAllMocks();
+        distributedLockServiceMock.acquire.mockResolvedValue({
+            release: jest.fn().mockResolvedValue(undefined),
+        });
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -54,18 +62,8 @@ describe('KodyRulesSyncListener', () => {
                     useValue: organizationParametersServiceMock,
                 },
                 {
-                    provide: getDataSourceToken(),
-                    useValue: {
-                        query: jest
-                            .fn()
-                            .mockImplementation((sql: string) =>
-                                Promise.resolve(
-                                    sql.trimStart().startsWith('INSERT')
-                                        ? [{ claim_key: 'k' }]
-                                        : [],
-                                ),
-                            ),
-                    },
+                    provide: DistributedLockService,
+                    useValue: distributedLockServiceMock,
                 },
             ],
         }).compile();

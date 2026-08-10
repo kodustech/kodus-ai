@@ -109,7 +109,7 @@ export const columns: ColumnDef<LicenseTableRow>[] = [
             <div className="flex items-center gap-2">
                 <span>{row.original.name}</span>
                 {row.original.removedFromGit && (
-                    <Badge variant="outline" className="text-muted-foreground shrink-0">
+                    <Badge variant="helper" className="shrink-0">
                         Removed from organization
                     </Badge>
                 )}

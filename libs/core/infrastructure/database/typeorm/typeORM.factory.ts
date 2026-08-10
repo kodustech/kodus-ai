@@ -83,8 +83,33 @@ export class TypeORMFactory implements TypeOrmOptionsFactory {
                 max: poolConfig.max,
                 min: poolConfig.min,
                 idleTimeoutMillis: 30000,
-                connectionTimeoutMillis: 60000,
+                // 90s (not 60s) intentionally: HTTP integrations time out at
+                // 60s (INTEGRATION_REQUEST_TIMEOUT_MS), and matching the two
+                // creates a resonance where every upstream stall cascades
+                // into pool-acquire timeouts at the same wall-clock second.
+                // Keeping the pool wait strictly longer than the HTTP wait
+                // lets a slow request finish and release its slot before a
+                // waiter gives up.
+                connectionTimeoutMillis: 90000,
                 keepAlive: true,
+                // Linux default `tcp_keepalive_time` is 7200s (2h). Without
+                // this, TCP probes only start after RDS's 1h
+                // `idle_session_timeout` already killed the session — the
+                // pool then serves dead sockets. 10s here mirrors the same
+                // hardening applied to `kodus-bridge-pool` after the
+                // 2026-07-31 stress test.
+                keepAliveInitialDelayMillis: 10000,
+                // Hard 30s cap on any single statement. Protects the pool
+                // from a runaway query pinning a slot indefinitely (there
+                // is no legitimate HTTP request on this pool that needs a
+                // longer DB query — LLM/agent work runs in the worker and
+                // via its own long-lived clients).
+                statement_timeout: 30000,
+                // 60s cap on idle-in-transaction. A transaction left open
+                // by a crashed handler used to hold row locks + a pool
+                // slot until the RDS `idle_in_transaction_session_timeout`
+                // (10min) kicked in — that's a full pool lifetime lost.
+                idle_in_transaction_session_timeout: 60000,
                 // Tags every connection this pool opens in `pg_stat_activity`
                 // so incident triage can bucket by process type ("who is
                 // holding those 20 slots?") without guessing.

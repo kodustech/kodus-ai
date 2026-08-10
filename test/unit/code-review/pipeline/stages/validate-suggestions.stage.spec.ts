@@ -55,7 +55,6 @@ describe('ValidateSuggestionsStage', () => {
     const createBaseContext = (
         overrides: Partial<CodeReviewPipelineContext> = {},
     ) => ({
-        dryRun: { enabled: false },
         organizationAndTeamData: mockOrganizationAndTeamData as any,
         repository: {
             id: 'repo-1',

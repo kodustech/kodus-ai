@@ -251,7 +251,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                         total_lines_changed: 0,
                     },
                 } as any,
-                dryRun: { enabled: false },
                 teamAutomationId: 'cli-automation',
                 origin: 'cli',
                 action: 'review',
