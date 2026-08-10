@@ -111,6 +111,10 @@ describe('trace ui server', () => {
 
         const html = await response.text();
         expect(html).toContain('Kodus Trace');
+        expect(html).toContain('aria-label="Kodus Trace home"');
+        expect(html).toContain('--bg: #101019');
+        expect(html).toContain('--accent: #f8b76d');
+        expect(html).toContain('Raw transcripts never leave this machine.');
     });
 
     it('rejects an untrusted Host header before routing', async () => {
