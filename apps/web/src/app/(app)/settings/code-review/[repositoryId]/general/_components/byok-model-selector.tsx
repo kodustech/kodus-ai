@@ -54,7 +54,7 @@ export const BYOKModelSelectorSection = () => {
     const config = useCodeReviewConfig();
     const currentLevel = useCurrentConfigLevel();
 
-    const { llmConfigStatus, byokModels } = useCodeReviewModelData();
+    const { llmConfigStatus } = useCodeReviewModelData();
     const byok = llmConfigStatus?.byok;
     const provider = byok?.configured ? byok.providerId : undefined;
     const byokMainModel = byok?.model ?? "";
@@ -99,7 +99,14 @@ export const BYOKModelSelectorSection = () => {
         return null;
     }
 
-    const models = byokModels;
+    // Only the models the org actually CONFIGURED in BYOK — not the provider's
+    // full catalog. You can only route a review to a model you've set up, and
+    // the id we write (`byokModelId`) must reference a real config `models[]`
+    // entry so the routing resolver matches it. Mirrors the Routing tab's pool.
+    const models = (llmConfigStatus?.models ?? []).map((m) => ({
+        id: m.modelId,
+        name: m.model ?? m.modelId,
+    }));
 
     // The value inherited from the parent scope (repository / BYOK settings),
     // computed the same way the override indicator does. Prefer the id-based
@@ -135,10 +142,16 @@ export const BYOKModelSelectorSection = () => {
                 // manually or inherited from a kodus-config.yml. We can't be
                 // certain it's invalid (the catalog isn't exhaustive), so warn
                 // rather than block.
+                // Match by id OR name: a legacy override (or one saved before the
+                // id migration) stores the model NAME, which is still a valid
+                // configured model — flagging it as "unknown" would be a false
+                // alarm. New picks write the stable id.
                 const isUnknownModel =
                     currentValue !== "" &&
                     models.length > 0 &&
-                    !models.some((m) => m.id === currentValue);
+                    !models.some(
+                        (m) => m.id === currentValue || m.name === currentValue,
+                    );
 
                 const selectModel = (modelId: string) => {
                     field.onChange(modelId);

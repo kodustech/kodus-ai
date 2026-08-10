@@ -30,14 +30,18 @@ jest.mock("@services/organizationParameters/fetch", () => ({
 const modelData = {
     llmConfigStatus: {
         source: "byok",
-        models: [],
+        // The selector now offers the org's CONFIGURED models (not the provider
+        // catalog), so the selectable list lives here.
+        models: [
+            { modelId: "gpt-4o", model: "GPT-4o", resolvable: true },
+            { modelId: "gpt-legacy", model: "GPT Legacy", resolvable: true },
+        ],
         byok: { configured: true, providerId: "openai", model: "gpt-4o-mini" },
         env: { configured: false },
     } as LLMConfigStatus,
-    byokModels: [
-        { id: "gpt-4o", name: "GPT-4o" },
-        { id: "gpt-legacy", name: "GPT Legacy" },
-    ],
+    // Provider catalog — no longer consumed by the selector; kept only to
+    // satisfy the context shape.
+    byokModels: [],
 };
 
 // Only byokModel / byokModelId are consulted by the selector; the rest of the
