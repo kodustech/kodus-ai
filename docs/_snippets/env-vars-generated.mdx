@@ -19,6 +19,7 @@
 | `RUN_SEEDS` | – | boolean | ⚙️ Both | Run database seeds on container boot. Required for first-time setup (creates default org, admin role, etc). Idempotent — safe to leave on. |
 | `USE_LOCAL_DB` | – | boolean | 🏠 Self-hosted | When true, the installer's docker-compose spins up a local Postgres container. Set to false to point at an externally-managed Postgres (managed RDS/Supabase/Neon/Railway). Read by kodus-installer/scripts/ install.sh + doctor.sh; not consumed by kodus-ai itself. |
 | `USE_LOCAL_RABBITMQ` | – | boolean | 🏠 Self-hosted | Same logic as USE_LOCAL_DB but for RabbitMQ. False if you bring your own broker (CloudAMQP, AWS MQ, etc). |
+| `KODUS_REGISTRY` | – | string | 🏠 Self-hosted | Registry the installer's docker-compose pulls the Kodus images from. Leave unset to use the public images; set it to mirror them into an internal registry (restricted networks) or to run throwaway e2e builds without publishing next to the production images. Read by kodus-installer/docker-compose.yml; not consumed by kodus-ai itself. |
 
 ## Server
 
