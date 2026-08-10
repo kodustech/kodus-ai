@@ -20,9 +20,9 @@ import type { InboxMessageModel } from './inbox-message.model';
 // ='WEBHOOK_PROCESSING' AND updatedAt >= now()-30min`. The composite
 // above forced a Bitmap Heap Scan (3-16s in prod); this partial with
 // `status` in the key turns it into an Index Only Scan (measured 14×
-// faster). TypeORM cannot emit the DESC ordering or the WHERE clause,
-// so `synchronize: false` and the real CREATE lives in migration
-// CronPoolReliefIndexes2026080600000000.
+// faster). TypeORM cannot express the DESC ordering, and the build must
+// be CONCURRENTLY, so `synchronize: false` and the real CREATE lives in
+// migration CronPoolReliefIndexes2026080600000000.
 @Index('idx_workflow_jobs_webhook_monitor', { synchronize: false })
 export class WorkflowJobModel extends CoreModel {
     @Column({ type: 'varchar', length: 255 })

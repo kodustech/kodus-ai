@@ -12,13 +12,16 @@ import {
 // (`find({ entityType, entityId })`) — the table had zero indexes and
 // was doing a Seq Scan for every one of the ~2.5M queries/day this
 // path emits. Added after the 2026-08-06 pool-exhaustion incident.
+// `synchronize: false` like its siblings below: the CONCURRENTLY build
+// is owned by migration CronPoolReliefIndexes2026080600000000, and
+// leaving TypeORM out of it keeps migration:generate from emitting a
+// second, non-concurrent CREATE for the same name.
 @Index('IDX_context_references_entity', ['entityType', 'entityId'], {
-    concurrent: true,
+    synchronize: false,
 })
 // Partial: covers `find({ parentReferenceId })` while skipping the
-// many-null rows a full-column btree would waste space on. TypeORM
-// cannot emit the WHERE clause here, so `synchronize: false` and the
-// real CREATE lives in the migration (see CronPoolReliefIndexes2026080600000000).
+// many-null rows a full-column btree would waste space on. Same
+// ownership split as above.
 @Index('IDX_context_references_parent', { synchronize: false })
 export class ContextReferenceModel extends CoreModel {
     @Column({ type: 'varchar', length: 64, nullable: true })

@@ -14,10 +14,16 @@ export const SESSION_EVENT_TYPES = [
 export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
 
 export type ClassificationStatus =
-    'PROCESSING' | 'COMPLETED' | 'FAILED' | 'SKIPPED';
+    | 'PROCESSING'
+    | 'COMPLETED'
+    | 'FAILED'
+    | 'SKIPPED';
 
 export type ClassificationSource =
-    'llm' | 'heuristic' | 'heuristic-fallback' | 'empty';
+    | 'llm'
+    | 'heuristic'
+    | 'heuristic-fallback'
+    | 'empty';
 
 @Entity('session_events')
 @Index('IDX_session_events_org_session', ['organizationId', 'sessionId'])
@@ -29,8 +35,9 @@ export type ClassificationSource =
 // organization_id=? AND type='session_end'`). The existing composite
 // on (session_id, type) still fetched heap rows to filter by org and
 // only-session-end; the partial makes the anti-join a pure index probe.
-// TypeORM cannot emit the WHERE clause, so `synchronize: false` and
-// the actual CREATE lives in migration CronPoolReliefIndexes2026080600000000.
+// Declared with `synchronize: false` so TypeORM leaves it alone in both
+// schema sync and migration:generate — the real CONCURRENTLY build is
+// owned by migration CronPoolReliefIndexes2026080600000000.
 @Index('IDX_session_events_end_only', { synchronize: false })
 export class SessionEventModel extends CoreModel {
     @Column({ type: 'uuid', name: 'organization_id' })
