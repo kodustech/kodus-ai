@@ -26,6 +26,12 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * The UNIQUE index on profile_configs(profile_id, configKey) ships
  * separately (needs a preflight de-dup step) — see the sibling
  * `ProfileConfigsUniqueKey` migration.
+ *
+ * No session-level timeout juggling here: `migration:run` is its own
+ * CLI process against ormconfig.ts, whose pool sets no
+ * statement_timeout, and it exits when the run finishes. The only
+ * addition over the plain CONCURRENTLY form is `dropIfInvalid` — see
+ * its doc for the failure it covers.
  */
 export class HotPathIndexes2026080700000000 implements MigrationInterface {
     name = 'HotPathIndexes2026080700000000';
@@ -34,65 +40,18 @@ export class HotPathIndexes2026080700000000 implements MigrationInterface {
     transaction = false;
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        try {
-            await this.runUp(queryRunner);
-        } finally {
-            await this.resetTimeouts(queryRunner);
-        }
-    }
-
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        try {
-            await this.runDown(queryRunner);
-        } finally {
-            await this.resetTimeouts(queryRunner);
-        }
-    }
-
-    /**
-     * `SET` without `LOCAL` is session-scoped, and `transaction = false`
-     * rules out `SET LOCAL`. TypeORM runs this migration on a pooled
-     * connection, so without an explicit RESET the connection goes back to
-     * the pool carrying `statement_timeout = 0` — which would silently
-     * disable the 30s statement cap this same change adds to the pool
-     * config, on exactly one connection, for the life of the process.
-     */
-    private async resetTimeouts(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`RESET statement_timeout`);
-        await queryRunner.query(`RESET lock_timeout`);
-    }
-
-    private async runUp(queryRunner: QueryRunner): Promise<void> {
-        // CONCURRENTLY on tables that have grown large can run for many
-        // minutes. A global statement_timeout would abort mid-build and
-        // leave an INVALID index that IF NOT EXISTS then silently skips
-        // forever. Disable it just for this migration session; keep
-        // lock_timeout bounded because CONCURRENTLY still takes brief
-        // ACCESS SHARE locks.
-        await queryRunner.query(`SET statement_timeout = 0`);
-        await queryRunner.query(`SET lock_timeout = '30s'`);
-
-        // ─────────────────────────────────────────────────────────────
-        // 1. team_member(user_id)
-        // ─────────────────────────────────────────────────────────────
         await this.dropIfInvalid(queryRunner, 'IDX_team_member_user');
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_team_member_user"
                 ON "team_member" ("user_id")
         `);
 
-        // ─────────────────────────────────────────────────────────────
-        // 2. team_member(organization_id, team_id)
-        // ─────────────────────────────────────────────────────────────
         await this.dropIfInvalid(queryRunner, 'IDX_team_member_org_team');
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_team_member_org_team"
                 ON "team_member" ("organization_id", "team_id")
         `);
 
-        // ─────────────────────────────────────────────────────────────
-        // 3. team_member(communicationId) — partial (skip null rows)
-        // ─────────────────────────────────────────────────────────────
         await this.dropIfInvalid(queryRunner, 'IDX_team_member_comm_id');
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_team_member_comm_id"
@@ -100,9 +59,6 @@ export class HotPathIndexes2026080700000000 implements MigrationInterface {
                 WHERE "communicationId" IS NOT NULL
         `);
 
-        // ─────────────────────────────────────────────────────────────
-        // 4. auth(userUuid)
-        // ─────────────────────────────────────────────────────────────
         await this.dropIfInvalid(queryRunner, 'IDX_auth_user');
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_auth_user"
@@ -110,10 +66,7 @@ export class HotPathIndexes2026080700000000 implements MigrationInterface {
         `);
     }
 
-    private async runDown(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`SET statement_timeout = 0`);
-        await queryRunner.query(`SET lock_timeout = '30s'`);
-
+    public async down(queryRunner: QueryRunner): Promise<void> {
         // DROP INDEX CONCURRENTLY also cannot run inside a transaction.
         await queryRunner.query(
             `DROP INDEX CONCURRENTLY IF EXISTS "IDX_auth_user"`,
@@ -130,9 +83,17 @@ export class HotPathIndexes2026080700000000 implements MigrationInterface {
     }
 
     /**
-     * Drops an index only if Postgres flagged it invalid (a killed
-     * CONCURRENTLY build). Must run as a top-level statement — DROP
-     * INDEX CONCURRENTLY cannot execute inside a transaction/DO block.
+     * Drops an index only if Postgres flagged it invalid.
+     *
+     * A CONCURRENTLY build that dies halfway (deploy timeout, killed pod,
+     * dropped connection) leaves the index in place but INVALID. Plain
+     * `IF NOT EXISTS` sees the name, decides there is nothing to do, and
+     * the index stays broken forever — the table reads as indexed while
+     * every query still Seq Scans it. Clearing the invalid leftover first
+     * makes a re-run actually rebuild.
+     *
+     * Must run as a top-level statement: DROP INDEX CONCURRENTLY cannot
+     * execute inside a transaction or a DO block.
      */
     private async dropIfInvalid(
         queryRunner: QueryRunner,

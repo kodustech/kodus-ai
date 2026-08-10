@@ -25,41 +25,17 @@ export class ProfileConfigsUniqueKey2026080700000001 implements MigrationInterfa
     transaction = false;
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        try {
-            await this.runUp(queryRunner);
-        } finally {
-            await this.resetTimeouts(queryRunner);
-        }
-    }
-
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        try {
-            await this.runDown(queryRunner);
-        } finally {
-            await this.resetTimeouts(queryRunner);
-        }
-    }
-
-    /**
-     * Session-scoped SETs must not ride the pooled connection back into the
-     * application. See the sibling HotPathIndexes migration for the full
-     * rationale.
-     */
-    private async resetTimeouts(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`RESET statement_timeout`);
-        await queryRunner.query(`RESET lock_timeout`);
-    }
-
-    private async runUp(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`SET statement_timeout = 0`);
-        await queryRunner.query(`SET lock_timeout = '30s'`);
-
         // Preflight: collapse historical duplicates before the UNIQUE
         // build. Keep the newest row per (profile_id, configKey) — the
         // last write in the racing pair is the one the caller
         // intended. Uses ROW_NUMBER over the deterministic
         // (createdAt DESC, uuid DESC) ordering; running twice is a
         // no-op because the DELETE only touches rows ranked > 1.
+        //
+        // This and the build are not atomic, so a duplicate written
+        // between the two aborts the build. That is a re-runnable
+        // failure, not a corrupting one: both steps are idempotent, so
+        // a retry of the migration succeeds.
         await queryRunner.query(`
             WITH ranked AS (
                 SELECT uuid,
@@ -82,10 +58,7 @@ export class ProfileConfigsUniqueKey2026080700000001 implements MigrationInterfa
         `);
     }
 
-    private async runDown(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`SET statement_timeout = 0`);
-        await queryRunner.query(`SET lock_timeout = '30s'`);
-
+    public async down(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(
             `DROP INDEX CONCURRENTLY IF EXISTS "UQ_profile_configs_profile_key"`,
         );
@@ -93,6 +66,10 @@ export class ProfileConfigsUniqueKey2026080700000001 implements MigrationInterfa
         // wrong and there is no safe way to recreate them.
     }
 
+    /**
+     * Drops the index only if Postgres flagged it invalid. See the sibling
+     * HotPathIndexes migration for why `IF NOT EXISTS` alone is not enough.
+     */
     private async dropIfInvalid(
         queryRunner: QueryRunner,
         indexName: string,
