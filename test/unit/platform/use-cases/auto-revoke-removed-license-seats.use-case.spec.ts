@@ -295,6 +295,35 @@ describe('AutoRevokeRemovedLicenseSeatsUseCase', () => {
             ).not.toHaveBeenCalled();
         });
 
+        // execute() spends seconds in the git provider and billing before it
+        // writes, so it must not persist the config it read at the start.
+        it('keeps a seat setting saved while the sweep was running', async () => {
+            mockOrganizationParametersService.findByKey
+                // read at the top of execute(): auto-revoke on
+                .mockResolvedValueOnce(configValue())
+                // admin turns auto-revoke off mid-sweep; re-read before writing
+                .mockResolvedValueOnce(
+                    configValue({
+                        autoRevokeRemovedUsers: false,
+                        ignoredUsers: ['ignored-1', 'added-mid-sweep'],
+                    }),
+                );
+
+            await useCase.execute({ organizationAndTeamData });
+
+            expect(
+                mockOrganizationParametersService.createOrUpdateConfig,
+            ).toHaveBeenCalledWith(
+                OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
+                expect.objectContaining({
+                    autoRevokeRemovedUsers: false,
+                    ignoredUsers: ['ignored-1', 'added-mid-sweep'],
+                    pendingRevocations: { 'gone-1': NOW.toISOString() },
+                }),
+                organizationAndTeamData,
+            );
+        });
+
         it('does not rewrite the config when nothing changed', async () => {
             mockOrganizationParametersService.findByKey.mockResolvedValue(
                 configValue({

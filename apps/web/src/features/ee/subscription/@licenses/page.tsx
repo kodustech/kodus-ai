@@ -4,16 +4,11 @@ import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationPar
 import {
     getOrganizationMembers,
     getUsersWithLicense,
+    MEMBERS_UNAVAILABLE,
     validateOrganizationLicense,
-    type OrganizationMemberListResult,
 } from "../_services/billing/fetch";
 import type { LicenseTableRow } from "./_components/columns";
 import { LicensesPageClient } from "./_components/page.client";
-
-const MEMBERS_UNAVAILABLE: OrganizationMemberListResult = {
-    status: "unavailable",
-    members: [],
-};
 
 export default async function SubscriptionTabs() {
     const teamId = await getGlobalSelectedTeamId();

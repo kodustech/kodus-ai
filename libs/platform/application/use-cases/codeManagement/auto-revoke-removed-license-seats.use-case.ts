@@ -120,7 +120,6 @@ export class AutoRevokeRemovedLicenseSeatsUseCase {
 
         await this.persistPendingRevocations(
             organizationAndTeamData,
-            config,
             previous,
             pendingRevocations,
         );
@@ -133,15 +132,31 @@ export class AutoRevokeRemovedLicenseSeatsUseCase {
         };
     }
 
+    /**
+     * Writes back only the revocation timers, merged onto a freshly read
+     * config. The snapshot taken at the top of `execute` is stale by the time
+     * we get here — the git provider and billing calls in between take seconds
+     * — so writing it back wholesale would revert any seat setting an admin
+     * saved during the sweep. Re-reading narrows that window to the gap between
+     * this read and the write; closing it completely needs a conditional
+     * update, which the parameters service does not expose today.
+     */
     private async persistPendingRevocations(
         organizationAndTeamData: OrganizationAndTeamData,
-        config: OrganizationParametersAutoAssignConfig,
         previous: Record<string, string>,
         next: Record<string, string>,
     ): Promise<void> {
         if (JSON.stringify(previous) === JSON.stringify(next)) {
             return;
         }
+
+        const current = await this.organizationParametersService.findByKey(
+            OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
+            organizationAndTeamData,
+        );
+
+        const config: OrganizationParametersAutoAssignConfig =
+            current?.configValue ?? { enabled: false, ignoredUsers: [] };
 
         await this.organizationParametersService.createOrUpdateConfig(
             OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,

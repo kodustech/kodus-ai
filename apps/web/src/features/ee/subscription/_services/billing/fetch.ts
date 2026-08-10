@@ -27,6 +27,16 @@ export type OrganizationMemberListResult =
     | { status: "unavailable"; members: [] };
 
 /**
+ * Use as the fallback whenever the member list can't be fetched. Never treat an
+ * `unavailable` result as "the organization is empty" — that is what made a
+ * failed lookup look like everyone had left the git org.
+ */
+export const MEMBERS_UNAVAILABLE: OrganizationMemberListResult = {
+    status: "unavailable",
+    members: [],
+};
+
+/**
  * Tolerates the pre-status response shape so a rolling deploy where the web app
  * is ahead of the API does not report every member as removed from the org.
  */
