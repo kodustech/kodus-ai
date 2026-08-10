@@ -224,7 +224,10 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         // reviewHasPartialErrors, reviewErrorCustomMessage). These flags used
         // to be read once at stage entry — before the summary ran — so a failed
         // summary still rendered "review completed" (#1568).
+        // Index shifted by -1 after the dry-run parameter (formerly arg 10)
+        // was removed together with the dry-run feature; reviewHasPartialErrors
+        // is now the 13th arg (0-indexed 12) instead of the 14th.
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[13]).toBe(true); // reviewHasPartialErrors
+        expect(args[12]).toBe(true); // reviewHasPartialErrors
     });
 });
