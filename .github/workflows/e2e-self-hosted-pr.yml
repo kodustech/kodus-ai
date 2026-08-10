@@ -66,6 +66,8 @@ jobs:
         outputs:
             needs_build: ${{ steps.check.outputs.needs_build }}
             ref: ${{ steps.check.outputs.ref }}
+            owner: ${{ steps.check.outputs.owner }}
+            registry: ${{ steps.check.outputs.registry }}
         steps:
             - name: Checkout
               uses: actions/checkout@v6.0.2
@@ -77,9 +79,17 @@ jobs:
               id: check
               env:
                   BASE: ${{ github.event.pull_request.base.sha }}
+                  E2E_IMAGE_OWNER: ${{ vars.E2E_IMAGE_OWNER }}
               run: |
                   set -uo pipefail
                   echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+                  # Resolved here rather than inline in the `with:` blocks
+                  # below: reusable-workflow inputs are the wrong place for
+                  # multi-branch expressions, and a mistake there fails the run
+                  # at STARTUP with no logs and no job to point at.
+                  OWNER="${E2E_IMAGE_OWNER:-${GITHUB_REPOSITORY%%/*}}"
+                  echo "owner=$OWNER" >> "$GITHUB_OUTPUT"
+                  echo "registry=ghcr.io/$OWNER" >> "$GITHUB_OUTPUT"
 
                   # Dispatch: always build. The caller named a ref precisely
                   # because they want THAT code tested.
@@ -113,7 +123,7 @@ jobs:
         with:
             ref: ${{ needs.decide.outputs.ref }}
             mode: self-hosted
-            registry_owner: ${{ vars.E2E_IMAGE_OWNER }}
+            registry_owner: ${{ needs.decide.outputs.owner }}
         secrets: inherit
 
     matrix:
@@ -129,8 +139,8 @@ jobs:
             # Empty when no build happened → the matrix resolves the newest
             # published release, which is the right baseline for a
             # harness-only change.
-            image_tag: ${{ needs.images.outputs.image_tag || '' }}
-            registry: ${{ needs.images.result == 'success' && format('ghcr.io/{0}', vars.E2E_IMAGE_OWNER || github.repository_owner) || '' }}
+            image_tag: ${{ needs.images.outputs.image_tag }}
+            registry: ${{ needs.images.outputs.image_tag && needs.decide.outputs.registry || '' }}
             matrix_file: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
             only_provider: ${{ inputs.only_provider || 'github' }}
         secrets: inherit
