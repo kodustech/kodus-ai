@@ -27,6 +27,15 @@ jest.mock("@services/organizationParameters/fetch", () => ({
     testBYOKModel: jest.fn().mockResolvedValue({ ok: true }),
 }));
 
+// The selector routes to the BYOK page from its "Manage models" item; child
+// components also read the pathname/params, so stub the whole surface.
+jest.mock("next/navigation", () => ({
+    useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+    usePathname: () => "/settings/code-review/repo-1/general",
+    useSearchParams: () => new URLSearchParams(),
+    useParams: () => ({ repositoryId: "repo-1" }),
+}));
+
 const modelData = {
     llmConfigStatus: {
         source: "byok",

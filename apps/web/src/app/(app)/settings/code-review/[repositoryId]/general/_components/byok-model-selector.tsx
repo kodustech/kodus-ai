@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import {
@@ -11,7 +12,6 @@ import {
     CommandList,
 } from "@components/ui/command";
 import { Heading } from "@components/ui/heading";
-import { Input } from "@components/ui/input";
 import {
     Popover,
     PopoverContent,
@@ -25,6 +25,7 @@ import {
     AlertTriangleIcon,
     CheckCircle2Icon,
     ChevronsUpDownIcon,
+    PlusIcon,
     XCircleIcon,
 } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
@@ -51,6 +52,7 @@ const MANUAL_ITEM = "__manual__";
  */
 export const BYOKModelSelectorSection = () => {
     const form = useFormContext<CodeReviewFormType>();
+    const router = useRouter();
     const config = useCodeReviewConfig();
     const currentLevel = useCurrentConfigLevel();
 
@@ -60,7 +62,6 @@ export const BYOKModelSelectorSection = () => {
     const byokMainModel = byok?.model ?? "";
 
     const [open, setOpen] = useState(false);
-    const [manual, setManual] = useState(false);
     const [search, setSearch] = useState("");
     const [test, setTest] = useState<
         | { status: "idle" }
@@ -198,30 +199,6 @@ export const BYOKModelSelectorSection = () => {
                         </CardHeader>
 
                         <CardContent className="w-full">
-                            {manual ? (
-                                <div className="flex flex-col gap-2">
-                                    <Input
-                                        size="md"
-                                        id={field.name}
-                                        disabled={field.disabled}
-                                        value={currentValue}
-                                        placeholder="Type a model id"
-                                        className="w-full"
-                                        onChange={(ev) => {
-                                            field.onChange(ev.target.value);
-                                            setTest({ status: "idle" });
-                                        }}
-                                    />
-                                    <Button
-                                        variant="tertiary"
-                                        size="xs"
-                                        disabled={field.disabled}
-                                        className="self-start"
-                                        onClick={() => setManual(false)}>
-                                        Select from list
-                                    </Button>
-                                </div>
-                            ) : (
                                 <Popover
                                     modal
                                     open={open}
@@ -324,18 +301,27 @@ export const BYOKModelSelectorSection = () => {
                                                     key={MANUAL_ITEM}
                                                     value={MANUAL_ITEM}
                                                     onSelect={() => {
-                                                        setManual(true);
                                                         setOpen(false);
+                                                        // A model has to be
+                                                        // connected in BYOK
+                                                        // before it can be
+                                                        // routed here — send the
+                                                        // user there instead of
+                                                        // letting them type an
+                                                        // id that isn't wired up.
+                                                        router.push(
+                                                            "/organization/byok",
+                                                        );
                                                     }}>
-                                                    {search.trim().length
-                                                        ? `Type manually: "${search.trim()}"`
-                                                        : "Type model manually"}
+                                                    <span className="text-primary-light flex items-center gap-1.5">
+                                                        <PlusIcon className="size-3.5" />
+                                                        Manage models in BYOK
+                                                    </span>
                                                 </CommandItem>
                                             </CommandList>
                                         </Command>
                                     </PopoverContent>
                                 </Popover>
-                            )}
 
                             {isUnknownModel && (
                                 <div className="border-warning/30 bg-warning/5 mt-3 rounded-lg border p-3">
