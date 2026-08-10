@@ -45,8 +45,12 @@ jobs:
         steps:
             - name: Prune
               env:
-                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  ORG: ${{ github.repository_owner }}
+                  # The CI org when one is configured. GITHUB_TOKEN cannot
+                  # delete packages outside this repo's own org, so the publish
+                  # token (delete:packages) is what makes the prune effective
+                  # there — without it every delete would warn and skip.
+                  GH_TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN || secrets.GITHUB_TOKEN }}
+                  ORG: ${{ vars.E2E_IMAGE_OWNER || github.repository_owner }}
                   KEEP_DAYS: ${{ inputs.keep_days || '7' }}
                   DRY_RUN: ${{ inputs.dry_run == false && 'false' || (github.event_name == 'schedule' && 'false' || 'true') }}
               run: |

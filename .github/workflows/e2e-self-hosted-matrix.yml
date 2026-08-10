@@ -269,6 +269,12 @@ jobs:
                   TEST_VM_PROVIDER: ${{ vars.E2E_VM_PROVIDER || 'aws' }}
                   # Empty = the published images, i.e. today's behaviour.
                   KODUS_REGISTRY: ${{ inputs.registry }}
+                  # Images in a non-public namespace are PRIVATE by default and
+                  # the VM pulls anonymously, so without these the stack fails
+                  # to pull with a 401 that reads like a missing tag. Empty when
+                  # pulling the public release images, where no login is needed.
+                  KODUS_REGISTRY_USER: ${{ inputs.registry && github.actor || '' }}
+                  KODUS_REGISTRY_TOKEN: ${{ inputs.registry && (secrets.GHCR_PUBLISH_TOKEN || secrets.GITHUB_TOKEN) || '' }}
                   # Region-boxed agent credential (us-east-2). It cannot reach
                   # us-east-1, where prod and QA live, and an IAM guardrail
                   # caps instance families at t3/t3a/t4g.
