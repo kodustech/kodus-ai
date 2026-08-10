@@ -19,9 +19,13 @@ permissions:
 #
 # Trigger:
 #   - workflow_call from qa-build-push-and-pr-green.yml after the GitOps
-#     PR for the QA deploy is opened.
-#   - schedule nightly 05:17 UTC — catch-all for drift / provider
-#     regressions / flaky cells that don't reproduce per-deploy.
+#     PR for the QA deploy is opened, and from selfhosted-build-push.yml
+#     as the Friday release train's cloud gate (full fast.yml).
+#   - schedule Mon–Thu 03:00 UTC (00:00 BRT) — midweek-smoke.yml only, a
+#     ~20-min two-PR heartbeat on github×paid that catches systemic
+#     breakage (dead LLM key, webhook delivery, stuck pipeline) early so
+#     Friday's release train doesn't discover a week of damage at once.
+#     Full-matrix coverage now lives on the Friday train, not nightly.
 #   - workflow_dispatch for manual runs.
 
 on:
@@ -38,10 +42,11 @@ on:
                 default: matrix/fast.yml
                 type: string
     schedule:
-        # 05:17 UTC = ~02:17 BRT. Off-peak; offset from the benchmark
-        # cron (which lives at 04:17 UTC) so they don't share a runner
-        # spike.
-        - cron: "17 5 * * *"
+        # Mon–Thu 03:00 UTC = 00:00 BRT. Runs midweek-smoke.yml (see
+        # MATRIX_FILE resolution below) — Friday full coverage happens via
+        # the selfhosted-build-push release train's cloud gate instead, so
+        # no Friday cron here.
+        - cron: "0 3 * * 1-4"
     workflow_dispatch:
         inputs:
             image_tag:
@@ -251,7 +256,11 @@ jobs:
                   # target.sh requires it set, so we still export it.
                   TARGET_BASE_URL: ${{ vars.CLOUD_QA_API_URL || 'https://qa.api.kodus.io' }}
                   TARGET_WEB_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://qa.web.kodus.io' }}
-                  MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
+                  # Scheduled runs (Mon–Thu) are the cheap heartbeat and use
+                  # midweek-smoke.yml; everything else (workflow_call from the
+                  # release train / QA deploy, manual dispatch) defaults to
+                  # the full fast.yml unless the caller overrides it.
+                  MATRIX_FILE: ${{ inputs.matrix_file || (github.event_name == 'schedule' && 'matrix/midweek-smoke.yml') || 'matrix/fast.yml' }}
 
                   # Provider tokens — cells without the right token are
                   # skipped (target.sh passes --skip-missing-tokens).

@@ -63,7 +63,7 @@ Você pode enriquecer suas mensagens personalizadas com contexto dinâmico usand
 
 Um resumo dos arquivos alterados, mostrando adições e exclusões por arquivo. Fornece um detalhamento completo do que foi modificado no pull request.
 
-### changedSummary
+### changeSummary
 
 Um resumo abrangente de todas as alterações no pull request, dando uma visão geral de todo o escopo das modificações.
 
@@ -85,10 +85,72 @@ a primeira revisão automatizada:
 - **Manual**: Kody aguarda alguém executar `@kody start-review` antes de fazer
   outra passagem.
 
+### reviewScope
+
+Mostra qual nível de configuração — global, repositório ou diretório — foi usado para revisar
+este pull request, para que os autores saibam quais configurações valeram.
+
+### agentPrompt
+
+<Note>
+  **Apenas na mensagem de fim de revisão.** Ela agrupa as sugestões de comentário de linha da
+  revisão, que só existem depois que a revisão rodou — por isso não é oferecida na mensagem de
+  início.
+</Note>
+
+Agrupa todas as sugestões da revisão em um único bloco de prompt para copiar e colar
+(renderizado como um **Open Agent Prompt** recolhível). Cole no seu agente de código para
+aplicar de uma vez todas as correções da revisão.
+
 <Info>
   Essas variáveis de contexto serão preenchidas automaticamente com os dados reais
   do seu pull request quando Kody enviar a mensagem.
 </Info>
+
+<Note>
+  No `kodus-config.yml` esses tokens são escritos com prefixo `@` — `@changedFiles`,
+  `@changeSummary`, `@reviewOptions`, `@reviewCadence`, `@reviewScope`, `@agentPrompt` —
+  em qualquer posição dentro do `content` da mensagem. O botão **Add Context** insere os
+  mesmos tokens pra você na interface web.
+</Note>
+
+## Mensagem de erro
+
+Separada do par início/fim, você pode anexar seu próprio texto ao comentário que o Kody publica
+quando uma revisão **falha** — por exemplo quando não há provider BYOK configurado, ou quando o
+provider rejeitou a requisição.
+
+- **Off** (padrão) — o Kody publica a mensagem de erro padrão, sem alteração.
+- **Active** — seu texto é anexado abaixo da mensagem de erro padrão.
+
+Use para apontar as pessoas ao responsável certo ou ao runbook, em vez de deixá-las com uma
+falha genérica:
+
+```yaml
+customMessages:
+    errorReviewMessage:
+        status: 'active' # off | active
+        content: |
+            Revisões falhando? Chame o #platform-eng — a chave da API do Kodus é nossa.
+```
+
+Deixar `content` vazio mantém a mensagem de erro padrão inalterada.
+
+## Configurações globais
+
+Dois toggles que valem para todo comentário do Kody, não só para as mensagens customizadas:
+
+| Configuração | Padrão | O que faz |
+| --- | --- | --- |
+| `hideComments` | `false` | Publica toda mensagem de revisão como comentário oculto/minimizado. Aparece na interface como **Post as hidden comment**. **Apenas GitHub** — o toggle fica escondido nas outras plataformas. |
+| `suggestionCopyPrompt` | `true` | Adiciona às sugestões o recurso de copiar como prompt, para você colar num agente de código. **Não disponível no Bitbucket.** |
+
+```yaml
+customMessages:
+    globalSettings:
+        hideComments: false # apenas GitHub
+        suggestionCopyPrompt: true # não disponível no Bitbucket
+```
 
 <Note>
   Você sempre pode reverter para o comportamento padrão desabilitando ambas as mensagens

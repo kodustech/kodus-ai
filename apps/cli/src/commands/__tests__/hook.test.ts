@@ -9,6 +9,7 @@ vi.mock('../../services/git.service.js', () => ({
     gitService: {
         isGitRepository: vi.fn().mockResolvedValue(true),
         getGitRoot: vi.fn(),
+        getHooksDir: vi.fn(),
     },
 }));
 
@@ -34,6 +35,7 @@ beforeEach(async () => {
 
     vi.mocked(gitService.isGitRepository).mockResolvedValue(true);
     vi.mocked(gitService.getGitRoot).mockResolvedValue(tmpDir);
+    vi.mocked(gitService.getHooksDir).mockResolvedValue(hooksDir);
 });
 
 afterEach(async () => {

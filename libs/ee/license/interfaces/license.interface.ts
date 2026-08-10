@@ -113,6 +113,29 @@ export interface ILicenseService {
     ): Promise<boolean>;
 
     /**
+     * Release several license seats in one shot.
+     *
+     * Deliberately batched rather than called once per user: both backends
+     * read the seat list, mutate it and write the whole thing back, so
+     * concurrent single-user revokes lose updates. Measured against the billing
+     * service, five concurrent revokes left its assignedLicenses counter at 3
+     * instead of 0; the same five sent as one batch settled at 0.
+     *
+     * Idempotent: revoking a seat the user does not hold succeeds.
+     *
+     * @param organizationAndTeamData Organization ID and team ID.
+     * @param userGitIds Git IDs of the users to release seats from.
+     * @param provider The git provider (e.g., 'github', 'gitlab'). Required by
+     *   the billing service, which rejects a user entry without a gitTool.
+     * @returns The git ids actually released, and those that could not be.
+     */
+    unassignLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+        userGitIds: string[],
+        provider: string,
+    ): Promise<{ revoked: string[]; failed: string[] }>;
+
+    /**
      * Atomically consume one Kodus-funded trial review credit.
      *
      * @param organizationAndTeamData Organization ID and team ID.

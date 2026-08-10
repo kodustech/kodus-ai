@@ -14,7 +14,12 @@
     },
     "favicon": "/favicon.svg",
     "contextual": {
-        "options": ["copy", "view", "chatgpt", "claude"]
+        "options": [
+            "copy",
+            "view",
+            "chatgpt",
+            "claude"
+        ]
     },
     "navigation": {
         "languages": [
@@ -56,7 +61,8 @@
                                             "how_to_use/en/code_review/configs/suggestion_control",
                                             "how_to_use/en/code_review/configs/pr_summary",
                                             "how_to_use/en/code_review/configs/custom_messages",
-                                            "how_to_use/en/code_review/configs/custom_prompts"
+                                            "how_to_use/en/code_review/configs/custom_prompts",
+                                            "how_to_use/en/code_review/configs/linked_repositories"
                                         ]
                                     },
                                     {
@@ -84,7 +90,6 @@
                                     "how_to_use/en/cli/concepts",
                                     "how_to_use/en/cli/commands",
                                     "how_to_use/en/cli/ai_agents",
-                                    "how_to_use/en/cli/decision_memory",
                                     "how_to_use/en/cli/self_hosted",
                                     "how_to_use/en/cli/troubleshooting"
                                 ]
@@ -93,6 +98,7 @@
                                 "group": "Cockpit",
                                 "pages": [
                                     "how_to_use/en/cockpit/overview",
+                                    "how_to_use/en/cockpit/configuration",
                                     "how_to_use/en/cockpit/kodus_review",
                                     {
                                         "group": "Metrics",
@@ -104,14 +110,17 @@
                                             "how_to_use/en/cockpit/metrics/kody_suggestions",
                                             "how_to_use/en/cockpit/metrics/lead_time_breakdown",
                                             "how_to_use/en/cockpit/metrics/developer_activity",
-                                            "how_to_use/en/cockpit/metrics/prs_by_developer"
+                                            "how_to_use/en/cockpit/metrics/prs_by_developer",
+                                            "how_to_use/en/cockpit/metrics/prs_opened_vs_closed"
                                         ]
                                     }
                                 ]
                             },
                             {
                                 "group": "Kody Issues",
-                                "pages": ["how_to_use/en/issues/overview"]
+                                "pages": [
+                                    "how_to_use/en/issues/overview"
+                                ]
                             },
                             {
                                 "group": "Organization",
@@ -151,7 +160,9 @@
                         "groups": [
                             {
                                 "group": "Concepts",
-                                "pages": ["how_to_deploy/en/kodus_architecture"]
+                                "pages": [
+                                    "how_to_deploy/en/kodus_architecture"
+                                ]
                             },
                             {
                                 "group": "Local Quickstart",
@@ -229,7 +240,9 @@
                         "groups": [
                             {
                                 "group": "Overview",
-                                "pages": ["knowledge_base/en/introduction"]
+                                "pages": [
+                                    "knowledge_base/en/introduction"
+                                ]
                             },
                             {
                                 "group": "Code Review",
@@ -257,7 +270,8 @@
                                     "knowledge_base/en/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/en/how-to-generate-rules-automatically",
                                     "knowledge_base/en/how-to-share-standards-across-repositories",
-                                    "knowledge_base/en/how-to-review-prs-with-project-context"
+                                    "knowledge_base/en/how-to-review-prs-with-project-context",
+                                    "knowledge_base/en/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -301,7 +315,9 @@
                         "pages": [
                             {
                                 "group": "Custom Plugins",
-                                "pages": ["cookbook/en/custom-plugin-install"]
+                                "pages": [
+                                    "cookbook/en/custom-plugin-install"
+                                ]
                             },
                             {
                                 "group": "Custom Context Playbooks",
@@ -318,13 +334,24 @@
                                     "cookbook/en/team-onboarding",
                                     "cookbook/en/compliance-review-pipeline"
                                 ]
+                            },
+                            {
+                                "group": "LLM Provider Setup",
+                                "pages": [
+                                    "cookbook/en/novita",
+                                    "cookbook/en/fireworks",
+                                    "cookbook/en/together",
+                                    "cookbook/en/groq"
+                                ]
                             }
                         ]
                     },
                     {
                         "tab": "Changelog",
                         "icon": "newspaper",
-                        "pages": ["changelog/index"]
+                        "pages": [
+                            "changelog/index"
+                        ]
                     }
                 ]
             },
@@ -346,7 +373,8 @@
                                 "group": "Facturación y Licencias",
                                 "pages": [
                                     "how_to_use/es/pricing",
-                                    "how_to_use/es/byok"
+                                    "how_to_use/es/byok",
+                                    "how_to_use/es/spend-limit"
                                 ]
                             },
                             {
@@ -365,7 +393,8 @@
                                             "how_to_use/es/code_review/configs/suggestion_control",
                                             "how_to_use/es/code_review/configs/pr_summary",
                                             "how_to_use/es/code_review/configs/custom_messages",
-                                            "how_to_use/es/code_review/configs/custom_prompts"
+                                            "how_to_use/es/code_review/configs/custom_prompts",
+                                            "how_to_use/es/code_review/configs/linked_repositories"
                                         ]
                                     },
                                     {
@@ -375,6 +404,7 @@
                                             "how_to_use/es/code_review/configs/rules_inheritance",
                                             "how_to_use/es/code_review/configs/rules_file_detection",
                                             "how_to_use/es/code_review/configs/repository_rules",
+                                            "how_to_use/es/code_review/configs/global_rule_sources",
                                             "how_to_use/es/code_review/learning/kody_rules_generation"
                                         ]
                                     },
@@ -392,7 +422,6 @@
                                     "how_to_use/es/cli/concepts",
                                     "how_to_use/es/cli/commands",
                                     "how_to_use/es/cli/ai_agents",
-                                    "how_to_use/es/cli/decision_memory",
                                     "how_to_use/es/cli/self_hosted",
                                     "how_to_use/es/cli/troubleshooting"
                                 ]
@@ -401,6 +430,7 @@
                                 "group": "Cockpit",
                                 "pages": [
                                     "how_to_use/es/cockpit/overview",
+                                    "how_to_use/es/cockpit/configuration",
                                     "how_to_use/es/cockpit/kodus_review",
                                     {
                                         "group": "Métricas",
@@ -412,14 +442,17 @@
                                             "how_to_use/es/cockpit/metrics/kody_suggestions",
                                             "how_to_use/es/cockpit/metrics/lead_time_breakdown",
                                             "how_to_use/es/cockpit/metrics/developer_activity",
-                                            "how_to_use/es/cockpit/metrics/prs_by_developer"
+                                            "how_to_use/es/cockpit/metrics/prs_by_developer",
+                                            "how_to_use/es/cockpit/metrics/prs_opened_vs_closed"
                                         ]
                                     }
                                 ]
                             },
                             {
                                 "group": "Kody Issues",
-                                "pages": ["how_to_use/es/issues/overview"]
+                                "pages": [
+                                    "how_to_use/es/issues/overview"
+                                ]
                             },
                             {
                                 "group": "Organización",
@@ -459,7 +492,9 @@
                         "groups": [
                             {
                                 "group": "Conceptos",
-                                "pages": ["how_to_deploy/es/kodus_architecture"]
+                                "pages": [
+                                    "how_to_deploy/es/kodus_architecture"
+                                ]
                             },
                             {
                                 "group": "Inicio Rápido Local",
@@ -537,7 +572,9 @@
                         "groups": [
                             {
                                 "group": "Descripción General",
-                                "pages": ["knowledge_base/es/introduction"]
+                                "pages": [
+                                    "knowledge_base/es/introduction"
+                                ]
                             },
                             {
                                 "group": "Revisión de Código",
@@ -565,7 +602,8 @@
                                     "knowledge_base/es/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/es/how-to-generate-rules-automatically",
                                     "knowledge_base/es/how-to-share-standards-across-repositories",
-                                    "knowledge_base/es/how-to-review-prs-with-project-context"
+                                    "knowledge_base/es/how-to-review-prs-with-project-context",
+                                    "knowledge_base/es/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -609,7 +647,9 @@
                         "pages": [
                             {
                                 "group": "Plugins Personalizados",
-                                "pages": ["cookbook/es/custom-plugin-install"]
+                                "pages": [
+                                    "cookbook/es/custom-plugin-install"
+                                ]
                             },
                             {
                                 "group": "Guías de Contexto Personalizado",
@@ -626,13 +666,24 @@
                                     "cookbook/es/team-onboarding",
                                     "cookbook/es/compliance-review-pipeline"
                                 ]
+                            },
+                            {
+                                "group": "Configuración de Proveedor LLM",
+                                "pages": [
+                                    "cookbook/es/novita",
+                                    "cookbook/es/fireworks",
+                                    "cookbook/es/together",
+                                    "cookbook/es/groq"
+                                ]
                             }
                         ]
                     },
                     {
                         "tab": "Changelog",
                         "icon": "newspaper",
-                        "pages": ["changelog/index"]
+                        "pages": [
+                            "changelog/index"
+                        ]
                     }
                 ]
             },
@@ -654,7 +705,8 @@
                                 "group": "Cobrança e Licenças",
                                 "pages": [
                                     "how_to_use/pt-br/pricing",
-                                    "how_to_use/pt-br/byok"
+                                    "how_to_use/pt-br/byok",
+                                    "how_to_use/pt-br/spend-limit"
                                 ]
                             },
                             {
@@ -673,7 +725,8 @@
                                             "how_to_use/pt-br/code_review/configs/suggestion_control",
                                             "how_to_use/pt-br/code_review/configs/pr_summary",
                                             "how_to_use/pt-br/code_review/configs/custom_messages",
-                                            "how_to_use/pt-br/code_review/configs/custom_prompts"
+                                            "how_to_use/pt-br/code_review/configs/custom_prompts",
+                                            "how_to_use/pt-br/code_review/configs/linked_repositories"
                                         ]
                                     },
                                     {
@@ -683,6 +736,7 @@
                                             "how_to_use/pt-br/code_review/configs/rules_inheritance",
                                             "how_to_use/pt-br/code_review/configs/rules_file_detection",
                                             "how_to_use/pt-br/code_review/configs/repository_rules",
+                                            "how_to_use/pt-br/code_review/configs/global_rule_sources",
                                             "how_to_use/pt-br/code_review/learning/kody_rules_generation"
                                         ]
                                     },
@@ -700,7 +754,6 @@
                                     "how_to_use/pt-br/cli/concepts",
                                     "how_to_use/pt-br/cli/commands",
                                     "how_to_use/pt-br/cli/ai_agents",
-                                    "how_to_use/pt-br/cli/decision_memory",
                                     "how_to_use/pt-br/cli/self_hosted",
                                     "how_to_use/pt-br/cli/troubleshooting"
                                 ]
@@ -709,6 +762,7 @@
                                 "group": "Cockpit",
                                 "pages": [
                                     "how_to_use/pt-br/cockpit/overview",
+                                    "how_to_use/pt-br/cockpit/configuration",
                                     "how_to_use/pt-br/cockpit/kodus_review",
                                     {
                                         "group": "Métricas",
@@ -720,14 +774,17 @@
                                             "how_to_use/pt-br/cockpit/metrics/kody_suggestions",
                                             "how_to_use/pt-br/cockpit/metrics/lead_time_breakdown",
                                             "how_to_use/pt-br/cockpit/metrics/developer_activity",
-                                            "how_to_use/pt-br/cockpit/metrics/prs_by_developer"
+                                            "how_to_use/pt-br/cockpit/metrics/prs_by_developer",
+                                            "how_to_use/pt-br/cockpit/metrics/prs_opened_vs_closed"
                                         ]
                                     }
                                 ]
                             },
                             {
                                 "group": "Kody Issues",
-                                "pages": ["how_to_use/pt-br/issues/overview"]
+                                "pages": [
+                                    "how_to_use/pt-br/issues/overview"
+                                ]
                             },
                             {
                                 "group": "Organização",
@@ -767,7 +824,9 @@
                         "groups": [
                             {
                                 "group": "Conceitos",
-                                "pages": ["how_to_deploy/pt-br/kodus_architecture"]
+                                "pages": [
+                                    "how_to_deploy/pt-br/kodus_architecture"
+                                ]
                             },
                             {
                                 "group": "Início Rápido Local",
@@ -845,7 +904,9 @@
                         "groups": [
                             {
                                 "group": "Visão Geral",
-                                "pages": ["knowledge_base/pt-br/introduction"]
+                                "pages": [
+                                    "knowledge_base/pt-br/introduction"
+                                ]
                             },
                             {
                                 "group": "Revisão de Código",
@@ -873,7 +934,8 @@
                                     "knowledge_base/pt-br/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/pt-br/how-to-generate-rules-automatically",
                                     "knowledge_base/pt-br/how-to-share-standards-across-repositories",
-                                    "knowledge_base/pt-br/how-to-review-prs-with-project-context"
+                                    "knowledge_base/pt-br/how-to-review-prs-with-project-context",
+                                    "knowledge_base/pt-br/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -917,7 +979,9 @@
                         "pages": [
                             {
                                 "group": "Plugins Personalizados",
-                                "pages": ["cookbook/pt-br/custom-plugin-install"]
+                                "pages": [
+                                    "cookbook/pt-br/custom-plugin-install"
+                                ]
                             },
                             {
                                 "group": "Guias de Contexto Personalizado",
@@ -934,13 +998,24 @@
                                     "cookbook/pt-br/team-onboarding",
                                     "cookbook/pt-br/compliance-review-pipeline"
                                 ]
+                            },
+                            {
+                                "group": "Configuração de Provedor LLM",
+                                "pages": [
+                                    "cookbook/pt-br/novita",
+                                    "cookbook/pt-br/fireworks",
+                                    "cookbook/pt-br/together",
+                                    "cookbook/pt-br/groq"
+                                ]
                             }
                         ]
                     },
                     {
                         "tab": "Changelog",
                         "icon": "newspaper",
-                        "pages": ["changelog/index"]
+                        "pages": [
+                            "changelog/index"
+                        ]
                     }
                 ]
             },
@@ -962,7 +1037,8 @@
                                 "group": "料金とライセンス",
                                 "pages": [
                                     "how_to_use/ja/pricing",
-                                    "how_to_use/ja/byok"
+                                    "how_to_use/ja/byok",
+                                    "how_to_use/ja/spend-limit"
                                 ]
                             },
                             {
@@ -981,7 +1057,8 @@
                                             "how_to_use/ja/code_review/configs/suggestion_control",
                                             "how_to_use/ja/code_review/configs/pr_summary",
                                             "how_to_use/ja/code_review/configs/custom_messages",
-                                            "how_to_use/ja/code_review/configs/custom_prompts"
+                                            "how_to_use/ja/code_review/configs/custom_prompts",
+                                            "how_to_use/ja/code_review/configs/linked_repositories"
                                         ]
                                     },
                                     {
@@ -991,6 +1068,7 @@
                                             "how_to_use/ja/code_review/configs/rules_inheritance",
                                             "how_to_use/ja/code_review/configs/rules_file_detection",
                                             "how_to_use/ja/code_review/configs/repository_rules",
+                                            "how_to_use/ja/code_review/configs/global_rule_sources",
                                             "how_to_use/ja/code_review/learning/kody_rules_generation"
                                         ]
                                     },
@@ -1008,7 +1086,6 @@
                                     "how_to_use/ja/cli/concepts",
                                     "how_to_use/ja/cli/commands",
                                     "how_to_use/ja/cli/ai_agents",
-                                    "how_to_use/ja/cli/decision_memory",
                                     "how_to_use/ja/cli/self_hosted",
                                     "how_to_use/ja/cli/troubleshooting"
                                 ]
@@ -1017,6 +1094,7 @@
                                 "group": "コックピット",
                                 "pages": [
                                     "how_to_use/ja/cockpit/overview",
+                                    "how_to_use/ja/cockpit/configuration",
                                     "how_to_use/ja/cockpit/kodus_review",
                                     {
                                         "group": "メトリクス",
@@ -1028,14 +1106,17 @@
                                             "how_to_use/ja/cockpit/metrics/kody_suggestions",
                                             "how_to_use/ja/cockpit/metrics/lead_time_breakdown",
                                             "how_to_use/ja/cockpit/metrics/developer_activity",
-                                            "how_to_use/ja/cockpit/metrics/prs_by_developer"
+                                            "how_to_use/ja/cockpit/metrics/prs_by_developer",
+                                            "how_to_use/ja/cockpit/metrics/prs_opened_vs_closed"
                                         ]
                                     }
                                 ]
                             },
                             {
                                 "group": "Kody Issues",
-                                "pages": ["how_to_use/ja/issues/overview"]
+                                "pages": [
+                                    "how_to_use/ja/issues/overview"
+                                ]
                             },
                             {
                                 "group": "組織管理",
@@ -1075,7 +1156,9 @@
                         "groups": [
                             {
                                 "group": "概念",
-                                "pages": ["how_to_deploy/ja/kodus_architecture"]
+                                "pages": [
+                                    "how_to_deploy/ja/kodus_architecture"
+                                ]
                             },
                             {
                                 "group": "ローカルクイックスタート",
@@ -1153,7 +1236,9 @@
                         "groups": [
                             {
                                 "group": "概要",
-                                "pages": ["knowledge_base/ja/introduction"]
+                                "pages": [
+                                    "knowledge_base/ja/introduction"
+                                ]
                             },
                             {
                                 "group": "コードレビュー",
@@ -1181,7 +1266,8 @@
                                     "knowledge_base/ja/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/ja/how-to-generate-rules-automatically",
                                     "knowledge_base/ja/how-to-share-standards-across-repositories",
-                                    "knowledge_base/ja/how-to-review-prs-with-project-context"
+                                    "knowledge_base/ja/how-to-review-prs-with-project-context",
+                                    "knowledge_base/ja/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -1225,7 +1311,9 @@
                         "pages": [
                             {
                                 "group": "カスタムプラグイン",
-                                "pages": ["cookbook/ja/custom-plugin-install"]
+                                "pages": [
+                                    "cookbook/ja/custom-plugin-install"
+                                ]
                             },
                             {
                                 "group": "カスタムコンテキストガイド",
@@ -1242,13 +1330,24 @@
                                     "cookbook/ja/team-onboarding",
                                     "cookbook/ja/compliance-review-pipeline"
                                 ]
+                            },
+                            {
+                                "group": "LLM プロバイダー設定",
+                                "pages": [
+                                    "cookbook/ja/novita",
+                                    "cookbook/ja/fireworks",
+                                    "cookbook/ja/together",
+                                    "cookbook/ja/groq"
+                                ]
                             }
                         ]
                     },
                     {
                         "tab": "Changelog",
                         "icon": "newspaper",
-                        "pages": ["changelog/index"]
+                        "pages": [
+                            "changelog/index"
+                        ]
                     }
                 ]
             },
@@ -1270,7 +1369,8 @@
                                 "group": "计费与许可证",
                                 "pages": [
                                     "how_to_use/zh/pricing",
-                                    "how_to_use/zh/byok"
+                                    "how_to_use/zh/byok",
+                                    "how_to_use/zh/spend-limit"
                                 ]
                             },
                             {
@@ -1289,7 +1389,8 @@
                                             "how_to_use/zh/code_review/configs/suggestion_control",
                                             "how_to_use/zh/code_review/configs/pr_summary",
                                             "how_to_use/zh/code_review/configs/custom_messages",
-                                            "how_to_use/zh/code_review/configs/custom_prompts"
+                                            "how_to_use/zh/code_review/configs/custom_prompts",
+                                            "how_to_use/zh/code_review/configs/linked_repositories"
                                         ]
                                     },
                                     {
@@ -1299,6 +1400,7 @@
                                             "how_to_use/zh/code_review/configs/rules_inheritance",
                                             "how_to_use/zh/code_review/configs/rules_file_detection",
                                             "how_to_use/zh/code_review/configs/repository_rules",
+                                            "how_to_use/zh/code_review/configs/global_rule_sources",
                                             "how_to_use/zh/code_review/learning/kody_rules_generation"
                                         ]
                                     },
@@ -1316,7 +1418,6 @@
                                     "how_to_use/zh/cli/concepts",
                                     "how_to_use/zh/cli/commands",
                                     "how_to_use/zh/cli/ai_agents",
-                                    "how_to_use/zh/cli/decision_memory",
                                     "how_to_use/zh/cli/self_hosted",
                                     "how_to_use/zh/cli/troubleshooting"
                                 ]
@@ -1325,6 +1426,7 @@
                                 "group": "驾驶舱",
                                 "pages": [
                                     "how_to_use/zh/cockpit/overview",
+                                    "how_to_use/zh/cockpit/configuration",
                                     "how_to_use/zh/cockpit/kodus_review",
                                     {
                                         "group": "指标",
@@ -1336,14 +1438,17 @@
                                             "how_to_use/zh/cockpit/metrics/kody_suggestions",
                                             "how_to_use/zh/cockpit/metrics/lead_time_breakdown",
                                             "how_to_use/zh/cockpit/metrics/developer_activity",
-                                            "how_to_use/zh/cockpit/metrics/prs_by_developer"
+                                            "how_to_use/zh/cockpit/metrics/prs_by_developer",
+                                            "how_to_use/zh/cockpit/metrics/prs_opened_vs_closed"
                                         ]
                                     }
                                 ]
                             },
                             {
                                 "group": "Kody 工单",
-                                "pages": ["how_to_use/zh/issues/overview"]
+                                "pages": [
+                                    "how_to_use/zh/issues/overview"
+                                ]
                             },
                             {
                                 "group": "组织管理",
@@ -1383,7 +1488,9 @@
                         "groups": [
                             {
                                 "group": "概念",
-                                "pages": ["how_to_deploy/zh/kodus_architecture"]
+                                "pages": [
+                                    "how_to_deploy/zh/kodus_architecture"
+                                ]
                             },
                             {
                                 "group": "本地快速开始",
@@ -1461,7 +1568,9 @@
                         "groups": [
                             {
                                 "group": "概述",
-                                "pages": ["knowledge_base/zh/introduction"]
+                                "pages": [
+                                    "knowledge_base/zh/introduction"
+                                ]
                             },
                             {
                                 "group": "代码审查",
@@ -1489,7 +1598,8 @@
                                     "knowledge_base/zh/how-to-import-rules-from-ide-tools",
                                     "knowledge_base/zh/how-to-generate-rules-automatically",
                                     "knowledge_base/zh/how-to-share-standards-across-repositories",
-                                    "knowledge_base/zh/how-to-review-prs-with-project-context"
+                                    "knowledge_base/zh/how-to-review-prs-with-project-context",
+                                    "knowledge_base/zh/how-to-use-linked-repositories-in-code-review"
                                 ]
                             },
                             {
@@ -1533,7 +1643,9 @@
                         "pages": [
                             {
                                 "group": "自定义插件",
-                                "pages": ["cookbook/zh/custom-plugin-install"]
+                                "pages": [
+                                    "cookbook/zh/custom-plugin-install"
+                                ]
                             },
                             {
                                 "group": "自定义上下文剧本",
@@ -1550,13 +1662,24 @@
                                     "cookbook/zh/team-onboarding",
                                     "cookbook/zh/compliance-review-pipeline"
                                 ]
+                            },
+                            {
+                                "group": "LLM 提供商配置",
+                                "pages": [
+                                    "cookbook/zh/novita",
+                                    "cookbook/zh/fireworks",
+                                    "cookbook/zh/together",
+                                    "cookbook/zh/groq"
+                                ]
                             }
                         ]
                     },
                     {
                         "tab": "Changelog",
                         "icon": "newspaper",
-                        "pages": ["changelog/index"]
+                        "pages": [
+                            "changelog/index"
+                        ]
                     }
                 ]
             }
@@ -1644,6 +1767,26 @@
         {
             "source": "/how_to_use/pt-br/cli/ci_cd",
             "destination": "/how_to_use/pt-br/cli/ai_agents"
+        },
+        {
+            "source": "/how_to_use/en/cli/decision_memory",
+            "destination": "/how_to_use/en/cli/introduction"
+        },
+        {
+            "source": "/how_to_use/es/cli/decision_memory",
+            "destination": "/how_to_use/es/cli/introduction"
+        },
+        {
+            "source": "/how_to_use/pt-br/cli/decision_memory",
+            "destination": "/how_to_use/pt-br/cli/introduction"
+        },
+        {
+            "source": "/how_to_use/ja/cli/decision_memory",
+            "destination": "/how_to_use/ja/cli/introduction"
+        },
+        {
+            "source": "/how_to_use/zh/cli/decision_memory",
+            "destination": "/how_to_use/zh/cli/introduction"
         }
     ]
 }

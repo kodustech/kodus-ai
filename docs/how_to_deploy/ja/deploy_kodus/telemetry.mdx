@@ -94,7 +94,7 @@ receiver はボディに 5 KB の制限を設けており、文書化された�
 ペイロードを出力できます：
 
 ```bash
-yarn telemetry:preview
+pnpm run telemetry:preview
 ```
 
 このコマンドは最小限の Kodus コンテキストを起動し、cron が使用するのと
@@ -102,7 +102,7 @@ yarn telemetry:preview
 しません。`jq` にパイプして探索できます：
 
 ```bash
-yarn telemetry:preview | jq '.usage_7d'
+pnpm run telemetry:preview | jq '.usage_7d'
 ```
 
 ## テレメトリを無効化する

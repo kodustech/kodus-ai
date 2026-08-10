@@ -9,6 +9,8 @@ export type OrganizationLicenseInvalid = {
 export type OrganizationLicenseTrial = {
     valid: true;
     subscriptionStatus: "trial";
+    /** Plan the trial converts into (billing returns e.g. "teams_managed"). */
+    planType?: PlanType;
     trialEnd: string;
     byok?: boolean;
     trialReviewCreditsTotal?: number;
@@ -96,6 +98,8 @@ export type OrganizationLicenseActive = {
 export type OrganizationLicenseSelfHosted = {
     valid: true;
     subscriptionStatus: "self-hosted";
+    /** Community self-hosted has no plan; keeps `license.planType` uniform across the union. */
+    planType?: undefined;
 };
 
 export type OrganizationLicenseLicensedSelfHosted = {

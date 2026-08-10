@@ -1,5 +1,6 @@
 ---
 title: Criando um Webhook
+description: "Crie manualmente o webhook do Forgejo quando o registro automático não aconteceu, e selecione os eventos que o Kodus consome."
 icon: webhook
 ---
 
@@ -19,16 +20,22 @@ O Kodus geralmente cria o webhook automaticamente. Se isso não aconteceu, siga 
 4. Clique em **Add Webhook** → **Forgejo**
 5. Configure seu webhook:
 
-   - **Target URL**: Insira a URL onde deseja receber as notificações, a URL que você colocou em `GLOBAL_FORGEJO_CODE_MANAGEMENT_WEBHOOK` no arquivo `.env`
+   - **Target URL**: Insira a URL onde deseja receber as notificações, a URL que você colocou em `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` no arquivo `.env`
    - **HTTP Method**: POST
    - **POST Content Type**: `application/json`
    - **Trigger On**: Selecione estes eventos:
         - Push events
         - Pull Request events
-        - Issues events
         - Issue Comment events
    - **Active**: Marque
 
 6. Clique em **Add Webhook**
 
 Pronto! Você configurou com sucesso um webhook para revisões de código no seu repositório Forgejo.
+
+<Note>
+  O Kodus consome eventos de pull request, push, comentário de review e comentário em issue.
+  Eventos de push importam especificamente no Forgejo: são os únicos que carregam o head anterior
+  e o atual da branch, que é como o Kodus detecta force-push e mapeia uma branch de volta aos seus
+  pull requests abertos. Eventos de issue são descartados na chegada.
+</Note>

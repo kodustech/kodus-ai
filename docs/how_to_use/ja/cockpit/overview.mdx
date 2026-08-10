@@ -8,7 +8,7 @@ description: "エンジニアリングチームのパフォーマンスに関す
 Cockpit アナリティクスは、生産性、コード品質、デリバリー効率を測定する主要なメトリクスを通じて、エンジニアリングチームのパフォーマンスに関する包括的なインサイトを提供します。これらのメトリクスは改善が必要な領域を特定し、時間をかけて進捗を追跡するのに役立ちます。
 
 <Warning>
-  Cockpit は**Teamsプラン（クラウド）専用**です。セルフホスト型の Community インストールには Cockpit 機能は含まれていません。
+  Cockpit は有料プランが必要です：**クラウドの Teams または Enterprise**、あるいは**ライセンス済みのセルフホスト Enterprise**。ライセンスのないセルフホスト（Community）と free BYOK プランでは利用できません。セルフホスト Enterprise では [Analytics Worker](/how_to_deploy/ja/deploy_kodus/analytics_worker) の稼働も必要です。
 </Warning>
 
 <Frame caption="リアルタイム分析でチームのパフォーマンスを監視します。">
@@ -17,8 +17,8 @@ Cockpit アナリティクスは、生産性、コード品質、デリバリー
 
 ## 主な機能
 
-- データは2時間ごとに更新
-- Teams プランのみ（クラウド）
+- データはデフォルトで 30 分ごとに更新されます（`ANALYTICS_INGESTION_CRON`）
+- クラウドの Teams / Enterprise、またはライセンス済みセルフホスト Enterprise
 - AI 駆動のメトリクス計算
 - DORA およびカスタムメトリクス 8 種類以上
 
@@ -28,6 +28,11 @@ Cockpit アナリティクスは、生産性、コード品質、デリバリー
 
 - **Kodus Review** — Kodus のレビューがどれだけ効果的かを示します。実装率、重大度キャリブレーション、ネガティブフィードバック、そして Kody ルールのヘルスです。これは Kodus そのものに関するものであり、あなたが行動を起こす場です。[Kodus Review](/how_to_use/ja/cockpit/kodus_review) を参照してください。
 - **Productivity** — 一般的なデリバリーメトリクスです。デプロイ頻度、リードタイム、PR サイクルタイム、PR サイズ、開発者のアクティビティです。
+
+<Note>
+  Owner はタブ全体や個別のメトリクスを組織全体に対して非表示にできます —
+  [Cockpit の設定](/how_to_use/ja/cockpit/configuration) を参照してください。
+</Note>
 
 ## 主要メトリクスカテゴリ
 

@@ -194,3 +194,67 @@ describe("BYOK topbar visibility", () => {
         }
     });
 });
+
+describe("isTeamsOrEnterprisePlan", () => {
+    it("allows active Teams and Enterprise plans", async () => {
+        const { isTeamsOrEnterprisePlan } = await import("./_utils");
+
+        expect(
+            isTeamsOrEnterprisePlan({
+                valid: true,
+                subscriptionStatus: "active",
+                planType: "teams_byok",
+            } as any),
+        ).toBe(true);
+        expect(
+            isTeamsOrEnterprisePlan({
+                valid: true,
+                subscriptionStatus: "active",
+                planType: "enterprise_managed",
+            } as any),
+        ).toBe(true);
+    });
+
+    it("blocks free_byok and unlicensed self-hosted", async () => {
+        const { isTeamsOrEnterprisePlan } = await import("./_utils");
+
+        expect(
+            isTeamsOrEnterprisePlan({
+                valid: true,
+                subscriptionStatus: "active",
+                planType: "free_byok",
+            } as any),
+        ).toBe(false);
+        expect(
+            isTeamsOrEnterprisePlan({
+                valid: true,
+                subscriptionStatus: "self-hosted",
+            } as any),
+        ).toBe(false);
+    });
+
+    it("allows trial and licensed self-hosted enterprise only", async () => {
+        const { isTeamsOrEnterprisePlan } = await import("./_utils");
+
+        expect(
+            isTeamsOrEnterprisePlan({
+                valid: true,
+                subscriptionStatus: "trial",
+            } as any),
+        ).toBe(true);
+        expect(
+            isTeamsOrEnterprisePlan({
+                valid: true,
+                subscriptionStatus: "licensed-self-hosted",
+                planType: "enterprise",
+            } as any),
+        ).toBe(true);
+        expect(
+            isTeamsOrEnterprisePlan({
+                valid: true,
+                subscriptionStatus: "licensed-self-hosted",
+                planType: "teams_byok",
+            } as any),
+        ).toBe(false);
+    });
+});

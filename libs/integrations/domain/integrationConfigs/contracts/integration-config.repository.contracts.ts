@@ -23,6 +23,10 @@ export interface IIntegrationConfigRepository {
     findByInstallId(
         installId: string,
     ): Promise<IntegrationConfigEntity | undefined>;
+    findByOrganizationAndConfigKey(
+        organizationId: string,
+        configKey: IntegrationConfigKey,
+    ): Promise<IntegrationConfigEntity[]>;
     findOneIntegrationConfigWithIntegrations(
         configKey: IntegrationConfigKey,
         organizationAndTeamData: OrganizationAndTeamData,

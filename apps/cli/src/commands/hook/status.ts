@@ -13,8 +13,7 @@ export async function statusAction(): Promise<void> {
         exitWithCode(1);
     }
 
-    const gitRoot = await gitService.getGitRoot();
-    const hookPath = path.join(gitRoot.trim(), '.git', 'hooks', 'pre-push');
+    const hookPath = path.join(await gitService.getHooksDir(), 'pre-push');
 
     let content: string;
     try {

@@ -10,6 +10,7 @@ import axios from 'axios';
 import * as bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
+import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
 import { createLogger } from '@libs/core/log/logger';
 import { IAuthService } from '@libs/identity/domain/auth/contracts/auth.service.contracts';
 import {
@@ -458,6 +459,7 @@ export class AuthService implements IAuthService {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
             },
         );
 

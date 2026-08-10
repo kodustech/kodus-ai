@@ -1,5 +1,6 @@
 ---
 title: Webhookの作成
+description: "自動登録が行われなかった場合に Forgejo の Webhook を手動で作成し、Kodus が利用するイベントを選択する手順。"
 icon: webhook
 ---
 
@@ -19,16 +20,22 @@ Kodusは通常、Webhookを自動的に作成します。自動的に作成さ�
 4. **Add Webhook** → **Forgejo**をクリックします
 5. Webhookを設定します：
 
-   - **Target URL**: 通知を受け取るURLを入力します。`.env`ファイルの`GLOBAL_FORGEJO_CODE_MANAGEMENT_WEBHOOK`に設定したURLです
+   - **Target URL**: 通知を受け取るURLを入力します。`.env`ファイルの`API_FORGEJO_CODE_MANAGEMENT_WEBHOOK`に設定したURLです
    - **HTTP Method**: POST
    - **POST Content Type**: `application/json`
    - **Trigger On**: 以下のイベントを選択します：
         - Push events
         - Pull Request events
-        - Issues events
         - Issue Comment events
    - **Active**: チェック
 
 6. **Add Webhook**をクリックします
 
 これで、ForgejoリポジトリでコードレビューのためのWebhookが正常に設定されました。
+
+<Note>
+  Kodus は pull request、push、pull request review comment、issue comment の各イベントを利用します。
+  Forgejo では push イベントが特に重要です。ブランチの変更前と変更後の head を両方含む唯一の
+  イベントであり、Kodus はこれで force-push を検出し、ブランチをオープンなプルリクエストに
+  対応づけます。issue イベントは届いた時点で破棄されます。
+</Note>

@@ -221,6 +221,11 @@ export const usePullRequestsFacets = (
             ),
         enabled: !!teamId,
         retry: false,
+        // No polling here on purpose: the facets (Needs attention / Awaiting
+        // cards) are refreshed reactively via usePullRequestExecutionSSE. The
+        // verification pass emits `execution_updated` right after it persists
+        // suggestion statuses, so invalidating on that event refetches the
+        // cards at the exact moment the counts change — no periodic load.
         staleTime: 60_000,
         select: (response) => response.data,
     });
@@ -352,6 +357,13 @@ export const usePullRequestExecutionSSE = (enabled = true) => {
         });
         queryClient.invalidateQueries({
             queryKey: ["pull-requests-daily-digest"],
+        });
+        // Facets power the Needs attention / Awaiting cards. The suggestion
+        // verification pass emits `execution_updated` after persisting statuses
+        // (see ImplementationVerificationProcessor), so invalidating here makes
+        // the cards refetch at the exact moment the counts change.
+        queryClient.invalidateQueries({
+            queryKey: ["pull-requests-facets"],
         });
     }, [queryClient]);
 

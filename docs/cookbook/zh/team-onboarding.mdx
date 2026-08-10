@@ -22,21 +22,14 @@ icon: "users-gear"
 ```yaml
 # kodus-config.yml — 放入每个代码库根目录
 reviewOptions:
+  bug: true
   security: true
-  code_style: true
-  kody_rules: true
-  refactoring: true
-  error_handling: true
-  maintainability: true
-  potential_issues: true
-  performance_and_optimization: true
+  performance: true
   business_logic: true
 
 suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
   severityLevelFilter: medium
+  applyFiltersToKodyRules: false
 
 automatedReviewActive: true
 ```
@@ -134,4 +127,4 @@ URL 必须来自环境变量或配置文件。
 - 前几个 PR 使用 `@kody start-review` 让团队看到 Kodus 的实际效果
 - 如果想审查 Kody 学到的内容，启用 LLM 生成记忆审批
 
-完整设置指南，请参阅[快速开始](/how_to_use/en/quickstart)。
+完整设置指南，请参阅[快速开始](/how_to_use/zh/quickstart)。

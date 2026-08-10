@@ -4,6 +4,7 @@ import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationPar
 import {
     getOrganizationMembers,
     getUsersWithLicense,
+    MEMBERS_UNAVAILABLE,
     validateOrganizationLicense,
 } from "../_services/billing/fetch";
 import type { LicenseTableRow } from "./_components/columns";
@@ -12,24 +13,21 @@ import { LicensesPageClient } from "./_components/page.client";
 export default async function SubscriptionTabs() {
     const teamId = await getGlobalSelectedTeamId();
 
-    const [
-        organizationMembersRaw,
-        usersWithLicense,
-        license,
-        autoLicenseAssignmentConfig,
-    ] = await Promise.all([
-        getOrganizationMembers({ teamId }).catch(() => []),
-        getUsersWithLicense({ teamId }).catch(() => []),
-        validateOrganizationLicense({ teamId }).catch(() => ({
-            valid: false,
-            subscriptionStatus: "inactive" as const,
-        })),
-        getAutoLicenseAssignmentConfig().catch(() => undefined),
-    ]);
+    const [memberList, usersWithLicense, license, autoLicenseAssignmentConfig] =
+        await Promise.all([
+            getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
+            getUsersWithLicense({ teamId }).catch(() => []),
+            validateOrganizationLicense({ teamId }).catch(() => ({
+                valid: false,
+                subscriptionStatus: "inactive" as const,
+            })),
+            getAutoLicenseAssignmentConfig().catch(() => undefined),
+        ]);
 
-    const organizationMembers = Array.isArray(organizationMembersRaw)
-        ? organizationMembersRaw
-        : [];
+    // Without a confirmed member list we cannot tell who left the org, so no row
+    // is flagged as removed and seat pruning stays unavailable.
+    const membersUnavailable = memberList.status !== "ok";
+    const organizationMembers = memberList.members;
 
     const organizationMemberIds = new Set(
         organizationMembers.map((m) => m.id.toString()),
@@ -40,39 +38,40 @@ export default async function SubscriptionTabs() {
     );
 
     const organizationMembersWithLicense: LicenseTableRow[] = [
-        ...organizationMembers
-            .map((member) => {
-                const normalizedName =
-                    member.name?.trim() ||
-                    member.displayName?.trim() ||
-                    member.username?.trim() ||
-                    member.login?.trim() ||
-                    "Unknown member";
+        ...organizationMembers.map((member) => {
+            const normalizedName =
+                member.name?.trim() ||
+                member.displayName?.trim() ||
+                member.username?.trim() ||
+                member.login?.trim() ||
+                "Unknown member";
 
-                const user = usersWithLicenseByGitId.get(member.id.toString());
+            const user = usersWithLicenseByGitId.get(member.id.toString());
 
-                return {
-                    id: member.id,
-                    name: normalizedName,
-                    licenseStatus:
-                        license.valid && license.subscriptionStatus === "trial"
-                            ? "active"
-                            : user?.git_id && (user?.status ?? "active") === "active"
-                            ? "active"
-                            : "inactive",
-                };
+            return {
+                id: member.id,
+                name: normalizedName,
+                licenseStatus:
+                    license.valid && license.subscriptionStatus === "trial"
+                        ? "active"
+                        : user?.git_id && (user?.status ?? "active") === "active"
+                          ? "active"
+                          : "inactive",
+            } satisfies LicenseTableRow;
         }),
         ...usersWithLicense
             .filter(
                 (userWithLicense) =>
                     !organizationMemberIds.has(userWithLicense.git_id) &&
-                    userWithLicense.status !== 'inactive',
+                    userWithLicense.status !== "inactive",
             )
             .map((userWithLicense) => ({
                 id: userWithLicense.git_id,
-                name: `Deleted user (${userWithLicense.git_id})`,
+                name: membersUnavailable
+                    ? userWithLicense.git_id
+                    : `Deleted user (${userWithLicense.git_id})`,
                 licenseStatus: userWithLicense.status ?? "active",
-                removedFromGit: true,
+                removedFromGit: !membersUnavailable,
             })),
     ];
 
@@ -80,6 +79,7 @@ export default async function SubscriptionTabs() {
         <LicensesPageClient
             data={organizationMembersWithLicense}
             autoLicenseAssignmentConfig={autoLicenseAssignmentConfig}
+            membersUnavailable={membersUnavailable}
         />
     );
 }

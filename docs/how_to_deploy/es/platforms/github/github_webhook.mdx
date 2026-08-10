@@ -1,5 +1,6 @@
 ---
 title: Crear un webhook
+description: "Crea manualmente el webhook de GitHub cuando el registro automático no ocurrió, y selecciona los tres eventos que Kodus consume."
 icon: webhook
 ---
 
@@ -23,11 +24,13 @@ Kodus generalmente crea el webhook automáticamente. Si eso no ocurrió, sigue e
    - Marca estas casillas:
      - Issue comment
      - Pull request review comments
-     - Pull request review threads
-     - Pull request reviews
      - Pull requests
-     - Pushes
 
 6. Haz clic en "Add webhook"
 
 Has configurado correctamente un webhook para las revisiones de código en tu repositorio de GitHub.
+
+<Note>
+  Estos son los únicos tres eventos que Kodus consume. Marcar otros (pushes, pull request
+  reviews, review threads) solo genera tráfico que se descarta al llegar.
+</Note>

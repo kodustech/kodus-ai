@@ -63,7 +63,7 @@ Puedes enriquecer tus mensajes personalizados con contexto dinámico usando el b
 
 Un resumen de los archivos modificados, mostrando adiciones y eliminaciones por archivo. Proporciona un desglose detallado de lo que se modificó en el pull request.
 
-### changedSummary
+### changeSummary
 
 Un resumen exhaustivo de todos los cambios en el pull request, ofreciendo una visión general del alcance completo de las modificaciones.
 
@@ -106,6 +106,51 @@ agente de código para aplicar todas las correcciones de la revisión de una vez
   Estas variables de contexto se completarán automáticamente con los datos reales
   de tu pull request cuando Kody envíe el mensaje.
 </Info>
+
+<Note>
+  En `kodus-config.yml` estos tokens se escriben con prefijo `@` — `@changedFiles`,
+  `@changeSummary`, `@reviewOptions`, `@reviewCadence`, `@reviewScope`, `@agentPrompt` —
+  en cualquier posición dentro del `content` del mensaje. El botón **Add Context** inserta
+  los mismos tokens por ti en la interfaz web.
+</Note>
+
+## Mensaje de error
+
+Aparte del par inicio/fin, puedes añadir tu propio texto al comentario que Kody publica cuando
+una revisión **falla** — por ejemplo cuando no hay proveedor BYOK configurado, o el proveedor
+rechazó la petición.
+
+- **Off** (por defecto) — Kody publica su mensaje de error estándar sin cambios.
+- **Active** — tu texto se añade debajo del mensaje de error estándar.
+
+Úsalo para dirigir a la gente al responsable interno o al runbook, en lugar de dejarles un fallo
+genérico:
+
+```yaml
+customMessages:
+    errorReviewMessage:
+        status: 'active' # off | active
+        content: |
+            ¿Fallan las revisiones? Escribe a #platform-eng — la clave de la API de Kodus es nuestra.
+```
+
+Dejar `content` vacío mantiene el mensaje de error por defecto sin cambios.
+
+## Ajustes globales
+
+Dos toggles que aplican a todos los comentarios de Kody, no solo a los mensajes personalizados:
+
+| Ajuste | Por defecto | Qué hace |
+| --- | --- | --- |
+| `hideComments` | `false` | Publica cada mensaje de revisión como comentario oculto/minimizado. Se muestra en la interfaz como **Post as hidden comment**. **Solo GitHub** — el toggle se oculta en otras plataformas. |
+| `suggestionCopyPrompt` | `true` | Añade a las sugerencias la opción de copiar como prompt, para pegarlas en un agente de código. **No disponible en Bitbucket.** |
+
+```yaml
+customMessages:
+    globalSettings:
+        hideComments: false # solo GitHub
+        suggestionCopyPrompt: true # no disponible en Bitbucket
+```
 
 <Note>
   Siempre puedes volver al comportamiento predeterminado deshabilitando ambos mensajes

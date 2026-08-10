@@ -35,8 +35,7 @@ export async function uninstallAction(
             throw new CommandError('NOT_IN_GIT_REPO', 'Not a git repository.');
         }
 
-        const gitRoot = await gitService.getGitRoot();
-        const hookPath = path.join(gitRoot.trim(), '.git', 'hooks', 'pre-push');
+        const hookPath = path.join(await gitService.getHooksDir(), 'pre-push');
 
         let content: string;
         try {

@@ -869,9 +869,13 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             type: 'e2b',
             sandboxId: e2bSandbox.sandboxId,
             repoDir: '/home/user/repo',
-            run: async (command: string, opts?: { timeoutMs?: number }) => {
+            run: async (
+                command: string,
+                opts?: { timeoutMs?: number; envs?: Record<string, string> },
+            ) => {
                 const result = await e2bSandbox.commands.run(command, {
                     timeoutMs: opts?.timeoutMs ?? 30_000,
+                    ...(opts?.envs && { envs: opts.envs }),
                 });
                 return {
                     stdout: result.stdout || '',

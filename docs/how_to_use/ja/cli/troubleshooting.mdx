@@ -88,13 +88,6 @@ kodus review --verbose    # または --verbose 付きの任意のコマンド
     - 単一のプッシュでフックをスキップ: `KODUS_SKIP_HOOK=1 git push`。
   </Accordion>
 
-  <Accordion title="Decisions（メモリ）フックがキャプチャされていません">
-    - `kodus decisions status` でどのエージェントが接続されているかを確認。
-    - `kodus decisions enable --force` を再実行して統合ファイルを再インストール。
-    - Codex の場合、`~/.codex/config.toml` に `notify = ["kodus", "decisions", "capture", ...]` 行が含まれていることを確認するか、`--codex-config <path>` を渡してください。
-    - エージェントが実際にターン完了イベントを発行していることを確認（一部の古い Claude Code 設定では発行しません）。
-  </Accordion>
-
   <Accordion title="デバイス制限に達しました">
     セルフホスト型インスタンスは組織ごとにデバイス制限を強制できます。制限を増やすか、ダッシュボードから未使用のデバイスを削除するよう管理者に依頼してください。
   </Accordion>

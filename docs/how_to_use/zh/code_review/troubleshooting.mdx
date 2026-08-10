@@ -30,9 +30,9 @@ description: "Kody 代码审查故障排除"
 
 ### 配置问题
 
-- **自动审查**：确保在您的[全局设置](https://app.kodus.io/automations/AutomationCodeReview/global/general)中启用了自动审查。如果禁用，请使用 `@kody start-review` 手动开始审查。
-- **审查类型**：确保至少选择了一种审查类型，以便 Kody 提供建议。[配置审查类型](https://app.kodus.io/automations/AutomationCodeReview/global/general)。
-- **分支审查**：默认情况下，Kody 审查合并到默认分支的 PR。要包括其他分支，请[更新您的配置](https://app.kodus.io/automations/AutomationCodeReview/global/general)。
+- **自动审查**：确保在您的[全局设置](https://app.kodus.io/settings/code-review/global/general)中启用了自动审查。如果禁用，请使用 `@kody start-review` 手动开始审查。
+- **审查类型**：确保至少选择了一种审查类型，以便 Kody 提供建议。[配置审查类型](https://app.kodus.io/settings/code-review/global/general)。
+- **分支审查**：默认情况下，Kody 审查合并到默认分支的 PR。要包括其他分支，请[更新您的配置](https://app.kodus.io/settings/code-review/global/general)。
 - **大型 PR**：请注意，具有大量更改的 PR 可能需要更长时间来处理。
 
 ---
@@ -46,7 +46,7 @@ Kody 使用分层配置系统。其工作原理如下：
 
 #### 故障排除步骤
 
-1. **检查全局配置**：查看并确认全局设置正确。[访问全局设置](https://app.kodus.io/automations/AutomationCodeReview/global/general)。
+1. **检查全局配置**：查看并确认全局设置正确。[访问全局设置](https://app.kodus.io/settings/code-review/global/general)。
 2. **验证代码库设置**：
    - 导航到设置中的 **By Repositories** 部分。
    - 确认是否为相关代码库设置了自定义配置。
@@ -72,10 +72,10 @@ Kody 使用分层配置系统。其工作原理如下：
 5. 推送节奏：如果使用自动暂停，请等待冷却时间或请求手动审查。
 6. 代码库覆盖：代码库特定的设置可以覆盖全局设置。根据需要清除或对齐它们。
 
-<Card title="审查模式与节奏" icon="clock" href="/how_to_use/en/code_review/configs/general">
+<Card title="审查模式与节奏" icon="clock" href="/how_to_use/zh/code_review/configs/general">
   检查自动审查、节奏和分支过滤器。
 </Card>
 
-<Card title="限制与定价" icon="scale-balanced" href="/how_to_use/en/pricing">
+<Card title="限制与定价" icon="scale-balanced" href="/how_to_use/zh/pricing">
   了解建议的限制以及它们如何影响审查。
 </Card>

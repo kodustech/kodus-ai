@@ -53,7 +53,7 @@ PR 打开 → 暂无消息
 
 已更改文件的摘要,显示每个文件的添加和删除。这提供了拉取请求中修改内容的详细分解。
 
-### changedSummary
+### changeSummary
 
 拉取请求中所有更改的全面摘要,概述整个修改范围。
 
@@ -69,9 +69,66 @@ PR 打开 → 暂无消息
 - **自动暂停**:Kody 自动重新审查推送,但如果检测到"推送突发"(例如,根据您的阈值,15 分钟内 3 次推送),它会暂停后续审查,直到您恢复它们。节奏上下文包括推送和时间限制,以便团队知道何时可以触发暂停。
 - **手动**:Kody 等待某人运行 `@kody start-review` 后再进行另一次审查。
 
+### reviewScope
+
+显示本次 pull request 的审查使用了哪个配置级别 —— 全局、代码库还是目录 —— 让作者知道
+实际生效的是哪套设置。
+
+### agentPrompt
+
+<Note>
+  **仅用于结束审查消息。** 它会打包本次审查的行级评论建议,而这些建议在审查跑完之前并不存在 ——
+  因此它不会出现在开始消息中。
+</Note>
+
+把本次审查的所有建议打包成一个可复制粘贴的提示词块(渲染为可折叠的 **Open Agent Prompt**)。
+把它粘贴到你的编码代理中,即可一次性应用本次审查的全部修复。
+
 <Info>
   当 Kody 发送消息时,这些上下文变量将自动填充来自您的拉取请求的实际数据。
 </Info>
+
+<Note>
+  在 `kodus-config.yml` 中,这些标记要带 `@` 前缀书写 —— `@changedFiles`、
+  `@changeSummary`、`@reviewOptions`、`@reviewCadence`、`@reviewScope`、`@agentPrompt` ——
+  可以放在消息 `content` 内的任意位置。网页界面中的 **Add Context** 按钮会为你插入相同的标记。
+</Note>
+
+## 错误消息
+
+与开始/结束消息这一对相互独立,你还可以在审查**失败**时,把自己的文本追加到 Kody 发布的
+评论中 —— 例如未配置 BYOK 提供商,或提供商拒绝了请求时。
+
+- **Off**(默认)—— Kody 按原样发布标准错误评论。
+- **Active** —— 你的文本会追加到标准错误评论下方。
+
+用它把人引导到对应的内部负责人或 runbook,而不是只留下一个笼统的失败提示:
+
+```yaml
+customMessages:
+    errorReviewMessage:
+        status: 'active' # off | active
+        content: |
+            审查失败?请联系 #platform-eng —— Kodus API 密钥由我们负责。
+```
+
+把 `content` 留空则保持默认错误消息不变。
+
+## 全局设置
+
+两个开关,作用于 Kody 的所有评论,而不只是自定义消息:
+
+| 设置 | 默认值 | 作用 |
+| --- | --- | --- |
+| `hideComments` | `false` | 把每条审查消息都作为隐藏/折叠评论发布。界面中显示为 **Post as hidden comment**。**仅 GitHub** —— 在其他平台上该开关会被隐藏。 |
+| `suggestionCopyPrompt` | `true` | 为建议添加"复制为提示词"的能力,便于你粘贴到编码代理中。**Bitbucket 上不可用。** |
+
+```yaml
+customMessages:
+    globalSettings:
+        hideComments: false # 仅 GitHub
+        suggestionCopyPrompt: true # Bitbucket 上不可用
+```
 
 <Note>
   您始终可以通过禁用两个自定义消息或清除消息内容来恢复到默认行为。

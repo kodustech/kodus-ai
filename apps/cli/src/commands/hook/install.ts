@@ -102,8 +102,7 @@ export async function installAction(
             throw new CommandError('NOT_IN_GIT_REPO', 'Not a git repository.');
         }
 
-        const gitRoot = await gitService.getGitRoot();
-        const hooksDir = path.join(gitRoot.trim(), '.git', 'hooks');
+        const hooksDir = await gitService.getHooksDir();
         const hookPath = path.join(hooksDir, 'pre-push');
 
         // Check if hook already exists

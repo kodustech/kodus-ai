@@ -234,7 +234,15 @@ export class GenerateKodyRulesUseCase {
             );
 
             const allRules = [];
-            const createdRules = []; // To track created rules for notification
+            // Typed on purpose. As a bare `[]` this was `any[]`, so pushing
+            // objects here and passing the array to a `string[]` parameter
+            // type-checked cleanly — and only blew up at render time, inside
+            // the worker, as "Objects are not valid as a React child".
+            const createdRules: Array<{
+                title: string;
+                rule: string;
+                severity: string;
+            }> = [];
             // Repos that received ≥1 persisted rule — promoted to isSelected:true
             // after the loop so the generated rules are visible in the UI.
             const reposWithRules = new Map<string, Repositories>();
@@ -516,8 +524,15 @@ export class GenerateKodyRulesUseCase {
                 });
 
                 // Execute notification asynchronously to not block the main flow
+                // The notification takes the rule TITLES — short, human
+                // readable, and the same text the Kody Rules screen shows.
+                // The full rule body is a paragraph of prompt text and would
+                // make the email unreadable.
                 this.sendRulesNotificationUseCase
-                    .execute(organizationId, createdRules)
+                    .execute(
+                        organizationId,
+                        createdRules.map((r) => r.title),
+                    )
                     .catch((error) => {
                         this.logger.error({
                             message:

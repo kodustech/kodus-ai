@@ -288,7 +288,6 @@ export default function General() {
                 <div data-field-name="baseBranches">
                     <BaseBranches />
                 </div>
-
                 {repositoryId === "global" && (
                     <div data-field-name="language">
                         <FormProvider {...form}>

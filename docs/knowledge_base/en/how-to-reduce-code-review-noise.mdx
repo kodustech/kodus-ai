@@ -5,22 +5,19 @@ description: "Fine-tune your AI code review to surface only the most relevant su
 
 Too many low-priority suggestions can make developers ignore code review feedback entirely. The key is to tune the review so it surfaces what matters and stays quiet on what doesn't.
 
-## Suggestion control
+## Review filters
 
-Kodus gives you fine-grained control over how many suggestions appear and at what severity:
+Kodus filters which findings actually get posted:
 
-- **Max suggestions per PR** — limit the total number of suggestions (e.g., 9)
-- **Severity filter** — only show suggestions at or above a threshold (e.g., Medium and above)
-- **Grouping mode** — control how suggestions are organized in the PR
+- **Minimum severity** — only show suggestions at or above a threshold (default: Medium)
+- **Apply filters to Kody Rules** — off by default, so your team's own rules always surface
 
-Configure these in **Code Review Settings** → **Suggestion Control**, or in `kodus-config.yml`:
+Configure these in **Code Review Settings** → **Review filters**, or in `kodus-config.yml`:
 
 ```yaml
 suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
-  severityLevelFilter: medium
+  severityLevelFilter: medium   # low | medium | high | critical
+  applyFiltersToKodyRules: false
 ```
 
 ## Ignore files and paths
@@ -52,10 +49,10 @@ Disable entire review categories you don't need:
 
 ```yaml
 reviewOptions:
+  bug: true
   security: true
-  code_style: true
-  refactoring: false        # disable if too noisy
-  documentation_and_comments: false  # disable if not relevant
+  performance: false        # disable if too noisy
+  business_logic: false     # disable if not relevant
 ```
 
 ## Review cadence

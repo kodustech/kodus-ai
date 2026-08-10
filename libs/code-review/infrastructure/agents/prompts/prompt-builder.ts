@@ -35,6 +35,41 @@ const SCOPE_CROSS_FILE_EXTRA = `
     CROSS-FILE: when the bug spans files, set relevantFile/relevantLinesStart/relevantLinesEnd to the CHANGED line that TRIGGERS it (the modified call, usage, import, or signature) — NOT the unchanged file where the symptom surfaces — and explain the cross-file effect in suggestionContent.
     NEVER emit a placeholder, guessed, "unknown", or non-diff path for relevantFile. If you cannot anchor the finding to a specific changed line present in this diff, OMIT the finding entirely.`;
 
+/**
+ * Cross-repo boundary directive (#1576). Only rendered when the deterministic
+ * boundary gate armed `linkedRepoAccess` for this review (config alone is not
+ * enough — pure internal refactors keep this empty). Verbatim pilot-validated text.
+ */
+export function formatCrossRepoBoundarySection(
+    input: Pick<ReviewAgentInput, 'linkedRepoAccess'>,
+): string {
+    const links = input.linkedRepoAccess?.list() ?? [];
+    if (!links.length) return '';
+
+    const linkLines = links
+        .map((l) => {
+            const hint = l.instructions ? ` — ${l.instructions}` : '';
+            return `      - ${l.repository} (ref candidate: ${l.preferredRef})${hint}`;
+        })
+        .join('\n');
+
+    return `
+  <CrossRepoBoundary>
+    Linked repositories available via tools (pass repo="<fullName>" to grep/readFile/listDir):
+${linkLines}
+
+    Your goal is to find CROSS-BOUNDARY defects: a field name, key derivation, value encoding, state/status value, or config that does not match what the OTHER side of the boundary (another service, the frontend/backend counterpart, a sibling integration adapter, a shared helper) actually produces or expects.
+
+    For every external field/key/status the changed code reads or writes, find who produces or consumes it and verify the shapes match. Check shared helpers and sibling adapters/finders of the same boundary.
+
+    Judgment rules:
+      - Only emit a finding with CONFIRMED counterpart evidence (linked-repo file + the mismatching shape). Hedged "this literal must match the backend" comments are noise — do not emit them.
+      - relevantFile/relevantLinesStart/relevantLinesEnd MUST stay inside this PR's diff. Linked-repo snippets are evidence for suggestionContent only — never set relevantFile to a path from a linked repo.
+      - Tag confirmed cross-repo findings in suggestionContent with "[cross-repo]" and name the counterpart file.
+  </CrossRepoBoundary>
+`;
+}
+
 export interface PromptAgentMeta {
     /** The agent's identity (name/description) — from getIdentity(). */
     identity: ReviewAgentIdentity;
@@ -205,7 +240,7 @@ export function buildSystemPrompt(input: ReviewAgentInput, meta: PromptAgentMeta
     Trace impact through callers — symptom can appear elsewhere, but the cause must be in the diff.
     readFile and grep return the FULL file, including code this PR did NOT touch. Those surrounding lines are context for understanding only — they are NOT part of the diff. Before reporting, confirm the line you cite appears as an added/modified line in the diff hunks; if a pattern you noticed (e.g. a rename, a legacy field, a pre-existing bug) is only visible via readFile and is not in the diff, do NOT report it as introduced by this PR.${SCOPE_CROSS_FILE_EXTRA}
   </Scope>
-
+${formatCrossRepoBoundarySection(input) || ''}
 ${overridesSection}
 
 ${memoryRulesSection}
@@ -227,6 +262,7 @@ export function buildCompactSystemPrompt(input: ReviewAgentInput, meta: PromptAg
         const categoryLabel = meta.categoryLabel;
         const overridesSection = formatOverrides(input, meta);
         const memoryRulesSection = formatMemoryRules(input.memoryRules);
+        const crossRepoSection = formatCrossRepoBoundarySection(input);
         const langLabel = resolveLanguageLabel(input.languageResultPrompt);
         const langLine = langLabel
             ? `\n  Write all review output in ${langLabel}.`
@@ -236,7 +272,7 @@ export function buildCompactSystemPrompt(input: ReviewAgentInput, meta: PromptAg
   <Role>You are ${identity.name}, a ${categoryLabel} code reviewer.${langLine}</Role>
   <Mindset>Assume each change is broken until you can name the input that proves it safe. Default to reporting when you have code-backed suspicion.</Mindset>
   <Workflow>For each changed function: grep callers and callees with the tools, read enough to confirm or dismiss, then submit via the submitResult tool.</Workflow>
-  <Scope>Root cause must be in lines added or modified by this PR. Trace impact through callers but anchor the finding to a changed line — for cross-file bugs anchor on the changed trigger line, never a placeholder or non-diff path; if you can't anchor it to a changed line, omit it.</Scope>
+  <Scope>Root cause must be in lines added or modified by this PR. Trace impact through callers but anchor the finding to a changed line — for cross-file bugs anchor on the changed trigger line, never a placeholder or non-diff path; if you can't anchor it to a changed line, omit it.</Scope>${crossRepoSection ? `\n${crossRepoSection}` : ''}
 ${overridesSection}
 ${memoryRulesSection}
 </CodeReviewAgent>`;
@@ -324,7 +360,11 @@ ${callGraphSection}
 
   <Task>
     Review this Pull Request for ${taskDescription}.
-    For each changed function: grep callers → read context → challenge with adversarial questions.${input.callGraph ? '\n    Use the call graph above as a fast map of production callers/callees, but still verify with tools before reporting.' : ''}
+    For each changed function: grep callers → read context → challenge with adversarial questions.${input.callGraph ? '\n    Use the call graph above as a fast map of production callers/callees, but still verify with tools before reporting.' : ''}${
+                input.linkedRepoAccess?.list()?.length
+                    ? '\n    When linked repositories are listed in <CrossRepoBoundary>, use grep/readFile with repo="<fullName>" to verify producer/consumer shapes across the boundary. Only report cross-repo defects with confirmed counterpart evidence.'
+                    : ''
+            }
     Promote a finding when the changed code gives you a code-backed suspicion of a defect. You don't need to fully prove the failure — anchor it to a specific changed line and let the verifier filter unsupported claims.
     Dismiss only what you can explain WHY it cannot fail; when in doubt, report rather than self-censor.
 ${mixedLabelTaskGuidance}

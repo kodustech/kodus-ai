@@ -21,6 +21,7 @@ export type OrchestratorInputComputed = Pick<
     // release check) rather than read straight off the context, so the alpha
     // gate is applied in exactly one place.
     | 'heavy'
+    | 'linkedRepoAccess'
 > & {
     // Review-ready kody rules computed by the stage: long rules swapped for
     // their validated summaries (KodyRuleSummaryService). Optional so callers
@@ -75,6 +76,7 @@ export function buildOrchestratorInput(
         reviewOptions: computed.reviewOptions,
         onAgentProgress: computed.onAgentProgress,
         gitHubToken: computed.gitHubToken,
+        linkedRepoAccess: computed.linkedRepoAccess,
         baseBranch:
             context.sandboxHandle?.baseBranch ||
             context.pullRequest?.base?.ref ||
@@ -88,15 +90,15 @@ export function buildOrchestratorInput(
         // this reads only that so the gate can't be bypassed here.
         heavy: computed.heavy || undefined,
         // Trial-only forced model (ignored when a BYOK config is present —
-        // byokToVercelModel prefers BYOK). Subscription trial → Kimi; anonymous
-        // public demo (try.kodus.io) → Gemini 3 Flash. The isTrialMode flag
-        // lives on the CLI pipeline context; the cast avoids inverting the dep
-        // graph (cli-review depends on code-review).
+        // byokToVercelModel prefers BYOK). Both subscription trial and the
+        // anonymous public demo (try.kodus.io) → DeepSeek V4 Flash. The
+        // isTrialMode flag lives on the CLI pipeline context; the cast avoids
+        // inverting the dep graph (cli-review depends on code-review).
         defaultModelOverride:
             context.pipelineMetadata?.subscriptionStatus === 'trial'
-                ? 'kimi-k2.6'
+                ? 'deepseek-v4-flash'
                 : (context as { isTrialMode?: boolean }).isTrialMode
-                  ? 'gemini-3-flash-preview'
+                  ? 'deepseek-v4-flash'
                   : undefined,
         // Per-repo/directory model override resolved by ValidateConfigStage.
         byokModel: context.codeReviewConfig?.byokModel,

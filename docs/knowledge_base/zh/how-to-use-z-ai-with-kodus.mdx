@@ -117,7 +117,7 @@ Z.AI(由智谱 AI 开发)提供 GLM 系列模型。它是少数几家为 API 访
   ```
 
 <Note>
-  无需命名空间包装 — Kodus 在发送前会在 `openaiCompatible`(当前提供商)下自动包装。详见 [主 BYOK 文档 → 自定义 JSON 覆盖](/how_to_use/zh/byok#custom-json-override)。
+  无需命名空间包装 — Kodus 在发送前会在 `openaiCompatible`(当前提供商)下自动包装。详见 [主 BYOK 文档 → 自定义 JSON 覆盖](/how_to_use/zh/byok#自定义-json-覆盖)。
 </Note>
 
 ### 调优并发
@@ -163,7 +163,7 @@ API_OPEN_AI_API_KEY="your-z-ai-api-key"
 docker-compose logs api worker | grep -iE "z\.ai|glm"
 ```
 
-完整的自托管设置(域名、安全密钥、数据库、webhook、反向代理)请参见[通用 VM 部署指南](https://docs.kodus.io/docs/how_to_deploy/en/deploy_kodus/generic_vm),只需将 LLM 部分替换为上面的配置。
+完整的自托管设置(域名、安全密钥、数据库、webhook、反向代理)请参见[通用 VM 部署指南](https://docs.kodus.io/how_to_deploy/zh/deploy_kodus/generic_vm),只需将 LLM 部分替换为上面的配置。
 
 ## 在 Coding Plan 和按 token 付费之间选择
 

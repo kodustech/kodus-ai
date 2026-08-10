@@ -1,5 +1,6 @@
 ---
 title: "General"
+description: "The core review settings — cadence, PR workflow, skip conditions, and analysis types — plus the full kodus-config.yml reference."
 ---
 
 ## Core Settings
@@ -9,45 +10,107 @@ title: "General"
 </Note>
 
 ### Config Priority
-`kodus-config.yml` in your repo root overrides web settings. No setup needed—just commit the file.
+
+You can keep your review configuration in a `kodus-config.yml` file at the root of your
+repository instead of the web UI.
+
+<Warning>
+  **The file is ignored until you opt in.** By default `kodusConfigFileOverridesWebPreferences`
+  is `false`, which means Kody never reads `kodus-config.yml` — committing the file alone does
+  nothing.
+
+  Turn it on first in **Settings → Code Review → the repository → General**, or set
+  `kodusConfigFileOverridesWebPreferences: true` at the repository (or directory) level in the
+  web UI. Only then does the file take effect.
+</Warning>
+
+Once enabled, the file is merged on top of your web settings, so you only need to declare the
+keys you want to change — anything you omit keeps its web value.
+
+<Note>
+  **Unknown keys are silently dropped.** Any top-level key that isn't part of the current
+  schema is removed before the config is applied — no error, no warning. If a setting appears
+  to have no effect, check the spelling against the sample below.
+</Note>
 
 <Accordion title="Sample kodus-config.yml">
 ```yaml
-version: '1.2'
-summary:
-  generatePRSummary: true
-  customInstructions: ''
-  behaviourForExistingDescription: concatenate
-ignorePaths:
-  - yarn.lock
-  - package-lock.json
-  - package.json
-  - .env
-baseBranches: []
-reviewOptions:
-  security: true
-  code_style: true
-  kody_rules: true
-  refactoring: true
-  error_handling: true
-  maintainability: true
-  potential_issues: true
-  documentation_and_comments: true
-  performance_and_optimization: true
-  business_logic: true
-suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
-  severityLevelFilter: medium
-ignoredTitleKeywords: []
+version: 2.0
+
+# general
 automatedReviewActive: true
+showStatusFeedback: true
+kodusConfigFileOverridesWebPreferences: false
+reviewCadence:
+    type: 'automatic' # automatic | auto_pause | manual
+    timeWindow: 15 # minutes
+    pushesToTrigger: 3
 pullRequestApprovalActive: false
-isRequestChangesActive: false
+isRequestChangesActive: false # not available on GitLab
+runOnDraft: true
+ignorePaths:
+    - 'yarn.lock'
+    - 'package-lock.json'
+    - 'package.json'
+    - '.env'
+    - '**/*.json'
+ignoredTitleKeywords: []
+baseBranches: []
+enableCommittableSuggestions: true
+byokModel: '' # empty = inherit the model from your BYOK settings
+
+# Teams / Enterprise only. Sibling repos the agent may consult during review.
+# Soft cap of 3; empty = feature off.
+linkedRepositories: []
+
+# review categories
+reviewOptions:
+    bug: true
+    performance: true
+    security: true
+    business_logic: true
+
+# suggestion control
+suggestionControl:
+    applyFiltersToKodyRules: false
+    severityLevelFilter: 'medium' # low | medium | high | critical
+
+# PR summary
+summary:
+    generatePRSummary: true
+    behaviourForNewCommits: 'none'
+    behaviourForExistingDescription: 'replace'
+    customInstructions: ''
+
+# kody rules
+ideRulesSyncEnabled: false
+kodyRulesGeneratorEnabled: true
+kodyLearningExcludedReviewers: []
 kodyKnowledgeApproval:
     enabled: false
+
+# custom messages
+customMessages:
+    globalSettings:
+        hideComments: false # GitHub only
+        suggestionCopyPrompt: true # not available on Bitbucket
+    errorReviewMessage:
+        status: 'off' # off | active
+        content: ''
+    startReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: ''
+    endReviewMessage:
+        status: 'every_push' # every_push | only_when_opened | off
+        content: ''
 ```
 </Accordion>
+
+<Note>
+  This sample mirrors the shipped defaults. The canonical source is
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
+  in the kodus-ai repository.
+</Note>
 
 ## Review Behavior
 
@@ -93,24 +156,48 @@ Kody requests changes when finding critical issues.
 
 ### Skip Conditions
 
-**Ignored Files:** Use glob patterns (e.g., `**/*.js`), one per line. Default: `yarn.lock`, `package-lock.json`, `package.json`, `.env`
+**Ignored Files:** Use glob patterns (e.g., `**/*.js`), one per line. Default: `yarn.lock`, `package-lock.json`, `package.json`, `.env`, `**/*.json`
 
 **Ignored Titles:** Skip PRs with specific keywords (case-insensitive, max 100 chars)
 
-**Base Branches:** Additional branches to review besides default (dev, release, master)
+**Base Branches:** Restricts *which* base branches get reviewed.
+
+<Info>
+  **Empty (the default) means every base branch is reviewed** — there is no built-in
+  `dev`/`release`/`master` list. Add entries only when you want to *narrow* the scope: once the
+  list is non-empty, Kody reviews only PRs targeting those branches (your repository's default
+  branch is always included).
+
+  Entries are matched against the PR's **target** branch and support a small pattern syntax:
+
+  | Entry | Matches |
+  | --- | --- |
+  | `main` | PRs targeting exactly `main` |
+  | `release/*` | PRs targeting any branch under `release/` (`*` is a single-level wildcard) |
+  | `=main` | Exact match, same as writing `main` |
+  | `!staging` | Excludes PRs targeting `staging` |
+  | `contains:hotfix` | Matches on the **source** branch instead — any PR whose head branch contains `hotfix` |
+
+  When several entries match, the most specific one wins. Each entry is limited to 100
+  characters, may only use `a-z A-Z 0-9 / * - _ ! = :`, and `**` is not allowed.
+</Info>
+
+**Draft PRs:** `runOnDraft` is `true` by default, so drafts are reviewed. Set it to `false` to
+skip them until the PR is marked ready.
 
 ## Analysis Types
 
-### Code Quality
-- Security: SQL injection, XSS, security threats
-- Performance: Caching, query optimization, speed improvements
-- Error Handling: Exception management, error messages
-- Potential Issues: Null pointers, resource leaks, infinite loops
+Kody reviews across four categories. Enable or disable each one under **Analysis Types**, or via
+`reviewOptions` in `kodus-config.yml`.
 
-### Code Structure
-- Refactoring: Code organization, function size, duplication
-- Maintainability: Future-proof code patterns
-- Code Style: Consistent formatting and standards
-- Documentation: Clear comments and API docs
-- Kody Rules: Custom rule enforcement
-- Business Logic: Validates PR implementation against task requirements and acceptance criteria
+- **Bug** — logic errors, race conditions, null dereferences, edge cases, and incorrect behavior.
+- **Security** — vulnerabilities, injection, auth issues, data exposure, and secrets.
+- **Performance** — N+1 queries, hot-path allocations, missing caching, and blocking I/O.
+- **Business Logic** — validates the implementation against business rules, requirements, and
+  acceptance criteria linked in the PR. See
+  [Business Logic Validation](/how_to_use/en/code_review/business_logic_validation).
+
+<Note>
+  Kody Rules are **not** one of these categories — they always run, independently of
+  `reviewOptions`. See [Kody Rules](/how_to_use/en/code_review/configs/kody_rules).
+</Note>
