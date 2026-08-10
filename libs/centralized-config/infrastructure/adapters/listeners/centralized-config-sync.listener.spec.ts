@@ -7,6 +7,7 @@ import {
     ICentralizedConfigService,
 } from '@libs/centralized-config/domain/contracts/CentralizedConfigService.contract';
 import { PullRequestClosedEvent } from '@libs/core/domain/events/pull-request-closed.event';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { CentralizedConfigSyncListener } from './centralized-config-sync.listener';
 
 describe('CentralizedConfigSyncListener', () => {
@@ -34,10 +35,19 @@ describe('CentralizedConfigSyncListener', () => {
             removeStaleKodyRules: jest.fn(),
         };
 
+    // Default: lock acquired (sync runs). Individual tests can override
+    // by calling `distributedLockServiceMock.acquire.mockResolvedValueOnce(null)`.
+    const distributedLockServiceMock = {
+        acquire: jest.fn(),
+    };
+
     beforeEach(async () => {
         centralizedConfigSyncUseCaseMock.execute.mockReset();
         centralizedConfigPrServiceMock.handleTrackedPullRequestClose.mockReset();
         jest.clearAllMocks();
+        distributedLockServiceMock.acquire.mockResolvedValue({
+            release: jest.fn().mockResolvedValue(undefined),
+        });
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -53,6 +63,10 @@ describe('CentralizedConfigSyncListener', () => {
                 {
                     provide: CENTRALIZED_CONFIG_SERVICE_TOKEN,
                     useValue: centralizedConfigServiceMock,
+                },
+                {
+                    provide: DistributedLockService,
+                    useValue: distributedLockServiceMock,
                 },
             ],
         }).compile();

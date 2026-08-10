@@ -10,6 +10,8 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 
+import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
+
 import { Reaction } from '@libs/code-review/domain/codeReviewFeedback/enums/codeReviewCommentReaction.enum';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
@@ -924,6 +926,7 @@ export class GitlabService implements Omit<
                     grant_type: 'authorization_code',
                     redirect_uri: process.env.GLOBAL_GITLAB_REDIRECT_URL,
                 },
+                { timeout: INTEGRATION_REQUEST_TIMEOUT_MS },
             );
 
             if (!tokenResponse || !tokenResponse.data) {
