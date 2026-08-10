@@ -189,10 +189,25 @@ export class LicenseService implements ILicenseService {
         }
     }
 
+    /**
+     * The billing service's `users-with-license` endpoint filters on
+     * `licenseStatus = ACTIVE` and returns only `git_id`, so on cloud there is
+     * no way to tell a revoked seat from one that never existed. Every user it
+     * returns is by definition active. Surfacing revoked seats here needs a
+     * billing-service change; until then this reports the active seats with an
+     * explicit status so callers do not have to guess.
+     */
     async getAllUsersEverWithLicense(
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<UserWithLicense[]> {
-        return this.getAllUsersWithLicense(organizationAndTeamData);
+        const users = await this.getAllUsersWithLicense(
+            organizationAndTeamData,
+        );
+
+        return users.map((user) => ({
+            git_id: user.git_id,
+            status: user.status ?? 'active',
+        }));
     }
 
     /**
@@ -242,6 +257,62 @@ export class LicenseService implements ILicenseService {
                 },
             });
             return false;
+        }
+    }
+
+    /**
+     * Release a user's seat by calling the billing service endpoint.
+     * @param organizationAndTeamData Organization and team identifiers
+     * @param userGitId Git ID of the user
+     * @returns Promise with boolean indicating success
+     */
+    async unassignLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+        userGitIds: string[],
+        provider: string,
+    ): Promise<{ revoked: string[]; failed: string[] }> {
+        if (!userGitIds?.length) {
+            return { revoked: [], failed: [] };
+        }
+
+        try {
+            const result = await this.licenseRequest.post('assign-license', {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                users: userGitIds.map((gitId) => ({
+                    gitId,
+                    // The billing service rejects the whole request with a 400
+                    // when a user entry is missing gitTool.
+                    gitTool: provider?.toLowerCase(),
+                    licenseStatus: 'inactive',
+                })),
+                editedBy: {
+                    email: 'system@kodus.ai',
+                },
+                userName: 'System Seat Reclaim',
+            });
+
+            const revoked = (result?.successful ?? []).map(
+                (license: { git_id: string }) => String(license.git_id),
+            );
+            const revokedSet = new Set(revoked);
+
+            return {
+                revoked,
+                failed: userGitIds.filter((gitId) => !revokedSet.has(gitId)),
+            };
+        } catch (error) {
+            this.logger.error({
+                message: 'UnassignLicenses not working',
+                error: error,
+                context: LicenseService.name,
+                serviceName: 'LicenseService unassignLicenses',
+                metadata: {
+                    ...organizationAndTeamData,
+                    userGitIds,
+                },
+            });
+            return { revoked: [], failed: userGitIds };
         }
     }
 }

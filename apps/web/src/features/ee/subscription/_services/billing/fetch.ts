@@ -22,25 +22,65 @@ type OrganizationMember = {
     displayName?: string | null;
 };
 
+export type OrganizationMemberListResult =
+    | { status: "ok"; members: Array<OrganizationMember> }
+    | { status: "unavailable"; members: [] };
+
+/**
+ * Use as the fallback whenever the member list can't be fetched. Never treat an
+ * `unavailable` result as "the organization is empty" — that is what made a
+ * failed lookup look like everyone had left the git org.
+ */
+export const MEMBERS_UNAVAILABLE: OrganizationMemberListResult = {
+    status: "unavailable",
+    members: [],
+};
+
+/**
+ * Tolerates the pre-status response shape so a rolling deploy where the web app
+ * is ahead of the API does not report every member as removed from the org.
+ */
+const toMemberListResult = (
+    response: unknown,
+): OrganizationMemberListResult => {
+    if (Array.isArray(response)) {
+        return response.length > 0
+            ? { status: "ok", members: response as Array<OrganizationMember> }
+            : { status: "unavailable", members: [] };
+    }
+
+    const result = response as OrganizationMemberListResult | undefined;
+
+    if (result?.status === "ok" && Array.isArray(result.members)) {
+        return { status: "ok", members: result.members };
+    }
+
+    return { status: "unavailable", members: [] };
+};
+
 export const getOrganizationMembers = async (params: { teamId: string }) => {
-    return authorizedFetch<Array<OrganizationMember>>(
+    const response = await authorizedFetch<unknown>(
         pathToApiUrl("/code-management/organization-members"),
         {
             params: { teamId: params.teamId },
         },
     );
+
+    return toMemberListResult(response);
 };
 
 export const refreshOrganizationMembers = async (params: {
     teamId: string;
 }) => {
-    return authorizedFetch<Array<OrganizationMember>>(
+    const response = await authorizedFetch<unknown>(
         pathToApiUrl("/code-management/organization-members/refresh"),
         {
             method: "POST",
             params: { teamId: params.teamId },
         },
     );
+
+    return toMemberListResult(response);
 };
 
 export const startTeamTrial = async (params: {
@@ -104,10 +144,17 @@ export const createManageBillingLink = async (params: { teamId: string }) => {
     );
 };
 
-export const getUsersWithLicense = async (params: { teamId: string }) => {
+export type UserWithLicense = {
+    git_id: string;
+    status?: "active" | "inactive";
+};
+
+export const getUsersWithLicense = async (
+    params: { teamId: string },
+): Promise<Array<UserWithLicense>> => {
     if (isSelfHosted) {
         try {
-            return await authorizedFetch<Array<{ git_id: string; status?: 'active' | 'inactive' }>>(
+            return await authorizedFetch<Array<UserWithLicense>>(
                 pathToApiUrl("/license/users"),
             );
         } catch {
@@ -116,9 +163,39 @@ export const getUsersWithLicense = async (params: { teamId: string }) => {
     }
 
     const organizationId = await getOrganizationId();
-    return billingFetch<Array<{ git_id: string }>>(`users-with-license`, {
+    return billingFetch<Array<UserWithLicense>>(`users-with-license`, {
         params: { organizationId, teamId: params.teamId },
     });
+};
+
+export type PruneSeatsResult = {
+    status: "ok" | "members_unavailable";
+    candidates: string[];
+    revoked: string[];
+    failed: string[];
+};
+
+export const getRemovableSeats = async (params: { teamId: string }) => {
+    return authorizedFetch<PruneSeatsResult>(
+        pathToApiUrl("/license/removable-seats"),
+        { params: { teamId: params.teamId } },
+    );
+};
+
+export const pruneRemovedSeats = async (params: {
+    teamId: string;
+    gitIds?: string[];
+}) => {
+    return authorizedFetch<PruneSeatsResult>(
+        pathToApiUrl("/license/prune-seats"),
+        {
+            method: "POST",
+            body: JSON.stringify({
+                teamId: params.teamId,
+                gitIds: params.gitIds,
+            }),
+        },
+    );
 };
 
 export const getPlans = () =>

@@ -27,6 +27,7 @@ import { CheckIfPRCanBeApprovedCronProvider } from './CheckIfPRCanBeApproved.cro
 import { ClassifyOrphanedSessionsCronProvider } from './classifyOrphanedSessions.cron';
 import { CodeReviewFeedbackCronProvider } from './codeReviewFeedback.cron';
 import { KodyLearningCronProvider } from './kodyLearning.cron';
+import { PruneLicenseSeatsCronProvider } from './pruneLicenseSeats.cron';
 import { SpendLimitAlertCronProvider } from './spendLimitAlert.cron';
 import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
@@ -57,6 +58,7 @@ import { SSOModule } from '@libs/ee/sso/sso.module';
         ClassifyOrphanedSessionsCronProvider,
         CodeReviewFeedbackCronProvider,
         KodyLearningCronProvider,
+        PruneLicenseSeatsCronProvider,
         SSOTestSessionCleanupCronProvider,
         SpendLimitAlertCronProvider,
         StaleReviewWatchdogCronProvider,
