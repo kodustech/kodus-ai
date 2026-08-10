@@ -28,10 +28,19 @@ export interface ClearOverrideTarget {
 }
 
 function overrideModel(configs: unknown): string | undefined {
-    const value = (configs as { byokModel?: unknown } | undefined)?.byokModel;
-    if (typeof value !== 'string') return undefined;
-    const trimmed = value.trim();
-    return trimmed.length > 0 ? trimmed : undefined;
+    const c = configs as
+        | { byokModelId?: unknown; byokModel?: unknown }
+        | undefined;
+    // The id-based override wins over the legacy NAME — the same precedence the
+    // routing resolver uses. The model selector now writes `byokModelId`, so
+    // reading only `byokModel` here left every new override invisible.
+    for (const value of [c?.byokModelId, c?.byokModel]) {
+        if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed.length > 0) return trimmed;
+        }
+    }
+    return undefined;
 }
 
 /** Enumerate every non-empty `byokModel` override with its location. */
@@ -105,6 +114,9 @@ export function clearModelOverrides(
 
     const clearAt = (configs: any): boolean => {
         if (configs && overrideModel(configs)) {
+            // Clear BOTH leaves so the scope truly inherits — leaving a stale
+            // `byokModelId` behind would keep the override alive (id wins).
+            configs.byokModelId = '';
             configs.byokModel = '';
             return true;
         }
