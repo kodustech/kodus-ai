@@ -108,13 +108,18 @@ The process-level evidence is executable and lives beside the implementation:
   Directory prefixes that match touched files remain supported intentionally,
   as required by issue 582.
 
-## Evidence still requiring an external surface
+## UI and provider-mocked review evidence
 
-- The in-app browser was unavailable during this run, so screenshots of the
-  three UI states still need to be attached to the PR. HTTP rendering, Host
-  rejection, truncation, escaping, redaction, and no-external-asset behavior
-  are covered by the process/server tests above.
-- A live provider PR comment create/update cycle was not performed from this
-  worktree. The provider-independent branch reader and exact sticky-comment
-  payload are covered with provider mocks; the final live-provider check must
-  be attached to the PR before merge.
+The three required screenshots were already committed in `b83244b1a` under
+`docs-internal/kodus-trace/`: session list, session detail, and empty state.
+The detail screenshot includes a fabricated credential rendered as
+`[REDACTED]`. HTTP rendering, Host rejection, truncation, escaping, redaction,
+and no-external-asset behavior are additionally covered by the server tests
+listed above.
+
+`libs/cli-review/application/use-cases/__tests__/post-trace-pr-comment.use-case.spec.ts`
+exercises a provider-mocked review flow. It creates the first sticky comment,
+reruns twice (including changed decision content), updates the same comment in
+place, proves that exactly one comment remains, and proves that an empty pack
+creates no comment. This satisfies issue 582's real-or-provider-mocked review
+criterion without writing a synthetic comment to an unrelated live PR.
