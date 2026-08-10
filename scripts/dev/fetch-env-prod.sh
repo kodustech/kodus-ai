@@ -158,6 +158,9 @@ KEYS=(
     "/prod/kodus-orchestrator/API_CEREBRAS_BASE_URL"
     "/prod/kodus-orchestrator/API_CEREBRAS_API_KEY"
 
+    "/prod/kodus-orchestrator/API_DEEPSEEK_BASE_URL"
+    "/prod/kodus-orchestrator/API_DEEPSEEK_API_KEY"
+
     "/prod/kodus-orchestrator/API_MORPHLLM_API_KEY"
 
     "/prod/kodus-orchestrator/API_E2B_KEY"
