@@ -327,6 +327,11 @@ export const RoutingTab = ({
                             value={defaultModelId}
                             onSelect={(id) => {
                                 setDefaultModelId(id);
+                                // A fallback equal to the main model is a no-op —
+                                // if the new default matches the fallback, clear it.
+                                setFallbackModelId((prev) =>
+                                    prev === id ? undefined : prev,
+                                );
                                 // Drop per-task overrides that now equal the new
                                 // default — they inherit, so they must not stay
                                 // pinned (else they'd re-surface if it moves again).
@@ -372,14 +377,21 @@ export const RoutingTab = ({
                                 Fallback (optional)
                             </span>
                             <span className="text-text-tertiary text-xs">
-                                Used automatically if the main model is
-                                unavailable.
+                                Used for any task whose model can&apos;t run it —
+                                e.g. it&apos;s missing a capability the task needs
+                                (or its key).
                             </span>
                         </div>
                         {showFallback ? (
                             <div className="flex items-center gap-2">
                                 <ModelCombobox
-                                    models={pool}
+                                    // The fallback only makes sense as a DIFFERENT
+                                    // model from the main one — it's what runs when
+                                    // the main is unavailable, so offering the main
+                                    // here would be a no-op. Exclude it.
+                                    models={pool.filter(
+                                        (m) => m.id !== defaultModelId,
+                                    )}
                                     value={fallbackModelId}
                                     onSelect={setFallbackModelId}
                                     trigger={
@@ -472,7 +484,16 @@ export const RoutingTab = ({
                 </div>
 
                 {/* ── Per repository (read-only mirror of Code Review Settings) ── */}
-                <PerRepositoryPanel teamId={teamId} />
+                {/* Feed the connected pool so the mirror resolves stored model
+                    ids to the same labels shown above (not the raw id). */}
+                <PerRepositoryPanel
+                    teamId={teamId}
+                    models={pool.map((m) => ({
+                        id: m.id,
+                        label: m.label,
+                        provider: m.provider,
+                    }))}
+                />
             </div>
         </TooltipProvider>
     );

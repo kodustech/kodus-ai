@@ -8,11 +8,11 @@ import {
     type ListModelOverridesResult,
 } from "@services/organizationParameters/fetch";
 import {
+    Building2Icon,
     ChevronDownIcon,
     ChevronRightIcon,
     ExternalLinkIcon,
     FolderIcon,
-    Building2Icon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
@@ -64,17 +64,39 @@ const groupOverrides = (
     return [...byRepo.values()];
 };
 
-const ModelCell = ({ model }: { model?: string }) =>
-    model ? (
+/** id -> friendly label/provider, so the read-only mirror shows the same model
+ *  name the rest of the routing screen does (e.g. "Kimi K2.7 Code") instead of
+ *  the raw stored id ("model-kimi"). */
+export type PerRepositoryModelInfo = {
+    id: string;
+    label: string;
+    provider?: string;
+};
+
+const ModelCell = ({
+    model,
+    models,
+}: {
+    model?: string;
+    models?: PerRepositoryModelInfo[];
+}) => {
+    if (!model) {
+        return <span className="text-text-tertiary text-sm">Inherits</span>;
+    }
+    // The stored override is a model id; resolve it to the display label. Fall
+    // back to the raw value so a legacy name-based override still shows readably.
+    const info = models?.find((m) => m.id === model);
+    return (
         <span className="flex items-center gap-2">
-            <ProviderAvatar provider={providerFromModel(model)} />
+            <ProviderAvatar
+                provider={info?.provider ?? providerFromModel(model)}
+            />
             <span className="text-text-primary text-sm font-medium">
-                {model}
+                {info?.label ?? model}
             </span>
         </span>
-    ) : (
-        <span className="text-text-tertiary text-sm">Inherits</span>
     );
+};
 
 /**
  * A READ-ONLY mirror of the per-repository / per-folder model overrides set in
@@ -83,12 +105,20 @@ const ModelCell = ({ model }: { model?: string }) =>
  * user sees every model assignment (org default, per agent, per repository).
  * Renders nothing while there are no repo/folder overrides to mirror.
  */
-export const PerRepositoryPanel = ({ teamId }: { teamId?: string }) => {
+export const PerRepositoryPanel = ({
+    teamId,
+    models,
+}: {
+    teamId?: string;
+    models?: PerRepositoryModelInfo[];
+}) => {
     const [data, setData] = useState<ListModelOverridesResult | null>(null);
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
     useEffect(() => {
-        if (!teamId) return;
+        if (!teamId) {
+            return;
+        }
         void listModelOverrides(teamId)
             .then(setData)
             .catch(() => setData(null));
@@ -138,68 +168,78 @@ export const PerRepositoryPanel = ({ teamId }: { teamId?: string }) => {
                     folder in Code Review Settings to see it here.
                 </div>
             ) : (
-            <div className="border-card-lv3/40 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-lg border">
-                {/* Header spine */}
-                <div className="text-text-tertiary bg-card-lv2/40 grid grid-cols-[1fr_16rem] gap-4 px-3 py-2 text-[0.6875rem] font-medium tracking-wide uppercase">
-                    <span>Repository / Folder</span>
-                    <span>Model</span>
-                </div>
+                <div className="border-card-lv3/40 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-lg border">
+                    {/* Header spine */}
+                    <div className="text-text-tertiary bg-card-lv2/40 grid grid-cols-[1fr_16rem] gap-4 px-3 py-2 text-[0.6875rem] font-medium tracking-wide uppercase">
+                        <span>Repository / Folder</span>
+                        <span>Model</span>
+                    </div>
 
-                {repos.map((repo) => {
-                    const isMonorepo = repo.folders.length > 0;
-                    const isOpen = expanded.has(repo.id);
-                    return (
-                        <div key={repo.id} className="flex flex-col">
-                            <div className="grid grid-cols-[1fr_16rem] items-center gap-4 px-3 py-2.5">
-                                <span className="flex min-w-0 items-center gap-2">
-                                    {isMonorepo ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => toggle(repo.id)}
-                                            aria-label={
-                                                isOpen ? "Collapse" : "Expand"
-                                            }
-                                            className="text-text-tertiary hover:text-text-secondary shrink-0">
-                                            {isOpen ? (
-                                                <ChevronDownIcon className="size-4" />
-                                            ) : (
-                                                <ChevronRightIcon className="size-4" />
-                                            )}
-                                        </button>
-                                    ) : (
-                                        <span className="w-4 shrink-0" />
-                                    )}
-                                    <span className="text-text-primary truncate font-mono text-sm">
-                                        {repo.name}
+                    {repos.map((repo) => {
+                        const isMonorepo = repo.folders.length > 0;
+                        const isOpen = expanded.has(repo.id);
+                        return (
+                            <div key={repo.id} className="flex flex-col">
+                                <div className="grid grid-cols-[1fr_16rem] items-center gap-4 px-3 py-2.5">
+                                    <span className="flex min-w-0 items-center gap-2">
+                                        {isMonorepo ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => toggle(repo.id)}
+                                                aria-label={
+                                                    isOpen
+                                                        ? "Collapse"
+                                                        : "Expand"
+                                                }
+                                                className="text-text-tertiary hover:text-text-secondary shrink-0">
+                                                {isOpen ? (
+                                                    <ChevronDownIcon className="size-4" />
+                                                ) : (
+                                                    <ChevronRightIcon className="size-4" />
+                                                )}
+                                            </button>
+                                        ) : (
+                                            <span className="w-4 shrink-0" />
+                                        )}
+                                        <span className="text-text-primary truncate font-mono text-sm">
+                                            {repo.name}
+                                        </span>
+                                        {isMonorepo && (
+                                            <Badge variant="helper">
+                                                Monorepo
+                                            </Badge>
+                                        )}
                                     </span>
-                                    {isMonorepo && (
-                                        <Badge variant="helper">Monorepo</Badge>
-                                    )}
-                                </span>
-                                <ModelCell model={repo.model} />
-                            </div>
-
-                            {isMonorepo && isOpen && (
-                                <div className="border-card-lv3/30 flex flex-col border-t">
-                                    {repo.folders.map((f) => (
-                                        <div
-                                            key={f.id}
-                                            className="grid grid-cols-[1fr_16rem] items-center gap-4 py-2 pr-3 pl-3">
-                                            <span className="flex min-w-0 items-center gap-2 pl-8">
-                                                <FolderIcon className="text-text-tertiary size-3.5 shrink-0" />
-                                                <span className="text-text-secondary truncate font-mono text-sm">
-                                                    {f.name}
-                                                </span>
-                                            </span>
-                                            <ModelCell model={f.model} />
-                                        </div>
-                                    ))}
+                                    <ModelCell
+                                        model={repo.model}
+                                        models={models}
+                                    />
                                 </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+
+                                {isMonorepo && isOpen && (
+                                    <div className="border-card-lv3/30 flex flex-col border-t">
+                                        {repo.folders.map((f) => (
+                                            <div
+                                                key={f.id}
+                                                className="grid grid-cols-[1fr_16rem] items-center gap-4 py-2 pr-3 pl-3">
+                                                <span className="flex min-w-0 items-center gap-2 pl-8">
+                                                    <FolderIcon className="text-text-tertiary size-3.5 shrink-0" />
+                                                    <span className="text-text-secondary truncate font-mono text-sm">
+                                                        {f.name}
+                                                    </span>
+                                                </span>
+                                                <ModelCell
+                                                    model={f.model}
+                                                    models={models}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             )}
         </div>
     );
