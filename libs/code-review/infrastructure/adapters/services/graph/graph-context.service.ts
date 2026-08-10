@@ -32,7 +32,7 @@ export class GraphContextService {
         @Inject(REPOSITORY_SERVICE_TOKEN)
         private readonly repositoryService: IRepositoryService,
         private readonly cli: KodusGraphCli,
-    ) {}
+    ) { }
 
     /**
      * Generate context using DB graph as baseline.
@@ -91,12 +91,25 @@ export class GraphContextService {
                 });
                 return this.generateContextLegacy(sandbox, changedFiles);
             }
+            let prGraphStr: string | undefined;
+            try {
+                prGraphStr = await sandbox.readFile(`${sandbox.repoDir}/${GRAPH_PATH}`, { timeoutMs: 5000 });
+            } catch (e) {
+                this.logger.warn({
+                    message: '[KODUS-GRAPH] Could not read sandbox graph.json for PR nodes',
+                    error: e,
+                    context: GraphContextService.name,
+                });
+            }
+
             await this.writeBaseGraphToSandbox(
                 sandbox,
                 repoId,
                 filePaths,
                 repo.astGraphSha ?? undefined,
                 includeDuplicates,
+                prGraphStr,
+                changedFiles,
             );
 
             const diffPath = await this.writeDiffToSandbox(
@@ -108,10 +121,22 @@ export class GraphContextService {
                 context: GraphContextService.name,
                 metadata: { hasDiff: !!diffPath },
             });
-            let prompt = await this.runContext(sandbox, filePaths, {
-                graphPath: BASE_GRAPH_PATH,
-                diffPath,
-            });
+            let prompt = '';
+            try {
+                prompt = await this.runContext(sandbox, filePaths, {
+                    graphPath: BASE_GRAPH_PATH,
+                    diffPath,
+                });
+            } catch (error) {
+                this.logger.warn({
+                    message: `[KODUS-GRAPH] Failed with DB baseline, falling back to legacy`,
+                    context: GraphContextService.name,
+                    error,
+                    metadata: { repoId, fileCount: filePaths.length },
+                });
+                prompt = await this.generateContextLegacy(sandbox, changedFiles);
+            }
+
             if (includeDuplicates) {
                 try {
                     const graphJsonStr = await sandbox.readFile(`${sandbox.repoDir}/${BASE_GRAPH_PATH}`, { timeoutMs: 5000 });
@@ -119,13 +144,25 @@ export class GraphContextService {
                         const baseGraph = JSON.parse(graphJsonStr);
                         const allNodes = baseGraph.nodes || [];
                         const twins = allNodes.filter((n: any) => n.is_duplicate);
+
                         if (twins.length > 0) {
-                            prompt = prompt.replace('</CallGraph>', '');
-                            prompt += '\n  <DuplicateCandidates>\n';
+                            const twinLines: string[] = [];
                             for (const t of twins) {
-                                prompt += `    <Candidate name="${t.name}" file="${t.file_path}" lineStart="${t.line_start}" lineEnd="${t.line_end}" />\n`;
+                                const twin = t.duplicate_twin;
+                                const first = `${t.qualified_name ?? `${t.file_path}::${t.name}`}:${t.line_start}-${t.line_end}`;
+                                const second = twin
+                                    ? `${twin.qualified_name ?? `${twin.file_path}::${twin.name}`}:${twin.line_start ?? 0}-${twin.line_end ?? 0}`
+                                    : first;
+                                twinLines.push(`    <TwinPair first="${first}" second="${second}" />`);
                             }
-                            prompt += '  </DuplicateCandidates>\n</CallGraph>';
+
+                            const duplicatesBlock = `\n  <DuplicateCandidates>\n${twinLines.join('\n')}\n  </DuplicateCandidates>`;
+
+                            if (prompt.includes('</CallGraph>')) {
+                                prompt = prompt.replace('</CallGraph>', `${duplicatesBlock}\n</CallGraph>`);
+                            } else {
+                                prompt = `<CallGraph>\n${prompt}${duplicatesBlock}\n</CallGraph>`;
+                            }
                         }
                     }
                 } catch (error) {
@@ -151,12 +188,11 @@ export class GraphContextService {
             return prompt;
         } catch (error) {
             this.logger.warn({
-                message: `[KODUS-GRAPH] Failed with DB baseline, falling back to legacy`,
+                message: `[KODUS-GRAPH] Failed to generate context, proceeding without it`,
                 context: GraphContextService.name,
                 error,
-                metadata: { repoId, fileCount: filePaths.length },
             });
-            return this.generateContextLegacy(sandbox, changedFiles);
+            return '';
         }
     }
 
@@ -335,10 +371,10 @@ export class GraphContextService {
                     // sandbox. Parameter expansion is a pure text operation
                     // and can't be abused by filename content.
                     `for f in ${fileList}; do ` +
-                        `d="${BASE_FILES_DIR}/\${f%/*}" && ` +
-                        `mkdir -p "$d" 2>/dev/null; ` +
-                        `git show ${safeBaseRef}":$f" > "${BASE_FILES_DIR}/$f" 2>/dev/null || rm -f "${BASE_FILES_DIR}/$f"; ` +
-                        `done`,
+                    `d="${BASE_FILES_DIR}/\${f%/*}" && ` +
+                    `mkdir -p "$d" 2>/dev/null; ` +
+                    `git show ${safeBaseRef}":$f" > "${BASE_FILES_DIR}/$f" 2>/dev/null || rm -f "${BASE_FILES_DIR}/$f"; ` +
+                    `done`,
                     `find ${BASE_FILES_DIR} -type f -size +0c | sed 's|^${BASE_FILES_DIR}/||' | sort`,
                 ].join(' && '),
                 { timeoutMs: 30_000 },
@@ -401,6 +437,8 @@ export class GraphContextService {
         changedFiles: string[],
         sha?: string,
         includeDuplicates = false,
+        prNodesJson?: string,
+        fileChanges: FileChange[] = [],
     ): Promise<void> {
         // Filtered subgraph: only nodes in changed files + direct neighbors.
         // ~99% reduction vs full export (e.g. ~500 nodes instead of 50k+).
@@ -409,6 +447,8 @@ export class GraphContextService {
             changedFiles,
             sha,
             includeDuplicates,
+            prNodesJson,
+            fileChanges,
         );
         const baseGraphPath = `${sandbox.repoDir}/${BASE_GRAPH_PATH}`;
 
@@ -516,6 +556,6 @@ export class GraphContextService {
 
 function extractFilePaths(changedFiles: FileChange[]): string[] {
     return (changedFiles || [])
-        .map((f) => f.filename || f.previous_filename)
+        .map((f) => (f.filename || f.previous_filename)?.replace(/\\/g, '/'))
         .filter(Boolean) as string[];
 }

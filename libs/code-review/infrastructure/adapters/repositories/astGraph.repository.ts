@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { createLogger } from '@libs/core/log/logger';
 
 import { AstNodeModel } from './schemas/astNode.model';
 import { AstEdgeModel } from './schemas/astEdge.model';
@@ -51,6 +52,8 @@ const EDGE_CHUNK_SIZE = Math.floor(65535 / EDGE_COL_COUNT); // ~9362
 
 @Injectable()
 export class AstGraphRepository {
+    private readonly logger = createLogger(AstGraphRepository.name);
+
     constructor(
         // Kept for TypeORM module registration (forFeature).
         @InjectRepository(AstNodeModel)
@@ -58,7 +61,7 @@ export class AstGraphRepository {
         @InjectRepository(AstEdgeModel)
         private readonly _edgeRepo: Repository<AstEdgeModel>,
         private readonly dataSource: DataSource,
-    ) {}
+    ) { }
 
     // -----------------------------------------------------------------------
     // Delete helpers
@@ -372,76 +375,48 @@ export class AstGraphRepository {
         changedFiles: string[],
         sha?: string,
         includeDuplicates = false,
+        prNodesJson?: string,
+        fileChanges: Array<{ filename?: string; patch?: string }> = [],
     ): Promise<string> {
+
         if (changedFiles.length === 0) {
             return '{"sha":"","nodes":[],"edges":[]}';
         }
 
-        const duplicateCte = includeDuplicates
-            ? `,
-            -- Outgoing CALLS targets for each changed node (its "call shape")
-            changed_calls AS (
-                SELECT DISTINCT cn.qualified_name AS qn, e.target_qualified AS callee
-                FROM changed_nodes cn
-                JOIN ast_edges e
-                  ON e.repo_id = $1
-                 AND e.kind = 'CALLS'
-                 AND e.source_qualified = cn.qualified_name
-            ),
-            duplicate_candidates AS (
-                -- TIER 1 (high confidence): structural twins — same return type
-                -- + shared call shape (>= 2 common callees). Catches
-                -- differently-named functions over the same domain entities.
-                SELECT DISTINCT n.qualified_name AS qn
-                FROM ast_nodes n
-                JOIN changed_nodes c ON n.repo_id = $1
-                WHERE n.kind IN ('Function', 'Method', 'function', 'method')
-                  AND n.qualified_name != c.qualified_name
-                  AND n.return_type = c.return_type
-                  AND (
-                      SELECT COUNT(DISTINCT cc.callee)
-                      FROM changed_calls cc
-                      WHERE cc.qn = c.qualified_name
-                        AND cc.callee IN (
-                            SELECT e2.target_qualified
-                            FROM ast_edges e2
-                            WHERE e2.repo_id = $1
-                              AND e2.kind = 'CALLS'
-                              AND e2.source_qualified = n.qualified_name
-                        )
-                  ) >= 2
-                UNION
-                -- TIER 2 (softer signal): high name similarity + same return
-                -- type + same param count. Catches utility-function twins
-                -- (toCaps / toCapsLock) with no shared repo-level callees.
-                SELECT DISTINCT n.qualified_name AS qn
-                FROM ast_nodes n
-                JOIN changed_nodes c ON n.repo_id = $1
-                WHERE n.kind IN ('Function', 'Method', 'function', 'method')
-                  AND n.qualified_name != c.qualified_name
-                  AND similarity(n.name, c.name) >= 0.7
-                  AND length(c.name) > 5
-                  AND n.return_type = c.return_type
-                  AND COALESCE(array_length(string_to_array(NULLIF(n.params, ''), ','), 1), 0) =
-                      COALESCE(array_length(string_to_array(NULLIF(c.params, ''), ','), 1), 0)
-                LIMIT 10
-            )`
-            : '';
-
-        const duplicateUnion = includeDuplicates
-            ? `
-                UNION
-                SELECT qn FROM duplicate_candidates`
-            : '';
-
-        const duplicateNodeProp = includeDuplicates
-            ? `
-                        'is_duplicate', (n.qualified_name IN (SELECT qn FROM duplicate_candidates)),`
-            : '';
+        // Parse sandbox PR graph JSON (nodes & edges for new PR files) BEFORE the
+        // query below, which references them in its params (prNodes/prEdges).
+        // Normalize the path-like fields ONCE here, at the boundary — the sandbox
+        // CLI may emit backslashes, and every consumer (SQL $4/$5, pr_sandbox_*,
+        // and the TS matcher) relies on forward slashes.
+        let prNodes: any[] = [];
+        let prEdges: any[] = [];
+        if (prNodesJson) {
+            try {
+                const parsed = JSON.parse(prNodesJson);
+                prNodes = (parsed.nodes || []).map((n: any) => ({
+                    ...n,
+                    qualified_name: (n?.qualified_name || '').replace(/\\/g, '/'),
+                    file_path: (n?.file_path || '').replace(/\\/g, '/'),
+                }));
+                prEdges = (parsed.edges || []).map((e: any) => ({
+                    ...e,
+                    source_qualified: (e?.source_qualified || '').replace(/\\/g, '/'),
+                    target_qualified: (e?.target_qualified || '').replace(/\\/g, '/'),
+                }));
+            } catch (e) {
+                this.logger.warn({
+                    message: '[AST-GRAPH] Failed to parse prNodesJson in exportSubgraphJsonString',
+                    context: AstGraphRepository.name,
+                    error: e,
+                    metadata: { repoId },
+                });
+            }
+        }
 
         const result = await this.dataSource.query(
             `WITH changed_nodes AS (
-                SELECT qualified_name, name, params, return_type
+                SELECT qualified_name, name, params, return_type,
+                       file_path, line_start, line_end
                 FROM ast_nodes
                 WHERE repo_id = $1 AND file_path = ANY($3::text[])
             ),
@@ -485,11 +460,11 @@ export class AstGraphRepository {
                 SELECT * FROM touching_edges
                 UNION
                 SELECT * FROM sibling_edges
-            )${duplicateCte},
+            ),
             neighbor_qnames AS (
                 SELECT DISTINCT source_qualified AS qn FROM all_edges
                 UNION
-                SELECT DISTINCT target_qualified AS qn FROM all_edges${duplicateUnion}
+                SELECT DISTINCT target_qualified AS qn FROM all_edges
             ),
             all_relevant_nodes AS (
                 SELECT n.*
@@ -498,7 +473,9 @@ export class AstGraphRepository {
                   AND n.qualified_name IN (SELECT qn FROM neighbor_qnames)
             )
             SELECT json_build_object(
+                'schema_v', 1,
                 'sha', $2::text,
+                'schema_version', '2.1',
                 'nodes', COALESCE((
                     SELECT json_agg(jsonb_strip_nulls(jsonb_build_object(
                         'kind', n.kind,
@@ -508,7 +485,7 @@ export class AstGraphRepository {
                         'line_start', COALESCE(n.line_start, 0),
                         'line_end', COALESCE(n.line_end, 0),
                         'language', COALESCE(n.language, ''),
-                        'is_test', n.is_test,${duplicateNodeProp}
+                        'is_test', n.is_test,
                         'parent_name', n.parent_name,
                         'params', n.params,
                         'return_type', n.return_type,
@@ -529,7 +506,387 @@ export class AstGraphRepository {
             [repoId, sha || '', changedFiles],
         );
 
-        return result[0]?.graph_json || '{"sha":"","nodes":[],"edges":[]}';
+        let jsonOutput = result[0]?.graph_json || '{"sha":"","nodes":[],"edges":[]}';
+        try {
+            const parsed = JSON.parse(jsonOutput);
+
+            // Pair changed functions against twin pool matching params, return type, & shared callees.
+            if (includeDuplicates) {
+                // Requires diff patches to identify changed functions.
+                const hasPatches = (fileChanges || []).some((fc) => !!fc?.patch);
+                if (hasPatches) {
+                    // Query repo functions with >=80% callee overlap per changed PR function.
+                    const twinQuery = `
+                        SELECT n.qualified_name, n.params, n.return_type,
+                               n.file_path, COALESCE(n.line_start, 0) AS line_start,
+                               COALESCE(n.line_end, 0) AS line_end,
+                               COALESCE(array_agg(DISTINCT e.target_qualified)
+                                        FILTER (WHERE e.kind = 'CALLS'
+                                                AND e.target_qualified IS NOT NULL),
+                                        ARRAY[]::text[]) AS callees
+                        FROM ast_nodes n
+                        LEFT JOIN ast_edges e
+                             ON e.repo_id = n.repo_id
+                            AND e.source_qualified = n.qualified_name
+                        WHERE n.repo_id = $1
+                          AND n.kind IN ('Function', 'Method')
+                          AND n.params IS NOT NULL AND n.params <> ''
+                        GROUP BY n.qualified_name, n.params, n.return_type,
+                                 n.file_path, n.line_start, n.line_end
+                        HAVING (
+                            SELECT count(*)
+                            FROM unnest($2::text[]) AS p(callee)
+                            WHERE p.callee = ANY(
+                                COALESCE(
+                                    array_agg(DISTINCT e.target_qualified)
+                                        FILTER (WHERE e.kind = 'CALLS'
+                                                AND e.target_qualified IS NOT NULL),
+                                    ARRAY[]::text[]
+                                )
+                            )
+                        ) * 100 >= 80 * cardinality($2::text[])
+                    `;
+                    // Group PR CALLS edges by source -> each changed fn's callee set.
+                    const prCalleesBySource = new Map<string, Set<string>>();
+                    for (const e of prEdges || []) {
+                        if (e?.kind !== 'CALLS') continue;
+                        if (!e.source_qualified) continue;
+                        if (!prCalleesBySource.has(e.source_qualified)) {
+                            prCalleesBySource.set(e.source_qualified, new Set());
+                        }
+                        prCalleesBySource.get(e.source_qualified)!.add(e.target_qualified);
+                    }
+                    const poolRows: any[] = [];
+                    for (const [prQn, callees] of prCalleesBySource) {
+                        const calleeArr = [...callees];
+                        if (calleeArr.length === 0) continue;
+                        try {
+                            const res = await this.dataSource.query(twinQuery, [
+                                repoId,
+                                calleeArr,
+                            ]);
+                            const rows = Array.isArray(res) ? res : (res?.rows || []);
+                            for (const row of rows) {
+                                if (row.qualified_name === prQn) continue; // not its own twin
+                                poolRows.push(row);
+                            }
+                        } catch (err) {
+                            this.logger.warn({
+                                message: '[AST-GRAPH] Twin pool query failed for PR function',
+                                context: AstGraphRepository.name,
+                                error: err,
+                                metadata: { repoId, prQn },
+                            });
+                        }
+                    }
+                    // Rows -> node objects (shape the matcher reads).
+                    const twinPool: any[] = poolRows.map((r) => ({
+                        kind: 'Function',
+                        qualified_name: r.qualified_name,
+                        name: (r.qualified_name || '').split('::').pop(),
+                        params: r.params,
+                        return_type: r.return_type,
+                        file_path: r.file_path,
+                        line_start: r.line_start ?? 0,
+                        line_end: r.line_end ?? 0,
+                    }));
+                    // Rows -> CALLS edges (unpack callees) for the overlap gate.
+                    const poolEdges: any[] = poolRows.flatMap((r) =>
+                        (r.callees || []).map((cal: string) => ({
+                            kind: 'CALLS',
+                            source_qualified: r.qualified_name,
+                            target_qualified: cal,
+                        })),
+                    );
+                    this.pairDuplicateTwinsInGraph(
+                        {
+                            // byQn = twin pool; sources = prNodes ∩ hunks (4th arg).
+                            nodes: twinPool,
+                            edges: [...poolEdges, ...(prEdges || [])],
+                        },
+                        prEdges,
+                        prNodes || [],
+                        fileChanges,
+                    );
+                    // Merge flagged (PR + pool) nodes into parsed.nodes for the output.
+                    const flaggedNodes = [
+                        ...(prNodes || []).filter((n: any) => n?.is_duplicate),
+                        ...twinPool.filter((n: any) => n?.is_duplicate),
+                    ];
+                    for (const f of flaggedNodes) {
+                        const idx = parsed.nodes.findIndex(
+                            (n: any) => n?.qualified_name === f.qualified_name,
+                        );
+                        if (idx >= 0) parsed.nodes[idx] = f;
+                        else parsed.nodes.push(f);
+                    }
+                }
+                // Re-serialize so the pair flags survive — jsonOutput is the
+                // string the consumers re-parse.
+                jsonOutput = JSON.stringify(parsed);
+            }
+
+            const duplicateNodes = (parsed.nodes || []).filter((n: any) => n.is_duplicate);
+            if (duplicateNodes.length > 0) {
+                this.logger.log({
+                    message: `Flagged ${duplicateNodes.length} duplicate twin nodes in subgraph`,
+                    context: AstGraphRepository.name,
+                    metadata: { repoId, count: duplicateNodes.length },
+                });
+            }
+
+            // Print deep CTE step logs to identify where duplicate candidate detection breaks.
+            // Dev-only: skipped on normal runs unless DUPLICATE_DEBUG=1.
+            if (includeDuplicates && process.env.DUPLICATE_DEBUG === '1') {
+                try {
+                    const debugDbCheck = await this.dataSource.query(
+                        `SELECT count(*)::int as total_db_nodes FROM ast_nodes WHERE repo_id = $1`,
+                        [repoId],
+                    );
+                    // Outgoing CALLS per PR-source: read straight from the already-parsed
+                    // prEdges (the sandbox-side CALLS edges), which is what the pairing uses.
+                    const debugChangedCalls: any[] = [];
+                    for (const e of prEdges || []) {
+                        if (e?.kind !== 'CALLS') continue;
+                        const src = e.source_qualified;
+                        if (!src) continue;
+                        let row = debugChangedCalls.find((r) => r.qualified_name === src);
+                        if (!row) {
+                            row = { qualified_name: src, callee_count: 0, callees: [] };
+                            debugChangedCalls.push(row);
+                        }
+                        row.callee_count++;
+                        row.callees.push(e.target_qualified);
+                    }
+                } catch (diagErr) {
+                    this.logger.warn({
+                        message: '[AST-GRAPH] Diagnostic query failed in exportSubgraphJsonString',
+                        context: AstGraphRepository.name,
+                        error: diagErr,
+                        metadata: { repoId },
+                    });
+                }
+            }
+
+        } catch (e) {
+            this.logger.warn({
+                message: '[AST-GRAPH] Failed to parse or process subgraph JSON in exportSubgraphJsonString',
+                context: AstGraphRepository.name,
+                error: e,
+                metadata: { repoId },
+            });
+        }
+
+        return jsonOutput;
+    }
+
+    // -----------------------------------------------------------------------
+    // Duplicate twin pairing (TypeScript)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Mark duplicate pairs in-place on `graph.nodes`.
+     *
+     * Matches changed functions against every function in the graph: same
+     * {name|type} param token-set (order-insensitive, lowercased), compatible
+     * return types (NULL==NULL allowed), and at least one overlapping repo
+     * callee. Sets `is_duplicate` + `duplicate_twin` on both members.
+     */
+    private pairDuplicateTwinsInGraph(
+        graph: { nodes?: any[]; edges?: any[] },
+        prEdges: { source_qualified: string; target_qualified: string; kind: string }[] = [],
+        prNodes: any[] = [],
+        fileChanges: Array<{ filename?: string; patch?: string }> = [],
+    ): void {
+        const nodes = graph.nodes ?? [];
+
+        if (nodes.length < 2) return;
+
+        // Sources = nodes the PR actually touched. The sandbox parses WHOLE
+        // files, so every PR node (changed or not) is in prNodes. The diff's
+        // added-line ranges (new-file side) pick out the ones with changed
+        // lines. Sources can ONLY come from prNodes — they carry NEW-file line
+        // numbers (the coordinate space hunks use). DB-only nodes carry OLD
+        // lines and would false-match hunks.
+        const addedRangesByFile = new Map<string, Array<[number, number]>>();
+        for (const fc of fileChanges || []) {
+            const path = fc?.filename?.replace(/\\/g, '/');
+            if (!path || !fc?.patch) continue;
+            const ranges: Array<[number, number]> = [];
+            let newStart = 0, newCount = 0, newLine = 0;
+            for (const line of fc.patch.split('\n')) {
+                const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+                if (hunk) {
+                    newStart = parseInt(hunk[1], 10);
+                    newCount = hunk[2] ? parseInt(hunk[2], 10) : 1;
+                    newLine = newStart;
+                    continue;
+                }
+                if (newLine === 0) continue; // pre-hunk header lines
+                if (line.startsWith('+')) {
+                    ranges.push([newLine, newLine]);
+                    newLine++;
+                } else if (line.startsWith('-')) {
+                    // deleted line — does not advance the new-file cursor
+                } else {
+                    newLine++; // context line
+                }
+            }
+            if (ranges.length) addedRangesByFile.set(path, ranges);
+        }
+        const lineHitsHunk = (filePath: string, lineStart: number, lineEnd: number) => {
+            const normPath = (filePath || '').replace(/\\/g, '/');
+            const ranges = addedRangesByFile.get(normPath);
+            if (!ranges) return false;
+            for (const [s, e] of ranges) {
+                if (s >= lineStart && s <= lineEnd) return true;
+            }
+            return false;
+        };
+
+        // --- Tokenize params into {name|type} tokens (lowercased) ---
+        const tokenize = (raw: unknown): Set<string> => {
+            const s = typeof raw === 'string' ? raw : '';
+            const tokens = new Set<string>();
+            // Signed ({ a, b }: { a: T; b: U }): the trailing {…} holds the types.
+            // Multiple destructures ({ a }, { b }): no head (`}:` absent) → keep all.
+            const blocks = s.match(/\{[^{}]*\}/g) || [];
+            const hasHead = blocks.some((b) => {
+                let i = s.indexOf(b) + b.length;
+                while (i < s.length && s[i] === ' ') i++;
+                return s[i] === ':';
+            });
+            const ann = hasHead ? blocks[blocks.length - 1] : s;
+            // name (optional `?`) : type — charset stops at `,;|=>}` so defaults,
+            // unions, arrays, arrows leave the plain leading type.
+            const colonMatches = ann.matchAll(/([A-Za-z_$][\w$]*)\s*\??\s*:\s*([^,;|=>}]+)/g);
+            for (const m of colonMatches) {
+                tokens.add(`${m[1].toLowerCase()}|${m[2].trim().toLowerCase()}`);
+            }
+            // No colons → untyped (a, b): name-only tokens so they still match.
+            if (tokens.size === 0) {
+                for (const m of ann.matchAll(/([A-Za-z_$][\w$]*)/g)) {
+                    tokens.add(`${m[1].toLowerCase()}|`);
+                }
+            }
+            return tokens;
+        };
+
+        const byQn = new Map<string, any>();
+        for (const n of nodes) {
+            if (n?.kind === 'Function' || n?.kind === 'Method') {
+                byQn.set(n.qualified_name, n);
+            }
+        }
+
+        // Skip if no patch data reached us (the hasPatches gate in the caller
+        // should prevent this — belt-and-suspenders here).
+        if (addedRangesByFile.size === 0) {
+            return;
+        }
+        const changed = (prNodes || []).filter((n: any) => {
+            const filePath = n?.file_path as string | undefined;
+            if (!filePath) return false;
+            // Source = a PR node (new-file lines) whose range intersects an
+            // added hunk.
+            return lineHitsHunk(filePath, n.line_start ?? 0, n.line_end ?? 0);
+        });
+
+        if (changed.length === 0) return;
+
+        // Changed functions are those SQL pre-filtered (changed_functions); that
+        // subset now narrows to functions with >=1 repo callee. Build callee sets
+        // from the graph edges for the overlap requirement.
+        const calleeOf = new Map<string, Set<string>>();
+        const seedCallee = (from: string, to: string) => {
+            if (!from) return;
+            if (!calleeOf.has(from)) calleeOf.set(from, new Set<string>());
+            calleeOf.get(from)!.add(to);
+        };
+
+        for (const e of graph?.edges || []) {
+            if (e?.kind !== 'CALLS') continue;
+            if (Boolean(e.source_qualified) && Boolean(e.target_qualified)) {
+                seedCallee(e.source_qualified, e.target_qualified);
+            }
+        }
+
+        // The overlap check needs each function's callee set — who does it call?
+        // But the sandbox-side calls (the ones from new files) would be invisible if we only used graph.edges
+        for (const e of prEdges || []) {
+            if (e?.kind !== 'CALLS') continue;
+            if (Boolean(e.source_qualified) && Boolean(e.target_qualified)) {
+                seedCallee(e.source_qualified, e.target_qualified);
+            }
+        }
+
+        // Pairs where the changed function is the "source" (twin is anywhere in repo).
+        const seen = new Set<string>();
+        const addPair = (a: any, b: any) => {
+            if (!a || !b || a === b) return;
+            const key = [...[a.qualified_name, b.qualified_name]].sort().join('|');
+            if (seen.has(key)) return;
+            seen.add(key);
+            a.is_duplicate = true;
+            b.is_duplicate = true;
+            a.duplicate_twin = {
+                qualified_name: b.qualified_name,
+                file_path: b.file_path,
+                line_start: b.line_start ?? 0,
+                line_end: b.line_end ?? 0,
+            };
+            b.duplicate_twin = {
+                qualified_name: a.qualified_name,
+                file_path: a.file_path,
+                line_start: a.line_start ?? 0,
+                line_end: a.line_end ?? 0,
+            };
+        };
+
+        for (const c of changed) {
+            // changed function param
+            const cTokens = tokenize(c.params);
+            const cRet = c.return_type;
+            const why: any = { returnType: 0, tokens: 0, noOverlap: 0, lowSimilarity: 0, pairs: 0 };
+            if (cTokens.size === 0) continue; // unparseable/missing params — skip
+
+            for (const other of byQn.values()) {
+                if (other.qualified_name === c.qualified_name) continue;
+                // Return-type compatibility (NULL==NULL allowed)
+                if (cRet !== other.return_type &&
+                    !(cRet == null && other.return_type == null)) {
+                    why.returnType++;
+                    continue;
+                }
+                // twin function param
+                const oTokens = tokenize(other.params);
+                if (oTokens.size === 0) { why.tokens++; continue; }
+                // Similarity: fraction of c's tokens present in o's set.
+                // Providers rename params (payid vs csid), so exact equality is
+                // too strict — allow >=50% overlap.
+                let matched = 0;
+                for (const tk of cTokens) {
+                    if (oTokens.has(tk)) matched++;
+                }
+                const similarity = matched / cTokens.size;
+                if (similarity < 0.5) { why.lowSimilarity++; continue; }
+                // Overlapping repo callees. Require >=2 shared callees for generic similarity (0.50),
+                // but allow minOverlap=1 when parameter token similarity is high (>=0.70).
+                const cc = calleeOf.get(c.qualified_name) ?? new Set<string>();
+                const oc = calleeOf.get(other.qualified_name) ?? new Set<string>();
+                let overlap = 0;
+                for (const cal of cc) {
+                    if (oc.has(cal)) overlap++;
+                }
+                const minOverlap = similarity >= 0.7 ? 1 : 2;
+                if (overlap < minOverlap) { why.noOverlap++; continue; }
+                addPair(c, other);
+                why.pairs++;
+                why.i = similarity;
+            }
+            // if (process.env.DUPLICATE_DEBUG === '1') {
+            // }
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -550,12 +907,14 @@ export class AstGraphRepository {
 
         for (const n of nodes) {
             const base = params.length;
+            const normalizedFilePath = (n.file_path || '').replace(/\\/g, '/');
+            const normalizedQualifiedName = (n.qualified_name || '').replace(/\\/g, '/');
             params.push(
                 repoId,
                 n.kind,
                 n.name,
-                n.qualified_name,
-                n.file_path,
+                normalizedQualifiedName,
+                normalizedFilePath,
                 n.line_start ?? null,
                 n.line_end ?? null,
                 n.language ?? null,
@@ -597,12 +956,15 @@ export class AstGraphRepository {
 
         for (const e of edges) {
             const base = params.length;
+            const normalizedFilePath = (e.file_path || '').replace(/\\/g, '/');
+            const normalizedSourceQualified = (e.source_qualified || '').replace(/\\/g, '/');
+            const normalizedTargetQualified = (e.target_qualified || '').replace(/\\/g, '/');
             params.push(
                 repoId,
                 e.kind,
-                e.source_qualified,
-                e.target_qualified,
-                e.file_path,
+                normalizedSourceQualified,
+                normalizedTargetQualified,
+                normalizedFilePath,
                 e.line ?? 0,
                 e.confidence ?? null,
             );
