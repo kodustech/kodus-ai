@@ -70,7 +70,7 @@ test("each class points at where the fix lives", () => {
     );
     assert.match(
         describeLlmPreflight({ status: "auth", model: "m" }),
-        /BYOK_OPENAI_API_KEY/,
+        /E2E_LLM_API_KEY/,
     );
     assert.match(
         describeLlmPreflight({ status: "model", model: "gpt-x" }),

@@ -259,6 +259,24 @@ case "$MODE" in
             [[ "$REPLY" =~ ^[Yy]$ ]] || { warn "Aborted."; exit 0; }
         fi
 
+        # ----- review model -----
+        # The harness writes these onto the tenant as byok_config, so provider,
+        # base URL and model travel together and nothing is inferred from the
+        # model name. CI defaults to the same three values as repo variables:
+        # a local default that differs from CI is how "passes on my machine"
+        # gets manufactured.
+        #
+        # The trio is all-or-nothing. Taking E2E_LLM_API_KEY while leaving a
+        # stale API_OPENAI_FORCE_BASE_URL in place would send a Fireworks key
+        # to OpenAI and report it as a rejected key.
+        resolve_op_refs E2E_LLM_API_KEY
+        if [ -n "${E2E_LLM_API_KEY:-}" ]; then
+            export API_OPEN_AI_API_KEY="$E2E_LLM_API_KEY"
+            export API_LLM_PROVIDER="${E2E_LLM_PROVIDER:-openai_compatible}"
+            export API_OPENAI_FORCE_BASE_URL="${E2E_LLM_BASE_URL:-https://api.fireworks.ai/inference/v1}"
+            export API_LLM_PROVIDER_MODEL="${E2E_LLM_MODEL:-accounts/fireworks/models/deepseek-v4-flash-0731}"
+        fi
+
         # Resolve only the secrets the matrix will actually use. Cloud-only
         # runs don't need DO/Hetzner/SH_LICENSE_KEY (those drive self-hosted
         # droplet provisioning); resolving them via 1Password forces an

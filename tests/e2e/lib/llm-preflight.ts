@@ -71,7 +71,7 @@ export function describeLlmPreflight(r: LlmPreflightResult): string {
         case "ok":
             return `[preflight] LLM ok — ${r.model} answered`;
         case "auth":
-            return `[preflight] LLM key REJECTED for ${r.model}. Rotate BYOK_OPENAI_API_KEY; every review scenario will fail until then. ${r.detail ?? ""}`;
+            return `[preflight] LLM key REJECTED for ${r.model}. Rotate E2E_LLM_API_KEY; every review scenario will fail until then. Check it belongs to the vendor E2E_LLM_BASE_URL points at — a key sent to the wrong vendor is rejected exactly like a revoked one. ${r.detail ?? ""}`;
         case "quota":
             return `[preflight] LLM has NO BUDGET for ${r.model} — an empty balance and a hit spend cap produce the same error, so check BOTH billing and the project's monthly limit. Every review scenario will fail until then. ${r.detail ?? ""}`;
         case "model":
