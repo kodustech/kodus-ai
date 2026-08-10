@@ -18,8 +18,14 @@ name: "E2E: self-hosted on demand"
 # It skips the image build when the PR only touches `tests/e2e/**` — harness
 # changes need no new image, and the build is by far the slowest step.
 
+# A called workflow may only request permissions the CALLER already has, so
+# these are the union of what the chain needs, not what this file uses:
+# e2e-test-images pushes packages, and the matrix's history job appends to the
+# e2e-history branch (contents: write). Granting less fails the whole run at
+# STARTUP — no jobs, no logs, nothing to point at, which is how the first two
+# attempts at this workflow died.
 permissions:
-    contents: read
+    contents: write
     packages: write
 
 on:
