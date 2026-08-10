@@ -34,6 +34,35 @@ export class HotPathIndexes2026080700000000 implements MigrationInterface {
     transaction = false;
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        try {
+            await this.runUp(queryRunner);
+        } finally {
+            await this.resetTimeouts(queryRunner);
+        }
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        try {
+            await this.runDown(queryRunner);
+        } finally {
+            await this.resetTimeouts(queryRunner);
+        }
+    }
+
+    /**
+     * `SET` without `LOCAL` is session-scoped, and `transaction = false`
+     * rules out `SET LOCAL`. TypeORM runs this migration on a pooled
+     * connection, so without an explicit RESET the connection goes back to
+     * the pool carrying `statement_timeout = 0` — which would silently
+     * disable the 30s statement cap this same change adds to the pool
+     * config, on exactly one connection, for the life of the process.
+     */
+    private async resetTimeouts(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`RESET statement_timeout`);
+        await queryRunner.query(`RESET lock_timeout`);
+    }
+
+    private async runUp(queryRunner: QueryRunner): Promise<void> {
         // CONCURRENTLY on tables that have grown large can run for many
         // minutes. A global statement_timeout would abort mid-build and
         // leave an INVALID index that IF NOT EXISTS then silently skips
@@ -81,7 +110,7 @@ export class HotPathIndexes2026080700000000 implements MigrationInterface {
         `);
     }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
+    private async runDown(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`SET statement_timeout = 0`);
         await queryRunner.query(`SET lock_timeout = '30s'`);
 

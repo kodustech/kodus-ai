@@ -18,15 +18,39 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * preflight de-dup step is required: the UNIQUE build would fail on
  * any existing duplicate rows produced by the historical race.
  */
-export class ProfileConfigsUniqueKey2026080700000001
-    implements MigrationInterface
-{
+export class ProfileConfigsUniqueKey2026080700000001 implements MigrationInterface {
     name = 'ProfileConfigsUniqueKey2026080700000001';
 
     // CREATE UNIQUE INDEX CONCURRENTLY cannot run inside a transaction.
     transaction = false;
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        try {
+            await this.runUp(queryRunner);
+        } finally {
+            await this.resetTimeouts(queryRunner);
+        }
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        try {
+            await this.runDown(queryRunner);
+        } finally {
+            await this.resetTimeouts(queryRunner);
+        }
+    }
+
+    /**
+     * Session-scoped SETs must not ride the pooled connection back into the
+     * application. See the sibling HotPathIndexes migration for the full
+     * rationale.
+     */
+    private async resetTimeouts(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`RESET statement_timeout`);
+        await queryRunner.query(`RESET lock_timeout`);
+    }
+
+    private async runUp(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`SET statement_timeout = 0`);
         await queryRunner.query(`SET lock_timeout = '30s'`);
 
@@ -50,10 +74,7 @@ export class ProfileConfigsUniqueKey2026080700000001
         `);
 
         // Self-heal a prior interrupted CONCURRENTLY build.
-        await this.dropIfInvalid(
-            queryRunner,
-            'UQ_profile_configs_profile_key',
-        );
+        await this.dropIfInvalid(queryRunner, 'UQ_profile_configs_profile_key');
 
         await queryRunner.query(`
             CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "UQ_profile_configs_profile_key"
@@ -61,7 +82,7 @@ export class ProfileConfigsUniqueKey2026080700000001
         `);
     }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
+    private async runDown(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`SET statement_timeout = 0`);
         await queryRunner.query(`SET lock_timeout = '30s'`);
 
