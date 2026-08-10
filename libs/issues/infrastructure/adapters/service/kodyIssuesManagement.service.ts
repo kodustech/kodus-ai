@@ -304,7 +304,13 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                             title: suggestion.oneSentenceSummary,
                             description: suggestion.suggestionContent,
                             filePath: suggestion.relevantFile,
-                            language: suggestion.language,
+                            // IssuesModel marks `language` required, but the
+                            // finder schema has it optional and the model
+                            // frequently omits it — Mongoose then throws
+                            // "Path 'language' is required" and the issue is
+                            // silently never created. Same 'unknown' fallback
+                            // the prompt path below already uses.
+                            language: suggestion.language || 'unknown',
                             label: suggestion?.label as LabelType,
                             severity: suggestion?.severity as SeverityLevel,
                             contributingSuggestions: [
