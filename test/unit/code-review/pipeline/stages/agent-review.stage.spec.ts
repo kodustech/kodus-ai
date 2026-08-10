@@ -73,7 +73,6 @@ describe('AgentReviewStage', () => {
         overrides: Partial<CodeReviewPipelineContext> = {},
     ): CodeReviewPipelineContext =>
         ({
-            dryRun: { enabled: false },
             organizationAndTeamData: {
                 organizationId: 'org-123',
                 teamId: 'team-456',
