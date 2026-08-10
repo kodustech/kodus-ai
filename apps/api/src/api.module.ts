@@ -49,6 +49,7 @@ import { SharedCoreModule } from '@libs/shared/infrastructure/shared-core.module
 import { SharedLogModule } from '@libs/shared/infrastructure/shared-log.module';
 import { SharedObservabilityModule } from '@libs/shared/infrastructure/shared-observability.module';
 import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AgentController } from './controllers/agent.controller';
 import { AuthController } from './controllers/auth.controller';
 import { CliConfigController } from './controllers/cli/cli-config.controller';
@@ -96,6 +97,16 @@ import { NotificationController } from './controllers/notification.controller';
 
 @Module({
     imports: [
+        // EventEmitterModule.forRoot() registers a @Global()
+        // EventEmitterCoreModule, so exactly one call per process graph is
+        // both necessary and sufficient. It used to reach the API only as a
+        // side effect of importing DryRunModule (and a second time via
+        // DryRunCoreModule) — two registrations meant two
+        // EventSubscribersLoader instances and every @OnEvent handler bound
+        // twice. Declaring it here at the root keeps a single binding and
+        // stops the emitter's availability from depending on an unrelated
+        // feature module.
+        EventEmitterModule.forRoot(),
         SharedCoreModule,
         SharedConfigModule,
         SharedLogModule,
