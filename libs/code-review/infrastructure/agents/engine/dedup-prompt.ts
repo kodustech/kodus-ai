@@ -55,8 +55,13 @@ function wordSet(text: string): Set<string> {
     return new Set(text.toLowerCase().match(/[a-z_][a-z0-9_]{2,}/g) || []);
 }
 
-function bodyWords(f?: { oneSentenceSummary?: string; suggestionContent?: string }): Set<string> {
-    return wordSet(`${f?.oneSentenceSummary || ''} ${f?.suggestionContent || ''}`);
+function bodyWords(f?: {
+    oneSentenceSummary?: string;
+    suggestionContent?: string;
+}): Set<string> {
+    return wordSet(
+        `${f?.oneSentenceSummary || ''} ${f?.suggestionContent || ''}`,
+    );
 }
 
 function codeWords(f?: { improvedCode?: string }): Set<string> {
@@ -72,10 +77,19 @@ function jaccard(A: Set<string>, B: Set<string>): number {
 
 /** Word-overlap (Jaccard) of two findings' text. 0 = nothing in common, 1 = identical. */
 export function contentSimilarity(
-    a?: { oneSentenceSummary?: string; improvedCode?: string; suggestionContent?: string },
-    b?: { oneSentenceSummary?: string; improvedCode?: string; suggestionContent?: string },
+    a?: {
+        oneSentenceSummary?: string;
+        improvedCode?: string;
+        suggestionContent?: string;
+    },
+    b?: {
+        oneSentenceSummary?: string;
+        improvedCode?: string;
+        suggestionContent?: string;
+    },
 ): number {
-    const bodyA = bodyWords(a), bodyB = bodyWords(b);
+    const bodyA = bodyWords(a),
+        bodyB = bodyWords(b);
     const bodySim = jaccard(bodyA, bodyB);
 
     // Only let `improvedCode` influence the score when BOTH findings carry one.
@@ -83,7 +97,8 @@ export function contentSimilarity(
     // real duplicate below DEDUP_CONTENT_THRESHOLD, so the guard vetoes a correct
     // merge (the live PR #1526 case). When both have code the combined set can
     // only strengthen the signal, so take the max.
-    const codeA = codeWords(a), codeB = codeWords(b);
+    const codeA = codeWords(a),
+        codeB = codeWords(b);
     if (codeA.size && codeB.size) {
         const A = new Set([...bodyA, ...codeA]);
         const B = new Set([...bodyB, ...codeB]);
@@ -171,6 +186,25 @@ export function buildDedupSummaries(
         .join('\n');
 }
 
+/**
+ * Every prompt in this file is sent with `Output.object(...)`, and
+ * `withStructuredOutputFallback` retries with `structuredOutputs: false`
+ * when an upstream rejects `response_format: json_schema`. On that retry
+ * `@ai-sdk/openai-compatible` sends `response_format: { type:
+ * 'json_object' }` instead — and OpenAI hard-rejects that request unless
+ * one of the messages contains the word "json":
+ *
+ *   400 Prompt must contain the word 'json' in some form to use
+ *       'response_format' of type 'json_object'
+ *
+ * The SDK does not inject any instruction of its own on that path, so the
+ * word has to come from the prompt. It earns its place twice over: in
+ * json_object mode the schema is not sent at all, so stating the shape is
+ * the only thing telling the model what to produce.
+ */
+const JSON_OUTPUT_CLAUSE =
+    'Respond with a single JSON object matching the requested schema. No prose, no markdown fences.';
+
 /** Full dedup prompt (instructions + the suggestion summaries). */
 export function buildDedupPrompt(
     suggestions: DedupSuggestionLike[],
@@ -194,6 +228,8 @@ NOT duplicates (keep both):
 
 IGNORE the category label (bug/security/performance) when deciding — two agents can independently find the same issue.
 Prefer keeping the suggestion with the most detail or clearest fix as the representative.
+
+${JSON_OUTPUT_CLAUSE}
 
 ${summaries}`;
 }
@@ -253,6 +289,8 @@ export function buildTiebreakPrompt(
 First, in one short phrase each, state the single root-cause defect of A and of B. Then compare:
 - sameBug = TRUE when both point at the SAME defect — even if the wording, the emphasis, or the suggested fix differ (e.g. two ways to fix the same prototype-pollution hole, or the same N+1 query described differently).
 - sameBug = FALSE when the defects are genuinely different problems, even if they sit on the same lines or the same function (e.g. a null-deref crash vs an inverted authorization check; a security hole vs a performance issue).
+
+${JSON_OUTPUT_CLAUSE}
 
 Finding A:
 ${fmt(a)}

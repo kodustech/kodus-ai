@@ -313,9 +313,7 @@ const RECOVERY_SCHEMA = z.object({
 /** Injected capability: re-structure a prose `reasoning` into findings. The
  *  domain (finder/recall passes) depends only on this function; the adapter
  *  wires it to the concrete internal-model fallback. Undefined = recovery off. */
-export type ProseRecoverer = (
-    reasoning: string,
-) => Promise<FinderSuggestion[]>;
+export type ProseRecoverer = (reasoning: string) => Promise<FinderSuggestion[]>;
 
 /** Extract findings from a run, and — if the model produced NONE but wrote
  *  finding-like prose in `reasoning` (the Anthropic omission mode) — recover
@@ -350,13 +348,20 @@ export async function recoverFindingsFromProse(
                 const { object } = await generateObject({
                     model,
                     schema: RECOVERY_SCHEMA,
+                    // The "JSON object" wording is load-bearing, not style:
+                    // withStructuredOutputFallback retries this call with
+                    // structuredOutputs off, which makes the SDK send
+                    // `response_format: { type: 'json_object' }`, and OpenAI
+                    // rejects that request outright unless a message contains
+                    // the word "json". See dedup-prompt.ts for the full note.
                     prompt:
                         "The following is a code reviewer's analysis written as " +
                         'prose. Extract EVERY concrete finding it describes into ' +
                         'the structured schema — one entry per distinct issue, ' +
                         'using the file paths and line numbers mentioned. Do NOT ' +
                         'invent findings; only extract what is explicitly ' +
-                        `described.\n\nANALYSIS:\n${prose}`,
+                        'described. Respond with a single JSON object matching ' +
+                        `the schema.\n\nANALYSIS:\n${prose}`,
                 });
                 return object.suggestions as unknown as FinderSuggestion[];
             },
@@ -583,7 +588,9 @@ export async function runFinderWithVerify(
         gate.kept.forEach((f, i) =>
             verdictByFinding.set(f, gate.keptVerdicts[i]),
         );
-        gate.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
+        gate.dropped.forEach((d) =>
+            verdictByFinding.set(d.candidate, d.verdict),
+        );
         const stillDropped = new Set(gate.dropped.map((d) => d.candidate));
         kept = kept.filter((f) => !stillDropped.has(f));
         dropped = [...dropped, ...gate.dropped];
