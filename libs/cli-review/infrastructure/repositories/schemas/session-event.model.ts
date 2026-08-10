@@ -14,16 +14,10 @@ export const SESSION_EVENT_TYPES = [
 export type SessionEventType = (typeof SESSION_EVENT_TYPES)[number];
 
 export type ClassificationStatus =
-    | 'PROCESSING'
-    | 'COMPLETED'
-    | 'FAILED'
-    | 'SKIPPED';
+    'PROCESSING' | 'COMPLETED' | 'FAILED' | 'SKIPPED';
 
 export type ClassificationSource =
-    | 'llm'
-    | 'heuristic'
-    | 'heuristic-fallback'
-    | 'empty';
+    'llm' | 'heuristic' | 'heuristic-fallback' | 'empty';
 
 @Entity('session_events')
 @Index('IDX_session_events_org_session', ['organizationId', 'sessionId'])

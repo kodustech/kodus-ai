@@ -62,13 +62,21 @@ const API_CRON_CHECK_IF_PR_SHOULD_BE_APPROVED =
 // 4 different rajadas (parameters/find, teamAutomation/find, main
 // teams.map, and PR-level for each eligible PR). Without a cap, ~40
 // teams = 40 parallel conns per rajada, which starved the pool during
-// the 2026-08-06 incident. `TEAM_CONCURRENCY=10` leaves ~40 pool slots
-// free for regular traffic; the cron finishes in under a second still,
-// well before the next 6-min tick.
+// the 2026-08-06 incident.
+//
+// Budget: the API pool is 25, not 50 — api.module.ts passes
+// `poolSize: 25` to SharedPostgresModule.forRoot, which overrides the
+// factory default. 10 leaves 15 slots for request traffic, and the cron
+// still finishes well before the next 6-min tick.
 const TEAM_CONCURRENCY = 10;
-// PR-level fanout is nested inside the team-level loop, so the real
-// ceiling is TEAM_CONCURRENCY * PR_CONCURRENCY = 30 conns — still
-// safe against pool=50 and headroom for other services.
+// Both limiters are created ONCE per run, so this is a global cap and
+// not a per-team one: at most 3 PR-level queries are in flight across
+// all teams, and the worst case for the whole cron is
+// TEAM_CONCURRENCY + PR_CONCURRENCY = 13 of the 25 slots.
+//
+// Do NOT move the pLimit() call inside the teams.map() callback to get
+// 3-per-team — that reads like the obvious fix, but it means 10 x 3 =
+// 30 concurrent queries, which is more than the whole pool.
 const PR_CONCURRENCY = 3;
 
 @Injectable()
@@ -187,9 +195,9 @@ export class CheckIfPRCanBeApprovedCronProvider {
             // Cap DB fan-out across every teams.map()/prs.map() below.
             // Old behavior spawned N teams (~40) queries in parallel per
             // rajada across 4 rajadas — enough to starve the API pool
-            // (see 2026-08-06 incident). Team-level 10 * PR-level 3
-            // = 30 max in flight, leaves ~20 pool slots free for
-            // regular traffic while the cron runs.
+            // (see 2026-08-06 incident). Both limiters are global for
+            // the run: 10 team-level + 3 PR-level = 13 in flight at
+            // worst, against a pool of 25.
             const teamLimit = pLimit(TEAM_CONCURRENCY);
             const prLimit = pLimit(PR_CONCURRENCY);
 
@@ -266,140 +274,147 @@ export class CheckIfPRCanBeApprovedCronProvider {
                         const organizationId = team.organization?.uuid;
                         const teamId = team.uuid;
 
-                    const organizationAndTeamData: OrganizationAndTeamData = {
-                        organizationId,
-                        teamId,
-                    };
-
-                    const codeReviewParameter = parametersByTeam.get(teamId);
-
-                    if (!codeReviewParameter?.configValue) {
-                        return;
-                    }
-
-                    const codeReviewConfig = codeReviewParameter?.configValue;
-
-                    if (
-                        !codeReviewParameter ||
-                        !codeReviewConfig ||
-                        !Array.isArray(codeReviewConfig.repositories) ||
-                        codeReviewConfig.repositories?.length < 1
-                    ) {
-                        return;
-                    }
-
-                    const teamAutomation = teamAutomationsByTeam.get(teamId);
-
-                    if (!teamAutomation) {
-                        return;
-                    }
-
-                    const eligiblePullRequestRefs =
-                        await this.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
-                            sevenDaysAgo,
-                            now,
-                            teamAutomation.uuid,
-                        );
-
-                    const eligiblePullRequestKeys = new Set(
-                        eligiblePullRequestRefs.map(
-                            (ref) =>
-                                `${ref.repositoryId}:${ref.pullRequestNumber}`,
-                        ),
-                    );
-
-                    const automationExecutionsPRs = [
-                        ...new Set(
-                            eligiblePullRequestRefs
-                                .map((ref) => ref.pullRequestNumber)
-                                .filter((prNumber): prNumber is number =>
-                                    Number.isInteger(prNumber),
-                                ),
-                        ),
-                    ];
-
-                    if (!automationExecutionsPRs?.length) {
-                        return;
-                    }
-
-                    const openPullRequests =
-                        await this.pullRequestService.findPullRequestsWithDeliveredSuggestions(
-                            organizationId,
-                            automationExecutionsPRs,
-                            PullRequestState.OPENED,
-                        );
-
-                    this.logger.log({
-                        message: 'Open pull requests found',
-                        context: CheckIfPRCanBeApprovedCronProvider.name,
-                        metadata: {
-                            openPullRequests: openPullRequests?.length,
-                            organizationAndTeamData: {
+                        const organizationAndTeamData: OrganizationAndTeamData =
+                            {
                                 organizationId,
                                 teamId,
-                            },
-                        },
-                    });
+                            };
 
-                    if (!openPullRequests || openPullRequests?.length === 0) {
-                        return;
-                    }
+                        const codeReviewParameter =
+                            parametersByTeam.get(teamId);
 
-                    const eligibleOpenPullRequests = openPullRequests.filter(
-                        (pr) =>
-                            eligiblePullRequestKeys.has(
-                                `${pr?.repository?.id}:${pr?.number}`,
+                        if (!codeReviewParameter?.configValue) {
+                            return;
+                        }
+
+                        const codeReviewConfig =
+                            codeReviewParameter?.configValue;
+
+                        if (
+                            !codeReviewParameter ||
+                            !codeReviewConfig ||
+                            !Array.isArray(codeReviewConfig.repositories) ||
+                            codeReviewConfig.repositories?.length < 1
+                        ) {
+                            return;
+                        }
+
+                        const teamAutomation =
+                            teamAutomationsByTeam.get(teamId);
+
+                        if (!teamAutomation) {
+                            return;
+                        }
+
+                        const eligiblePullRequestRefs =
+                            await this.automationExecutionService.findEligiblePullRequestRefsForApprovalByPeriodAndTeamAutomationId(
+                                sevenDaysAgo,
+                                now,
+                                teamAutomation.uuid,
+                            );
+
+                        const eligiblePullRequestKeys = new Set(
+                            eligiblePullRequestRefs.map(
+                                (ref) =>
+                                    `${ref.repositoryId}:${ref.pullRequestNumber}`,
                             ),
-                    );
+                        );
 
-                    if (!eligibleOpenPullRequests.length) {
-                        return;
-                    }
+                        const automationExecutionsPRs = [
+                            ...new Set(
+                                eligiblePullRequestRefs
+                                    .map((ref) => ref.pullRequestNumber)
+                                    .filter((prNumber): prNumber is number =>
+                                        Number.isInteger(prNumber),
+                                    ),
+                            ),
+                        ];
 
-                    // Process PRs in parallel (bounded by prLimit)
-                    await Promise.allSettled(
-                        eligibleOpenPullRequests.map((pr) =>
-                            prLimit(async () => {
-                                const repository = pr?.repository;
+                        if (!automationExecutionsPRs?.length) {
+                            return;
+                        }
 
-                                const codeReviewConfigFromRepo =
-                                    codeReviewConfig?.repositories?.find(
-                                        (codeReviewConfigRepo) =>
-                                            codeReviewConfigRepo?.id ===
-                                            repository?.id,
-                                    );
+                        const openPullRequests =
+                            await this.pullRequestService.findPullRequestsWithDeliveredSuggestions(
+                                organizationId,
+                                automationExecutionsPRs,
+                                PullRequestState.OPENED,
+                            );
 
-                                if (!codeReviewConfigFromRepo) {
-                                    return;
-                                }
+                        this.logger.log({
+                            message: 'Open pull requests found',
+                            context: CheckIfPRCanBeApprovedCronProvider.name,
+                            metadata: {
+                                openPullRequests: openPullRequests?.length,
+                                organizationAndTeamData: {
+                                    organizationId,
+                                    teamId,
+                                },
+                            },
+                        });
 
-                                const resolvedConfig =
-                                    await this.codeBaseConfigService.getConfig(
+                        if (
+                            !openPullRequests ||
+                            openPullRequests?.length === 0
+                        ) {
+                            return;
+                        }
+
+                        const eligibleOpenPullRequests =
+                            openPullRequests.filter((pr) =>
+                                eligiblePullRequestKeys.has(
+                                    `${pr?.repository?.id}:${pr?.number}`,
+                                ),
+                            );
+
+                        if (!eligibleOpenPullRequests.length) {
+                            return;
+                        }
+
+                        // Process PRs in parallel (bounded by prLimit)
+                        await Promise.allSettled(
+                            eligibleOpenPullRequests.map((pr) =>
+                                prLimit(async () => {
+                                    const repository = pr?.repository;
+
+                                    const codeReviewConfigFromRepo =
+                                        codeReviewConfig?.repositories?.find(
+                                            (codeReviewConfigRepo) =>
+                                                codeReviewConfigRepo?.id ===
+                                                repository?.id,
+                                        );
+
+                                    if (!codeReviewConfigFromRepo) {
+                                        return;
+                                    }
+
+                                    const resolvedConfig =
+                                        await this.codeBaseConfigService.getConfig(
+                                            organizationAndTeamData,
+                                            {
+                                                id: codeReviewConfigFromRepo.id,
+                                                name: codeReviewConfigFromRepo.name,
+                                            },
+                                            [],
+                                        );
+
+                                    if (
+                                        resolvedConfig?.pullRequestApprovalActive ===
+                                        false
+                                    ) {
+                                        return;
+                                    }
+
+                                    await this.shouldApprovePR({
                                         organizationAndTeamData,
-                                        {
-                                            id: codeReviewConfigFromRepo.id,
-                                            name: codeReviewConfigFromRepo.name,
-                                        },
-                                        [],
-                                    );
-
-                                if (
-                                    resolvedConfig?.pullRequestApprovalActive ===
-                                    false
-                                ) {
-                                    return;
-                                }
-
-                                await this.shouldApprovePR({
-                                    organizationAndTeamData,
-                                    pr,
-                                    codeReviewConfig: resolvedConfig,
-                                    teamAutomationId: teamAutomation.uuid,
-                                });
-                            }),
-                        ),
-                    );
-                }),
+                                        pr,
+                                        codeReviewConfig: resolvedConfig,
+                                        teamAutomationId: teamAutomation.uuid,
+                                    });
+                                }),
+                            ),
+                        );
+                    }),
                 ),
             );
         } catch (error) {

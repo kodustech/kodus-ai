@@ -36,7 +36,9 @@ const API_CRON_SYNC_CODE_REVIEW_REACTIONS =
 
 // Max DB queries in flight per rajada. Each team.map() spawns 1 query;
 // without a cap, N teams = N parallel conns, which starves the pool
-// during scale-down (2026-08-06 incident). 5 is safe against pool=50.
+// during scale-down (2026-08-06 incident). The API pool is 25
+// (api.module.ts passes poolSize: 25, overriding the factory default),
+// so 5 leaves 20 slots for request traffic.
 const DB_CONCURRENCY = 5;
 
 const LOCK_KEY = 'CRON:SYNC_CODE_REVIEW_REACTIONS';

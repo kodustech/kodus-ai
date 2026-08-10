@@ -30,30 +30,20 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  *      only grows. Two composite indexes cover the actual filter
  *      patterns in ContextReferenceRepository.applyFilter().
  */
-export class CronPoolReliefIndexes2026080600000000
-    implements MigrationInterface
-{
+export class CronPoolReliefIndexes2026080600000000 implements MigrationInterface {
     name = 'CronPoolReliefIndexes2026080600000000';
 
     // CREATE INDEX CONCURRENTLY forbids running inside a transaction.
     transaction = false;
 
     public async up(queryRunner: QueryRunner): Promise<void> {
-        // CREATE INDEX CONCURRENTLY on large tables can run for many
-        // minutes. A global statement_timeout would abort mid-build
-        // and leave an INVALID index that IF NOT EXISTS then silently
-        // skips forever. Disable the statement timeout for this
-        // migration session; keep lock_timeout bounded because
-        // CONCURRENTLY still takes brief ACCESS SHARE locks.
-        await queryRunner.query(`SET statement_timeout = 0`);
-        await queryRunner.query(`SET lock_timeout = '30s'`);
-
         // ─────────────────────────────────────────────────────────────
         // 1. workflow_jobs — webhook failure monitor cron (5min tick)
         // ─────────────────────────────────────────────────────────────
         await this.dropIfInvalid(
             queryRunner,
             'idx_workflow_jobs_webhook_monitor',
+            'kodus_workflow',
         );
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_workflow_jobs_webhook_monitor"
@@ -64,10 +54,7 @@ export class CronPoolReliefIndexes2026080600000000
         // ─────────────────────────────────────────────────────────────
         // 2. session_events — NOT EXISTS session_end (orphaned classifier)
         // ─────────────────────────────────────────────────────────────
-        await this.dropIfInvalid(
-            queryRunner,
-            'IDX_session_events_end_only',
-        );
+        await this.dropIfInvalid(queryRunner, 'IDX_session_events_end_only');
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_session_events_end_only"
                 ON "session_events" ("session_id", "organization_id")
@@ -77,19 +64,13 @@ export class CronPoolReliefIndexes2026080600000000
         // ─────────────────────────────────────────────────────────────
         // 3. context_references — ContextReferenceRepository.applyFilter
         // ─────────────────────────────────────────────────────────────
-        await this.dropIfInvalid(
-            queryRunner,
-            'IDX_context_references_entity',
-        );
+        await this.dropIfInvalid(queryRunner, 'IDX_context_references_entity');
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_context_references_entity"
                 ON "context_references" ("entityType", "entityId")
         `);
 
-        await this.dropIfInvalid(
-            queryRunner,
-            'IDX_context_references_parent',
-        );
+        await this.dropIfInvalid(queryRunner, 'IDX_context_references_parent');
         await queryRunner.query(`
             CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_context_references_parent"
                 ON "context_references" ("parentReferenceId")
@@ -98,9 +79,6 @@ export class CronPoolReliefIndexes2026080600000000
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`SET statement_timeout = 0`);
-        await queryRunner.query(`SET lock_timeout = '30s'`);
-
         // DROP INDEX CONCURRENTLY also forbids transactions and cannot
         // run inside a DO block.
         await queryRunner.query(
@@ -121,22 +99,34 @@ export class CronPoolReliefIndexes2026080600000000
      * Drops an index only if Postgres flagged it invalid (a killed
      * CONCURRENTLY build). Must run as a top-level statement — DROP
      * INDEX CONCURRENTLY cannot execute inside a transaction/DO block.
+     *
+     * Schema-qualified on both halves, unlike the copy in
+     * ReviewOperationalIngestionIndexes. That one gets away with it
+     * because every index it touches lives in `public`; here the
+     * workflow_jobs index lives in `kodus_workflow`, and an unqualified
+     * DROP resolves against search_path instead — so the lookup would
+     * find the invalid index (relname matches in any schema) and the
+     * DROP would then silently no-op, leaving the self-heal broken for
+     * exactly the index that needs it most.
      */
     private async dropIfInvalid(
         queryRunner: QueryRunner,
         indexName: string,
+        schema = 'public',
     ): Promise<void> {
         const invalid = (await queryRunner.query(
             `SELECT 1
                FROM pg_class c
+               JOIN pg_namespace n ON n.oid = c.relnamespace
                JOIN pg_index i ON i.indexrelid = c.oid
               WHERE c.relname = $1
+                AND n.nspname = $2
                 AND NOT i.indisvalid`,
-            [indexName],
+            [indexName, schema],
         )) as unknown[];
         if (invalid.length) {
             await queryRunner.query(
-                `DROP INDEX CONCURRENTLY IF EXISTS "${indexName}"`,
+                `DROP INDEX CONCURRENTLY IF EXISTS "${schema}"."${indexName}"`,
             );
         }
     }
