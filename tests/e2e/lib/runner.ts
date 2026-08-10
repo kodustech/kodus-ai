@@ -8,6 +8,7 @@ import type {
     Scenario,
     ScenarioResult,
     ScenarioStatus,
+    KodusSession,
     SkipKind,
     Target,
     TargetContext,
@@ -195,6 +196,63 @@ function readCloudTenantsFile(): CloudTenantEntry[] {
 // all paid cloud cells after the 2026-07-24 rotation. One login + one POST
 // per unique tenant, idempotent (same create-or-update endpoint the seeder
 // uses), best-effort per tenant, and skipped when no env key is configured.
+/**
+ * Write a tenant's BYOK config through the API — the same row the product UI
+ * writes, and the same one `resolveKodyRulesModelPolicy` and the review path
+ * read FIRST.
+ *
+ * This is how the e2e states the provider EXPLICITLY. The env path
+ * (`API_LLM_PROVIDER_MODEL`) cannot: `describeEnvLLMConfig` infers the provider
+ * from the model name and only recognises Gemini and Claude, so every OpenAI
+ * model routes as `openai_compatible`. Harmless for gpt-5.4-mini, fatal for a
+ * reasoning model — `Function tools with reasoning_effort are not supported for
+ * gpt-5.6-luna in /v1/chat/completions` — which is a real self-hosted bug, but
+ * one the harness should not be blocked on.
+ *
+ * Writing the DB config takes the same route a customer takes, so the test
+ * exercises the supported path instead of the inferred one.
+ */
+async function applyByokToTenant(
+    target: TargetContext,
+    session: KodusSession,
+): Promise<{ ok: boolean; status: number }> {
+    const resp = await http(
+        `${target.apiBaseUrl}/organization-parameters/create-or-update`,
+        {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+            body: {
+                key: 'byok_config',
+                configValue: { main: byokFromEnv() },
+            },
+            timeoutMs: 30_000,
+        },
+    );
+    return { ok: resp.status >= 200 && resp.status < 300, status: resp.status };
+}
+
+/**
+ * The BYOK block the matrix wants every tenant to use. `API_LLM_PROVIDER`
+ * defaults to `openai`; point it (with `API_OPENAI_FORCE_BASE_URL`) at any
+ * OpenAI- or Anthropic-compatible vendor to run the matrix on a different
+ * model without touching the product.
+ */
+function byokFromEnv(): {
+    provider: string;
+    apiKey: string;
+    baseURL: string;
+    model: string;
+} {
+    return {
+        provider: process.env.API_LLM_PROVIDER ?? 'openai',
+        apiKey: process.env.API_OPEN_AI_API_KEY ?? '',
+        baseURL:
+            process.env.API_OPENAI_FORCE_BASE_URL ??
+            'https://api.openai.com/v1',
+        model: process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini',
+    };
+}
+
 async function refreshCloudTenantByok(log: {
     info: (m: string) => void;
     warn: (m: string) => void;
@@ -224,21 +282,8 @@ async function refreshCloudTenantByok(log: {
                 email: entry.email,
                 password: entry.password,
             });
-            const resp = await http(
-                `${target.apiBaseUrl}/organization-parameters/create-or-update`,
-                {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${session.accessToken}` },
-                    body: {
-                        key: 'byok_config',
-                        configValue: {
-                            main: { provider, apiKey, baseURL, model },
-                        },
-                    },
-                    timeoutMs: 30_000,
-                },
-            );
-            if (resp.status >= 200 && resp.status < 300) {
+            const resp = await applyByokToTenant(target, session);
+            if (resp.ok) {
                 log.info(
                     `[byok-refresh] ${entry.provider}/${entry.license}: byok_config updated`,
                 );
@@ -576,6 +621,46 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                   cell.provider,
                   opts.runId,
               );
+
+        // Self-hosted: state the BYOK config EXPLICITLY on this cell's tenant.
+        //
+        // Without it the stack falls back to `API_LLM_PROVIDER_MODEL`, and
+        // `describeEnvLLMConfig` infers the provider from the model name —
+        // recognising only Gemini and Claude, so every OpenAI model routes as
+        // `openai_compatible`. That is harmless for gpt-5.4-mini and fatal for
+        // a reasoning model ("Function tools with reasoning_effort are not
+        // supported ... in /v1/chat/completions").
+        //
+        // Writing the row takes the same path a customer takes through the UI,
+        // so the matrix exercises the supported configuration rather than the
+        // inferred one. Best-effort: a tenant that keeps its existing config is
+        // still testable, and failing the cell here would trade a product
+        // signal for a setup detail.
+        if (
+            cell.target === 'self-hosted' &&
+            !opts.dryRun &&
+            tenant &&
+            process.env.API_OPEN_AI_API_KEY
+        ) {
+            try {
+                const session = await login(target, tenant);
+                const applied = await applyByokToTenant(target, session);
+                const cfg = byokFromEnv();
+                if (applied.ok) {
+                    log.info(
+                        `[byok] ${cell.provider}/${cell.license}: ${cfg.provider}:${cfg.model} written to the tenant`,
+                    );
+                } else {
+                    log.warn(
+                        `[byok] ${cell.provider}/${cell.license}: HTTP ${applied.status} — tenant keeps its existing config (env inference applies)`,
+                    );
+                }
+            } catch (err) {
+                log.warn(
+                    `[byok] ${cell.provider}/${cell.license}: ${(err as Error).message.slice(0, 120)} — continuing on the tenant's existing config`,
+                );
+            }
+        }
 
         // Circuit breaker: once a github bot account's quota is exhausted,
         // every remaining scenario in the cell would either re-hit the 403 or
