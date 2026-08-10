@@ -1,167 +1,86 @@
-import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
-import { Request } from 'express';
 
 import { CacheService } from '@libs/core/cache/cache.service';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
+import {
+    OrganizationMemberListResult,
+    OrganizationMemberListService,
+    OrganizationMemberSummary,
+} from '@libs/platform/application/services/organization-member-list.service';
 
 @Injectable()
 export class GetCodeManagementMemberListUseCase implements IUseCase {
-    private readonly logger = createLogger(
-        GetCodeManagementMemberListUseCase.name,
-    );
     private static readonly CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
     constructor(
-        private readonly codeManagementService: CodeManagementService,
+        private readonly organizationMemberListService: OrganizationMemberListService,
         private readonly cacheService: CacheService,
         @Inject(REQUEST)
-        private readonly request: Request & {
-            user: { organization: { uuid: string } };
-        },
+        private readonly request: UserRequest,
     ) {}
 
     public async execute(
         teamId?: string,
-    ): Promise<{ name: string; id: string | number }[]> {
+    ): Promise<OrganizationMemberListResult> {
         const organizationAndTeamData: OrganizationAndTeamData = {
             organizationId: this.request.user.organization.uuid,
             teamId,
         };
 
-        const cacheKey =
-            teamId !== undefined
-                ? `org_members_${organizationAndTeamData.organizationId}_${teamId}`
-                : `org_members_${organizationAndTeamData.organizationId}`;
+        const cacheKey = this.buildCacheKey(
+            organizationAndTeamData.organizationId,
+            teamId,
+        );
 
         try {
             const cached =
                 await this.cacheService.getFromCache<
-                    { name: string; id: string | number }[]
+                    OrganizationMemberSummary[]
                 >(cacheKey);
 
             if (cached?.length > 0) {
-                return cached;
+                return { status: 'ok', members: cached };
             }
         } catch {
             // Cache miss or error, proceed with fetch
         }
 
-        const platformMembers = await this.fetchMembersFromCodeIntegration(
+        const result = await this.organizationMemberListService.fetch(
             organizationAndTeamData,
         );
-        const mergedMembers = this.normalizeMembers(platformMembers);
 
-        if (mergedMembers.length > 0) {
+        if (result.status === 'ok') {
             await this.cacheService
                 .addToCache(
                     cacheKey,
-                    mergedMembers,
+                    result.members,
                     GetCodeManagementMemberListUseCase.CACHE_TTL,
                 )
                 .catch(() => {});
         }
 
-        return mergedMembers;
+        return result;
     }
 
     public async refreshMembers(
         teamId?: string,
-    ): Promise<{ name: string; id: string | number }[]> {
-        const organizationId = this.request.user.organization.uuid;
-        const cacheKey =
-            teamId !== undefined
-                ? `org_members_${organizationId}_${teamId}`
-                : `org_members_${organizationId}`;
+    ): Promise<OrganizationMemberListResult> {
+        const cacheKey = this.buildCacheKey(
+            this.request.user.organization.uuid,
+            teamId,
+        );
 
         await this.cacheService.removeFromCache(cacheKey);
 
         return this.execute(teamId);
     }
 
-    private async fetchMembersFromCodeIntegration(
-        organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<{ name: string; id: string | number }[]> {
-        try {
-            const members = await this.codeManagementService.getListMembers({
-                organizationAndTeamData,
-            });
-
-            return this.normalizeMembers(members);
-        } catch (error) {
-            this.logger.warn({
-                message: 'Unable to fetch members from code integration',
-                context: GetCodeManagementMemberListUseCase.name,
-                metadata: {
-                    organizationId: organizationAndTeamData.organizationId,
-                },
-                error,
-            });
-
-            return [];
-        }
-    }
-
-    private normalizeMembers(
-        members: Array<{ name?: string; id?: string | number }> = [],
-    ): { name: string; id: string | number }[] {
-        if (!Array.isArray(members) || members.length === 0) {
-            return [];
-        }
-
-        const uniqueMembers = new Map<
-            string,
-            { name: string; id: string | number }
-        >();
-
-        for (const member of members) {
-            const normalized = this.normalizeMember(member);
-
-            if (normalized && !uniqueMembers.has(String(normalized.id))) {
-                uniqueMembers.set(String(normalized.id), normalized);
-            }
-        }
-
-        return Array.from(uniqueMembers.values()).sort((a, b) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
-        );
-    }
-
-    private normalizeMember(member: {
-        name?: string;
-        id?: string | number;
-        [key: string]: any;
-    }): { name: string; id: string | number } | null {
-        if (!member) {
-            return null;
-        }
-
-        const rawId =
-            member?.descriptor ??
-            member?.id ??
-            member?.uuid ??
-            member?.originId ??
-            member?.email ??
-            member?.login ??
-            member?.principalName;
-
-        const rawName =
-            member?.name ??
-            member?.displayName ??
-            member?.login ??
-            member?.principalName ??
-            member?.email;
-
-        if (!rawId || !rawName) {
-            return null;
-        }
-
-        return {
-            id: rawId,
-            name: rawName,
-        };
+    private buildCacheKey(organizationId: string, teamId?: string): string {
+        return teamId !== undefined
+            ? `org_members_${organizationId}_${teamId}`
+            : `org_members_${organizationId}`;
     }
 }

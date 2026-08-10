@@ -52,7 +52,6 @@ import {
     ApiTags,
 } from '@nestjs/swagger';
 import { ApiStandardResponses } from '../docs/api-standard-responses.decorator';
-import { ApiArrayResponseDto } from '../dtos/api-response.dto';
 import {
     CodeManagementPullRequestsResponseDto,
     CodeManagementRepositoriesCreateResponseDto,
@@ -202,10 +201,10 @@ export class CodeManagementController {
     )
     @ApiOperation({
         summary: 'List organization members',
-        description: 'Returns members from the connected code platform.',
+        description:
+            'Returns members from the connected code platform. A "unavailable" status means the platform could not be reached and the empty list must not be read as an empty organization.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    @ApiOkResponse({ type: ApiArrayResponseDto })
     public async getOrganizationMembers(@Query() query: { teamId: string }) {
         return this.getCodeManagementMemberListUseCase.execute(query.teamId);
     }
@@ -224,7 +223,6 @@ export class CodeManagementController {
             'Clears the cached members list and re-fetches from the code platform.',
     })
     @ApiQuery({ name: 'teamId', required: true })
-    @ApiOkResponse({ type: ApiArrayResponseDto })
     public async refreshOrganizationMembers(
         @Query() query: { teamId: string },
     ) {
