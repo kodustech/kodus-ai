@@ -245,28 +245,52 @@ export class SelfHostedLicenseService implements ILicenseService {
         organizationAndTeamData: OrganizationAndTeamData,
         userGitId: string,
     ): Promise<boolean> {
+        const { failed } = await this.unassignLicenses(
+            organizationAndTeamData,
+            [userGitId],
+        );
+
+        return failed.length === 0;
+    }
+
+    /**
+     * Batched so a bulk prune performs a single read-modify-write of the
+     * assigned-users parameter. Revoking one user per call concurrently would
+     * lose updates, leaving seats that look released but are still occupied.
+     */
+    async unassignLicenses(
+        organizationAndTeamData: OrganizationAndTeamData,
+        userGitIds: string[],
+    ): Promise<{ revoked: string[]; failed: string[] }> {
+        if (!userGitIds?.length) {
+            return { revoked: [], failed: [] };
+        }
+
         try {
             const assignedUsers = await this.getAssignedUsers(
                 organizationAndTeamData,
             );
+            const byGitId = new Map(assignedUsers.map((u) => [u.gitId, u]));
 
-            const existing = assignedUsers.find(
-                (u) => u.gitId === userGitId,
-            );
-            if (!existing) {
-                return true;
+            for (const gitId of userGitIds) {
+                const existing = byGitId.get(gitId);
+
+                // Revoking a seat the user never held is a no-op, not a failure.
+                if (existing) {
+                    existing.status = 'inactive';
+                }
             }
 
-            existing.status = 'inactive';
             await this.saveAssignedUsers(organizationAndTeamData, assignedUsers);
-            return true;
+
+            return { revoked: [...userGitIds], failed: [] };
         } catch (error) {
             this.logger.error({
-                message: 'Error unassigning license',
+                message: 'Error unassigning licenses',
                 context: SelfHostedLicenseService.name,
                 error,
             });
-            return false;
+            return { revoked: [], failed: [...userGitIds] };
         }
     }
 
