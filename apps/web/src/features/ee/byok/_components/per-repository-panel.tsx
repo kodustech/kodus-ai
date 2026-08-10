@@ -95,7 +95,6 @@ export const PerRepositoryPanel = ({ teamId }: { teamId?: string }) => {
     }, [teamId]);
 
     const repos = useMemo(() => groupOverrides(data), [data]);
-    if (repos.length === 0) return null;
 
     const toggle = (id: string) =>
         setExpanded((prev) => {
@@ -132,6 +131,13 @@ export const PerRepositoryPanel = ({ teamId }: { teamId?: string }) => {
                 </Link>
             </div>
 
+            {repos.length === 0 ? (
+                <div className="border-card-lv3/40 text-text-tertiary rounded-lg border border-dashed px-4 py-6 text-center text-sm text-pretty">
+                    No per-repository models yet — every repository uses the
+                    models above. Assign a model to a specific repository or
+                    folder in Code Review Settings to see it here.
+                </div>
+            ) : (
             <div className="border-card-lv3/40 divide-card-lv3/30 flex flex-col divide-y overflow-hidden rounded-lg border">
                 {/* Header spine */}
                 <div className="text-text-tertiary bg-card-lv2/40 grid grid-cols-[1fr_16rem] gap-4 px-3 py-2 text-[0.6875rem] font-medium tracking-wide uppercase">
@@ -194,6 +200,7 @@ export const PerRepositoryPanel = ({ teamId }: { teamId?: string }) => {
                     );
                 })}
             </div>
+            )}
         </div>
     );
 };

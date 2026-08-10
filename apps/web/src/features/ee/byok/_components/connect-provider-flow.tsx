@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
 import {
@@ -317,56 +316,57 @@ export function ConnectProviderFlow({
                 )}>
                 {hero}
 
-                <div
-                    className={cn(
-                        "grid w-full max-w-xl grid-cols-2 gap-2.5 self-center sm:grid-cols-3",
-                    )}>
-                    {providers.map((p) => (
-                        <button
-                            key={p.id}
-                            type="button"
-                            onClick={() =>
-                                // Curated providers open the in-place model cards;
-                                // everything else goes straight to the manual form
-                                // pre-scoped to the provider (no empty middle step).
-                                p.modelCount > 0
-                                    ? setPickedProvider(p.id)
-                                    : router.push(
-                                          `/organization/byok/manual?provider=${encodeURIComponent(p.id)}`,
-                                      )
-                            }
-                            className="border-card-lv2 bg-card-lv2 hover:border-primary-light/60 hover:bg-card-lv3 flex items-center gap-2.5 rounded-lg border p-3 text-left transition-colors">
-                            <ProviderLogo
-                                provider={p.id}
-                                label={p.label}
-                                className="size-8"
-                            />
-                            <span className="flex min-w-0 flex-col gap-1">
-                                <span className="text-text-primary truncate text-sm font-semibold">
-                                    {p.label}
+                <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-3">
+                    {providers.map((p) => {
+                        // These providers can't auto-list models — they point at
+                        // your own deployment, so the connect form asks for a base
+                        // URL first. Surface that as a one-line subtitle rather
+                        // than a separate wrapping tag that broke row alignment.
+                        const needsEndpoint =
+                            !p.autoListModels && p.modelCount === 0;
+                        return (
+                            <button
+                                key={p.id}
+                                type="button"
+                                onClick={() =>
+                                    // Curated providers open the in-place model
+                                    // cards; everything else goes straight to the
+                                    // manual form pre-scoped to the provider.
+                                    p.modelCount > 0
+                                        ? setPickedProvider(p.id)
+                                        : router.push(
+                                              `/organization/byok/manual?provider=${encodeURIComponent(p.id)}`,
+                                          )
+                                }
+                                className="border-card-lv2 bg-card-lv2 hover:border-primary-light/60 hover:bg-card-lv3 flex min-h-[4.25rem] items-center gap-3 rounded-lg border p-3 text-left transition-colors">
+                                <ProviderLogo
+                                    provider={p.id}
+                                    label={p.label}
+                                    className="size-8 shrink-0"
+                                />
+                                <span className="flex min-w-0 flex-col gap-0.5">
+                                    <span className="text-text-primary line-clamp-2 text-sm leading-tight font-semibold">
+                                        {p.label}
+                                    </span>
+                                    <span className="text-text-tertiary flex items-center gap-1 text-xs tabular-nums">
+                                        {p.modelCount > 0 ? (
+                                            `${p.modelCount} ${p.modelCount === 1 ? "model" : "models"}`
+                                        ) : needsEndpoint ? (
+                                            <>
+                                                <LinkIcon
+                                                    size={10}
+                                                    className="shrink-0"
+                                                />
+                                                Custom endpoint
+                                            </>
+                                        ) : (
+                                            "Browse models"
+                                        )}
+                                    </span>
                                 </span>
-                                {/* One axis only: this line is always about the
-                                    provider's models. The "you must supply an
-                                    endpoint" signal is a separate tag below, so
-                                    the subtitle never mixes a count, a fetch
-                                    behaviour, and a setup requirement. */}
-                                <span className="text-text-tertiary text-xs tabular-nums">
-                                    {p.modelCount > 0
-                                        ? `${p.modelCount} ${p.modelCount === 1 ? "model" : "models"}`
-                                        : "Browse models"}
-                                </span>
-                                {!p.autoListModels && p.modelCount === 0 && (
-                                    <Badge
-                                        variant="helper"
-                                        size="xs"
-                                        className="mt-0.5 self-start">
-                                        <LinkIcon size={10} className="mr-1" />
-                                        Needs endpoint URL
-                                    </Badge>
-                                )}
-                            </span>
-                        </button>
-                    ))}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {(footer || onCancel) && (

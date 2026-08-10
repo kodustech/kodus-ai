@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@components/ui/alert";
 import { Badge } from "@components/ui/badge";
-import { Image } from "@components/ui/image";
 import { Page } from "@components/ui/page";
 import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
@@ -168,12 +167,6 @@ export const ByokPageClient = ({
                             which model runs each task.
                         </span>
                         <span className="flex items-center gap-2">
-                            <span className="w-9 shrink-0">
-                                <Image
-                                    src="/assets/images/kody_safety.png"
-                                    alt="Kody guarding your key"
-                                />
-                            </span>
                             <span>
                                 You pay your provider directly —{" "}
                                 <strong className="text-text-primary font-medium">

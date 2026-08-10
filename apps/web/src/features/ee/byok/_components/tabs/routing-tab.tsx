@@ -17,7 +17,11 @@ import {
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { ChevronsUpDownIcon, SlidersHorizontalIcon } from "lucide-react";
+import {
+    ChevronsUpDownIcon,
+    Layers3Icon,
+    SlidersHorizontalIcon,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TASK_ROUTING_FALLBACK } from "@libs/llm/byok-config";
 
@@ -296,6 +300,17 @@ export const RoutingTab = ({
 
                 {/* ── Defaults: one model for everything + fallback ── */}
                 <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-0.5">
+                        <span className="text-text-primary flex items-center gap-2 text-sm font-medium">
+                            <Layers3Icon className="text-primary-light size-4" />
+                            Defaults
+                        </span>
+                        <span className="text-text-tertiary text-xs">
+                            The model every task uses until you override it per
+                            agent below.
+                        </span>
+                    </div>
+                    <div className="border-card-lv3/50 bg-card-lv1 flex flex-col gap-4 rounded-xl border p-4">
                     <div
                         data-routing-anchor="default"
                         className="flex flex-wrap items-center justify-between gap-3 scroll-mt-4">
@@ -413,6 +428,7 @@ export const RoutingTab = ({
                                 </Button>
                             </div>
                         )}
+                    </div>
                     </div>
                 </div>
 
