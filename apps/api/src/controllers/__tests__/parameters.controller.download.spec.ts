@@ -24,7 +24,7 @@ const buildResponse = (): ResponseDouble =>
     Object.assign(new PassThrough(), { set: jest.fn() }) as ResponseDouble;
 
 const buildController = (
-    centralizedConfigDownloadUseCase: { executeAsZipStream: jest.Mock },
+    centralizedConfigDownloadZipUseCase: { execute: jest.Mock },
     request: any,
 ) =>
     new ParametersController(
@@ -40,7 +40,7 @@ const buildController = (
         null as any, // getDefaultConfigUseCase
         null as any, // getCodeReviewParameterUseCase
         null as any, // centralizedConfigSyncUseCase
-        centralizedConfigDownloadUseCase as any,
+        centralizedConfigDownloadZipUseCase as any,
         null as any, // centralizedConfigInitUseCase
         null as any, // codeBaseConfigService
     );
@@ -53,11 +53,11 @@ describe('ParametersController › downloadCentralizedConfig', () => {
         archive.append('version: 2\n', { name: 'kodus-config.yml' });
         void archive.finalize();
 
-        const centralizedConfigDownloadUseCase = {
-            executeAsZipStream: jest.fn().mockResolvedValue(archive),
+        const centralizedConfigDownloadZipUseCase = {
+            execute: jest.fn().mockResolvedValue(archive),
         };
 
-        const controller = buildController(centralizedConfigDownloadUseCase, {
+        const controller = buildController(centralizedConfigDownloadZipUseCase, {
             user,
         });
 
@@ -73,7 +73,7 @@ describe('ParametersController › downloadCentralizedConfig', () => {
                 'attachment; filename=centralized-config.zip',
         });
         expect(
-            centralizedConfigDownloadUseCase.executeAsZipStream,
+            centralizedConfigDownloadZipUseCase.execute,
         ).toHaveBeenCalledWith(user, 'team-1');
 
         const output = Buffer.concat(chunks);
@@ -84,11 +84,11 @@ describe('ParametersController › downloadCentralizedConfig', () => {
     it('destroys the response when the archive fails mid-stream', async () => {
         const archive = new PassThrough();
 
-        const centralizedConfigDownloadUseCase = {
-            executeAsZipStream: jest.fn().mockResolvedValue(archive),
+        const centralizedConfigDownloadZipUseCase = {
+            execute: jest.fn().mockResolvedValue(archive),
         };
 
-        const controller = buildController(centralizedConfigDownloadUseCase, {
+        const controller = buildController(centralizedConfigDownloadZipUseCase, {
             user,
         });
 
@@ -109,11 +109,11 @@ describe('ParametersController › downloadCentralizedConfig', () => {
     });
 
     it('refuses to build anything without an organization', async () => {
-        const centralizedConfigDownloadUseCase = {
-            executeAsZipStream: jest.fn(),
+        const centralizedConfigDownloadZipUseCase = {
+            execute: jest.fn(),
         };
 
-        const controller = buildController(centralizedConfigDownloadUseCase, {
+        const controller = buildController(centralizedConfigDownloadZipUseCase, {
             user: { uuid: 'user-1' },
         });
 
@@ -125,7 +125,7 @@ describe('ParametersController › downloadCentralizedConfig', () => {
         ).rejects.toThrow('Organization ID is missing from request');
 
         expect(
-            centralizedConfigDownloadUseCase.executeAsZipStream,
+            centralizedConfigDownloadZipUseCase.execute,
         ).not.toHaveBeenCalled();
     });
 });

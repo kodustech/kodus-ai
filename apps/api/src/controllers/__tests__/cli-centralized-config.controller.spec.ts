@@ -17,10 +17,7 @@ describe('CliCentralizedConfigController', () => {
     let createOrUpdateParametersUseCase: { execute: jest.Mock };
     let centralizedConfigInitUseCase: { execute: jest.Mock };
     let centralizedConfigSyncUseCase: { execute: jest.Mock };
-    let centralizedConfigDownloadUseCase: {
-        execute: jest.Mock;
-        executeAsZipStream: jest.Mock;
-    };
+    let centralizedConfigDownloadZipUseCase: { execute: jest.Mock };
 
     const teamData = {
         team: { uuid: 'team-1' },
@@ -83,14 +80,8 @@ describe('CliCentralizedConfigController', () => {
             }),
         };
 
-        centralizedConfigDownloadUseCase = {
-            execute: jest.fn().mockResolvedValue([
-                {
-                    path: 'kodus-config.yml',
-                    content: 'version: 1',
-                },
-            ]),
-            executeAsZipStream: jest.fn(),
+        centralizedConfigDownloadZipUseCase = {
+            execute: jest.fn(),
         };
 
         controller = new CliCentralizedConfigController(
@@ -101,7 +92,7 @@ describe('CliCentralizedConfigController', () => {
             createOrUpdateParametersUseCase as any,
             centralizedConfigInitUseCase as any,
             centralizedConfigSyncUseCase as any,
-            centralizedConfigDownloadUseCase as any,
+            centralizedConfigDownloadZipUseCase as any,
         );
     });
 
@@ -227,7 +218,7 @@ describe('CliCentralizedConfigController', () => {
             pipe: jest.fn(),
         };
 
-        centralizedConfigDownloadUseCase.executeAsZipStream.mockResolvedValue(
+        centralizedConfigDownloadZipUseCase.execute.mockResolvedValue(
             archiveMock,
         );
 
@@ -244,7 +235,7 @@ describe('CliCentralizedConfigController', () => {
         });
         expect(archiveMock.pipe).toHaveBeenCalledWith(response);
         expect(
-            centralizedConfigDownloadUseCase.executeAsZipStream,
+            centralizedConfigDownloadZipUseCase.execute,
         ).toHaveBeenCalledWith(
             {
                 uuid: 'kody',

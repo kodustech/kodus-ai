@@ -50,7 +50,7 @@ import {
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 
 import { DeleteRepositoryCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/delete-repository-code-review-parameter.use-case';
-import { CentralizedConfigDownloadUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-download.use-case';
+import { CentralizedConfigDownloadZipUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-download-zip.use-case';
 import { CentralizedConfigInitUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-init.use-case';
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
@@ -91,7 +91,7 @@ export class ParametersController {
         private readonly getDefaultConfigUseCase: GetDefaultConfigUseCase,
         private readonly getCodeReviewParameterUseCase: GetCodeReviewParameterUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
-        private readonly centralizedConfigDownloadUseCase: CentralizedConfigDownloadUseCase,
+        private readonly centralizedConfigDownloadZipUseCase: CentralizedConfigDownloadZipUseCase,
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
 
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
@@ -549,7 +549,7 @@ export class ParametersController {
         }
 
         const archive =
-            await this.centralizedConfigDownloadUseCase.executeAsZipStream(
+            await this.centralizedConfigDownloadZipUseCase.execute(
                 this.request.user,
                 teamId,
             );
