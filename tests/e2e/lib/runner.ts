@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -23,6 +23,11 @@ import {
     integrationQuota,
 } from "./github-token-pool.js";
 import type { RateLimitInfo } from "./github-token-pool.js";
+import {
+    IDLE,
+    describeQuotaCurve,
+    startQuotaSampler,
+} from "./quota-curve.js";
 import { githubAppToken } from "./github-app-token.js";
 import {
     finishOnboarding,
@@ -497,6 +502,17 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     const artifactDir = join(opts.artifactRoot, opts.runId);
     mkdirSync(artifactDir, { recursive: true });
 
+    // Timer-based quota sampling, alongside the per-scenario deltas below.
+    // The two answer different questions: the deltas say what a scenario cost,
+    // the curve says what was ACTUALLY burning and when. They disagree
+    // whenever work is asynchronous -- the onboarding backfill is dispatched
+    // in the background, so its spend gets charged to whatever scenario
+    // happens to be in the foreground when it lands. See quota-curve.ts.
+    const quotaSampler =
+        opts.dryRun || !opts.cells.some((c) => c.provider === 'github')
+            ? undefined
+            : startQuotaSampler({ probe: () => integrationQuota() });
+
     // Idempotency pre-flight: abandon every PR (or MR) on each
     // fixture repo whose title starts with `[e2e]` and is still
     // open. Per-scenario `closePR()` runs in `finally` and covers
@@ -764,6 +780,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                 artifactDir,
                 `${scenario.id}-${cell.target}-${cell.provider}-${cell.license}`,
             );
+            quotaSampler?.mark(scenario.id);
             for (let attempt = 1; attempt <= 2; attempt++) {
                 const t0 = Date.now();
                 // Attribute GitHub spend to a scenario, or to whatever else
@@ -996,8 +1013,28 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     }
                 }
             }
+            quotaSampler?.mark(IDLE);
             if (failFastHit) break;
         }
+    }
+
+    if (quotaSampler) {
+        const curve = quotaSampler.stop();
+        for (const line of describeQuotaCurve(curve)) {
+            log.info(line);
+        }
+        writeFileSync(
+            join(artifactDir, 'quota-curve.json'),
+            JSON.stringify(
+                {
+                    samples: quotaSampler.samples,
+                    marks: quotaSampler.marks,
+                    summary: curve,
+                },
+                null,
+                2,
+            ),
+        );
     }
 
     return {
