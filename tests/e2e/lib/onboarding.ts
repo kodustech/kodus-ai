@@ -331,6 +331,13 @@ function invalidateRegisteredIntegrations(
     for (const key of registeredIntegrationCache) {
         if (key.startsWith(prefix)) registeredIntegrationCache.delete(key);
     }
+    // Onboarding is scoped to the integration that was live when it ran.
+    // Deleting that integration voids it, so the next scenario has to pay for
+    // finish-onboarding again rather than inherit a hit for state that no
+    // longer exists.
+    for (const key of finishedOnboardingCache) {
+        if (key.startsWith(prefix)) finishedOnboardingCache.delete(key);
+    }
 }
 
 export async function registerIntegration(
@@ -656,11 +663,39 @@ async function readKodyLearningStatus(
     );
 }
 
+// Onboarded (tenant, repo) pairs for this run. finish-onboarding is idempotent
+// from the scenario's point of view -- but NOT free: each POST kicks off
+// generateKodyRules({months: 3}), which issues 3 GitHub calls per PR in that
+// window, uncapped, against the credential the PRODUCT stores.
+//
+// The fixture repo is at 816 PRs and grows by ~8 every run, so one call now
+// costs ~2450 requests out of GitHub's 5000/h. Two scenarios onboarding the
+// same repo exhausted the account 5 minutes into run 31443426784 and took
+// three scenarios down with it. Integration and repo registration were already
+// cached per run for the same reason; this call is simply the expensive one
+// nobody had measured.
+//
+// This caches the REDUNDANT calls away. It does not make the first one cheap --
+// see the product-side note in the PR: a customer onboarding an active repo
+// pays the same cost on their own quota, once per repo they select.
+const finishedOnboardingCache = new Set<string>();
+
 export async function finishOnboarding(
     target: TargetContext,
     session: KodusSession,
     repo: ProviderRepoRef,
 ): Promise<void> {
+    const cacheKey = `${target.apiBaseUrl}:${session.organizationId}:${repo.id}`;
+    if (finishedOnboardingCache.has(cacheKey)) {
+        log.info(
+            `Onboarding already finished this run for repo ${repo.name ?? repo.full_name} — reusing ` +
+                '(skips a ~3-calls-per-PR GitHub backfill)',
+        );
+        // Still reset the config. Scenarios depend on this side effect of
+        // finishOnboarding, and it is the POST that is expensive, not this.
+        await resetCodeReviewConfig(target, session);
+        return;
+    }
     log.info("Finishing onboarding");
     // finish-onboarding does substantial work synchronously: generates
     // per-repo Kody rules via LLM and syncs rules from repo files. The
@@ -703,6 +738,7 @@ export async function finishOnboarding(
         // when no automation is found).
         await settle(10_000);
         await resetCodeReviewConfig(target, session);
+        finishedOnboardingCache.add(cacheKey);
         return;
     }
 
@@ -737,6 +773,7 @@ export async function finishOnboarding(
             // call from being silently dropped by validate-prerequisites.
             await new Promise((r) => setTimeout(r, 10_000));
             await resetCodeReviewConfig(target, session);
+            finishedOnboardingCache.add(cacheKey);
             return;
         }
         await new Promise((r) => setTimeout(r, 10_000));
