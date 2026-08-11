@@ -513,8 +513,30 @@ export class AstGraphRepository {
                 // Requires diff patches to identify changed functions.
                 const hasPatches = (fileChanges || []).some((fc) => !!fc?.patch);
                 if (hasPatches) {
-                    // Query repo functions with >=80% callee overlap per changed PR function.
-                    const twinQuery = `
+                    // Build per-PR-function callee sets from the edges the
+                    // main subgraph query already returned
+                    const prCalleesBySource = new Map<string, Set<string>>();
+                    for (const e of prEdges || []) {
+                        if (e?.kind !== 'CALLS') continue;
+                        if (!e.source_qualified) continue;
+                        if (!prCalleesBySource.has(e.source_qualified)) {
+                            prCalleesBySource.set(e.source_qualified, new Set());
+                        }
+                        prCalleesBySource.get(e.source_qualified)!.add(e.target_qualified);
+                    }
+
+                    // Collect the union of all PR-function callees so we can
+                    // pre-filter candidates in Postgres (keeps the result set
+                    // small before the per-function 80% gate runs in JS).
+                    const allPrCallees = [
+                        ...new Set(
+                            [...prCalleesBySource.values()].flatMap((s) => [...s]),
+                        ),
+                    ];
+
+                    // Single batch query: fetch every repo function that shares
+                    // at least one callee with any PR function.
+                    const batchTwinQuery = `
                         SELECT n.qualified_name, n.params, n.return_type,
                                n.file_path, COALESCE(n.line_start, 0) AS line_start,
                                COALESCE(n.line_end, 0) AS line_end,
@@ -531,49 +553,59 @@ export class AstGraphRepository {
                           AND n.params IS NOT NULL AND n.params <> ''
                         GROUP BY n.qualified_name, n.params, n.return_type,
                                  n.file_path, n.line_start, n.line_end
-                        HAVING (
-                            SELECT count(*)
-                            FROM unnest($2::text[]) AS p(callee)
-                            WHERE p.callee = ANY(
-                                COALESCE(
-                                    array_agg(DISTINCT e.target_qualified)
-                                        FILTER (WHERE e.kind = 'CALLS'
-                                                AND e.target_qualified IS NOT NULL),
-                                    ARRAY[]::text[]
-                                )
-                            )
-                        ) * 10 >= 8 * cardinality($2::text[])
+                        HAVING $2::text[] && COALESCE(
+                            array_agg(DISTINCT e.target_qualified)
+                            FILTER (WHERE e.kind = 'CALLS'
+                                    AND e.target_qualified IS NOT NULL),
+                            ARRAY[]::text[]
+                        )
                     `;
-                    // Group PR CALLS edges by source -> each changed fn's callee set.
-                    const prCalleesBySource = new Map<string, Set<string>>();
-                    for (const e of prEdges || []) {
-                        if (e?.kind !== 'CALLS') continue;
-                        if (!e.source_qualified) continue;
-                        if (!prCalleesBySource.has(e.source_qualified)) {
-                            prCalleesBySource.set(e.source_qualified, new Set());
-                        }
-                        prCalleesBySource.get(e.source_qualified)!.add(e.target_qualified);
-                    }
+
+                    // Helper: what fraction of prCallees does candidate share?
+                    const overlapRatio = (
+                        candidateCallees: string[],
+                        prCallees: Set<string>,
+                    ): number => {
+                        if (prCallees.size === 0) return 0;
+                        const hits = candidateCallees.filter((c) =>
+                            prCallees.has(c),
+                        ).length;
+                        return hits / prCallees.size;
+                    };
+
                     const poolRows: any[] = [];
-                    for (const [prQn, callees] of prCalleesBySource) {
-                        const calleeArr = [...callees];
-                        if (calleeArr.length === 0) continue;
+                    if (allPrCallees.length > 0) {
                         try {
-                            const res = await this.dataSource.query(twinQuery, [
+                            const res = await this.dataSource.query(batchTwinQuery, [
                                 repoId,
-                                calleeArr,
+                                allPrCallees,
                             ]);
-                            const rows = Array.isArray(res) ? res : (res?.rows || []);
+                            const rows: any[] = res?.rows || [];
+
+                            // Per-function overlap gate (>=80%) applied in JS.
+                            const seenQns = new Set<string>();
                             for (const row of rows) {
-                                if (row.qualified_name === prQn) continue; // not its own twin
-                                poolRows.push(row);
+                                if (seenQns.has(row.qualified_name)) continue;
+                                const candidateCallees: string[] = row.callees || [];
+                                // Accept if this candidate clears the threshold for
+                                // at least one changed PR function, and is not the
+                                // PR function itself.
+                                const qualifies = [...prCalleesBySource.entries()].some(
+                                    ([prQn, prCallees]) =>
+                                        row.qualified_name !== prQn &&
+                                        overlapRatio(candidateCallees, prCallees) >= 0.8,
+                                );
+                                if (qualifies) {
+                                    seenQns.add(row.qualified_name);
+                                    poolRows.push(row);
+                                }
                             }
                         } catch (err) {
                             this.logger.warn({
-                                message: '[AST-GRAPH] Twin pool query failed for PR function',
+                                message: '[AST-GRAPH] Batch twin pool query failed',
                                 context: AstGraphRepository.name,
                                 error: err,
-                                metadata: { repoId, prQn },
+                                metadata: { repoId },
                             });
                         }
                     }
@@ -607,16 +639,23 @@ export class AstGraphRepository {
                         fileChanges,
                     );
                     // Merge flagged (PR + pool) nodes into parsed.nodes for the output.
+                    const nodeIndexByQn = new Map<string, number>(
+                        (parsed.nodes as any[]).map((n: any, i: number) => [
+                            n?.qualified_name,
+                            i,
+                        ]),
+                    );
                     const flaggedNodes = [
                         ...(prNodes || []).filter((n: any) => n?.is_duplicate),
                         ...twinPool.filter((n: any) => n?.is_duplicate),
                     ];
                     for (const f of flaggedNodes) {
-                        const idx = parsed.nodes.findIndex(
-                            (n: any) => n?.qualified_name === f.qualified_name,
-                        );
-                        if (idx >= 0) parsed.nodes[idx] = f;
-                        else parsed.nodes.push(f);
+                        const idx = nodeIndexByQn.get(f.qualified_name);
+                        if (idx !== undefined) parsed.nodes[idx] = f;
+                        else {
+                            nodeIndexByQn.set(f.qualified_name, parsed.nodes.length);
+                            parsed.nodes.push(f);
+                        }
                     }
                 }
                 // Re-serialize so the pair flags survive — jsonOutput is the

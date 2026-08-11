@@ -18,7 +18,10 @@ import { randomUUID } from 'crypto';
 
 import { calculateBackoffInterval } from '@libs/common/utils/polling';
 import { existsSync } from 'fs';
-import { SandboxLeaseRepository } from '../repositories/sandbox-lease.repository';
+import {
+    SandboxLeaseRepository,
+    SANDBOX_LEASE_REPOSITORY_TOKEN,
+} from '../repositories/sandbox-lease.repository';
 import { SANDBOX_LEASE_CLEANUP_STATUS } from '../repositories/schemas/sandbox-lease.model';
 import { NULL_SANDBOX_INSTANCE } from '../providers/null-sandbox.service';
 import { buildE2BRemoteCommands } from '../providers/e2b-sandbox.service';
@@ -134,7 +137,7 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
     constructor(
         @Inject(SANDBOX_PROVIDER_TOKEN)
         private readonly sandboxProvider: ISandboxProvider,
-        @Inject(SandboxLeaseRepository)
+        @Inject(SANDBOX_LEASE_REPOSITORY_TOKEN)
         private readonly leaseRepo: SandboxLeaseRepository,
         private readonly configService: ConfigService,
     ) {}
