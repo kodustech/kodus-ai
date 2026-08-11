@@ -113,7 +113,22 @@ export class CentralizedConfigDownloadUseCase {
         // Not awaited: the caller has to be piping before the archive drains.
         // A rejection here would otherwise be unhandled, so it is routed back
         // into the stream as an 'error' the caller is already listening for.
+        // It is logged here too: the caller only sees a destroyed stream after
+        // headers are already on the wire, so this is the last place with
+        // enough context to say which download failed and why.
         archive.finalize().catch((error) => {
+            this.logger.error({
+                message: 'Failed to finalize centralized config zip',
+                context: CentralizedConfigDownloadUseCase.name,
+                metadata: {
+                    teamId,
+                    organizationId:
+                        user?.organization?.uuid || options.organizationId,
+                    entryCount: entries.length,
+                    errorMessage: this.getErrorMessage(error),
+                },
+            });
+
             archive.destroy(
                 error instanceof Error ? error : new Error(String(error)),
             );
