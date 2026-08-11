@@ -376,6 +376,8 @@ export class GenerateKodyRulesUseCase {
                                 'Failed to fetch pull requests (code management integration/auth error)',
                             context: GenerateKodyRulesUseCase.name,
                             metadata: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
                                 dateFilter,
                                 repositoryId:
                                     repository?.id ?? 'repository not found',
@@ -735,6 +737,7 @@ export class GenerateKodyRulesUseCase {
                     'Stopped sampling pull requests early (comment budget reached or scan ceiling hit)',
                 context: GenerateKodyRulesUseCase.name,
                 metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
                     pullRequestsInWindow: ordered.length,
                     pullRequestsScanned: scanned,
                     substantiveCommentsSampled: sampled,

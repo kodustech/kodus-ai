@@ -198,6 +198,23 @@ describe('fetchPullRequestComments (the walk itself)', () => {
     // The quality half of the bug: the old walk filled its quota in the order
     // the provider returned, so rules were learned from the OLDEST reviews in
     // the window -- the least current conventions in the repo.
+    // Multi-tenant: "we stopped early on repo X" is unusable without knowing
+    // whose repo X is, and this log is the only trace that coverage was
+    // trimmed at all.
+    it('names the organization when it reports an early stop', async () => {
+        const useCase = makeUseCase(0);
+
+        await useCase.fetchPullRequestComments({}, prs(816), {
+            organizationId: 'org-1',
+        });
+
+        expect(useCase.logger.log).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: expect.objectContaining({ organizationId: 'org-1' }),
+            }),
+        );
+    });
+
     it('takes the NEWEST pull requests, not the first ones the API returned', async () => {
         const useCase = makeUseCase(0);
 
