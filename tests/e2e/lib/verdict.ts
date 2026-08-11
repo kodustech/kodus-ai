@@ -7,7 +7,19 @@ import type { RunVerdict, ScenarioResult } from "./types.js";
 // every entry must have an open issue; quarantine is a parking lot, not a
 // graveyard. `e2e:report --quarantine` lists candidates by measured flake
 // rate so this stays evidence-driven instead of vibes-driven.
-export const QUARANTINED: string[] = [];
+export const QUARANTINED: string[] = [
+    // Bitbucket delivers the `@kody review` comment webhook TWICE. The product
+    // dedupes the second correctly ("Code review already being processed"),
+    // but within the 90s health window the only TERMINAL row for the PR is
+    // that `skipped` duplicate, so the cell reads unhealthy. Seen on runs
+    // 31531667234 and 31534832505; passed on retry in 31504796937, which is
+    // what a timing-dependent race looks like.
+    //
+    // Not proven yet: whether the first review settles late or never. Deciding
+    // that needs the execution rows for the PR, which the evidence does not
+    // capture today. Tracked in #1699 — remove this entry when it closes.
+    'command-review×bitbucket×license-paid',
+];
 
 export function isQuarantined(r: ScenarioResult): boolean {
     return (
