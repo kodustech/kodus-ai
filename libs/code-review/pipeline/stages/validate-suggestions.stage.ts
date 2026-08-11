@@ -128,8 +128,9 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
             platformType,
             codeReviewConfig,
             validSuggestions,
-            changedFiles,
+            changedFiles,discardedSuggestions
         } = context;
+console.log(JSON.stringify({discardedSuggestions,validSuggestions}));
 
         const prNumber = pullRequest.number;
 

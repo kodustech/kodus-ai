@@ -39,6 +39,7 @@ export async function formatSuggestionContent(
         languageResultPrompt?: string;
     },
 ): Promise<Map<number, FormattedSuggestion>> {
+    return new Map();
     if (suggestions.length === 0) {
         return new Map();
     }

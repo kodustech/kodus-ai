@@ -16,7 +16,7 @@ import {
 import type { FileHandle } from 'fs/promises';
 import { constants as fsConstants } from 'fs';
 import { tmpdir } from 'os';
-import { basename, isAbsolute, join, sep, relative } from 'path';
+import { basename, isAbsolute, join, relative, sep } from 'path';
 import { existsSync } from 'fs';
 import { promisify } from 'util';
 
@@ -338,7 +338,7 @@ export class LocalSandboxService implements ISandboxProvider {
                         return { stdout: '', stderr: '', exitCode: 1 };
                     }
                     const tokens = parts
-                        .map((p: string) => p.replace(/^['"]|['"]$/g, ''))
+                        .map((p) => p.replace(/^['"]|['"]$/g, ''))
                         .filter((t) => t !== '2>&1');
                     const [program, ...args] = tokens;
 
@@ -923,7 +923,7 @@ export class LocalSandboxService implements ISandboxProvider {
     }
 
     buildSandboxInstance(tempDir: string): SandboxInstance {
-        const capturedRepoDir = tempDir.split('\\').join('/');
+        const capturedRepoDir = tempDir.replace(/\\/g, '/');
         const remoteCommands = this.buildRemoteCommands(capturedRepoDir);
 
         const execAsync = promisify(exec);
@@ -935,6 +935,21 @@ export class LocalSandboxService implements ISandboxProvider {
                     : 'bash'
                 : undefined;
 
+        // Privileged shell exec for infrastructure callers (graph build,
+        // AST extraction, sandbox bootstrap). Unlike `remoteCommands.exec`
+        // this does NOT whitelist programs — it runs the command through
+        // /bin/sh so mkdir, pipes, redirections, etc. work. That power
+        // comes with a safety contract: **callers MUST shell-quote any
+        // value that could come (directly or transitively) from user
+        // input** (PR filenames, branch names, commit messages, etc.).
+        //
+        // As a runtime tripwire we reject command substitution (`$(...)`
+        // and backticks) on the raw string. Internal infrastructure
+        // commands have no legitimate need to spawn subshells, and a
+        // leaked `$()` is the most common path from "string concatenation
+        // bug" to RCE. The block is conservative by design — if a real
+        // use case ever needs command substitution, it should opt in
+        // explicitly instead of piggybacking on this entry point.
         const run = async (
             command: string,
             opts?: { timeoutMs?: number },

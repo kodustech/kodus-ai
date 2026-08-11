@@ -32,7 +32,7 @@ export class GraphContextService {
         @Inject(REPOSITORY_SERVICE_TOKEN)
         private readonly repositoryService: IRepositoryService,
         private readonly cli: KodusGraphCli,
-    ) { }
+    ) {}
 
     /**
      * Generate context using DB graph as baseline.
@@ -371,10 +371,10 @@ export class GraphContextService {
                     // sandbox. Parameter expansion is a pure text operation
                     // and can't be abused by filename content.
                     `for f in ${fileList}; do ` +
-                    `d="${BASE_FILES_DIR}/\${f%/*}" && ` +
-                    `mkdir -p "$d" 2>/dev/null; ` +
-                    `git show ${safeBaseRef}":$f" > "${BASE_FILES_DIR}/$f" 2>/dev/null || rm -f "${BASE_FILES_DIR}/$f"; ` +
-                    `done`,
+                        `d="${BASE_FILES_DIR}/\${f%/*}" && ` +
+                        `mkdir -p "$d" 2>/dev/null; ` +
+                        `git show ${safeBaseRef}":$f" > "${BASE_FILES_DIR}/$f" 2>/dev/null || rm -f "${BASE_FILES_DIR}/$f"; ` +
+                        `done`,
                     `find ${BASE_FILES_DIR} -type f -size +0c | sed 's|^${BASE_FILES_DIR}/||' | sort`,
                 ].join(' && '),
                 { timeoutMs: 30_000 },

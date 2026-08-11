@@ -395,13 +395,13 @@ export class AstGraphRepository {
                 const parsed = JSON.parse(prNodesJson);
                 prNodes = (parsed.nodes || []).map((n: any) => ({
                     ...n,
-                    qualified_name: (n?.qualified_name || '').replace(/\\/g, '/'),
-                    file_path: (n?.file_path || '').replace(/\\/g, '/'),
+                    qualified_name: (n?.qualified_name || ''),
+                    file_path: (n?.file_path || ''),
                 }));
                 prEdges = (parsed.edges || []).map((e: any) => ({
                     ...e,
-                    source_qualified: (e?.source_qualified || '').replace(/\\/g, '/'),
-                    target_qualified: (e?.target_qualified || '').replace(/\\/g, '/'),
+                    source_qualified: (e?.source_qualified || ''),
+                    target_qualified: (e?.target_qualified || ''),
                 }));
             } catch (e) {
                 this.logger.warn({
@@ -473,9 +473,7 @@ export class AstGraphRepository {
                   AND n.qualified_name IN (SELECT qn FROM neighbor_qnames)
             )
             SELECT json_build_object(
-                'schema_v', 1,
                 'sha', $2::text,
-                'schema_version', '2.1',
                 'nodes', COALESCE((
                     SELECT json_agg(jsonb_strip_nulls(jsonb_build_object(
                         'kind', n.kind,
@@ -544,7 +542,7 @@ export class AstGraphRepository {
                                     ARRAY[]::text[]
                                 )
                             )
-                        ) * 100 >= 80 * cardinality($2::text[])
+                        ) * 10 >= 8 * cardinality($2::text[])
                     `;
                     // Group PR CALLS edges by source -> each changed fn's callee set.
                     const prCalleesBySource = new Map<string, Set<string>>();
@@ -635,39 +633,6 @@ export class AstGraphRepository {
                 });
             }
 
-            // Print deep CTE step logs to identify where duplicate candidate detection breaks.
-            // Dev-only: skipped on normal runs unless DUPLICATE_DEBUG=1.
-            if (includeDuplicates && process.env.DUPLICATE_DEBUG === '1') {
-                try {
-                    const debugDbCheck = await this.dataSource.query(
-                        `SELECT count(*)::int as total_db_nodes FROM ast_nodes WHERE repo_id = $1`,
-                        [repoId],
-                    );
-                    // Outgoing CALLS per PR-source: read straight from the already-parsed
-                    // prEdges (the sandbox-side CALLS edges), which is what the pairing uses.
-                    const debugChangedCalls: any[] = [];
-                    for (const e of prEdges || []) {
-                        if (e?.kind !== 'CALLS') continue;
-                        const src = e.source_qualified;
-                        if (!src) continue;
-                        let row = debugChangedCalls.find((r) => r.qualified_name === src);
-                        if (!row) {
-                            row = { qualified_name: src, callee_count: 0, callees: [] };
-                            debugChangedCalls.push(row);
-                        }
-                        row.callee_count++;
-                        row.callees.push(e.target_qualified);
-                    }
-                } catch (diagErr) {
-                    this.logger.warn({
-                        message: '[AST-GRAPH] Diagnostic query failed in exportSubgraphJsonString',
-                        context: AstGraphRepository.name,
-                        error: diagErr,
-                        metadata: { repoId },
-                    });
-                }
-            }
-
         } catch (e) {
             this.logger.warn({
                 message: '[AST-GRAPH] Failed to parse or process subgraph JSON in exportSubgraphJsonString',
@@ -710,7 +675,7 @@ export class AstGraphRepository {
         // lines and would false-match hunks.
         const addedRangesByFile = new Map<string, Array<[number, number]>>();
         for (const fc of fileChanges || []) {
-            const path = fc?.filename?.replace(/\\/g, '/');
+            const path = fc?.filename;
             if (!path || !fc?.patch) continue;
             const ranges: Array<[number, number]> = [];
             let newStart = 0, newCount = 0, newLine = 0;
@@ -735,7 +700,7 @@ export class AstGraphRepository {
             if (ranges.length) addedRangesByFile.set(path, ranges);
         }
         const lineHitsHunk = (filePath: string, lineStart: number, lineEnd: number) => {
-            const normPath = (filePath || '').replace(/\\/g, '/');
+            const normPath = (filePath || '');
             const ranges = addedRangesByFile.get(normPath);
             if (!ranges) return false;
             for (const [s, e] of ranges) {
@@ -884,8 +849,6 @@ export class AstGraphRepository {
                 why.pairs++;
                 why.i = similarity;
             }
-            // if (process.env.DUPLICATE_DEBUG === '1') {
-            // }
         }
     }
 
@@ -907,14 +870,12 @@ export class AstGraphRepository {
 
         for (const n of nodes) {
             const base = params.length;
-            const normalizedFilePath = (n.file_path || '').replace(/\\/g, '/');
-            const normalizedQualifiedName = (n.qualified_name || '').replace(/\\/g, '/');
             params.push(
                 repoId,
                 n.kind,
                 n.name,
-                normalizedQualifiedName,
-                normalizedFilePath,
+                n.qualified_name,
+                n.file_path,
                 n.line_start ?? null,
                 n.line_end ?? null,
                 n.language ?? null,
@@ -956,15 +917,12 @@ export class AstGraphRepository {
 
         for (const e of edges) {
             const base = params.length;
-            const normalizedFilePath = (e.file_path || '').replace(/\\/g, '/');
-            const normalizedSourceQualified = (e.source_qualified || '').replace(/\\/g, '/');
-            const normalizedTargetQualified = (e.target_qualified || '').replace(/\\/g, '/');
             params.push(
                 repoId,
                 e.kind,
-                normalizedSourceQualified,
-                normalizedTargetQualified,
-                normalizedFilePath,
+                e.source_qualified,
+                e.target_qualified,
+                e.file_path,
                 e.line ?? 0,
                 e.confidence ?? null,
             );
