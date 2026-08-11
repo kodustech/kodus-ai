@@ -76,7 +76,7 @@ export function makeGithubTokenPicker(
 // likely to trip mid-cell and cascade into rate-limit SKIPs.
 const LOW_QUOTA_FRACTION = 0.1;
 
-interface RateLimitInfo {
+export interface RateLimitInfo {
     slot: number;
     remaining: number;
     limit: number;
@@ -235,6 +235,31 @@ export async function preflightIntegrationToken(
         log.info(line);
     }
     return quota;
+}
+
+/**
+ * Sample the integration account's quota mid-run, so a drain can be ATTRIBUTED
+ * instead of guessed at.
+ *
+ * Run 31443426784 is why this exists: the preflight read 5000/5000, and five
+ * minutes later the same account answered `used: 5000` and killed three
+ * scenarios. Nothing in the evidence could say whether the product burned an
+ * hour of quota reviewing a 12-line diff, or whether some other consumer of
+ * that account (it is a personal PAT, not a dedicated one) drained it while we
+ * watched. Those two have opposite fixes, and a whole run is the wrong unit to
+ * discover which one you have.
+ *
+ * Sampling per scenario separates them: spend inside a scenario is ours, spend
+ * between scenarios is somebody else's. /rate_limit does not count against the
+ * quota it reports, so this measurement is free.
+ */
+export async function integrationQuota(
+    env: NodeJS.ProcessEnv = process.env,
+): Promise<RateLimitInfo | undefined> {
+    const info = integrationTokenInfo(env);
+    if (!info.token) return undefined;
+    const quota = await probeQuota(info.token, 0);
+    return quota.ok ? quota : undefined;
 }
 
 export async function preflightGithubRateLimits(

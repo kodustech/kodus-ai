@@ -20,7 +20,9 @@ import {
     makeGithubTokenPicker,
     preflightGithubRateLimits,
     preflightIntegrationToken,
+    integrationQuota,
 } from "./github-token-pool.js";
+import type { RateLimitInfo } from "./github-token-pool.js";
 import { githubAppToken } from "./github-app-token.js";
 import {
     finishOnboarding,
@@ -489,6 +491,9 @@ export function absenceRetryDelayMs(message: string): number {
 export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     const startedAt = new Date().toISOString();
     const results: ScenarioResult[] = [];
+    // Carried ACROSS cells, not per cell: the gap this detects is the time
+    // between two scenarios, and cell boundaries are just another gap.
+    let lastQuotaAfter: RateLimitInfo | undefined;
     const artifactDir = join(opts.artifactRoot, opts.runId);
     mkdirSync(artifactDir, { recursive: true });
 
@@ -761,6 +766,25 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
             );
             for (let attempt = 1; attempt <= 2; attempt++) {
                 const t0 = Date.now();
+                // Attribute GitHub spend to a scenario, or to whatever else
+                // shares this account. See integrationQuota().
+                const quotaBefore =
+                    cell.provider === 'github' && !opts.dryRun
+                        ? await integrationQuota()
+                        : undefined;
+                if (quotaBefore && lastQuotaAfter) {
+                    const idleSpend =
+                        lastQuotaAfter.remaining - quotaBefore.remaining;
+                    // Nothing of ours ran in this gap. A non-trivial number
+                    // here means the account is shared, and no amount of
+                    // tuning our own request volume will save the run.
+                    if (idleSpend > 50) {
+                        log.warn(
+                            `[quota] integration account lost ${idleSpend} requests while NO scenario was running — ` +
+                                'something outside this run shares that credential. Give the product a dedicated account.',
+                        );
+                    }
+                }
                 try {
                     const provider = makeProvider(
                         cell.provider,
@@ -953,6 +977,23 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     );
                     if (opts.failFast) failFastHit = true;
                     break;
+                } finally {
+                    if (quotaBefore) {
+                        const after = await integrationQuota();
+                        if (after) {
+                            const spent =
+                                quotaBefore.remaining - after.remaining;
+                            // Logged on every scenario, not only when it goes
+                            // wrong: the number that matters is the one from
+                            // the run that PASSED, because that is the budget
+                            // the next scenario has left to work with.
+                            log.info(
+                                `[quota] ${scenario.id}: integration account spent ${spent} github requests ` +
+                                    `(${after.remaining}/${after.limit} left, resets ${after.resetIso})`,
+                            );
+                            lastQuotaAfter = after;
+                        }
+                    }
                 }
             }
             if (failFastHit) break;
