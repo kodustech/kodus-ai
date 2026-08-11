@@ -141,12 +141,17 @@ export interface IKodyRule {
     /**
      * Set when this rule was auto-paused at creation/reactivation time
      * because activating it would have exceeded the free plan's active-rule
-     * quota (`KodyRulesService.ensureFreePlanLimit`). Distinguishes a
+     * quota (`KodyRulesService.resolveStatusWithinPlanLimit`). Distinguishes a
      * plan-limit lock from a rule the user paused themselves — the web UI
      * renders these as "Locked" with an upgrade CTA instead of a plain
      * pause toggle. Cleared whenever the rule transitions to `ACTIVE`
      * (`KodyRulesService.createOrUpdate` clears it once the org is back
      * under quota or the plan changes).
+     *
+     * NOTE: This flag is persisted at write time and is stale-safe on reads
+     * — the review pipeline (`codeBaseConfig.service.ts`) normalizes
+     * `PAUSED + lockedByPlan` back to `ACTIVE` when `shouldLimitResources`
+     * is false (i.e., the org is on a paid plan). See #1626.
      */
     lockedByPlan?: boolean;
 }
