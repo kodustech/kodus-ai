@@ -167,6 +167,11 @@ function extractTaskIdFromText(text: string | undefined): string | undefined {
         return explicit[1].trim();
     }
 
+    const azureBoards = text.match(/\bAB#(\d+)\b/i);
+    if (azureBoards?.[1]) {
+        return azureBoards[1];
+    }
+
     const issueKey = text.match(/\b([A-Z][A-Z0-9]+-\d+)\b/);
     return issueKey?.[1];
 }

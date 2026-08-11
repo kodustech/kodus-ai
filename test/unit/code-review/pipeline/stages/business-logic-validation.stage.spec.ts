@@ -110,6 +110,30 @@ describe('BusinessLogicValidationStage', () => {
                 expect.objectContaining({ reason: 'no_signals' }),
             );
         });
+
+        it('does not skip when Azure Boards AB# is only in the PR title with Azure DevOps MCP', async () => {
+            mcpManagerService.getConnections.mockResolvedValue([
+                {
+                    appName: 'Azure DevOps',
+                    provider: 'custom',
+                    organizationId: 'org-1',
+                },
+            ]);
+
+            const context = buildContext({
+                pullRequest: {
+                    number: 74,
+                    body: '',
+                    title: 'feat(AB#5625): per-company overrides',
+                    head: { ref: 'KEYTO-5625' },
+                    base: { ref: 'main' },
+                },
+            });
+
+            const decision = await (stage as any).evaluateSkip(context);
+
+            expect(decision).toBeNull();
+        });
     });
 
     describe('executeStage', () => {
@@ -235,7 +259,7 @@ describe('BusinessLogicValidationStage', () => {
     });
 
     describe('computePrBodyHash', () => {
-        it('only depends on the PR body â€” title-only edits should not re-trigger reviews', () => {
+        it('only depends on the PR body — title-only edits should not re-trigger reviews', () => {
             const hash1 = (stage as any).computePrBodyHash('same body');
             const hash2 = (stage as any).computePrBodyHash('same body');
             expect(hash1).toBe(hash2);
@@ -266,6 +290,20 @@ describe('BusinessLogicValidationStage', () => {
             );
             expect(keys).toEqual(['DL-2773']);
         });
+
+        it('extracts Azure Boards AB# refs as AB#id and bare numeric id', () => {
+            const keys = (stage as any).detectTicketKeys(
+                'feat(AB#5625): per-company overrides',
+            );
+            expect(keys).toEqual(expect.arrayContaining(['AB#5625', '5625']));
+        });
+
+        it('extracts Azure DevOps work item ids from work-item URLs', () => {
+            const keys = (stage as any).detectTicketKeys(
+                'See https://dev.azure.com/keytogroup/KEYTO/_workitems/edit/5625',
+            );
+            expect(keys).toEqual(expect.arrayContaining(['AB#5625', '5625']));
+        });
     });
 
     describe('hasRelevantBusinessSignals', () => {
@@ -281,6 +319,22 @@ describe('BusinessLogicValidationStage', () => {
             const result = (stage as any).hasRelevantBusinessSignals(
                 'LKDB-286 refactor logging',
                 ['atlassianrovo'],
+            );
+            expect(result).toBe(true);
+        });
+
+        it('matches Azure Boards AB# refs when Azure DevOps MCP is connected', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'feat(AB#5625): per-company overrides',
+                ['azuredevops'],
+            );
+            expect(result).toBe(true);
+        });
+
+        it('matches Azure DevOps work-item URLs', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'https://dev.azure.com/keytogroup/KEYTO/_workitems/edit/5625',
+                ['azuredevops'],
             );
             expect(result).toBe(true);
         });
