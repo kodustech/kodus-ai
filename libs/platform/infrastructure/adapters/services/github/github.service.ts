@@ -5,6 +5,7 @@ import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/i
 import { graphql } from '@octokit/graphql';
 import { enterpriseServer313 } from '@octokit/plugin-enterprise-server';
 import { retry } from '@octokit/plugin-retry';
+import { groupCommentsByPullRequest } from './github-comment-sample';
 import { throttling } from '@octokit/plugin-throttling';
 import { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
 
@@ -6617,6 +6618,147 @@ This is an experimental feature that generates committable changes. Review the d
                 error: error.message,
                 metadata: params,
             });
+            return null;
+        }
+    }
+
+    /**
+     * Recent review + conversation comments for a whole repository, newest
+     * first, grouped by pull request.
+     *
+     * Answers the question rule generation actually asks -- "what have
+     * reviewers been saying in this repo lately" -- with two paginated
+     * listings, instead of walking every PR in the window and issuing three
+     * calls each.
+     *
+     * The old shape cost 3 requests per PR, uncapped, to produce a list the
+     * consumer then truncated to 100 comments. On a repo with 816 PRs in the
+     * window that was ~2450 requests out of GitHub's 5000/hour, spent to
+     * throw almost all of it away -- see issue #1686. Here the cap lives at
+     * the source: we stop paginating once enough substantive comments are in
+     * hand.
+     *
+     * It also fixes what those 100 comments WERE. The per-PR loop filled the
+     * quota in PR order, so the surviving comments came from the OLDEST pull
+     * requests in the window -- rules were being learned from the least
+     * current conventions in the repo. Sorting by recency is the point, not a
+     * side effect.
+     */
+    async getRecentRepositoryComments(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: {
+            id: string;
+            name: string;
+        };
+        filters?: {
+            startDate?: string;
+            endDate?: string;
+        };
+        limit?: number;
+    }): Promise<Array<{
+        pr: { pull_number: number };
+        generalComments: any[];
+        reviewComments: any[];
+        files: { filename: string }[];
+    }> | null> {
+        try {
+            const { organizationAndTeamData, repository, filters } = params;
+            // Oversampled against the ~100 the consumer keeps: bot authors,
+            // Kody's own past comments and denylisted reviewers are all
+            // dropped downstream, so collecting exactly 100 here would leave
+            // fewer than that after filtering.
+            const limit = params.limit ?? 300;
+
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(organizationAndTeamData);
+
+            const startTime = filters?.startDate
+                ? new Date(filters.startDate).getTime()
+                : null;
+            const endTime = filters?.endDate
+                ? new Date(filters.endDate).getTime()
+                : null;
+
+            // Mirrors the consumer's own filter (commentAnalysis.service:
+            // `body.length > 100`). Applying it while paginating means the
+            // budget counts comments that can actually become a rule, not
+            // "LGTM" and ":+1:".
+            const substantive = (body?: string): boolean =>
+                (body ?? '').length > 100;
+
+            const budget = { kept: 0 };
+
+            // Shared across both listings: the two endpoints feed one sample,
+            // so they must not each spend the full budget.
+            const collectPage = <T extends { created_at: string; body?: string }>(
+                page: T[],
+                done: () => void,
+            ): T[] => {
+                const inWindow: T[] = [];
+                for (const comment of page) {
+                    const t = new Date(comment.created_at).getTime();
+                    // Sorted newest first, so the first one older than the
+                    // window means every remaining page is older too.
+                    if (startTime !== null && t < startTime) {
+                        done();
+                        break;
+                    }
+                    if (endTime !== null && t > endTime) {
+                        continue;
+                    }
+                    inWindow.push(comment);
+                    if (substantive(comment.body)) {
+                        budget.kept++;
+                        if (budget.kept >= limit) {
+                            done();
+                            break;
+                        }
+                    }
+                }
+                return inWindow;
+            };
+
+            const listParams = {
+                owner: githubAuthDetail.org,
+                repo: repository.name,
+                sort: 'created' as const,
+                direction: 'desc' as const,
+                per_page: 100,
+                ...(filters?.startDate && { since: filters.startDate }),
+            };
+
+            const reviewComments = await octokit.paginate(
+                octokit.pulls.listReviewCommentsForRepo,
+                listParams,
+                (response, done) => collectPage(response.data, done),
+            );
+
+            const issueComments = await octokit.paginate(
+                octokit.issues.listCommentsForRepo,
+                listParams,
+                (response, done) => collectPage(response.data, done),
+            );
+
+            // /issues/comments covers issues AND pull requests -- on GitHub a
+            // PR is an issue -- so the sample is filtered and grouped by
+            // github-comment-sample.ts, where that logic is unit-tested.
+            return groupCommentsByPullRequest(
+                reviewComments as any[],
+                issueComments as any[],
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get recent repository comments',
+                context: GithubService.name,
+                serviceName: 'GithubService getRecentRepositoryComments',
+                error: error.message,
+                metadata: params,
+            });
+            // null (not []) so the caller can tell "this provider path
+            // failed, fall back to the per-PR walk" from "this repo genuinely
+            // has no recent comments".
             return null;
         }
     }

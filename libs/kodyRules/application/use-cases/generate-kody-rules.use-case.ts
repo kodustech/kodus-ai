@@ -261,8 +261,22 @@ export class GenerateKodyRulesUseCase {
                 );
 
             for (const repository of filteredRepositories) {
-                const pullRequests =
-                    await this.codeManagementService.getPullRequestsByRepository(
+                // Preferred path: ask the provider for the repo's recent
+                // comments directly, newest first, and stop once we have
+                // enough. Bounded by the sample we want rather than by how
+                // many PRs the repo happens to have.
+                //
+                // The fallback below walks every PR in the window and spends
+                // 3 calls on each, which on an active repo can exceed the
+                // account's entire hourly GitHub budget before it finishes
+                // (issue #1686). It stays only for providers with no
+                // repository-level comment listing.
+                // Optional call: the capability is declared optional on the
+                // contract, so a platform (or a partially-wired facade) that
+                // lacks it degrades to the walk below instead of failing rule
+                // generation outright.
+                const sampled =
+                    await this.codeManagementService.getRecentRepositoryComments?.(
                         {
                             organizationAndTeamData,
                             repository,
@@ -272,42 +286,61 @@ export class GenerateKodyRulesUseCase {
                         },
                     );
 
-                // null/undefined = fetch failed (e.g. GitHub App install
-                // returning 404 on the access token); an empty array is a
-                // legitimate "no PRs in this window".
-                if (pullRequests == null) {
-                    this.logger.error({
-                        message:
-                            'Failed to fetch pull requests (code management integration/auth error)',
-                        context: GenerateKodyRulesUseCase.name,
-                        metadata: {
-                            dateFilter,
-                            repositoryId: repository?.id ?? 'repository not found',
-                        },
-                    });
-                    failedRepositories.push(repository?.id ?? 'unknown');
-                    continue;
-                }
+                let comments = sampled;
 
-                if (pullRequests.length === 0) {
-                    this.logger.log({
-                        message: 'No pull requests found',
-                        context: GenerateKodyRulesUseCase.name,
-                        metadata: {
-                            dateFilter,
-                            repositoryId: repository
-                                ? repository.id
-                                : 'repository not found',
-                        },
-                    });
-                    continue;
-                }
+                // null means the provider has no repository-level listing (or
+                // the call failed) -- NOT "no comments". Only then do we pay
+                // for the per-PR walk.
+                if (comments == null) {
+                    const pullRequests =
+                        await this.codeManagementService.getPullRequestsByRepository(
+                            {
+                                organizationAndTeamData,
+                                repository,
+                                filters: {
+                                    ...dateFilter,
+                                },
+                            },
+                        );
 
-                const comments = await this.fetchPullRequestComments(
-                    repository,
-                    pullRequests,
-                    organizationAndTeamData,
-                );
+                    // null/undefined = fetch failed (e.g. GitHub App install
+                    // returning 404 on the access token); an empty array is a
+                    // legitimate "no PRs in this window".
+                    if (pullRequests == null) {
+                        this.logger.error({
+                            message:
+                                'Failed to fetch pull requests (code management integration/auth error)',
+                            context: GenerateKodyRulesUseCase.name,
+                            metadata: {
+                                dateFilter,
+                                repositoryId:
+                                    repository?.id ?? 'repository not found',
+                            },
+                        });
+                        failedRepositories.push(repository?.id ?? 'unknown');
+                        continue;
+                    }
+
+                    if (pullRequests.length === 0) {
+                        this.logger.log({
+                            message: 'No pull requests found',
+                            context: GenerateKodyRulesUseCase.name,
+                            metadata: {
+                                dateFilter,
+                                repositoryId: repository
+                                    ? repository.id
+                                    : 'repository not found',
+                            },
+                        });
+                        continue;
+                    }
+
+                    comments = await this.fetchPullRequestComments(
+                        repository,
+                        pullRequests,
+                        organizationAndTeamData,
+                    );
+                }
 
                 if (!comments || comments.length === 0) {
                     this.logger.log({
