@@ -1,6 +1,6 @@
 import type { KodusSession, RunContext } from './types.js';
 import { http, ensureOk } from './http.js';
-import { pollUntil } from '../providers/base.js';
+import { pollUntil, settle } from '../providers/base.js';
 
 /**
  * Execution HEALTH assertion: the review's automation execution must end
@@ -12,6 +12,51 @@ import { pollUntil } from '../providers/base.js';
  * hits/hour on a customer instance, every scenario still green). Output
  * asserts don't see that; only the execution status does.
  */
+/**
+ * Wait until the PR's in-flight automation has SETTLED, so a follow-up
+ * trigger is not refused as a duplicate.
+ *
+ * Opening a PR starts an automation that takes a per-PR distributed lock
+ * (`CODE_REVIEW:<org>:<repo>:<pr>`, 60s TTL) before the pipeline decides
+ * anything -- including before it decides to skip. Anything arriving while
+ * that lock is held is answered with "Code review already being processed"
+ * and dropped, with no retry.
+ *
+ * Best effort by design: if no automation row ever appears, there is nothing
+ * holding the lock and the caller should proceed. This waits for a fact
+ * instead of sleeping a fixed interval, which is what made the same scenario
+ * pass on fast providers and fail on bitbucket (#1699).
+ */
+export async function waitForAutomationToSettle(
+    ctx: RunContext,
+    session: KodusSession,
+    prNumber: number,
+    opts: { timeoutSec?: number } = {},
+): Promise<string | null> {
+    const settled = await pollUntil<string>(
+        async () => {
+            const resp = await http<any>(
+                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${prNumber}&teamId=${encodeURIComponent(session.teamId)}&limit=5`,
+                {
+                    headers: { Authorization: `Bearer ${session.accessToken}` },
+                    timeoutMs: 30_000,
+                },
+            );
+            if (resp.status < 200 || resp.status >= 300) return null;
+            // null here means "nothing terminal yet" -- either no row at all
+            // or one still running. Both mean: keep waiting.
+            return findExecutionStatus(resp.body, prNumber);
+        },
+        { intervalSec: 5, timeoutSec: opts.timeoutSec ?? 120 },
+    );
+
+    // The execution row is written just BEFORE the lock is released (the
+    // release lives in the finally that runs after completion), so settling
+    // is not quite the same instant as the lock being free.
+    if (settled) await settle(3_000);
+    return settled;
+}
+
 export async function assertHealthyExecution(
     ctx: RunContext,
     session: KodusSession,
