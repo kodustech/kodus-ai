@@ -129,6 +129,8 @@ type Harness = {
     directoryDeleteCalls: () => string[];
     /** The org-level `configs` the reconcile wrote, if it wrote at all. */
     reconciledGlobalConfigs: () => unknown;
+    /** The whole CENTRALIZED_CONFIG payload the sync wrote back. */
+    savedCentralizedConfig: () => any;
 };
 
 /**
@@ -142,6 +144,10 @@ async function buildHarness(opts: {
     managedGlobalConfig?: boolean;
     repositories?: ReturnType<typeof threeSelectedRepos>;
     useRealDeleteUseCase?: boolean;
+    /** What the second CENTRALIZED_CONFIG read returns; `null` = parameter gone. */
+    midSweepValue?: any;
+    /** Seeds the FIRST read, so a stale spread has something to resurrect. */
+    activePullRequest?: any;
 }): Promise<Harness> {
     const codeReviewConfig = {
         configValue: opts.repositories ?? threeSelectedRepos(),
@@ -157,13 +163,30 @@ async function buildHarness(opts: {
     if (opts.managedGlobalConfig !== undefined) {
         centralizedConfigValue.managedGlobalConfig = opts.managedGlobalConfig;
     }
+    if (opts.activePullRequest !== undefined) {
+        centralizedConfigValue.activePullRequest = opts.activePullRequest;
+    }
 
+    // The service reads CENTRALIZED_CONFIG twice: once up front to load the
+    // baseline, once again right before writing it back. `midSweepValue` is
+    // what the second read sees, standing in for another writer — a webhook
+    // clearing `activePullRequest`, or an admin disabling the feature — that
+    // landed while the sweep was still deleting scopes.
+    let centralizedReads = 0;
     const parametersService = {
         findByKey: jest.fn().mockImplementation((key: string) => {
             if (key === ParametersKey.CODE_REVIEW_CONFIG) {
                 return Promise.resolve(codeReviewConfig);
             }
             if (key === ParametersKey.CENTRALIZED_CONFIG) {
+                centralizedReads += 1;
+                if (centralizedReads > 1 && opts.midSweepValue !== undefined) {
+                    return Promise.resolve(
+                        opts.midSweepValue === null
+                            ? null
+                            : { configValue: opts.midSweepValue },
+                    );
+                }
                 return Promise.resolve({ configValue: centralizedConfigValue });
             }
             return Promise.resolve({ configValue: {} });
@@ -311,6 +334,10 @@ async function buildHarness(opts: {
             )
                 .filter((c: any[]) => c[0]?.directoryId)
                 .map((c: any[]) => `${c[0].repositoryId}:${c[0].directoryId}`),
+        savedCentralizedConfig: () =>
+            createOrUpdateParametersUseCase.execute.mock.calls
+                .filter((c: any[]) => c[0] === ParametersKey.CENTRALIZED_CONFIG)
+                .pop()?.[1],
         reconciledGlobalConfigs: () => {
             const call = createOrUpdateParametersUseCase.execute.mock.calls
                 .filter((c: any[]) => c[0] === ParametersKey.CODE_REVIEW_CONFIG)
@@ -481,5 +508,90 @@ describe('#1579 Sync must not read "absent" as "removed"', () => {
         // Absence of a global file it never owned must not reset the org's
         // `configs` (default model / BYOK / language) to {}.
         expect(h.reconciledGlobalConfigs()).not.toEqual({});
+    });
+
+    // -- the baseline write must not clobber concurrent writers ---------
+    //
+    // CENTRALIZED_CONFIG carries `enabled`, `repository` and
+    // `activePullRequest` alongside the baseline, and the sweep is long:
+    // one delete use case per stale scope, each a round of git and database
+    // calls. CentralizedConfigPrService clears `activePullRequest` from a
+    // webhook and CentralizedConfigInitUseCase flips `enabled` from the UI,
+    // both of which can land in that window.
+
+    it('K: a configuration disabled during the sweep is not re-enabled', async () => {
+        const h = await buildHarness({
+            managedRepositoryIds: ['repo-1', 'repo-2', 'repo-3'],
+            // An admin turned centralized config off while the sweep ran —
+            // exactly what CentralizedConfigInitUseCase writes.
+            midSweepValue: {
+                enabled: false,
+                repository: null,
+                activePullRequest: null,
+            },
+        });
+
+        await h.service.removeStaleConfigs({
+            organizationAndTeamData,
+            configFiles: COMPLETE,
+            actor,
+        });
+
+        const written = h.savedCentralizedConfig();
+
+        expect(written.enabled).toBe(false);
+        expect(written.repository).toBeNull();
+        // Non-vacuous: the baseline really was recorded on that same write.
+        expect(written.managedRepositoryIds?.sort()).toEqual([
+            'repo-1',
+            'repo-2',
+            'repo-3',
+        ]);
+    });
+
+    it('L: a pull request cleared during the sweep is not resurrected', async () => {
+        const h = await buildHarness({
+            managedRepositoryIds: ['repo-1', 'repo-2', 'repo-3'],
+            // A pull request was open when the sweep started...
+            activePullRequest: {
+                prUrl: 'https://github.com/acme/config/pull/7',
+                prNumber: 7,
+                sourceBranch: 'kodus-centralized-config',
+                repository: { id: 'config-repo', name: 'config-repo' },
+                createdAt: '2026-07-30T10:00:00.000Z',
+                updatedAt: '2026-07-30T10:00:00.000Z',
+            },
+            // ...and merged mid-sweep, so the webhook nulled the metadata.
+            midSweepValue: {
+                enabled: true,
+                repository: { id: 'config-repo', name: 'config-repo' },
+                activePullRequest: null,
+            },
+        });
+
+        await h.service.removeStaleConfigs({
+            organizationAndTeamData,
+            configFiles: COMPLETE,
+            actor,
+        });
+
+        expect(h.savedCentralizedConfig().activePullRequest).toBeNull();
+    });
+
+    it('M: a parameter deleted during the sweep is not recreated', async () => {
+        const h = await buildHarness({
+            managedRepositoryIds: ['repo-1', 'repo-2', 'repo-3'],
+            midSweepValue: null,
+        });
+
+        await h.service.removeStaleConfigs({
+            organizationAndTeamData,
+            configFiles: COMPLETE,
+            actor,
+        });
+
+        // Writing would leave a parameter holding a baseline and nothing else
+        // — no `repository`, no `enabled`.
+        expect(h.savedCentralizedConfig()).toBeUndefined();
     });
 });

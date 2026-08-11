@@ -846,15 +846,46 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             // deleted `kodus-config.yml` from one that never existed. Written
             // even when nothing changed — the baseline is what makes the very
             // first run safe and every later run precise.
-            await this.createOrUpdateParametersUseCase.execute(
+            //
+            // Re-read before writing. The snapshot taken at the top of this
+            // method is stale by now: the delete use case ran once per stale
+            // scope in between, each one a round of git and database calls, so
+            // a large organization spends seconds to minutes here. This key
+            // holds more than the baseline — `enabled`, `repository` and
+            // `activePullRequest` live on it, and two other writers touch them
+            // meanwhile: CentralizedConfigPrService clears `activePullRequest`
+            // from a webhook, and CentralizedConfigInitUseCase flips `enabled`
+            // when an admin turns the feature off. Spreading the stale
+            // snapshot would resurrect a cleared pull request, or re-enable a
+            // configuration the user just disabled.
+            const freshCentralizedConfig = await this.parametersService.findByKey(
                 ParametersKey.CENTRALIZED_CONFIG,
-                {
-                    ...(centralizedConfigParameter?.configValue ?? {}),
-                    managedRepositoryIds: Array.from(desiredRepositoryConfigs),
-                    managedGlobalConfig: desiredHasGlobalConfig,
-                },
                 organizationAndTeamData,
             );
+
+            // Gone entirely means the organization dropped centralized config
+            // mid-sweep. Writing here would recreate the parameter from just
+            // the baseline, leaving a record with no `repository` behind it.
+            if (!freshCentralizedConfig?.configValue) {
+                this.logger.warn({
+                    message:
+                        'Centralized config parameter disappeared mid-sync; not recording the managed-repository baseline',
+                    context: CentralizedConfigService.name,
+                    metadata: { organizationAndTeamData },
+                });
+            } else {
+                await this.createOrUpdateParametersUseCase.execute(
+                    ParametersKey.CENTRALIZED_CONFIG,
+                    {
+                        ...freshCentralizedConfig.configValue,
+                        managedRepositoryIds: Array.from(
+                            desiredRepositoryConfigs,
+                        ),
+                        managedGlobalConfig: desiredHasGlobalConfig,
+                    },
+                    organizationAndTeamData,
+                );
+            }
 
             if (!hasChanges) {
                 return {
