@@ -124,5 +124,6 @@ export interface IKodyRulesService extends IKodyRulesRepository {
 
     syncRulesWithPlanLimit(
         organizationAndTeamData: OrganizationAndTeamData,
+        opts?: { entity?: KodyRulesEntity | null; limited?: boolean },
     ): Promise<KodyRulesEntity | null>;
 }

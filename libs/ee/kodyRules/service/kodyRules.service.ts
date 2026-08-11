@@ -296,33 +296,43 @@ export class KodyRulesService implements IKodyRulesService {
      */
     async syncRulesWithPlanLimit(
         organizationAndTeamData: OrganizationAndTeamData,
+        opts: { entity?: KodyRulesEntity | null; limited?: boolean } = {},
     ): Promise<KodyRulesEntity | null> {
         const organizationId = organizationAndTeamData.organizationId;
         if (!organizationId) return null;
 
+        // The review pipeline already loaded the rules; it passes the entity in
+        // so this fail-safe doesn't repeat the round-trip.
         const entity =
-            await this.kodyRulesRepository.findByOrganizationId(
+            opts.entity ??
+            (await this.kodyRulesRepository.findByOrganizationId(
                 organizationId,
-            );
+            ));
         const existingRules = entity?.toObject()?.rules || [];
 
         if (!existingRules?.length) return entity;
 
-        let isLimited = false;
-        try {
-            isLimited =
-                await this.permissionValidationService.shouldLimitResources(
-                    organizationAndTeamData,
-                    KodyRulesService.name,
-                );
-        } catch (error) {
-            this.logger.error({
-                message: 'Error checking resource limits for rules sync',
-                context: KodyRulesService.name,
-                error,
-                metadata: { organizationAndTeamData },
-            });
-            return entity;
+        let isLimited: boolean;
+        if (typeof opts.limited === 'boolean') {
+            // codeBaseConfig already resolved the plan gate for the review —
+            // reuse it instead of a second license lookup.
+            isLimited = opts.limited;
+        } else {
+            try {
+                isLimited =
+                    await this.permissionValidationService.shouldLimitResources(
+                        organizationAndTeamData,
+                        KodyRulesService.name,
+                    );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Error checking resource limits for rules sync',
+                    context: KodyRulesService.name,
+                    error,
+                    metadata: { organizationAndTeamData },
+                });
+                return entity;
+            }
         }
 
         const changedRules: Array<{ ruleId: string; patch: Partial<IKodyRule> }> = [];

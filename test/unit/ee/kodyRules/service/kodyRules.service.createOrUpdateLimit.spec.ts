@@ -535,4 +535,125 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
         expect(updatedRules[11].status).toBe(KodyRulesStatus.PAUSED);
         expect(updatedRules[11].lockedByPlan).toBe(true);
     });
+
+    // The review pipeline (codeBaseConfig) already holds the entity and the
+    // resolved plan gate, so it passes them in to avoid duplicate lookups.
+    it('reuses caller-supplied entity + limited without re-loading or re-checking the plan', async () => {
+        const existingRules = [
+            {
+                uuid: 'r1',
+                title: 'Locked',
+                status: KodyRulesStatus.PAUSED,
+                lockedByPlan: true,
+            },
+        ];
+        let currentEntity = KodyRulesEntity.create({
+            uuid: 'kr-1',
+            organizationId: 'org-1',
+            rules: existingRules,
+        });
+
+        const repositoryMock = {
+            findByOrganizationId: jest
+                .fn()
+                .mockImplementation(() => Promise.resolve(currentEntity)),
+            updateRule: jest.fn().mockImplementation((_uuid, ruleId, patch) => {
+                const rules = currentEntity
+                    .toObject()
+                    .rules.map((r) =>
+                        r.uuid === ruleId ? { ...r, ...patch } : r,
+                    );
+                currentEntity = KodyRulesEntity.create({
+                    ...currentEntity.toObject(),
+                    rules,
+                });
+                return Promise.resolve(currentEntity);
+            }),
+        };
+        const permissionValidationServiceMock = {
+            shouldLimitResources: jest.fn().mockResolvedValue(true),
+        };
+
+        const service = new KodyRulesService(
+            repositoryMock as any,
+            { emit: jest.fn() } as any,
+            {} as any,
+            {} as any,
+            { MAX_KODY_RULES: 10 } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            permissionValidationServiceMock as any,
+            {} as any,
+            {} as any,
+        );
+
+        await service.syncRulesWithPlanLimit(organizationAndTeamData, {
+            entity: currentEntity,
+            limited: false,
+        });
+
+        // `limited` reused → no license lookup.
+        expect(
+            permissionValidationServiceMock.shouldLimitResources,
+        ).not.toHaveBeenCalled();
+        // Initial load skipped (entity reused); findByOrganizationId only runs
+        // once, for the fresh re-fetch after the write.
+        expect(repositoryMock.findByOrganizationId).toHaveBeenCalledTimes(1);
+        // Still reconciles: the plan-locked rule is reactivated.
+        expect(repositoryMock.updateRule).toHaveBeenCalled();
+        expect(currentEntity.toObject().rules[0].status).toBe(
+            KodyRulesStatus.ACTIVE,
+        );
+        expect(currentEntity.toObject().rules[0].lockedByPlan).toBe(false);
+    });
+
+    it('is a zero-lookup no-op when the passed rules already match the plan', async () => {
+        const entity = KodyRulesEntity.create({
+            uuid: 'kr-1',
+            organizationId: 'org-1',
+            rules: [
+                {
+                    uuid: 'r1',
+                    status: KodyRulesStatus.ACTIVE,
+                    lockedByPlan: false,
+                },
+            ],
+        });
+
+        const repositoryMock = {
+            findByOrganizationId: jest.fn(),
+            updateRule: jest.fn(),
+        };
+        const permissionValidationServiceMock = {
+            shouldLimitResources: jest.fn(),
+        };
+
+        const service = new KodyRulesService(
+            repositoryMock as any,
+            { emit: jest.fn() } as any,
+            {} as any,
+            {} as any,
+            { MAX_KODY_RULES: 10 } as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            permissionValidationServiceMock as any,
+            {} as any,
+            {} as any,
+        );
+
+        // Paid plan, nothing locked → nothing to do, and it must not touch the
+        // DB or the license service (the common per-review path).
+        await service.syncRulesWithPlanLimit(organizationAndTeamData, {
+            entity,
+            limited: false,
+        });
+
+        expect(repositoryMock.findByOrganizationId).not.toHaveBeenCalled();
+        expect(
+            permissionValidationServiceMock.shouldLimitResources,
+        ).not.toHaveBeenCalled();
+        expect(repositoryMock.updateRule).not.toHaveBeenCalled();
+    });
 });
