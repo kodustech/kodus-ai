@@ -70,6 +70,7 @@ import { CreateOrUpdateCodeReviewParameterDto } from '@libs/organization/dtos/cr
 import { DeleteRepositoryCodeReviewParameterDto } from '@libs/organization/dtos/delete-repository-code-review-parameter.dto';
 import { PreviewPrSummaryDto } from '@libs/organization/dtos/preview-pr-summary.dto';
 import { finished } from 'stream/promises';
+import { createZipArchive } from '@libs/common/utils/zip-archive';
 
 @ApiTags('Parameters')
 @ApiBearerAuth('jwt')
@@ -559,8 +560,7 @@ export class ParametersController {
                 'attachment; filename=centralized-config.zip',
         });
 
-        const { default: archiver } = await import('archiver');
-        const archive = archiver('zip', { zlib: { level: 9 } });
+        const archive = createZipArchive();
         archive.on('error', (err) => {
             response.destroy(err);
         });

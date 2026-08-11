@@ -45,6 +45,7 @@ import { CentralizedConfigDownloadUseCase } from '@libs/centralized-config/appli
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
 import { ApiStandardResponses } from '../../docs/api-standard-responses.decorator';
+import { createZipArchive } from '@libs/common/utils/zip-archive';
 
 @ApiTags('CLI Centralized Config')
 @ApiStandardResponses()
@@ -344,8 +345,7 @@ export class CliCentralizedConfigController {
                 'attachment; filename=centralized-config.zip',
         });
 
-        const { default: archiver } = await import('archiver');
-        const archive = archiver('zip', { zlib: { level: 9 } });
+        const archive = createZipArchive();
         archive.on('error', (err) => {
             response.destroy(err);
         });
