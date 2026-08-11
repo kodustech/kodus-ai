@@ -214,7 +214,12 @@ jobs:
         # toggle (3 sequential PRs, ~10-12min real though its internal poll
         # ceiling is 40min) + rbac. Headroom over the observed ~35min so a
         # slow LLM round on one scenario doesn't kill the whole cell.
-        timeout-minutes: 60
+        # Bitbucket legitimately takes 27-53 min while the other providers
+        # take ~20 (Atlassian's per-endpoint burst limits force a slower
+        # fan-out). At 60 it sat on the edge and run 31526446836 tipped over,
+        # which GitHub reports as `cancelled` -- indistinguishable from
+        # someone hitting stop.
+        timeout-minutes: 90
         environment: ci
         strategy:
             fail-fast: false
@@ -503,6 +508,54 @@ jobs:
                   name: e2e-self-hosted-matrix
                   path: evidence/
                   retention-days: 30
+
+            # A cell that times out uploads nothing, and its job result is
+            # `cancelled` -- which is not `failure`, so the notification below
+            # stays quiet too. The cell then simply is not in the aggregate,
+            # and a run missing a whole provider reads exactly like a run that
+            # never had one. Compare what came back against what was planned,
+            # so lost coverage is stated instead of inferred.
+            # A cell that times out uploads nothing, and its job result is
+            # `cancelled` -- which is not `failure`, so the notification below
+            # stays quiet too. The cell then simply is not in the aggregate,
+            # and a run missing a whole provider reads exactly like a run that
+            # never had one. Compare what came back against what was planned,
+            # so lost coverage is stated rather than inferred.
+            - name: Check every planned cell reported
+              if: always()
+              env:
+                  PLANNED: ${{ needs.plan.outputs.cells }}
+              run: |
+                  set -uo pipefail
+                  printf '%s' "$PLANNED" > planned.json
+                  python3 - <<'PYCHECK'
+                  import glob, json, sys
+
+                  planned = json.load(open('planned.json'))
+                  # Cells are matched on (provider, license) -- the shape the
+                  # plan job emits. Substring matching would be wrong here:
+                  # "github-app" contains "github".
+                  seen = set()
+                  for path in glob.glob('evidence/**/result.json', recursive=True):
+                      try:
+                          data = json.load(open(path))
+                      except Exception:
+                          continue
+                      for r in data.get('results', []):
+                          cell = r.get('cell') or {}
+                          seen.add((cell.get('provider'), cell.get('license')))
+
+                  missing = [
+                      c for c in planned
+                      if (c['provider'], c['license']) not in seen
+                  ]
+                  if missing:
+                      print('::error::Planned cells produced NO evidence (timed out, or died before upload):')
+                      for c in missing:
+                          print('::error::  - {} x {}'.format(c['provider'], c['license']))
+                      sys.exit(1)
+                  print('All {} planned cells reported evidence.'.format(len(planned)))
+                  PYCHECK
 
             - name: Checkout monorepo (for composite action)
               if: needs.matrix.result == 'failure'
