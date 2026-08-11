@@ -17,6 +17,7 @@ import {
 import { deepDifference, deepMerge } from '@libs/common/utils/deep';
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 
+import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { KodusConfigFile } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -33,7 +34,7 @@ type FileEntry = { path: string; content: string };
 type CustomMessagesConfig = NonNullable<KodusConfigFile['customMessages']>;
 
 @Injectable()
-export class CentralizedConfigDownloadUseCase {
+export class CentralizedConfigDownloadUseCase implements IUseCase {
     private readonly logger = createLogger(
         CentralizedConfigDownloadUseCase.name,
     );

@@ -10,9 +10,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CentralizedConfigDownloadUseCase } from './centralized-config-download.use-case';
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 import { CentralizedConfigPrService } from '../../infrastructure/adapters/services/centralized-config-pr.service';
+import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 
 @Injectable()
-export class CentralizedConfigInitUseCase {
+export class CentralizedConfigInitUseCase implements IUseCase {
     private readonly logger = createLogger(CentralizedConfigInitUseCase.name);
 
     constructor(

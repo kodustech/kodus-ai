@@ -531,9 +531,24 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 (meta) => !meta.repositoryId,
             );
 
+            // Repository-scope files only: `{repo}/kodus-config.yml`, never a
+            // directory scope underneath it. Both spellings are checked
+            // because discovery stopped setting `directoryPath` on config-file
+            // metas in 7ca98c8d9 ("Fixing sync multi directories") and emits
+            // `directoryPaths` instead — the singular check alone therefore
+            // admits every directory scope. That was invisible while this set
+            // only meant "keep"; as the #1579 baseline it makes a repository
+            // whose sole centralized file is a directory scope look like the
+            // owner of a repository-level config, so removing that directory
+            // deselects the entire repository.
             const desiredRepositoryConfigs = new Set<string>(
                 configFiles
-                    .filter((meta) => meta.repositoryId && !meta.directoryPath)
+                    .filter(
+                        (meta) =>
+                            meta.repositoryId &&
+                            !meta.directoryPath &&
+                            !meta.directoryPaths?.length,
+                    )
                     .map((meta) => meta.repositoryId as string),
             );
 

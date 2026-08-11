@@ -253,3 +253,4 @@ evals/kody-rules/prod-rules.json
 .grok/settings.json
 
 .tessl
+.claude/skills/tlc-spec-driven

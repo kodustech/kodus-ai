@@ -3,13 +3,10 @@ import {
     ForbiddenException,
     UnauthorizedException,
 } from '@nestjs/common';
-import archiver from 'archiver';
 import { CliCentralizedConfigController } from '../cli/cli-centralized-config.controller';
 import { TEAM_CLI_KEY_CAPABILITIES } from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { ParametersKey } from '@libs/core/domain/enums';
-
-jest.mock('archiver', () => jest.fn());
 
 describe('CliCentralizedConfigController', () => {
     let controller: CliCentralizedConfigController;
@@ -20,7 +17,7 @@ describe('CliCentralizedConfigController', () => {
     let createOrUpdateParametersUseCase: { execute: jest.Mock };
     let centralizedConfigInitUseCase: { execute: jest.Mock };
     let centralizedConfigSyncUseCase: { execute: jest.Mock };
-    let centralizedConfigDownloadUseCase: { execute: jest.Mock };
+    let centralizedConfigDownloadZipUseCase: { execute: jest.Mock };
 
     const teamData = {
         team: { uuid: 'team-1' },
@@ -83,13 +80,8 @@ describe('CliCentralizedConfigController', () => {
             }),
         };
 
-        centralizedConfigDownloadUseCase = {
-            execute: jest.fn().mockResolvedValue([
-                {
-                    path: 'kodus-config.yml',
-                    content: 'version: 1',
-                },
-            ]),
+        centralizedConfigDownloadZipUseCase = {
+            execute: jest.fn(),
         };
 
         controller = new CliCentralizedConfigController(
@@ -100,7 +92,7 @@ describe('CliCentralizedConfigController', () => {
             createOrUpdateParametersUseCase as any,
             centralizedConfigInitUseCase as any,
             centralizedConfigSyncUseCase as any,
-            centralizedConfigDownloadUseCase as any,
+            centralizedConfigDownloadZipUseCase as any,
         );
     });
 
@@ -224,11 +216,11 @@ describe('CliCentralizedConfigController', () => {
         const archiveMock = {
             on: jest.fn().mockReturnThis(),
             pipe: jest.fn(),
-            append: jest.fn(),
-            finalize: jest.fn().mockResolvedValue(undefined),
         };
 
-        (archiver as unknown as jest.Mock).mockReturnValue(archiveMock);
+        centralizedConfigDownloadZipUseCase.execute.mockResolvedValue(
+            archiveMock,
+        );
 
         const response = {
             set: jest.fn(),
@@ -242,11 +234,9 @@ describe('CliCentralizedConfigController', () => {
                 'attachment; filename=centralized-config.zip',
         });
         expect(archiveMock.pipe).toHaveBeenCalledWith(response);
-        expect(archiveMock.append).toHaveBeenCalledWith('version: 1', {
-            name: 'kodus-config.yml',
-        });
-        expect(archiveMock.finalize).toHaveBeenCalled();
-        expect(centralizedConfigDownloadUseCase.execute).toHaveBeenCalledWith(
+        expect(
+            centralizedConfigDownloadZipUseCase.execute,
+        ).toHaveBeenCalledWith(
             {
                 uuid: 'kody',
                 email: 'kody@kodus.io',
