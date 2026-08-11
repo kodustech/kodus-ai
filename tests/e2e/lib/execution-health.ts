@@ -196,7 +196,10 @@ const EXECUTION_STATUSES = new Set([
 ]);
 
 /** Defensive walk: find the newest execution status for the PR number. */
-function findExecutionStatus(node: unknown, prNumber: number): string | null {
+export function findExecutionStatus(
+    node: unknown,
+    prNumber: number,
+): string | null {
     const hits: string[] = [];
     const walk = (n: unknown): void => {
         if (Array.isArray(n)) {
@@ -227,16 +230,28 @@ function findExecutionStatus(node: unknown, prNumber: number): string | null {
     };
     walk(node);
     if (!hits.length) return null;
-    // A single PR can carry MULTIPLE execution rows (verified live on the
-    // QA gitlab tenant: a duplicate/synchronize event adds a newer `skipped`
-    // row next to the real review's `success`). Health is about the review
-    // execution, so prefer a success anywhere over incidental skips, then
-    // real failures, then skips; still-running rows keep the poll alive
-    // only when nothing terminal exists.
-    for (const preferred of ['success', 'partial_error', 'error', 'skipped']) {
+
+    // A single PR can carry MULTIPLE execution rows: a duplicate delivery adds
+    // a `skipped` row next to the real review (seen on the QA gitlab tenant,
+    // and on every bitbucket run — bitbucket delivers the @kody comment
+    // webhook twice and the product correctly dedupes the second).
+    //
+    // Success anywhere wins: the review happened, and an incidental skip
+    // alongside it is not a health problem.
+    if (hits.includes('success')) return 'success';
+
+    // Nothing succeeded YET, but something is still running -- so the answer
+    // is "not yet", not "skipped". This ordering is the bug that failed
+    // command-review on bitbucket twice (#1699): the preference list below
+    // used to be consulted first, so a duplicate's `skipped` row outranked
+    // the real review still in flight, and the poll verdicted `skipped` at
+    // 90s while the review it was waiting for was still running.
+    if (hits.some((h) => h === 'pending' || h === 'in_progress')) return null;
+
+    // Nothing running and nothing succeeded: report the worst terminal row,
+    // preferring real failures over incidental skips.
+    for (const preferred of ['partial_error', 'error', 'skipped']) {
         if (hits.includes(preferred)) return preferred;
     }
-    return hits.every((h) => h === 'pending' || h === 'in_progress')
-        ? null
-        : hits[0];
+    return hits[0];
 }
