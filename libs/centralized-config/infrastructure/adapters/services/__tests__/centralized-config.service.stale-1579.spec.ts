@@ -76,6 +76,24 @@ const REPO_ONLY: IConfigFileMeta[] = [
 ];
 
 /**
+ * repo-1's ONLY centralized file is a directory scope — it has no
+ * `repo-1/kodus-config.yml` of its own.
+ *
+ * Discovery emits `directoryPaths` (plural) for these; `directoryPath`
+ * (singular) has not been set on a config-file meta since commit 7ca98c8d9
+ * ("Fixing sync multi directories", 2026-06-12) replaced it.
+ */
+const DIRECTORY_ONLY: IConfigFileMeta[] = [
+    { path: 'kodus-config.yml' } as any,
+    {
+        repositoryId: 'repo-1',
+        path: 'repo-1/src/kodus-config.yml',
+        centralizedDirectoryPath: 'repo-1/src',
+        directoryPaths: ['/src'],
+    } as any,
+];
+
+/**
  * One selected repo carrying a per-directory scope. Used to exercise the
  * directory reconciliation loop, which `threeSelectedRepos` cannot reach —
  * every repo there has `directories: []`.
@@ -576,6 +594,49 @@ describe('#1579 Sync must not read "absent" as "removed"', () => {
         });
 
         expect(h.savedCentralizedConfig().activePullRequest).toBeNull();
+    });
+
+    // -- directory-only repositories ------------------------------------
+    //
+    // The repository-level baseline is built from
+    // `configFiles.filter((meta) => meta.repositoryId && !meta.directoryPath)`.
+    // Since 7ca98c8d9 discovery never sets `directoryPath` on a config-file
+    // meta — only `directoryPaths` — so that filter admits directory scopes
+    // and records their repository as if it owned a `{repo}/kodus-config.yml`.
+    //
+    // Harmless while the set only meant "keep". As the #1579 baseline it
+    // means the repository goes stale the moment the directory scope is
+    // removed, taking the whole repository's selection with it. Reproduced
+    // against QA: deleting `xfile-review-fixtures/src/kodus-config.yml`
+    // deselected `xfile-review-fixtures`.
+
+    it('N: a directory-only scope is not recorded as a repository baseline', async () => {
+        const h = await buildHarness({ managedRepositoryIds: [] });
+
+        await h.service.removeStaleConfigs({
+            organizationAndTeamData,
+            configFiles: DIRECTORY_ONLY,
+            actor,
+        });
+
+        // repo-1 owns no `repo-1/kodus-config.yml`, so nothing about it is
+        // the repository scope's to reconcile later.
+        expect(h.savedManagedIds()).toEqual([]);
+    });
+
+    it('O: removing a directory-only scope does not deselect the repository', async () => {
+        // What the previous sync recorded, once N holds: repo-1 absent.
+        const h = await buildHarness({ managedRepositoryIds: [] });
+
+        // The directory scope is gone from the config repo now.
+        await h.service.removeStaleConfigs({
+            organizationAndTeamData,
+            configFiles: GLOBAL_ONLY,
+            actor,
+        });
+
+        expect(h.deleteCalls()).toEqual([]);
+        expect(h.reconciledSelection()).toEqual(['<no reconcile call>']);
     });
 
     it('M: a parameter deleted during the sweep is not recreated', async () => {
