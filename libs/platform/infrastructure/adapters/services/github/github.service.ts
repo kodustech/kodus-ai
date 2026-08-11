@@ -6729,6 +6729,14 @@ This is an experimental feature that generates committable changes. Review the d
                 ...(filters?.startDate && { since: filters.startDate }),
             };
 
+            // Sequential on purpose, NOT a missed Promise.all. Both listings
+            // draw from one budget, and running them in order gives review
+            // comments first claim on it -- they carry the `path` they were
+            // left on, which is what replaces the per-PR files call. In
+            // parallel the split between the two sources would depend on
+            // which pages return first, making the sample that feeds rule
+            // generation nondeterministic. The cost is one extra round trip
+            // on a background job nobody is waiting for.
             const reviewComments = await octokit.paginate(
                 octokit.pulls.listReviewCommentsForRepo,
                 listParams,
