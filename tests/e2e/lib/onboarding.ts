@@ -691,8 +691,14 @@ export async function finishOnboarding(
             `Onboarding already finished this run for repo ${repo.name ?? repo.full_name} — reusing ` +
                 '(skips a ~3-calls-per-PR GitHub backfill)',
         );
-        // Still reset the config. Scenarios depend on this side effect of
-        // finishOnboarding, and it is the POST that is expensive, not this.
+        // Same settle as the uncached path below. Caching removed the POST,
+        // and with it ~10s of slack before the scenario starts opening PRs --
+        // shortening a sequence the comment below documents as timing
+        // sensitive. Run 31531667234 lost bitbucket's command-review to
+        // "Code review already being processed", the duplicate-review shape
+        // of that same race. The POST was the expensive part; this wait is
+        // not what we were trying to save.
+        await settle(10_000);
         await resetCodeReviewConfig(target, session);
         return;
     }

@@ -71,13 +71,27 @@ export async function assertHealthyExecution(
         finalStatus !== null,
         `No settled automation execution found for PR #${prNumber} within 90s — cannot verify review health`,
     );
+    // The explanation has to match the status we actually saw. It used to
+    // describe partial_error unconditionally, so a run that observed
+    // "skipped" was handed a paragraph about crashed agents and sent whoever
+    // read it looking for a stage failure that never happened.
+    const STATUS_MEANING: Record<string, string> = {
+        partial_error:
+            'an agent or auxiliary stage crashed and its work was silently dropped — ' +
+            'the review may still have posted findings from the surviving agents',
+        skipped:
+            'the product declined to review this PR — most often a review was ' +
+            'ALREADY in flight for it (duplicate trigger), or no active ' +
+            'code-review automation matched',
+        error: 'the pipeline failed outright',
+    };
+    const meaning = STATUS_MEANING[finalStatus as string];
     ctx.assert(
         finalStatus === 'success',
         `Review of PR #${prNumber} completed UNHEALTHY: execution status stayed "${finalStatus}" ` +
-            `through the full 90s window with no success row ` +
-            `(partial_error = an agent or auxiliary stage crashed and its work was silently dropped — ` +
-            `the review may still have posted findings from the surviving agents). ` +
-            `Check the worker logs for the failing stage/agent.`,
+            `through the full 90s window with no success row` +
+            (meaning ? ` (${finalStatus} = ${meaning})` : '') +
+            `. Check the worker logs for the failing stage/agent.`,
     );
     return finalStatus!;
 }
