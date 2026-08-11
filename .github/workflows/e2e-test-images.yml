@@ -55,15 +55,6 @@ on:
     # branch that introduces them — a chicken-and-egg that would otherwise
     # force this to be merged unproven. A push trigger has no such rule.
     #
-    # REMOVE THIS BLOCK before merge: once the workflow is on main, dispatch
-    # and workflow_call cover every real use, and rebuilding images on every
-    # push to a branch is pure waste.
-    push:
-        branches:
-            - fix/e2e-matrix-signal
-        paths:
-            - "docker-bake.hcl"
-            - ".github/workflows/e2e-test-images.yml"
     workflow_call:
         inputs:
             ref:

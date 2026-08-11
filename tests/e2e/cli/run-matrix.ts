@@ -87,6 +87,11 @@ const PROVIDER_REQUIRED_ENV: Record<string, string[]> = {
     // still run as a user, not as the App). The App-specific bits are
     // GH_APP_TEST_REPO (where the App is installed, scope-limited) and
     // GH_APP_INSTALLATION_ID (the numeric id captured after install).
+    // NOT COVERED TODAY -- tracked in issue #1695. These two are unset, so
+    // every github-app cell is dropped here as a non-gating setup skip. The
+    // cell is deliberately NOT deleted: reporting it as unverified keeps the
+    // gap visible, and deleting it would make the matrix look complete while
+    // the path customers are meant to use goes untested.
     "github-app": [
         "GH_TEST_TOKEN",
         "GH_APP_TEST_REPO",
@@ -260,7 +265,10 @@ async function main() {
             );
             for (const { cell, missing } of preSkipped) {
                 log.info(
-                    `  - ${cell.provider} × ${cell.target} × ${cell.license} (need: ${missing.join(", ")})`,
+                    `  - ${cell.provider} × ${cell.target} × ${cell.license} (need: ${missing.join(", ")})` +
+                        (cell.provider === 'github-app'
+                            ? ' — known gap, tracked in #1695'
+                            : ''),
                 );
             }
         }
