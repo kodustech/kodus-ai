@@ -3,13 +3,19 @@ import {
     ForbiddenException,
     UnauthorizedException,
 } from '@nestjs/common';
-import archiver from 'archiver';
+import { createZipArchive } from '@libs/common/utils/zip-archive';
 import { CliCentralizedConfigController } from '../cli/cli-centralized-config.controller';
 import { TEAM_CLI_KEY_CAPABILITIES } from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { ParametersKey } from '@libs/core/domain/enums';
 
-jest.mock('archiver', () => jest.fn());
+// Mock the factory, not `archiver` itself: the factory is the seam the
+// controller actually depends on, and it keeps this spec from re-breaking on
+// the next archiver API change. The real construction is covered by
+// test/unit/common/zip-archive.spec.ts, which drives archiver for real.
+jest.mock('@libs/common/utils/zip-archive', () => ({
+    createZipArchive: jest.fn(),
+}));
 
 describe('CliCentralizedConfigController', () => {
     let controller: CliCentralizedConfigController;
@@ -228,7 +234,7 @@ describe('CliCentralizedConfigController', () => {
             finalize: jest.fn().mockResolvedValue(undefined),
         };
 
-        (archiver as unknown as jest.Mock).mockReturnValue(archiveMock);
+        (createZipArchive as jest.Mock).mockReturnValue(archiveMock);
 
         const response = {
             set: jest.fn(),
