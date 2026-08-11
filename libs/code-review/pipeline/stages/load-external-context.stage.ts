@@ -18,6 +18,11 @@ import {
 } from '@libs/ai-engine/domain/prompt/contracts/promptContextLoader.contract';
 import { CodeReviewContextPackService } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service';
 import { BuildTraceContextPackUseCase } from '@libs/cli-review/application/use-cases/build-trace-context-pack.use-case';
+import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import {
+    IOrganizationService,
+    ORGANIZATION_SERVICE_TOKEN,
+} from '@libs/organization/domain/organization/contracts/organization.service.contract';
 
 @Injectable()
 export class LoadExternalContextStage
@@ -37,8 +42,50 @@ export class LoadExternalContextStage
         private readonly promptContextLoader: IPromptContextLoaderService,
         private readonly contextPackService: CodeReviewContextPackService,
         private readonly buildTraceContextPackUseCase: BuildTraceContextPackUseCase,
+        private readonly featureGate: FeatureGateService,
+        @Inject(ORGANIZATION_SERVICE_TOKEN)
+        private readonly organizationService: IOrganizationService,
     ) {
         super();
+    }
+
+    private async isTraceReviewContextEnabled(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        const organizationAndTeamData = context.organizationAndTeamData;
+
+        try {
+            const releaseTrack = await this.organizationService.getReleaseTrack(
+                organizationAndTeamData.organizationId,
+            );
+
+            return await this.featureGate.isEnabled(
+                FEATURE_KEYS.kodusTraceReviewContext,
+                {
+                    identifier: organizationAndTeamData.organizationId,
+                    organizationAndTeamData,
+                    releaseTrack,
+                    groups: {
+                        team: organizationAndTeamData.teamId,
+                        repository: String(context.repository.id),
+                    },
+                },
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Kodus Trace alpha gate could not be evaluated; review context remains disabled',
+                context: this.stageName,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    repositoryId: context.repository?.id,
+                    errorName:
+                        error instanceof Error ? error.name : 'UnknownError',
+                },
+            });
+            return false;
+        }
     }
 
     /**
@@ -52,6 +99,10 @@ export class LoadExternalContextStage
         context: CodeReviewPipelineContext,
     ): Promise<TraceContextDecision[] | undefined> {
         try {
+            if (!(await this.isTraceReviewContextEnabled(context))) {
+                return undefined;
+            }
+
             const changedFilePaths = (context.changedFiles ?? [])
                 .map((file) => file?.filename)
                 .filter((filename): filename is string => !!filename);

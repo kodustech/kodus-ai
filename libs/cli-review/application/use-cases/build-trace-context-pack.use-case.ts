@@ -181,9 +181,10 @@ export function renderTraceContextPack(
         '### Recorded Decisions (why this code looks the way it does)',
         '',
         'These decisions were captured from the agent sessions that produced the',
-        'code under review, scoped to the files in this diff. Treat a `tradeoff`',
-        'as deliberate: do not report it as a finding unless the diff breaks the',
-        'reason it was made.',
+        'code under review, scoped to the files in this diff. They may be stale',
+        'or wrong and are not proof that the implementation is correct. Verify',
+        'their claims and never suppress a concrete finding merely because the',
+        'recorded decision describes the behavior as deliberate.',
         '',
         ...decisions.map((decision) => renderDecision(decision)),
     ].join('\n');

@@ -29,6 +29,42 @@ jest.mock(
     '@libs/platform/modules/platform.module',
     mockEmptyModule('PlatformModule'),
 );
+jest.mock('@libs/feature-gate/modules/feature-gate.module', () => {
+    const { Module } = require('@nestjs/common');
+    const {
+        FeatureGateService,
+    } = require('@libs/feature-gate/application/feature-gate.service');
+    class MockFeatureGateModule {}
+    Module({
+        providers: [
+            {
+                provide: FeatureGateService,
+                useValue: { isEnabled: jest.fn().mockResolvedValue(false) },
+            },
+        ],
+        exports: [FeatureGateService],
+    })(MockFeatureGateModule);
+    return { FeatureGateModule: MockFeatureGateModule };
+});
+jest.mock('@libs/organization/modules/organization.module', () => {
+    const { Module } = require('@nestjs/common');
+    const {
+        ORGANIZATION_SERVICE_TOKEN,
+    } = require('@libs/organization/domain/organization/contracts/organization.service.contract');
+    class MockOrganizationModule {}
+    Module({
+        providers: [
+            {
+                provide: ORGANIZATION_SERVICE_TOKEN,
+                useValue: {
+                    getReleaseTrack: jest.fn().mockResolvedValue('beta'),
+                },
+            },
+        ],
+        exports: [ORGANIZATION_SERVICE_TOKEN],
+    })(MockOrganizationModule);
+    return { OrganizationModule: MockOrganizationModule };
+});
 jest.mock('@libs/ai-engine/modules/ai-engine.module', () => {
     const { Module } = require('@nestjs/common');
     const {
