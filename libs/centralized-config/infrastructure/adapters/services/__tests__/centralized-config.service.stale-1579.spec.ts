@@ -70,6 +70,39 @@ const COMPLETE: IConfigFileMeta[] = [
     { repositoryId: 'repo-3', path: 'repo-3/kodus-config.yml' } as any,
 ];
 
+/** Per-repo files only — the config repo has no global `kodus-config.yml`. */
+const REPO_ONLY: IConfigFileMeta[] = [
+    { repositoryId: 'repo-1', path: 'repo-1/kodus-config.yml' } as any,
+];
+
+/**
+ * One selected repo carrying a per-directory scope. Used to exercise the
+ * directory reconciliation loop, which `threeSelectedRepos` cannot reach —
+ * every repo there has `directories: []`.
+ */
+function repoWithDirectoryScope() {
+    return {
+        configs: { languageResultPrompt: 'en-US' },
+        repositories: [
+            {
+                id: 'repo-1',
+                name: 'repo-1',
+                isSelected: true,
+                configs: { automatedReviewActive: true },
+                directories: [
+                    {
+                        id: 'dir-1',
+                        name: 'src',
+                        path: 'src',
+                        folders: [{ id: 'f-1', name: 'src', path: 'src' }],
+                        configs: { automatedReviewActive: true },
+                    },
+                ],
+            },
+        ],
+    };
+}
+
 /** Three connected + selected repos, no per-directory scopes. */
 function threeSelectedRepos() {
     return {
@@ -92,6 +125,10 @@ type Harness = {
     messagesDeletedFor: () => string[];
     integrationWrites: () => any[][];
     savedManagedIds: () => string[] | undefined;
+    /** Scopes the reconcile deleted, as `repositoryId:directoryId` pairs. */
+    directoryDeleteCalls: () => string[];
+    /** The org-level `configs` the reconcile wrote, if it wrote at all. */
+    reconciledGlobalConfigs: () => unknown;
 };
 
 /**
@@ -102,9 +139,13 @@ type Harness = {
  */
 async function buildHarness(opts: {
     managedRepositoryIds?: string[];
+    managedGlobalConfig?: boolean;
+    repositories?: ReturnType<typeof threeSelectedRepos>;
     useRealDeleteUseCase?: boolean;
 }): Promise<Harness> {
-    const codeReviewConfig = { configValue: threeSelectedRepos() };
+    const codeReviewConfig = {
+        configValue: opts.repositories ?? threeSelectedRepos(),
+    };
 
     const centralizedConfigValue: any = {
         enabled: true,
@@ -112,6 +153,9 @@ async function buildHarness(opts: {
     };
     if (opts.managedRepositoryIds !== undefined) {
         centralizedConfigValue.managedRepositoryIds = opts.managedRepositoryIds;
+    }
+    if (opts.managedGlobalConfig !== undefined) {
+        centralizedConfigValue.managedGlobalConfig = opts.managedGlobalConfig;
     }
 
     const parametersService = {
@@ -260,6 +304,19 @@ async function buildHarness(opts: {
                 .pop();
             return call?.[1]?.managedRepositoryIds;
         },
+        directoryDeleteCalls: () =>
+            (opts.useRealDeleteUseCase
+                ? deletePullRequestMessagesUseCase.execute.mock.calls
+                : mockDeleteUseCase.execute.mock.calls
+            )
+                .filter((c: any[]) => c[0]?.directoryId)
+                .map((c: any[]) => `${c[0].repositoryId}:${c[0].directoryId}`),
+        reconciledGlobalConfigs: () => {
+            const call = createOrUpdateParametersUseCase.execute.mock.calls
+                .filter((c: any[]) => c[0] === ParametersKey.CODE_REVIEW_CONFIG)
+                .pop();
+            return call ? call[1].configs : '<no reconcile call>';
+        },
     };
 }
 
@@ -381,5 +438,48 @@ describe('#1579 Sync must not read "absent" as "removed"', () => {
         expect(h.integrationWrites()).not.toContainEqual(
             expect.arrayContaining([IntegrationConfigKey.REPOSITORIES]),
         );
+    });
+
+    // -- the other two scopes the fix guards ----------------------------
+    //
+    // A/B/C/F only ever exercise repository-level reconciliation against a
+    // discovery that always carries a global `kodus-config.yml`, so the
+    // directory loop and the global-config branch were both unguarded:
+    // reverting either one kept the whole suite green. These two close that.
+
+    it('I: directories of an unmanaged repository are left alone', async () => {
+        const h = await buildHarness({
+            repositories: repoWithDirectoryScope(),
+        });
+
+        // Global-only discovery: repo-1 is not discovered and no previous sync
+        // recorded it, so the centralized config does not own it — its
+        // per-directory scope is none of Sync's business.
+        await h.service.removeStaleConfigs({
+            organizationAndTeamData,
+            configFiles: GLOBAL_ONLY,
+            actor,
+        });
+
+        expect(h.directoryDeleteCalls()).toEqual([]);
+    });
+
+    it('J: the global config survives a config repo that never had one', async () => {
+        const h = await buildHarness({
+            managedRepositoryIds: ['repo-1'],
+            // No previous sync ever owned a global `kodus-config.yml`.
+            managedGlobalConfig: false,
+        });
+
+        // Discovery carries per-repo files only — no global file to be found.
+        await h.service.removeStaleConfigs({
+            organizationAndTeamData,
+            configFiles: REPO_ONLY,
+            actor,
+        });
+
+        // Absence of a global file it never owned must not reset the org's
+        // `configs` (default model / BYOK / language) to {}.
+        expect(h.reconciledGlobalConfigs()).not.toEqual({});
     });
 });
