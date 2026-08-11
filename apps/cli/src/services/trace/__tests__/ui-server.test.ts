@@ -112,9 +112,37 @@ describe('trace ui server', () => {
         const html = await response.text();
         expect(html).toContain('Kodus Trace');
         expect(html).toContain('aria-label="Kodus Trace home"');
-        expect(html).toContain('--bg: #101019');
-        expect(html).toContain('--accent: #f8b76d');
-        expect(html).toContain('Raw transcripts never leave this machine.');
+        expect(html).toContain('macrostructure: Narrative Workflow');
+        expect(html).toContain('--color-paper: #101019');
+        expect(html).toContain('--color-paper-raised: #181825');
+        expect(html).toContain('--color-paper-active: #202032');
+        expect(html).toContain('--color-rule: #30304b');
+        expect(html).toContain('--color-ink: #f3f3f7');
+        expect(html).toContain('--color-accent: #f8b76d');
+        expect(html).toContain('--color-secondary: #c9bbf2');
+        expect(html).toContain('--font-body: "DM Sans", sans-serif');
+        expect(html).toContain('--font-mono: "Overpass Mono", monospace');
+        expect(html).not.toContain('Local and sanitized');
+        expect(html).toContain('overflow-x: clip');
+    });
+
+    it('ships a responsive chronological session review', async () => {
+        const html = await (await fetch(server.url)).text();
+
+        expect(html).toContain('data-region="sessions"');
+        expect(html).toContain('data-region="review"');
+        expect(html).toContain('What happened');
+        expect(html).toContain('You asked');
+        expect(html).toContain('Agent activity');
+        expect(html).toContain('Agent response');
+        expect(html).toContain('What Trace learned');
+        expect(html).toContain('Technical details');
+        expect(html).not.toContain('Team memory');
+        expect(html).not.toContain('Correction');
+        expect(html).not.toContain("getJson('/api/decisions')");
+        expect(html).toContain('function renderMarkdown(value)');
+        expect(html).toContain('class="response markdown"');
+        expect(html).toContain('prefers-reduced-motion: reduce');
     });
 
     it('rejects an untrusted Host header before routing', async () => {
@@ -149,7 +177,7 @@ describe('trace ui server', () => {
         expect(payload.sessions).toEqual([]);
 
         const html = await (await fetch(server.url)).text();
-        expect(html).toContain('No sessions captured yet');
+        expect(html).toContain('No sessions captured');
     });
 
     it('lists sessions read from the local store', async () => {
