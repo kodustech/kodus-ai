@@ -1827,23 +1827,6 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         suggestions: Partial<CodeSuggestion>[];
         trace: DedupTraceSummary;
     }> {
-        return {
-            suggestions: [],
-            trace: {
-                status: 'skipped',
-                totalClassifiedCount: suggestions.length,
-                kodyRulesSkippedCount: 0,
-                nonKodyInputCount: suggestions.length,
-                nonKodyOutputCount: suggestions.length,
-                finalOutputCount: suggestions.length,
-                uniqueCount: suggestions.length,
-                groupsCount: 0,
-                removedCount: 0,
-                unique: suggestions.map((suggestion) =>
-                    this.summarizeDedupSuggestion(suggestion),
-                ),
-            },
-        };
         if (suggestions.length <= 1) {
             return {
                 suggestions,
