@@ -45,7 +45,6 @@ import { CentralizedConfigDownloadUseCase } from '@libs/centralized-config/appli
 import { IUser } from '@libs/identity/domain/user/interfaces/user.interface';
 
 import { ApiStandardResponses } from '../../docs/api-standard-responses.decorator';
-import { createZipArchive } from '@libs/common/utils/zip-archive';
 
 @ApiTags('CLI Centralized Config')
 @ApiStandardResponses()
@@ -330,14 +329,15 @@ export class CliCentralizedConfigController {
 
         const context = this.toOrganizationAndTeamData(authContext);
 
-        const entries = await this.centralizedConfigDownloadUseCase.execute(
-            this.buildCliUser(authContext),
-            context.teamId,
-            {
-                skipAuthorization: true,
-                organizationId: context.organizationId,
-            },
-        );
+        const archive =
+            await this.centralizedConfigDownloadUseCase.executeAsZipStream(
+                this.buildCliUser(authContext),
+                context.teamId,
+                {
+                    skipAuthorization: true,
+                    organizationId: context.organizationId,
+                },
+            );
 
         response.set({
             'Content-Type': 'application/zip',
@@ -345,18 +345,12 @@ export class CliCentralizedConfigController {
                 'attachment; filename=centralized-config.zip',
         });
 
-        const archive = createZipArchive();
         archive.on('error', (err) => {
             response.destroy(err);
         });
 
         archive.pipe(response);
 
-        for (const entry of entries) {
-            archive.append(entry.content, { name: entry.path });
-        }
-
-        await archive.finalize();
         if (typeof (response as any).on === 'function') {
             await finished(response as any);
         }

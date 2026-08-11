@@ -70,7 +70,6 @@ import { CreateOrUpdateCodeReviewParameterDto } from '@libs/organization/dtos/cr
 import { DeleteRepositoryCodeReviewParameterDto } from '@libs/organization/dtos/delete-repository-code-review-parameter.dto';
 import { PreviewPrSummaryDto } from '@libs/organization/dtos/preview-pr-summary.dto';
 import { finished } from 'stream/promises';
-import { createZipArchive } from '@libs/common/utils/zip-archive';
 
 @ApiTags('Parameters')
 @ApiBearerAuth('jwt')
@@ -549,10 +548,11 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
-        const entries = await this.centralizedConfigDownloadUseCase.execute(
-            this.request.user,
-            teamId,
-        );
+        const archive =
+            await this.centralizedConfigDownloadUseCase.executeAsZipStream(
+                this.request.user,
+                teamId,
+            );
 
         response.set({
             'Content-Type': 'application/zip',
@@ -560,17 +560,11 @@ export class ParametersController {
                 'attachment; filename=centralized-config.zip',
         });
 
-        const archive = createZipArchive();
         archive.on('error', (err) => {
             response.destroy(err);
         });
         archive.pipe(response);
 
-        for (const entry of entries) {
-            archive.append(entry.content, { name: entry.path });
-        }
-
-        await archive.finalize();
         if (typeof (response as any).on === 'function') {
             await finished(response as any);
         }

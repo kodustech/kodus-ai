@@ -3,19 +3,10 @@ import {
     ForbiddenException,
     UnauthorizedException,
 } from '@nestjs/common';
-import { createZipArchive } from '@libs/common/utils/zip-archive';
 import { CliCentralizedConfigController } from '../cli/cli-centralized-config.controller';
 import { TEAM_CLI_KEY_CAPABILITIES } from '@libs/organization/domain/team-cli-key/interfaces/team-cli-key.interface';
 import { IntegrationConfigKey } from '@libs/core/domain/enums/Integration-config-key.enum';
 import { ParametersKey } from '@libs/core/domain/enums';
-
-// Mock the factory, not `archiver` itself: the factory is the seam the
-// controller actually depends on, and it keeps this spec from re-breaking on
-// the next archiver API change. The real construction is covered by
-// test/unit/common/zip-archive.spec.ts, which drives archiver for real.
-jest.mock('@libs/common/utils/zip-archive', () => ({
-    createZipArchive: jest.fn(),
-}));
 
 describe('CliCentralizedConfigController', () => {
     let controller: CliCentralizedConfigController;
@@ -26,7 +17,10 @@ describe('CliCentralizedConfigController', () => {
     let createOrUpdateParametersUseCase: { execute: jest.Mock };
     let centralizedConfigInitUseCase: { execute: jest.Mock };
     let centralizedConfigSyncUseCase: { execute: jest.Mock };
-    let centralizedConfigDownloadUseCase: { execute: jest.Mock };
+    let centralizedConfigDownloadUseCase: {
+        execute: jest.Mock;
+        executeAsZipStream: jest.Mock;
+    };
 
     const teamData = {
         team: { uuid: 'team-1' },
@@ -96,6 +90,7 @@ describe('CliCentralizedConfigController', () => {
                     content: 'version: 1',
                 },
             ]),
+            executeAsZipStream: jest.fn(),
         };
 
         controller = new CliCentralizedConfigController(
@@ -230,11 +225,11 @@ describe('CliCentralizedConfigController', () => {
         const archiveMock = {
             on: jest.fn().mockReturnThis(),
             pipe: jest.fn(),
-            append: jest.fn(),
-            finalize: jest.fn().mockResolvedValue(undefined),
         };
 
-        (createZipArchive as jest.Mock).mockReturnValue(archiveMock);
+        centralizedConfigDownloadUseCase.executeAsZipStream.mockResolvedValue(
+            archiveMock,
+        );
 
         const response = {
             set: jest.fn(),
@@ -248,11 +243,9 @@ describe('CliCentralizedConfigController', () => {
                 'attachment; filename=centralized-config.zip',
         });
         expect(archiveMock.pipe).toHaveBeenCalledWith(response);
-        expect(archiveMock.append).toHaveBeenCalledWith('version: 1', {
-            name: 'kodus-config.yml',
-        });
-        expect(archiveMock.finalize).toHaveBeenCalled();
-        expect(centralizedConfigDownloadUseCase.execute).toHaveBeenCalledWith(
+        expect(
+            centralizedConfigDownloadUseCase.executeAsZipStream,
+        ).toHaveBeenCalledWith(
             {
                 uuid: 'kody',
                 email: 'kody@kodus.io',

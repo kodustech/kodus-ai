@@ -1,7 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
 import { promises as fsPromises } from 'fs';
+import { Readable } from 'stream';
 import * as yaml from 'js-yaml';
+
+import { createZipArchive } from '@libs/common/utils/zip-archive';
 
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
@@ -81,6 +84,42 @@ export class CentralizedConfigDownloadUseCase {
             });
             throw error;
         }
+    }
+
+    /**
+     * Same content as `execute`, packed as a zip stream.
+     *
+     * Both download endpoints used to build the archive themselves, which is
+     * how the archiver v8 bump broke them in two places at once. Keeping the
+     * packing here leaves the controllers with headers and a pipe.
+     */
+    public async executeAsZipStream(
+        user: Partial<IUser>,
+        teamId: string,
+        options: {
+            skipAuthorization?: boolean;
+            organizationId?: string;
+            markRulesAsPendingWithSourcePath?: boolean;
+        } = {},
+    ): Promise<Readable> {
+        const entries = await this.execute(user, teamId, options);
+
+        const archive = createZipArchive();
+
+        for (const entry of entries) {
+            archive.append(entry.content, { name: entry.path });
+        }
+
+        // Not awaited: the caller has to be piping before the archive drains.
+        // A rejection here would otherwise be unhandled, so it is routed back
+        // into the stream as an 'error' the caller is already listening for.
+        archive.finalize().catch((error) => {
+            archive.destroy(
+                error instanceof Error ? error : new Error(String(error)),
+            );
+        });
+
+        return archive;
     }
 
     private async getConfigEntries(
