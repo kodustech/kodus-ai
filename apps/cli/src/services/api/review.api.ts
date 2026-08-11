@@ -7,6 +7,7 @@ import type {
 } from '../../types/review.js';
 import type { GitMetrics, IReviewApi } from './api.interface.js';
 import { requestWithRetry } from './api-core.js';
+import { CommandError } from '../../utils/command-errors.js';
 
 type RequestWithRetry = <T>(
     endpoint: string,
@@ -37,6 +38,18 @@ interface CliReviewJobStatusResponse {
 const POLL_MIN_DELAY_MS = 1_000;
 const POLL_MAX_DELAY_MS = 5_000;
 const POLL_MAX_WAIT_MS = 30 * 60 * 1000;
+
+// Match the API contract exactly. The DTO caps the raw diff by character
+// count (@MaxLength(20000000) — apps/api/src/dtos/cli-review.dto.ts) and the
+// server body-parser caps the whole request at 25mb (apps/api/src/main.ts).
+// A serialized-body cap alone would hard-fail valid payloads (JSON escaping
+// or config.files push a valid diff's body just past a 20MiB threshold), so
+// guard on diff.length for the DTO cap and keep a byte guard with margin
+// under the parser cap. Working-tree reviews inline full file contents, so
+// large changesets can blow past this — fail fast with a clear message
+// instead of letting a gateway/WAF turn it into an opaque 403.
+const MAX_DIFF_CHARS = 20_000_000; // matches DTO @MaxLength(20000000)
+const MAX_SERIALIZED_BODY_BYTES = 24 * 1024 * 1024; // margin under the 25mb body parser
 
 export class RealReviewApi implements IReviewApi {
     constructor(private readonly requester: RequestWithRetry = requestWithRetry) {}
@@ -72,6 +85,21 @@ export class RealReviewApi implements IReviewApi {
         // the parameter's meaning.
         const endpoint = '/cli/review';
 
+        const body = JSON.stringify({ diff, config, ...metrics });
+        const payloadBytes = Buffer.byteLength(body, 'utf8');
+        if (diff.length > MAX_DIFF_CHARS) {
+            throw new CommandError(
+                'REVIEW_TOO_LARGE',
+                `Diff is too large (${diff.length.toLocaleString()} characters, limit ${MAX_DIFF_CHARS.toLocaleString()}). Narrow the review scope.`,
+            );
+        }
+        if (payloadBytes > MAX_SERIALIZED_BODY_BYTES) {
+            throw new CommandError(
+                'REVIEW_TOO_LARGE',
+                `Review payload is too large (${(payloadBytes / (1024 * 1024)).toFixed(1)}MB, limit ${MAX_SERIALIZED_BODY_BYTES / (1024 * 1024)}MB). Narrow the review scope or use --branch, --commit, or --fast, which avoid inlining file contents.`,
+            );
+        }
+
         // Enqueue: server returns 202 + jobId. We then poll for completion.
         const enqueueResponse = await this.requester<CliReviewEnqueueResponse>(
             endpoint,
@@ -81,11 +109,7 @@ export class RealReviewApi implements IReviewApi {
                     ...authHeaders,
                     'X-Kodus-Async': '1',
                 },
-                body: JSON.stringify({
-                    diff,
-                    config,
-                    ...metrics,
-                }),
+                body,
             },
         );
 

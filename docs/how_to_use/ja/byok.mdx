@@ -8,7 +8,7 @@ BYOK（Bring Your Own Key）は、**すべてのプランで Kodus が LLM を�
 <Card
   title="プランとの対応関係"
   icon="scale-balanced"
-  href="/how_to_use/ja/pricing#byok-is-the-default-across-all-plans"
+  href="/how_to_use/ja/pricing#byok-はすべてのプランでデフォルト"
 >
   BYOK は Community では無料、Teams では（トークン費用に加えてアクティブ開発者1人あたり月10ドル）で利用可能、Enterprise では2つのオプションのうちの1つです（もう1つは Kodus が管理する APIキー）。
 </Card>
@@ -147,7 +147,9 @@ Z.ai と Moonshot はどちらも、ペイパートークンの Developer API �
 
 <Steps>
   <Step title="プロバイダーを選択">
-    OpenAI、Anthropic、Google Gemini、OpenRouter、Novita、または **OpenAI Compatible**（任意の OpenAI フォーマットのエンドポイント向け）から選択します。
+    OpenAI、Anthropic、Google Gemini、Google Vertex AI、Amazon Bedrock、OpenRouter、Novita、**OpenAI Compatible**（任意の OpenAI フォーマットのエンドポイント向け）、**Anthropic-compatible**（任意の Anthropic Messages フォーマットのエンドポイント向け）から選択します。
+
+    Vertex と Bedrock は **Beta** と表示され、単一キーではなくプロバイダー固有の認証情報を求められます — 下記の[対応プロバイダー](#対応プロバイダー)を参照してください。
   </Step>
 
   <Step title="ベース URL を入力（必要な場合）">
@@ -158,8 +160,8 @@ Z.ai と Moonshot はどちらも、ペイパートークンの Developer API �
     Kodus がプロバイダーからモデルをリスト化できる場合、ドロップダウンが表示されます。そうでない場合（例：セルフホスト、またはプラットフォームキーが未設定）、正確なモデル ID を手動で入力します。
   </Step>
 
-  <Step title="APIキーを貼り付ける">
-    キーフィールドはプロバイダーとモデルが設定された後に表示されます。
+  <Step title="認証情報を貼り付ける">
+    ほとんどのプロバイダーでは API キーの単一フィールドで、プロバイダーとモデルを設定すると表示されます。Vertex はサービスアカウント JSON とリージョン、Bedrock は Bedrock API キー（または IAM 認証情報）とリージョンを求めます。
   </Step>
 
   <Step title="Advanced settings を調整（任意）">
@@ -231,6 +233,36 @@ Z.ai と Moonshot はどちらも、ペイパートークンの Developer API �
     </Warning>
   </Tab>
 
+  <Tab title="Google Vertex AI">
+    <Info>**ベータ。** 新しめの統合で、単一キーが基本の他プロバイダーより認証の手順が複雑です。</Info>
+
+    **こんな場合に：** すでに Google Cloud を使っていて、既存の GCP の請求・IAM・データレジデンシー要件のもとで Gemini（または Claude）を使いたいチーム。
+
+    **設定方法：**
+    1. 手動ウィザードでプロバイダーに **Google Vertex AI** を選びます。
+    2. **サービスアカウント JSON ファイルの中身**を Service Account JSON 欄に貼り付けます（base64 でも可）。Kodus は JSON から `project_id` を自動で抽出します。
+    3. **Region** — グローバルエンドポイントを使う場合は空のままにします（推奨）。データレジデンシー要件がある場合のみ、リージョン（例：`us-east5`）を固定します。
+
+    サービスアカウントには、そのプロジェクトで Vertex AI の予測 API を呼び出す権限が必要です。
+  </Tab>
+
+  <Tab title="Amazon Bedrock">
+    <Info>**ベータ。** 新しめの統合で、単一キーが基本の他プロバイダーより認証の手順が複雑です。</Info>
+
+    **こんな場合に：** AWS に標準化していて、モデルの利用料を自社の AWS アカウントで請求したいチーム。
+
+    **設定方法：**
+    1. 手動ウィザードでプロバイダーに **Amazon Bedrock** を選びます。
+    2. **Bedrock API キー**（ベアラートークン）を入力します — [Bedrock API キーの生成方法](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-generate.html)を参照。
+    3. **Region** を設定します（例：`us-east-1`、`us-west-2`、`eu-central-1`）。
+
+    <Accordion title="上級：API キーの代わりに IAM 認証情報を使う">
+      Bedrock API キーへ移行していないチームは、**Advanced — use IAM user credentials instead** を開いて、静的なアクセスキー ID とシークレット（STS の一時認証情報の場合はセッショントークンも）を入力します。IAM プリンシパルには `bedrock:InvokeModel` が必要です。
+
+      API キーが優先されます。ベアラートークンが設定されている場合、IAM の項目は無視されます。
+    </Accordion>
+  </Tab>
+
   <Tab title="OpenAI Compatible">
     **おすすめの用途:** 特化プロバイダー（Moonshot、Z.ai、Fireworks、Together、Groq、DeepSeek）またはセルフホストエンドポイント。
 
@@ -253,6 +285,17 @@ Z.ai と Moonshot はどちらも、ペイパートークンの Developer API �
         Together AI のセットアップ。
       </Card>
     </CardGroup>
+  </Tab>
+  <Tab title="Anthropic-compatible">
+    **こんな場合に：** OpenAI 形式ではなく Anthropic の Messages API を話すエンドポイント（Kimi のコーディングプラン向けエンドポイントなど）。
+
+    **設定方法：**
+    1. 手動ウィザードで **Anthropic-compatible** プロバイダーを選びます。
+    2. ベース URL、キー、モデル ID を入力します。
+
+    <Note>
+      ベース URL はプロバイダーが示す形式のまま貼り付けてください — 末尾の `/v1` はあってもなくても構いません（例：`https://api.kimi.com/coding` または `https://api.kimi.com/coding/v1`）。Anthropic の 2 つの SDK 経路は `/v1` の位置の解釈が異なるため、Kodus が内部で正規化します。
+    </Note>
   </Tab>
 </Tabs>
 

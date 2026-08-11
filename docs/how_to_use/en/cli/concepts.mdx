@@ -91,23 +91,6 @@ kodus config centralized disable
 
 Use Centralized Config when your team wants auditable, versioned control over review settings. Keep the default (per-repo settings in Kodus) when that ceremony is overkill.
 
-## Decision Memory
-
-Decision Memory is Kodus's way of persisting the *reasoning* behind AI agent work — not just the diff, but the "why".
-
-When enabled, Kodus installs hooks in Claude Code, Cursor, or Codex that fire on every turn-complete event and capture structured decisions to:
-
-```
-.kody/
-├── pr/by-sha/<head-sha>.md    # PR-level decisions (versioned with code)
-├── memory/<module-id>.md      # Module-level decisions (long-term)
-└── modules.yml                # Module configuration
-```
-
-PR-level memory lives on the branch. When a PR merges, promote its decisions to module-level memory (`kodus decisions promote`) so future work on that module starts with the accumulated context.
-
-Full walk-through: [Decision Memory](decision_memory).
-
 ## Business Validation
 
 Where `kodus review` asks "is this code good?", `kodus pr business-validation` asks "does this diff actually do what the task said to do?". You point it at a Linear/Jira/URL-based task and a diff source (working tree, staged, branch, commit) and it checks the implementation against the task's acceptance criteria.
@@ -136,9 +119,6 @@ Most agent integrations just need `--prompt-only`. Reach for `--agent` when you'
   </Card>
   <Card title="AI Agents" icon="robot" href="ai_agents">
     Build review-fix loops with coding agents.
-  </Card>
-  <Card title="Decision Memory" icon="brain" href="decision_memory">
-    Capture and promote agent decisions across branches.
   </Card>
   <Card title="Troubleshooting" icon="life-ring" href="troubleshooting">
     Common errors and exit codes.

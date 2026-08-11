@@ -97,6 +97,58 @@ camelCase を使用する必要があります。標準に準拠するために�
 
 チームのニーズに基づいて、重大な問題には詳細な説明を、軽微な問題には簡潔なフィードバックなど、トーン、詳細レベル、コミュニケーションスタイルをカスタマイズできます。
 
+## `kodus-config.yml` で設定する
+
+同じ 4 つのフィールドが `v2PromptOverrides` キーの下で利用できます：
+
+```yaml
+v2PromptOverrides:
+    generation:
+        main: |
+            Base instruction used for every suggestion.
+    categories:
+        descriptions:
+            bug: |
+                What Kody should look for in the Bug category.
+            performance: |
+                What Kody should look for in the Performance category.
+            security: |
+                What Kody should look for in the Security category.
+```
+
+この 4 つは Web UI が公開しているもので、それぞれ上限は 2000 文字です。Business Logic
+カテゴリにプロンプトの override はありません。
+
+設定ファイルは、UI に出てこないグループをもう 1 つ受け付けます — Kody が検出結果を分類する
+ための重大度ルーブリックです：
+
+```yaml
+v2PromptOverrides:
+    severity:
+        flags:
+            critical: |
+                何を critical とみなすか（クラッシュ、データ損失、セキュリティ侵害など）。
+            high: |
+            medium: |
+            low: |
+```
+
+<Warning>
+  これは Kody の*表現*だけでなく*分類*そのものを変えます — ルーブリックを誤ると、すべての
+  レビューで重大度が静かに下げられたり、逆に膨らんだりします。出荷時のデフォルトである
+  [`default-kodus-config.yml`](https://github.com/kodustech/kodus-ai/blob/main/default-kodus-config.yml)
+  を起点にし、ルーブリックをゼロから書き起こさないでください。
+</Warning>
+
+<Note>
+  同梱の `default-kodus-config.yml` には `v2PromptOverrides.level` グループも含まれています。
+  後方互換のため受け付けられ続けますが、**エンジンはもう読みません** — 設定しても何も変わりません。
+  レビューに届くのは `categories.descriptions`、`severity.flags`、`generation.main` だけです。
+</Note>
+
+このファイルは `kodusConfigFileOverridesWebPreferences` を有効にして初めて読み込まれます
+（[一般設定](/how_to_use/ja/code_review/configs/general) を参照）。
+
 ## 外部参照
 
 すべてのカスタムプロンプト（カテゴリ、サジェスト、PR サマリー）は、Kody がアクセスできるコードベースの実際のファイルへの参照をサポートします。更新を保存すると、Kody は自動的に外部参照を検出し、将来のレビューのために解決します。

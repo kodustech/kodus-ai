@@ -9,9 +9,16 @@ import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
     DEDUP_SCHEMA,
     DEDUP_CONTENT_THRESHOLD,
+    DEDUP_EMBEDDING_LOW,
+    DEDUP_EMBEDDING_HIGH,
+    DEDUP_TIEBREAK_SCHEMA,
     buildDedupPrompt,
+    buildTiebreakPrompt,
     contentSimilarity,
+    cosineSimilarity,
+    dedupEmbeddingText,
 } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
+import { OpenAIEmbeddings } from '@langchain/openai';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -46,6 +53,24 @@ import {
 } from '@libs/automation/domain/automationExecution/contracts/automation-execution.service';
 import { AutomationStatus } from '@libs/automation/domain/automation/enum/automation-status';
 import { AgentProgressEvent } from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import {
+    LazyLinkedRepoAccess,
+    evaluateCrossRepoBoundaryGate,
+    findOverrideForRepo,
+    parsePrDescriptionOverrides,
+    prHeadRefspecForPlatform,
+    resolveLinkedRepositories,
+    type CrossRepoGateMetadata,
+    type LinkedRepoAccess,
+    type LinkedRepositoriesReviewMetadata,
+} from '@libs/ee/linked-repositories';
+import {
+    ILicenseService,
+    LICENSE_SERVICE_TOKEN,
+} from '@libs/ee/license/interfaces/license.interface';
+import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
+import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
 
 import { GraphContextService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-context.service';
 import {
@@ -258,10 +283,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         private readonly featureGate: FeatureGateService,
         @Inject(ORGANIZATION_SERVICE_TOKEN)
         private readonly organizationService: IOrganizationService,
+        private readonly codeManagementService: CodeManagementService,
         // Optional: specs construct the stage manually; when absent the
         // review simply runs on the full rule texts.
         @Optional()
         private readonly kodyRuleSummaryService?: KodyRuleSummaryService,
+        // Optional so unit tests that don't care about plan tier still compile.
+        // Production always wires LicenseService; missing service ⇒ linked
+        // repos stay off (fail-closed for the paid feature).
+        @Optional()
+        @Inject(LICENSE_SERVICE_TOKEN)
+        private readonly licenseService?: ILicenseService,
     ) {
         super();
     }
@@ -578,6 +610,15 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 draft.heavy = resolvedHeavy;
             });
 
+            // Deterministic boundary gate (#1576): only arm linked-repo tools
+            // + prompt when the diff touches boundary surface. Config alone is
+            // not enough — pure internal refactors stay single-repo.
+            const { linkedRepoAccess, gateMetadata } =
+                await this.resolveLinkedRepoAccessWithGate(
+                    context,
+                    changedFiles,
+                );
+
             const result = await this.reviewOrchestrator.execute(
                 buildOrchestratorInput(context, {
                     changedFiles,
@@ -590,8 +631,30 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     adaptiveProfile,
                     heavy: resolvedHeavy,
                     kodyRules: await this.prepareKodyRulesForReview(context),
+                    linkedRepoAccess,
                 }),
             );
+
+            // Snapshot linked-repo metadata after the review so clone status
+            // (ready/failed) reflects what the agent actually used. When the
+            // gate skips the pass we still record the decision for telemetry.
+            if (linkedRepoAccess || gateMetadata) {
+                const metadata: LinkedRepositoriesReviewMetadata =
+                    linkedRepoAccess?.getMetadata() ?? {
+                        configured:
+                            context.codeReviewConfig?.linkedRepositories
+                                ?.length ?? 0,
+                        resolved: 0,
+                        cloned: 0,
+                        failed: 0,
+                        warnings: [],
+                        gate: gateMetadata,
+                        repositories: [],
+                    };
+                context = this.updateContext(context, (draft) => {
+                    draft.linkedRepositoriesMetadata = metadata;
+                });
+            }
 
             // Emit profile-driven warnings up here at the stage so they
             // surface even when the agent's overhead preflight throws
@@ -988,6 +1051,28 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ? dedupError.message
                             : String(dedupError),
                 };
+            }
+
+            // Cross-stream dedup (PR #1527 follow-up): a file-scope Kody Rule and
+            // an AI suggestion can flag the same issue on the same file. They are
+            // deduped in separate streams above, so both survive. Absorb the
+            // suggestion into the Kody Rule when they describe the same bug (the
+            // rule wins — it's user-configured and carries the violation link).
+            try {
+                dedupedNonRules =
+                    await this.crossDedupSuggestionsAgainstKodyRules(
+                        dedupedNonRules,
+                        kodyRulesForDedup,
+                        prNumber,
+                        context.codeReviewConfig?.byokConfig,
+                        telemetryMeta,
+                    );
+            } catch (crossErr) {
+                this.logger.warn({
+                    message: `[DEDUP-CROSS] PR#${prNumber}: cross-stream dedup failed, keeping all`,
+                    context: this.stageName,
+                    error: crossErr,
+                });
             }
 
             let deduped = [...dedupedNonRules, ...kodyRulesForDedup];
@@ -1489,6 +1574,245 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         return result;
     }
 
+    /** Embed a suggestion's description once per dedup run (memoized by index).
+     * Fail-soft: no platform embedding key or any error → null, so the caller
+     * falls back to the pre-#1527 lexical behavior (veto) instead of crashing. */
+    /**
+     * Embedder for the dedup semantic tier. HARDCODED to OpenAI: text-embedding
+     * models are OpenAI's, so this must NEVER go through the client's BYOK
+     * provider nor inherit a forced base URL (e.g. a Moonshot/OpenAI-compatible
+     * override in the env) — those don't serve text-embedding-3-small. The
+     * base URL is pinned explicitly; only the platform key comes from the env.
+     * (The tiebreak LLM that runs AFTER the embedding still uses BYOK.)
+     */
+    private dedupEmbedder: OpenAIEmbeddings | null | undefined;
+    private getDedupEmbedder(): OpenAIEmbeddings | null {
+        if (this.dedupEmbedder !== undefined) {
+            return this.dedupEmbedder;
+        }
+        const apiKey = process.env.API_OPEN_AI_API_KEY;
+        this.dedupEmbedder = apiKey
+            ? new OpenAIEmbeddings({
+                  apiKey,
+                  model: 'text-embedding-3-small',
+                  configuration: { baseURL: 'https://api.openai.com/v1' },
+              })
+            : null;
+        return this.dedupEmbedder;
+    }
+
+    private async embedDedupSuggestion(
+        suggestion: Partial<CodeSuggestion>,
+        key: string,
+        cache: Map<string, number[] | null>,
+    ): Promise<number[] | null> {
+        if (cache.has(key)) {
+            return cache.get(key) ?? null;
+        }
+        let vector: number[] | null = null;
+        try {
+            const text = dedupEmbeddingText(suggestion as any);
+            const embedder = this.getDedupEmbedder();
+            if (text && embedder) {
+                vector = await embedder.embedQuery(text);
+            }
+        } catch (err) {
+            this.logger.warn({
+                message: `[DEDUP-GUARD] embedding unavailable, falling back to lexical veto`,
+                context: this.stageName,
+                error: err,
+            });
+            vector = null;
+        }
+        cache.set(key, vector);
+        return vector;
+    }
+
+    /**
+     * Tiered dedup guard (PR #1527): decide whether to honor a merge.
+     *   1. lexical overlap ≥ threshold → honor (cheap, obvious duplicates);
+     *   2. else semantic cosine of the two descriptions:
+     *        ≥ HIGH → honor, < LOW → veto, in-between → LLM tiebreak (full text).
+     * Every external failure (no embed key, embedding/LLM error) falls back to a
+     * veto — the exact pre-#1527 behavior — so a low-overlap merge is never
+     * honored blindly.
+     *
+     * `crossStream` mode (Kody-Rule vs suggestion): there is NO prior LLM
+     * grouping to corroborate a match, so the cheap lexical-honor shortcut is
+     * skipped — only a strong semantic signal (embedding-high or a tiebreak yes)
+     * may absorb a suggestion into a rule, keeping false absorptions near zero.
+     */
+    private async resolveDedupMerge(
+        dup: Partial<CodeSuggestion>,
+        keep: Partial<CodeSuggestion>,
+        dupKey: string,
+        keepKey: string,
+        embedCache: Map<string, number[] | null>,
+        tiebreak: (
+            a: Partial<CodeSuggestion>,
+            b: Partial<CodeSuggestion>,
+        ) => Promise<boolean | null>,
+        opts?: { crossStream?: boolean },
+    ): Promise<{ honor: boolean; reason: string; score: number }> {
+        const lexical = contentSimilarity(dup, keep);
+        if (!opts?.crossStream && lexical >= DEDUP_CONTENT_THRESHOLD) {
+            return { honor: true, reason: 'lexical', score: lexical };
+        }
+
+        const [vecDup, vecKeep] = await Promise.all([
+            this.embedDedupSuggestion(dup, dupKey, embedCache),
+            this.embedDedupSuggestion(keep, keepKey, embedCache),
+        ]);
+        if (!vecDup || !vecKeep) {
+            return { honor: false, reason: 'lexical-veto (no-embed)', score: lexical };
+        }
+
+        const cos = cosineSimilarity(vecDup, vecKeep);
+        if (cos >= DEDUP_EMBEDDING_HIGH) {
+            return { honor: true, reason: 'embedding-high', score: cos };
+        }
+        if (cos < DEDUP_EMBEDDING_LOW) {
+            return { honor: false, reason: 'embedding-low', score: cos };
+        }
+
+        const sameBug = await tiebreak(dup, keep);
+        if (sameBug === null) {
+            return { honor: false, reason: 'tiebreak-error-veto', score: cos };
+        }
+        return {
+            honor: sameBug,
+            reason: `llm-tiebreak=${sameBug}`,
+            score: cos,
+        };
+    }
+
+    /**
+     * Build the pairwise "same bug?" tiebreak used by both the within-stream
+     * dedup guard and the cross-stream (Kody-Rule vs suggestion) dedup. Resolves
+     * the secondary model the same way the batch dedup does; any failure returns
+     * null so the caller vetoes (keeps both).
+     */
+    private buildDedupTiebreak(
+        byokConfig: any,
+        telemetryMeta: LangfuseTelemetryMetadata | undefined,
+        prNumber: number,
+    ): (
+        a: Partial<CodeSuggestion>,
+        b: Partial<CodeSuggestion>,
+    ) => Promise<boolean | null> {
+        const secondaryByok = isSecondaryByok(byokConfig);
+        return async (a, b) => {
+            try {
+                const call = (model: any) =>
+                    tracedGenerateText({
+                        model: model as any,
+                        ...toAiSdkTelemetryArgs(
+                            buildLangfuseTelemetry(
+                                'dedup-tiebreak',
+                                telemetryMeta,
+                            ),
+                        ),
+                        output: Output.object({
+                            schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA as any),
+                        }) as any,
+                        prompt: buildTiebreakPrompt(a as any, b as any),
+                    });
+                const tiebreakByok = secondaryByok
+                    ? byokConfig?.main
+                        ? { main: byokConfig.main }
+                        : byokConfig
+                    : byokConfig;
+                const res = await withStructuredOutputFallback(
+                    {
+                        byokConfig: tiebreakByok,
+                        organizationId: telemetryMeta?.organizationId,
+                        label: 'dedup-tiebreak',
+                    },
+                    call,
+                );
+                const out = (res as any).object ?? (res as any).output;
+                return typeof out?.sameBug === 'boolean' ? out.sameBug : null;
+            } catch (err) {
+                this.logger.warn({
+                    message: `[DEDUP-GUARD] PR#${prNumber}: tiebreak failed, vetoing merge`,
+                    context: this.stageName,
+                    error: err,
+                });
+                return null;
+            }
+        };
+    }
+
+    /**
+     * Cross-stream dedup (PR #1527 follow-up): a Kody Rule and an AI suggestion
+     * can flag the SAME issue on the same file, but they are deduped in separate
+     * streams so both survive. Here we cross-compare FILE-scope Kody Rules
+     * against the already-deduped suggestions; when they describe the same bug we
+     * drop the suggestion and keep the Kody Rule (it is user-configured and
+     * carries the rule-violation link). PR-scope rules (no relevantFile) are
+     * excluded — they are not tied to a file/line. Fail-soft: any error keeps the
+     * suggestion (pre-change behavior).
+     */
+    private async crossDedupSuggestionsAgainstKodyRules(
+        suggestions: Partial<CodeSuggestion>[],
+        kodyRules: Partial<CodeSuggestion>[],
+        prNumber: number,
+        byokConfig?: any,
+        telemetryMeta?: LangfuseTelemetryMetadata,
+    ): Promise<Partial<CodeSuggestion>[]> {
+        const fileScopedRules = kodyRules.filter((r) => !!r.relevantFile);
+        if (!suggestions.length || !fileScopedRules.length) {
+            return suggestions;
+        }
+
+        const embedCache = new Map<string, number[] | null>();
+        const tiebreak = this.buildDedupTiebreak(
+            byokConfig,
+            telemetryMeta,
+            prNumber,
+        );
+
+        const kept: Partial<CodeSuggestion>[] = [];
+        for (let si = 0; si < suggestions.length; si++) {
+            const s = suggestions[si];
+            let absorbedBy: { ri: number; reason: string; score: number } | null =
+                null;
+            for (let ri = 0; ri < fileScopedRules.length; ri++) {
+                const rule = fileScopedRules[ri];
+                // A suggestion can only duplicate a rule on the SAME file.
+                if (rule.relevantFile !== s.relevantFile) {
+                    continue;
+                }
+                const decision = await this.resolveDedupMerge(
+                    s,
+                    rule,
+                    `s${si}`,
+                    `r${ri}`,
+                    embedCache,
+                    tiebreak,
+                    { crossStream: true },
+                );
+                if (decision.honor) {
+                    absorbedBy = {
+                        ri,
+                        reason: decision.reason,
+                        score: decision.score,
+                    };
+                    break;
+                }
+            }
+            if (absorbedBy) {
+                this.logger.log({
+                    message: `[DEDUP-CROSS] PR#${prNumber}: suggestion ${s.relevantFile}:${s.relevantLinesStart}-${s.relevantLinesEnd} [${s.label}] absorbed by kody rule (${absorbedBy.reason}, score=${absorbedBy.score.toFixed(3)})`,
+                    context: this.stageName,
+                });
+            } else {
+                kept.push(s);
+            }
+        }
+        return kept;
+    }
+
     /**
      * Deduplicate suggestions that describe the same issue using LLM.
      * Groups by file, then asks Gemini Flash which suggestions are duplicates.
@@ -1639,6 +1963,17 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             }> = dedupOutput?.groups || [];
             const unique: number[] = dedupOutput?.unique || [];
 
+            // Semantic tier of the content guard (PR #1527): when lexical overlap
+            // is inconclusive we compare description embeddings, and only escalate
+            // the ambiguous band to a focused LLM tiebreak. Embeddings are memoized
+            // per suggestion for this dedup run.
+            const embedCache = new Map<string, number[] | null>();
+            const runTiebreak = this.buildDedupTiebreak(
+                byokConfig,
+                telemetryMeta,
+                prNumber,
+            );
+
             // Safety: if LLM returns nothing useful, keep all
             if (groups.length === 0 && unique.length === 0) {
                 this.logger.warn({
@@ -1783,12 +2118,23 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     // findings actually describe the same thing. A low word-overlap
                     // "duplicate" is a DIFFERENT bug the model over-merged (distinct
                     // issues on overlapping lines) — keep it instead of dropping.
-                    if (
-                        contentSimilarity(
-                            suggestions[dupIdx],
-                            suggestions[keepIdx],
-                        ) < DEDUP_CONTENT_THRESHOLD
-                    ) {
+                    const decision = await this.resolveDedupMerge(
+                        suggestions[dupIdx],
+                        suggestions[keepIdx],
+                        `n${dupIdx}`,
+                        `n${keepIdx}`,
+                        embedCache,
+                        runTiebreak,
+                    );
+                    if (!decision.honor) {
+                        // The model grouped these as duplicates but the guard is
+                        // not confident they are the same bug, so we keep both.
+                        // Log it — otherwise this veto is invisible in production
+                        // (the silent-degradation family from PR #1527).
+                        this.logger.log({
+                            message: `[DEDUP-GUARD] PR#${prNumber}: merge of idx ${dupIdx} into ${keepIdx} rejected (${decision.reason}, score=${decision.score.toFixed(3)})`,
+                            context: this.stageName,
+                        });
                         classifiedIndices.add(dupIdx);
                         if (!addedIndices.has(dupIdx)) {
                             addedIndices.add(dupIdx);
@@ -2191,6 +2537,396 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             // Best effort — tool just won't be available
         }
         return undefined;
+    }
+
+    /**
+     * Whether the org may use linked repositories (Teams / Enterprise / trial).
+     * Fail-closed: missing license service or validation errors deny the feature
+     * without failing the rest of the review.
+     */
+    private async isLinkedRepositoriesPlanAllowed(
+        organizationAndTeamData: CodeReviewPipelineContext['organizationAndTeamData'],
+    ): Promise<boolean> {
+        if (!this.licenseService) {
+            return false;
+        }
+        try {
+            const license =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+            return isTeamsOrEnterpriseTierAllowed(license);
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'linkedRepositories plan check failed — treating as not allowed',
+                context: this.stageName,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+            return false;
+        }
+    }
+
+    /**
+     * Run the deterministic boundary gate, then (only if it fires) build
+     * lazy linked-repo access. Gate-off still returns metadata so the
+     * review can record "configured but skipped".
+     */
+    private async resolveLinkedRepoAccessWithGate(
+        context: CodeReviewPipelineContext,
+        changedFiles: CodeReviewPipelineContext['changedFiles'],
+    ): Promise<{
+        linkedRepoAccess: LinkedRepoAccess | undefined;
+        gateMetadata: CrossRepoGateMetadata | undefined;
+    }> {
+        const configured = context.codeReviewConfig?.linkedRepositories;
+        if (!configured?.length) {
+            return { linkedRepoAccess: undefined, gateMetadata: undefined };
+        }
+
+        // Teams / Enterprise (and trial) only — free / CE self-hosted never
+        // arm cross-repo context even if config still has links.
+        const planAllowed = await this.isLinkedRepositoriesPlanAllowed(
+            context.organizationAndTeamData,
+        );
+        if (!planAllowed) {
+            this.logger.log({
+                message:
+                    'linkedRepositories configured but plan is not Teams/Enterprise — cross-repo context disabled',
+                context: this.stageName,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                    organizationId:
+                        context.organizationAndTeamData?.organizationId,
+                    configuredCount: configured.length,
+                },
+            });
+            return {
+                linkedRepoAccess: undefined,
+                gateMetadata: {
+                    activate: false,
+                    reasons: ['plan_not_allowed'],
+                    signalKinds: [],
+                    signalCount: 0,
+                },
+            };
+        }
+
+        const gate = evaluateCrossRepoBoundaryGate(changedFiles);
+        const gateMetadata: CrossRepoGateMetadata = {
+            activate: gate.activate,
+            reasons: gate.reasons,
+            signalKinds: [...new Set(gate.signals.map((s) => s.kind))],
+            signalCount: gate.signals.length,
+        };
+
+        if (!gate.activate) {
+            this.logger.log({
+                message:
+                    'Cross-repo boundary gate OFF — linked repos configured but diff has no boundary surface; skipping linked-repo pass',
+                context: this.stageName,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                    configuredCount: configured.length,
+                    reasons: gate.reasons,
+                },
+            });
+            return { linkedRepoAccess: undefined, gateMetadata };
+        }
+
+        this.logger.log({
+            message: `Cross-repo boundary gate ON — ${gate.signals.length} signal(s): ${gate.reasons.join(', ')}`,
+            context: this.stageName,
+            metadata: {
+                prNumber: context.pullRequest?.number,
+                signalKinds: gateMetadata.signalKinds,
+            },
+        });
+
+        const linkedRepoAccess = await this.buildLinkedRepoAccess(
+            context,
+            gateMetadata,
+        );
+        return { linkedRepoAccess, gateMetadata };
+    }
+
+    /**
+     * Build lazy linked-repo access for cross-repo agent tools (#1576).
+     * Returns undefined when the feature is off (no sandbox).
+     * Caller must already have passed the boundary gate.
+     *
+     * Ref cascade (decision 1):
+     *  1. PR-description override (`owner/repo#123` / URL / `@branch`)
+     *  2. Config `ref` pin
+     *  3. Open PR on matching head branch (prefer PR head)
+     *  4. Head branch name
+     *  5. Default branch (+ main/master fallbacks)
+     *
+     * Validation against the org's connected repos drops invalid entries
+     * with warnings (never silently).
+     */
+    private async buildLinkedRepoAccess(
+        context: CodeReviewPipelineContext,
+        gateMetadata?: CrossRepoGateMetadata,
+    ): Promise<LinkedRepoAccess | undefined> {
+        const configured = context.codeReviewConfig?.linkedRepositories;
+        if (!configured?.length) {
+            return undefined;
+        }
+        if (!context.sandboxHandle?.run || !context.sandboxHandle?.repoDir) {
+            this.logger.warn({
+                message:
+                    'linkedRepositories configured but no sandbox available — cross-repo context disabled for this review',
+                context: this.stageName,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                    configuredCount: configured.length,
+                },
+            });
+            return undefined;
+        }
+
+        try {
+            const organizationAndTeamData = context.organizationAndTeamData;
+            const platformType = context.platformType;
+            const prHeadBranch =
+                context.pullRequest?.head?.ref || context.branch;
+            const prDescription = [
+                context.pullRequest?.title,
+                context.pullRequest?.body,
+            ]
+                .filter(Boolean)
+                .join('\n\n');
+
+            const connected =
+                (await this.codeManagementService.getRepositories({
+                    organizationAndTeamData,
+                })) || [];
+
+            const connectedMapped = connected.map((r) => ({
+                id: String(r.id),
+                name: r.name,
+                full_name: r.full_name,
+                default_branch: r.default_branch,
+            }));
+
+            // Pre-resolve description #N and open-PR-on-head-branch via API
+            // so the cascade can prefer concrete heads over bare branch names.
+            const descriptionOverrides =
+                parsePrDescriptionOverrides(prDescription);
+            const descriptionPrHeads = new Map<
+                string,
+                { prNumber: number; headRef: string; headSha?: string }
+            >();
+            const openPrOnHeadBranch = new Map<
+                string,
+                { prNumber: number; headRef: string; headSha?: string }
+            >();
+
+            // First pass: identify which configured repos are valid so we
+            // only spend API calls on them.
+            const firstPass = resolveLinkedRepositories({
+                configured,
+                connectedRepositories: connectedMapped,
+                sandboxRepoDir: context.sandboxHandle.repoDir,
+                prHeadBranch,
+                prDescription,
+                resolvePrHeadRefspec: (n) =>
+                    prHeadRefspecForPlatform(String(platformType), n),
+            });
+
+            await Promise.all(
+                firstPass.resolved.map(async (repo) => {
+                    const override = findOverrideForRepo(
+                        descriptionOverrides,
+                        repo.fullName,
+                    );
+
+                    // Description #N / URL → resolve PR head via API
+                    if (override?.kind === 'pr') {
+                        try {
+                            const pr =
+                                await this.codeManagementService.getPullRequest(
+                                    {
+                                        organizationAndTeamData,
+                                        repository: {
+                                            id: repo.id,
+                                            name: repo.name,
+                                            fullName: repo.fullName,
+                                        } as any,
+                                        prNumber: override.prNumber,
+                                    },
+                                    platformType,
+                                );
+                            if (pr?.head?.ref || pr?.head?.sha) {
+                                descriptionPrHeads.set(
+                                    repo.fullName.toLowerCase(),
+                                    {
+                                        prNumber: override.prNumber,
+                                        headRef: pr.head.ref || pr.head.sha!,
+                                        headSha: pr.head.sha,
+                                    },
+                                );
+                            }
+                        } catch (err) {
+                            this.logger.warn({
+                                message: `Failed to resolve description PR #${override.prNumber} for linked repo ${repo.fullName}`,
+                                context: this.stageName,
+                                error: err,
+                            });
+                        }
+                        return; // description override wins — skip open-PR lookup
+                    }
+
+                    if (!prHeadBranch) return;
+
+                    try {
+                        const openPrs =
+                            await this.codeManagementService.getPullRequests(
+                                {
+                                    organizationAndTeamData,
+                                    repository: {
+                                        id: repo.id,
+                                        name: repo.name,
+                                    },
+                                    filters: {
+                                        state: PullRequestState.OPENED,
+                                        branch: prHeadBranch,
+                                    },
+                                },
+                                platformType,
+                            );
+                        const match = (openPrs || []).find((pr) => {
+                            const headRef =
+                                pr?.head?.ref || pr?.sourceRefName || '';
+                            return (
+                                headRef === prHeadBranch ||
+                                headRef.endsWith(`/${prHeadBranch}`)
+                            );
+                        });
+                        if (match) {
+                            const prNumber =
+                                match.number || match.pull_number;
+                            if (prNumber) {
+                                openPrOnHeadBranch.set(
+                                    repo.fullName.toLowerCase(),
+                                    {
+                                        prNumber: Number(prNumber),
+                                        headRef:
+                                            match.head?.ref ||
+                                            match.sourceRefName ||
+                                            prHeadBranch,
+                                        headSha: match.head?.sha,
+                                    },
+                                );
+                            }
+                        }
+                    } catch (err) {
+                        this.logger.warn({
+                            message: `Failed to look up open PR on ${prHeadBranch} for linked repo ${repo.fullName}`,
+                            context: this.stageName,
+                            error: err,
+                        });
+                    }
+                }),
+            );
+
+            const { resolved, warnings } = resolveLinkedRepositories({
+                configured,
+                connectedRepositories: connectedMapped,
+                sandboxRepoDir: context.sandboxHandle.repoDir,
+                prHeadBranch,
+                prDescription,
+                descriptionPrHeads,
+                openPrOnHeadBranch,
+                resolvePrHeadRefspec: (n) =>
+                    prHeadRefspecForPlatform(String(platformType), n),
+            });
+
+            for (const w of warnings) {
+                this.logger.warn({
+                    message: w,
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: context.pullRequest?.number,
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
+                    },
+                });
+            }
+
+            if (!resolved.length) {
+                return undefined;
+            }
+
+            this.logger.log({
+                message: `Linked repos ready for review: ${resolved
+                    .map(
+                        (r) =>
+                            `${r.fullName}→${r.preferredRef}(${r.refCandidates[0]?.source || '?'})`,
+                    )
+                    .join(', ')}`,
+                context: this.stageName,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                    descriptionOverrideCount: descriptionOverrides.size,
+                    openPrMatchCount: openPrOnHeadBranch.size,
+                },
+            });
+
+            return new LazyLinkedRepoAccess({
+                sandbox: context.sandboxHandle,
+                resolved,
+                warnings,
+                gate: gateMetadata,
+                getCloneParams: async (repo) => {
+                    try {
+                        const params =
+                            await this.codeManagementService.getCloneParams(
+                                {
+                                    repository: {
+                                        id: repo.id,
+                                        name: repo.name,
+                                        fullName: repo.fullName,
+                                        defaultBranch: repo.defaultBranch,
+                                    },
+                                    organizationAndTeamData,
+                                },
+                                platformType,
+                            );
+                        if (!params?.url) return null;
+                        return {
+                            url: params.url,
+                            authToken: params.auth?.token || '',
+                            authUsername: params.auth?.username,
+                            platform: platformType,
+                        };
+                    } catch (err) {
+                        this.logger.warn({
+                            message: `Failed to resolve clone params for linked repo ${repo.fullName}`,
+                            context: this.stageName,
+                            error: err,
+                        });
+                        return null;
+                    }
+                },
+            });
+        } catch (err) {
+            this.logger.warn({
+                message:
+                    'Failed to set up linkedRepositories — continuing without cross-repo context',
+                context: this.stageName,
+                error: err,
+                metadata: {
+                    prNumber: context.pullRequest?.number,
+                },
+            });
+            return undefined;
+        }
     }
 
     private summarizeToolCalls(

@@ -1,0 +1,71 @@
+---
+title: "Fontes Globais de Regras"
+description: "Transforme um repositório conectado em fonte de Kody Rules para toda a organização, aplicando um único conjunto de padrões de arquitetura e código em todos os repositórios durante o code review."
+---
+
+As Fontes Globais de Regras permitem apontar o Kodus para um ou mais repositórios conectados e importar seus arquivos de regras como Kody Rules **globais**. Diferente das [Regras de Repositório](/how_to_use/pt-br/code_review/configs/repository_rules) — que valem apenas no repositório onde vivem — as regras importadas de uma fonte global valem em **todos** os repositórios durante o code review.
+
+Use isso quando o time mantém seus padrões de arquitetura e de código num repositório dedicado de "standards" e quer esses padrões aplicados em todo lugar, sem copiar arquivos de regra para cada projeto.
+
+## Como funciona
+
+- Você seleciona repositórios conectados para atuar como **fontes**.
+- O Kodus varre cada repositório fonte em busca de arquivos de regra usando os mesmos padrões da [Detecção de Arquivos de Regras](/how_to_use/pt-br/code_review/configs/rules_file_detection) (`CLAUDE.md`, `AGENTS.md`, `.cursor/rules/**`, `.kody/rules/**`, e assim por diante).
+- Cada arquivo de regra encontrado é importado para o **escopo global** e marcado com o repositório fonte de onde veio.
+- No code review de qualquer repositório, essas regras globais são aplicadas junto com as regras do próprio repositório (respeitando a [herança](/how_to_use/pt-br/code_review/configs/rules_inheritance)).
+
+<Info>
+Somente repositórios já conectados nas suas configurações de git podem ser usados como fontes globais. Isso mantém uma fonte única de verdade para repositórios conectados e garante que as regras importadas fiquem atualizadas pelo gatilho de Pull Request descrito abaixo.
+</Info>
+
+## Configuração
+
+1. Abra **Settings → Code Review → Kody Rules** e mude para a visão **global**.
+2. Na aba **Configuration**, encontre **Global rule sources**.
+3. Clique no seletor de repositórios e escolha um ou mais repositórios conectados.
+4. Clique em **Import selected**.
+
+A importação roda em background. Ao terminar, as regras importadas aparecem na sua lista de Kody Rules globais, cada uma identificada com seu repositório fonte.
+
+<Tip>
+Você pode selecionar quantos repositórios fonte quiser. O Kodus importa os arquivos de regra que encontrar em cada um deles.
+</Tip>
+
+## Mantendo as regras atualizadas
+
+As regras importadas são atualizadas automaticamente e sob demanda:
+
+- **No merge** — quando um Pull Request é mergeado num repositório fonte, seus arquivos de regra são revarridos e as regras globais são atualizadas. Arquivos sem alteração são pulados, então isso é barato.
+- **Resync now** — use o botão **Resync now** para revarrer todas as fontes configuradas sob demanda. Isso também cobre mudanças enviadas diretamente para a branch padrão de um repositório fonte.
+
+<Note>
+Mudanças enviadas **diretamente** para a branch padrão de um repositório fonte (sem Pull Request) não são detectadas automaticamente. Use **Resync now** após um push direto para capturá-las.
+</Note>
+
+## Removendo uma fonte
+
+Remover um repositório da lista de fontes **apaga as regras globais que foram importadas dele** — elas deixam de valer no code review. Você será solicitado a confirmar antes de a remoção tomar efeito. Regras importadas das suas outras fontes, e quaisquer regras que você escreveu à mão, nunca são afetadas.
+
+## Repositórios fonte não são revisados
+
+Um repositório usado puramente como fonte de regras globais é tratado como repositório de configuração, não como base de código. O Kodus **pula o code review** em Pull Requests abertos numa fonte global de regras, do mesmo jeito que faz para um repositório de [configuração centralizada](/how_to_use/pt-br/code_review/configs/centralized_config).
+
+## Disponibilidade por plano
+
+O acesso às Fontes Globais de Regras depende do seu plano:
+
+| Plano | Acesso |
+|------|--------|
+| **Free** | Não disponível. |
+| **Trial** | Importa até **5 regras globais no total**, somando todos os repositórios fonte. Apenas as 5 primeiras regras encontradas são importadas; atingido o limite, nenhuma regra adicional é importada até você remover algumas ou fazer upgrade. |
+| **Pago** (cloud) e **self-hosted licenciado** | Ilimitado. |
+
+<Info>
+No plano Trial, ao importar, o Kodus importa as **5 primeiras regras que encontrar** entre os repositórios que você selecionou (na ordem dos arquivos do repositório). Um contador na tela mostra quantas das suas 5 regras já foram usadas, e um diálogo de confirmação detalha quantas serão adicionadas antes de você importar.
+</Info>
+
+## Relacionados
+
+- [Regras de Repositório](/how_to_use/pt-br/code_review/configs/repository_rules) — regras versionadas com escopo de um único repositório.
+- [Detecção de Arquivos de Regras](/how_to_use/pt-br/code_review/configs/rules_file_detection) — os padrões de arquivo que o Kodus varre.
+- [Herança de Regras](/how_to_use/pt-br/code_review/configs/rules_inheritance) — como regras globais, de repositório e de diretório se combinam na revisão.

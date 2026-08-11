@@ -51,6 +51,34 @@ export const isEnterprisePlan = (license: OrganizationLicense): boolean => {
     }
 };
 
+/**
+ * Mirror of `isTeamsOrEnterpriseTierAllowed` in
+ * `libs/ee/license/tier/teams-or-enterprise-tier-policy.ts` — keep aligned.
+ *
+ * Used by paid-team features such as linked repositories (cross-repo
+ * context) and cockpit analytics.
+ */
+export const isTeamsOrEnterprisePlan = (
+    license: OrganizationLicense,
+): boolean => {
+    if (!license.valid) return false;
+    const plan = license.planType ?? "";
+    const isTeams = plan.startsWith("teams_");
+    const isEnterprise =
+        plan.startsWith("enterprise_") || plan === "enterprise";
+
+    switch (license.subscriptionStatus) {
+        case "active":
+            return isTeams || isEnterprise;
+        case "licensed-self-hosted":
+            return isEnterprise;
+        case "trial":
+            return true;
+        default:
+            return false;
+    }
+};
+
 export const shouldShowBYOKMissingKeyTopbar = (params: {
     license: OrganizationLicense | null;
     llmConfigStatus: LLMConfigStatus | null | undefined;
@@ -88,6 +116,39 @@ export const shouldShowBYOKMissingKeyTopbar = (params: {
         action: Action.Update,
         resource: ResourceType.OrganizationSettings,
     });
+};
+
+/**
+ * Mirror of `supportsSamplingParams` in `libs/llm/anthropic-model-traits.ts`
+ * — keep aligned.
+ *
+ * Anthropic removed temperature / top_p / top_k from Claude 4.7 onward:
+ * sending one is a 400 that fails the whole request. The backend already
+ * withholds the value, so this only decides whether we show a field that
+ * could not take effect. An unrecognized Claude is treated as new (same bias
+ * as the backend) — a model we can't place is far more likely to be newer
+ * than one of the handful of legacy ids.
+ */
+export const anthropicRejectsTemperature = (
+    provider?: string,
+    model?: string,
+): boolean => {
+    if (provider !== "anthropic") return false;
+    if (!model?.trim()) return true;
+
+    let name = model.trim().toLowerCase();
+    const colon = name.indexOf(":");
+    if (colon > -1) name = name.slice(colon + 1);
+    if (name.startsWith("anthropic.")) name = name.slice("anthropic.".length);
+    name = name.split("@")[0].replace(/-\d{8}$/, "");
+
+    // Claude 2.x / 3.x, and 4 through 4.5, still accept sampling params — as
+    // does 4.6, the last generation before they were removed.
+    const acceptsSamplingParams =
+        /^claude-[23](\b|[-.])/.test(name) ||
+        /^claude-(opus|sonnet|haiku)-4(-[0-6])?$/.test(name);
+
+    return !acceptsSamplingParams;
 };
 
 /**

@@ -1,5 +1,6 @@
 ---
 title: Criando um Webhook
+description: "Crie manualmente o webhook do GitLab quando o registro automático não aconteceu, e selecione os eventos que o Kodus consome."
 icon: webhook
 ---
 
@@ -21,9 +22,13 @@ O Kodus geralmente cria o webhook automaticamente. Se isso não aconteceu, siga 
    - **SSL verification**: Habilite a verificação SSL
    - **Trigger**: Selecione os seguintes eventos:
      - Comments
-     - Issue events
      - Merge request events
 
 4. Clique em "Add webhook"
 
 Você configurou com sucesso um webhook para revisões de código no seu repositório GitLab.
+
+<Note>
+  O Kodus consome apenas eventos de comentário e de merge request. Eventos de issue são
+  descartados na chegada.
+</Note>

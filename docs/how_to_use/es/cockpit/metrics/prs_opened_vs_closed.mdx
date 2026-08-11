@@ -1,0 +1,47 @@
+---
+title: "PRs Abiertos vs Cerrados"
+description: "Compara cuántos pull requests abre tu equipo frente a cuántos cierra cada semana para detectar un backlog de revisión creciente."
+---
+
+## Qué es PRs Abiertos vs Cerrados
+
+Este gráfico pone dos conteos semanales lado a lado: cuántos pull requests se **abrieron** y
+cuántos se **cerraron** en la misma semana. Responde una pregunta que ninguna métrica de
+velocidad responde — ¿tu equipo está siguiendo el ritmo de su propio throughput, o el trabajo se
+acumula más rápido de lo que se mergea?
+
+## Cómo lo calculamos
+
+Para cada semana del período seleccionado contamos:
+
+- **Abiertos** — pull requests creados esa semana.
+- **Cerrados** — pull requests cerrados esa semana (mergeados o cerrados de otro modo).
+
+Ambos se cuentan de forma independiente: un PR abierto en una semana y cerrado tres semanas
+después aparece en la barra de "abiertos" de la primera y en la de "cerrados" de la tercera. Es
+deliberado — es lo que hace visible el backlog.
+
+## Cómo leerlo
+
+- **Cerrados ≈ Abiertos, semana tras semana** — estado estable. El equipo absorbe lo que asume.
+- **Abiertos consistentemente por encima de Cerrados** — el backlog crece. El cuello de botella
+  suele ser la capacidad de revisión, no la de escribir código.
+- **Picos de Cerrados muy por encima de Abiertos** — normalmente una limpieza: alguien cerró un
+  lote de PRs estancados. Conviene confirmarlo antes de leerlo como una mejora de productividad.
+- **Ambos caen a la vez** — suele ser efecto de calendario (festivo, freeze, incidente), no un
+  cambio de comportamiento.
+
+<Tip>
+  Léelo junto a [PR Cycle Time](/how_to_use/es/cockpit/metrics/lead_time_for_changes). Una brecha
+  creciente aquí junto con un cycle time al alza es la señal más clara de que el cuello de botella
+  está en la revisión, no en el desarrollo.
+</Tip>
+
+## Dónde encontrarlo
+
+Cockpit → pestaña **Productivity**, en la sección de gráficos detallados.
+
+<Note>
+  Este gráfico puede ocultarse para toda la organización. Si no lo ves, consulta
+  [Configuración de Cockpit](/how_to_use/es/cockpit/configuration).
+</Note>

@@ -2,7 +2,6 @@ import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
 
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     CodeReviewConfig,
@@ -29,7 +28,6 @@ export interface ICommentManagerService {
         platformType: string,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
     ): Promise<{ commentId: number; noteId: number; threadId?: number }>;
 
     processEndReviewMessageTemplate(
@@ -68,11 +66,11 @@ export interface ICommentManagerService {
         codeReviewConfig?: CodeReviewConfig,
         threadId?: number,
         finalCommentBody?: string,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
         reviewErrorCustomMessage?: string,
+        linkedRepositoriesMetadata?: import('@libs/ee/linked-repositories').LinkedRepositoriesReviewMetadata,
     ): Promise<void>;
 
     updateSummarizationInPR(
@@ -80,7 +78,6 @@ export interface ICommentManagerService {
         prNumber: number,
         repository: { name: string; id: string },
         summary: string,
-        dryRun: CodeReviewPipelineContext['dryRun'],
     ): Promise<void>;
 
     createLineComments(
@@ -89,7 +86,6 @@ export interface ICommentManagerService {
         repository: { name: string; id: string; language: string },
         lineComments: Comment[],
         language: string,
-        dryRun: CodeReviewPipelineContext['dryRun'],
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
     ): Promise<{
@@ -117,7 +113,6 @@ export interface ICommentManagerService {
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
     ): Promise<{ commentResults: Array<CommentResult> }>;
 
     findLastReviewComment(
@@ -145,7 +140,6 @@ export interface ICommentManagerService {
         codeReviewConfig?: CodeReviewConfig,
         endReviewMessage?: string,
         pullRequestMessagesConfig?: IPullRequestMessages,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
         prLevelCommentResults?: Array<CommentResult>,
         reviewFailed?: boolean,
         reviewErrorMessage?: string,

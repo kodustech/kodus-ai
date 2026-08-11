@@ -25,6 +25,7 @@ import { ForgejoPullRequestHandler } from '../infrastructure/webhooks/forgejo/fo
 import { GitHubPullRequestHandler } from '../infrastructure/webhooks/github/githubPullRequest.handler';
 import { GitLabMergeRequestHandler } from '../infrastructure/webhooks/gitlab/gitlabPullRequest.handler';
 
+import { OrganizationMemberListService } from '../application/services/organization-member-list.service';
 import { WebhookContextService } from '../application/services/webhook-context.service';
 import { GetConnectionsUseCase } from '../application/use-cases/integrations/get-connections.use-case';
 import { GetOrganizationLanguageUseCase } from '../application/use-cases/organization/get-organization-language.use-case';
@@ -74,6 +75,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         ...CodeManagementUseCases,
         GetConnectionsUseCase,
         GetOrganizationLanguageUseCase,
+        OrganizationMemberListService,
         WebhookContextService,
         AzureReposPullRequestHandler,
         GitHubPullRequestHandler,
@@ -107,6 +109,7 @@ import { SandboxModule } from '@libs/sandbox/modules/sandbox.module';
         ...CodeManagementUseCases,
         GetConnectionsUseCase,
         GetOrganizationLanguageUseCase,
+        OrganizationMemberListService,
         WebhookContextService,
         'AZURE_REPOS_WEBHOOK_HANDLER',
         'GITHUB_WEBHOOK_HANDLER',

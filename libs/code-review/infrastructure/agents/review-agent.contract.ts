@@ -32,6 +32,7 @@ import { type AdaptiveProfile } from '@libs/code-review/infrastructure/agents/en
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import type { DocumentationSearchAdapter } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
+import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 
 export type { FindingsOutput } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 
@@ -130,6 +131,12 @@ export interface ToolingContext {
      *  tiered coverage is active. Safe to omit — the scorer falls back to
      *  a neutral structural weight of 1.0 when missing. */
     callGraphJson?: { nodes: unknown[]; edges: unknown[] };
+    /**
+     * Cross-repo context (#1576): lazy access to linked sibling repositories.
+     * When set, grep/readFile/listDir accept an optional `repo` param and the
+     * system prompt gains a boundary-check directive. Absent = feature off.
+     */
+    linkedRepoAccess?: LinkedRepoAccess;
 }
 
 /** Review behavior + rules the agent applies. */
@@ -342,6 +349,10 @@ export interface AgentLoopInput {
     /** BYOK provider type — needed to map reasoning effort to the correct
      *  provider-specific format in providerOptions. */
     byokProvider?: BYOKProvider | string;
+    /** Model id for this attempt, as `provider:model`. The provider alone is
+     *  not enough to shape the reasoning payload: Anthropic changed its
+     *  thinking API twice, and each generation rejects the others' shape. */
+    modelName?: string;
     /** Which BYOK role this attempt is running as. Selects the concurrency
      *  limiter bucket in the model wrapper ('main' vs 'fallback'). Defaults to
      *  'main' when omitted. */
@@ -375,6 +386,8 @@ export interface AgentLoopSecrets {
     remoteCommands: RemoteCommands | undefined;
     byokConfig?: BYOKConfig;
     gitHubToken?: string;
+    /** Cross-repo linked-repo access for agent tools (#1576). */
+    linkedRepoAccess?: LinkedRepoAccess;
     /**
      * External documentation search adapter (Exa-backed). When provided,
      * registers the `searchDocs` tool on the agent so it can verify

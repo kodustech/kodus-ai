@@ -14,11 +14,12 @@
 | `RELEASE_VERSION` | – | string | ☁️ Cloud | Released version tag, set by CI on prod builds. |
 | `KODUS_LICENSE_KEY` | – | secret | 🏢 Self-hosted Enterprise | Self-hosted license key. Unlocks enterprise features. EE-only — documented in the docs reference; does not appear in either default .env.example. |
 | `API_DEVELOPMENT_MODE` | – | boolean | ☁️ Cloud | Dev-only bypass of permission validation. Cloud devs only. |
-| `GLOBAL_RULES_IMPORT_TIER_OVERRIDE` | – | enum=free|trial|paid | ☁️ Cloud | Dev-only override for the global Kody Rules import tier so the free/trial/paid UI can be exercised locally (where an install usually has no license and would otherwise resolve to `free`). Only honored when API_DEVELOPMENT_MODE is true; ignored in production. Leave empty to resolve the tier from the org's license as usual. |
+| `GLOBAL_RULES_IMPORT_TIER_OVERRIDE` | – | enum=free\|trial\|paid | ☁️ Cloud | Dev-only override for the global Kody Rules import tier so the free/trial/paid UI can be exercised locally (where an install usually has no license and would otherwise resolve to `free`). Only honored when API_DEVELOPMENT_MODE is true; ignored in production. Leave empty to resolve the tier from the org's license as usual. |
 | `RUN_MIGRATIONS` | – | boolean | ⚙️ Both | Run TypeORM migrations on container boot (OLTP + analytics warehouse + mcp-manager). Default true so a fresh install boots into a usable state without an extra step. Set to false to manage migrations manually (e.g. blue/green deploys where you run them out-of-band). |
 | `RUN_SEEDS` | – | boolean | ⚙️ Both | Run database seeds on container boot. Required for first-time setup (creates default org, admin role, etc). Idempotent — safe to leave on. |
 | `USE_LOCAL_DB` | – | boolean | 🏠 Self-hosted | When true, the installer's docker-compose spins up a local Postgres container. Set to false to point at an externally-managed Postgres (managed RDS/Supabase/Neon/Railway). Read by kodus-installer/scripts/ install.sh + doctor.sh; not consumed by kodus-ai itself. |
 | `USE_LOCAL_RABBITMQ` | – | boolean | 🏠 Self-hosted | Same logic as USE_LOCAL_DB but for RabbitMQ. False if you bring your own broker (CloudAMQP, AWS MQ, etc). |
+| `KODUS_REGISTRY` | – | string | 🏠 Self-hosted | Registry the installer's docker-compose pulls the Kodus images from. Leave unset to use the public images; set it to mirror them into an internal registry (restricted networks) or to run throwaway e2e builds without publishing next to the production images. Read by kodus-installer/docker-compose.yml; not consumed by kodus-ai itself. |
 
 ## Server
 
@@ -119,7 +120,9 @@
 | `API_VERTEX_AI_LOCATION` | – | string | ☁️ Cloud |  |
 | `API_GOOGLE_AI_PROVIDER` | – | enum(gemini,vertex) | ☁️ Cloud | Google AI provider: gemini (AI Studio) or vertex (Vertex AI). |
 | `API_NOVITA_AI_API_KEY` | – | secret | ☁️ Cloud |  |
-| `API_MOONSHOT_API_KEY` | – | secret | ☁️ Cloud | Moonshot AI (Kimi) — used by the public-demo trial flow in libs/code-review/infrastructure/agents/llm/byok-to-vercel.ts when the default model name matches /^kimi[-_.]/. Wires through the OpenAI- compatible adapter pointed at https://api.moonshot.ai/v1. The eval scripts (evals/{investigation,promotion}/run-eval.js) also reference this key by name. Cloud-only — self-hosted has no Moonshot demo path. |
+| `API_MOONSHOT_API_KEY` | – | secret | ☁️ Cloud | Moonshot AI (Kimi) — used by the public-demo trial flow in libs/code-review/infrastructure/agents/llm/byok-to-vercel.ts when the default model name matches /^kimi[-_.]/. Wires through the OpenAI- compatible adapter pointed at https://api.moonshot.ai/v1. The eval scripts (evals/\{investigation,promotion\}/run-eval.js) also reference this key by name. Cloud-only — self-hosted has no Moonshot demo path. |
+| `API_DEEPSEEK_API_KEY` | – | secret | ☁️ Cloud | DeepSeek — the managed default model (deepseek-v4-flash) for the trial / no-BYOK flow: libs/llm/byok-to-vercel.ts routes any default model name matching /^deepseek[-_.]/ through the OpenAI-compatible adapter pointed at API_DEEPSEEK_BASE_URL. Used by the v5 code-review agents, PR summary, kody-rules generation, reference detection, and issue generation/closing. Cloud-only — self-hosted brings its own model via API_LLM_PROVIDER_MODEL. |
+| `API_DEEPSEEK_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_GROQ_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_GROQ_API_KEY` | – | secret | ☁️ Cloud |  |
 | `API_CEREBRAS_BASE_URL` | – | url | ☁️ Cloud |  |
@@ -348,6 +351,7 @@
 | `API_CRON_CLASSIFY_ORPHANED_SESSIONS` | – | cron | ⚙️ Both | Reclassifies orphaned (no-PR) review sessions every 15 minutes. Cloud-only feature. |
 | `API_CRON_SSO_TEST_SESSION_CLEANUP` | – | cron | ☁️ Cloud | Daily cleanup of expired SSO test sessions (1 AM UTC). |
 | `API_CRON_STALE_REVIEW_WATCHDOG` | – | cron | ⚙️ Both | Reaps code review executions stuck IN_PROGRESS (process died mid-review) and finalizes their orphaned platform check runs. |
+| `API_CRON_PRUNE_LICENSE_SEATS` | – | cron | ⚙️ Both | Daily sweep (4 AM) that releases license seats still held by users who left the git organization. Only acts on orgs that opted in via the auto_license_assignment parameter, and skips any org whose member list could not be fetched, so a provider outage never mass-revokes seats. |
 | `WORKFLOW_STALE_JOB_REAPER_CRON` | – | cron | ⚙️ Both | Cadence of the workflow-jobs stale-PROCESSING reaper, which fails jobs left in PROCESSING when a worker was killed mid-processing (OOM/eviction). The eligibility threshold (WORKFLOW_STALE_JOB_TIMEOUT_MINUTES) still bounds what can be reaped, so cadence only affects how quickly orphans are caught. |
 | `WORKFLOW_STALE_JOB_TIMEOUT_MINUTES` | – | number | ⚙️ Both | Minutes a workflow job may sit in PROCESSING before the reaper marks it FAILED. Must exceed the longest legitimate run — the 105min job-abort timeout and the 150min inbox claim timeout — so live jobs are never reaped; 180 leaves margin. |
 | `WORKFLOW_QUEUE_CHECK_IMPLEMENTATION_PREFETCH` | – | number | ⚙️ Both (opt-in) | Per-handler prefetch (in-flight messages) for the check-implementation workflow handler. |

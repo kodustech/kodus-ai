@@ -9,7 +9,7 @@ CLI 内置了一种精简、结构化的输出模式（`--prompt-only`），专�
 
 - **Claude Code** — 通过技能安装器原生支持。
 - **Cursor** — 原生技能。
-- **Codex** — 原生技能，通过 `notify` 钩子支持决策记忆。
+- **Codex** — 原生技能。
 - **Windsurf** — 通过 `--prompt-only` 输出。
 
 任何能够执行 shell 命令并解析结构化文本的代理，都能直接使用 `kodus review --prompt-only`。
@@ -78,15 +78,6 @@ kodus review --prompt-only
 | `--fail-on` | 退出码门槛。只要此项非零，循环就继续。 |
 | `--fields <csv>` | 缩减 JSON/代理 payload（例如 `summary,issues.file,issues.severity`），有助于保持代理上下文窗口精简。 |
 
-## 与决策记忆结合
-
-将代理循环与 [决策记忆](decision_memory) 结合，将每次代理 turn 背后的推理捕获为仓库中的结构化文件。循环处理 *做了什么*；记忆处理 *为什么*。
-
-```bash
-kodus decisions enable
-# 此后每次代理 turn 都会在 .kody/ 下写入决策文件
-```
-
 ## 示例：Claude Code 循环 + 业务验证
 
 ```bash
@@ -102,9 +93,6 @@ git commit -am "fix: KC-1441 address review findings"
 ## 相关
 
 <CardGroup cols={2}>
-  <Card title="决策记忆" icon="brain" href="decision_memory">
-    将代理决策持久化为仓库中的结构化文件。
-  </Card>
   <Card title="核心概念" icon="book-open" href="concepts">
     审查模式、diff 模式和代理输出标志。
   </Card>

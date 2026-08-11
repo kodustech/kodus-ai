@@ -21,6 +21,7 @@ import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
+import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
 
 @Injectable()
 export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -177,7 +178,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     pullRequest.number,
                     repository,
                     summaryPR,
-                    context.dryRun,
                 );
             } catch (error) {
                 this.logger.error({
@@ -266,11 +266,11 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 codeReviewConfig,
                 initialCommentData.threadId,
                 undefined,
-                context.dryRun,
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
+                context.linkedRepositoriesMetadata,
             );
             return context;
         }
@@ -317,6 +317,14 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     lineComments,
                 );
 
+            // Append cross-repo transparency line to custom end-review templates too.
+            const linkedLine = formatLinkedReposSummaryLine(
+                context.linkedRepositoriesMetadata,
+            );
+            const bodyWithLinked = linkedLine
+                ? `${finalCommentBody}${linkedLine}`
+                : finalCommentBody;
+
             await this.commentManagerService.updateOverallComment(
                 organizationAndTeamData,
                 pullRequest.number,
@@ -327,12 +335,12 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 lineComments,
                 codeReviewConfig,
                 initialCommentData.threadId,
-                finalCommentBody,
-                context.dryRun,
+                bodyWithLinked,
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
                 reviewErrorCustomMessage,
+                context.linkedRepositoriesMetadata,
             );
             return context;
         }
@@ -365,7 +373,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 codeReviewConfig,
                 finalCommentBody,
                 context.pullRequestMessagesConfig,
-                context.dryRun,
                 context.prLevelCommentResults ?? [],
                 reviewFailed,
                 reviewErrorMessage,

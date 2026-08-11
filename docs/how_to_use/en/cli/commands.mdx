@@ -42,12 +42,24 @@ kodus review --prompt-only            # Output optimized for AI agents
 | `--branch <name>`      | `-b`  | Compare current branch against specified branch             |
 | `--rules-only`         | —     | Review using only configured rules (no general suggestions) |
 | `--fast`               | —     | Fast mode: quicker analysis with lighter checks             |
+| `--focus <text>`       | —     | Steer the review at a specific area — see [Steer a Review](/how_to_use/en/code_review/review_directive) |
+| `--heavy`              | —     | Deeper pass: extra critic rounds for higher recall (alpha, see below) |
 | `--interactive`        | `-i`  | Interactive mode: navigate and apply fixes                  |
 | `--fix`                | —     | Automatically apply all fixable issues                      |
 | `--prompt-only`        | —     | Output optimized for AI agents                              |
 | `--fail-on <severity>` | —     | Exit with code 1 if issues meet or exceed severity          |
 | `--context <file>`     | —     | Custom context file to include in review                    |
 | `--fields <csv>`       | —     | Select response fields (JSON/agent mode), e.g. `summary,issues.file` |
+| `--github-pat <token>` | —     | GitHub token (`read:repo`) used to clone private repos. Trial users only. Also settable via `KODUS_GITHUB_PAT`. Held in memory only, never persisted. |
+| `--no-hunk`            | —     | Skip the hunk viewer and use the legacy interactive list (interactive sessions only) |
+
+<Warning>
+  `--heavy` is an **alpha** feature, **access by request** — it is off for every organization
+  until we enable it. Cloud only for now; not available self-hosted. Until you're opted in the
+  flag is accepted but the review runs normally, with no error and no warning. Ask for access on
+  [Discord](https://discord.gg/TFZBRk9fT6) or at [support@kodus.io](mailto:support@kodus.io).
+  See [Heavy mode](/how_to_use/en/code_review/review_directive#heavy-mode).
+</Warning>
 
 ### Review Modes
 
@@ -234,66 +246,6 @@ KODUS_SKIP_HOOK=1 git push
 
 ---
 
-## `kodus decisions`
-
-Capture and persist AI agent decisions into your repository for future reference. Decisions are stored as structured markdown in `.kody/`.
-
-### `decisions enable`
-
-```bash
-kodus decisions enable                                    # All agents
-kodus decisions enable --agents claude,cursor            # Specific agents
-kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
-kodus decisions enable --force                           # Overwrite existing config
-```
-
-| Flag                    | Default                | Description                      |
-| ----------------------- | ---------------------- | -------------------------------- |
-| `--agents <agents>`     | `claude,cursor,codex`  | Comma-separated agent list       |
-| `--codex-config <path>` | `~/.codex/config.toml` | Path to Codex config             |
-| `--force`               | —                      | Overwrite existing `modules.yml` |
-
-### `decisions disable`
-
-```bash
-kodus decisions disable
-```
-
-Removes all decision hooks. Preserved data in `.kody/` is not deleted.
-
-### `decisions status`
-
-```bash
-kodus decisions status
-```
-
-Shows PR memory, sessions, last SHA, agent, and module config.
-
-### `decisions show`
-
-```bash
-kodus decisions show                  # Current branch PR memory
-kodus decisions show auth             # Module decisions for 'auth'
-kodus decisions show feat/new-api     # PR decisions for a specific branch
-```
-
-### `decisions promote`
-
-```bash
-kodus decisions promote                                   # Current branch, all modules
-kodus decisions promote --branch feat/auth                # Specific branch
-kodus decisions promote --branch feat/auth --modules auth,users
-```
-
-| Flag              | Description                                       |
-| ----------------- | ------------------------------------------------- |
-| `--branch <name>` | Branch name (default: current branch)             |
-| `--modules <ids>` | Comma-separated module IDs (default: all matched) |
-
-Promotes PR-level decisions to long-term module memory.
-
----
-
 ## `kodus config centralized`
 
 Manage centralized configuration from the CLI.
@@ -326,7 +278,7 @@ kodus config centralized download --out ./centralized-config.zip
 | `--out <path>`                 | `download`                  | Required output path for ZIP file |
 | `--json`                       | all centralized subcommands | Output structured JSON            |
 
-For a complete walkthrough, see: [/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section](/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section)
+For a complete walkthrough, see: [/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section](/how_to_use/en/code_review/configs/centralized_config#cli)
 
 ---
 
@@ -471,13 +423,32 @@ kodus skills uninstall                                   # Remove bundled skills
 
 ## `kodus status`
 
-Show a consolidated Kodus status: auth mode, organization, repository, hook, decisions, bundled skills, and CLI version.
+Show a consolidated Kodus status: auth mode, organization, repository, hook, bundled skills, and CLI version.
 
 ```bash
 kodus status
 ```
 
 Useful as a first diagnostic when something misbehaves or when onboarding a new machine.
+
+---
+
+## `kodus diff`
+
+Open the current changeset in the Hunk terminal diff viewer.
+
+```bash
+kodus diff
+```
+
+This is a thin wrapper around `hunk diff` — every argument you pass is forwarded to it
+unchanged, so any flag Hunk supports works here too.
+
+<Note>
+  Useful for eyeballing a changeset before running `kodus review` on it. The same viewer backs
+  the interactive review experience; pass `--no-hunk` to `kodus review` if you prefer the
+  legacy list.
+</Note>
 
 ---
 
@@ -526,3 +497,4 @@ Issues are categorized by severity, from most to least critical:
 | `complexity`             | Code complexity issues                 |
 | `maintainability`        | Maintainability concerns               |
 | `style`                  | Code style issues                      |
+| `documentation`          | Documentation gaps (accepted by `--category` on `kodus pr suggestions`) |

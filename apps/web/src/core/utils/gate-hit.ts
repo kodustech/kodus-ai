@@ -4,7 +4,11 @@ import { auth } from "src/core/config/auth";
 
 import { capturePostHogEvent } from "./posthog";
 
-export type GateFeature = "cockpit" | "mcp_plugins" | "kody_rules";
+export type GateFeature =
+    | "cockpit"
+    | "mcp_plugins"
+    | "kody_rules"
+    | "linked_repositories";
 
 type GateEventInput = {
     feature: GateFeature;

@@ -88,13 +88,6 @@ kodus review --verbose    # 或在任意命令上加 --verbose
     - 跳过单次推送：`KODUS_SKIP_HOOK=1 git push`。
   </Accordion>
 
-  <Accordion title="决策（记忆）钩子没有捕获">
-    - 运行 `kodus decisions status` 查看已接入的代理。
-    - 重新运行 `kodus decisions enable --force` 以重装集成文件。
-    - 对于 Codex，确保 `~/.codex/config.toml` 包含 `notify = ["kodus", "decisions", "capture", ...]` 一行，或传入 `--codex-config <path>`。
-    - 确认代理确实会触发 turn-complete 事件（部分旧版 Claude Code 配置不会）。
-  </Accordion>
-
   <Accordion title="达到设备数上限">
     自托管实例可按组织强制设备数上限。请联系管理员提高上限或在仪表板中移除旧设备。
   </Accordion>

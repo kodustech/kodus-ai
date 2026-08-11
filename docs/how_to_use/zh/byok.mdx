@@ -147,7 +147,9 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
 
 <Steps>
   <Step title="选择提供商">
-    从 OpenAI、Anthropic、Google Gemini、OpenRouter、Novita 或 **OpenAI Compatible**(用于任意 OpenAI 格式的端点)中选择。
+    从 OpenAI、Anthropic、Google Gemini、Google Vertex AI、Amazon Bedrock、OpenRouter、Novita、**OpenAI Compatible**(用于任意 OpenAI 格式的端点)或 **Anthropic-compatible**(用于任意 Anthropic Messages 格式的端点)中选择。
+
+    Vertex 和 Bedrock 标记为 **Beta**,需要提供商特定的凭证而非单一密钥 —— 参见下方的[支持的提供商](#支持的提供商)。
   </Step>
 
   <Step title="输入基础 URL(如需要)">
@@ -158,8 +160,8 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
     如果 Kodus 能从提供商列出模型,您会看到下拉菜单。否则(例如自托管或未配置平台密钥时)需要手动输入精确的模型 ID。
   </Step>
 
-  <Step title="粘贴 API 密钥">
-    密钥字段会在提供商和模型设定后出现。
+  <Step title="粘贴凭证">
+    对大多数提供商而言这是单个 API 密钥字段,在设置好提供商和模型后出现。Vertex 需要服务账号 JSON 加区域,Bedrock 需要 Bedrock API key(或 IAM 凭证)加区域。
   </Step>
 
   <Step title="调整高级设置(可选)">
@@ -231,6 +233,36 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
     </Warning>
   </Tab>
 
+  <Tab title="Google Vertex AI">
+    <Info>**Beta。** 较新的集成,认证路径比"单一密钥"的常规方式更复杂。</Info>
+
+    **适合:** 已经在使用 Google Cloud、希望在既有 GCP 计费、IAM 和数据驻留保障下使用 Gemini(或 Claude)的团队。
+
+    **如何配置:**
+    1. 在手动向导中选择 **Google Vertex AI** 作为提供商。
+    2. 把**服务账号 JSON 文件的内容**粘贴到 Service Account JSON 字段(base64 编码同样可用)。Kodus 会自动从 JSON 中提取 `project_id`。
+    3. **Region** —— 留空以使用全局端点(推荐)。仅在有数据驻留要求时才固定某个区域(例如 `us-east5`)。
+
+    该服务账号需要具备在该项目中调用 Vertex AI 预测 API 的权限。
+  </Tab>
+
+  <Tab title="Amazon Bedrock">
+    <Info>**Beta。** 较新的集成,认证路径比"单一密钥"的常规方式更复杂。</Info>
+
+    **适合:** 已标准化到 AWS、希望模型费用计入自家 AWS 账户的团队。
+
+    **如何配置:**
+    1. 在手动向导中选择 **Amazon Bedrock** 作为提供商。
+    2. 提供一个 **Bedrock API key**(bearer token)—— 参见[如何生成 Bedrock API key](https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys-generate.html)。
+    3. 设置 **Region**(例如 `us-east-1`、`us-west-2`、`eu-central-1`)。
+
+    <Accordion title="高级:改用 IAM 凭证而非 API key">
+      如果你的团队尚未迁移到 Bedrock API key,展开 **Advanced — use IAM user credentials instead**,填入静态的 access key ID 与 secret(若使用 STS 临时凭证还需 session token)。该 IAM 主体需要 `bedrock:InvokeModel` 权限。
+
+      API key 优先:一旦设置了 bearer token,IAM 字段会被忽略。
+    </Accordion>
+  </Tab>
+
   <Tab title="OpenAI Compatible">
     **最适合:**专业提供商(Moonshot、Z.ai、Fireworks、Together、Groq、DeepSeek)或自托管端点。
 
@@ -253,6 +285,17 @@ Z.ai 和 Moonshot 都在按 token 付费的开发者 API 之外提供一个订�
         Together AI 设置。
       </Card>
     </CardGroup>
+  </Tab>
+  <Tab title="Anthropic-compatible">
+    **适合:** 使用 Anthropic Messages API 格式(而非 OpenAI 格式)的端点 —— 包括 Kimi 等的 coding plan 端点。
+
+    **如何配置:**
+    1. 在手动向导中选择 **Anthropic-compatible** 提供商。
+    2. 填入 base URL、密钥和模型 ID。
+
+    <Note>
+      base URL 按你的提供商所文档化的形式粘贴即可 —— 末尾带不带 `/v1` 都可以(例如 `https://api.kimi.com/coding` 或 `https://api.kimi.com/coding/v1`)。Kodus 会在内部做归一化,因为 Anthropic 的两条 SDK 路径对 `/v1` 应该放在哪里的处理并不一致。
+    </Note>
   </Tab>
 </Tabs>
 

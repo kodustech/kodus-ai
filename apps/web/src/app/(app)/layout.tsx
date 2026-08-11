@@ -145,10 +145,14 @@ export default async function Layout({ children }: React.PropsWithChildren) {
                     organizationLicense
                         ? ({
                               ...organizationLicense,
-                              byok:
-                                  hasByokKey ||
-                                  (organizationLicense as { byok?: boolean })
-                                      .byok,
+                              // Trust the locally-configured key as the single
+                              // source of truth for "a key is connected". The
+                              // billing license carries a plan-derived `byok`
+                              // (true for any *_byok plan) that stays true even
+                              // after the key is disconnected — OR-ing it in
+                              // would show "connected / unlimited" for a trial
+                              // that actually has no key and burned its credits.
+                              byok: hasByokKey,
                           } as typeof organizationLicense)
                         : {
                               valid: false,

@@ -42,6 +42,7 @@ graph LR
 - API: ビジネスロジックとリクエスト処理を担う中央サービスレイヤー
 - Worker: キューとバックグラウンドジョブの非同期処理
 - Webhooks: GitプロバイダーWebhookの専用サービス
+- Analytics Worker: Cockpit のダッシュボードを支える任意のインジェストワーカー（`WORKER_ROLE=analytics`）。Enterprise 限定 — [Analytics Worker](/how_to_deploy/ja/deploy_kodus/analytics_worker) を参照
 
 ### 3. MCP Manager
 
@@ -62,7 +63,7 @@ PrometheusとGrafanaはオプションで、モニタリングと可視化に使
 
 ### 6. 補助サービス（Kodus Cloud）
 
-Kodus Cloudには、セルフホスト型デプロイメントには不要なクローズドソースの補助サービス（課金、アナリティクス、チャットインテグレーション）が含まれています。
+Kodus Cloudには、セルフホスト型デプロイメントには不要なクローズドソースの補助サービス（課金、チャットインテグレーション）が含まれています。アナリティクスはクラウド専用ではありません：ライセンス済みのセルフホスト Enterprise は同じインジェストワーカーをローカルで実行します。
 
 ## 次のステップ
 <CardGroup cols={2}>

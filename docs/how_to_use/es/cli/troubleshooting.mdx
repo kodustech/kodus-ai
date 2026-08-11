@@ -88,13 +88,6 @@ kodus review --verbose    # o cualquier comando con --verbose
     - Omite el hook para un solo envío: `KODUS_SKIP_HOOK=1 git push`.
   </Accordion>
 
-  <Accordion title="Los hooks de decisiones (memory) no están capturando">
-    - Ejecuta `kodus decisions status` para ver qué agentes están configurados.
-    - Vuelve a ejecutar `kodus decisions enable --force` para reinstalar los archivos de integración.
-    - Para Codex, asegúrate de que `~/.codex/config.toml` contenga la línea `notify = ["kodus", "decisions", "capture", ...]`, o pasa `--codex-config <path>`.
-    - Verifica que el agente emita realmente eventos de turno completado (algunas configuraciones antiguas de Claude Code no lo hacen).
-  </Accordion>
-
   <Accordion title="Límite de dispositivos alcanzado">
     Las instancias auto-alojadas pueden aplicar límites de dispositivos por organización. Pide a tu administrador que aumente el límite o elimine dispositivos no utilizados del panel.
   </Accordion>

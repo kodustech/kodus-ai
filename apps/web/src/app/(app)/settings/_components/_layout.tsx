@@ -70,10 +70,20 @@ const routes = [
     { label: "PR Summary", href: "pr-summary" },
     { label: "Kody Rules", href: "kody-rules" },
     { label: "Custom Messages", href: "custom-messages" },
+    // Cross-repo context (#1576): relationships are directional and
+    // repo-scoped by design (a global default would link EVERY repo to the
+    // same siblings), so the item only renders in repository submenus.
+    { label: "Linked Repositories", href: "linked-repositories", repoOnly: true },
 ] satisfies Array<{
     label: string;
     href: string;
+    repoOnly?: boolean;
 }>;
+
+// Global scope never shows repo-only routes (see `repoOnly` on `routes`).
+const globalSettingsRoutes = routes.filter(
+    (r) => !("repoOnly" in r && r.repoOnly),
+);
 
 type InitialPlatformConfig = {
     uuid: string;
@@ -181,7 +191,7 @@ function SettingsLayoutShell({
     const globalConfigOverrideCount = configValue
         ? countConfigOverridesForRoutes(
             configValue.configs,
-            routes.map((r) => r.href),
+            globalSettingsRoutes.map((r) => r.href),
             FormattedConfigLevel.GLOBAL,
         )
         : 0;
@@ -346,7 +356,7 @@ function SettingsLayoutShell({
                                         <CollapsibleContent>
                                             <SidebarMenuItem>
                                                 <SidebarMenuSub>
-                                                    {settingsRoutes.map(
+                                                    {globalSettingsRoutes.map(
                                                         ({ label, href }) => {
                                                             const active =
                                                                 repositoryId ===
@@ -388,7 +398,7 @@ function SettingsLayoutShell({
                                     </Collapsible>
                                 ) : (
                                     <SettingsGlobalSidebarSkeleton
-                                        settingsRoutes={settingsRoutes}
+                                        settingsRoutes={globalSettingsRoutes}
                                     />
                                 )}
 

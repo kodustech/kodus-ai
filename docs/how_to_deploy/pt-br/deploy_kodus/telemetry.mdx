@@ -95,7 +95,7 @@ Antes de qualquer heartbeat sair da sua instância, você pode imprimir o
 payload exato que o cron diário construiria:
 
 ```bash
-yarn telemetry:preview
+pnpm run telemetry:preview
 ```
 
 Esse comando inicializa um contexto Kodus mínimo, roda o mesmo coletor que
@@ -103,7 +103,7 @@ o cron usa, e imprime o JSON em stdout — sem enviar. Pipe pra `jq` pra
 explorar:
 
 ```bash
-yarn telemetry:preview | jq '.usage_7d'
+pnpm run telemetry:preview | jq '.usage_7d'
 ```
 
 ## Desligar a telemetria

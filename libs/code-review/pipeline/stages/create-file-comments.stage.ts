@@ -28,10 +28,6 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
 import {
-    DRY_RUN_SERVICE_TOKEN,
-    IDryRunService,
-} from '@libs/dryRun/domain/contracts/dryRun.service.contract';
-import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
@@ -56,9 +52,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
 
         @Inject(SUGGESTION_SERVICE_TOKEN)
         private readonly suggestionService: ISuggestionService,
-
-        @Inject(DRY_RUN_SERVICE_TOKEN)
-        private readonly dryRunService: IDryRunService,
     ) {
         super();
     }
@@ -109,7 +102,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             repository: context.repository,
             prNumber: context.pullRequest.number,
             platformType: context.platformType as PlatformType,
-            dryRun: context.dryRun,
         });
 
         if (validSuggestions.length === 0) {
@@ -147,7 +139,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     discardedSuggestions,
                     context.platformType,
                     context.fileMetadata,
-                    context.dryRun,
                     allCommits,
                     context.heavy,
                 );
@@ -258,7 +249,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             codeReviewConfig,
             repository,
             platformType,
-            dryRun,
         } = context;
 
         // v3 pipeline: suggestions are already severity-normalized and deduplicated
@@ -296,7 +286,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 sortedPrioritizedSuggestions,
                 repository,
                 codeReviewConfig,
-                dryRun,
                 context.pipelineMetadata?.lastExecution?.dataExecution
                     ?.lastAnalyzedCommit || null,
                 context.pullRequestMessagesConfig?.globalSettings
@@ -319,7 +308,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                 allDiscardedSuggestions,
                 platformType,
                 context.fileMetadata,
-                dryRun,
                 context.prAllCommits,
                 context.heavy,
             );
@@ -375,7 +363,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         sortedPrioritizedSuggestions: any[],
         repository: Partial<Repository>,
         codeReviewConfig: CodeReviewConfig,
-        dryRun: CodeReviewPipelineContext['dryRun'],
         lastAnalyzedCommitFromContext: any,
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
@@ -510,7 +497,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                     },
                     lineComments,
                     codeReviewConfig?.languageResultPrompt,
-                    dryRun,
                     suggestionCopyPrompt,
                     fallbackSuggestionsBySeverity,
                 );
@@ -544,7 +530,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
         discardedSuggestions: Partial<CodeSuggestion>[],
         platformType: string,
         fileMetadata?: Map<string, any>,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
         prCommits?: Commit[],
         heavy?: boolean,
     ) {
@@ -559,18 +544,6 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
             }
             return file;
         });
-
-        if (dryRun?.enabled) {
-            await this.dryRunService.addFilesToDryRun({
-                organizationAndTeamData,
-                id: dryRun?.id,
-                files: enrichedFiles,
-                prioritizedSuggestions: sortedPrioritizedSuggestions as any,
-                unusedSuggestions: discardedSuggestions as any,
-            });
-
-            return;
-        }
 
         // Update status for originally prioritized suggestions based on comment results
         const suggestionsWithStatus =

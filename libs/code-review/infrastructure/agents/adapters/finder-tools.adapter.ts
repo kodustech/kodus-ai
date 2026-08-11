@@ -30,6 +30,7 @@ import {
     type DocumentationSearchAdapter,
 } from '@libs/code-review/infrastructure/agents/engine/agent-tools.factory';
 import type { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
+import type { LinkedRepoAccess } from '@libs/ee/linked-repositories';
 
 /** Recover the raw JSON schema from whatever buildAgentTools produced
  *  (AI SDK jsonSchema() wrapper exposes `.jsonSchema`; fall back to as-is). */
@@ -71,6 +72,8 @@ export interface FinderToolRegistryOptions {
     /** Gated (default off): wrap readFile so a range-less read of a large file
      *  returns a symbol outline instead of dumping the head. A/B knob. */
     outlineFirst?: boolean;
+    /** Cross-repo linked-repo access (#1576). When set, tools accept repo=. */
+    linkedRepoAccess?: LinkedRepoAccess;
 }
 
 export function buildFinderToolRegistry(
@@ -83,6 +86,7 @@ export function buildFinderToolRegistry(
         options.documentationSearchService,
         options.documentationSearchOptions,
         options.callGraph,
+        options.linkedRepoAccess,
     );
 
     const tools: AgentTool[] = Object.entries(raw).map(

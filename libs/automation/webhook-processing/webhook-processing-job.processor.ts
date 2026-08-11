@@ -17,6 +17,8 @@ import {
     WORKFLOW_JOB_REPOSITORY_TOKEN,
 } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { raceWithAbortSignal } from '@libs/core/workflow/infrastructure/abort-signal-race';
+import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
 /**
  * Processor for WEBHOOK_PROCESSING jobs
@@ -172,12 +174,21 @@ export class WebhookProcessingJobProcessorService implements IJobProcessorServic
                         result: 'Processed',
                     },
                 });
-            } catch (error) {
+            } catch (rawError) {
+                // Wrap octokit 403/429 in RateLimitError (else pass through) so
+                // the consumer error handler re-queues with a delay aligned to
+                // the bucket reset instead of DLQ'ing it as PERMANENT. Before
+                // this, a rate-limited webhook (the product's GitHub account out
+                // of quota) was marked PERMANENT and the review was silently
+                // LOST — matching the octokit throttle that used to sleep the
+                // whole reset window inside the call. Both are fixed together.
+                const error = classifyGitHubError(rawError) as Error;
+                const rateLimited = isRateLimitError(error);
                 const errorMessage =
                     error instanceof Error ? error.message : String(error);
 
                 this.logger.error({
-                    message: `WEBHOOK_PROCESSING job ${jobId} failed`,
+                    message: `WEBHOOK_PROCESSING job ${jobId} failed${rateLimited ? ' (GitHub rate limit — will retry after reset)' : ''}`,
                     context: WebhookProcessingJobProcessorService.name,
                     error: error instanceof Error ? error : undefined,
                     metadata: {
@@ -185,15 +196,21 @@ export class WebhookProcessingJobProcessorService implements IJobProcessorServic
                         correlationId: job.correlationId,
                         platformType: job.metadata?.platformType,
                         event: job.metadata?.event,
+                        rateLimited,
                     },
                 });
 
                 await this.jobRepository.update(jobId, {
                     status: JobStatus.FAILED,
-                    errorClassification: ErrorClassification.PERMANENT,
+                    errorClassification: rateLimited
+                        ? ErrorClassification.RATE_LIMITED
+                        : ErrorClassification.PERMANENT,
                     lastError: errorMessage,
                 });
 
+                // Throw the CLASSIFIED error so RabbitMQErrorHandler sees the
+                // typed RateLimitError and applies the smart (reset-aligned)
+                // re-queue delay — not the raw octokit shape.
                 throw error;
             }
         };

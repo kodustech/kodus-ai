@@ -1,5 +1,6 @@
 ---
 title: "Azure DevOps PAT Token"
+description: "Generate the Azure DevOps Personal Access Token Kody needs to read your repositories and post review comments, with the exact scopes required."
 ---
 
 ## Introduction to the PAT
@@ -54,7 +55,7 @@ If Kody is connected but **nothing happens on new pull requests** — no reactio
 
 ### 1. Check the PAT scopes
 
-Open the PAT in Azure DevOps and confirm every scope listed under [Generating the PAT](#set-up-the-new-token-with-the-following-specifications) is enabled. The one most often missed is **Code: Read & Write** — without **Write**, Kody can read your repositories but cannot post review comments, so the reviews "run silently".
+Open the PAT in Azure DevOps and confirm every scope listed under [Generating the PAT](#generating-the-pat-personal-access-token) is enabled. The one most often missed is **Code: Read & Write** — without **Write**, Kody can read your repositories but cannot post review comments, so the reviews "run silently".
 
 If the PAT was created before a scope was added, Azure DevOps won't retroactively add it. Create a new PAT with the full scope list and update it in the Kody automation setup.
 

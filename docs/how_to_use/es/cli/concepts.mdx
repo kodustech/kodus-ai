@@ -91,23 +91,6 @@ kodus config centralized disable
 
 Usa la Configuración Centralizada cuando tu equipo quiera un control auditable y versionado sobre la configuración de revisiones. Mantén el predeterminado (configuración por repositorio en Kodus) cuando esa ceremonia sea excesiva.
 
-## Decision Memory
-
-Decision Memory es la forma en que Kodus persiste el *razonamiento* detrás del trabajo de los agentes de IA, no solo el diff, sino el "por qué".
-
-Cuando está habilitado, Kodus instala hooks en Claude Code, Cursor o Codex que se activan en cada evento de turno completado y capturan decisiones estructuradas en:
-
-```
-.kody/
-├── pr/by-sha/<head-sha>.md    # Decisiones a nivel de PR (versionadas con el código)
-├── memory/<module-id>.md      # Decisiones a nivel de módulo (largo plazo)
-└── modules.yml                # Configuración de módulos
-```
-
-La memoria a nivel de PR vive en la rama. Cuando se fusiona un PR, promueve sus decisiones a la memoria de nivel de módulo (`kodus decisions promote`) para que el trabajo futuro en ese módulo comience con el contexto acumulado.
-
-Guía completa: [Decision Memory](decision_memory).
-
 ## Validación de Negocio
 
 Donde `kodus review` pregunta "¿es bueno este código?", `kodus pr business-validation` pregunta "¿este diff realmente hace lo que decía la tarea?". Lo apuntas a una tarea de Linear/Jira/URL y a una fuente de diff (árbol de trabajo, preparado, rama, commit) y verifica la implementación contra los criterios de aceptación de la tarea.
@@ -136,9 +119,6 @@ La mayoría de las integraciones de agentes solo necesitan `--prompt-only`. Recu
   </Card>
   <Card title="Agentes de IA" icon="robot" href="ai_agents">
     Construye bucles de revisión y corrección con agentes de programación.
-  </Card>
-  <Card title="Decision Memory" icon="brain" href="decision_memory">
-    Captura y promueve decisiones de agentes entre ramas.
   </Card>
   <Card title="Solución de Problemas" icon="life-ring" href="troubleshooting">
     Errores comunes y códigos de salida.

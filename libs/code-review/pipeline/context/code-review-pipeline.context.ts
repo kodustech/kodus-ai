@@ -10,6 +10,7 @@ import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessag
 import { CollectCrossFileContextsResult } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { LlmErrorCategory } from '@libs/llm/error-classifier';
 import type { ReviewWarning } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
+import type { LinkedRepositoriesReviewMetadata } from '@libs/ee/linked-repositories';
 import { PlatformType } from '@libs/core/domain/enums';
 import {
     AnalysisContext,
@@ -52,10 +53,6 @@ export type PullRequestType = {
 };
 
 export interface CodeReviewPipelineContext extends PipelineContext {
-    dryRun: {
-        enabled: boolean;
-        id?: string;
-    };
     organizationAndTeamData: OrganizationAndTeamData;
     repository: Repository;
     branch: string;
@@ -260,6 +257,14 @@ export interface CodeReviewPipelineContext extends PipelineContext {
      * review ran at full fidelity.
      */
     reviewWarnings?: ReviewWarning[];
+
+    /**
+     * Cross-repo context (#1576): which linked repositories were consulted
+     * (and their clone/ref status). Populated by AgentReviewStage after the
+     * agent run. Used for end-review transparency + telemetry. Absent when
+     * the feature is off.
+     */
+    linkedRepositoriesMetadata?: LinkedRepositoriesReviewMetadata;
 }
 
 export interface DedupTraceSuggestionSummary {
