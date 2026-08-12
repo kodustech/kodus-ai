@@ -91,6 +91,22 @@ export type CentralizedConfigParameter = {
      */
     managedRepositoryIds?: string[];
 
+    /**
+     * Per-repository directory scopes the centralized repo owns, keyed by
+     * repository id and holding the encoded group folder names
+     * (`buildGroupFolderName`) the last successful sync wrote.
+     *
+     * Ownership is tracked per SCOPE, not per repository, because reconciling
+     * directories by repository is wrong in both directions: a repository
+     * whose only file is a directory scope is absent from
+     * `managedRepositoryIds` entirely (its scope could never be cleaned up),
+     * while a repository present only through `.kody-rules` files looks
+     * managed and says nothing about directories (its UI-created scopes all
+     * looked stale). A directory is removable only when a previous sync
+     * owned that directory.
+     */
+    managedDirectoryScopes?: Record<string, string[]>;
+
     /** Same idea for the global `kodus-config.yml`. */
     managedGlobalConfig?: boolean;
 };

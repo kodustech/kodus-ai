@@ -130,6 +130,10 @@ export class CentralizedConfigSyncUseCase implements IUseCase {
                 await this.centralizedConfigService.removeStaleKodyRules({
                     organizationAndTeamData,
                     ruleFiles: ruleFilesMeta,
+                    // Same tree read as the rules: proof the repository was
+                    // reachable, so an empty rule set means the user deleted
+                    // them rather than the read having failed.
+                    configFiles: configFilesMeta,
                     actor,
                 });
 

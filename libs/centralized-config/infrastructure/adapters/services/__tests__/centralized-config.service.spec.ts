@@ -168,6 +168,77 @@ describe('CentralizedConfigService', () => {
     });
 
     describe('synchronizeConfigs', () => {
+        /**
+         * Discovery emits `directoryPaths` (plural) and stopped setting
+         * `directoryPath`. Keying the config level off the singular spelling
+         * sent every directory scope down the REPOSITORY branch, so the
+         * directory's custom messages were written onto the repository —
+         * overwriting the repository's own messages and never creating a
+         * directory-level one.
+         *
+         * Reproduced end to end before writing this: two files, one with
+         * `MSG-DO-REPO` and one with `MSG-DO-DIRETORIO`, produced a single
+         * message at repository level carrying the directory's content.
+         */
+        it('writes a directory scope custom message at DIRECTORY level', async () => {
+            const configFiles: IConfigFileMeta[] = [
+                {
+                    repositoryId: 'repo-1',
+                    centralizedDirectoryPath: 'repo1/src',
+                    // What discovery actually emits for a directory scope.
+                    directoryPaths: ['/src'],
+                } as any,
+            ];
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [{ id: 'repo-1', name: 'repo1', full_name: 'org/repo1' }],
+            );
+            mockCodeBaseConfigService.getDirectoryIdForPath.mockResolvedValue(
+                'dir-1',
+            );
+            mockPullRequestMessagesService.findOne.mockResolvedValue(null);
+            mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+                version: '2.0',
+                customMessages: {
+                    startReviewMessage: {
+                        status: 'every_push',
+                        content: 'MSG-DO-DIRETORIO',
+                    },
+                },
+            });
+            mockParametersService.findByKey.mockImplementation((key) => {
+                if (key === ParametersKey.CENTRALIZED_CONFIG) {
+                    return Promise.resolve({
+                        configValue: {
+                            enabled: true,
+                            repository: { id: 'c-1', name: 'centralized' },
+                        },
+                    });
+                }
+                return Promise.resolve({ configValue: {} });
+            });
+
+            await service.synchronizeConfigs({
+                organizationAndTeamData,
+                configFiles,
+                actor,
+            });
+
+            // Asserted on the payload directly: the use case takes three
+            // arguments and `toHaveBeenCalledWith` matches arity too.
+            const payload =
+                mockCreateOrUpdatePullRequestMessagesUseCase.execute.mock
+                    .calls[0][1];
+
+            expect(payload).toEqual(
+                expect.objectContaining({
+                    configLevel: ConfigLevel.DIRECTORY,
+                    repositoryId: 'repo-1',
+                    directoryId: 'dir-1',
+                }),
+            );
+        });
+
         it('should sync custom messages from centralized config', async () => {
             const configFiles: IConfigFileMeta[] = [
                 {
@@ -706,8 +777,8 @@ describe('CentralizedConfigService', () => {
     describe('removeStaleConfigs', () => {
         it('should remove stale custom messages even when regular config does not change', async () => {
             // Non-empty discovery (a repo scope) so the #1518 empty-discovery
-            // guard does not trigger; the GLOBAL message is stale because no
-            // global config file was discovered.
+            // guard does not trigger; the GLOBAL message is stale because a
+            // previous sync owned a global config file that is gone now.
             const configFiles: IConfigFileMeta[] = [
                 { repositoryId: 'repo-1' } as any,
             ];
@@ -722,6 +793,14 @@ describe('CentralizedConfigService', () => {
             mockParametersService.findByKey.mockImplementation((key) => {
                 if (key === ParametersKey.CODE_REVIEW_CONFIG) {
                     return Promise.resolve(codeReviewConfig);
+                }
+
+                if (key === ParametersKey.CENTRALIZED_CONFIG) {
+                    // Ownership is what makes this a removal rather than a
+                    // message the centralized config simply never managed.
+                    return Promise.resolve({
+                        configValue: { managedGlobalConfig: true },
+                    });
                 }
 
                 return Promise.resolve({ configValue: {} });
@@ -759,6 +838,42 @@ describe('CentralizedConfigService', () => {
                 expect.anything(),
                 expect.anything(),
             );
+        });
+
+        it('should NOT remove a global custom message it never owned', async () => {
+            // Same discovery as above, one difference: no previous sync ever
+            // owned a global `kodus-config.yml`. The message was authored in
+            // the UI and the centralized config has no claim on it.
+            const configFiles: IConfigFileMeta[] = [
+                { repositoryId: 'repo-1' } as any,
+            ];
+
+            mockParametersService.findByKey.mockImplementation((key) => {
+                if (key === ParametersKey.CODE_REVIEW_CONFIG) {
+                    return Promise.resolve({
+                        configValue: { configs: {}, repositories: [] },
+                    });
+                }
+
+                return Promise.resolve({ configValue: {} });
+            });
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [],
+            );
+
+            mockPullRequestMessagesService.find.mockResolvedValue([
+                { uuid: 'global-message-1', configLevel: ConfigLevel.GLOBAL },
+            ]);
+
+            const result = await service.removeStaleConfigs({
+                organizationAndTeamData,
+                configFiles,
+                actor,
+            });
+
+            expect(result.success).toBe(true);
+            expect(mockPullRequestMessagesService.delete).not.toHaveBeenCalled();
         });
     });
 
@@ -805,6 +920,35 @@ describe('CentralizedConfigService', () => {
                     repository: { name: 'config-repo', id: 'repo-1' },
                 }),
             ).rejects.toThrow();
+        });
+
+        // H5 — a `kodus-config.yml` more than one level below the repository
+        // folder is dropped by discovery with nothing but a log line. Executed
+        // rather than assumed: this is what a user who hand-writes
+        // `my-repo/src/api/kodus-config.yml` actually gets. Not a data-loss
+        // bug — the file is ignored, not acted on — but the silence is the
+        // problem, and any change to it is a product decision.
+        it('discoverConfigFiles silently ignores a nested path deeper than one level', async () => {
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([
+                { type: 'file', path: 'my-repo/kodus-config.yml' },
+                { type: 'file', path: 'my-repo/src/api/kodus-config.yml' },
+            ]);
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [{ id: 'r-1', name: 'my-repo', full_name: 'acme/my-repo' }],
+            );
+
+            const discovered = await service.discoverConfigFiles({
+                organizationAndTeamData,
+                repository: { name: 'config-repo', id: 'repo-1' },
+            });
+
+            // Only the repository-level file survives; the nested one is gone
+            // and the caller has no way to know it existed.
+            expect(discovered).toHaveLength(1);
+            expect(discovered[0]).toEqual(
+                expect.objectContaining({ repositoryId: 'r-1' }),
+            );
+            expect(discovered[0].directoryPaths).toBeUndefined();
         });
 
         it('removeStaleKodyRules does NOT delete centralized rules when discovery is empty', async () => {
