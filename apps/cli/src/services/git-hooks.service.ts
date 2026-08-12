@@ -39,9 +39,7 @@ ${TRACE_HOOK_MARKER}
 # name another clone fetches. The exact object ids come from Git's stdin; the
 # hook never consults the currently checked-out branch or HEAD.
 if [ -z "$KODUS_TRACE_SKIP" ] && command -v kodus >/dev/null 2>&1; then
-  KODUS_TRACE_REQUESTS="$(mktemp "\${TMPDIR:-/tmp}/kodus-trace-push.XXXXXX" 2>/dev/null)" || KODUS_TRACE_REQUESTS=""
-  if [ -n "$KODUS_TRACE_REQUESTS" ]; then
-    while read -r KODUS_LOCAL_REF KODUS_LOCAL_SHA KODUS_REMOTE_REF KODUS_REMOTE_SHA; do
+  while read -r KODUS_LOCAL_REF KODUS_LOCAL_SHA KODUS_REMOTE_REF KODUS_REMOTE_SHA; do
     case "$KODUS_REMOTE_REF" in
       refs/heads/kodus/trace/v1) continue ;;
       refs/heads/*) ;;
@@ -55,23 +53,12 @@ if [ -z "$KODUS_TRACE_SKIP" ] && command -v kodus >/dev/null 2>&1; then
     esac
 
     KODUS_TRACE_BRANCH="\${KODUS_REMOTE_REF#refs/heads/}"
-    printf '%s %s\n' "$KODUS_TRACE_BRANCH" "$KODUS_LOCAL_SHA" >> "$KODUS_TRACE_REQUESTS"
-    done
-
-  # One detached worker drains every pushed branch sequentially. This avoids
-  # concurrent model calls on a multi-ref push without delaying that push.
-  (
-    awk '!seen[$1]++' "$KODUS_TRACE_REQUESTS" |
-    while read -r KODUS_TRACE_BRANCH KODUS_LOCAL_SHA; do
-      kodus trace distill \\
-        --branch "$KODUS_TRACE_BRANCH" \\
-        --head "$KODUS_LOCAL_SHA" \\
-        --remote "$1" \\
-        >/dev/null 2>&1
-    done
-    rm -f "$KODUS_TRACE_REQUESTS"
-    ) >/dev/null 2>&1 </dev/null &
-  fi
+    kodus trace distill \\
+      --branch "$KODUS_TRACE_BRANCH" \\
+      --head "$KODUS_LOCAL_SHA" \\
+      --remote "$1" \\
+      >/dev/null 2>&1 </dev/null &
+  done
 fi
 ${TRACE_HOOK_END_MARKER}
 `.trimStart();
