@@ -21,11 +21,9 @@ permissions:
 #   - workflow_call from qa-build-push-and-pr-green.yml after the GitOps
 #     PR for the QA deploy is opened, and from selfhosted-build-push.yml
 #     as the Friday release train's cloud gate (full fast.yml).
-#   - schedule Mon–Thu 03:00 UTC (00:00 BRT) — midweek-smoke.yml only, a
-#     ~20-min two-PR heartbeat on github×paid that catches systemic
-#     breakage (dead LLM key, webhook delivery, stuck pipeline) early so
-#     Friday's release train doesn't discover a week of damage at once.
-#     Full-matrix coverage now lives on the Friday train, not nightly.
+#   - schedule Mon–Thu 03:00 UTC (00:00 BRT) — fast.yml, the full cloud
+#     coverage. Override with vars.E2E_CLOUD_NIGHTLY_MATRIX (e.g. back to
+#     matrix/midweek-smoke.yml) without touching this file.
 #   - workflow_dispatch for manual runs.
 
 on:
@@ -42,10 +40,8 @@ on:
                 default: matrix/fast.yml
                 type: string
     schedule:
-        # Mon–Thu 03:00 UTC = 00:00 BRT. Runs midweek-smoke.yml (see
-        # MATRIX_FILE resolution below) — Friday full coverage happens via
-        # the selfhosted-build-push release train's cloud gate instead, so
-        # no Friday cron here.
+        # Mon–Thu 03:00 UTC = 00:00 BRT. Friday is covered by the release
+        # train's own cloud gate, so no Friday cron here.
         - cron: "0 3 * * 1-4"
     workflow_dispatch:
         inputs:
@@ -256,11 +252,20 @@ jobs:
                   # target.sh requires it set, so we still export it.
                   TARGET_BASE_URL: ${{ vars.CLOUD_QA_API_URL || 'https://qa.api.kodus.io' }}
                   TARGET_WEB_URL: ${{ vars.CLOUD_QA_WEB_URL || 'https://qa.web.kodus.io' }}
-                  # Scheduled runs (Mon–Thu) are the cheap heartbeat and use
-                  # midweek-smoke.yml; everything else (workflow_call from the
-                  # release train / QA deploy, manual dispatch) defaults to
-                  # the full fast.yml unless the caller overrides it.
-                  MATRIX_FILE: ${{ inputs.matrix_file || (github.event_name == 'schedule' && 'matrix/midweek-smoke.yml') || 'matrix/fast.yml' }}
+                  # Nightly coverage is back to fast.yml.
+                  #
+                  # It was cut to midweek-smoke.yml (3 scenarios × 1 cell) on
+                  # 2026-07-29 after the cron had been red for 15 straight
+                  # nights. That made the runs green again by checking ~3% of
+                  # what they used to — the red was never fixed, it was
+                  # narrowed out of view. The reason the red was ignorable was
+                  # that a run could not distinguish "gate broke" from "we
+                  # never checked"; with the verdict + history in place it can,
+                  # so full nightly coverage is worth having again.
+                  #
+                  # vars.E2E_CLOUD_NIGHTLY_MATRIX overrides this without a code
+                  # change (set it to matrix/midweek-smoke.yml to dial back).
+                  MATRIX_FILE: ${{ inputs.matrix_file || (github.event_name == 'schedule' && (vars.E2E_CLOUD_NIGHTLY_MATRIX || 'matrix/fast.yml')) || 'matrix/fast.yml' }}
 
                   # Provider tokens — cells without the right token are
                   # skipped (target.sh passes --skip-missing-tokens).
@@ -288,8 +293,17 @@ jobs:
                   # cell dies with `partial_error: Incorrect API key`. Same
                   # secret + model the self-hosted matrix injects, so both
                   # targets review with one debuggable configuration.
-                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+                  # E2E_LLM_API_KEY is the key for whatever vendor E2E_LLM_BASE_URL
+                  # points at (Fireworks today). Falls back to the OpenAI secret so
+                  # nothing breaks before it is set.
+                  API_OPEN_AI_API_KEY: ${{ secrets.E2E_LLM_API_KEY || secrets.BYOK_OPENAI_API_KEY }}
+                  # DeepSeek V4 Flash via Fireworks. The harness writes these
+                  # into the tenant's byok_config (runner.ts:applyByokToTenant),
+                  # which the product reads BEFORE the env fallback — so the
+                  # provider is stated, never inferred from the model name.
+                  API_LLM_PROVIDER: ${{ vars.E2E_LLM_PROVIDER || 'openai_compatible' }}
+                  API_OPENAI_FORCE_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
                   # Org-Administration token (QA environment secret) used ONLY
                   # by trial-managed-review to create/delete its throwaway repo
                   # per run. Absent → that scenario is SKIPPED, not failed
@@ -361,22 +375,50 @@ jobs:
                   NOTIFY_JSON="$f" node - <<'__JS__'
                   const fs = require("fs");
                   const n = JSON.parse(fs.readFileSync(process.env.NOTIFY_JSON, "utf8"));
-                  const fmt = (l) => l.map((x) => `• \`${x.cell}\`\n  ${x.error}`).join("\n");
+                  const fmt = (l) => l.map((x) => `• \`${x.cell}\`\n  ${x.error ?? x.reason}`).join("\n");
                   const out = [];
-                  out.push(`headline=${n.passed}/${n.total} passed (failed=${n.failed}, skipped=${n.skipped})`);
+                  // Report against EXECUTED and APPLICABLE, not total. "23/84
+                  // passed" on a sparse matrix reads as a catastrophe and hides
+                  // the number that matters — how much of what we meant to
+                  // check actually ran. Pre-verdict artifacts have no
+                  // `executed`, so fall back to the old shape.
+                  const executed = n.executed ?? (n.passed + n.failed);
+                  const applicable = n.applicable ?? n.total;
+                  out.push(`verdict=${n.verdict ?? (n.gatingFailures.length ? "red" : "green")}`);
+                  out.push(`headline=${n.passed}/${executed} passed · verified ${executed}/${applicable} applicable`);
                   out.push(`gating_count=${n.gatingFailures.length}`);
                   out.push(`advisory_count=${n.advisoryFailures.length}`);
+                  out.push(`unverified_count=${(n.unverified ?? []).length}`);
                   out.push(`retried_count=${n.retriedCells.length}`);
                   const body = [];
                   if (n.gatingFailures.length) body.push(`**P0 failures (gating):**\n${fmt(n.gatingFailures)}`);
+                  if ((n.unverified ?? []).length) body.push(`**P0 cells NOT verified (no result — this is not a pass):**\n${fmt(n.unverified)}`);
                   if (n.advisoryFailures.length) body.push(`**Advisory (non-gating):**\n${fmt(n.advisoryFailures)}`);
-                  if (n.retriedCells.length) body.push(`Recovered on retry: ${n.retriedCells.map((c) => `\`${c}\``).join(", ")}`);
+                  if (n.setupSkipped) body.push(`Skipped for missing setup (coverage gap): ${n.setupSkipped}`);
+                  if (n.retriedCells.length) body.push(`Passed only on retry (flaky): ${n.retriedCells.map((c) => `\`${c}\``).join(", ")}`);
                   // GITHUB_OUTPUT multiline
                   out.push("details<<__EOF__");
                   out.push(body.join("\n") || "—");
                   out.push("__EOF__");
                   fs.appendFileSync(process.env.GITHUB_OUTPUT, out.join("\n") + "\n");
                   __JS__
+
+                  # Same digest into the run's own summary page, so the numbers
+                  # are visible without opening the artifact.
+                  {
+                      echo "### E2E cloud matrix"
+                      echo ""
+                      NOTIFY_JSON="$f" node -e '
+                        const n = JSON.parse(require("fs").readFileSync(process.env.NOTIFY_JSON, "utf8"));
+                        const ex = n.executed ?? (n.passed + n.failed);
+                        console.log(`**Verdict: ${(n.verdict ?? "?").toUpperCase()}** — ${n.passed}/${ex} passed, verified ${ex}/${n.applicable ?? n.total} applicable`);
+                        console.log("");
+                        console.log(`- Not verified (infra): **${n.infraSkipped ?? 0}**`);
+                        console.log(`- Skipped for missing setup: ${n.setupSkipped ?? 0}`);
+                        console.log(`- Passed only on retry: ${n.passedOnRetry ?? 0}`);
+                        console.log(`- Not applicable (appliesTo): ${n.notApplicable ?? 0}`);
+                      '
+                  } >> "$GITHUB_STEP_SUMMARY" || true
 
             # Case 1 — infra: QA never became reachable; the matrix NEVER RAN.
             # Distinct wording so nobody reads it as "the tests broke".
@@ -409,7 +451,8 @@ jobs:
             - name: Notify Discord — gating failures
               if: >-
                   failure() && steps.matrix.outcome == 'failure' &&
-                  steps.digest.outputs.found == 'true'
+                  steps.digest.outputs.found == 'true' &&
+                  steps.digest.outputs.verdict != 'inconclusive'
               uses: ./.github/actions/discord-notify
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
@@ -419,6 +462,28 @@ jobs:
                       ${{ steps.digest.outputs.details || 'No notify.json produced — see the run log.' }}
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                       Trigger: ${{ github.event_name }}${{ github.event_name == 'schedule' && ' (nightly catch-all)' || '' }}
+
+            # Case 2a — INCONCLUSIVE: nothing failed, but P0 cells never ran
+            # (GitHub quota exhausted, target went unreachable mid-run). The
+            # run-matrix exit code is 3 and the job is red on purpose — an
+            # unverified release gate must block, not pass — but the message
+            # has to say "we did not check this", not "the product broke".
+            # Reading those two as the same thing is what let the 2026-08-07
+            # train ship with five P0 cells never executed.
+            - name: Notify Discord — coverage not verified (inconclusive)
+              if: >-
+                  failure() && steps.digest.outputs.found == 'true' &&
+                  steps.digest.outputs.verdict == 'inconclusive'
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: cancelled
+                  title: "🚧 E2E cloud matrix INCONCLUSIVE: ${{ steps.digest.outputs.headline }}"
+                  description: |
+                      No gate failed — but ${{ steps.digest.outputs.unverified_count }} P0 cell(s) never ran, so this run does NOT clear the release.
+                      ${{ steps.digest.outputs.details }}
+                      Usual cause: GitHub quota on the bot accounts. Check the App token path before re-running — a re-run on the same account hits the same hourly limit.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
             # Case 2b — the matrix ran but produced no digest at all: it hit
             # its step timeout (or died) before writing notify.json, which
@@ -460,3 +525,48 @@ jobs:
                       All P0 gates passed. Non-gating failures to keep an eye on:
                       ${{ steps.digest.outputs.details }}
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    # Durable history. Separate job on purpose: it is the ONLY thing here that
+    # needs `contents: write`, and the matrix job — which runs third-party
+    # provider code and long-lived tokens — should not carry a write scope it
+    # never uses. Reads the evidence artifact the matrix just uploaded and
+    # appends one JSONL row per cell to the `e2e-history` orphan branch, so
+    # "when did this cell last pass?" survives the artifact's 30-day expiry.
+    history:
+        name: Append run to e2e history
+        runs-on: ubuntu-latest
+        needs: cloud-matrix
+        if: always()
+        permissions:
+            contents: write
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            - name: Download evidence
+              uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  name: e2e-cloud-matrix
+                  path: tests/e2e/evidence
+
+            - name: Append + push history
+              env:
+                  # Must resolve IDENTICALLY to the matrix job above (line ~268).
+                  # It used to hardcode midweek-smoke for scheduled runs while
+                  # the matrix job honoured vars.E2E_CLOUD_NIGHTLY_MATRIX, so
+                  # every scheduled run recorded a matrixId naming a file it had
+                  # not run -- and matrixId is what the history is grouped and
+                  # compared by, so the drift is invisible until someone trusts
+                  # a trend that mixes two different suites.
+                  MATRIX_FILE: ${{ inputs.matrix_file || (github.event_name == 'schedule' && (vars.E2E_CLOUD_NIGHTLY_MATRIX || 'matrix/fast.yml')) || 'matrix/fast.yml' }}
+              run: bash tests/e2e/provisioning/history-push.sh

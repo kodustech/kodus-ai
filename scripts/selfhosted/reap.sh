@@ -32,7 +32,38 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SCRIPT_DIR/_common.sh"
 
+# Droplet name prefixes this script owns.
+#
+# `kodus-selfhosted-` is what provision.sh creates for manual/SSO droplets.
+# `kodus-e2e-` is what the MATRIX creates — and it was missing here, so every
+# matrix droplet was invisible to the reaper. Eight of them accumulated over
+# 05-07/08/2026 until DigitalOcean started refusing to create new ones and the
+# self-hosted matrix failed in provisioning ("Creating server..." then a jq
+# parse error on a non-JSON error response).
+#
+# PREFIX stays defined as the primary one: it is used to rebuild a full name
+# from a local state-file instance id, which only provision.sh writes.
 PREFIX="kodus-selfhosted-"
+PREFIXES=("kodus-selfhosted-" "kodus-e2e-")
+
+# Fail-closed name guard. Anything not matching one of our prefixes is never
+# deleted — prod (kodus-web-new) can never match.
+matches_prefix() {
+    local name="$1" p
+    for p in "${PREFIXES[@]}"; do
+        case "$name" in "$p"*) return 0 ;; esac
+    done
+    return 1
+}
+
+# Strip whichever prefix this droplet carries, for state-file lookups.
+strip_prefix() {
+    local name="$1" p
+    for p in "${PREFIXES[@]}"; do
+        case "$name" in "$p"*) printf '%s' "${name#$p}"; return 0 ;; esac
+    done
+    printf '%s' "$name"
+}
 TTL_HOURS=6
 ASSUME_YES=0
 DRY_RUN=0
@@ -62,11 +93,25 @@ NOW=$(date -u +%s)
 
 # Parse an ISO-8601 UTC timestamp (e.g. 2026-06-29T12:34:56Z) to epoch seconds.
 # Portable across GNU date (Linux/CI runners) and BSD date (macOS/dev Mac).
+# Epoch seconds for an ISO-8601 timestamp, or EMPTY when it cannot be parsed.
+#
+# Empty, NOT 0. Returning 0 meant an unparseable timestamp read as "launched in
+# 1970" — i.e. always older than any TTL — so the reaper would happily
+# terminate a VM a run had just created. Callers must treat empty as "unknown
+# age, leave it alone".
+#
+# AWS reports `2026-08-08T19:44:59+00:00`; DigitalOcean reports
+# `2026-08-08T19:44:59Z`. GNU date (CI) takes both, BSD date (Mac) needs the
+# exact format, so normalise the offset to Z before the BSD attempt.
 iso_to_epoch() {
-    # GNU date first (CI), then BSD date (Mac); 0 if neither parses.
-    date -u -d "$1" +%s 2>/dev/null \
-        || date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$1" +%s 2>/dev/null \
-        || echo 0
+    local ts="${1:-}"
+    [ -n "$ts" ] || return 0
+    local norm="${ts/+00:00/Z}"
+    norm="${norm%%.*}"
+    case "$norm" in *Z) ;; *) norm="${norm}Z" ;; esac
+    date -u -d "$ts" +%s 2>/dev/null \
+        || date -j -u -f "%Y-%m-%dT%H:%M:%SZ" "$norm" +%s 2>/dev/null \
+        || true
 }
 
 is_kept() {
@@ -77,7 +122,7 @@ is_kept() {
     return 1
 }
 
-log "Reaping ${PREFIX}* droplets on DigitalOcean"
+log "Reaping ${PREFIXES[*]} droplets on DigitalOcean"
 if [ "$REAP_ALL" = "1" ]; then
     log "Mode: ALL (ignoring TTL)"
 else
@@ -93,26 +138,33 @@ DROPLETS_JSON=$(curl -fsS \
     || { err "Failed to list droplets from DigitalOcean"; exit 1; }
 
 # name<TAB>id<TAB>created_at, filtered to our prefix.
+PREFIX_JSON=$(printf '%s\n' "${PREFIXES[@]}" | jq -R . | jq -sc .)
 MATCHES=$(echo "$DROPLETS_JSON" | jq -r \
-    --arg p "$PREFIX" \
-    '.droplets[] | select(.name | startswith($p)) | "\(.name)\t\(.id)\t\(.created_at)"')
+    --argjson ps "$PREFIX_JSON" \
+    '.droplets[] | select([.name | startswith($ps[])] | any) | "\(.name)\t\(.id)\t\(.created_at)"')
 
 LIVE_NAMES=$(echo "$DROPLETS_JSON" | jq -r '.droplets[].name')
 
 # ---------- decide what to reap ----------
 TO_REAP=()        # instance short-names (suffix after prefix)
 TO_REAP_IDS=()    # parallel array of droplet ids
+TO_REAP_NAMES=()  # parallel array of FULL droplet names (namespace intact)
 SKIPPED_YOUNG=0
 
 if [ -n "$MATCHES" ]; then
     while IFS=$'\t' read -r name id created; do
         [ -n "$name" ] || continue
-        short="${name#$PREFIX}"
+        short="$(strip_prefix "$name")"
         if is_kept "$short"; then
             dim "  keep   $name (exempt)"
             continue
         fi
-        age=$(( NOW - $(iso_to_epoch "$created") ))
+        created_epoch=$(iso_to_epoch "$created")
+        if [ -z "$created_epoch" ]; then
+            warn "  skip   $name — could not parse created_at '$created'; refusing to guess its age"
+            continue
+        fi
+        age=$(( NOW - created_epoch ))
         age_h=$(( age / 3600 ))
         if [ "$REAP_ALL" != "1" ] && [ "$age" -lt "$TTL_SECS" ]; then
             dim "  young  $name (${age_h}h < ${TTL_HOURS}h) — keeping"
@@ -122,6 +174,7 @@ if [ -n "$MATCHES" ]; then
         warn "  REAP   $name (${age_h}h old, id=$id)"
         TO_REAP+=("$short")
         TO_REAP_IDS+=("$id")
+        TO_REAP_NAMES+=("$name")
     done <<< "$MATCHES"
 fi
 
@@ -136,9 +189,95 @@ while IFS= read -r inst; do
     fi
 done < <(list_instances)
 
+# ---------- AWS EC2 sweep ----------
+# Additive and independent of the DigitalOcean flow above, so it cannot break
+# it. Runs only when a credential is present (locally that is usually absent,
+# and in CI it is the region-boxed kodus-devops-agent user).
+#
+# Selection is by TAG, not by name. Name-prefix matching is exactly what let
+# eight DigitalOcean droplets survive for days when the matrix started naming
+# them `kodus-e2e-*` while the reaper watched `kodus-selfhosted-*`. A tag
+# travels with the instance and cannot drift.
+reap_aws_ec2() {
+    # Loud, not dim. The matrix provisions on AWS by default, so a skipped EC2
+    # sweep means instances bill forever -- and the job still exits 0, so the
+    # only evidence anything was missed is this line. It ran silently in CI for
+    # exactly that reason: reap-droplets.yml passed no AWS credential.
+    command -v aws >/dev/null 2>&1 || { warn "aws CLI not found — EC2 sweep SKIPPED (leaked instances will not be reaped)"; return 0; }
+    if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -z "${AWS_PROFILE:-}" ]; then
+        warn "no AWS credential — EC2 sweep SKIPPED (leaked instances will not be reaped)"
+        return 0
+    fi
+    local region="${AWS_REGION_E2E:-${AWS_DEFAULT_REGION:-us-east-2}}"
+    log "Reaping EC2 instances tagged Project=kodus-e2e in $region"
+
+    local rows
+    rows=$(aws ec2 describe-instances \
+        --region "$region" \
+        --filters "Name=tag:Project,Values=kodus-e2e" \
+                  "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+        --query 'Reservations[].Instances[].[InstanceId,LaunchTime,Tags[?Key==`Name`]|[0].Value]' \
+        --output text 2>/dev/null) || { warn "Could not list EC2 instances in $region"; return 1; }
+
+    # NOTE: do not return early when there are no instances — orphaned key
+    # pairs are precisely the case where nothing is running, and an early
+    # return skipped the cleanup below entirely.
+    [ -n "$rows" ] || ok "No tagged EC2 instances in $region."
+
+    local id launched name age age_h launched_epoch
+    while read -r id launched name; do
+        [ -n "$rows" ] || break
+        [ -n "${id:-}" ] || continue
+        launched_epoch=$(iso_to_epoch "$launched")
+        if [ -z "$launched_epoch" ]; then
+            warn "  skip   $id ${name:-} — could not parse LaunchTime '$launched'; refusing to guess its age"
+            continue
+        fi
+        age=$(( NOW - launched_epoch ))
+        age_h=$(( age / 3600 ))
+        if [ "$REAP_ALL" != "1" ] && [ "$age" -lt "$TTL_SECS" ]; then
+            dim "  young  $id ${name:-} (${age_h}h < ${TTL_HOURS}h) — keeping"
+            continue
+        fi
+        if [ "$DRY_RUN" = "1" ]; then
+            warn "  REAP   $id ${name:-} (${age_h}h old) [dry-run]"
+            continue
+        fi
+        warn "  REAP   $id ${name:-} (${age_h}h old)"
+        aws ec2 terminate-instances --region "$region" --instance-ids "$id" >/dev/null \
+            && ok "Terminated $id" \
+            || { warn "Could not terminate $id"; rc=1; }
+    done <<< "$rows"
+
+    # Key pairs outlive their instance when a run dies between import and
+    # launch. They cost nothing but accumulate; drop the ones with no instance.
+    local kp
+    while read -r kp; do
+        [ -n "${kp:-}" ] || continue
+        case "$kp" in
+            kodus-e2e-*)
+                if ! echo "$rows" | grep -q "$kp"; then
+                    [ "$DRY_RUN" = "1" ] \
+                        && dim "  would drop stale key pair $kp" \
+                        || { aws ec2 delete-key-pair --region "$region" --key-name "$kp" >/dev/null 2>&1 \
+                             && dim "  dropped stale key pair $kp"; }
+                fi
+                ;;
+        esac
+    done < <(aws ec2 describe-key-pairs --region "$region" --query 'KeyPairs[].KeyName' --output text 2>/dev/null | tr '\t' '\n')
+}
+
+rc=0
+
 if [ "${#TO_REAP[@]}" -eq 0 ] && [ "${#ORPHAN_STATES[@]}" -eq 0 ]; then
-    ok "Nothing to reap. (${SKIPPED_YOUNG} droplet(s) still within TTL.)"
-    exit 0
+    ok "Nothing to reap on DigitalOcean. (${SKIPPED_YOUNG} droplet(s) still within TTL.)"
+    # Still sweep EC2 — once the matrix runs on AWS this is the only sweep
+    # that matters, and gating it behind DigitalOcean having work to do would
+    # silently disable it.
+    reap_aws_ec2 || rc=1
+
+[ "$rc" -eq 0 ] && ok "Reap complete." || warn "Reap completed with some failures (rc=$rc)."
+    exit "$rc"
 fi
 
 echo
@@ -160,7 +299,17 @@ i=0
 for short in ${TO_REAP[@]+"${TO_REAP[@]}"}; do
     id="${TO_REAP_IDS[$i]}"
     i=$(( i + 1 ))
-    if state_exists "$short"; then
+    full_name="${TO_REAP_NAMES[$(( i - 1 ))]}"
+    # destroy.sh addresses instances by SHORT name, which is ambiguous across
+    # namespaces: kodus-e2e-github and kodus-selfhosted-github both strip to
+    # "github". Delegating an e2e droplet to destroy.sh would hand it a name
+    # that resolves to the SELFHOSTED droplet's state file and destroy that
+    # machine instead -- a different, live host, irreversibly.
+    #
+    # destroy.sh owns the kodus-selfhosted-* namespace only. Everything else
+    # goes down the API path below, which deletes by droplet ID and re-verifies
+    # the live name first.
+    if [ "${full_name#kodus-selfhosted-}" != "$full_name" ] && state_exists "$short"; then
         # Full cleanup path (droplet + SSH key + state) with destroy.sh's own
         # live-name prefix safety guard.
         log "destroy.sh --name $short (has state file)"
@@ -173,20 +322,17 @@ for short in ${TO_REAP[@]+"${TO_REAP[@]}"}; do
             -H "Authorization: Bearer ${DIGITALOCEAN_TOKEN}" \
             "https://api.digitalocean.com/v2/droplets/$id" 2>/dev/null \
             | jq -r '.droplet.name // ""' 2>/dev/null || echo "")
-        case "$live_name" in
-            "${PREFIX}"*)
+        if matches_prefix "$live_name"; then
                 log "orphan delete id=$id ($live_name)"
                 curl -fsS -X DELETE \
                     -H "Authorization: Bearer ${DIGITALOCEAN_TOKEN}" \
                     "https://api.digitalocean.com/v2/droplets/$id" >/dev/null \
                     && ok "Destroyed orphan droplet $id ($live_name)" \
                     || { warn "Could not destroy orphan $id"; rc=1; }
-                ;;
-            *)
-                err "SAFETY: orphan id=$id live name '$live_name' is not ${PREFIX}* — skipping."
+        else
+                err "SAFETY: orphan id=$id live name '$live_name' matches none of ${PREFIXES[*]} — skipping."
                 rc=1
-                ;;
-        esac
+        fi
     fi
 done
 
@@ -197,6 +343,8 @@ for inst in ${ORPHAN_STATES[@]+"${ORPHAN_STATES[@]}"}; do
     rm -f "$sf" "$key" "$key.pub" 2>/dev/null || true
     ok "Cleaned stale state for '$inst'"
 done
+
+reap_aws_ec2 || rc=1
 
 [ "$rc" -eq 0 ] && ok "Reap complete." || warn "Reap completed with some failures (rc=$rc)."
 exit $rc

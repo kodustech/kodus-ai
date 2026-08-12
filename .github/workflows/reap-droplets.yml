@@ -5,7 +5,8 @@ name: "Reap stale test droplets"
 # infra (NOT a developer Mac), so it fires regardless of who's online.
 #
 # Reconciles against the DigitalOcean API (source of truth): destroys any
-# `kodus-selfhosted-*` droplet older than the TTL. Prod (kodus-web-new) never
+# `kodus-selfhosted-*` or `kodus-e2e-*` droplet older than the TTL. Prod
+# (kodus-web-new) never
 # matches the prefix, so it's never touched. On a CI runner there are no local
 # state files, so every match goes through reap.sh's fail-closed orphan path
 # (re-confirm prefix, then API DELETE).
@@ -34,7 +35,7 @@ on:
 
 jobs:
     reap:
-        name: Reap kodus-selfhosted-* droplets
+        name: Reap kodus-selfhosted-* and kodus-e2e-* droplets
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
@@ -42,6 +43,13 @@ jobs:
             - name: Reap
               env:
                   DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+                  # The matrix defaults to AWS, so the EC2 sweep is the half
+                  # that matters now. Without these the sweep returned 0 and
+                  # the job still reported success -- leaked instances billing
+                  # indefinitely while the reaper said it had reaped.
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_E2E_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_E2E_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: us-east-2
               run: |
                   if [ -z "$DIGITALOCEAN_TOKEN" ]; then
                       echo "::error::DIGITALOCEAN_TOKEN secret is not set"

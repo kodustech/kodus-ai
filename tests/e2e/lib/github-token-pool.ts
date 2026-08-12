@@ -76,7 +76,7 @@ export function makeGithubTokenPicker(
 // likely to trip mid-cell and cascade into rate-limit SKIPs.
 const LOW_QUOTA_FRACTION = 0.1;
 
-interface RateLimitInfo {
+export interface RateLimitInfo {
     slot: number;
     remaining: number;
     limit: number;
@@ -95,6 +95,173 @@ interface RateLimitInfo {
  * Best-effort: a network/parse error on one token never poisons the run —
  * the per-scenario paths still throw their own specific errors.
  */
+/**
+ * The credential the PRODUCT stores as its GitHub integration, mirroring
+ * providers/github.ts:authToken(). It is deliberately NOT the driver pool and
+ * NOT the App token: /code-management/auth-integration makes the backend
+ * validate it against GitHub, and the stored credential has to outlive the
+ * run, so an installation token (~1h) is rejected there.
+ *
+ * The fallback is the trap. With GH_INTEGRATION_TOKEN unset this silently
+ * becomes GH_TEST_TOKEN -- the same abuse-flagged bot account the harness is
+ * already draining -- and the two consumers share one penalised budget. That
+ * is what exhausted run 31270321822 on its FIRST scenario, in a call that no
+ * amount of App migration would have covered.
+ */
+export function integrationTokenInfo(env: NodeJS.ProcessEnv = process.env): {
+    token?: string;
+    source: 'GH_INTEGRATION_TOKEN' | 'GH_TEST_TOKEN' | 'none';
+    sharedWithDriverPool: boolean;
+} {
+    if (env.GH_INTEGRATION_TOKEN) {
+        return {
+            token: env.GH_INTEGRATION_TOKEN,
+            source: 'GH_INTEGRATION_TOKEN',
+            sharedWithDriverPool: githubTokenPool(env).includes(
+                env.GH_INTEGRATION_TOKEN,
+            ),
+        };
+    }
+    if (env.GH_TEST_TOKEN) {
+        return {
+            token: env.GH_TEST_TOKEN,
+            source: 'GH_TEST_TOKEN',
+            sharedWithDriverPool: true,
+        };
+    }
+    return { source: 'none', sharedWithDriverPool: false };
+}
+
+async function probeQuota(
+    token: string,
+    slot: number,
+): Promise<RateLimitInfo> {
+    try {
+        const resp = await fetch('https://api.github.com/rate_limit', {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28',
+            },
+        });
+        if (resp.status === 401) {
+            return {
+                slot,
+                remaining: 0,
+                limit: 0,
+                resetIso: '',
+                ok: false,
+                note: 'token rejected (HTTP 401 - expired/revoked?)',
+            };
+        }
+        const body = (await resp.json()) as {
+            resources?: {
+                core?: { remaining: number; limit: number; reset: number };
+            };
+        };
+        const core = body.resources?.core;
+        if (!core) {
+            return {
+                slot,
+                remaining: 0,
+                limit: 0,
+                resetIso: '',
+                ok: false,
+                note: `unexpected /rate_limit shape (HTTP ${resp.status})`,
+            };
+        }
+        return {
+            slot,
+            remaining: core.remaining,
+            limit: core.limit,
+            resetIso: new Date(core.reset * 1000).toISOString(),
+            ok: true,
+        };
+    } catch (err) {
+        return {
+            slot,
+            remaining: 0,
+            limit: 0,
+            resetIso: '',
+            ok: false,
+            note: err instanceof Error ? err.message : String(err),
+        };
+    }
+}
+
+/**
+ * Preflight the credential the PRODUCT uses. The driver-pool preflight below
+ * never looked at it, so a run started blind about the exact account that
+ * dies inside /code-management/auth-integration.
+ */
+export async function preflightIntegrationToken(
+    log: { info: (m: string) => void; warn: (m: string) => void },
+    env: NodeJS.ProcessEnv = process.env,
+): Promise<RateLimitInfo | undefined> {
+    const info = integrationTokenInfo(env);
+    if (!info.token) {
+        log.warn(
+            '[preflight] no GitHub integration credential (GH_INTEGRATION_TOKEN / GH_TEST_TOKEN) - the product cannot register its integration',
+        );
+        return undefined;
+    }
+    if (info.source === 'GH_TEST_TOKEN') {
+        log.warn(
+            "[preflight] GH_INTEGRATION_TOKEN is UNSET - the product's stored GitHub credential falls back to GH_TEST_TOKEN, " +
+                'so the harness and the product drain the SAME account. Set GH_INTEGRATION_TOKEN (and GH_INTEGRATION_TOKEN_PAID) ' +
+                'to a separate, non-abuse-flagged account.',
+        );
+    } else if (info.sharedWithDriverPool) {
+        log.warn(
+            '[preflight] GH_INTEGRATION_TOKEN is ALSO in the driver pool - the product and the harness share one budget. ' +
+                'Use a dedicated account for the integration credential.',
+        );
+    }
+
+    const quota = await probeQuota(info.token, 0);
+    if (!quota.ok) {
+        log.warn(`[preflight] integration credential (${info.source}): ${quota.note}`);
+        return quota;
+    }
+    const line =
+        `[preflight] integration credential (${info.source}): ` +
+        `${quota.remaining}/${quota.limit} core requests remaining (resets ${quota.resetIso})`;
+    if (quota.remaining < quota.limit * LOW_QUOTA_FRACTION) {
+        log.warn(
+            `${line} - LOW. This is the account /code-management/auth-integration validates; ` +
+                'when it is dry, onboarding 400s and the cell breaker skips every scenario.',
+        );
+    } else {
+        log.info(line);
+    }
+    return quota;
+}
+
+/**
+ * Sample the integration account's quota mid-run, so a drain can be ATTRIBUTED
+ * instead of guessed at.
+ *
+ * Run 31443426784 is why this exists: the preflight read 5000/5000, and five
+ * minutes later the same account answered `used: 5000` and killed three
+ * scenarios. Nothing in the evidence could say whether the product burned an
+ * hour of quota reviewing a 12-line diff, or whether some other consumer of
+ * that account (it is a personal PAT, not a dedicated one) drained it while we
+ * watched. Those two have opposite fixes, and a whole run is the wrong unit to
+ * discover which one you have.
+ *
+ * Sampling per scenario separates them: spend inside a scenario is ours, spend
+ * between scenarios is somebody else's. /rate_limit does not count against the
+ * quota it reports, so this measurement is free.
+ */
+export async function integrationQuota(
+    env: NodeJS.ProcessEnv = process.env,
+): Promise<RateLimitInfo | undefined> {
+    const info = integrationTokenInfo(env);
+    if (!info.token) return undefined;
+    const quota = await probeQuota(info.token, 0);
+    return quota.ok ? quota : undefined;
+}
+
 export async function preflightGithubRateLimits(
     log: { info: (m: string) => void; warn: (m: string) => void },
     env: NodeJS.ProcessEnv = process.env,
@@ -103,64 +270,7 @@ export async function preflightGithubRateLimits(
     if (!pool.length) return [];
 
     const infos = await Promise.all(
-        pool.map(async (token, idx): Promise<RateLimitInfo> => {
-            const slot = idx + 1;
-            try {
-                const resp = await fetch('https://api.github.com/rate_limit', {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        Accept: 'application/vnd.github+json',
-                        'X-GitHub-Api-Version': '2022-11-28',
-                    },
-                });
-                if (resp.status === 401) {
-                    return {
-                        slot,
-                        remaining: 0,
-                        limit: 0,
-                        resetIso: '',
-                        ok: false,
-                        note: 'token rejected (HTTP 401 — expired/revoked?)',
-                    };
-                }
-                const body = (await resp.json()) as {
-                    resources?: {
-                        core?: {
-                            remaining: number;
-                            limit: number;
-                            reset: number;
-                        };
-                    };
-                };
-                const core = body.resources?.core;
-                if (!core) {
-                    return {
-                        slot,
-                        remaining: 0,
-                        limit: 0,
-                        resetIso: '',
-                        ok: false,
-                        note: `unexpected /rate_limit shape (HTTP ${resp.status})`,
-                    };
-                }
-                return {
-                    slot,
-                    remaining: core.remaining,
-                    limit: core.limit,
-                    resetIso: new Date(core.reset * 1000).toISOString(),
-                    ok: true,
-                };
-            } catch (err) {
-                return {
-                    slot,
-                    remaining: 0,
-                    limit: 0,
-                    resetIso: '',
-                    ok: false,
-                    note: err instanceof Error ? err.message : String(err),
-                };
-            }
-        }),
+        pool.map((token, idx) => probeQuota(token, idx + 1)),
     );
 
     for (const info of infos) {
