@@ -239,14 +239,32 @@ export function matchesAnyPath(
         return false;
     }
 
-    return scope.some((scopeEntry) =>
-        changedFilePaths.some(
-            (changed) =>
-                scopeEntry === changed ||
-                changed.startsWith(`${scopeEntry}/`) ||
-                scopeEntry.startsWith(`${changed}/`),
-        ),
-    );
+    const changed = new Set(changedFilePaths.map(normalizePath).filter(Boolean));
+    const changedPrefixes = pathPrefixes(changed);
+
+    for (const scopeEntry of scope) {
+        if (changedPrefixes.has(scopeEntry)) {
+            return true;
+        }
+        for (const prefix of pathPrefixes([scopeEntry])) {
+            if (changed.has(prefix)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+function pathPrefixes(paths: Iterable<string>): Set<string> {
+    const prefixes = new Set<string>();
+    for (const entry of paths) {
+        const segments = entry.split('/');
+        for (let index = 1; index <= segments.length; index += 1) {
+            prefixes.add(segments.slice(0, index).join('/'));
+        }
+    }
+    return prefixes;
 }
 
 function normalizePath(value: string): string {

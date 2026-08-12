@@ -514,11 +514,16 @@ export class ClassifySessionUseCase {
             .map((entry) => this.normalizePath(entry))
             .filter(Boolean);
 
+        const candidatePrefixes = new Set<string>();
+        for (const candidate of candidates) {
+            const segments = candidate.split('/');
+            for (let index = 1; index <= segments.length; index += 1) {
+                candidatePrefixes.add(segments.slice(0, index).join('/'));
+            }
+        }
+
         const valid = requested.filter((entry) =>
-            candidates.some(
-                (candidate) =>
-                    candidate === entry || candidate.startsWith(`${entry}/`),
-            ),
+            candidatePrefixes.has(entry),
         );
 
         // A decision with no usable scope still belongs to the files the
