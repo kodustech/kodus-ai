@@ -37,6 +37,46 @@ export interface InlineCommentRef {
  * the PR, and most providers reject — or silently misplace — a comment
  * anchored to them.
  */
+/**
+ * Lines a comment may legitimately be anchored to: everything the hunk covers
+ * on the new-file side, added AND context.
+ *
+ * Added-only was too strict, and the platform proves it: GitHub REJECTS a
+ * comment anchored outside the diff hunk, so a comment that posted
+ * successfully is by definition inside it. Run 31638485154 failed
+ * code-review-basic on a comment at src/server.ts:31 when the added lines
+ * were 27, 28 and 30 -- a context line immediately below the change, which is
+ * exactly where "this existing line needs guarding by what you just added"
+ * belongs.
+ *
+ * The bug class this check exists for survives the loosening: an anchor in the
+ * wrong FILE, or far from the change, is still caught.
+ */
+export function commentableLinesFromPatch(patch: string): Set<number> {
+    const lines = new Set<number>();
+    let newLine = 0;
+    for (const raw of patch.split("\n")) {
+        const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
+        if (hunk) {
+            newLine = Number(hunk[1]);
+            continue;
+        }
+        if (newLine === 0) continue;
+        if (raw.startsWith("+")) {
+            lines.add(newLine);
+            newLine++;
+        } else if (raw.startsWith("-")) {
+            // removed line: consumes no new-file numbering
+        } else if (raw.startsWith("\\")) {
+            // "\ No newline at end of file"
+        } else {
+            lines.add(newLine); // context line: inside the hunk, commentable
+            newLine++;
+        }
+    }
+    return lines;
+}
+
 export function addedLinesFromPatch(patch: string): Set<number> {
     const added = new Set<number>();
     let newLine = 0;
@@ -65,7 +105,7 @@ export interface PlacementViolation {
     comment: InlineCommentRef;
     reason:
         | "file-not-in-diff"
-        | "line-not-added"
+        | "line-not-in-diff"
         | "missing-anchor"
         | "left-side";
     detail: string;
@@ -84,7 +124,10 @@ export function findPlacementViolations(
 ): PlacementViolation[] {
     const byPath = new Map<string, Set<number> | null>();
     for (const f of files) {
-        byPath.set(f.path, f.patch ? addedLinesFromPatch(f.patch) : null);
+        byPath.set(
+            f.path,
+            f.patch ? commentableLinesFromPatch(f.patch) : null,
+        );
     }
 
     const violations: PlacementViolation[] = [];
@@ -106,17 +149,17 @@ export function findPlacementViolations(
             });
             continue;
         }
-        const added = byPath.get(c.path);
+        const commentable = byPath.get(c.path);
         // Binary file (no patch) — nothing to verify against, don't invent a
         // violation.
-        if (added === null) continue;
+        if (commentable === null) continue;
         // For a multi-line comment, the provider anchors it at `line` and the
         // range starts at `startLine`; the anchor is what has to be valid.
-        if (!added!.has(c.line)) {
+        if (!commentable!.has(c.line)) {
             violations.push({
                 comment: c,
-                reason: "line-not-added",
-                detail: `comment at ${c.path}:${c.line} is not on a line this PR added (added lines: ${[...added!].slice(0, 12).join(", ")}${added!.size > 12 ? "…" : ""})`,
+                reason: "line-not-in-diff",
+                detail: `comment at ${c.path}:${c.line} is outside this PR's diff for that file (hunk lines: ${[...commentable!].slice(0, 12).join(", ")}${commentable!.size > 12 ? "…" : ""})`,
             });
         }
     }

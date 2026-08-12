@@ -64,15 +64,28 @@ test("a comment on an added line is valid", () => {
     );
 });
 
-// The GitLab bug class: the comment arrives, the old assertions pass, and it
-// is hanging off a line the PR never touched.
-test("a comment on a context line is a violation", () => {
+// A context line INSIDE the hunk is a legitimate anchor: "the line you just
+// added should be guarding this one" belongs exactly there, and GitHub accepts
+// it. Requiring an added line failed a real review on run 31638485154 for a
+// comment one line below the change.
+test("a comment on a context line inside the hunk is valid", () => {
+    assert.deepEqual(
+        findPlacementViolations(FILES, [
+            { path: "src/handler.ts", line: 25, side: "RIGHT" },
+        ]),
+        [],
+    );
+});
+
+// The bug class this check exists for: an anchor with no relationship to the
+// change. GitHub would reject it outright; GitLab has shipped it.
+test("a comment far outside every hunk is a violation", () => {
     const v = findPlacementViolations(FILES, [
-        { path: "src/handler.ts", line: 25, side: "RIGHT" },
+        { path: "src/handler.ts", line: 900, side: "RIGHT" },
     ]);
     assert.equal(v.length, 1);
-    assert.equal(v[0].reason, "line-not-added");
-    assert.match(v[0].detail, /src\/handler\.ts:25/);
+    assert.equal(v[0].reason, "line-not-in-diff");
+    assert.match(v[0].detail, /src\/handler\.ts:900/);
 });
 
 test("a comment on a file the PR does not touch is a violation", () => {
@@ -107,8 +120,9 @@ test("binary files have no patch — never invent a violation", () => {
 
 test("reports every violation, not just the first", () => {
     const v = findPlacementViolations(FILES, [
-        { path: "src/handler.ts", line: 23 }, // ok
-        { path: "src/handler.ts", line: 1 }, // context
+        { path: "src/handler.ts", line: 23 }, // ok: added line
+        { path: "src/handler.ts", line: 25 }, // ok: context inside the hunk
+        { path: "src/handler.ts", line: 900 }, // outside every hunk
         { path: "nope.ts", line: 5 }, // wrong file
     ]);
     assert.equal(v.length, 2);
