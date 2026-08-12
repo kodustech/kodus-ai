@@ -1,8 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { LogLevel, LogComponent, LogEntry } from '../types/session.js';
-
-const LOG_FILE = '.kody/logs/hooks.jsonl';
+import { redactDeep } from './trace/redaction.js';
+import { hookLogPath } from './trace/store-paths.js';
 
 class HookLoggerService {
     private logDir: string | null = null;
@@ -11,10 +11,13 @@ class HookLoggerService {
     /**
      * Initialize the logger with a repo root path.
      * Must be called before any log methods.
+     *
+     * The log itself lives in the out-of-tree trace store keyed by that root —
+     * hook logs are not the developer's to commit.
      */
     async init(repoRoot: string): Promise<void> {
-        this.logDir = path.join(repoRoot, '.kody', 'logs');
-        this.logPath = path.join(repoRoot, LOG_FILE);
+        this.logPath = hookLogPath(repoRoot);
+        this.logDir = path.dirname(this.logPath);
         await fs.mkdir(this.logDir, { recursive: true });
     }
 
@@ -60,8 +63,11 @@ class HookLoggerService {
             return;
         }
 
+        // Callers pass prompts, task descriptions and tool inputs in here, so
+        // the log gets the same redaction as the record. A diagnostic file is
+        // not a reason to keep a credential on disk.
         const entry: LogEntry = {
-            ...fields,
+            ...redactDeep(fields ?? {}),
             time: new Date().toISOString(),
             level,
             msg,

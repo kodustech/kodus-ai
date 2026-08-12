@@ -1,13 +1,8 @@
 import chalk from 'chalk';
 import type { ReviewIssue } from '../types/review.js';
-import {
-    formatCategoryBadge,
-    getFileStats,
-} from './interactive-helpers.js';
+import { formatCategoryBadge, getFileStats } from './interactive-helpers.js';
 
-export function getSeverityColor(
-    severity: string,
-): (text: string) => string {
+export function getSeverityColor(severity: string): (text: string) => string {
     switch (severity) {
         case 'critical':
             return chalk.red.bold;
@@ -46,10 +41,7 @@ export function formatIssueTitle(issue: ReviewIssue): string {
     return `${icon} ${color(issue.severity.toUpperCase())} - ${location}${fixable} - ${issue.message}`;
 }
 
-export function formatFileChoice(
-    file: string,
-    issues: ReviewIssue[],
-): string {
+export function formatFileChoice(file: string, issues: ReviewIssue[]): string {
     const stats = getFileStats(issues);
     const badges: string[] = [];
 
@@ -66,7 +58,9 @@ export function formatFileChoice(
         badges.push(chalk.cyan(`${stats.info} info`));
     }
 
-    const categories = [...new Set(issues.map((i) => i.category).filter(Boolean))];
+    const categories = [
+        ...new Set(issues.map((i) => i.category).filter(Boolean)),
+    ];
     const categoryBadge =
         categories.length > 0
             ? chalk.magenta(

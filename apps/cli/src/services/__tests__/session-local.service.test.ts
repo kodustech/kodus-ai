@@ -8,20 +8,28 @@ import {
     removeLocal,
     markTurnCompleted,
     listStaleSessions,
+    sessionStateDir,
     type LocalSessionData,
 } from '../session-local.service.js';
 
 describe('session-local.service', () => {
     let tmpDir: string;
+    let traceHome: string;
 
     beforeEach(async () => {
         tmpDir = await fs.mkdtemp(
             path.join(os.tmpdir(), 'session-local-test-'),
         );
+        traceHome = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'session-local-home-'),
+        );
+        process.env.KODUS_TRACE_HOME = traceHome;
     });
 
     afterEach(async () => {
+        delete process.env.KODUS_TRACE_HOME;
         await fs.rm(tmpDir, { recursive: true, force: true });
+        await fs.rm(traceHome, { recursive: true, force: true });
     });
 
     const sampleData: LocalSessionData = {
@@ -130,7 +138,7 @@ describe('session-local.service', () => {
 
             // Set their mtime to 2 hours ago
             const twoHoursAgo = new Date(Date.now() - 2 * ONE_HOUR_MS);
-            const sessDir = path.join(tmpDir, '.kody', 'sessions');
+            const sessDir = sessionStateDir(tmpDir);
             await fs.utimes(
                 path.join(sessDir, 'old-sess-1.json'),
                 twoHoursAgo,
@@ -159,7 +167,7 @@ describe('session-local.service', () => {
 
         it('returns empty array for empty sessions directory', async () => {
             // Create the directory but no files
-            const sessDir = path.join(tmpDir, '.kody', 'sessions');
+            const sessDir = sessionStateDir(tmpDir);
             await fs.mkdir(sessDir, { recursive: true });
 
             const stale = await listStaleSessions(tmpDir, ONE_HOUR_MS);
@@ -173,7 +181,7 @@ describe('session-local.service', () => {
 
         it('ignores non-json files in the directory', async () => {
             await saveLocal(tmpDir, 'real-sess', sampleData);
-            const sessDir = path.join(tmpDir, '.kody', 'sessions');
+            const sessDir = sessionStateDir(tmpDir);
             await fs.writeFile(
                 path.join(sessDir, 'README.txt'),
                 'not a session',

@@ -464,9 +464,7 @@ describe('config repo command', () => {
         );
         expect(output).toContain('Review repository settings: kodustech/cli');
         expect(output).toContain('+ Auto approve: disabled -> enabled');
-        expect(output).toContain(
-            '+ Minimum severity level: critical -> high',
-        );
+        expect(output).toContain('+ Minimum severity level: critical -> high');
         expect(output).toContain(
             'Repository settings updated for kodustech/cli',
         );
@@ -1137,9 +1135,7 @@ describe('config repo command', () => {
             'Inspect and update the current repository settings in Kodus.',
         );
         expect(remoteHelp).toContain('Team-key auth is');
-        expect(remoteHelp).toContain(
-            'required for repository config commands',
-        );
+        expect(remoteHelp).toContain('required for repository config commands');
         expect(remoteHelp).toContain('shortcut for');
         expect(remoteHelp).toContain("'kodus config remote");
         expect(remoteHelp).toContain('add [options] [repository]');
