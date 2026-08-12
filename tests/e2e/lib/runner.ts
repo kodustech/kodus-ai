@@ -290,9 +290,35 @@ async function refreshCloudTenantByok(log: {
     const seen = new Set<string>();
     for (const entry of entries) {
         if (entry.license === 'free') {
-            log.info(
-                `[byok-refresh] ${entry.provider}/free: SKIPPED — a free tenant with a BYOK key is a community tenant, and reviews for it are expected`,
-            );
+            // Skipping the write is not enough: the key persists on the tenant
+            // from every run before this one, so the free tenant stays a
+            // community tenant forever and license-attribution keeps failing
+            // (observed on cloud runs 31601925282 and 31608293474 -- the second
+            // one WITH the skip in place). Its identity has to be ENFORCED each
+            // run, not assumed.
+            try {
+                const session = await login(target, {
+                    email: entry.email,
+                    password: entry.password,
+                });
+                const resp = await http(
+                    `${target.apiBaseUrl}/organization-parameters/delete-byok-config?configType=main`,
+                    {
+                        method: 'DELETE',
+                        headers: {
+                            Authorization: `Bearer ${session.accessToken}`,
+                        },
+                        timeoutMs: 30_000,
+                    },
+                );
+                log.info(
+                    `[byok-refresh] ${entry.provider}/free: byok_config CLEARED (HTTP ${resp.status}) — a free tenant is defined by having no key of its own`,
+                );
+            } catch (err) {
+                log.warn(
+                    `[byok-refresh] ${entry.provider}/free: could not clear byok_config (${(err as Error).message.slice(0, 120)}) — license-attribution will fail if a key is still stored`,
+                );
+            }
             continue;
         }
         if (seen.has(entry.email)) continue;
