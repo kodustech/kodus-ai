@@ -377,7 +377,13 @@ export class AstGraphRepository {
         includeDuplicates = false,
         prNodesJson?: string,
         fileChanges: Array<{ filename?: string; patch?: string }> = [],
+        options?: {
+            organizationId?: string;
+            repository?: string;
+            prNumber?: string | number;
+        },
     ): Promise<string> {
+        const { organizationId, repository, prNumber } = options || {};
 
         if (changedFiles.length === 0) {
             return '{"sha":"","nodes":[],"edges":[]}';
@@ -408,7 +414,12 @@ export class AstGraphRepository {
                     message: '[AST-GRAPH] Failed to parse prNodesJson in exportSubgraphJsonString',
                     context: AstGraphRepository.name,
                     error: e,
-                    metadata: { repoId },
+                    metadata: {
+                        repoId,
+                        organizationId: organizationId || 'unknown',
+                        ...(repository && { repository }),
+                        ...(prNumber && { prNumber }),
+                    },
                 });
             }
         }
@@ -580,7 +591,7 @@ export class AstGraphRepository {
                                 repoId,
                                 allPrCallees,
                             ]);
-                            const rows: any[] = res?.rows || [];
+                            const rows: any[] = Array.isArray(res) ? res : (res?.rows || []);
 
                             // Per-function overlap gate (>=80%) applied in JS.
                             const seenQns = new Set<string>();
@@ -605,7 +616,12 @@ export class AstGraphRepository {
                                 message: '[AST-GRAPH] Batch twin pool query failed',
                                 context: AstGraphRepository.name,
                                 error: err,
-                                metadata: { repoId },
+                                metadata: {
+                                    repoId,
+                                    organizationId: organizationId || 'unknown',
+                                    ...(repository && { repository }),
+                                    ...(prNumber && { prNumber }),
+                                },
                             });
                         }
                     }
@@ -677,7 +693,12 @@ export class AstGraphRepository {
                 message: '[AST-GRAPH] Failed to parse or process subgraph JSON in exportSubgraphJsonString',
                 context: AstGraphRepository.name,
                 error: e,
-                metadata: { repoId },
+                metadata: {
+                    repoId,
+                    organizationId: organizationId || 'unknown',
+                    ...(repository && { repository }),
+                    ...(prNumber && { prNumber }),
+                },
             });
         }
 

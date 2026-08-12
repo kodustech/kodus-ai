@@ -110,6 +110,10 @@ export class GraphContextService {
                 includeDuplicates,
                 prGraphStr,
                 changedFiles,
+                {
+                    organizationId: repo?.integrationConfigId,
+                    repository: repo?.fullName || repo?.name,
+                },
             );
 
             const diffPath = await this.writeDiffToSandbox(
@@ -439,6 +443,11 @@ export class GraphContextService {
         includeDuplicates = false,
         prNodesJson?: string,
         fileChanges: FileChange[] = [],
+        options?: {
+            organizationId?: string;
+            repository?: string;
+            prNumber?: string | number;
+        },
     ): Promise<void> {
         // Filtered subgraph: only nodes in changed files + direct neighbors.
         // ~99% reduction vs full export (e.g. ~500 nodes instead of 50k+).
@@ -449,6 +458,7 @@ export class GraphContextService {
             includeDuplicates,
             prNodesJson,
             fileChanges,
+            options,
         );
         const baseGraphPath = `${sandbox.repoDir}/${BASE_GRAPH_PATH}`;
 
