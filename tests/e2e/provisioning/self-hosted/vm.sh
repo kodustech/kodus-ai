@@ -478,7 +478,23 @@ for i in $(seq 1 30); do
     if [ -n "$URL" ]; then SERVER_TUNNEL_URL="$URL"; break; fi
     sleep 3
 done
-[ -n "$SERVER_TUNNEL_URL" ] || { err "tunnel URL never appeared"; exit 1; }
+if [ -z "$SERVER_TUNNEL_URL" ]; then
+    # Say WHY before the instance dies. This path used to fail and terminate
+    # the VM one second later, destroying the only record of what cloudflared
+    # was doing -- so "the tunnel did not come up" was all anyone ever learned,
+    # run after run (gitlab and azure-devops, run 31638485154).
+    err "tunnel URL never appeared after 90s — dumping tunnel state before teardown"
+    echo "----- systemctl status kodus-tunnel -----"
+    ssh_vm "systemctl status kodus-tunnel --no-pager 2>&1 | tail -n 20" || true
+    echo "----- journalctl -u kodus-tunnel -----"
+    ssh_vm "journalctl -u kodus-tunnel --no-pager -n 30 2>&1" || true
+    echo "----- /var/log/cloudflared.log (tail) -----"
+    ssh_vm "tail -n 40 /var/log/cloudflared.log 2>&1" || true
+    echo "----- cloudflared binary -----"
+    ssh_vm "ls -l /usr/local/bin/cloudflared 2>&1; /usr/local/bin/cloudflared --version 2>&1" || true
+    echo "---------------------------------------"
+    exit 1
+fi
 ok "Tunnel: $SERVER_TUNNEL_URL"
 
 # ---------- write .env on VM ----------
