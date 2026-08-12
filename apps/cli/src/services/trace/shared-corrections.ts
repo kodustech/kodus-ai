@@ -23,9 +23,10 @@ export interface SharedCorrectionResult {
 }
 
 /**
- * Persist a correction in the branch shard that owns the stable decision id.
- * The local Trace ref is updated even when the remote is offline; the next
- * successful Trace push publishes it.
+ * Persist a correction in every branch shard that contains the stable decision
+ * id. Decisions normally belong to one shard, but merges and older clients can
+ * copy them into another; updating every copy keeps a forgotten decision from
+ * resurfacing in review. The local Trace ref is updated even when offline.
  */
 export async function updateSharedDecisionCorrection(
     gitRoot: string,
@@ -39,56 +40,81 @@ export async function updateSharedDecisionCorrection(
         readAllBranchRecords(gitRoot, selectedRemote).catch(() => []),
     ]);
 
-    const record = findOwningRecord([...local, ...shared], decisionId);
-    if (!record) {
+    // Local records are appended last so an offline/newer local shard wins over
+    // a stale copy fetched from the shared ref for the same branch.
+    const records = findOwningRecords([...shared, ...local], decisionId);
+    if (records.length === 0) {
         return { found: false, pushed: false };
     }
-
-    const updated = updateRecord(record, decisionId, action);
-    await saveLocalBranchRecord(gitRoot, updated);
 
     const tempDir = await fs.mkdtemp(
         path.join(os.tmpdir(), 'kodus-trace-correction-index-'),
     );
-    const indexFile = path.join(tempDir, 'index');
     try {
-        const written = await writeBranchRecord(gitRoot, updated, {
-            indexFile,
-        });
-        if (!selectedRemote) {
-            return { found: true, pushed: false };
+        let pushed = !!selectedRemote;
+        let pushError: string | undefined;
+
+        for (const [index, record] of records.entries()) {
+            const updated = updateRecord(record, decisionId, action);
+            await saveLocalBranchRecord(gitRoot, updated);
+
+            const indexFile = path.join(tempDir, `index-${index}`);
+            const written = await writeBranchRecord(gitRoot, updated, {
+                indexFile,
+            });
+            if (!selectedRemote) {
+                pushed = false;
+                continue;
+            }
+
+            const outcome = await pushTraceBranch(gitRoot, updated, {
+                remote: selectedRemote,
+                indexFile,
+                sourceCommit: written.commit,
+                mergeRemoteDecisions: true,
+            });
+            if (!outcome.pushed) {
+                pushed = false;
+                pushError ??= outcome.error;
+            }
         }
-        const outcome = await pushTraceBranch(gitRoot, updated, {
-            remote: selectedRemote,
-            indexFile,
-            sourceCommit: written.commit,
-            mergeRemoteDecisions: true,
-        });
+
         return {
             found: true,
-            pushed: outcome.pushed,
-            pushError: outcome.error,
+            pushed,
+            pushError,
         };
     } finally {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
     }
 }
 
-function findOwningRecord(
+function findOwningRecords(
     records: TraceBranchRecord[],
     decisionId: string,
-): TraceBranchRecord | null {
-    return (
-        records.find((record) =>
-            record.decisions?.some((decision) => decision.id === decisionId),
-        ) ??
-        records.find(
-            (record) =>
-                record.corrections?.forgotten?.includes(decisionId) ||
-                record.corrections?.pinned?.includes(decisionId),
-        ) ??
-        null
-    );
+): TraceBranchRecord[] {
+    const byBranch = new Map<string, TraceBranchRecord>();
+
+    for (const record of records) {
+        if (record.decisions?.some((decision) => decision.id === decisionId)) {
+            byBranch.set(record.branch, record);
+        }
+    }
+
+    if (byBranch.size > 0) {
+        return [...byBranch.values()];
+    }
+
+    for (const record of records) {
+        if (
+            record.corrections?.forgotten?.includes(decisionId) ||
+            record.corrections?.pinned?.includes(decisionId)
+        ) {
+            byBranch.set(record.branch, record);
+        }
+    }
+
+    return [...byBranch.values()];
 }
 
 function updateRecord(

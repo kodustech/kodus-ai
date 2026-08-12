@@ -141,6 +141,8 @@ describe('trace ui server', () => {
         expect(html).not.toContain('Correction');
         expect(html).not.toContain("getJson('/api/decisions')");
         expect(html).toContain('function renderMarkdown(value)');
+        expect(html).toContain('const level = heading[1].length');
+        expect(html).not.toContain('heading[1].length + 2');
         expect(html).toContain('class="response markdown"');
         expect(html).toContain('prefers-reduced-motion: reduce');
     });

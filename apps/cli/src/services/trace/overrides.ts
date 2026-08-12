@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { overridesPath } from './store-paths.js';
 import type { TraceOverrides } from '../../types/trace.js';
+import { cliDebug } from '../../utils/logger.js';
 
 const EMPTY: TraceOverrides = { forgotten: [], pinned: [] };
 
@@ -10,14 +11,23 @@ const EMPTY: TraceOverrides = { forgotten: [], pinned: [] };
  * curation layer — there is no separate curated-markdown store to keep in sync.
  */
 export async function readOverrides(gitRoot: string): Promise<TraceOverrides> {
+    const filePath = overridesPath(gitRoot);
     try {
-        const raw = await fs.readFile(overridesPath(gitRoot), 'utf-8');
+        const raw = await fs.readFile(filePath, 'utf-8');
         const parsed = JSON.parse(raw) as Partial<TraceOverrides>;
         return {
             forgotten: normalize(parsed.forgotten),
             pinned: normalize(parsed.pinned),
         };
-    } catch {
+    } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== 'ENOENT') {
+            cliDebug('Failed to read Trace overrides; using empty overrides', {
+                filePath,
+                errorName: error instanceof Error ? error.name : 'UnknownError',
+                code,
+            });
+        }
         return { ...EMPTY };
     }
 }

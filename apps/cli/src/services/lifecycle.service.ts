@@ -132,19 +132,16 @@ function truncateRedacted(value: string, maxLength: number): string {
         return value;
     }
 
-    const truncated = value.slice(0, maxLength);
     const placeholder = '[REDACTED]';
-    for (
-        let prefixLength = 1;
-        prefixLength < placeholder.length;
-        prefixLength += 1
+    const placeholderStart = value.lastIndexOf(placeholder, maxLength - 1);
+    if (
+        placeholderStart >= 0 &&
+        placeholderStart < maxLength &&
+        placeholderStart + placeholder.length > maxLength
     ) {
-        const prefix = placeholder.slice(0, prefixLength);
-        if (truncated.endsWith(prefix)) {
-            return `${truncated.slice(0, maxLength - placeholder.length)}${placeholder}`;
-        }
+        return `${value.slice(0, maxLength - placeholder.length)}${placeholder}`;
     }
-    return truncated;
+    return value.slice(0, maxLength);
 }
 
 function pickInputString(

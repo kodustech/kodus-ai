@@ -14,8 +14,10 @@ import {
     readBranchRecord,
     recordPathForBranch,
     configureTraceRefspec,
+    pushTraceBranch,
     TRACE_BRANCH,
     TRACE_REF,
+    writeBranchRecord,
 } from '../decision-branch.service.js';
 import { readAllLocalBranchRecords } from '../local-decisions.js';
 import { readIncidents } from '../incidents.js';
@@ -436,6 +438,54 @@ describe('distillBranch', () => {
             process.env.KODUS_TRACE_HOME = traceHome;
             await fs.rm(cloneDir, { recursive: true, force: true });
             await fs.rm(cloneHome, { recursive: true, force: true });
+        }
+    });
+
+    it('writes a forget tombstone to every shard containing the decision id', async () => {
+        await commitFile(repoRoot, 'src/billing/invoice.ts', 'a\n', 'feat: a');
+        const first = await distillBranch(repoRoot, {
+            branch: 'feat/billing',
+            defaultBranch: 'main',
+            runAgent: makeAgent(BILLING_DECISIONS).run,
+        });
+        const decision = first.record.decisions[0];
+
+        const copiedRecord = {
+            ...first.record,
+            branch: 'feat/copied',
+            decisions: [decision],
+        };
+        const indexDir = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'distill-copy-index-'),
+        );
+        try {
+            const written = await writeBranchRecord(repoRoot, copiedRecord, {
+                indexFile: path.join(indexDir, 'index'),
+            });
+            await pushTraceBranch(repoRoot, copiedRecord, {
+                remote: 'origin',
+                indexFile: path.join(indexDir, 'push-index'),
+                sourceCommit: written.commit,
+            });
+
+            expect(
+                await updateSharedDecisionCorrection(
+                    repoRoot,
+                    decision.id,
+                    'forget',
+                ),
+            ).toMatchObject({ found: true, pushed: true });
+
+            expect(
+                (await readBranchRecord(repoRoot, 'feat/billing'))?.corrections
+                    ?.forgotten,
+            ).toContain(decision.id);
+            expect(
+                (await readBranchRecord(repoRoot, 'feat/copied'))?.corrections
+                    ?.forgotten,
+            ).toContain(decision.id);
+        } finally {
+            await fs.rm(indexDir, { recursive: true, force: true });
         }
     });
 

@@ -36,10 +36,12 @@ ${TRACE_HOOK_MARKER}
 # Git writes one line per ref to stdin:
 #   <local-ref> <local-sha> <remote-ref> <remote-sha>
 # Records use the destination branch name because that is the stable shared
-# name another clone fetches. Each detached process gets the exact object Git
-# is pushing; it never consults the currently checked-out branch or HEAD.
+# name another clone fetches. The exact object ids come from Git's stdin; the
+# hook never consults the currently checked-out branch or HEAD.
 if [ -z "$KODUS_TRACE_SKIP" ] && command -v kodus >/dev/null 2>&1; then
-  while read -r KODUS_LOCAL_REF KODUS_LOCAL_SHA KODUS_REMOTE_REF KODUS_REMOTE_SHA; do
+  KODUS_TRACE_REQUESTS="$(mktemp "\${TMPDIR:-/tmp}/kodus-trace-push.XXXXXX" 2>/dev/null)" || KODUS_TRACE_REQUESTS=""
+  if [ -n "$KODUS_TRACE_REQUESTS" ]; then
+    while read -r KODUS_LOCAL_REF KODUS_LOCAL_SHA KODUS_REMOTE_REF KODUS_REMOTE_SHA; do
     case "$KODUS_REMOTE_REF" in
       refs/heads/kodus/trace/v1) continue ;;
       refs/heads/*) ;;
@@ -53,14 +55,23 @@ if [ -z "$KODUS_TRACE_SKIP" ] && command -v kodus >/dev/null 2>&1; then
     esac
 
     KODUS_TRACE_BRANCH="\${KODUS_REMOTE_REF#refs/heads/}"
-    (
+    printf '%s %s\n' "$KODUS_TRACE_BRANCH" "$KODUS_LOCAL_SHA" >> "$KODUS_TRACE_REQUESTS"
+    done
+
+  # One detached worker drains every pushed branch sequentially. This avoids
+  # concurrent model calls on a multi-ref push without delaying that push.
+  (
+    awk '!seen[$1]++' "$KODUS_TRACE_REQUESTS" |
+    while read -r KODUS_TRACE_BRANCH KODUS_LOCAL_SHA; do
       kodus trace distill \\
         --branch "$KODUS_TRACE_BRANCH" \\
         --head "$KODUS_LOCAL_SHA" \\
         --remote "$1" \\
-        >/dev/null 2>&1 </dev/null &
-    )
-  done
+        >/dev/null 2>&1
+    done
+    rm -f "$KODUS_TRACE_REQUESTS"
+    ) >/dev/null 2>&1 </dev/null &
+  fi
 fi
 ${TRACE_HOOK_END_MARKER}
 `.trimStart();
@@ -187,8 +198,11 @@ class GitHooksService {
         let content: string;
         try {
             content = await fs.readFile(hookPath, 'utf-8');
-        } catch {
-            return;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                return;
+            }
+            throw error;
         }
         const remaining = stripBlocks(
             content,
@@ -214,8 +228,11 @@ class GitHooksService {
         let content: string;
         try {
             content = await fs.readFile(hookPath, 'utf-8');
-        } catch {
-            return false;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+                return false;
+            }
+            throw error;
         }
 
         const markers = [TRACE_HOOK_MARKER, ...LEGACY_MARKERS];

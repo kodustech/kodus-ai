@@ -85,6 +85,15 @@ async function executePrePush(input: string): Promise<string[]> {
 }
 
 describe('gitHooksService.install', () => {
+    it('propagates unexpected legacy hook read failures', async () => {
+        const legacyPath = hookPath('post-commit');
+        await fs.mkdir(legacyPath, { recursive: true });
+
+        await expect(gitHooksService.install(hooksDir)).rejects.toMatchObject({
+            code: expect.stringMatching(/EISDIR|EACCES|EPERM/),
+        });
+    });
+
     it('installs prepare-commit-msg and pre-push hooks', async () => {
         const result = await gitHooksService.install(hooksDir);
 
@@ -114,6 +123,17 @@ describe('gitHooksService.install', () => {
         expect(content).toContain('kodus trace distill');
         expect(content).toMatch(/<\/dev\/null\s*&/);
         expect(content).toContain('>/dev/null 2>&1');
+    });
+
+    it('uses one sequential detached worker for a multi-ref push', async () => {
+        await gitHooksService.install(hooksDir);
+        const content = await fs.readFile(hookPath('pre-push'), 'utf-8');
+
+        expect(content).toContain("awk '!seen[$1]++'");
+        expect(content).toMatch(
+            /awk[^\n]+\|\s*\n\s*while read -r KODUS_TRACE_BRANCH KODUS_LOCAL_SHA;/,
+        );
+        expect(content.match(/<\/dev\/null\s*&/g)).toHaveLength(1);
     });
 
     it('distills the destination branch and exact SHA from realistic pre-push stdin', async () => {

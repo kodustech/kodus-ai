@@ -419,4 +419,12 @@ describe('summarizeToolInput', () => {
         expect(summary).not.toContain(key.slice(0, 10));
         expect(summary).toContain('[REDACTED]');
     });
+
+    it('preserves a legitimate opening bracket at the truncation boundary', () => {
+        const command = `${'z'.repeat(299)}[array item]`;
+        const summary = summarizeToolInput('/tmp/repo', makeCall(command));
+
+        expect(summary).toBe(`${'z'.repeat(299)}[`);
+        expect(summary).not.toContain('[REDACTED]');
+    });
 });

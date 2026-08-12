@@ -292,7 +292,7 @@ function renderMarkdown(value) {
     const ordered = line.match(/^\\d+[.)]\\s+(.+)$/);
     const quote = line.match(/^>\\s?(.+)$/);
     if (!line.trim()) { flushParagraph(); flushList(); }
-    else if (heading) { flushParagraph(); flushList(); const level = Math.min(heading[1].length + 2, 4); output.push('<h' + level + '>' + inlineMarkdown(heading[2]) + '</h' + level + '>'); }
+    else if (heading) { flushParagraph(); flushList(); const level = heading[1].length; output.push('<h' + level + '>' + inlineMarkdown(heading[2]) + '</h' + level + '>'); }
     else if (unordered || ordered) { flushParagraph(); const nextType = unordered ? 'ul' : 'ol'; if (listType && listType !== nextType) flushList(); listType = nextType; listItems.push((unordered || ordered)[1]); }
     else if (quote) { flushParagraph(); flushList(); output.push('<blockquote>' + inlineMarkdown(quote[1]) + '</blockquote>'); }
     else { flushList(); paragraph.push(line.trim()); }
