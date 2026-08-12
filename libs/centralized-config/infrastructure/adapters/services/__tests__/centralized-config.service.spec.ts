@@ -168,6 +168,77 @@ describe('CentralizedConfigService', () => {
     });
 
     describe('synchronizeConfigs', () => {
+        /**
+         * Discovery emits `directoryPaths` (plural) and stopped setting
+         * `directoryPath`. Keying the config level off the singular spelling
+         * sent every directory scope down the REPOSITORY branch, so the
+         * directory's custom messages were written onto the repository —
+         * overwriting the repository's own messages and never creating a
+         * directory-level one.
+         *
+         * Reproduced end to end before writing this: two files, one with
+         * `MSG-DO-REPO` and one with `MSG-DO-DIRETORIO`, produced a single
+         * message at repository level carrying the directory's content.
+         */
+        it('writes a directory scope custom message at DIRECTORY level', async () => {
+            const configFiles: IConfigFileMeta[] = [
+                {
+                    repositoryId: 'repo-1',
+                    centralizedDirectoryPath: 'repo1/src',
+                    // What discovery actually emits for a directory scope.
+                    directoryPaths: ['/src'],
+                } as any,
+            ];
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [{ id: 'repo-1', name: 'repo1', full_name: 'org/repo1' }],
+            );
+            mockCodeBaseConfigService.getDirectoryIdForPath.mockResolvedValue(
+                'dir-1',
+            );
+            mockPullRequestMessagesService.findOne.mockResolvedValue(null);
+            mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+                version: '2.0',
+                customMessages: {
+                    startReviewMessage: {
+                        status: 'every_push',
+                        content: 'MSG-DO-DIRETORIO',
+                    },
+                },
+            });
+            mockParametersService.findByKey.mockImplementation((key) => {
+                if (key === ParametersKey.CENTRALIZED_CONFIG) {
+                    return Promise.resolve({
+                        configValue: {
+                            enabled: true,
+                            repository: { id: 'c-1', name: 'centralized' },
+                        },
+                    });
+                }
+                return Promise.resolve({ configValue: {} });
+            });
+
+            await service.synchronizeConfigs({
+                organizationAndTeamData,
+                configFiles,
+                actor,
+            });
+
+            // Asserted on the payload directly: the use case takes three
+            // arguments and `toHaveBeenCalledWith` matches arity too.
+            const payload =
+                mockCreateOrUpdatePullRequestMessagesUseCase.execute.mock
+                    .calls[0][1];
+
+            expect(payload).toEqual(
+                expect.objectContaining({
+                    configLevel: ConfigLevel.DIRECTORY,
+                    repositoryId: 'repo-1',
+                    directoryId: 'dir-1',
+                }),
+            );
+        });
+
         it('should sync custom messages from centralized config', async () => {
             const configFiles: IConfigFileMeta[] = [
                 {

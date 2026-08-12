@@ -1117,7 +1117,17 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         success: boolean;
         message: string;
     }> {
-        const { repositoryId, directoryPath } = configFileMeta;
+        const { repositoryId } = configFileMeta;
+
+        // Discovery emits `directoryPaths` and stopped setting `directoryPath`
+        // when multi-directory groups landed. Reading only the singular
+        // spelling put every directory scope through the REPOSITORY branch
+        // below, so a directory's custom messages were written onto the
+        // repository — overwriting the repository's own messages, and never
+        // producing a directory-level message at all.
+        const directoryPath =
+            configFileMeta.directoryPath ??
+            configFileMeta.directoryPaths?.[0];
 
         // 1. Determine config level and resolve directory ID FIRST
         let configLevel: ConfigLevel;
