@@ -1,0 +1,28 @@
+version: 1
+setup:
+  - docker network create kodus-backend-services 2>/dev/null || true
+  - docker network create shared-network 2>/dev/null || true
+  # build sequencial da imagem compartilhada (api/worker/webhooks usam a MESMA
+  # tag; build paralelo do compose up tem race de export — igual aos scripts do repo)
+  - docker compose -f docker-compose.dev.yml build kodus-api
+  - pnpm install
+files:
+  copy: [.env]
+services:
+  compose:
+    file: docker-compose.dev.yml
+    public: kodus-api
+    health: /health/simple
+    health_timeout: 1200
+data:
+  migrate: pnpm run migration:run
+  seed: pnpm run seed
+validate:
+  - name: lint
+    run: pnpm run lint
+  - name: test-rbac
+    run: pnpm run test:rbac
+limits:
+  instance: m7i-flex.xlarge  # nao-burstavel: build sem throttling de creditos
+  disk: 100gb
+  idle_suspend: 10m
