@@ -64,6 +64,14 @@ jobs:
     cloud-matrix:
         name: cloud matrix (${{ inputs.matrix_file || 'matrix/fast.yml' }})
         runs-on: ubuntu-latest
+        # Stated at the `history` job below: this matrix runs third-party
+        # provider code with long-lived tokens and must never carry write
+        # scope. The workflow-level default already says `contents: read`,
+        # but a caller now has to grant `contents: write` as a ceiling so
+        # `history` can push — so pin the boundary on the job itself rather
+        # than leave it resting on precedence rules.
+        permissions:
+            contents: read
         # QA environment: where the QA-scoped secrets live (GH_REPO_ADMIN_TOKEN
         # for trial-managed-review's throwaway repos). Branch policy allows
         # `main` only — fine, every real trigger (qa-build workflow_call,
