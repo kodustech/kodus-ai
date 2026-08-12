@@ -37,7 +37,10 @@ if [ -f "$E2E_ROOT/.env" ]; then
     set -a; . "$E2E_ROOT/.env"; set +a
 fi
 
-TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-digitalocean}"
+# AWS is the default: DigitalOcean is retired, and defaulting to a provider
+# whose credentials no longer exist turns an unset variable into a confusing
+# 401 instead of a working provision.
+TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-aws}"
 MATRIX_FILE="${MATRIX_FILE:-matrix/fast.yml}"
 LICENSE_MODE="${LICENSE_MODE:-license-paid}"
 # Which product topology this stack runs.
