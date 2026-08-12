@@ -311,9 +311,24 @@ async function refreshCloudTenantByok(log: {
                         timeoutMs: 30_000,
                     },
                 );
-                log.info(
-                    `[byok-refresh] ${entry.provider}/free: byok_config CLEARED (HTTP ${resp.status}) — a free tenant is defined by having no key of its own`,
-                );
+                // 2xx cleared something; 400/404 means there was nothing to
+                // clear, which is the state we want and not a failure. Saying
+                // "CLEARED" on a 400 was a line that lied about its own
+                // result -- the exact habit this matrix spent the day
+                // removing from everywhere else.
+                if (resp.status >= 200 && resp.status < 300) {
+                    log.info(
+                        `[byok-refresh] ${entry.provider}/free: byok_config CLEARED — a free tenant is defined by having no key of its own`,
+                    );
+                } else if (resp.status === 400 || resp.status === 404) {
+                    log.info(
+                        `[byok-refresh] ${entry.provider}/free: no byok_config to clear (HTTP ${resp.status}) — already in the state a free tenant should be in`,
+                    );
+                } else {
+                    log.warn(
+                        `[byok-refresh] ${entry.provider}/free: clearing byok_config returned HTTP ${resp.status} — license-attribution will fail if a key is still stored`,
+                    );
+                }
             } catch (err) {
                 log.warn(
                     `[byok-refresh] ${entry.provider}/free: could not clear byok_config (${(err as Error).message.slice(0, 120)}) — license-attribution will fail if a key is still stored`,
