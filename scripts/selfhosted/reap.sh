@@ -86,7 +86,10 @@ done
 
 require_cmd jq
 require_cmd curl
-require_env DIGITALOCEAN_TOKEN
+# DigitalOcean is retired -- the matrix provisions on AWS. The token is no
+# longer required: without one we skip DO entirely and still sweep EC2, which
+# is the sweep that matters. Kept (rather than deleted) so leftover droplets
+# can still be reaped by anyone who supplies a working token.
 
 TTL_SECS=$(( TTL_HOURS * 3600 ))
 NOW=$(date -u +%s)
@@ -130,64 +133,6 @@ else
 fi
 [ "$DRY_RUN" = "1" ] && warn "DRY RUN — nothing will be deleted"
 [ "${#KEEP[@]}" -gt 0 ] && log "Exempt (--keep): ${KEEP[*]}"
-
-# ---------- pull live droplets (source of truth) ----------
-DROPLETS_JSON=$(curl -fsS \
-    -H "Authorization: Bearer ${DIGITALOCEAN_TOKEN}" \
-    "https://api.digitalocean.com/v2/droplets?per_page=200") \
-    || { err "Failed to list droplets from DigitalOcean"; exit 1; }
-
-# name<TAB>id<TAB>created_at, filtered to our prefix.
-PREFIX_JSON=$(printf '%s\n' "${PREFIXES[@]}" | jq -R . | jq -sc .)
-MATCHES=$(echo "$DROPLETS_JSON" | jq -r \
-    --argjson ps "$PREFIX_JSON" \
-    '.droplets[] | select([.name | startswith($ps[])] | any) | "\(.name)\t\(.id)\t\(.created_at)"')
-
-LIVE_NAMES=$(echo "$DROPLETS_JSON" | jq -r '.droplets[].name')
-
-# ---------- decide what to reap ----------
-TO_REAP=()        # instance short-names (suffix after prefix)
-TO_REAP_IDS=()    # parallel array of droplet ids
-TO_REAP_NAMES=()  # parallel array of FULL droplet names (namespace intact)
-SKIPPED_YOUNG=0
-
-if [ -n "$MATCHES" ]; then
-    while IFS=$'\t' read -r name id created; do
-        [ -n "$name" ] || continue
-        short="$(strip_prefix "$name")"
-        if is_kept "$short"; then
-            dim "  keep   $name (exempt)"
-            continue
-        fi
-        created_epoch=$(iso_to_epoch "$created")
-        if [ -z "$created_epoch" ]; then
-            warn "  skip   $name — could not parse created_at '$created'; refusing to guess its age"
-            continue
-        fi
-        age=$(( NOW - created_epoch ))
-        age_h=$(( age / 3600 ))
-        if [ "$REAP_ALL" != "1" ] && [ "$age" -lt "$TTL_SECS" ]; then
-            dim "  young  $name (${age_h}h < ${TTL_HOURS}h) — keeping"
-            SKIPPED_YOUNG=$(( SKIPPED_YOUNG + 1 ))
-            continue
-        fi
-        warn "  REAP   $name (${age_h}h old, id=$id)"
-        TO_REAP+=("$short")
-        TO_REAP_IDS+=("$id")
-        TO_REAP_NAMES+=("$name")
-    done <<< "$MATCHES"
-fi
-
-# ---------- find orphaned state files (droplet already gone) ----------
-ORPHAN_STATES=()
-while IFS= read -r inst; do
-    [ -n "$inst" ] || continue
-    full="${PREFIX}${inst}"
-    if ! echo "$LIVE_NAMES" | grep -qx "$full"; then
-        ORPHAN_STATES+=("$inst")
-        dim "  stale  state file for '$inst' (no live droplet) — will clean"
-    fi
-done < <(list_instances)
 
 # ---------- AWS EC2 sweep ----------
 # Additive and independent of the DigitalOcean flow above, so it cannot break
@@ -266,6 +211,86 @@ reap_aws_ec2() {
         esac
     done < <(aws ec2 describe-key-pairs --region "$region" --query 'KeyPairs[].KeyName' --output text 2>/dev/null | tr '\t' '\n')
 }
+
+# ---------- pull live droplets (source of truth) ----------
+# A dead DigitalOcean token must not take the EC2 sweep down with it. The two
+# clouds are independent, the matrix provisions on AWS now, and `exit 1` here
+# meant an expired DO credential silently stopped the only cleanup that still
+# matters -- leaked instances billing while the job merely reported failure
+# (observed: run 31629073157, DO returning 401).
+if [ -z "${DIGITALOCEAN_TOKEN:-}" ]; then
+    log "No DIGITALOCEAN_TOKEN - DigitalOcean is retired; sweeping EC2 only."
+    rc=0
+    reap_aws_ec2 || rc=1
+    [ "$rc" -eq 0 ] && ok "Reap complete (EC2 only)." || warn "Reap completed with failures (rc=$rc)."
+    exit "$rc"
+fi
+
+if ! DROPLETS_JSON=$(curl -fsS \
+    -H "Authorization: Bearer ${DIGITALOCEAN_TOKEN}" \
+    "https://api.digitalocean.com/v2/droplets?per_page=200"); then
+    # A token that is SET but rejected is different from no token: someone
+    # meant DigitalOcean to be reaped and it was not. Sweep EC2 anyway, then
+    # fail so the dead credential stays visible.
+    err "DigitalOcean returned an error (token expired or revoked?) - skipping DO, still sweeping EC2"
+    rc=0
+    reap_aws_ec2 || rc=1
+    err "DigitalOcean reap did NOT run. Rotate DIGITALOCEAN_TOKEN, or unset it if DO is gone for good."
+    exit 1
+fi
+
+# name<TAB>id<TAB>created_at, filtered to our prefix.
+PREFIX_JSON=$(printf '%s\n' "${PREFIXES[@]}" | jq -R . | jq -sc .)
+MATCHES=$(echo "$DROPLETS_JSON" | jq -r \
+    --argjson ps "$PREFIX_JSON" \
+    '.droplets[] | select([.name | startswith($ps[])] | any) | "\(.name)\t\(.id)\t\(.created_at)"')
+
+LIVE_NAMES=$(echo "$DROPLETS_JSON" | jq -r '.droplets[].name')
+
+# ---------- decide what to reap ----------
+TO_REAP=()        # instance short-names (suffix after prefix)
+TO_REAP_IDS=()    # parallel array of droplet ids
+TO_REAP_NAMES=()  # parallel array of FULL droplet names (namespace intact)
+SKIPPED_YOUNG=0
+
+if [ -n "$MATCHES" ]; then
+    while IFS=$'\t' read -r name id created; do
+        [ -n "$name" ] || continue
+        short="$(strip_prefix "$name")"
+        if is_kept "$short"; then
+            dim "  keep   $name (exempt)"
+            continue
+        fi
+        created_epoch=$(iso_to_epoch "$created")
+        if [ -z "$created_epoch" ]; then
+            warn "  skip   $name — could not parse created_at '$created'; refusing to guess its age"
+            continue
+        fi
+        age=$(( NOW - created_epoch ))
+        age_h=$(( age / 3600 ))
+        if [ "$REAP_ALL" != "1" ] && [ "$age" -lt "$TTL_SECS" ]; then
+            dim "  young  $name (${age_h}h < ${TTL_HOURS}h) — keeping"
+            SKIPPED_YOUNG=$(( SKIPPED_YOUNG + 1 ))
+            continue
+        fi
+        warn "  REAP   $name (${age_h}h old, id=$id)"
+        TO_REAP+=("$short")
+        TO_REAP_IDS+=("$id")
+        TO_REAP_NAMES+=("$name")
+    done <<< "$MATCHES"
+fi
+
+# ---------- find orphaned state files (droplet already gone) ----------
+ORPHAN_STATES=()
+while IFS= read -r inst; do
+    [ -n "$inst" ] || continue
+    full="${PREFIX}${inst}"
+    if ! echo "$LIVE_NAMES" | grep -qx "$full"; then
+        ORPHAN_STATES+=("$inst")
+        dim "  stale  state file for '$inst' (no live droplet) — will clean"
+    fi
+done < <(list_instances)
+
 
 rc=0
 

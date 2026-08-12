@@ -51,9 +51,11 @@ jobs:
                   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_E2E_SECRET_ACCESS_KEY }}
                   AWS_DEFAULT_REGION: us-east-2
               run: |
+                  # No longer fatal: DigitalOcean is retired and the EC2 sweep
+                  # is the one that matters. reap.sh skips DO cleanly when the
+                  # token is absent.
                   if [ -z "$DIGITALOCEAN_TOKEN" ]; then
-                      echo "::error::DIGITALOCEAN_TOKEN secret is not set"
-                      exit 1
+                      echo "::warning::DIGITALOCEAN_TOKEN not set — sweeping EC2 only"
                   fi
                   TTL="${{ github.event.inputs.ttl_hours || '6' }}"
                   ARGS=(--ttl "$TTL" -y)
