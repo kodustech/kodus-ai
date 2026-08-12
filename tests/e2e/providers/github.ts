@@ -1,4 +1,5 @@
 import type {
+    ChangedFile,
     OpenPRArgs,
     OpenPRFromBranchesArgs,
     OpenedPR,
@@ -500,7 +501,16 @@ export class GitHubProvider extends BaseProvider {
                 await this.refreshInstallationTokenIfNeeded();
                 const [reviewComments, issueComments, reviews] =
                     await Promise.all([
-                        this.conditionalGet<{ id: number; body: string }[]>(
+                        this.conditionalGet<
+                            {
+                                id: number;
+                                body: string;
+                                path?: string;
+                                line?: number | null;
+                                side?: string;
+                                start_line?: number | null;
+                            }[]
+                        >(
                             `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/comments?since=${since}`,
                         ),
                         this.conditionalGet<{ id: number; body: string }[]>(
@@ -606,11 +616,27 @@ export class GitHubProvider extends BaseProvider {
                         icRes.reviews[0]?.body ??
                         reviewsList[0]?.body ??
                         '';
+                    // Anchors of the inline findings, for the placement
+                    // assertion (lib/diff-position.ts). Only comments with a
+                    // `path` are inline; the rest are PR-level.
+                    const inlineComments = rcRes.reviews
+                        .filter((c) => typeof c.path === 'string')
+                        .map((c) => ({
+                            path: c.path as string,
+                            ...(typeof c.line === 'number'
+                                ? { line: c.line }
+                                : {}),
+                            ...(c.side ? { side: c.side } : {}),
+                            ...(typeof c.start_line === 'number'
+                                ? { startLine: c.start_line }
+                                : {}),
+                        }));
                     return {
                         reviewComments: rcRes.reviews.length,
                         issueComments: icRes.reviews.length,
                         reviews: reviewsList.length,
                         sample: sample.slice(0, 240),
+                        ...(inlineComments.length ? { inlineComments } : {}),
                         ...(licenseNotice
                             ? {
                                   licenseBlockedNotice: {
@@ -899,10 +925,37 @@ export class GitHubProvider extends BaseProvider {
         return this.token;
     }
 
+    // Identity, not traffic — and the two need DIFFERENT credentials.
+    //
+    // `GET /user` is the one call a GitHub App installation token cannot
+    // make (it has no user identity), which is why the runner only handed
+    // App tokens to cloud cells: self-hosted needs this id for seat
+    // assignment, so it stayed on the abuse-flagged PAT for ALL its GitHub
+    // traffic, quota limit included.
+    //
+    // Resolving the id from the durable PAT while everything else keeps
+    // using `this.token` lifts that restriction: the heavy traffic (clone,
+    // PRs, comment polling) can ride the App's own 5000/h budget on
+    // self-hosted too. The PAT spends exactly one request per cell here.
+    // Files + patches for the PR under test. Used by the review-placement
+    // assertion to decide whether a comment's line is one this PR added.
+    async listChangedFiles(pr: { number: number }): Promise<ChangedFile[]> {
+        const resp = await http<{ filename: string; patch?: string }[]>(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/files?per_page=100`,
+            { headers: this.headers(), timeoutMs: 30_000 },
+        );
+        ensureOk(resp, 'github:listChangedFiles');
+        const files = this.listOrThrow(resp, 'github:listChangedFiles');
+        return files.map((f) => ({ path: f.filename, patch: f.patch }));
+    }
+
     async currentUserId(): Promise<string> {
+        // authorHeaders() already resolves to the durable PAT whenever the
+        // assigned token is an App installation token — exactly what this
+        // call needs, since installation tokens have no user identity.
         const resp = await http<{ id: number; login: string }>(
             `${this.apiBase}/user`,
-            { headers: this.headers(), timeoutMs: 15_000 },
+            { headers: this.authorHeaders(), timeoutMs: 15_000 },
         );
         ensureOk(resp, 'github:currentUserId');
         return String(resp.body.id);

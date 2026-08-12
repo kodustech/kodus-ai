@@ -1,0 +1,47 @@
+id: cloud-aws
+description: |
+    Cloud matrix against a DISPOSABLE AWS environment (see
+    .github/workflows/e2e-cloud-aws.yml), rather than the shared QA.
+
+    Deliberately reduced. cli/cloud/setup-tenants.ts can only seed tenants on
+    the FREE tier — promoting one to paid/trial needs Stripe automation that
+    does not exist yet (TODO in ensureLicenseTier). So this file carries only
+    scenarios that either provision their own org or work on a free tenant.
+    Listing the paid-tier scenarios here would produce a red run that says
+    nothing about the product.
+
+    Grow this file as tier seeding lands; `run-matrix --validate` refuses any
+    cell or scenario that cannot actually run, so it cannot grow wrong.
+
+scenarios:
+    # Signs up its own throwaway org and provisions one user per role — needs
+    # nothing seeded.
+    - rbac-authorization
+    - rbac-frontend-routes
+    # trial-entitlement-gate / trial-credits-consume are NOT here, and the
+    # reason is concrete rather than cautious: both call POST /billing/trial,
+    # which returns HTTP 500 on a fresh environment because Stripe is not
+    # configured there. Verified on 2026-08-08 against i-01adbad9b85f5ab41 —
+    # the rest of this file passed on the same run. Add them back together
+    # with Stripe test-mode wiring, not before.
+    # Anonymous and tenant-free: only touches /cli/public/*.
+    - public-pr-demo
+
+cells:
+    # Both cells exist to SELECT scenarios, not to supply a seeded tenant:
+    # every scenario listed above signs up its own throwaway org (or needs no
+    # tenant at all), which is exactly why they are the ones that can run
+    # against a fresh environment.
+    #
+    # `github` rather than `github-app` for now, and the reason is mundane:
+    # the github-app provider requires GH_APP_TEST_REPO, which does not exist
+    # as a secret, so those cells are pre-skipped and the run ends with nothing
+    # executed. None of the scenarios here performs a code review, so the auth
+    # mode is not what they exercise — flip both to github-app once the secret
+    # is in place and the App is installed on the fixture repo.
+    - target: cloud
+      provider: github
+      license: paid
+    - target: cloud
+      provider: github
+      license: trial

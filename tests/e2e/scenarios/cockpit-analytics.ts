@@ -47,7 +47,7 @@ export const cockpitAnalytics: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["cloud", "self-hosted"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         // license-paid = the self-hosted Enterprise customer case (the
         // regression). paid/trial cover cloud. Tiers that legitimately can't
         // reach cockpit (free, community-byok, license-free) are excluded —

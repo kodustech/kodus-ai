@@ -36,7 +36,7 @@ export const publicPrDemo: Scenario = {
     priority: "P1",
     appliesTo: {
         target: ["cloud"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         license: ["paid"],
     },
     // Generous: live review of a small public PR completes in ~1-3 min,
