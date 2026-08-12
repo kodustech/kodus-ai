@@ -130,5 +130,8 @@ export function formatRuleToYaml(rule: Partial<IKodyRule>): string {
         ...(rule.status === KodyRulesStatus.PAUSED ? { enabled: false } : {}),
     };
 
-    return yaml.dump(ruleForYaml);
+    // js-yaml 5 only dumps plain Objects. Nest ValidationPipe + @Type()
+    // turns examples/inheritance into DTO class instances, which throw
+    // "unacceptable kind of an object to dump".
+    return yaml.dump(JSON.parse(JSON.stringify(ruleForYaml)));
 }
