@@ -148,6 +148,7 @@ LIVE_NAMES=$(echo "$DROPLETS_JSON" | jq -r '.droplets[].name')
 # ---------- decide what to reap ----------
 TO_REAP=()        # instance short-names (suffix after prefix)
 TO_REAP_IDS=()    # parallel array of droplet ids
+TO_REAP_NAMES=()  # parallel array of FULL droplet names (namespace intact)
 SKIPPED_YOUNG=0
 
 if [ -n "$MATCHES" ]; then
@@ -173,6 +174,7 @@ if [ -n "$MATCHES" ]; then
         warn "  REAP   $name (${age_h}h old, id=$id)"
         TO_REAP+=("$short")
         TO_REAP_IDS+=("$id")
+        TO_REAP_NAMES+=("$name")
     done <<< "$MATCHES"
 fi
 
@@ -197,9 +199,13 @@ done < <(list_instances)
 # them `kodus-e2e-*` while the reaper watched `kodus-selfhosted-*`. A tag
 # travels with the instance and cannot drift.
 reap_aws_ec2() {
-    command -v aws >/dev/null 2>&1 || { dim "aws CLI not found — skipping EC2 sweep"; return 0; }
+    # Loud, not dim. The matrix provisions on AWS by default, so a skipped EC2
+    # sweep means instances bill forever -- and the job still exits 0, so the
+    # only evidence anything was missed is this line. It ran silently in CI for
+    # exactly that reason: reap-droplets.yml passed no AWS credential.
+    command -v aws >/dev/null 2>&1 || { warn "aws CLI not found — EC2 sweep SKIPPED (leaked instances will not be reaped)"; return 0; }
     if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -z "${AWS_PROFILE:-}" ]; then
-        dim "no AWS credential — skipping EC2 sweep"
+        warn "no AWS credential — EC2 sweep SKIPPED (leaked instances will not be reaped)"
         return 0
     fi
     local region="${AWS_REGION_E2E:-${AWS_DEFAULT_REGION:-us-east-2}}"
@@ -293,7 +299,17 @@ i=0
 for short in ${TO_REAP[@]+"${TO_REAP[@]}"}; do
     id="${TO_REAP_IDS[$i]}"
     i=$(( i + 1 ))
-    if state_exists "$short"; then
+    full_name="${TO_REAP_NAMES[$(( i - 1 ))]}"
+    # destroy.sh addresses instances by SHORT name, which is ambiguous across
+    # namespaces: kodus-e2e-github and kodus-selfhosted-github both strip to
+    # "github". Delegating an e2e droplet to destroy.sh would hand it a name
+    # that resolves to the SELFHOSTED droplet's state file and destroy that
+    # machine instead -- a different, live host, irreversibly.
+    #
+    # destroy.sh owns the kodus-selfhosted-* namespace only. Everything else
+    # goes down the API path below, which deletes by droplet ID and re-verifies
+    # the live name first.
+    if [ "${full_name#kodus-selfhosted-}" != "$full_name" ] && state_exists "$short"; then
         # Full cleanup path (droplet + SSH key + state) with destroy.sh's own
         # live-name prefix safety guard.
         log "destroy.sh --name $short (has state file)"

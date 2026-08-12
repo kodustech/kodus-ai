@@ -64,6 +64,8 @@ export function computeVerdict(input: {
      * Zero means the run verified NOTHING — see below.
      */
     applicable?: number;
+    /** Cells that actually RAN: applicable minus setup/infra skips. */
+    executed?: number;
 }): RunVerdict {
     if (input.gatingFailures > 0 || input.blocked > 0 || input.targetCrashed) {
         return "red";
@@ -76,6 +78,20 @@ export function computeVerdict(input: {
     // exact ambiguity this verdict exists to remove, so it must not survive
     // inside the verdict itself.
     if (input.applicable !== undefined && input.applicable === 0) {
+        return "inconclusive";
+    }
+    // Same reasoning one step further in. `applicable` is total minus
+    // appliesTo skips (evidence.ts), so setup and infra skips still COUNT as
+    // applicable — a cell whose every scenario self-skipped on a missing
+    // secret reports applicable=N, executed=0, and used to come out green.
+    // "We were supposed to check N things and checked none of them" is the
+    // definition of inconclusive, and it is the exact shape that hid the
+    // github-app cell and the centralized-config gap.
+    if (
+        input.executed !== undefined &&
+        input.executed === 0 &&
+        (input.applicable ?? 0) > 0
+    ) {
         return "inconclusive";
     }
     return "green";

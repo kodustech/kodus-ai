@@ -143,3 +143,50 @@ test("computeVerdict: omitting applicable keeps the old behaviour", () => {
         "green",
     );
 });
+
+// applicable counts setup/infra skips (evidence.ts: total - notApplicable), so
+// "we were supposed to check N and checked none" used to come out green. That
+// is the shape that hid the github-app cell and the centralized-config gap.
+test("a run that executed nothing is inconclusive, not green", () => {
+    assert.equal(
+        computeVerdict({
+            gatingFailures: 0,
+            blocked: 0,
+            targetCrashed: false,
+            unverifiedP0: 0,
+            applicable: 9,
+            executed: 0,
+        }),
+        "inconclusive",
+    );
+});
+
+test("executing even one applicable cell is green again", () => {
+    assert.equal(
+        computeVerdict({
+            gatingFailures: 0,
+            blocked: 0,
+            targetCrashed: false,
+            unverifiedP0: 0,
+            applicable: 9,
+            executed: 1,
+        }),
+        "green",
+    );
+});
+
+// Nothing to run is already covered by the applicable===0 guard; executed===0
+// must not turn that into a second, contradictory verdict.
+test("nothing applicable stays inconclusive without executed", () => {
+    assert.equal(
+        computeVerdict({
+            gatingFailures: 0,
+            blocked: 0,
+            targetCrashed: false,
+            unverifiedP0: 0,
+            applicable: 0,
+            executed: 0,
+        }),
+        "inconclusive",
+    );
+});

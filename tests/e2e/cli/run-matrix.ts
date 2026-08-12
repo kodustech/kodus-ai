@@ -477,6 +477,7 @@ async function main() {
         targetCrashed,
         unverifiedP0: unverified.length,
         applicable: summary.applicable,
+        executed: summary.executed,
     });
 
     const notify = {

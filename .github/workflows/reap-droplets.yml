@@ -43,6 +43,13 @@ jobs:
             - name: Reap
               env:
                   DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
+                  # The matrix defaults to AWS, so the EC2 sweep is the half
+                  # that matters now. Without these the sweep returned 0 and
+                  # the job still reported success -- leaked instances billing
+                  # indefinitely while the reaper said it had reaped.
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_E2E_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_E2E_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: us-east-2
               run: |
                   if [ -z "$DIGITALOCEAN_TOKEN" ]; then
                       echo "::error::DIGITALOCEAN_TOKEN secret is not set"

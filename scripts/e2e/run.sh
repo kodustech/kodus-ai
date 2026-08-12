@@ -300,9 +300,16 @@ case "$MODE" in
                     # vm.sh reads the standard names; ~/.kodus-dev/config keeps
                     # the e2e credential under AWS_E2E_* so it never shadows a
                     # personal AWS profile.
-                    export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${AWS_E2E_ACCESS_KEY_ID:-}}"
-                    export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${AWS_E2E_SECRET_ACCESS_KEY:-}}"
-                    export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${AWS_E2E_REGION:-us-east-2}}"
+                    # AWS_E2E_* WINS over an ambient credential, deliberately.
+                    # The other order let a developer's own AWS_ACCESS_KEY_ID
+                    # (aws-vault, a sourced profile, a shell from another
+                    # project) silently take over -- and since the default
+                    # provider is now aws, that provisions e2e droplets in
+                    # someone's personal or production account, tagged
+                    # Project=kodus-e2e, where our reaper will never look.
+                    export AWS_ACCESS_KEY_ID="${AWS_E2E_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}"
+                    export AWS_SECRET_ACCESS_KEY="${AWS_E2E_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY:-}}"
+                    export AWS_DEFAULT_REGION="${AWS_E2E_REGION:-${AWS_DEFAULT_REGION:-us-east-2}}"
                     if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
                         err "TEST_VM_PROVIDER=aws but no AWS credential found."
                         err "  Add to ~/.kodus-dev/config:"

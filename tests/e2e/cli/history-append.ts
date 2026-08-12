@@ -88,9 +88,22 @@ function main(): void {
     const rows: HistoryRow[] = [];
     const runIds: string[] = [];
     for (const dir of dirs) {
-        const bundle = JSON.parse(
-            readFileSync(join(dir, "result.json"), "utf8"),
-        ) as EvidenceBundle;
+        // Per-dir guard: one truncated result.json among N cell dirs used to
+        // throw here and take the WHOLE run's history with it -- including the
+        // cells that wrote perfectly good evidence. Losing one cell's row is a
+        // gap; losing every row because of one bad file is the silent-loss
+        // shape this file exists to prevent.
+        let bundle: EvidenceBundle;
+        try {
+            bundle = JSON.parse(
+                readFileSync(join(dir, "result.json"), "utf8"),
+            ) as EvidenceBundle;
+        } catch (err) {
+            console.warn(
+                `::warning::[history] skipping ${dir}: result.json unreadable (${(err as Error).message})`,
+            );
+            continue;
+        }
 
         // notify.json carries the run-level verdict. Absent (older run, or the
         // matrix died before writing it) -> the rows still go in without it.

@@ -35,7 +35,7 @@ fi
 # re-apply them onto a freshly fetched branch without re-reading evidence.
 ROWS="$TMP/rows.jsonl"
 ( cd "$E2E_DIR" && ./node_modules/.bin/tsx cli/history-append.ts --history "$ROWS" ) \
-    || { echo "[history] could not build rows -- skipping"; exit 0; }
+    || { echo "::warning::[history] history-append.ts failed -- no rows pushed for this run"; exit 0; }
 
 if [ ! -s "$ROWS" ]; then
     echo "::warning::[history] no rows produced -- the matrix wrote no evidence (cells likely died before running), so this run leaves no trace in the history log"

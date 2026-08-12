@@ -561,5 +561,12 @@ jobs:
 
             - name: Append + push history
               env:
-                  MATRIX_FILE: ${{ inputs.matrix_file || (github.event_name == 'schedule' && 'matrix/midweek-smoke.yml') || 'matrix/fast.yml' }}
+                  # Must resolve IDENTICALLY to the matrix job above (line ~268).
+                  # It used to hardcode midweek-smoke for scheduled runs while
+                  # the matrix job honoured vars.E2E_CLOUD_NIGHTLY_MATRIX, so
+                  # every scheduled run recorded a matrixId naming a file it had
+                  # not run -- and matrixId is what the history is grouped and
+                  # compared by, so the drift is invisible until someone trusts
+                  # a trend that mixes two different suites.
+                  MATRIX_FILE: ${{ inputs.matrix_file || (github.event_name == 'schedule' && (vars.E2E_CLOUD_NIGHTLY_MATRIX || 'matrix/fast.yml')) || 'matrix/fast.yml' }}
               run: bash tests/e2e/provisioning/history-push.sh
