@@ -38,6 +38,44 @@ function classifyLicenseNotice(
     return 'other';
 }
 
+/**
+ * Classify a Kody comment on a PR. Hoisted and exported because it has
+ * misread comments twice: once ranking an incidental status above a real
+ * one, and once reading a security finding that mentions BYOK as a BYOK
+ * license notice (cloud run 31616209955).
+ */
+export function classifyKodyComment(
+    body: string,
+): 'started' | 'license-block' | 'review' {
+    if (!body.includes('<!-- kody-codereview')) return 'review';
+    if (body.includes('kody-codereview-completed'))
+        return 'review';
+    // A severity badge means this is a FINDING, whatever words
+    // it happens to contain. License notices never carry one.
+    //
+    // Without this, a review finding that mentions BYOK is read
+    // as a BYOK license notice -- and on THIS codebase that is
+    // routine: cloud run 31616209955 failed
+    // license-attribution x community-byok on a genuine
+    // Security/critical finding about /stats exposing an API
+    // key. The keyword match below cannot tell "Kody is telling
+    // you to configure a key" from "Kody found a key problem in
+    // your code", so the badge has to decide first.
+    if (/severity_level-/.test(body)) return 'review';
+    // Trial / BYOK / plan-activation prompts. Stable
+    // markers: the "Your trial has ended" and "activate
+    // your plan" / "BYOK" wording. Loose match so minor
+    // copy edits don't silently flip the classification.
+    if (
+        /trial.*ended|trial.*expired|byok|activate.*plan|talk.*to.*our.*founders/i.test(
+            body,
+        )
+    ) {
+        return 'license-block';
+    }
+    return 'started';
+}
+
 export class GitHubProvider extends BaseProvider {
     readonly name: ProviderName = 'github';
     readonly integrationType = 'GITHUB';
@@ -542,25 +580,7 @@ export class GitHubProvider extends BaseProvider {
                 //      summary with "Kody Review Complete" / "Kody
                 //      Guide") or individual finding comments with the
                 //      docs.kodus.io footer. Keep as a review signal.
-                const classify = (
-                    body: string,
-                ): 'started' | 'license-block' | 'review' => {
-                    if (!body.includes('<!-- kody-codereview')) return 'review';
-                    if (body.includes('kody-codereview-completed'))
-                        return 'review';
-                    // Trial / BYOK / plan-activation prompts. Stable
-                    // markers: the "Your trial has ended" and "activate
-                    // your plan" / "BYOK" wording. Loose match so minor
-                    // copy edits don't silently flip the classification.
-                    if (
-                        /trial.*ended|trial.*expired|byok|activate.*plan|talk.*to.*our.*founders/i.test(
-                            body,
-                        )
-                    ) {
-                        return 'license-block';
-                    }
-                    return 'started';
-                };
+                const classify = classifyKodyComment;
                 const filterNonTrigger = <
                     T extends { id: number; body: string },
                 >(
