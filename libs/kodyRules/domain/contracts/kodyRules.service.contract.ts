@@ -121,4 +121,9 @@ export interface IKodyRulesService extends IKodyRulesRepository {
         organizationAndTeamData: OrganizationAndTeamData,
         filters?: FindMemoriesFilters,
     ): Promise<FindMemoriesResult[]>;
+
+    syncRulesWithPlanLimit(
+        organizationAndTeamData: OrganizationAndTeamData,
+        opts?: { entity?: KodyRulesEntity | null; limited?: boolean },
+    ): Promise<KodyRulesEntity | null>;
 }

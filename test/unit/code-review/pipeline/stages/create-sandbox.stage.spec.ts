@@ -53,7 +53,6 @@ describe('CreateSandboxStage', () => {
         overrides: Partial<CodeReviewPipelineContext> = {},
     ): CodeReviewPipelineContext =>
         ({
-            dryRun: { enabled: false },
             organizationAndTeamData: {
                 organizationId: '7e2e97b8-aefa-422e-92d4-30b378c0332e',
                 teamId: 'team-456',

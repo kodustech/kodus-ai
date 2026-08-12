@@ -6,6 +6,7 @@ import { Response } from 'express';
 
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
+import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 
 import { BillingController } from './billing.controller';
 
@@ -66,6 +67,14 @@ describe('BillingController', () => {
             providers: [
                 { provide: NotificationService, useValue: notify },
                 { provide: ConfigService, useValue: config },
+                {
+                    provide: KODY_RULES_SERVICE_TOKEN,
+                    useValue: {
+                        syncRulesWithPlanLimit: jest
+                            .fn()
+                            .mockResolvedValue(null),
+                    },
+                },
             ],
         }).compile();
 

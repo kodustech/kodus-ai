@@ -91,7 +91,6 @@ describe('review failure propagation (agent → summary → approve → check)',
         statusInfo: { status: AutomationStatus.IN_PROGRESS },
         pipelineVersion: 'test',
         errors: [],
-        dryRun: { enabled: false },
         organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
         repository: { id: 'repo-1', name: 'api', fullName: 'acme/api' },
         branch: 'main',
@@ -268,13 +267,17 @@ describe('review failure propagation (agent → summary → approve → check)',
         it('tells the PR comment the review failed, and why', async () => {
             await run();
 
-            // updateOverallComment(..., reviewFailed, reviewErrorMessage, ...).
-            // The message is the CLASSIFIED one, not the raw provider string —
-            // a 404 on /chat/completions means "your model/base URL is wrong",
-            // which is the actionable thing to put in front of the user.
+            // updateOverallComment(..., finalCommentBody, reviewFailed,
+            // reviewErrorMessage, ...) — positional, so these indexes shift
+            // whenever the signature changes. The message is the CLASSIFIED
+            // one, not the raw provider string — a 404 on /chat/completions
+            // means "your model/base URL is wrong", which is the actionable
+            // thing to put in front of the user.
+            const REVIEW_FAILED_ARG = 10;
+            const REVIEW_ERROR_MESSAGE_ARG = 11;
             const args = commentManager.updateOverallComment.mock.calls[0];
-            expect(args[11]).toBe(true);
-            expect(args[12]).toMatch(/model/i);
+            expect(args[REVIEW_FAILED_ARG]).toBe(true);
+            expect(args[REVIEW_ERROR_MESSAGE_ARG]).toMatch(/model/i);
         });
     });
 

@@ -213,7 +213,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     pullRequest.number,
                     repository,
                     summaryPR,
-                    context.dryRun,
                 );
             } catch (error) {
                 this.logger.error({
@@ -304,7 +303,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 codeReviewConfig,
                 initialCommentData.threadId,
                 undefined,
-                context.dryRun,
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
@@ -375,7 +373,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 codeReviewConfig,
                 initialCommentData.threadId,
                 bodyWithLinked,
-                context.dryRun,
                 reviewFailed,
                 reviewErrorMessage,
                 reviewHasPartialErrors,
@@ -413,7 +410,6 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 codeReviewConfig,
                 finalCommentBody,
                 context.pullRequestMessagesConfig,
-                context.dryRun,
                 context.prLevelCommentResults ?? [],
                 reviewFailed,
                 reviewErrorMessage,

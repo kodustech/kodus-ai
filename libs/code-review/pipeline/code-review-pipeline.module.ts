@@ -34,7 +34,6 @@ import { NullChecksAdapter } from '@libs/core/infrastructure/pipeline/services/n
 import { PipelineChecksService } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
 import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.module';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
-import { DryRunCoreModule } from '@libs/dryRun/dry-run-core.module';
 import { FileReviewModule } from '@libs/ee/codeReview/fileReviewContextPreparation/fileReview.module';
 import { KodyFineTuningStage } from '@libs/ee/codeReview/stages/kody-fine-tuning.stage';
 import { LicenseModule } from '@libs/ee/license/license.module';
@@ -114,7 +113,6 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         AstGraphModule,
         forwardRef(() => McpCoreModule),
         WorkflowCoreModule,
-        DryRunCoreModule,
         SandboxModule,
         NotificationModule,
         UserCoreModule,

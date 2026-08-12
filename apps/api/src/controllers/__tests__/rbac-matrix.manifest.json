@@ -979,6 +979,28 @@
     }
   },
   {
+    "key": "license.controller.ts#pruneSeats",
+    "httpMethod": "POST",
+    "urlPath": "/license/prune-seats",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "license.controller.ts#removableSeats",
+    "httpMethod": "GET",
+    "urlPath": "/license/removable-seats",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "allow",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "license.controller.ts#status",
     "httpMethod": "GET",
     "urlPath": "/license/status",

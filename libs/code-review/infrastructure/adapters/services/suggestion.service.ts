@@ -41,7 +41,6 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { extractLinesFromUnifiedDiff } from '@libs/common/utils/patch';
 import { LLM_ANALYSIS_SERVICE_TOKEN } from './llmAnalysis.service';
 
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
@@ -2097,18 +2096,12 @@ export class SuggestionService implements ISuggestionService {
         repository,
         prNumber,
         platformType,
-        dryRun,
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
         platformType: PlatformType;
-        dryRun?: CodeReviewPipelineContext['dryRun'];
     }) {
-        if (dryRun?.enabled) {
-            return;
-        }
-
         try {
             const codeManagementRequestData = {
                 organizationAndTeamData,

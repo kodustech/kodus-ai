@@ -237,7 +237,6 @@ async function bootstrap() {
                 'Code Base',
                 'Code Management',
                 'Code Review Logs',
-                'Dry Run',
                 'Health',
                 'Integration',
                 'Integration Config',

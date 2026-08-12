@@ -105,7 +105,6 @@ export function createCrossFileBaseContext(
     overrides: Partial<CodeReviewPipelineContext> = {},
 ): CodeReviewPipelineContext {
     return {
-        dryRun: { enabled: false },
         organizationAndTeamData: {
             organizationId: 'org-123',
             teamId: 'team-456',

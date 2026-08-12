@@ -80,6 +80,70 @@ import { RepositoryCodeReviewConfig } from '@libs/core/infrastructure/config/typ
 // is already detached via setImmediate for the background path.
 export const PR_FETCH_CONCURRENCY = 2;
 
+// Ceiling on the per-PR walk, which is the fallback for providers with no
+// repository-level comment listing (GitLab, Bitbucket, Azure DevOps, Forgejo).
+//
+// Without it the walk costs 3 API calls per pull request in the window, with
+// nothing bounding the window's size but the customer's own activity. On a
+// repo with 816 PRs that is ~2450 requests -- most of an hourly GitHub budget,
+// spent to build a list this use case then truncates to 100 comments. See
+// issue #1686.
+//
+// Two limits, because either one alone leaves a hole: TARGET stops early on a
+// repo where a few PRs carry long review threads, and MAX_SCANNED stops a repo
+// whose PRs are mostly empty from walking forever looking for a target it will
+// never reach.
+export const MAX_PULL_REQUESTS_SCANNED = 100;
+
+// Oversampled against the ~100 comments the pipeline keeps: bot authors,
+// Kody's own past comments and denylisted reviewers are dropped downstream.
+export const TARGET_SAMPLED_COMMENTS = 300;
+
+// Mirrors the filter in commentAnalysis.service (`body.length > 100`), so the
+// budget counts comments that can actually become a rule rather than "LGTM".
+const SUBSTANTIVE_COMMENT_LENGTH = 100;
+
+/**
+ * Newest pull requests first, tolerating providers that do not return a
+ * creation date (bitbucket and forgejo do not populate `created_at` on this
+ * shape). Undated entries keep their original relative order, which is
+ * already newest-first for every provider we call -- sorting them to the back
+ * would be worse than leaving them where the API put them.
+ */
+export function orderPullRequestsNewestFirst<
+    T extends { created_at?: string; createdAt?: string },
+>(pullRequests: T[]): T[] {
+    const time = (pr: T): number | undefined => {
+        const raw = pr?.created_at ?? pr?.createdAt;
+        if (!raw) return undefined;
+        const t = new Date(raw).getTime();
+        return Number.isNaN(t) ? undefined : t;
+    };
+    return [...(pullRequests ?? [])]
+        .map((pr, index) => ({ pr, index, t: time(pr) }))
+        .sort((a, b) => {
+            if (a.t === undefined || b.t === undefined) {
+                return a.index - b.index;
+            }
+            return b.t - a.t;
+        })
+        .map((entry) => entry.pr);
+}
+
+/** Comments long enough to carry a convention worth learning. */
+export function countSubstantiveComments(entry: {
+    generalComments?: any[];
+    reviewComments?: any[];
+}): number {
+    return [
+        ...(entry?.generalComments ?? []),
+        ...(entry?.reviewComments ?? []),
+    ].filter(
+        (comment) =>
+            (comment?.body ?? '').length > SUBSTANTIVE_COMMENT_LENGTH,
+    ).length;
+}
+
 @Injectable()
 export class GenerateKodyRulesUseCase {
     private readonly logger = createLogger(GenerateKodyRulesUseCase.name);
@@ -234,7 +298,15 @@ export class GenerateKodyRulesUseCase {
             );
 
             const allRules = [];
-            const createdRules = []; // To track created rules for notification
+            // Typed on purpose. As a bare `[]` this was `any[]`, so pushing
+            // objects here and passing the array to a `string[]` parameter
+            // type-checked cleanly — and only blew up at render time, inside
+            // the worker, as "Objects are not valid as a React child".
+            const createdRules: Array<{
+                title: string;
+                rule: string;
+                severity: string;
+            }> = [];
             // Repos that received ≥1 persisted rule — promoted to isSelected:true
             // after the loop so the generated rules are visible in the UI.
             const reposWithRules = new Map<string, Repositories>();
@@ -253,8 +325,22 @@ export class GenerateKodyRulesUseCase {
                 );
 
             for (const repository of filteredRepositories) {
-                const pullRequests =
-                    await this.codeManagementService.getPullRequestsByRepository(
+                // Preferred path: ask the provider for the repo's recent
+                // comments directly, newest first, and stop once we have
+                // enough. Bounded by the sample we want rather than by how
+                // many PRs the repo happens to have.
+                //
+                // The fallback below walks every PR in the window and spends
+                // 3 calls on each, which on an active repo can exceed the
+                // account's entire hourly GitHub budget before it finishes
+                // (issue #1686). It stays only for providers with no
+                // repository-level comment listing.
+                // Optional call: the capability is declared optional on the
+                // contract, so a platform (or a partially-wired facade) that
+                // lacks it degrades to the walk below instead of failing rule
+                // generation outright.
+                const sampled =
+                    await this.codeManagementService.getRecentRepositoryComments?.(
                         {
                             organizationAndTeamData,
                             repository,
@@ -264,42 +350,63 @@ export class GenerateKodyRulesUseCase {
                         },
                     );
 
-                // null/undefined = fetch failed (e.g. GitHub App install
-                // returning 404 on the access token); an empty array is a
-                // legitimate "no PRs in this window".
-                if (pullRequests == null) {
-                    this.logger.error({
-                        message:
-                            'Failed to fetch pull requests (code management integration/auth error)',
-                        context: GenerateKodyRulesUseCase.name,
-                        metadata: {
-                            dateFilter,
-                            repositoryId: repository?.id ?? 'repository not found',
-                        },
-                    });
-                    failedRepositories.push(repository?.id ?? 'unknown');
-                    continue;
-                }
+                let comments = sampled;
 
-                if (pullRequests.length === 0) {
-                    this.logger.log({
-                        message: 'No pull requests found',
-                        context: GenerateKodyRulesUseCase.name,
-                        metadata: {
-                            dateFilter,
-                            repositoryId: repository
-                                ? repository.id
-                                : 'repository not found',
-                        },
-                    });
-                    continue;
-                }
+                // null means the provider has no repository-level listing (or
+                // the call failed) -- NOT "no comments". Only then do we pay
+                // for the per-PR walk.
+                if (comments == null) {
+                    const pullRequests =
+                        await this.codeManagementService.getPullRequestsByRepository(
+                            {
+                                organizationAndTeamData,
+                                repository,
+                                filters: {
+                                    ...dateFilter,
+                                },
+                            },
+                        );
 
-                const comments = await this.fetchPullRequestComments(
-                    repository,
-                    pullRequests,
-                    organizationAndTeamData,
-                );
+                    // null/undefined = fetch failed (e.g. GitHub App install
+                    // returning 404 on the access token); an empty array is a
+                    // legitimate "no PRs in this window".
+                    if (pullRequests == null) {
+                        this.logger.error({
+                            message:
+                                'Failed to fetch pull requests (code management integration/auth error)',
+                            context: GenerateKodyRulesUseCase.name,
+                            metadata: {
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                                dateFilter,
+                                repositoryId:
+                                    repository?.id ?? 'repository not found',
+                            },
+                        });
+                        failedRepositories.push(repository?.id ?? 'unknown');
+                        continue;
+                    }
+
+                    if (pullRequests.length === 0) {
+                        this.logger.log({
+                            message: 'No pull requests found',
+                            context: GenerateKodyRulesUseCase.name,
+                            metadata: {
+                                dateFilter,
+                                repositoryId: repository
+                                    ? repository.id
+                                    : 'repository not found',
+                            },
+                        });
+                        continue;
+                    }
+
+                    comments = await this.fetchPullRequestComments(
+                        repository,
+                        pullRequests,
+                        organizationAndTeamData,
+                    );
+                }
 
                 if (!comments || comments.length === 0) {
                     this.logger.log({
@@ -516,8 +623,15 @@ export class GenerateKodyRulesUseCase {
                 });
 
                 // Execute notification asynchronously to not block the main flow
+                // The notification takes the rule TITLES — short, human
+                // readable, and the same text the Kody Rules screen shows.
+                // The full rule body is a paragraph of prompt text and would
+                // make the email unreadable.
                 this.sendRulesNotificationUseCase
-                    .execute(organizationId, createdRules)
+                    .execute(
+                        organizationId,
+                        createdRules.map((r) => r.title),
+                    )
                     .catch((error) => {
                         this.logger.error({
                             message:
@@ -574,19 +688,65 @@ export class GenerateKodyRulesUseCase {
     ): Promise<any[]> {
         const limit = pLimit(PR_FETCH_CONCURRENCY);
 
-        const settled = await Promise.allSettled(
-            pullRequests.map((pr) =>
-                limit(() =>
-                    this.fetchSinglePullRequestComments(
-                        repository,
-                        pr,
-                        organizationAndTeamData,
-                    ),
-                ),
-            ),
-        );
+        // Newest first, then walk in chunks and stop as soon as we have
+        // enough. Fetching everything and truncating later is what made this
+        // cost an hour of the customer's GitHub budget (issue #1686); the
+        // chunking is what lets us stop, since the previous single
+        // Promise.allSettled committed to every PR before seeing any result.
+        const ordered = orderPullRequestsNewestFirst(pullRequests ?? []);
+        const scannable = ordered.slice(0, MAX_PULL_REQUESTS_SCANNED);
 
         const collected: any[] = [];
+        const settled: PromiseSettledResult<any>[] = [];
+        let sampled = 0;
+        let scanned = 0;
+
+        for (let i = 0; i < scannable.length; i += PR_FETCH_CONCURRENCY) {
+            const chunk = scannable.slice(i, i + PR_FETCH_CONCURRENCY);
+            const chunkSettled = await Promise.allSettled(
+                chunk.map((pr) =>
+                    limit(() =>
+                        this.fetchSinglePullRequestComments(
+                            repository,
+                            pr,
+                            organizationAndTeamData,
+                        ),
+                    ),
+                ),
+            );
+            settled.push(...chunkSettled);
+            scanned += chunk.length;
+
+            for (const result of chunkSettled) {
+                if (result.status === 'fulfilled') {
+                    sampled += countSubstantiveComments(result.value);
+                }
+            }
+
+            if (sampled >= TARGET_SAMPLED_COMMENTS) {
+                break;
+            }
+        }
+
+        // Never silent: a cap that trims coverage has to say what it left on
+        // the floor, or a thin rule set reads as "this repo has no
+        // conventions" instead of "we stopped early".
+        if (scanned < ordered.length) {
+            this.logger.log({
+                message:
+                    'Stopped sampling pull requests early (comment budget reached or scan ceiling hit)',
+                context: GenerateKodyRulesUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    pullRequestsInWindow: ordered.length,
+                    pullRequestsScanned: scanned,
+                    substantiveCommentsSampled: sampled,
+                    targetComments: TARGET_SAMPLED_COMMENTS,
+                    maxScanned: MAX_PULL_REQUESTS_SCANNED,
+                },
+            });
+        }
+
         for (const result of settled) {
             if (result.status === 'fulfilled') {
                 collected.push(result.value);

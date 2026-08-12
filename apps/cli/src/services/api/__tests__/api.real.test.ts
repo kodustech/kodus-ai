@@ -607,6 +607,56 @@ describe('RealApi config repository methods', () => {
         );
     });
 
+    it('surfaces the contextual endpoint message when a 403 has no JSON body', async () => {
+        // Non-JSON error bodies (gateway/CDN block pages, empty bodies) used
+        // to surface the raw "Request failed with status 403" — a synthesized
+        // placeholder that masked the actionable per-endpoint fallback.
+        fetchMock.mockResolvedValue(
+            new Response('Forbidden', {
+                status: 403,
+                headers: { 'Content-Type': 'text/plain' },
+            }),
+        );
+
+        const api = new RealApi();
+
+        await expect(
+            api.config.getAvailableRepositories('kodus_team_key'),
+        ).rejects.toEqual(
+            expect.objectContaining({
+                name: 'ApiError',
+                statusCode: 403,
+                message:
+                    'Access denied for Kodus API endpoint (/cli/config/repositories/available).',
+            } satisfies Partial<ApiError>),
+        );
+    });
+
+    it('explains oversized requests when a 413 has no JSON body', async () => {
+        // A gateway/CDN (or the API's own body-parser) rejecting an oversized
+        // request body with a non-JSON 413 used to surface a bare "Request
+        // failed with status 413" with no hint about what to do.
+        fetchMock.mockResolvedValue(
+            new Response('Request Entity Too Large', {
+                status: 413,
+                headers: { 'Content-Type': 'text/plain' },
+            }),
+        );
+
+        const api = new RealApi();
+
+        await expect(
+            api.config.getAvailableRepositories('kodus_team_key'),
+        ).rejects.toEqual(
+            expect.objectContaining({
+                name: 'ApiError',
+                statusCode: 413,
+                message:
+                    'Request payload too large for the Kodus API (/cli/config/repositories/available). Reduce the request size or narrow the review scope.',
+            } satisfies Partial<ApiError>),
+        );
+    });
+
     it('sends X-Team-Key when getting repository settings', async () => {
         fetchMock.mockResolvedValue(
             new Response(

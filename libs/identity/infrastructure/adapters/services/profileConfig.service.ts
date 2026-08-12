@@ -52,23 +52,28 @@ export class ProfileConfigService implements IProfileConfigService {
                     Role.OWNER,
                 );
 
-            profileIds.forEach(async (profileId) => {
-                const profileConfig = await this.findOne({
-                    profile: { uuid: profileId },
-                    configKey: profileConfigKey,
-                });
-
-                if (!profileConfig) {
-                    const uuid = uuidv4();
-
-                    return this.create({
-                        uuid: uuid,
-                        configKey: profileConfigKey,
-                        configValue: payload,
-                        status: true,
+            // forEach(async) drops the returned promises: the function
+            // resolved before any write finished and try/catch never saw
+            // failures. Two concurrent callers also raced on findOne and
+            // could both hit the create branch, producing duplicate rows.
+            // Await via Promise.all so writes finish before we return.
+            await Promise.all(
+                profileIds.map(async (profileId) => {
+                    const profileConfig = await this.findOne({
                         profile: { uuid: profileId },
+                        configKey: profileConfigKey,
                     });
-                } else {
+
+                    if (!profileConfig) {
+                        return this.create({
+                            uuid: uuidv4(),
+                            configKey: profileConfigKey,
+                            configValue: payload,
+                            status: true,
+                            profile: { uuid: profileId },
+                        });
+                    }
+
                     return this.update(
                         {
                             uuid: profileConfig?.uuid,
@@ -81,8 +86,8 @@ export class ProfileConfigService implements IProfileConfigService {
                             profile: { uuid: profileId },
                         },
                     );
-                }
-            });
+                }),
+            );
         } catch (err) {
             throw new BadRequestException(err);
         }

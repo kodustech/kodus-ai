@@ -183,6 +183,26 @@ export interface ICodeManagementService extends ICommonPlatformIntegrationServic
     ): Promise<IntegrationConfigEntity | null>;
     getDefaultBranch(params: any): Promise<string>;
     getPullRequestReviewComment(params: any): Promise<any | null>;
+    /**
+     * Recent review + conversation comments for a whole repository, newest
+     * first, grouped by pull request.
+     *
+     * OPTIONAL: only providers with a repository-level comment listing can
+     * answer this in a bounded number of calls (GitHub can; GitLab, Bitbucket
+     * and Azure DevOps expose comments per merge/pull request only). Callers
+     * must fall back to the per-PR walk when it is absent -- see issue #1686.
+     */
+    getRecentRepositoryComments?(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: { id: string; name: string };
+        filters?: { startDate?: string; endDate?: string };
+        limit?: number;
+    }): Promise<Array<{
+        pr: { pull_number: number };
+        generalComments: any[];
+        reviewComments: any[];
+        files: { filename: string }[];
+    }> | null>;
     createResponseToComment(params: any): Promise<any | null>;
     updateDescriptionInPullRequest(params: any): Promise<any | null>;
     getAuthenticationOAuthToken(params: any): Promise<string>;

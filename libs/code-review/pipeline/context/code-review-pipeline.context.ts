@@ -54,10 +54,6 @@ export type PullRequestType = {
 };
 
 export interface CodeReviewPipelineContext extends PipelineContext {
-    dryRun: {
-        enabled: boolean;
-        id?: string;
-    };
     organizationAndTeamData: OrganizationAndTeamData;
     repository: Repository;
     branch: string;

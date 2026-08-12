@@ -22,7 +22,6 @@ import { MetricsModule } from '@libs/core/infrastructure/metrics/metrics.module'
 import { RabbitMQWrapperModule } from '@libs/core/infrastructure/queue/rabbitmq.module';
 import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 import { WorkflowModule } from '@libs/core/workflow/modules/workflow.module';
-import { DryRunModule } from '@libs/dryRun/dry-run.module';
 import { CodeReviewSettingsLogModule } from '@libs/ee/codeReviewSettingsLog/codeReviewSettingsLog.module';
 import { LicenseModule } from '@libs/ee/license/license.module';
 import { PermissionValidationModule } from '@libs/ee/shared/permission-validation.module';
@@ -50,6 +49,7 @@ import { SharedCoreModule } from '@libs/shared/infrastructure/shared-core.module
 import { SharedLogModule } from '@libs/shared/infrastructure/shared-log.module';
 import { SharedObservabilityModule } from '@libs/shared/infrastructure/shared-observability.module';
 import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AgentController } from './controllers/agent.controller';
 import { AuthController } from './controllers/auth.controller';
 import { CliConfigController } from './controllers/cli/cli-config.controller';
@@ -97,6 +97,16 @@ import { NotificationController } from './controllers/notification.controller';
 
 @Module({
     imports: [
+        // EventEmitterModule.forRoot() registers a @Global()
+        // EventEmitterCoreModule, so exactly one call per process graph is
+        // both necessary and sufficient. It used to reach the API only as a
+        // side effect of importing DryRunModule (and a second time via
+        // DryRunCoreModule) — two registrations meant two
+        // EventSubscribersLoader instances and every @OnEvent handler bound
+        // twice. Declaring it here at the root keeps a single binding and
+        // stops the emitter's availability from depending on an unrelated
+        // feature module.
+        EventEmitterModule.forRoot(),
         SharedCoreModule,
         SharedConfigModule,
         SharedLogModule,
@@ -128,7 +138,6 @@ import { NotificationController } from './controllers/notification.controller';
         PullRequestMessagesModule,
         IntegrationModule,
         IntegrationConfigModule,
-        DryRunModule,
         AnalyticsModule,
         SpendLimitModule,
         AnalyticsWarehouseModule.forRoot(),
