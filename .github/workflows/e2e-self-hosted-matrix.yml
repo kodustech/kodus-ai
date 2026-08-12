@@ -331,6 +331,10 @@ jobs:
                   # (see github.ts authToken()).
                   GH_INTEGRATION_TOKEN: ${{ (matrix.cell.license == 'license-paid' && secrets.GH_INTEGRATION_TOKEN_PAID) || secrets.GH_INTEGRATION_TOKEN }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+                  # Without this the centralized-config scenario self-skips as
+                  # a setup gap, and the cell reports 8/9 verified forever. The
+                  # secret holds a repository NAME, not a credential.
+                  CENTRALIZED_CONFIG_TEST_REPO_SELF_HOSTED: ${{ secrets.CENTRALIZED_CONFIG_TEST_REPO_SELF_HOSTED }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
 
                   GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
