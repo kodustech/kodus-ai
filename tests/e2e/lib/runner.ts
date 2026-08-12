@@ -280,8 +280,21 @@ async function refreshCloudTenantByok(log: {
         process.env.API_OPENAI_FORCE_BASE_URL ?? 'https://api.openai.com/v1';
     const model = process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini';
 
+    // The `free` tenant is DEFINED by not having a key of its own: that is what
+    // makes it a free tenant rather than a community-plan one, and
+    // license-attribution asserts it receives no review. Writing byok_config
+    // onto it turns it into exactly the tenant the registry already keeps
+    // separately as `community-byok`, and the product then reviews its PRs --
+    // correctly. The test was refuting an entitlement rule it had just spent
+    // the run start dismantling (observed live, cloud run 31601925282).
     const seen = new Set<string>();
     for (const entry of entries) {
+        if (entry.license === 'free') {
+            log.info(
+                `[byok-refresh] ${entry.provider}/free: SKIPPED — a free tenant with a BYOK key is a community tenant, and reviews for it are expected`,
+            );
+            continue;
+        }
         if (seen.has(entry.email)) continue;
         seen.add(entry.email);
         try {
