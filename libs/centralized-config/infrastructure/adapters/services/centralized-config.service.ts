@@ -909,7 +909,28 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                                             ),
                                         ),
                                     );
-                                } catch {
+                                } catch (error) {
+                                    // Folder paths that cannot be encoded are
+                                    // a data anomaly, not a normal outcome.
+                                    // Treating the scope as unreconcilable is
+                                    // the safe answer, but it must leave a
+                                    // trace — otherwise its messages are
+                                    // silently skipped forever.
+                                    this.logger.warn({
+                                        message:
+                                            'Skipping directory scope with unencodable folder paths while resolving reconcilable scopes',
+                                        context: CentralizedConfigService.name,
+                                        metadata: {
+                                            organizationAndTeamData,
+                                            repositoryId: repository.id,
+                                            directoryId: directory.id,
+                                            folderPaths: directory.folders.map(
+                                                (folder) => folder.path,
+                                            ),
+                                        },
+                                        error,
+                                    });
+
                                     return false;
                                 }
                             })
