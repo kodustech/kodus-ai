@@ -243,6 +243,16 @@ ${renderLens('Performance', PROMPT_BLOCKS.performance)}
     - For refactors, renames, wrappers, and middleware changes, challenge whether non-obvious behavior was lost: tracing, logging, metrics, cache invalidation, authorization checks, or delegate wiring.
     - For provider/cache/adapter layers, verify that the changed implementation calls the intended delegate and preserves allow/deny semantics instead of accidentally changing trust behavior.
     - If a finding could fit multiple categories, choose the single strongest label.
-    - Finish condition: before you stop, you must be able to state in your reasoning which concrete hypothesis you tested for each enabled lens, and why it did or did not produce a finding.
+    - Finish condition: before you stop, you must be able to state in your reasoning which concrete hypothesis you tested for each enabled lens, and why it did or did not produce a finding.${
+        process.env.RECALL_TARGET_COUNT
+            ? `
+    - Target around ${process.env.RECALL_TARGET_COUNT} comments for this review. If you are below that number, lower your reporting bar and revisit the changed code for issues you considered but did not report.`
+            : ''
+    }${
+        process.env.RECALL_COVERAGE === '1'
+            ? `
+    - You must readFile EVERY hunk of every changed file listed above before finalizing. A file with multiple hunks is only fully covered when each listed line range has been read; reading the first hunk of a multi-hunk file does NOT cover the rest. grep, findFile, and listDir help navigation, but they do not count as coverage.`
+            : ''
+    }
   </CoordinationPolicy>`;
 }

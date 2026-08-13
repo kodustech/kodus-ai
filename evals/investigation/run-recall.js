@@ -357,6 +357,22 @@ async function main() {
             traceSummary: traceSummaryFromOutput(apiResult.output),
         });
 
+        // RECALL_DUMP=<dir>: grava a saida crua do agente por caso. Sem isso a
+        // submission so guarda findings + trace, entao um modelo que devolve
+        // ZERO findings e indistinguivel de um parsing que falhou.
+        if (process.env.RECALL_DUMP) {
+            try {
+                fs.mkdirSync(process.env.RECALL_DUMP, { recursive: true });
+                fs.writeFileSync(
+                    path.join(process.env.RECALL_DUMP, `${caseId}.raw.txt`),
+                    typeof apiResult.output === 'string'
+                        ? apiResult.output
+                        : JSON.stringify(apiResult.output, null, 2),
+                );
+            } catch (e) {
+                console.warn(`[dump] ${caseId}: ${e.message}`);
+            }
+        }
         submissionResults.push(
             submissionResultFromOutput(caseId, apiResult.output, apiResult.tokenUsage),
         );

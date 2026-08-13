@@ -114,7 +114,7 @@ async function main() {
                 `[${String(i).padStart(2)}/${total}] ${row.caseId.slice(0, 52).padEnd(52)} ` +
                     (m
                         ? `recall ${String(m.matched).padStart(2)}/${String(m.goldens).padEnd(2)} ` +
-                          `prec ${pct(m.precision)} F1 ${m.f1.toFixed(2)}`
+                          `prec ${pct(m.precision)} F1 ${m.f1 == null ? ' n/a' : m.f1.toFixed(2)}`
                         : row.status),
             );
         },
@@ -124,7 +124,8 @@ async function main() {
     console.log(`\n════ ${harness?.name || '?'} / ${model?.id || 'bundled'} ════`);
     console.log(`  recall (micro, pondera por golden) : ${pct(a.recallMicro)}  [${a.goldensMatched}/${a.goldensTotal}]`);
     console.log(`  recall (macro, média por caso)     : ${pct(a.recallMacro)}`);
-    console.log(`  precision (macro)                  : ${pct(a.precisionMacro)}`);
+    console.log(`  precision (micro, TP/(TP+FP))      : ${pct(a.precisionMicro)}
+  precision (macro)                  : ${pct(a.precisionMacro)}`);
     console.log(`  F1 (macro)                         : ${pct(a.f1Macro)}`);
     console.log(`  fair-recall (macro)                : ${pct(a.fairRecallMacro)}`);
     console.log(`  loop-fidelity (macro)              : ${pct(a.loopFidelityMacro)}`);

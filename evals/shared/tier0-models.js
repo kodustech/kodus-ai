@@ -20,8 +20,15 @@ const TIER0 = {
     'claude-opus-4-7': { provider: 'anthropic', keyEnvs: ['API_ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY', 'BYOK_ANTHROPIC_API_KEY'] },
     'gemini-3.1-pro-preview-customtools': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
     'gemini-3-flash-preview': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
+    // NOTA: as chaves novas do AI Studio (prefixo `AQ.`, "auth keys") levam 401
+    // ACCESS_TOKEN_TYPE_UNSUPPORTED quando a conexao e HTTP/2 — bug do edge da
+    // Google. O fetch do Node negocia HTTP/1.1, entao este caminho funciona;
+    // reproduzir com curl exige --http1.1.
+    'gemini-3.7-flash': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
     'kimi-k2.7-code': { provider: 'openai_compatible', keyEnvs: ['BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
     'glm-5.2': { provider: 'openai_compatible', keyEnvs: ['BYOK_ZHIPU_API_KEY', 'API_ZHIPU_API_KEY'], baseURL: 'https://api.z.ai/api/paas/v4' },
+    // V4-Pro saiu de preview em 2026-08 (build 0813). Mesmo endpoint do flash.
+    'deepseek-v4-pro': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com' },
     'deepseek-v4-flash': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.

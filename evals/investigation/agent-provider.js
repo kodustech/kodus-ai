@@ -160,6 +160,58 @@ function buildOpenAICompatibleConfig(config, apiKey, defaultName) {
     };
 }
 
+
+/**
+ * Injeta esforco de raciocinio explicito nas chamadas do modelo.
+ *
+ * POR QUE: o caminho self-hosted monta o modelo sem providerOptions, e o eval
+ * nunca seta config.main.reasoningEffort — entao TODO modelo roda no default do
+ * fornecedor. Isso nao e neutro: medimos gemini-3.7-flash gastando 5.2k tokens
+ * de saida por caso, contra ~107k que o mesmo modelo gasta em bench publico com
+ * thinking alto. O default e um eixo experimental, nao uma constante, e comparar
+ * modelos com defaults diferentes compara configuracoes, nao capacidades.
+ *
+ * Ativa com RECALL_REASONING_EFFORT=low|medium|high. Sem a env, nada muda.
+ * O valor escolhido vai para o artefato via runMetaOf(), senao o numero fica
+ * sem regime declarado.
+ */
+function withReasoningEffort(model, modelId) {
+    const effort = process.env.RECALL_REASONING_EFFORT;
+    if (!effort) return model;
+
+    const { buildReasoningProviderOptions } = require('../../libs/llm/reasoning-options.ts');
+    // provider derivado do id: o mapeamento nativo difere por fornecedor
+    // (thinkingLevel no Gemini 3+, reasoningEffort na OpenAI, thinking.type nos
+    // OpenAI-compativeis).
+    // valores do enum BYOKProvider (byokProvider.service.ts), nao os nomes
+    const provider = /^gemini/i.test(modelId)
+        ? 'google_gemini'
+        : /^claude/i.test(modelId)
+          ? 'anthropic'
+          : /^gpt|^o\d/i.test(modelId)
+            ? 'openai'
+            : 'openai_compatible';
+    const injected = buildReasoningProviderOptions(provider, effort, modelId);
+    if (!injected || !Object.keys(injected).length) {
+        console.warn(`[reasoning] ${modelId}: nenhuma opcao mapeada para effort=${effort}`);
+        return model;
+    }
+    console.log(`[reasoning] ${modelId} effort=${effort} -> ${JSON.stringify(injected)}`);
+
+    const merge = (options) => ({
+        ...options,
+        providerOptions: { ...(options?.providerOptions || {}), ...injected },
+    });
+    return new Proxy(model, {
+        get(target, prop, receiver) {
+            if (prop === 'doGenerate' || prop === 'doStream') {
+                return async (options) => target[prop](merge(options));
+            }
+            return Reflect.get(target, prop, receiver);
+        },
+    });
+}
+
 async function createModel(config) {
     if (config.provider === 'tier0') {
         const modelId = process.env.RECALL_MODEL || config.model;
@@ -176,7 +228,7 @@ async function createModel(config) {
 
         const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
         applyModelEnv(modelId);
-        return byokToVercelModel(undefined, 'main', {});
+        return withReasoningEffort(byokToVercelModel(undefined, 'main', {}), modelId);
     }
 
     // Env overrides so ANY model runs from one yaml (no per-provider config):

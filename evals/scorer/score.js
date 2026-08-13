@@ -115,8 +115,16 @@ async function scoreCase({ findings, goldens, corpus = '', trace = null, judge }
     const untestable = missed.filter((m) => m.fair.present === null).length;
 
     const recall = matched / goldenTexts.length;
-    const precision = candidates.length ? tpFindings / candidates.length : 0;
-    const f1 = recall + precision ? (2 * recall * precision) / (recall + precision) : 0;
+    // Precisao de ZERO predicoes e INDEFINIDA, nao zero. Zero significa "errou
+    // tudo que disse"; o modelo nao disse nada. Contar como zero penalizava
+    // sistematicamente quem se abstem: o gemini-3.7-flash aparecia com 33,3%
+    // (16 de 30 casos mudos entrando como 0) quando a precisao real era 73,9%.
+    // `mean()` descarta null, entao o caso sai da media em vez de afunda-la.
+    const precision = candidates.length ? tpFindings / candidates.length : null;
+    const f1 =
+        precision !== null && recall + precision
+            ? (2 * recall * precision) / (recall + precision)
+            : null;
     const fairDenom = matched + realMiss + untestable;
     const fairRecall = fairDenom ? matched / fairDenom : recall;
 
@@ -225,6 +233,8 @@ async function scoreSubmission({ submission, dataset, judge, onProgress, concurr
     const scored = cases.filter((c) => c.status === 'scored');
     const totalGoldens = scored.reduce((s, c) => s + c.metrics.goldens, 0);
     const totalMatched = scored.reduce((s, c) => s + c.metrics.matched, 0);
+    const totalFindings = scored.reduce((a, c) => a + (c.metrics.findings || 0), 0);
+    const totalTpFindings = scored.reduce((a, c) => a + (c.metrics.tpFindings || 0), 0);
     const usage = scored.reduce(
         (acc, c) => {
             acc.inputTokens += c.usage?.inputTokens || 0;
@@ -246,7 +256,16 @@ async function scoreSubmission({ submission, dataset, judge, onProgress, concurr
             // macro = média das médias por caso (comparável com o histórico).
             recallMicro: totalGoldens ? totalMatched / totalGoldens : null,
             recallMacro: mean(scored.map((c) => c.metrics.recall)),
+            // micro = TP/(TP+FP) agregado no bench inteiro. E a convencao que
+            // Martian e Alibaba publicam; macro fica ao lado para continuidade,
+            // mas o ranking deve usar micro.
+            precisionMicro: totalFindings ? totalTpFindings / totalFindings : null,
             precisionMacro: mean(scored.map((c) => c.metrics.precision)),
+            f1Micro: (() => {
+                const p = totalFindings ? totalTpFindings / totalFindings : null;
+                const r = totalGoldens ? totalMatched / totalGoldens : null;
+                return p !== null && r !== null && p + r ? (2 * p * r) / (p + r) : null;
+            })(),
             f1Macro: mean(scored.map((c) => c.metrics.f1)),
             fairRecallMacro: mean(scored.map((c) => c.metrics.fairRecall)),
             loopFidelityMacro: mean(scored.map((c) => c.metrics.hitRate)),
