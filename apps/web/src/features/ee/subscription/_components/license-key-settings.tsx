@@ -19,10 +19,11 @@ import {
     ShieldCheckIcon,
     XCircleIcon,
 } from "lucide-react";
-import { cn } from "src/core/utils/components";
 import { apiProxyPath } from "src/core/utils/api-proxy";
+import { cn } from "src/core/utils/components";
 
 import { useSubscriptionStatus } from "../_hooks/use-subscription-status";
+import { RequestTrialCta } from "./request-trial-cta";
 
 type LicenseActivationResult = {
     valid: boolean;
@@ -180,9 +181,14 @@ function CommunityCard() {
                 </div>
                 <CardDescription className="text-pretty">
                     You&apos;re running Kodus in self-hosted mode without a
-                    license. Activate a key below to unlock enterprise features.
+                    license. Don&apos;t have a key yet? Request a trial and
+                    we&apos;ll send you one to activate below.
                 </CardDescription>
             </CardHeader>
+
+            <CardContent>
+                <RequestTrialCta />
+            </CardContent>
         </Card>
     );
 }
