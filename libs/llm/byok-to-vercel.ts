@@ -157,9 +157,12 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
 /**
  * Default model config when no BYOK is configured.
  */
+export const KODUS_TRIAL_MODEL =
+    'accounts/fireworks/models/deepseek-v4-flash';
+
 const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,
-    model: 'deepseek-v4-flash',
+    model: KODUS_TRIAL_MODEL,
 };
 
 /**
@@ -363,10 +366,26 @@ export function byokToVercelModel(
             // (it'll fail fast on the API call instead of here).
         }
 
-        // DeepSeek — the managed default model for the trial / no-BYOK flow.
-        // Detected by model-name prefix so we don't need a new BYOK
-        // provider entry just for the default-only path. Wires through
-        // the OpenAI-compatible adapter pointed at DeepSeek's endpoint.
+        // Fireworks AI — the managed default model for the trial / no-BYOK
+        // flow. Detected by the `accounts/fireworks/models/` prefix so we
+        // don't need a new BYOK provider entry just for the default-only path.
+        // Wires through the OpenAI-compatible adapter pointed at Fireworks.
+        if (/^accounts\/fireworks\/models\//i.test(defaultModel)) {
+            const fireworksKey =
+                process.env.API_FIREWORKS_API_KEY ||
+                process.env.FIREWORKS_API_KEY ||
+                '';
+            return createOpenAICompatible({
+                name: 'fireworks',
+                apiKey: fireworksKey,
+                baseURL:
+                    process.env.API_FIREWORKS_BASE_URL ||
+                    'https://api.fireworks.ai/inference/v1',
+            })(defaultModel);
+        }
+
+        // DeepSeek — legacy managed fallback, kept for any lingering explicit
+        // `deepseek-*` override still in flight. New default is Fireworks above.
         if (/^deepseek[-_.]/i.test(defaultModel)) {
             const deepseekKey =
                 process.env.API_DEEPSEEK_API_KEY ||
@@ -381,8 +400,8 @@ export function byokToVercelModel(
             })(defaultModel);
         }
 
-        // Kimi (Moonshot AI) — legacy managed default, kept for any lingering
-        // `kimi-*` override still in flight. New default is DeepSeek above.
+        // Kimi (Moonshot AI) — legacy managed fallback, kept for any lingering
+        // `kimi-*` override still in flight. New default is Fireworks above.
         if (/^kimi[-_.]/i.test(defaultModel)) {
             const moonshotKey =
                 process.env.API_MOONSHOT_API_KEY ||

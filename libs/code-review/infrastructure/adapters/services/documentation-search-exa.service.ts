@@ -12,7 +12,10 @@ import {
 } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import {
+    byokToVercelModel,
+    KODUS_TRIAL_MODEL,
+} from '@libs/llm/byok-to-vercel';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import {
     buildLangfuseTelemetry,
@@ -433,7 +436,7 @@ export class DocumentationSearchExaService {
                     spanName,
                     runName,
                     model:
-                        params.byokConfig?.main?.model ?? 'deepseek-v4-flash',
+                        params.byokConfig?.main?.model ?? KODUS_TRIAL_MODEL,
                     attrs: {
                         organizationId:
                             params.organizationAndTeamData?.organizationId,
@@ -442,14 +445,14 @@ export class DocumentationSearchExaService {
                     },
                     exec: async () => {
                         // BYOK model when the org configured one; otherwise our
-                        // managed trial default (deepseek-v4-flash). Only pin
-                        // temperature when BYOK sets one — some managed models
-                        // reject a non-default temperature.
+                        // managed trial default. Only pin temperature when
+                        // BYOK sets one — some managed models reject a
+                        // non-default temperature.
                         const model = byokToVercelModel(
                             params.byokConfig ?? undefined,
                             'main',
                             {},
-                            'deepseek-v4-flash',
+                            KODUS_TRIAL_MODEL,
                         );
                         const configuredTemperature =
                             params.byokConfig?.main?.temperature;

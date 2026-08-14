@@ -1,5 +1,6 @@
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import type { OrchestratorInput } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
+import { KODUS_TRIAL_MODEL } from '@libs/llm/byok-to-vercel';
 
 /**
  * The stage-computed locals that the orchestrator input needs on top of the
@@ -92,14 +93,14 @@ export function buildOrchestratorInput(
         heavy: computed.heavy || undefined,
         // Trial-only forced model (ignored when a BYOK config is present —
         // byokToVercelModel prefers BYOK). Both subscription trial and the
-        // anonymous public demo (try.kodus.io) → DeepSeek V4 Flash. The
-        // isTrialMode flag lives on the CLI pipeline context; the cast avoids
+        // anonymous public demo (try.kodus.io) → DeepSeek V4 Flash on Fireworks.
+        // The isTrialMode flag lives on the CLI pipeline context; the cast avoids
         // inverting the dep graph (cli-review depends on code-review).
         defaultModelOverride:
             context.pipelineMetadata?.subscriptionStatus === 'trial'
-                ? 'deepseek-v4-flash'
+                ? KODUS_TRIAL_MODEL
                 : (context as { isTrialMode?: boolean }).isTrialMode
-                  ? 'deepseek-v4-flash'
+                  ? KODUS_TRIAL_MODEL
                   : undefined,
         // Per-repo/directory model override resolved by ValidateConfigStage.
         byokModel: context.codeReviewConfig?.byokModel,
