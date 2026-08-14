@@ -464,7 +464,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || 'https://openrouter.ai/api/v1',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 
@@ -474,7 +474,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || '',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 
@@ -484,7 +484,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || 'https://api.novita.ai/v3/openai',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 
