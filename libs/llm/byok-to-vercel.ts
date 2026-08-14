@@ -231,6 +231,10 @@ function shouldEnableJsonSchema(
         if (!baseURL) return false;
         // vLLM defaults to port 8000 and the issue's target case.
         if (/:8000(\/|$)/.test(baseURL)) return true;
+        // Fireworks supports strict json_schema via structuredOutputs.
+        // Without this flag the AI SDK emits legacy response_format and the
+        // provider warns (and may ignore the schema).
+        if (/api\.fireworks\.ai/i.test(baseURL)) return true;
         // Opt-in comma-separated allowlist of substrings, e.g.
         // "vllm.internal,my-llm-proxy.example.com". Set by ops when
         // running behind a non-vLLM but schema-capable proxy.
