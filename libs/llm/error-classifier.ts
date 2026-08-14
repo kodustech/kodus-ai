@@ -370,7 +370,7 @@ function buildContextOverflowMessage(err: unknown, provider?: string): string {
             '**To resolve, choose one:**',
             `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,
             `- **Split the PR into smaller ones**: file count drives prompt overhead.`,
-            `- **Raise \`byokConfig.main.maxInputTokens\`**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
+            `- **Raise the model's Max input tokens**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
         ].join('\n');
     }
 
@@ -382,7 +382,7 @@ function buildContextOverflowMessage(err: unknown, provider?: string): string {
             '**To resolve, choose one:**',
             `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,
             `- **Split the PR into smaller ones**: file count drives prompt overhead.`,
-            `- **Raise \`byokConfig.main.maxInputTokens\`**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
+            `- **Raise the model's Max input tokens**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
         ].join('\n');
     }
 

@@ -246,7 +246,7 @@ describe('classifyLLMError', () => {
             // All three action options.
             expect(msg).toContain('Switch to a recommended model');
             expect(msg).toContain('Split the PR');
-            expect(msg).toContain('byokConfig.main.maxInputTokens');
+            expect(msg).toContain("Raise the model's Max input tokens");
             // Names of curated models (the ones shown as cards in BYOK
             // settings — admins should recognize these).
             expect(msg).toContain('Claude Sonnet 4.6');
@@ -277,7 +277,7 @@ describe('classifyLLMError', () => {
             expect(msg).toContain('Switch to a recommended model');
             expect(msg).toContain('Split the PR');
             // BYOK-limit option is omitted (no specific window to compare).
-            expect(msg).not.toContain('byokConfig.main.maxInputTokens');
+            expect(msg).not.toContain("Raise the model's Max input tokens");
         });
 
         it('renders as GitHub-flavored Markdown (bold + bullets) so the PR comment formats correctly', () => {

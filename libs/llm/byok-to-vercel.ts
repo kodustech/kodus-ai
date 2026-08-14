@@ -160,9 +160,9 @@ export function resolveManagedSlot(
     //   `API_OPENAI_FORCE_BASE_URL` / `API_VERTEX_AI_API_KEY`) so the customer's
     //   own keys from .env drive the main model, the same way `getInternalModel`
     //   does for helper calls.
-    // Cloud (managed/trial): fall back to Kodus's bundled Gemini default
-    //   (`DEFAULT_MODEL.model` → v5 agent-first uses
-    //   gemini-3.1-pro-preview-customtools; legacy v2 stays on gemini-2.5-pro).
+    // Cloud (managed/trial): fall back to Kodus's bundled managed default
+    //   (`DEFAULT_MODEL.model` = KODUS_TRIAL_MODEL → Fireworks-hosted
+    //   deepseek-v4-flash; the Fireworks branch below builds it).
     const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
     if (envMode !== 'auto') {
         const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
@@ -410,8 +410,9 @@ export function getModelName(
  * 1. A resolved BYOK slot the caller passes → the client key (client pays).
  * 2. No slot → `resolveManagedSlot` (inside `buildModelFromSlot`): the
  *    self-hosted env model, or — in cloud — the Kodus-funded default. The
- *    Kodus-funded model is ALWAYS DeepSeek (`KODUS_DEFAULT_MODEL`); it is NEVER
- *    gpt/gemini. Env + cloud provider selection lives in the single place
+ *    Kodus-funded model is ALWAYS the managed `KODUS_DEFAULT_MODEL`
+ *    (Fireworks-hosted deepseek-v4-flash); it is NEVER gpt/gemini. Env + cloud
+ *    provider selection lives in the single place
  *    (`resolveManagedSlot`), so this stays a thin wrapper over the same builder.
  *
  * Fail-soft: returns null when no key backs the managed model, so a secondary
@@ -429,7 +430,7 @@ export function getInternalModel(
 
     // No slot → the SAME managed resolution the main no-BYOK path uses
     // (resolveManagedSlot inside buildModelFromSlot): the self-hosted env model,
-    // or — in cloud — the Kodus-funded DeepSeek default. Fail-soft: null when no
+    // or — in cloud — the Kodus-funded Fireworks default. Fail-soft: null when no
     // key backs that model, so the caller skips the pass instead of erroring.
     if (!hasManagedModelKey()) {
         return null;
@@ -440,8 +441,9 @@ export function getInternalModel(
 /**
  * Fail-soft guard for the no-BYOK internal path: is there a key backing the
  * managed model `resolveManagedSlot` would pick? Cloud → the Kodus-funded
- * DeepSeek key; self-hosted → whichever provider key the env model needs. Kept
- * deliberately coarse (any relevant key present) — the exact provider match is
+ * Fireworks key (the `KODUS_DEFAULT_MODEL` default routes through Fireworks);
+ * self-hosted → whichever provider key the env model needs. Kept deliberately
+ * coarse (any relevant key present) — the exact provider match is
  * `resolveManagedSlot`'s job; this only decides skip-vs-run.
  */
 function hasManagedModelKey(): boolean {
@@ -455,7 +457,13 @@ function hasManagedModelKey(): boolean {
             process.env.API_VERTEX_AI_API_KEY
         );
     }
-    return !!(process.env.API_DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY);
+    // Cloud managed default is Fireworks (KODUS_DEFAULT_MODEL) — match the key
+    // resolveManagedSlot's Fireworks branch actually builds with, NOT the legacy
+    // DeepSeek key (checking the wrong key skipped every secondary pass on a
+    // trial/managed org that only has the Fireworks key configured).
+    return !!(
+        process.env.API_FIREWORKS_API_KEY || process.env.FIREWORKS_API_KEY
+    );
 }
 
 // ─── Structured-output retry-on-error ────────────────────────────────

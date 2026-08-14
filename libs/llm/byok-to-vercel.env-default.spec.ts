@@ -119,6 +119,9 @@ const ENV_KEYS = [
     'API_DEEPSEEK_API_KEY',
     'DEEPSEEK_API_KEY',
     'API_DEEPSEEK_BASE_URL',
+    'API_FIREWORKS_API_KEY',
+    'FIREWORKS_API_KEY',
+    'API_FIREWORKS_BASE_URL',
 ] as const;
 
 const savedEnv: Record<string, string | undefined> = {};
@@ -296,20 +299,22 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         });
     });
 
-    // ── 7. auto env + deepseek default → DeepSeek OpenAI-compatible ───────────
-    it('auto env (unset) + deepseek default → createOpenAICompatible({name:deepseek, deepseek key, deepseek base})(defaultModel)', () => {
-        // API_LLM_PROVIDER_MODEL unset → 'auto'; default model is deepseek-*.
-        process.env.API_DEEPSEEK_API_KEY = 'ds-key';
+    // ── 7. auto env + Fireworks default → Fireworks OpenAI-compatible ─────────
+    it('auto env (unset) + Fireworks default → createOpenAICompatible({name:fireworks, fireworks key, fireworks base})(defaultModel)', () => {
+        // API_LLM_PROVIDER_MODEL unset → 'auto'; managed default is the
+        // Fireworks-hosted deepseek-v4-flash (KODUS_TRIAL_MODEL).
+        process.env.API_FIREWORKS_API_KEY = 'fw-key';
 
         const result: any = buildModelFromSlot(undefined);
 
         expect(createOpenAICompatibleMock).toHaveBeenCalledTimes(1);
         expect(result.sdk).toBe('openai-compatible');
-        expect(result.modelId).toBe('deepseek-v4-flash');
+        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
-            name: 'deepseek',
-            apiKey: 'ds-key',
-            baseURL: 'https://api.deepseek.com/v1',
+            name: 'fireworks',
+            apiKey: 'fw-key',
+            baseURL: 'https://api.fireworks.ai/inference/v1',
+            supportsStructuredOutputs: true,
         });
     });
 
@@ -335,19 +340,20 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
     });
 
     // ── 9. self-hosted mode declared but NO usable env key → falls to default ─
-    it('self-hosted model declared but NO env key → falls through to the deepseek default (does NOT throw)', () => {
+    it('self-hosted model declared but NO env key → falls through to the Fireworks default (does NOT throw)', () => {
         // openai-style model id but neither openai key nor vertex/studio keys.
         process.env.API_LLM_PROVIDER_MODEL = 'some-self-hosted-model';
-        process.env.API_DEEPSEEK_API_KEY = 'ds-key';
+        process.env.API_FIREWORKS_API_KEY = 'fw-key';
 
         const result: any = buildModelFromSlot(undefined);
 
         // No native/openai-compat branch fired for the declared model; execution
-        // fell through to the deepseek default (DEFAULT_MODEL.model = deepseek-v4-flash).
+        // fell through to the managed default (DEFAULT_MODEL.model =
+        // accounts/fireworks/models/deepseek-v4-flash).
         expect(result.sdk).toBe('openai-compatible');
-        expect(result.modelId).toBe('deepseek-v4-flash');
+        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'deepseek' }),
+            expect.objectContaining({ name: 'fireworks' }),
         );
         expect(createAnthropicMock).not.toHaveBeenCalled();
     });

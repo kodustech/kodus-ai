@@ -791,6 +791,10 @@ describe('ClassifySessionUseCase', () => {
                     rationale: 'Full auditability of every state change',
                     confidence: 0.9,
                     evidence: ['src/audit/store.ts', 'src/audit/replay.ts'],
+                    // No model-provided scope → falls back to the session's
+                    // filesModified (normalizeScope), so the decision can reach
+                    // a review.
+                    scope: ['src/audit/store.ts', 'src/audit/replay.ts'],
                     // 0.9 >= 0.7 and architectural_decision is auto-promotable.
                     autoPromoteCandidate: true,
                 },
@@ -801,6 +805,8 @@ describe('ClassifySessionUseCase', () => {
                     rationale: undefined,
                     confidence: 0.4,
                     evidence: [],
+                    // Same fallback to filesModified for a scope-less decision.
+                    scope: ['src/audit/store.ts', 'src/audit/replay.ts'],
                     // 0.4 < 0.7 → not a candidate.
                     autoPromoteCandidate: false,
                 },
