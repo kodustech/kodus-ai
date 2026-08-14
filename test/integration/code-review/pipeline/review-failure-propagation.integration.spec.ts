@@ -34,6 +34,7 @@ import { NotificationService } from '@libs/notifications/application/notificatio
 import { PrAuthorRecipientResolver } from '@libs/notifications/application/pr-author-recipient.resolver';
 import { ORGANIZATION_SERVICE_TOKEN } from '@libs/organization/domain/organization/contracts/organization.service.contract';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
 import { PullRequestReviewState } from '@libs/platform/domain/platformIntegrations/types/codeManagement/pullRequests.type';
 
 jest.mock('@libs/llm/llm-call', () => ({
@@ -161,6 +162,9 @@ describe('review failure propagation (agent → summary → approve → check)',
                 UpdateCommentsAndGenerateSummaryStage,
                 RequestChangesOrApproveStage,
                 CodeReviewPipelineObserver,
+                // Real: it short-circuits when the context has no recorded
+                // decisions, which is the case throughout this spec.
+                PostTracePrCommentUseCase,
                 { provide: ReviewOrchestratorService, useValue: orchestrator },
                 {
                     provide: COMMENT_MANAGER_SERVICE_TOKEN,

@@ -7,6 +7,7 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 
 import { createLogger } from '@libs/core/log/logger';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
+import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import {
     IPromptExternalReferenceManagerService,
     PROMPT_EXTERNAL_REFERENCE_MANAGER_SERVICE_TOKEN,
@@ -16,6 +17,12 @@ import {
     PROMPT_CONTEXT_LOADER_SERVICE_TOKEN,
 } from '@libs/ai-engine/domain/prompt/contracts/promptContextLoader.contract';
 import { CodeReviewContextPackService } from '@libs/ai-engine/infrastructure/adapters/services/context/code-review-context-pack.service';
+import { BuildTraceContextPackUseCase } from '@libs/cli-review/application/use-cases/build-trace-context-pack.use-case';
+import { FeatureGateService, FEATURE_KEYS } from '@libs/feature-gate';
+import {
+    IOrganizationService,
+    ORGANIZATION_SERVICE_TOKEN,
+} from '@libs/organization/domain/organization/contracts/organization.service.contract';
 
 @Injectable()
 export class LoadExternalContextStage
@@ -34,8 +41,114 @@ export class LoadExternalContextStage
         @Inject(PROMPT_CONTEXT_LOADER_SERVICE_TOKEN)
         private readonly promptContextLoader: IPromptContextLoaderService,
         private readonly contextPackService: CodeReviewContextPackService,
+        private readonly buildTraceContextPackUseCase: BuildTraceContextPackUseCase,
+        private readonly featureGate: FeatureGateService,
+        @Inject(ORGANIZATION_SERVICE_TOKEN)
+        private readonly organizationService: IOrganizationService,
     ) {
         super();
+    }
+
+    private async isTraceReviewContextEnabled(
+        context: CodeReviewPipelineContext,
+    ): Promise<boolean> {
+        const organizationAndTeamData = context.organizationAndTeamData;
+
+        try {
+            const releaseTrack = await this.organizationService.getReleaseTrack(
+                organizationAndTeamData.organizationId,
+            );
+
+            return await this.featureGate.isEnabled(
+                FEATURE_KEYS.kodusTraceReviewContext,
+                {
+                    identifier: organizationAndTeamData.organizationId,
+                    organizationAndTeamData,
+                    releaseTrack,
+                    groups: {
+                        team: organizationAndTeamData.teamId,
+                        repository: String(context.repository.id),
+                    },
+                },
+            );
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Kodus Trace alpha gate could not be evaluated; review context remains disabled',
+                context: this.stageName,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    repositoryId: context.repository?.id,
+                    errorName:
+                        error instanceof Error ? error.name : 'UnknownError',
+                },
+            });
+            return false;
+        }
+    }
+
+    /**
+     * Decisions recorded by Kodus Trace for the files in this diff.
+     *
+     * Returns undefined — not an empty array — when nothing matches, so a
+     * repository with no recorded decisions produces a review prompt that is
+     * byte-identical to current behaviour.
+     */
+    private async loadTraceDecisions(
+        context: CodeReviewPipelineContext,
+    ): Promise<TraceContextDecision[] | undefined> {
+        try {
+            if (!(await this.isTraceReviewContextEnabled(context))) {
+                return undefined;
+            }
+
+            const changedFilePaths = (context.changedFiles ?? [])
+                .map((file) => file?.filename)
+                .filter((filename): filename is string => !!filename);
+
+            if (changedFilePaths.length === 0) {
+                return undefined;
+            }
+
+            const pack = await this.buildTraceContextPackUseCase.execute({
+                organizationAndTeamData: context.organizationAndTeamData,
+                repository: {
+                    id: String(context.repository.id),
+                    name: context.repository.name,
+                },
+                changedFilePaths,
+                branch: context.pullRequest?.head?.ref,
+            });
+
+            if (pack.decisions.length === 0) {
+                return undefined;
+            }
+
+            this.logger.log({
+                message: `Loaded ${pack.decisions.length} recorded decisions for PR#${context.pullRequest?.number}`,
+                context: this.stageName,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                    prNumber: context.pullRequest?.number,
+                    droppedForBudget: pack.droppedForBudget,
+                    estimatedTokens: pack.estimatedTokens,
+                },
+            });
+
+            return pack.decisions;
+        } catch (error) {
+            // Never fail a review over the decision store.
+            this.logger.warn({
+                message: 'Failed to load recorded decisions',
+                context: this.stageName,
+                error,
+                metadata: {
+                    organizationAndTeamData: context.organizationAndTeamData,
+                },
+            });
+            return undefined;
+        }
     }
 
     protected async executeStage(
@@ -91,6 +204,8 @@ export class LoadExternalContextStage
                 contextLayers = loadResult.contextLayers;
             }
 
+            const traceDecisions = await this.loadTraceDecisions(context);
+
             let sharedContextPack = undefined;
             let updatedCodeReviewConfig = context.codeReviewConfig;
 
@@ -145,6 +260,7 @@ export class LoadExternalContextStage
                 externalPromptContext: externalContext,
                 externalPromptLayers: contextLayers,
                 sharedContextPack,
+                traceDecisions,
             };
         } catch (error) {
             this.logger.error({
@@ -162,6 +278,7 @@ export class LoadExternalContextStage
                 externalPromptContext: {},
                 externalPromptLayers: undefined,
                 sharedContextPack: undefined,
+                traceDecisions: undefined,
             };
         }
     }

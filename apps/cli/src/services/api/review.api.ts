@@ -23,11 +23,7 @@ interface CliReviewEnqueueResponse {
 interface CliReviewJobStatusResponse {
     jobId: string;
     status:
-        | 'PENDING'
-        | 'PROCESSING'
-        | 'COMPLETED'
-        | 'FAILED'
-        | 'WAITING_FOR_EVENT';
+        'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'WAITING_FOR_EVENT';
     result?: ReviewResult;
     error?: string;
     createdAt?: string;
@@ -52,7 +48,9 @@ const MAX_DIFF_CHARS = 20_000_000; // matches DTO @MaxLength(20000000)
 const MAX_SERIALIZED_BODY_BYTES = 24 * 1024 * 1024; // margin under the 25mb body parser
 
 export class RealReviewApi implements IReviewApi {
-    constructor(private readonly requester: RequestWithRetry = requestWithRetry) {}
+    constructor(
+        private readonly requester: RequestWithRetry = requestWithRetry,
+    ) {}
 
     async analyze(
         diff: string,

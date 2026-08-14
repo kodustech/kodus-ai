@@ -22,6 +22,7 @@ import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { PipelineError } from '@libs/core/infrastructure/pipeline/interfaces/pipeline-context.interface';
 import { formatLinkedReposSummaryLine } from '@libs/ee/linked-repositories';
+import { PostTracePrCommentUseCase } from '@libs/cli-review/application/use-cases/post-trace-pr-comment.use-case';
 
 @Injectable()
 export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -38,8 +39,42 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
         private readonly commentManagerService: ICommentManagerService,
         @Inject(PULL_REQUEST_MANAGER_SERVICE_TOKEN)
         private readonly pullRequestManagerService: IPullRequestManagerService,
+        private readonly postTracePrCommentUseCase: PostTracePrCommentUseCase,
     ) {
         super();
+    }
+
+    /**
+     * The sticky comment carrying the reasoning behind the change.
+     *
+     * Posted once and edited in place on every later run, and skipped entirely
+     * when the PR has no recorded decisions.
+     */
+    private async postTraceComment(
+        context: CodeReviewPipelineContext,
+    ): Promise<void> {
+        if (!context.traceDecisions?.length) {
+            return;
+        }
+
+        const outcome = await this.postTracePrCommentUseCase.execute({
+            organizationAndTeamData: context.organizationAndTeamData,
+            prNumber: context.pullRequest.number,
+            repository: context.repository,
+            decisions: context.traceDecisions,
+            platformType: context.platformType,
+            dryRun: context.dryRun,
+        });
+
+        this.logger.log({
+            message: `Kodus Trace comment ${outcome.action} on PR#${context.pullRequest.number}`,
+            context: this.stageName,
+            metadata: {
+                organizationAndTeamData: context.organizationAndTeamData,
+                prNumber: context.pullRequest.number,
+                outcome,
+            },
+        });
     }
 
     protected async executeStage(
@@ -243,6 +278,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                 });
             }
         }
+
+        await this.postTraceComment(context);
 
         const { reviewFailed, reviewHasPartialErrors } =
             classifyErrors(context);

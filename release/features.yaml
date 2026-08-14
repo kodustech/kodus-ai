@@ -35,3 +35,11 @@ features:
             An opt-in deeper review that re-runs the finder multiple times to
             surface more real bugs, for the changes where catching everything
             matters more than speed.
+
+    kodus-trace-review-context:
+        name: "Kodus Trace review context"
+        stage: alpha
+        audience: [cloud]
+        description: >-
+            Use sanitized decisions distilled from local coding-agent sessions
+            as repository-scoped context for Kody code reviews.

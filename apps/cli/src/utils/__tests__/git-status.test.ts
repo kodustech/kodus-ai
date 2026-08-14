@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-    parseGitNameStatusOutput,
-    parseGitStatus,
-} from '../git-status.js';
+import { parseGitNameStatusOutput, parseGitStatus } from '../git-status.js';
 
 describe('parseGitStatus', () => {
     it('maps A to added', () => {
