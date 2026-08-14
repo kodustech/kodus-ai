@@ -22,16 +22,21 @@ import {
     prompt_kodyrules_detect_references_user,
 } from '@libs/common/utils/langchainCommon/prompts/kodyRulesExternalReferences';
 import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
-import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
+import {
+    byokToVercelModel,
+    getModelName,
+    KODUS_TRIAL_MODEL,
+} from '@libs/llm/byok-to-vercel';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
 
 // Trial-only override: while the org is in the 14-day subscription trial
-// and hasn't wired a BYOK key, route reference detection through DeepSeek
-// V4 Flash so we don't burn the expensive production default on Kodus's
-// dime. Off-trial callers get no override, so byokToVercelModel falls back
-// to the production default (cloud) or API_LLM_PROVIDER_MODEL (self-hosted).
-// Any BYOK config takes precedence over this in every case.
-const TRIAL_MODEL_OVERRIDE = 'deepseek-v4-flash';
+// and hasn't wired a BYOK key, route reference detection through the
+// Kodus-funded Fireworks model so we don't burn the expensive production
+// default on Kodus's dime. Off-trial callers get no override, so
+// byokToVercelModel falls back to the production default (cloud) or
+// API_LLM_PROVIDER_MODEL (self-hosted). Any BYOK config takes precedence
+// over this in every case.
+const TRIAL_MODEL_OVERRIDE = KODUS_TRIAL_MODEL;
 
 /**
  * Kodus control markers are instructions to the sync engine, never file

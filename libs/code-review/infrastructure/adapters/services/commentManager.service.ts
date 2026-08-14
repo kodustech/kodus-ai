@@ -44,7 +44,10 @@ import {
 } from './messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import {
+    byokToVercelModel,
+    KODUS_TRIAL_MODEL,
+} from '@libs/llm/byok-to-vercel';
 import {
     attachClassification,
     classifyLLMError,
@@ -127,14 +130,14 @@ export class CommentManagerService implements ICommentManagerService {
         const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
             spanName,
             runName,
-            model: byokConfig?.main?.model ?? 'deepseek-v4-flash',
+            model: byokConfig?.main?.model ?? KODUS_TRIAL_MODEL,
             attrs,
             exec: async () => {
                 const model = byokToVercelModel(
                     byokConfig ?? undefined,
                     'main',
                     {},
-                    'deepseek-v4-flash',
+                    KODUS_TRIAL_MODEL,
                 );
                 // Only pin temperature when the BYOK config sets one. Forcing 0
                 // broke models that reject a non-default temperature — Moonshot's
