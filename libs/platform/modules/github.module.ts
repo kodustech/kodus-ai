@@ -16,7 +16,7 @@ import { GithubService as GitHubService } from '../infrastructure/adapters/servi
         forwardRef(() => IntegrationCoreModule),
         forwardRef(() => IntegrationConfigCoreModule),
         forwardRef(() => GlobalCacheModule),
-        McpCoreModule,
+        forwardRef(() => McpCoreModule),
     ],
     providers: [
         GitHubService,

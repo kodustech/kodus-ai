@@ -251,7 +251,6 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                         total_lines_changed: 0,
                     },
                 } as any,
-                dryRun: { enabled: false },
                 teamAutomationId: 'cli-automation',
                 origin: 'cli',
                 action: 'review',
@@ -467,9 +466,21 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                     paramObj.configValue?.repositories,
                 );
 
+            // Fail-safe: a CLI review is still a review — reconcile the rules'
+            // lock state with the current plan before applying them, in case
+            // the plan-change webhook was missed. Reuses the entity already
+            // loaded above; no `limited` here, so the sync resolves the plan.
+            const syncedEntity =
+                await this.kodyRulesService.syncRulesWithPlanLimit(
+                    organizationAndTeamData,
+                    { entity: kodyRulesEntity },
+                );
+            const effectiveRules =
+                (syncedEntity ?? kodyRulesEntity)?.toObject()?.rules || [];
+
             const { standardRules, memoryRules } =
                 this.kodyRulesValidationService.filterKodyRules(
-                    kodyRulesEntity?.toObject()?.rules || [],
+                    effectiveRules,
                     repositoryId,
                 );
 

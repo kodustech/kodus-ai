@@ -1299,6 +1299,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
                 context.fileContextMap,
             ),
             crossFileSnippets: context.crossFileContexts?.contexts,
+            traceDecisions: context.traceDecisions,
             documentationByFile: context.documentationByFile,
             remoteCommands: context.sandboxHandle?.remoteCommands,
             getFreshCloneParams: context.getFreshCloneParams,

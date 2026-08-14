@@ -56,8 +56,9 @@ import {
 
 /**
  * Resolved model selection for a Kody Rules LLM call. BYOK wins when present;
- * otherwise `modelOverride` forces a model (trial → Kimi); both undefined
- * resolves the self-hosted env model. Produced by `resolveKodyRulesModelPolicy`.
+ * otherwise `modelOverride` forces the managed trial model (DeepSeek V4 Flash
+ * on Fireworks); both undefined resolves the self-hosted env model. Produced by
+ * `resolveKodyRulesModelPolicy`.
  */
 export interface KodyRulesModelSelection {
     byokConfig?: NormalizedModel;
@@ -76,12 +77,13 @@ export class CommentAnalysisService {
      * Runs a structured-output LLM call, resolving the model the SAME way the
      * code-review agents do (see `resolveReviewAgentModel` / model-factory):
      * `resolveTaskModel(v2Config, LLM_TASK.codeReview, …)` over the org's raw config
-     * — BYOK wins; self-hosted resolves the env model; cloud trial forces Kimi
-     * via `modelOverride` (the default-model override); cloud without BYOK is
-     * already skipped upstream by the model policy. `wrapByokModel` adds the
-     * shared concurrency limiter + error classification. Non-strict structured
-     * output so schemas with optional fields work across providers. LLM failures
-     * propagate — callers must not treat them as "no result".
+     * — BYOK wins; self-hosted resolves the env model; cloud trial forces the
+     * managed model (DeepSeek V4 Flash on Fireworks) via `modelOverride` (the
+     * default-model override); cloud without BYOK is already skipped upstream by
+     * the model policy. `wrapByokModel` adds the shared concurrency limiter +
+     * error classification. Non-strict structured output so schemas with optional
+     * fields work across providers. LLM failures propagate — callers must not
+     * treat them as "no result".
      */
     private async runStructuredLLM<S extends z.ZodType>(args: {
         organizationAndTeamData: OrganizationAndTeamData;

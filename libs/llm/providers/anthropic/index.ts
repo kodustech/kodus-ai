@@ -8,6 +8,7 @@ import type { LanguageModel } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
+import { resolveAnthropicModelTraits } from '@libs/llm/anthropic-model-traits';
 import { registerProvider } from '../kernel/registry';
 import { anthropicEphemeralCacheHint } from '../kernel/anthropic-cache';
 import { anthropicModelListing } from './listing';
@@ -29,13 +30,13 @@ const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
 };
 
 /** Claude families that support the newer adaptive thinking (type:'adaptive'
- *  + effort); older families use enabled + budgetTokens. Mirrors reasoning-options. */
+ *  + effort); older families use enabled + budgetTokens. Delegates to the
+ *  single model-generation source so 4.6/4.7+/5 and the `anthropic:` /
+ *  `anthropic.` / `@date` id spellings all resolve the same way here as they
+ *  do in reasoning-options — the previous inline regex only knew 4.6–4.x and
+ *  silently mis-classified every Claude 5. */
 function isAdaptiveCapable(model: string): boolean {
-    return (
-        /claude-(opus|sonnet)-4-[6-9]/i.test(model) ||
-        /claude-(opus|sonnet)-4-\d{2,}/i.test(model) ||
-        model.includes('mythos')
-    );
+    return resolveAnthropicModelTraits(model).thinkingShape === 'adaptive';
 }
 
 export const anthropicModule: ProviderModule = {
@@ -93,18 +94,31 @@ export const anthropicModule: ProviderModule = {
         effort: ReasoningEffort,
     ): ProviderReasoningOptions {
         if (effort === 'none') return {};
-        // Compatible endpoints never implement adaptive thinking → always budget.
-        if (
-            (cfg.provider as string) !== 'anthropic_compatible' &&
-            isAdaptiveCapable(cfg.model)
-        ) {
-            return { anthropic: { thinking: { type: 'adaptive' }, effort } };
-        }
-        return {
+
+        const budget: ProviderReasoningOptions = {
             anthropic: {
                 thinking: { type: 'enabled', budgetTokens: EFFORT_TO_BUDGET[effort] },
             },
         };
+
+        // Compatible endpoints (Kimi/Z.ai/DeepSeek) never implement adaptive
+        // thinking → always budget, whatever the id looks like.
+        if ((cfg.provider as string) === 'anthropic_compatible') {
+            return budget;
+        }
+
+        // Native Anthropic: send the shape the model actually accepts. Claude
+        // 4.7+/5 REJECT budgetTokens (hard 400), so an UNIDENTIFIED id — the
+        // code-review loop passes an agent name, or nothing — must OMIT the
+        // config rather than gamble on budget and 400 the entire review.
+        switch (resolveAnthropicModelTraits(cfg.model).thinkingShape) {
+            case 'adaptive':
+                return { anthropic: { thinking: { type: 'adaptive' }, effort } };
+            case 'budget':
+                return budget;
+            default:
+                return {};
+        }
     },
 
     // The anthropic protocol (native AND anthropic_compatible endpoints) accepts

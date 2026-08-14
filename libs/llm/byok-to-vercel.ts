@@ -59,14 +59,18 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
  * "Kodus pays" (code-review trial/demo, Kody Rules generation, reference
  * detection, PR summary) references this instead of re-typing the id.
  */
-export const KODUS_DEFAULT_MODEL = 'deepseek-v4-flash';
+export const KODUS_DEFAULT_MODEL =
+    'accounts/fireworks/models/deepseek-v4-flash';
 
 /**
  * Default model config when no BYOK is configured.
  */
+export const KODUS_TRIAL_MODEL =
+    'accounts/fireworks/models/deepseek-v4-flash';
+
 const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,
-    model: KODUS_DEFAULT_MODEL,
+    model: KODUS_TRIAL_MODEL,
 };
 
 /**
@@ -245,10 +249,31 @@ export function resolveManagedSlot(
         // the API call instead of here).
     }
 
-    // DeepSeek — the managed default model for the trial / no-BYOK flow.
-    // Detected by model-name prefix so we don't need a new BYOK provider entry
-    // just for the default-only path; wires through the OpenAI-compatible adapter
-    // pointed at DeepSeek's endpoint (inline exception, like self-hosted above).
+    // Fireworks AI — the managed default model for the trial / no-BYOK flow.
+    // Detected by the `accounts/fireworks/models/` prefix so we don't need a
+    // new BYOK provider entry just for the default-only path; wires through the
+    // OpenAI-compatible adapter pointed at Fireworks (inline exception, like
+    // self-hosted above).
+    if (/^accounts\/fireworks\/models\//i.test(defaultModel)) {
+        const fireworksKey =
+            process.env.API_FIREWORKS_API_KEY ||
+            process.env.FIREWORKS_API_KEY ||
+            '';
+        return {
+            kind: 'inline',
+            model: createOpenAICompatible({
+                name: 'fireworks',
+                apiKey: fireworksKey,
+                baseURL:
+                    process.env.API_FIREWORKS_BASE_URL ||
+                    'https://api.fireworks.ai/inference/v1',
+                supportsStructuredOutputs: true,
+            })(defaultModel),
+        };
+    }
+
+    // DeepSeek — legacy managed fallback, kept for any lingering explicit
+    // `deepseek-*` override still in flight. New default is Fireworks above.
     if (/^deepseek[-_.]/i.test(defaultModel)) {
         const deepseekKey =
             process.env.API_DEEPSEEK_API_KEY ||
@@ -266,8 +291,8 @@ export function resolveManagedSlot(
         };
     }
 
-    // Kimi (Moonshot AI) — legacy managed default, kept for any lingering
-    // `kimi-*` override still in flight. New default is DeepSeek above. Routes
+    // Kimi (Moonshot AI) — legacy managed fallback, kept for any lingering
+    // `kimi-*` override still in flight. New default is Fireworks above. Routes
     // through the moonshot registry module (createOpenAICompatible under the hood).
     if (/^kimi[-_.]/i.test(defaultModel)) {
         const moonshotKey =

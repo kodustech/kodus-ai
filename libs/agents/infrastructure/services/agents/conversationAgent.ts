@@ -144,7 +144,8 @@ export class ConversationAgentProvider {
         // call-site from silently dropping one of them (the drift that broke the
         // review path's tuning). `temperature` is passed through only when the
         // slot configures it — omitting it lets models that reject a fixed value
-        // (e.g. kimi-k2.7-code wants 1) use their own default.
+        // (e.g. kimi-k2.7-code wants 1) use their own default. `resolveSlotCallOptions`
+        // also withholds it on Anthropic 4.7+ (sampling params 400 the request).
         const { model, callOptions, providerOptions } = resolveModelInvocation(
             slot,
             {

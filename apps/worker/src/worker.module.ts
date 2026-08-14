@@ -1,4 +1,5 @@
 import { DynamicModule, Module, Provider } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 
 
@@ -52,6 +53,11 @@ export class WorkerModule {
 
         const baseImports = [
             ScheduleModule.forRoot(),
+            // Same rationale as apps/api/src/api.module.ts: the worker used
+            // to inherit EventEmitter2 from CodebaseModule's DryRun import.
+            // One root registration keeps @OnEvent handlers — including the
+            // CrossProcessEventsBridge — bound exactly once.
+            EventEmitterModule.forRoot(),
             SharedConfigModule,
             SharedLogModule,
             SharedObservabilityModule,

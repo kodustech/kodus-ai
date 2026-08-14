@@ -4,7 +4,6 @@ import { CreateFileCommentsStage } from './create-file-comments.stage';
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CommentManagerService.contract';
 import { SUGGESTION_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/SuggestionService.contract';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
-import { DRY_RUN_SERVICE_TOKEN } from '@libs/dryRun/domain/contracts/dryRun.service.contract';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 
 /**
@@ -21,7 +20,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
     let mockCommentManagerService: any;
     let mockPullRequestService: any;
     let mockSuggestionService: any;
-    let mockDryRunService: any;
 
     // Frozen by DEFAULT: that is the shape production hands every stage after
     // the first produce(). See test/fixtures/frozen-pipeline-context.ts.
@@ -46,10 +44,8 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
             discardedSuggestions: [],
             prAllCommits: [{ sha: 'commit-1' }],
             fileMetadata: new Map(),
-            dryRun: { enabled: false },
             ...overrides,
         }) as any as CodeReviewPipelineContext;
-
 
     beforeEach(async () => {
         mockCommentManagerService = {};
@@ -66,9 +62,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
                 filteredDiscardedSuggestions: [],
             }),
         };
-        mockDryRunService = {
-            addFilesToDryRun: jest.fn().mockResolvedValue(undefined),
-        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -84,10 +77,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
                 {
                     provide: SUGGESTION_SERVICE_TOKEN,
                     useValue: mockSuggestionService,
-                },
-                {
-                    provide: DRY_RUN_SERVICE_TOKEN,
-                    useValue: mockDryRunService,
                 },
             ],
         }).compile();
@@ -110,8 +99,7 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
         ).toHaveBeenCalledTimes(1);
 
         const callArgs =
-            mockPullRequestService.aggregateAndSaveDataStructure.mock
-                .calls[0];
+            mockPullRequestService.aggregateAndSaveDataStructure.mock.calls[0];
         // Signature: (pullRequest, repository, enrichedFiles, prioritized,
         //            unused, platformType, organizationAndTeamData, commits)
         const enrichedFiles = callArgs[2];
@@ -166,19 +154,6 @@ describe('CreateFileCommentsStage — empty-suggestions persistence', () => {
 
         await stage.execute(ctx);
 
-        expect(
-            mockPullRequestService.aggregateAndSaveDataStructure,
-        ).not.toHaveBeenCalled();
-    });
-
-    it('skips Mongo persistence and routes to dryRunService when dryRun is enabled', async () => {
-        const ctx = baseContext({
-            dryRun: { enabled: true, id: 'dry-1' },
-        } as any);
-
-        await stage.execute(ctx);
-
-        expect(mockDryRunService.addFilesToDryRun).toHaveBeenCalledTimes(1);
         expect(
             mockPullRequestService.aggregateAndSaveDataStructure,
         ).not.toHaveBeenCalled();

@@ -110,23 +110,81 @@ describe('buildReasoningProviderOptions', () => {
             });
         });
 
-        it('falls back to budgetTokens when modelName is undefined (regression: agentName bug)', () => {
-            // The original bug: agentName ("kodus-generalist-review-agent") was passed as modelName.
-            // It does not match sonnet-4/opus-4 → should fall through to budgetTokens.
-            // This test guarantees the behavior is consistent regardless of the modelName value.
+        it.each([
+            ['claude-opus-5'],
+            ['claude-sonnet-5'],
+            ['claude-opus-4-8'],
+            ['anthropic:claude-opus-5'],
+            ['anthropic.claude-opus-5'],
+            ['claude-opus-4-8@20260101'],
+        ])('uses adaptive thinking for %s (4.7+ rejects budgetTokens)', (model) => {
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.ANTHROPIC,
+                    'high',
+                    model,
+                ),
+            ).toEqual({
+                anthropic: { thinking: { type: 'adaptive' }, effort: 'high' },
+            });
+        });
+
+        it('omits thinking config when the model cannot be identified', () => {
+            // Previously this fell through to budgetTokens. That shape is a hard
+            // 400 on every Claude from 4.7 on, which kills the whole review —
+            // whereas omitting only costs thinking depth. The old failure mode
+            // was reachable in production: the code-review loop never passed a
+            // modelName at all.
             expect(
                 buildReasoningProviderOptions(
                     BYOKProvider.ANTHROPIC,
                     'low',
                     undefined,
                 ),
-            ).toEqual({
-                anthropic: {
-                    thinking: {
-                        type: 'enabled',
-                        budgetTokens: EFFORT_TO_BUDGET.low,
-                    },
-                },
+            ).toEqual({});
+
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.ANTHROPIC,
+                    'low',
+                    'kodus-generalist-review-agent',
+                ),
+            ).toEqual({});
+        });
+
+        describe('effort=none', () => {
+            it('disables thinking explicitly on models that think by default', () => {
+                // Opus 5 / Sonnet 5 think unless told not to, so omitting the
+                // config would bill thinking to a user who picked Off.
+                expect(
+                    buildReasoningProviderOptions(
+                        BYOKProvider.ANTHROPIC,
+                        'none',
+                        'claude-opus-5',
+                    ),
+                ).toEqual({
+                    anthropic: { thinking: { type: 'disabled' } },
+                });
+            });
+
+            it('leaves Fable thinking on — the API rejects disabled', () => {
+                expect(
+                    buildReasoningProviderOptions(
+                        BYOKProvider.ANTHROPIC,
+                        'none',
+                        'claude-fable-5',
+                    ),
+                ).toEqual({});
+            });
+
+            it('omits the config on legacy models, which never think unasked', () => {
+                expect(
+                    buildReasoningProviderOptions(
+                        BYOKProvider.ANTHROPIC,
+                        'none',
+                        'claude-sonnet-4-5-20250929',
+                    ),
+                ).toEqual({});
             });
         });
     });

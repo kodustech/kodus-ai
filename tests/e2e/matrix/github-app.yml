@@ -12,7 +12,9 @@ description: |
     GH_APP_INSTALLATION_ID is missing — set both before running.
 
 scenarios:
-    - onboarding-webhook-registration
+    # onboarding-webhook-registration deliberately absent: GitHub Apps do not
+    # register per-repo webhooks (the App's webhook is configured once at
+    # registration level), so the scenario can never apply to a github-app cell.
     - code-review-basic
     - command-review
     - kody-rules-create-and-apply

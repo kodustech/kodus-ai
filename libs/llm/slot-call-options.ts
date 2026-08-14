@@ -1,3 +1,4 @@
+import { resolveByokTemperature } from './anthropic-model-traits';
 import type { NormalizedModel } from './byok-config';
 
 /**
@@ -24,8 +25,13 @@ export function resolveSlotCallOptions(
 ): SlotCallOptions {
     const options: SlotCallOptions = {};
 
-    if (typeof slot?.temperature === 'number') {
-        options.temperature = slot.temperature;
+    // Read temperature through `resolveByokTemperature`, not raw: it withholds
+    // the configured value on Anthropic models that reject sampling params
+    // (4.7+ 400s the whole request when temperature is present). Keeps this
+    // shared path in lockstep with the direct `resolveByokTemperature` callers.
+    const temperature = resolveByokTemperature(slot ?? undefined);
+    if (typeof temperature === 'number') {
+        options.temperature = temperature;
     }
 
     // A non-positive max-output means "use the model default" → omit it so the

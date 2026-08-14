@@ -93,7 +93,7 @@ export const rbacUiRender: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["cloud", "self-hosted"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         license: ["trial", "paid", "license-paid"],
     },
     // Full onboarding (finishOnboarding polls up to 300s) + 4 roles ×

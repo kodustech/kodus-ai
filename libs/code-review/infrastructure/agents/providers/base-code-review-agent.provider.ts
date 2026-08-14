@@ -583,6 +583,10 @@ export abstract class BaseCodeReviewAgentProvider {
                     reasoningEffort: modelParams.reasoningEffort,
                     reasoningConfigOverride: modelParams.reasoningConfigOverride,
                     byokProvider: modelParams.byokProvider,
+                    // Without this the reasoning mapper can't tell an Opus 5
+                    // from a Sonnet 4.5 and has to guess the thinking shape —
+                    // and the wrong guess is a 400 that fails the review.
+                    modelName: modelParams.modelName,
                     // Drives the BYOK concurrency limiter bucket + wrapper role.
                     byokRole: modelParams.role,
                     openrouterProviderOrder: modelParams.openrouterProviderOrder,

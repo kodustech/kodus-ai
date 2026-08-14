@@ -660,7 +660,8 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         // fixed `temperature: 0` used to override it and broke models that only
         // accept their configured value — e.g. kimi-k2.7-code wants 1); a system
         // model keeps the call's own option. Tuning is derived through the shared
-        // mapping now, so the ≤0 → provider-default guard applies uniformly.
+        // mapping now, so the ≤0 → provider-default guard AND the Anthropic 4.7+
+        // sampling-param withholding apply uniformly.
         const temperature = this.byokConfig
             ? invocation.callOptions.temperature
             : options.temperature;

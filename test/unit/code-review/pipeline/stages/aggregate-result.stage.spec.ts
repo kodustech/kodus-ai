@@ -26,7 +26,6 @@ describe('AggregateResultsStage', () => {
         overrides: Partial<CodeReviewPipelineContext> = {},
     ) =>
         ({
-            dryRun: { enabled: false },
             organizationAndTeamData: mockOrganizationAndTeamData as any,
             repository: { id: 'repo-1', name: 'test-repo' } as any,
             branch: 'main',

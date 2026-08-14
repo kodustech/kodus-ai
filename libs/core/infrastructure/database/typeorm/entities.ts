@@ -5,7 +5,6 @@ import { AutomationModel } from '../../../../automation/infrastructure/adapters/
 import { AutomationExecutionModel } from '../../../../automation/infrastructure/adapters/repositories/schemas/automationExecution.model';
 import { CodeReviewExecutionModel } from '../../../../automation/infrastructure/adapters/repositories/schemas/codeReviewExecution.model';
 import { TeamAutomationModel } from '../../../../automation/infrastructure/adapters/repositories/schemas/teamAutomation.model';
-import { DryRunModel } from '../../../../dryRun/infrastructure/adapters/repositories/schemas/dryRun.model';
 import { CodeReviewSettingsLogModel } from '../../../../ee/codeReviewSettingsLog/infrastructure/adapters/repository/schemas/codeReviewSettingsLog.model';
 import { SSOConfigModel } from '../../../../ee/sso/repositories/ssoConfig.model';
 import { AuthModel } from '../../../../identity/infrastructure/adapters/repositories/schemas/auth.model';
@@ -42,7 +41,6 @@ import { UserNotificationModel } from '../../../../notifications/infrastructure/
 import { RoutingRuleModel } from '../../../../notifications/infrastructure/repositories/schemas/routing-rule.model';
 
 export const ENTITIES = [
-    DryRunModel,
     TeamModel,
     OrganizationModel,
     UserModel,

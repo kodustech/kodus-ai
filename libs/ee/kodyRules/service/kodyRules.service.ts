@@ -223,19 +223,188 @@ export class KodyRulesService implements IKodyRulesService {
     async find(filter?: Partial<IKodyRules>): Promise<KodyRulesEntity[]> {
         const entities = await this.kodyRulesRepository.find(filter);
 
-        return entities?.map((entity) => {
-            const normalized = entity.toObject();
-            normalized.rules = normalized.rules.map((rule) => ({
-                ...rule,
-                severity: rule.severity?.toLowerCase(),
-            }));
-            return KodyRulesEntity.create(normalized);
+        if (!entities?.length) return entities;
+
+        const toObject = (e: any) =>
+            typeof e?.toObject === 'function' ? e.toObject() : e;
+
+        const staleOrgIds = new Set<string>();
+        entities.forEach((e) => {
+            const obj = toObject(e);
+            if (
+                obj?.rules?.some(
+                    (r: any) =>
+                        r.status === KodyRulesStatus.PAUSED && r.lockedByPlan,
+                ) &&
+                obj?.organizationId
+            ) {
+                staleOrgIds.add(obj.organizationId);
+            }
         });
+
+        const orgIdArray = [...staleOrgIds];
+        const syncResults = await Promise.allSettled(
+            orgIdArray.map((orgId) =>
+                this.syncRulesWithPlanLimit({ organizationId: orgId }),
+            ),
+        );
+
+        syncResults.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                const orgId = orgIdArray[index];
+                this.logger.error({
+                    message: 'Failed self-healing stale rules in find()',
+                    context: KodyRulesService.name,
+                    error: result.reason,
+                    metadata: { organizationId: orgId },
+                });
+            }
+        });
+        const normalized = (entitiesResult: KodyRulesEntity[]) =>
+            entitiesResult?.map((entity) => {
+                const normalized = toObject(entity);
+                normalized.rules = normalized.rules.map((rule) => ({
+                    ...rule,
+                    severity: rule.severity?.toLowerCase(),
+                }));
+                return KodyRulesEntity.create(normalized);
+            });
+
+        if (staleOrgIds.size > 0) {
+            return normalized(await this.kodyRulesRepository.find(filter));
+        }
+
+        return normalized(entities);
     }
 
     async findByOrganizationId(
         organizationId: string,
     ): Promise<KodyRulesEntity | null> {
+        return this.kodyRulesRepository.findByOrganizationId(organizationId);
+    }
+
+    /**
+     * Synchronizes an organization's stored Kody Rules in MongoDB with its
+     * current plan resource limits (#1626).
+     *
+     * - On Paid plans (not limited): clears `lockedByPlan` and flips `PAUSED` → `ACTIVE`
+     *   for any rules that were previously locked by plan limits.
+     * - On Free plans (limited): enforces the 10-rule cap on active rules, stamping any
+     *   overflow rules as `PAUSED` with `lockedByPlan: true`.
+     */
+    async syncRulesWithPlanLimit(
+        organizationAndTeamData: OrganizationAndTeamData,
+        opts: { entity?: KodyRulesEntity | null; limited?: boolean } = {},
+    ): Promise<KodyRulesEntity | null> {
+        const organizationId = organizationAndTeamData.organizationId;
+        if (!organizationId) return null;
+
+        // The review pipeline already loaded the rules; it passes the entity in
+        // so this fail-safe doesn't repeat the round-trip.
+        const entity =
+            opts.entity ??
+            (await this.kodyRulesRepository.findByOrganizationId(
+                organizationId,
+            ));
+        const existingRules = entity?.toObject()?.rules || [];
+
+        if (!existingRules?.length) return entity;
+
+        let isLimited: boolean;
+        if (typeof opts.limited === 'boolean') {
+            // codeBaseConfig already resolved the plan gate for the review —
+            // reuse it instead of a second license lookup.
+            isLimited = opts.limited;
+        } else {
+            try {
+                isLimited =
+                    await this.permissionValidationService.shouldLimitResources(
+                        organizationAndTeamData,
+                        KodyRulesService.name,
+                    );
+            } catch (error) {
+                this.logger.error({
+                    message: 'Error checking resource limits for rules sync',
+                    context: KodyRulesService.name,
+                    error,
+                    metadata: { organizationAndTeamData },
+                });
+                return entity;
+            }
+        }
+
+        const changedRules: Array<{ ruleId: string; patch: Partial<IKodyRule> }> = [];
+
+        if (!isLimited) {
+            // Paid plan: unpause any rule that was auto-locked by a plan limit
+            for (const r of existingRules) {
+                if (r.uuid && r.status === KodyRulesStatus.PAUSED && r.lockedByPlan) {
+                    changedRules.push({
+                        ruleId: r.uuid,
+                        patch: {
+                            status: KodyRulesStatus.ACTIVE,
+                            lockedByPlan: false,
+                            updatedAt: new Date(),
+                        },
+                    });
+                }
+            }
+        } else {
+            // Free plan: enforce MAX_KODY_RULES (10) active ceiling
+            const MAX = this.kodyRulesValidationService.MAX_KODY_RULES;
+            let activeCount = 0;
+
+            for (const r of existingRules) {
+                if (r.status === KodyRulesStatus.ACTIVE) {
+                    activeCount++;
+                    if (activeCount > MAX && r.uuid) {
+                        changedRules.push({
+                            ruleId: r.uuid,
+                            patch: {
+                                status: KodyRulesStatus.PAUSED,
+                                lockedByPlan: true,
+                                updatedAt: new Date(),
+                            },
+                        });
+                    }
+                }
+            }
+        }
+
+        if (!changedRules.length) return entity;
+
+        // Targeted per-rule updates in parallel: prevents whole-array overwrite race conditions (#1626)
+        const updateResults = await Promise.allSettled(
+            changedRules.map(({ ruleId, patch }) =>
+                this.kodyRulesRepository.updateRule(
+                    entity.uuid,
+                    ruleId,
+                    patch,
+                ),
+            ),
+        );
+
+        updateResults.forEach((res, i) => {
+            if (res.status === 'rejected') {
+                this.logger.error({
+                    message: 'Failed per-rule update in syncRulesWithPlanLimit',
+                    context: KodyRulesService.name,
+                    error: res.reason,
+                    metadata: { organizationId, ruleId: changedRules[i].ruleId },
+                });
+            }
+        });
+
+        this.logger.log({
+            message: 'Synchronized Kody Rules with current plan limits in MongoDB',
+            context: KodyRulesService.name,
+            metadata: {
+                organizationId,
+                isLimited,
+                updatedRuleCount: changedRules.length,
+            },
+        });
+
         return this.kodyRulesRepository.findByOrganizationId(organizationId);
     }
 

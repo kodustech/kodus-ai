@@ -156,9 +156,21 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
                     CodeBaseConfigService.name,
                 );
 
+            // Fail-safe: reconcile the rules' lock state with the current plan
+            // before the review uses them, in case the plan-change webhook was
+            // missed. Reuses the entity + `limited` already resolved above so
+            // it's a no-op (no extra lookup, no write) when already in sync.
+            const syncedEntity =
+                await this.kodyRulesService.syncRulesWithPlanLimit(
+                    organizationAndTeamData,
+                    { entity: kodyRulesEntity, limited },
+                );
+            const effectiveRules =
+                (syncedEntity ?? kodyRulesEntity)?.toObject()?.rules || [];
+
             const { standardRules, memoryRules } =
                 this.kodyRulesValidationService.filterKodyRules(
-                    kodyRulesEntity?.toObject()?.rules || [],
+                    effectiveRules,
                     repository.id,
                     mergedConfigs.directoryId,
                     limited,

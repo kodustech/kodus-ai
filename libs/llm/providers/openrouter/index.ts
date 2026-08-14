@@ -57,7 +57,7 @@ export const openRouterModule: ProviderModule = {
             apiKey: cfg.apiKey,
             baseURL: cfg.baseURL || 'https://openrouter.ai/api/v1',
             supportsStructuredOutputs:
-                opts?.structuredOutputs === true &&
+                opts?.structuredOutputs !== false &&
                 shouldEnableJsonSchema('open_router', cfg.model, cfg.baseURL),
         })(cfg.model);
     },

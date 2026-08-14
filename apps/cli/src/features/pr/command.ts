@@ -121,8 +121,9 @@ async function prSuggestionsAction(
             ? validateHttpUrl(options.prUrl, '--pr-url')
             : undefined;
 
-        const allowedSeverities: readonly (Severity | 'high' | 'medium' | 'low')[] =
-            ['info', 'warning', 'error', 'critical', 'high', 'medium', 'low'];
+        const allowedSeverities: readonly (
+            Severity | 'high' | 'medium' | 'low'
+        )[] = ['info', 'warning', 'error', 'critical', 'high', 'medium', 'low'];
         const allowedCategories: readonly (IssueCategory | 'documentation')[] =
             [
                 'security_vulnerability',

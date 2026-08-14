@@ -8,7 +8,9 @@ type RequestWithRetry = <T>(
 ) => Promise<T>;
 
 export class RealAuthApi implements IAuthApi {
-    constructor(private readonly requester: RequestWithRetry = requestWithRetry) {}
+    constructor(
+        private readonly requester: RequestWithRetry = requestWithRetry,
+    ) {}
 
     async login(email: string, password: string): Promise<AuthResponse> {
         const response = await this.requester<{

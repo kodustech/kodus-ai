@@ -65,7 +65,6 @@ import { codeReviewPipelineProvider } from '@libs/core/providers/code-review-pip
 import { pipelineProvider } from '@libs/core/providers/pipeline.provider.ee';
 
 import { GlobalCacheModule } from '@libs/core/cache/cache.module';
-import { DryRunModule } from '@libs/dryRun/dry-run.module';
 import { SafeguardPipelineService } from '../infrastructure/adapters/services/safeguardPipeline.service';
 import { AstGraphModule } from './ast-graph.module';
 import { DocumentationContextModule } from './documentation-context.module';
@@ -93,7 +92,6 @@ import { DocumentationContextModule } from './documentation-context.module';
         forwardRef(() => OrganizationParametersModule),
         forwardRef(() => OrganizationModule),
         forwardRef(() => UserModule),
-        forwardRef(() => DryRunModule),
         forwardRef(() => DocumentationContextModule),
         AstGraphModule,
         GlobalCacheModule,

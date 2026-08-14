@@ -15,7 +15,11 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
         teamId: 'team-1',
     };
 
-    function buildListener() {
+    function buildListener(
+        overrides: {
+            acquireImpl?: () => Promise<{ release: jest.Mock } | null>;
+        } = {},
+    ) {
         const kodyRulesSyncService = {
             syncFromChangedFiles: jest.fn().mockResolvedValue(undefined),
             purgeAllIdeSyncRulesForRepository: jest
@@ -35,28 +39,28 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
             findByKey: jest.fn().mockResolvedValue(null),
         };
 
-        const dataSource = {
-            // CREATE TABLE / DELETE sweep return [], the INSERT claim wins
-            // by default (RETURNING one row).
-            query: jest
-                .fn()
-                .mockImplementation((sql: string) =>
-                    Promise.resolve(
-                        sql.trimStart().startsWith('INSERT')
-                            ? [{ claim_key: 'k' }]
-                            : [],
-                    ),
-                ),
+        // Default: acquire wins with a lock object whose release resolves.
+        const releaseMock = jest.fn().mockResolvedValue(undefined);
+        const distributedLockService = {
+            acquire: jest.fn(
+                overrides.acquireImpl ??
+                    (() => Promise.resolve({ release: releaseMock })),
+            ),
         };
 
         const listener = new KodyRulesSyncListener(
             kodyRulesSyncService as any,
             parametersService as any,
             organizationParametersService as any,
-            dataSource as any,
+            distributedLockService as any,
         );
 
-        return { listener, kodyRulesSyncService, dataSource };
+        return {
+            listener,
+            kodyRulesSyncService,
+            distributedLockService,
+            releaseMock,
+        };
     }
 
     it('action=delete purges IDE-synced rules', async () => {
@@ -156,7 +160,7 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
         ).not.toHaveBeenCalled();
     });
 
-    describe('cross-process sync claim', () => {
+    describe('cross-process sync via distributed lock', () => {
         const mergedEvent = {
             merged: true,
             pullRequestNumber: 42,
@@ -165,34 +169,41 @@ describe('KodyRulesSyncListener — handleIdeRulesSyncDisabled', () => {
             files: [{ filename: '.kody/rules/x.md', status: 'added' }],
         } as any;
 
-        it('runs the sync when this process wins the claim', async () => {
-            const { listener, kodyRulesSyncService } = buildListener();
+        it('runs the sync when this process acquires the lock', async () => {
+            const { listener, kodyRulesSyncService, releaseMock } =
+                buildListener();
             await listener.handlePullRequestClosedEvent(mergedEvent);
             expect(
                 kodyRulesSyncService.syncFromChangedFiles,
             ).toHaveBeenCalledTimes(1);
+            // finally-block must release even on success
+            expect(releaseMock).toHaveBeenCalledTimes(1);
         });
 
-        it('skips the sync when another process already claimed the merge', async () => {
-            const { listener, kodyRulesSyncService, dataSource } =
-                buildListener();
-            dataSource.query.mockImplementation((sql: string) =>
-                Promise.resolve([]),
-            );
+        it('skips the sync when another process holds the lock', async () => {
+            const { listener, kodyRulesSyncService } = buildListener({
+                acquireImpl: () => Promise.resolve(null),
+            });
             await listener.handlePullRequestClosedEvent(mergedEvent);
             expect(
                 kodyRulesSyncService.syncFromChangedFiles,
             ).not.toHaveBeenCalled();
         });
 
-        it('proceeds when the claim infrastructure errors (availability over exactly-once)', async () => {
-            const { listener, kodyRulesSyncService, dataSource } =
-                buildListener();
-            dataSource.query.mockRejectedValue(new Error('pg down'));
-            await listener.handlePullRequestClosedEvent(mergedEvent);
-            expect(
-                kodyRulesSyncService.syncFromChangedFiles,
-            ).toHaveBeenCalledTimes(1);
+        it('releases the lock even if the sync throws', async () => {
+            const releaseMock = jest.fn().mockResolvedValue(undefined);
+            const { listener, kodyRulesSyncService } = buildListener({
+                acquireImpl: () =>
+                    Promise.resolve({ release: releaseMock } as any),
+            });
+            (
+                kodyRulesSyncService.syncFromChangedFiles as jest.Mock
+            ).mockRejectedValueOnce(new Error('sync boom'));
+
+            await expect(
+                listener.handlePullRequestClosedEvent(mergedEvent),
+            ).rejects.toThrow('sync boom');
+            expect(releaseMock).toHaveBeenCalledTimes(1);
         });
     });
 });

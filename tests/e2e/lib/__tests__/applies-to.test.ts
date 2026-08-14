@@ -1,14 +1,9 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import type { MatrixCell, Scenario } from "../types.js";
-
-function appliesToCell(scenario: Scenario, cell: MatrixCell): boolean {
-    const at = scenario.appliesTo;
-    if (at.target && !at.target.includes(cell.target)) return false;
-    if (at.provider && !at.provider.includes(cell.provider)) return false;
-    if (at.license && !at.license.includes(cell.license)) return false;
-    return true;
-}
+// Import the SHIPPED implementation. This file used to re-declare its own
+// copy, so the test could stay green while the real matcher drifted.
+import { appliesToCell } from "../runner.js";
 
 const dummyRun = async () => ({});
 
@@ -92,4 +87,59 @@ test("appliesToCell: partial appliesTo (only license)", () => {
         }),
         false,
     );
+});
+
+// Canary cells: once the matrix runs on GitHub App auth, one cell stays on a
+// PAT purely to prove the token path still works, and it should run a single
+// review scenario rather than the whole suite.
+test("cell.only pins a cell to a subset of scenarios", () => {
+    const cell: MatrixCell = {
+        target: "cloud",
+        provider: "github",
+        license: "paid",
+        only: ["code-review-basic"],
+    };
+    const inList: Scenario = {
+        id: "code-review-basic",
+        title: "",
+        priority: "P0",
+        appliesTo: {},
+        run: async () => ({}),
+    };
+    const notInList: Scenario = { ...inList, id: "kody-rules-create-and-apply" };
+    assert.equal(appliesToCell(inList, cell), true);
+    assert.equal(appliesToCell(notInList, cell), false);
+});
+
+test("cell.only narrows but never widens — appliesTo still wins", () => {
+    const cell: MatrixCell = {
+        target: "cloud",
+        provider: "github",
+        license: "paid",
+        only: ["self-hosted-only-scenario"],
+    };
+    const shOnly: Scenario = {
+        id: "self-hosted-only-scenario",
+        title: "",
+        priority: "P0",
+        appliesTo: { target: ["self-hosted"] },
+        run: async () => ({}),
+    };
+    assert.equal(
+        appliesToCell(shOnly, cell),
+        false,
+        "listing a scenario in `only` must not override its appliesTo",
+    );
+});
+
+test("a cell without `only` is unaffected", () => {
+    const cell: MatrixCell = { target: "cloud", provider: "github", license: "paid" };
+    const s: Scenario = {
+        id: "anything",
+        title: "",
+        priority: "P0",
+        appliesTo: {},
+        run: async () => ({}),
+    };
+    assert.equal(appliesToCell(s, cell), true);
 });

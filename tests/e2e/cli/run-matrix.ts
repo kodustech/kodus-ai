@@ -2,13 +2,26 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { allScenarios, resolveScenarios } from "../scenarios/index.js";
-import { runMatrix } from "../lib/runner.js";
+import { resolveScenarios } from "../scenarios/index.js";
+import { llmPreflight, describeLlmPreflight } from "../lib/llm-preflight.js";
+import {
+    computeVerdict,
+    describeCell,
+    isQuarantined,
+    priorityOf,
+    unverifiedP0,
+} from "../lib/verdict.js";
+import { appliesToCell, runMatrix } from "../lib/runner.js";
 import { summarize, writeAll } from "../lib/evidence.js";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "../lib/log.js";
-import type { MatrixCell, ScenarioResult, Target } from "../lib/types.js";
+import type {
+    MatrixCell,
+    RunVerdict,
+    ScenarioResult,
+    Target,
+} from "../lib/types.js";
 
 const log = logger("cli:matrix");
 
@@ -24,6 +37,7 @@ function parseArgs(): {
     targetFilter?: Target;
     dryRun: boolean;
     skipMissingTokens: boolean;
+    validate: boolean;
 } {
     const args = process.argv.slice(2);
     const positional: string[] = [];
@@ -31,7 +45,7 @@ function parseArgs(): {
     // Flags that take no value — treat them as booleans even if a positional
     // follows. Without this list the naive lookahead consumes the matrix path
     // as the value of `--skip-missing-tokens`.
-    const booleanFlags = new Set(["dry-run", "skip-missing-tokens"]);
+    const booleanFlags = new Set(["dry-run", "skip-missing-tokens", "validate"]);
     for (let i = 0; i < args.length; i++) {
         const a = args[i];
         if (a.startsWith("--")) {
@@ -50,7 +64,7 @@ function parseArgs(): {
     const matrixPath = (flags.matrix as string) ?? positional[0];
     if (!matrixPath) {
         console.error(
-            "usage: run-matrix <matrix.yml> [--target cloud|self-hosted] [--dry-run] [--skip-missing-tokens]",
+            "usage: run-matrix <matrix.yml> [--target cloud|self-hosted] [--dry-run] [--skip-missing-tokens] [--validate]",
         );
         process.exit(2);
     }
@@ -59,6 +73,7 @@ function parseArgs(): {
         targetFilter: flags.target as Target | undefined,
         dryRun: Boolean(flags["dry-run"]),
         skipMissingTokens: Boolean(flags["skip-missing-tokens"]),
+        validate: Boolean(flags.validate),
     };
 }
 
@@ -72,6 +87,11 @@ const PROVIDER_REQUIRED_ENV: Record<string, string[]> = {
     // still run as a user, not as the App). The App-specific bits are
     // GH_APP_TEST_REPO (where the App is installed, scope-limited) and
     // GH_APP_INSTALLATION_ID (the numeric id captured after install).
+    // NOT COVERED TODAY -- tracked in issue #1695. These two are unset, so
+    // every github-app cell is dropped here as a non-gating setup skip. The
+    // cell is deliberately NOT deleted: reporting it as unverified keeps the
+    // gap visible, and deleting it would make the matrix look complete while
+    // the path customers are meant to use goes untested.
     "github-app": [
         "GH_TEST_TOKEN",
         "GH_APP_TEST_REPO",
@@ -150,7 +170,8 @@ function missingScenarioRequirements(scenarioId: string): string[] {
 }
 
 async function main() {
-    const { matrixPath, targetFilter, dryRun, skipMissingTokens } = parseArgs();
+    const { matrixPath, targetFilter, dryRun, skipMissingTokens, validate } =
+        parseArgs();
     const raw = readFileSync(matrixPath, "utf8");
     const matrix = parseYaml(raw) as MatrixFile;
 
@@ -158,6 +179,73 @@ async function main() {
     let cells = targetFilter
         ? matrix.cells.filter((c) => c.target === targetFilter)
         : matrix.cells;
+
+    // ---- Config validation (cheap, no provisioning) ----------------------
+    // A cell whose appliesTo excludes every scenario has nothing to run. That
+    // is a matrix CONFIG error, not a test result — but until now the only way
+    // it surfaced was at the END of a run: the self-hosted job provisioned a
+    // droplet, waited ~15 minutes, skipped all 13 scenarios and reported
+    // INCONCLUSIVE. Catch it here, before anything is provisioned, and say
+    // exactly which cell and what to do about it.
+    //
+    // `--validate` makes this the whole job: the workflow's plan step runs it
+    // and fails fast, so a mis-specified matrix never costs a droplet.
+    const emptyCells = cells.filter(
+        (cell) => !scenarios.some((s) => appliesToCell(s, cell)),
+    );
+    if (emptyCells.length > 0) {
+        log.err(
+            `Matrix ${matrix.id}: ${emptyCells.length} cell(s) have ZERO applicable scenarios. They would provision, run nothing, and report inconclusive:`,
+        );
+        for (const cell of emptyCells) {
+            log.err(
+                `  - ${cell.target} × ${cell.provider} × ${cell.license} — 0/${scenarios.length} scenarios apply`,
+            );
+        }
+        log.err(
+            "Fix the matrix file: either give one of its scenarios an appliesTo that covers this cell, or remove the cell.",
+        );
+        process.exit(EXIT_CONFIG);
+    }
+    // The mirror check: a scenario listed in the matrix that NO cell can run.
+    //
+    // ONLY under --validate. During a real run the matrix may be a generated
+    // single-cell SHARD (provisioning/self-hosted/vm.sh builds one per job,
+    // carrying every scenario but one cell), where most scenarios legitimately
+    // have no cell — they simply do not execute. Enforcing it there fails a
+    // perfectly good run, which is what happened to run 31318234481.
+    // Silent coverage loss, and the exact thing that just happened — moving the
+    // cloud github cells to the App orphaned stripe-billing, which is pinned to
+    // `github`. The cell-side check would never have caught it: every cell still
+    // had work, the scenario just stopped having a home.
+    const orphanScenarios = validate
+        ? scenarios.filter((s) => !cells.some((cell) => appliesToCell(s, cell)))
+        : [];
+    if (orphanScenarios.length > 0) {
+        log.err(
+            `Matrix ${matrix.id}: ${orphanScenarios.length} scenario(s) have ZERO cells to run on. They are listed but never execute:`,
+        );
+        for (const s of orphanScenarios) {
+            log.err(`  - ${s.id} (appliesTo: ${JSON.stringify(s.appliesTo)})`);
+        }
+        log.err(
+            "Fix the matrix file: widen the scenario's appliesTo, or add a cell it matches, or drop it from the scenario list.",
+        );
+        process.exit(EXIT_CONFIG);
+    }
+
+    if (validate) {
+        log.ok(
+            `Matrix ${matrix.id} is coherent: every one of the ${cells.length} cell(s) has at least one applicable scenario.`,
+        );
+        for (const cell of cells) {
+            const n = scenarios.filter((s) => appliesToCell(s, cell)).length;
+            log.info(
+                `  ${cell.target} × ${cell.provider} × ${cell.license}: ${n}/${scenarios.length}`,
+            );
+        }
+        return;
+    }
 
     let preSkipped: Array<{ cell: MatrixCell; missing: string[] }> = [];
     let scenarioSkipped: Array<{ scenarioId: string; missing: string[] }> = [];
@@ -177,7 +265,10 @@ async function main() {
             );
             for (const { cell, missing } of preSkipped) {
                 log.info(
-                    `  - ${cell.provider} × ${cell.target} × ${cell.license} (need: ${missing.join(", ")})`,
+                    `  - ${cell.provider} × ${cell.target} × ${cell.license} (need: ${missing.join(", ")})` +
+                        (cell.provider === 'github-app'
+                            ? ' — known gap, tracked in #1695'
+                            : ''),
                 );
             }
         }
@@ -204,6 +295,28 @@ async function main() {
                 "All cells were skipped due to missing provider tokens. Set at least one provider's env vars and re-run.",
             );
             process.exit(2);
+        }
+    }
+
+    // Check the review LLM before spending the run on it. Three consecutive
+    // runs were burned discovering at minute ~40 that the key had no budget;
+    // the scenarios failed exactly as designed and the verdict read like a
+    // product regression. One token answers it up front.
+    //
+    // A dead LLM makes the run INCONCLUSIVE, not red: we could not verify the
+    // product, which is a different statement from "the product is broken".
+    if (!dryRun) {
+        const llm = await llmPreflight();
+        if (llm.status === "ok") {
+            log.info(describeLlmPreflight(llm));
+        } else if (llm.status === "unknown") {
+            log.info(describeLlmPreflight(llm));
+        } else {
+            log.err(describeLlmPreflight(llm));
+            log.err(
+                "Refusing to run: every review scenario would fail for this reason, and the result would say nothing about the product.",
+            );
+            process.exit(EXIT_INCONCLUSIVE);
         }
     }
 
@@ -308,7 +421,10 @@ async function main() {
             ? ` — ${preSkipped.length} cells SKIPPED upfront (missing tokens)`
             : "";
     log.info(
-        `Result: ${summary.passed}/${summary.total} passed (failed=${summary.failed}, skipped=${summary.skipped}, blocked=${summary.blocked})${preSkippedNote}`,
+        `Result: ${summary.passed}/${summary.executed} passed — executed ${summary.executed}/${summary.applicable} applicable (${summary.total} cells)${preSkippedNote}`,
+    );
+    log.info(
+        `        NOT verified: ${summary.infraSkipped} infra, ${summary.setupSkipped} setup · failed=${summary.failed} blocked=${summary.blocked} flaky=${summary.passedOnRetry}`,
     );
     log.info(`Evidence: ${artifactDir}`);
 
@@ -345,13 +461,39 @@ async function main() {
             r.status === "passed" &&
             (r.evidence as Record<string, unknown>)?.retriedAfter,
     );
+    // ---- Verdict ---------------------------------------------------------
+    // RED           a P0 gate broke, a cell was blocked, or a whole target
+    //               crashed. Release must not proceed.
+    // INCONCLUSIVE  nothing failed, but a P0 scenario went UNVERIFIED —
+    //               GitHub quota exhausted or the target went unreachable
+    //               mid-run. This used to report GREEN, which is how a
+    //               release train shipped on runs where entire cells never
+    //               executed a single scenario.
+    // GREEN         every applicable P0 cell actually ran and passed.
+    const unverified = unverifiedP0(allResults);
+    const verdict: RunVerdict = computeVerdict({
+        gatingFailures: gating.length,
+        blocked: summary.blocked,
+        targetCrashed,
+        unverifiedP0: unverified.length,
+        applicable: summary.applicable,
+        executed: summary.executed,
+    });
+
     const notify = {
         runId,
+        verdict,
         total: summary.total,
+        applicable: summary.applicable,
+        executed: summary.executed,
         passed: summary.passed,
         failed: summary.failed,
         skipped: summary.skipped,
         blocked: summary.blocked,
+        notApplicable: summary.notApplicable,
+        setupSkipped: summary.setupSkipped,
+        infraSkipped: summary.infraSkipped,
+        passedOnRetry: summary.passedOnRetry,
         preSkippedCells: preSkipped.length,
         targetCrashed,
         gatingFailures: gating.map((r) => ({
@@ -364,6 +506,13 @@ async function main() {
             quarantined: isQuarantined(r),
             error: firstLine(r.errorMessage),
         })),
+        // P0 cells we could NOT verify. The whole point of the inconclusive
+        // verdict — these are named so the Discord message can say which
+        // coverage went missing instead of just reporting a pass count.
+        unverified: unverified.map((r) => ({
+            cell: describeCell(r),
+            reason: firstLine(String(r.evidence?.skipReason ?? "")),
+        })),
         retriedCells: retried.map((r) => describeCell(r)),
     };
     writeFileSync(
@@ -371,8 +520,28 @@ async function main() {
         JSON.stringify(notify, null, 2),
     );
 
-    if (gating.length > 0 || summary.blocked > 0 || targetCrashed) {
-        process.exit(1);
+    if (verdict === "red") {
+        process.exit(EXIT_RED);
+    }
+    if (verdict === "inconclusive") {
+        // Two different ways to end up here, and they need different words.
+        // Reporting the empty-run case with the infra wording printed the
+        // nonsense "INCONCLUSIVE: 0 P0 cell(s) never ran".
+        if (unverified.length > 0) {
+            log.err(
+                `Run is INCONCLUSIVE: ${unverified.length} P0 cell(s) never ran (infra). This is NOT a pass:`,
+            );
+            for (const r of unverified) {
+                log.err(
+                    `  - ${describeCell(r)} — ${firstLine(String(r.evidence?.skipReason ?? ""))}`,
+                );
+            }
+        } else {
+            log.err(
+                `Run is INCONCLUSIVE: nothing was applicable to this cell — ${summary.total} scenario(s), all excluded by appliesTo. Nothing was verified, so this is NOT a pass. Either give this cell a scenario that covers it, or drop it from the matrix file.`,
+            );
+        }
+        process.exit(EXIT_INCONCLUSIVE);
     }
     if (advisory.length > 0) {
         log.info(
@@ -381,31 +550,18 @@ async function main() {
     }
 }
 
-// Cells under investigation: they still RUN and REPORT (advisory) but never
-// gate the release. Format: "scenario-id" (all cells) or
-// "scenario-id×provider×license" (one cell). Keep entries SHORT-LIVED —
-// every entry must have an open issue; quarantine is a parking lot, not a
-// graveyard.
-const QUARANTINED: string[] = [];
+// Exit codes are the contract with CI: the workflow branches on them to pick
+// which Discord message to send, so they must stay distinct.
+//   0  green
+//   1  red — a gate broke
+//   2  usage error (bad args, every cell skipped) — pre-existing
+//   3  inconclusive — nothing broke, but P0 coverage did not run
+const EXIT_RED = 1;
+const EXIT_INCONCLUSIVE = 3;
+// Matrix file is mis-specified — a cell nothing can run. Same class as bad
+// args, so it shares the usage exit code.
+const EXIT_CONFIG = 2;
 
-function isQuarantined(r: ScenarioResult): boolean {
-    return (
-        QUARANTINED.includes(r.scenarioId) ||
-        QUARANTINED.includes(
-            `${r.scenarioId}×${r.cell.provider}×${r.cell.license}`,
-        )
-    );
-}
-
-// Priority lookup from the scenario registry. Unknown id → P0
-// (conservative: an unregistered scenario should gate, not slip through).
-function priorityOf(scenarioId: string): string {
-    return allScenarios[scenarioId]?.priority ?? "P0";
-}
-
-function describeCell(r: ScenarioResult): string {
-    return `${r.scenarioId} × ${r.cell.target} × ${r.cell.provider} × ${r.cell.license}`;
-}
 
 function firstLine(message?: string): string {
     return (message ?? "").split("\n")[0].slice(0, 300);

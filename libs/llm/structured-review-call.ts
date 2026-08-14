@@ -4,7 +4,8 @@
  *
  * Model policy (1 model per task — no runtime error-recovery fallback):
  *   - the run resolves ONE model: the org's BYOK model, or our managed default
- *     when no BYOK (`deepseek-v4-flash` via DeepSeek — resolved by buildModelFromSlot).
+ *     when no BYOK (`accounts/fireworks/models/deepseek-v4-flash` on Fireworks —
+ *     resolved by buildModelFromSlot).
  *
  * There is NO 2nd-model cascade: no managed Groq for trial orgs, no
  * `byok-fallback` for BYOK orgs. A model failure/timeout fails the call. The

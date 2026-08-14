@@ -8,6 +8,11 @@ import {
     HealthSimpleResponseDto,
 } from './health-response.dto';
 
+// Must stay comfortably under the load balancer's own health-check timeout so
+// a starved pool answers 503 instead of letting the probe time out — a probe
+// timeout and a 503 both mark the target unhealthy, but the 503 says why.
+const SERVING_CHECK_TIMEOUT_MS = 3000;
+
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
@@ -102,5 +107,29 @@ export class HealthController {
     @ApiOkResponse({ type: HealthSimpleResponseDto })
     liveCheck(@Res() res: Response) {
         return this.simpleCheck(res);
+    }
+
+    @Get('serving')
+    @ApiOperation({
+        summary: 'Serving check (Postgres pool)',
+        description:
+            'Public endpoint. Returns 503 when this instance cannot obtain a Postgres connection, so a load balancer can drain an instance whose pool is starved. Checks Postgres only — a Mongo outage must not pull the fleet out of rotation.',
+    })
+    @ApiOkResponse({ type: HealthSimpleResponseDto })
+    async servingCheck(@Res() res: Response) {
+        const result = await this.databaseHealthIndicator.isPostgresHealthy(
+            SERVING_CHECK_TIMEOUT_MS,
+        );
+        const healthy = result.status === 'up';
+
+        return res
+            .status(healthy ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE)
+            .json({
+                status: healthy ? 'ok' : 'error',
+                version: process.env.RELEASE_VERSION || 'unknown',
+                timestamp: new Date().toISOString(),
+                uptime: Math.floor(process.uptime()),
+                details: { postgres: result.postgres },
+            });
     }
 }

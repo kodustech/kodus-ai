@@ -11,6 +11,7 @@ import { createLogger } from '@libs/core/log/logger';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import { REGISTRY } from '@libs/llm/providers';
 import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
+import { resolveAnthropicModelTraits } from '@libs/llm/anthropic-model-traits';
 
 const logger = createLogger('ReasoningOptions');
 
@@ -183,15 +184,20 @@ function mergeOpenRouterOptions(
  * Build provider-specific reasoning/thinking options for generateText.
  *
  * Maps a normalized effort level to each provider's native format:
- *   - Anthropic (new): adaptive thinking + output_config.effort
- *   - Anthropic (old): enabled + budget_tokens
+ *   - Anthropic: per model generation — see `anthropic-model-traits.ts`
  *   - Google Gemini 3+: thinkingConfig.thinkingLevel (minimal/low/medium/high)
  *   - Google Gemini 2.5: thinkingConfig.thinkingBudget
  *   - OpenAI o-series: reasoningEffort (low/medium/high)
  *   - OpenRouter: reasoning.effort (normalized across providers)
  *   - Kimi/GLM/others via OPENAI_COMPATIBLE: thinking.type enabled/disabled
  *
- * Defaults when nothing configured: thinking stays OFF for all providers.
+ * `modelName` is not optional in practice for Anthropic: the provider alone
+ * cannot tell an Opus 5 from a Sonnet 4.5, and the two accept mutually
+ * exclusive thinking shapes.
+ *
+ * Defaults when nothing configured: thinking stays OFF for all providers —
+ * which for Anthropic means saying `disabled` out loud, since its newest
+ * models think unless told not to.
  *
  * Sources:
  *   Claude: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
@@ -203,7 +209,16 @@ export function buildReasoningProviderOptions(
     effort?: ReasoningEffort,
     modelName?: string,
 ): Record<string, any> {
-    if (!effort || effort === 'none' || !provider) return {};
+    if (!provider) return {};
+
+    // Anthropic is the only provider where "off" needs to be said out loud:
+    // Opus 5, Sonnet 5 and Fable 5 think by default, so omitting the config
+    // leaves thinking ON for a user who explicitly picked Off.
+    if (provider === BYOKProvider.ANTHROPIC && (!effort || effort === 'none')) {
+        return buildAnthropicThinkingOff(modelName);
+    }
+
+    if (!effort || effort === 'none') return {};
 
     // Delegate the effort→native mapping to the provider module's reasoning()
     // (Phase 1 — this switch is gone; the modules are the single source). An
@@ -216,4 +231,24 @@ export function buildReasoningProviderOptions(
         { provider: id, model: modelName ?? '', apiKey: '' } as ProviderBuildConfig,
         effort,
     );
+}
+
+/**
+ * Express "thinking off" for Anthropic. On Opus 5, Sonnet 5 and Fable 5
+ * thinking is on by default, so omitting the config is not the same as
+ * disabling it — the user picks Off and still pays for thinking.
+ *
+ * Fable/Mythos reject `disabled` outright (400), so there the only honest
+ * answer is to leave thinking on.
+ */
+function buildAnthropicThinkingOff(modelName?: string): Record<string, any> {
+    const traits = resolveAnthropicModelTraits(modelName);
+
+    if (traits.thinkingShape === 'adaptive' && traits.canDisableThinking) {
+        return { anthropic: { thinking: { type: 'disabled' } } };
+    }
+
+    // Legacy models don't think unless asked, and unidentified models get no
+    // config at all — omitting is already "off" for both.
+    return {};
 }

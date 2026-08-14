@@ -1,5 +1,6 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable, Inject } from '@nestjs/common';
+import pLimit from 'p-limit';
 
 import { IKodyIssuesManagementService } from '@libs/code-review/domain/contracts/KodyIssuesManagement.contract';
 import {
@@ -44,6 +45,10 @@ import {
 } from '@libs/ee/codeBase/kodyIssuesAnalysis.service';
 import { LabelType } from '@libs/common/utils/codeManagement/labels';
 import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
+
+// Matches the per-call fan-out the API pool (max 30) can absorb without
+// starving concurrent requests.
+const ISSUE_CREATE_CONCURRENCY = 5;
 
 @Injectable()
 export class KodyIssuesManagementService implements IKodyIssuesManagementService {
@@ -280,51 +285,69 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     context.organizationAndTeamData,
                 );
 
-            for (const suggestion of unmatchedSuggestions) {
-                await this.issuesService.create({
-                    title: suggestion.oneSentenceSummary,
-                    description: suggestion.suggestionContent,
-                    filePath: suggestion.relevantFile,
-                    language: suggestion.language,
-                    label: suggestion?.label as LabelType,
-                    severity: suggestion?.severity as SeverityLevel,
-                    contributingSuggestions: [
-                        {
-                            id: suggestion.id,
-                            prNumber: context.pullRequest.number,
-                            prAuthor: {
-                                id: pullRequest?.user?.id.toString() || '',
-                                name: pullRequest?.user?.name || '',
+            // Each create is independent — parallelize instead of
+            // sequential await. Cuts latency of this step from N × RTT
+            // to max(RTT) on the code-review hot path when a PR has
+            // many unmatched suggestions.
+            //
+            // Bounded, though: an unbounded fan-out here would issue one
+            // concurrent write per unmatched suggestion, and a PR with many
+            // of them turns into an instant burst against the same pool this
+            // change is trying to keep healthy (worker max 60, API 30). The
+            // cap keeps the latency win while leaving the pool room to serve
+            // everything else.
+            const createLimit = pLimit(ISSUE_CREATE_CONCURRENCY);
+            await Promise.all(
+                unmatchedSuggestions.map((suggestion) =>
+                    createLimit(() =>
+                        this.issuesService.create({
+                            title: suggestion.oneSentenceSummary,
+                            description: suggestion.suggestionContent,
+                            filePath: suggestion.relevantFile,
+                            language: suggestion.language,
+                            label: suggestion?.label as LabelType,
+                            severity: suggestion?.severity as SeverityLevel,
+                            contributingSuggestions: [
+                                {
+                                    id: suggestion.id,
+                                    prNumber: context.pullRequest.number,
+                                    prAuthor: {
+                                        id:
+                                            pullRequest?.user?.id.toString() ||
+                                            '',
+                                        name: pullRequest?.user?.name || '',
+                                    },
+                                    ...(suggestion.brokenKodyRulesIds?.length
+                                        ? {
+                                              brokenKodyRulesIds:
+                                                  suggestion.brokenKodyRulesIds,
+                                          }
+                                        : {}),
+                                },
+                            ],
+                            repository: {
+                                id: context.repository.id,
+                                name: context.repository.name,
+                                full_name: context.repository.full_name,
+                                platform: context.repository.platform,
                             },
-                            ...(suggestion.brokenKodyRulesIds?.length
-                                ? {
-                                      brokenKodyRulesIds:
-                                          suggestion.brokenKodyRulesIds,
-                                  }
-                                : {}),
-                        },
-                    ],
-                    repository: {
-                        id: context.repository.id,
-                        name: context.repository.name,
-                        full_name: context.repository.full_name,
-                        platform: context.repository.platform,
-                    },
-                    organizationId:
-                        context.organizationAndTeamData.organizationId,
-                    status: IssueStatus.OPEN,
-                    owner: {
-                        gitId: pullRequest.user.id,
-                        username: pullRequest.user.username,
-                    },
-                    reporter: {
-                        gitId: 'kodus',
-                        username: 'Kodus',
-                    },
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                });
-            }
+                            organizationId:
+                                context.organizationAndTeamData.organizationId,
+                            status: IssueStatus.OPEN,
+                            owner: {
+                                gitId: pullRequest.user.id,
+                                username: pullRequest.user.username,
+                            },
+                            reporter: {
+                                gitId: 'kodus',
+                                username: 'Kodus',
+                            },
+                            createdAt: new Date().toISOString(),
+                            updatedAt: new Date().toISOString(),
+                        }),
+                    ),
+                ),
+            );
         } catch (error) {
             this.logger.error({
                 message: 'Error creating new issues',
@@ -416,11 +439,17 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                     );
 
                 if (llmResult?.issueVerificationResults) {
+                    // Push into the existing `updatePromises` array
+                    // instead of awaiting sequentially — the outer
+                    // Promise.all below then runs every updateStatus
+                    // in parallel. Was N × RTT, becomes max(RTT).
                     for (const resolution of llmResult.issueVerificationResults) {
                         if (!resolution.isIssuePresentInCode) {
-                            await this.issuesService.updateStatus(
-                                resolution.issueId,
-                                IssueStatus.RESOLVED,
+                            updatePromises.push(
+                                this.issuesService.updateStatus(
+                                    resolution.issueId,
+                                    IssueStatus.RESOLVED,
+                                ),
                             );
                         }
                     }

@@ -4,15 +4,16 @@ import { environment } from '@libs/ee/configs/environment';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
-import { KODUS_DEFAULT_MODEL } from '@libs/llm/byok-to-vercel';
+import { KODUS_TRIAL_MODEL } from '@libs/llm/byok-to-vercel';
 
 /**
- * The Kodus-funded model for Kody Rules generation when there's no BYOK — the
- * shared managed default (DeepSeek V4 Flash via `API_DEEPSEEK_API_KEY`, routed by
- * the resolver's `deepseek-*` prefix). Gemini is dead (project denied access) and
- * must never be used here — see item 9 of docs/plans/fix-kody-rules-generation.md.
+ * The Kodus-funded model for Kody Rules generation when there's no BYOK:
+ * DeepSeek V4 Flash hosted on Fireworks (`API_FIREWORKS_API_KEY`), routed by
+ * the resolver's `accounts/fireworks/models/` prefix detection. Gemini is dead
+ * (project denied access) and must never be used here — see item 9 of
+ * docs/plans/fix-kody-rules-generation.md.
  */
-export const KODY_RULES_KODUS_MODEL = KODUS_DEFAULT_MODEL;
+export const KODY_RULES_KODUS_MODEL = KODUS_TRIAL_MODEL;
 
 /**
  * Resolved model policy for a Kody Rules generation run.
@@ -34,10 +35,11 @@ export interface KodyRulesModelPolicy {
  * Decides which model (if any) a Kody Rules generation run may use.
  *
  * Policy (see docs/plans/fix-kody-rules-generation.md). The Kodus-funded model
- * is ALWAYS DeepSeek — Gemini is dead and must never be reached from this flow:
+ * is ALWAYS the Fireworks-hosted DeepSeek V4 Flash — Gemini is dead and must
+ * never be reached from this flow:
  * - BYOK configured              → client's BYOK model.
  * - Self-hosted (not cloud)      → the deployment's env model (customer keys).
- * - Cloud + dev OR trial         → DeepSeek V4 Flash (Kodus pays).
+ * - Cloud + dev OR trial         → DeepSeek V4 Flash on Fireworks (Kodus pays).
  * - Cloud + free/paid, no BYOK   → SKIP (generates nothing).
  */
 export async function resolveKodyRulesModelPolicy(

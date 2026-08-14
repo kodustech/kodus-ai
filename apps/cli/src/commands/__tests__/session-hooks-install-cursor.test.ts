@@ -5,14 +5,12 @@ import os from 'os';
 import {
     installCursorSessionHooks,
     removeCursorSessionHooks,
-} from '../memory/session-hooks-install-cursor.js';
+} from '../trace/session-hooks-install-cursor.js';
 
 let tmpDir: string;
 
 beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), 'kodus-cursor-hooks-'),
-    );
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kodus-cursor-hooks-'));
 });
 
 afterEach(async () => {
@@ -58,22 +56,20 @@ describe('installCursorSessionHooks', () => {
         >;
 
         expect(hooks['sessionStart'][0].command).toBe(
-            'kodus decisions hooks cursor sessionStart',
+            'kodus trace hooks cursor sessionStart',
         );
         expect(hooks['sessionEnd'][0].command).toBe(
-            'kodus decisions hooks cursor sessionEnd',
+            'kodus trace hooks cursor sessionEnd',
         );
-        expect(hooks['stop'][0].command).toBe(
-            'kodus decisions hooks cursor stop',
-        );
+        expect(hooks['stop'][0].command).toBe('kodus trace hooks cursor stop');
         expect(hooks['beforeSubmitPrompt'][0].command).toBe(
-            'kodus decisions hooks cursor beforeSubmitPrompt',
+            'kodus trace hooks cursor beforeSubmitPrompt',
         );
         expect(hooks['subagentStart'][0].command).toBe(
-            'kodus decisions hooks cursor subagentStart',
+            'kodus trace hooks cursor subagentStart',
         );
         expect(hooks['subagentStop'][0].command).toBe(
-            'kodus decisions hooks cursor subagentStop',
+            'kodus trace hooks cursor subagentStop',
         );
     });
 
@@ -114,7 +110,7 @@ describe('installCursorSessionHooks', () => {
         );
         expect(sessionStartCommands).toContain('echo custom-hook');
         expect(sessionStartCommands).toContain(
-            'kodus decisions hooks cursor sessionStart',
+            'kodus trace hooks cursor sessionStart',
         );
     });
 });
@@ -163,9 +159,7 @@ describe('removeCursorSessionHooks', () => {
 
         // The custom hook should remain
         expect(afterHooks['sessionStart']).toHaveLength(1);
-        expect(afterHooks['sessionStart'][0].command).toBe(
-            'echo custom-hook',
-        );
+        expect(afterHooks['sessionStart'][0].command).toBe('echo custom-hook');
 
         // Other event keys (which only had kodus hooks) should be removed
         expect(afterHooks['sessionEnd']).toBeUndefined();

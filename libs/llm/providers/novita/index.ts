@@ -45,7 +45,7 @@ export const novitaModule: ProviderModule = {
             apiKey: cfg.apiKey,
             baseURL: cfg.baseURL || 'https://api.novita.ai/v3/openai',
             supportsStructuredOutputs:
-                opts?.structuredOutputs === true &&
+                opts?.structuredOutputs !== false &&
                 shouldEnableJsonSchema('novita', cfg.model, cfg.baseURL),
         })(cfg.model);
     },

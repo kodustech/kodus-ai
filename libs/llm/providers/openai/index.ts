@@ -110,7 +110,7 @@ export const openaiModule: ProviderModule = {
                 // (D-00b). Unknown upstreams still defer to the heuristic — the
                 // capability is additive, not a blanket force-on.
                 supportsStructuredOutputs:
-                    opts?.structuredOutputs === true &&
+                    opts?.structuredOutputs !== false &&
                     (isNeverDowngradeModel(cfg.model) ||
                         shouldEnableJsonSchema(
                             cfg.provider as string,

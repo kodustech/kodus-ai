@@ -5,7 +5,7 @@ import os from 'os';
 import {
     installSessionHooks,
     removeSessionHooks,
-} from '../memory/session-hooks-install.js';
+} from '../trace/session-hooks-install.js';
 
 let tmpDir: string;
 
@@ -60,16 +60,14 @@ describe('installSessionHooks', () => {
         };
 
         expect(getCommand('SessionStart')).toBe(
-            'kodus decisions hooks claude-code session-start',
+            'kodus trace hooks claude-code session-start',
         );
         expect(getCommand('SessionEnd')).toBe(
-            'kodus decisions hooks claude-code session-end',
+            'kodus trace hooks claude-code session-end',
         );
-        expect(getCommand('Stop')).toBe(
-            'kodus decisions hooks claude-code stop',
-        );
+        expect(getCommand('Stop')).toBe('kodus trace hooks claude-code stop');
         expect(getCommand('UserPromptSubmit')).toBe(
-            'kodus decisions hooks claude-code user-prompt-submit',
+            'kodus trace hooks claude-code user-prompt-submit',
         );
     });
 
@@ -129,7 +127,7 @@ describe('installSessionHooks', () => {
         }>;
 
         expect(sessionStart[0].hooks[0].command).toBe(
-            'kodus decisions hooks cursor session-start',
+            'kodus trace hooks cursor session-start',
         );
     });
 });

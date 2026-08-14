@@ -213,13 +213,32 @@ describe('buildModelFromSlot — OpenAI registry routing (resolved slot)', () =>
         );
     });
 
-    it('openai_compatible: structured outputs stay OFF without the per-call opt-in, even on a :8000 base', () => {
+    it('openai_compatible: structured outputs default ON on a :8000 base, OFF only when explicitly disabled', () => {
+        // No per-call opt-in: the default is now ON (`structuredOutputs !== false`)
+        // and the gate enables json_schema for the vLLM `:8000` case.
         buildModelFromSlot({
             provider: BYOKProvider.OPENAI_COMPATIBLE,
             apiKey: 'sk-compat',
             model: 'kimi-k2.7-code',
             baseURL: 'https://host:8000/v1',
         } as NormalizedModel);
+
+        expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
+            expect.objectContaining({ supportsStructuredOutputs: true }),
+        );
+
+        createOpenAICompatibleMock.mockClear();
+
+        // Explicit opt-out is the only thing that turns it back OFF.
+        buildModelFromSlot(
+            {
+                provider: BYOKProvider.OPENAI_COMPATIBLE,
+                apiKey: 'sk-compat',
+                model: 'kimi-k2.7-code',
+                baseURL: 'https://host:8000/v1',
+            } as NormalizedModel,
+            { structuredOutputs: false },
+        );
 
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
             expect.objectContaining({ supportsStructuredOutputs: false }),
@@ -246,12 +265,12 @@ describe('buildModelFromSlot — env/managed default (undefined slot)', () => {
         else process.env.API_MOONSHOT_API_KEY = prevMoonshot;
     });
 
-    it('no slot + auto env → the managed DeepSeek default (deepseek-v4-flash via DeepSeek)', () => {
+    it('no slot + auto env → the managed Fireworks default (deepseek-v4-flash via Fireworks)', () => {
         const result: any = buildModelFromSlot(undefined);
 
-        expect(result.modelId).toBe('deepseek-v4-flash');
+        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
-            expect.objectContaining({ name: 'deepseek' }),
+            expect.objectContaining({ name: 'fireworks' }),
         );
     });
 
@@ -284,7 +303,9 @@ describe('getModelName — resolved slot vs env default', () => {
     });
 
     it('undefined slot + auto env → the managed default model id', () => {
-        expect(getModelName(undefined)).toBe('deepseek-v4-flash');
+        expect(getModelName(undefined)).toBe(
+            'accounts/fireworks/models/deepseek-v4-flash',
+        );
     });
 
     it('undefined slot preserves the self-host env-mode name branch', () => {
@@ -702,6 +723,7 @@ function tpmSlot(
         tpm?: number;
         rpm?: number;
         maxConcurrentRequests?: number;
+        cooldownMs?: number;
     } = {},
 ): NormalizedModel {
     return {

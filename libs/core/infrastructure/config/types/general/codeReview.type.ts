@@ -31,6 +31,7 @@ import {
     SuggestionType,
 } from '@libs/core/domain/enums/code-review.enum';
 import { IClusterizedSuggestion } from '@libs/kodyFineTuning/domain/interfaces/kodyFineTuning.interface';
+import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyKnowledgeApprovalConfig } from '@libs/common/utils/kody-rules/knowledge-approval';
 import { OrganizationAndTeamData } from './organizationAndTeamData';
@@ -108,6 +109,8 @@ export type AnalysisContext<TPullRequest = any> = {
     augmentationsByFile?: Record<string, ContextAugmentationsMap>;
     /** Cross-file context snippets relevant to the current file under review. */
     crossFileSnippets?: CrossFileContextSnippet[];
+    /** Decisions recorded by Kodus Trace, scoped to the files in this diff. */
+    traceDecisions?: TraceContextDecision[];
     /** Documentation context grouped by file path, built in previous pipeline stages. */
     documentationByFile?: Record<string, DocumentationContextItem[]>;
     /** Documentation context scoped to the current file under analysis. */

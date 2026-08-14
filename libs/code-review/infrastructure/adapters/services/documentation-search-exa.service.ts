@@ -222,9 +222,13 @@ export class DocumentationSearchExaService {
                 task.query,
             );
 
+            // No `category` filter on purpose. Exa's categories are page-type
+            // verticals ('company', 'news', 'research paper', ...) and none of
+            // them is documentation — scoping to 'company' returned vendor
+            // landing pages and same-named companies instead of API docs, so
+            // the agent got plausible marketing copy in place of the spec.
             const response = await exaCallLimiter(() =>
                 this.exaClient!.search(packageScopedQuery, {
-                    category: 'company',
                     type: 'auto',
                 }),
             );

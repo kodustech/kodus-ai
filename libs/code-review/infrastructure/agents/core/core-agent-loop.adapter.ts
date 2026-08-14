@@ -99,6 +99,7 @@ export async function runAgentLoopViaCore(
             reasoningEffort: input.reasoningEffort,
             reasoningConfigOverride: input.reasoningConfigOverride,
             byokProvider: input.byokProvider,
+            modelName: input.modelName,
             openrouterProviderOrder: input.openrouterProviderOrder,
             openrouterAllowFallbacks: input.openrouterAllowFallbacks,
         },

@@ -21,6 +21,12 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any, // pullRequestManagerService — unused when summary is off
+            {
+                execute: jest.fn().mockResolvedValue({
+                    action: 'skipped',
+                    reason: 'no-decisions',
+                }),
+            } as any, // postTracePrCommentUseCase
         );
         return { stage, commentManagerService };
     };
@@ -53,7 +59,6 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
             platformType: undefined,
             initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
             changedFiles: [],
-            dryRun: { enabled: false },
             lineComments,
             // Both messages ACTIVE → the branch that calls
             // processEndReviewMessageTemplate.
@@ -94,6 +99,44 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
     });
 });
 
+describe('UpdateCommentsAndGenerateSummaryStage - Trace pack forwarding', () => {
+    it('passes the exact selected prompt decisions to the sticky comment', async () => {
+        const postTrace = {
+            execute: jest.fn().mockResolvedValue({ action: 'created' }),
+        };
+        const stage = new UpdateCommentsAndGenerateSummaryStage(
+            {} as any,
+            {} as any,
+            postTrace as any,
+        );
+        const selected = [
+            {
+                type: 'convention',
+                decision: 'Use the repository-scoped adapter',
+                scope: ['src/trace'],
+                pinned: true,
+            },
+        ];
+        const context = {
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pullRequest: { number: 42 },
+            repository: { id: 'repo-1', name: 'repo-1' },
+            traceDecisions: selected,
+            dryRun: { enabled: false },
+        };
+
+        await (stage as any).postTraceComment(context);
+
+        expect(postTrace.execute).toHaveBeenCalledWith(
+            expect.objectContaining({ decisions: selected }),
+        );
+        expect(postTrace.execute.mock.calls[0][0].decisions).toBe(selected);
+    });
+});
+
 /**
  * Guards the frozen-context error-recording path (issue #1452 matrix-gaps
  * item 3, same family as create-file-comments #c886e369a / agent-review
@@ -126,6 +169,12 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any,
+            {
+                execute: jest.fn().mockResolvedValue({
+                    action: 'skipped',
+                    reason: 'no-decisions',
+                }),
+            } as any, // postTracePrCommentUseCase
         );
         return { stage, commentManagerService };
     };
@@ -145,7 +194,6 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
             platformType: undefined,
             initialCommentData: { commentId: 1, noteId: 2, threadId: 3 },
             changedFiles: [],
-            dryRun: { enabled: false },
             lineComments: [],
             // A frozen, already-initialized errors array — the realistic
             // shape. The old code's `context.errors.push(...)` throws on it.
@@ -226,8 +274,11 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         // reviewHasPartialErrors, reviewErrorCustomMessage). These flags used
         // to be read once at stage entry — before the summary ran — so a failed
         // summary still rendered "review completed" (#1568).
+        // Index shifted by -1 after the dry-run parameter (formerly arg 10)
+        // was removed together with the dry-run feature; reviewHasPartialErrors
+        // is now the 13th arg (0-indexed 12) instead of the 14th.
         const args = commentManagerService.updateOverallComment.mock.calls[0];
-        expect(args[13]).toBe(true); // reviewHasPartialErrors
+        expect(args[12]).toBe(true); // reviewHasPartialErrors
     });
 
     // Regression: the summary must route by the `prSummary` task, not reuse the

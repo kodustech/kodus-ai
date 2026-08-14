@@ -31,7 +31,6 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
         const pullRequestMessagesConfig = context.pullRequestMessagesConfig;
 
         if (
-            !context.dryRun?.enabled &&
             context.lastExecution &&
             context.platformType === PlatformType.GITHUB
         ) {
@@ -120,7 +119,6 @@ export class InitialCommentStage extends BasePipelineStage<CodeReviewPipelineCon
             context.platformType,
             context.codeReviewConfig,
             pullRequestMessagesConfig,
-            context.dryRun,
         );
 
         return this.updateContext(context, (draft) => {

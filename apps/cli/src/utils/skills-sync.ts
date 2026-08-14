@@ -20,6 +20,7 @@ export const DEFAULT_SYNC_SKILL_NAMES = [
     'kodus-business-rules-validation',
     'kodus-kody-rules',
     'kodus-centralized-config',
+    'kodus-trace',
 ] as const;
 
 const LEGACY_BUSINESS_RULES_NAME = 'business-rules-validation';

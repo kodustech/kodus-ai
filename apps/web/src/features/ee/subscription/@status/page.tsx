@@ -9,6 +9,7 @@ import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team
 
 import {
     getOrganizationMembers,
+    MEMBERS_UNAVAILABLE,
     recalculateTrialUnlocks,
 } from "../_services/billing/fetch";
 import { Redirect } from "./_components";
@@ -27,7 +28,7 @@ export default async function SubscriptionStatus() {
             authorizedFetch<TeamMembersResponse>(SETUP_PATHS.TEAM_MEMBERS, {
                 params: { teamId },
             }),
-            getOrganizationMembers({ teamId }).catch(() => []),
+            getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
             getLLMConfigStatus().catch(() => undefined),
         ]);
 
@@ -38,9 +39,12 @@ export default async function SubscriptionStatus() {
     // real credentials) so this page and the app chrome can never disagree.
     const hasByok = Boolean(llmConfigStatus?.byok?.configured);
 
-    const codeHostMembersCount = Array.isArray(organizationMembers)
-        ? organizationMembers.length
-        : undefined;
+    // Stays undefined when the code host could not be reached: "unknown" must
+    // not be reported as a real headcount to the trial-unlock signals.
+    const codeHostMembersCount =
+        organizationMembers.status === "ok"
+            ? organizationMembers.members.length
+            : undefined;
     const recalculatedLicense = await recalculateTrialUnlocks({
         teamId,
         signals: {
