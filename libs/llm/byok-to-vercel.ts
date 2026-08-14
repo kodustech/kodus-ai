@@ -385,6 +385,7 @@ export function byokToVercelModel(
                 baseURL:
                     process.env.API_FIREWORKS_BASE_URL ||
                     'https://api.fireworks.ai/inference/v1',
+                supportsStructuredOutputs: true,
             })(defaultModel);
         }
 
