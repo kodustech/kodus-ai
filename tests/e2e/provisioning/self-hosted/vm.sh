@@ -548,9 +548,9 @@ env_set IMAGE_TAG "$IMAGE_TAG"
 env_set API_LOG_LEVEL "info"
 # Point the web's server-side API calls (next-auth authorize → /auth/login,
 # used by rbac-frontend-routes / rbac-ui-render) at the compose SERVICE name
-# `api`, which Docker DNS always resolves on the shared network regardless of
-# container_name. The old literal `kodus-api` matched neither the service
-# (`api`) nor the actual container (`kodus_api` once GLOBAL_API_CONTAINER_NAME
+# \`api\`, which Docker DNS always resolves on the shared network regardless of
+# container_name. The old literal \`kodus-api\` matched neither the service
+# (\`api\`) nor the actual container (\`kodus_api\` once GLOBAL_API_CONTAINER_NAME
 # is set), so authorize() got ENOTFOUND → returned null → the next-auth login
 # 302'd with no session → both RBAC web scenarios failed on self-hosted only
 # (cloud passes: it reaches the API over the public URL, not a docker host).

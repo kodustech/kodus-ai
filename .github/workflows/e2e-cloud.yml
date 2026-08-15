@@ -104,6 +104,10 @@ jobs:
               working-directory: tests/e2e
               run: npm install --no-audit --no-fund
 
+            - name: Install Playwright Chromium
+              working-directory: tests/e2e
+              run: npx playwright install --with-deps chromium
+
             # Seed the cloud tenant registry. The runner resolves each cloud
             # cell's tenant by (provider, license) from ~/.kodus-dev/cloud-
             # tenants.json (runner.ts:readCloudTenantsFile). Locally that file

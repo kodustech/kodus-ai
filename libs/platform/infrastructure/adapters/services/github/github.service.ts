@@ -4677,18 +4677,20 @@ This is an experimental feature that generates committable changes. Review the d
                     /No commit found for the ref/i.test(
                         (error as any)?.message ?? '',
                     );
-                this.logger.warn({
-                    message: refDeleted
-                        ? 'PR head ref missing — falling back to base ref'
-                        : 'Error getting file content from pull request',
-                    context: GithubService.name,
-                    error,
-                    metadata: {
-                        ...params,
-                        prHeadMissing: refDeleted,
-                        httpStatus: status,
-                    },
-                });
+                if (!(params.suppressNotFoundLogs && status === 404)) {
+                    this.logger.warn({
+                        message: refDeleted
+                            ? 'PR head ref missing — falling back to base ref'
+                            : 'Error getting file content from pull request',
+                        context: GithubService.name,
+                        error,
+                        metadata: {
+                            ...params,
+                            prHeadMissing: refDeleted,
+                            httpStatus: status,
+                        },
+                    });
+                }
 
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
@@ -4701,12 +4703,16 @@ This is an experimental feature that generates committable changes. Review the d
                 return lines;
             }
         } catch (error) {
-            this.logger.error({
-                message: 'Error getting file content to branch base',
-                context: GithubService.name,
-                error,
-                metadata: { ...params },
-            });
+            const status =
+                (error as any)?.status ?? (error as any)?.response?.status;
+            if (!(params.suppressNotFoundLogs && status === 404)) {
+                this.logger.error({
+                    message: 'Error getting file content to branch base',
+                    context: GithubService.name,
+                    error,
+                    metadata: { ...params },
+                });
+            }
         }
     }
 
