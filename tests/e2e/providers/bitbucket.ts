@@ -351,11 +351,14 @@ export class BitbucketProvider extends BaseProvider {
                     { method: "DELETE", headers: this.headers() },
                 );
                 if (del.status === 403) {
-                    log.warn(
-                        `bitbucket:cleanupStale: cannot delete stale webhook ${h.url} — app password lacks the delete:webhook:bitbucket scope. ` +
-                            `${stale.length} dead tunnel webhook(s) remain; at Bitbucket's 50-hook cap NEW webhook registration fails silently and reviews never trigger.`,
+                    throw new Error(
+                        `bitbucket:cleanupStale: cannot delete stale webhook ${h.url} — ` +
+                            `BB_TEST_APP_PASSWORD lacks delete:webhook:bitbucket. ` +
+                            `${stale.length} dead tunnel webhook(s) remain; refusing to spend ` +
+                            `the matrix timeout on PRs whose webhook cannot be trusted. ` +
+                            `Rotate the app password with webhook read/write/delete permission, ` +
+                            `then rerun this cell to clean them automatically.`,
                     );
-                    break;
                 }
                 if (del.status >= 200 && del.status < 300) hooksDeleted += 1;
             }
@@ -364,9 +367,20 @@ export class BitbucketProvider extends BaseProvider {
                     `bitbucket:cleanupStale: deleted ${hooksDeleted} stale tunnel webhook(s)`,
                 );
             }
-        } catch {
-            // Best-effort — webhook cleanup failing must not block the run;
-            // the loud 403 warn above is the actionable signal.
+        } catch (error) {
+            // A known permission/cap problem is deterministic and must fail
+            // before a review opens. Unknown cleanup errors remain best-effort
+            // because a temporary listing failure does not prove the current
+            // webhook is unusable.
+            if (
+                error instanceof Error &&
+                error.message.includes("delete:webhook:bitbucket")
+            ) {
+                throw error;
+            }
+            log.warn(
+                `bitbucket:cleanupStale: webhook cleanup unavailable: ${error instanceof Error ? error.message : String(error)}`,
+            );
         }
         return { closed };
     }
