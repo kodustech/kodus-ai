@@ -158,7 +158,7 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
  * Default model config when no BYOK is configured.
  */
 export const KODUS_TRIAL_MODEL =
-    'accounts/fireworks/models/deepseek-v4-flash';
+    'accounts/fireworks/models/deepseek-v4-flash-0731';
 
 const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,
