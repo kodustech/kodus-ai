@@ -309,7 +309,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
 
         expect(createOpenAICompatibleMock).toHaveBeenCalledTimes(1);
         expect(result.sdk).toBe('openai-compatible');
-        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash');
+        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash-0731');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith({
             name: 'fireworks',
             apiKey: 'fw-key',
@@ -351,7 +351,7 @@ describe('buildModelFromSlot — env/managed default characterization (undefined
         // fell through to the managed default (DEFAULT_MODEL.model =
         // accounts/fireworks/models/deepseek-v4-flash).
         expect(result.sdk).toBe('openai-compatible');
-        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash');
+        expect(result.modelId).toBe('accounts/fireworks/models/deepseek-v4-flash-0731');
         expect(createOpenAICompatibleMock).toHaveBeenCalledWith(
             expect.objectContaining({ name: 'fireworks' }),
         );

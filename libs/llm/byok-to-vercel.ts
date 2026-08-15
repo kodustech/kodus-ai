@@ -60,7 +60,7 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
  * detection, PR summary) references this instead of re-typing the id.
  */
 export const KODUS_DEFAULT_MODEL =
-    'accounts/fireworks/models/deepseek-v4-flash';
+    'accounts/fireworks/models/deepseek-v4-flash-0731';
 
 /**
  * Default model config when no BYOK is configured.
