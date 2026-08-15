@@ -75,12 +75,19 @@ export const groupModelsByProvider = (
     config: BYOKConfig | null | undefined,
 ): { credential: BYOKCredential; models: BYOKModelConfig[] }[] => {
     if (!isByokConfig(config)) return [];
-    const models = config.models ?? [];
+    // Bucket models by credentialId ONCE (O(n)) so the per-credential lookup
+    // below is O(1) instead of a nested filter (O(credentials × models)).
+    const modelsByCredential = new Map<string, BYOKModelConfig[]>();
+    for (const model of config.models ?? []) {
+        const bucket = modelsByCredential.get(model.credentialId);
+        if (bucket) bucket.push(model);
+        else modelsByCredential.set(model.credentialId, [model]);
+    }
     return config.credentials
         .filter((c) => !c.managed)
         .map((credential) => ({
             credential,
-            models: models.filter((m) => m.credentialId === credential.id),
+            models: modelsByCredential.get(credential.id) ?? [],
         }));
 };
 
