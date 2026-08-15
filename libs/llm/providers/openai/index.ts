@@ -100,10 +100,19 @@ export const openaiModule: ProviderModule = {
         const baseURL = cfg.baseURL;
 
         if ((cfg.provider as string) === 'openai_compatible') {
+            // openai_compatible is a custom endpoint — there is no sensible
+            // default. `@ai-sdk/openai-compatible` throws a cryptic "Invalid URL"
+            // on an empty baseURL when it builds the first request; fail loud and
+            // actionable at build time instead.
+            if (!baseURL) {
+                throw new Error(
+                    'openai_compatible provider requires a baseURL (none configured on the slot).',
+                );
+            }
             return createOpenAICompatible({
                 name: 'openai-compatible',
                 apiKey,
-                baseURL: baseURL || '',
+                baseURL,
                 // Never-downgrade family wins over the baseURL heuristic: a
                 // direct-Moonshot upstream (api.moonshot.ai) keeps json_schema
                 // ON even though shouldEnableJsonSchema alone would reject it

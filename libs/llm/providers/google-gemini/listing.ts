@@ -28,9 +28,14 @@ const httpListing: ModelListing = {
                 }
             )?.models ?? [];
         return models
-            .filter((m) => m.name.includes('gemini'))
+            .filter((m) => m.name?.includes('gemini'))
             .map((m) => {
-                const modelId = m.name.split('/')[1];
+                // The API normally returns `models/<id>`, but guard against a
+                // bare id or a missing prefix so an unexpected response shape
+                // doesn't throw and crash the whole listing.
+                const parts = m.name?.split('/') ?? [];
+                const modelId =
+                    parts.length > 1 ? parts[1] : (parts[0] ?? m.name);
                 return catalogWithReasoning(modelId, formatModelName(modelId));
             });
     },

@@ -205,3 +205,18 @@ export function hasNonManagedCredential(
         (config.credentials ?? []).some((c) => !c.managed)
     );
 }
+
+/**
+ * Secret fields carried inside a credential's `settings` (Amazon Bedrock auth).
+ * The SINGLE source of truth shared by the write path (create-or-update, which
+ * encrypts/keeps them) and the read path (find-by-key, which masks them). Keeping
+ * one list prevents the two from drifting — a field added to one but not the
+ * other would leak that setting's ciphertext to the client on read.
+ * `awsRegion`, `baseURL`, `vertexLocation` are plaintext settings, NOT listed.
+ */
+export const BYOK_SECRET_SETTINGS = [
+    'awsBearerToken',
+    'awsAccessKeyId',
+    'awsSecretAccessKey',
+    'awsSessionToken',
+] as const;

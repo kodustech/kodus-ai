@@ -1,6 +1,7 @@
 import { encrypt } from '@libs/common/utils/crypto';
 import {
     isByokConfig,
+    BYOK_SECRET_SETTINGS,
     type BYOKConfig,
     type BYOKCredential,
 } from '@libs/llm/byok-config';
@@ -247,6 +248,14 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
 
         const credentials = (next.credentials ?? []).map((cred) => {
+            // A managed credential carries NO secret of its own — the runtime
+            // resolves the Kodus-funded key from env. Skip the encrypt/keep +
+            // auth pass entirely: the provider-based `prior` fallback below would
+            // otherwise hand it a NON-managed credential's ciphertext, storing a
+            // contradictory `managed: true` + stale key. Force apiKey undefined.
+            if (cred?.managed) {
+                return { ...cred, apiKey: undefined };
+            }
             const prior =
                 (cred.id ? existingById.get(cred.id) : undefined) ??
                 (cred.provider
@@ -292,7 +301,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         const existingSettings = existing?.settings;
         if (nextSettings || existingSettings) {
             const settings: Record<string, unknown> = { ...(nextSettings ?? {}) };
-            for (const field of CreateOrUpdateOrganizationParametersUseCase.V2_SECRET_SETTINGS) {
+            for (const field of BYOK_SECRET_SETTINGS) {
                 const kept = this.encryptOrKeep(
                     typeof nextSettings?.[field] === 'string'
                         ? (nextSettings[field] as string)
@@ -347,14 +356,6 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             );
         }
     }
-
-    /** Secret fields carried inside a credential's `settings` (Bedrock auth). */
-    private static readonly V2_SECRET_SETTINGS = [
-        'awsBearerToken',
-        'awsAccessKeyId',
-        'awsSecretAccessKey',
-        'awsSessionToken',
-    ] as const;
 
     /**
      * Provider + slot for the byok_configured telemetry event. v2-only (04b-06 —

@@ -1,6 +1,7 @@
 import { decrypt } from '@libs/common/utils/crypto';
 import {
     isByokConfig,
+    BYOK_SECRET_SETTINGS,
     type BYOKConfig,
     type BYOKCredential,
 } from '@libs/llm/byok-config';
@@ -140,19 +141,6 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
     }
 
     /**
-     * The encrypted secret fields carried inside a credential's `settings`
-     * (Amazon Bedrock auth). Kept in sync with `V2_SECRET_SETTINGS` in
-     * create-or-update.use-case.ts. `awsRegion`, `baseURL`, `vertexLocation`
-     * are plaintext settings and are left untouched.
-     */
-    private static readonly V2_SECRET_SETTINGS = [
-        'awsBearerToken',
-        'awsAccessKeyId',
-        'awsSecretAccessKey',
-        'awsSessionToken',
-    ] as const;
-
-    /**
      * Mask every credential's secret fields on a config: the top-level
      * `apiKey` and the aws* fields under `settings`. `models[]`/`routing`/
      * `version` pass through plaintext. A managed credential (env default,
@@ -174,7 +162,7 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
             delete masked.apiKey;
             if (cred.settings && typeof cred.settings === 'object') {
                 const settings: Record<string, unknown> = { ...cred.settings };
-                for (const field of FindByKeyOrganizationParametersUseCase.V2_SECRET_SETTINGS) {
+                for (const field of BYOK_SECRET_SETTINGS) {
                     delete settings[field];
                 }
                 masked.settings = settings;
@@ -188,7 +176,7 @@ export class FindByKeyOrganizationParametersUseCase implements IUseCase {
 
         if (cred.settings && typeof cred.settings === 'object') {
             const settings: Record<string, unknown> = { ...cred.settings };
-            for (const field of FindByKeyOrganizationParametersUseCase.V2_SECRET_SETTINGS) {
+            for (const field of BYOK_SECRET_SETTINGS) {
                 const value = settings[field];
                 if (typeof value === 'string' && value) {
                     settings[field] = this.safeMaskSecret(value);
