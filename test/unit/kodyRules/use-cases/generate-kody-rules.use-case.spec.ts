@@ -172,7 +172,7 @@ describe('GenerateKodyRulesUseCase', () => {
                         // BYOK", so these tests exercise the persistence flow.
                         // v2-native: the model policy now asks the service for
                         // the codeReview carrier directly.
-                        resolveTaskCarrier: jest
+                        resolveTaskSlot: jest
                             .fn()
                             .mockResolvedValue({ main: { model: 'test-model' } }),
                         getSubscriptionStatus: jest

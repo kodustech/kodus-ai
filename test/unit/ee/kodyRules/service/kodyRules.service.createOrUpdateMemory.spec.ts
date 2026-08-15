@@ -107,8 +107,8 @@ describe('KodyRulesService.createOrUpdateMemory', () => {
 
         const permissionValidationServiceMock = {
             // v2-native: evaluateMemoryActionViaLLM resolves BYOK via
-            // resolveTaskCarrier(org, codeReview). null → env/managed default.
-            resolveTaskCarrier: jest.fn().mockResolvedValue(null),
+            // resolveTaskSlot(org, codeReview). null → env/managed default.
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
             getBYOKConfig: jest.fn().mockResolvedValue(undefined),
         };
 

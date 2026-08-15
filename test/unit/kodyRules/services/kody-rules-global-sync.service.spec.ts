@@ -65,7 +65,6 @@ function createService(opts: {
         {} as any, // updateOrCreateCodeReviewParameterUseCase
         {} as any, // createOrUpdateKodyRulesUseCase
         deleteRuleInOrganizationByIdKodyRulesUseCase as any,
-        {} as any, // promptRunnerService
         permissionValidationService as any,
         {} as any, // observabilityService
         {} as any, // contextReferenceDetectionService

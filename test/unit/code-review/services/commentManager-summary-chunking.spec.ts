@@ -389,10 +389,15 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
     };
 
     // The carrier generateSummaryPR gets back from
-    // permissionValidationService.resolveTaskCarrier(org, prSummary); its
+    // permissionValidationService.resolveTaskSlot(org, prSummary); its
     // main.maxInputTokens drives chunkChangedFilesForSummary.
+    // v2-native: resolveTaskSlot returns a FLAT NormalizedModel slot (no
+    // `main`/`fallback` carrier), and generateSummaryPR reads
+    // `slot.maxInputTokens` directly off it.
     const carrierWithMaxInputTokens = (maxInputTokens: number) => ({
-        main: { provider: 'openai', model: 'gpt-4o', maxInputTokens },
+        provider: 'openai',
+        model: 'gpt-4o',
+        maxInputTokens,
     });
 
     beforeEach(async () => {
@@ -427,7 +432,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             // v2-native: generateSummaryPR resolves its own model by routing the
             // org's v2 config for the `prSummary` task; maxInputTokens comes from
             // the resolved slot. Default null → env default (no chunking).
-            resolveTaskCarrier: jest.fn().mockResolvedValue(null),
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
             getBYOKConfig: jest.fn().mockResolvedValue(null),
         };
 
@@ -477,7 +482,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         it('should make a single LLM call', async () => {
             const files = [makeFile('a.ts', 50)];
 
-            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
                 carrierWithMaxInputTokens(100000),
             );
 
@@ -500,7 +505,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             // Each file ≈ 2000 tokens, budget allows ~1 file per chunk
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
                 carrierWithMaxInputTokens(3000),
             );
 
@@ -537,7 +542,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 makeFile('e.ts', 3000),
             ];
 
-            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
                 carrierWithMaxInputTokens(4000),
             );
 
@@ -580,7 +585,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
                 carrierWithMaxInputTokens(3000),
             );
 
@@ -616,7 +621,7 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            mockPermissionValidationService.resolveTaskCarrier.mockResolvedValue(
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
                 carrierWithMaxInputTokens(3000),
             );
 

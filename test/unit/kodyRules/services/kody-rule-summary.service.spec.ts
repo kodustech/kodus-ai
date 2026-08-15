@@ -57,7 +57,7 @@ function createService(
     const permissionValidationService = {
         // v2-native: generateAtoms/summary ask the service for the codeReview
         // carrier (null → env/managed default).
-        resolveTaskCarrier: jest.fn().mockResolvedValue(null),
+        resolveTaskSlot: jest.fn().mockResolvedValue(null),
         getBYOKConfig: jest
             .fn()
             .mockResolvedValue(
