@@ -88,7 +88,7 @@ const MODEL_PRESETS = {
     },
     'deepseek-v4-flash-fireworks': {
         provider: 'openai-compatible',
-        model: 'accounts/fireworks/models/deepseek-v4-flash',
+        model: 'accounts/fireworks/models/deepseek-v4-flash-0731',
         apiKeyEnv: 'FIREWORKS_API_KEY',
         baseURL: 'https://api.fireworks.ai/inference/v1',
         label: 'deepseek-v4-flash-fireworks-investigation',
