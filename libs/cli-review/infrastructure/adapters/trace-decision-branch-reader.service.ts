@@ -50,6 +50,10 @@ export class TraceDecisionBranchReaderService implements ITraceDecisionBranchRea
                     head: { ref: TRACE_BRANCH },
                     base: { ref: TRACE_BRANCH },
                 },
+                // A repository that has never enabled Trace legitimately has
+                // no orphan branch. Treat that 404 as an empty context rather
+                // than emitting the generic PR-file fallback/error pair.
+                suppressNotFoundLogs: true,
             });
 
         const raw = decodeContent(response);

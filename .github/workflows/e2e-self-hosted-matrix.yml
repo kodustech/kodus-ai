@@ -245,6 +245,15 @@ jobs:
               working-directory: tests/e2e
               run: npm install --no-audit --no-fund
 
+            # Browser scenarios currently apply only to the GitHub cell. The
+            # Playwright npm package does not install Chromium by itself on a
+            # fresh GitHub runner, so without this step rbac-ui-render and the
+            # Cockpit render check fail before opening a page.
+            - name: Install Playwright Chromium
+              if: matrix.cell.provider == 'github'
+              working-directory: tests/e2e
+              run: npx playwright install --with-deps chromium
+
             - name: Resolve cell-specific secrets
               id: secrets
               env:

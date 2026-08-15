@@ -67,6 +67,7 @@ describe('TraceDecisionBranchReaderService', () => {
                     head: { ref: TRACE_BRANCH },
                     base: { ref: TRACE_BRANCH },
                 },
+                suppressNotFoundLogs: true,
             }),
         );
     });
