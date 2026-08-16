@@ -2040,7 +2040,7 @@ export class ChatWithKodyFromGitUseCase {
                     'Sandbox unavailable; conversation will continue without native repository tools',
                 context: ChatWithKodyFromGitUseCase.name,
                 error,
-                metadata: { prKey },
+                metadata: { prKey, organizationAndTeamData },
             });
         }
 
