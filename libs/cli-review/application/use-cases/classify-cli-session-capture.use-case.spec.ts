@@ -3,7 +3,7 @@
  *
  * Sibling of the 03-01 tracer (classify-session.use-case.spec.ts). Proves the
  * "no behavior change on the happy path" gate after migrating extractWithLLM off
- * the legacy BYOKPromptRunner LangChain path (CEREBRAS_GLM_47 pin) onto the
+ * the legacy BYOKPromptRunner LangChain path onto the
  * AI SDK path (runStructuredReviewCall, byokConfig: undefined → managed default).
  * Parity is on the parsed decisions[] mapping: a fixed { decisions: [...] } result,
  * returned through the REAL runStructuredReviewCall (real schema conversion + model

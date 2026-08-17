@@ -122,7 +122,7 @@ function inferCategory(name: string, sch: SchemaItem | undefined): string {
     if (/^API_DOCS_/.test(name)) return 'api-docs';
     if (/^WEB_/.test(name)) return 'web';
     if (/GITHUB|GITLAB|BITBUCKET|AZURE|FORGEJO/.test(name)) return 'git-providers';
-    if (/OPENAI|ANTHROPIC|GEMINI|GOOGLE_AI|VERTEX|GROQ|NOVITA|CEREBRAS|OPENROUTER|MORPHLLM|LLM/.test(name))
+    if (/OPENAI|ANTHROPIC|GEMINI|GOOGLE_AI|VERTEX|GROQ|NOVITA|OPENROUTER|MORPHLLM|LLM/.test(name))
         return 'llm';
     if (/PG_DB|MG_DB|DATABASE|MONGODB/.test(name)) return 'database';
     if (/JWT|CRYPTO|NEXTAUTH/.test(name)) return 'auth';

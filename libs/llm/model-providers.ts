@@ -55,7 +55,6 @@ export enum LLMModelProvider {
     NOVITA_DEEPSEEK_V3_0324 = 'novita:deepseek-v3-0324',
     NOVITA_QWEN3_235B_A22B_THINKING_2507 = 'novita:qwen3-235b-a22b-thinking-2507',
     NOVITA_MOONSHOTAI_KIMI_K2_INSTRUCT = 'novita:moonshotai/kimi-k2-instruct',
-    CEREBRAS_GPT_OSS_120B = 'cerebras:gpt-oss-120b',
 }
 
 /**

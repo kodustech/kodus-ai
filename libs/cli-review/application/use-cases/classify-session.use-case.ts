@@ -346,7 +346,7 @@ export class ClassifySessionUseCase {
         // Migrated off the legacy LangChain PromptRunner path onto the AI
         // SDK path (REQ-NOLC-01). byokConfig is undefined here → runStructuredReviewCall
         // resolves the managed review default (Kimi via Moonshot); the previous
-        // CEREBRAS_GLM_47/GEMINI_3_FLASH_PREVIEW pin is intentionally dropped
+        // GEMINI_3_FLASH_PREVIEW pin is intentionally dropped
         // (per-task model routing is Phase 4). `.setTemperature(0)` is likewise
         // dropped — runStructuredReviewCall does not thread temperature; acceptable
         // for this structured extraction. Parity is on the parsed decisions[] mapping.

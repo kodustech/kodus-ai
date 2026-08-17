@@ -176,7 +176,7 @@ export class ClassifyCliSessionCaptureUseCase {
         // Migrated off the legacy LangChain BYOKPromptRunner path onto the
         // AI SDK path (REQ-NOLC-01), mirroring the tracer (03-01). byokConfig is
         // undefined here → runStructuredReviewCall resolves the managed review
-        // default; the previous CEREBRAS_GLM_47/GEMINI_3_FLASH_PREVIEW pin is
+        // default; the previous GEMINI_3_FLASH_PREVIEW pin is
         // intentionally dropped (per-task model routing is Phase 4).
         // runStructuredReviewCall owns the single observability span path (Q4).
         // setTemperature(0) is likewise dropped (not threaded by
