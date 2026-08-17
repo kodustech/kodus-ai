@@ -115,7 +115,8 @@
 | `API_ANTHROPIC_API_KEY` | – | secret | ☁️ Cloud |  |
 | `API_GOOGLE_AI_API_KEY` | – | secret | ☁️ Cloud | Optional secondary providers — appear commented in the installer template. |
 | `GEMINI_API_KEY` | – | secret | ☁️ Cloud |  |
-| `API_VERTEX_AI_API_KEY` | – | secret | ☁️ Cloud | Service Account JSON (base64-encoded) for Vertex AI. |
+| `API_VERTEX_AI_API_KEY` | – | secret | ☁️ Cloud | Service Account JSON (base64-encoded) for Vertex AI. Leave empty to authenticate with Application Default Credentials instead (Workload Identity, an attached service account, or `gcloud auth application-default login`); GOOGLE_CLOUD_PROJECT must then be set. |
+| `GOOGLE_CLOUD_PROJECT` | – | string | ☁️ Cloud | GCP project for Vertex AI when authenticating with Application Default Credentials rather than a service account key. Only needed when API_VERTEX_AI_API_KEY is empty — with a key the project is read from the key itself. GCLOUD_PROJECT is accepted as an alias. |
 | `API_VERTEX_AI_LOCATION` | – | string | ☁️ Cloud |  |
 | `API_GOOGLE_AI_PROVIDER` | – | enum(gemini,vertex) | ☁️ Cloud | Google AI provider: gemini (AI Studio) or vertex (Vertex AI). |
 | `API_NOVITA_AI_API_KEY` | – | secret | ☁️ Cloud |  |
