@@ -188,6 +188,33 @@ describe('GitlabService', () => {
             );
         });
 
+        // CLI mode passes the placeholder id '0' with a fullName parsed from the
+        // local remote. '0' is a truthy string, so this needs an explicit check
+        // or every CLI clone burns a guaranteed-failing round-trip.
+        it.each(['0', '', undefined])(
+            'skips the project lookup when the id is the placeholder %p',
+            async (id) => {
+                mockAuthDetails();
+                const show = jest.fn();
+                mockProjectsShow(show);
+
+                const cloneParams = await service.getCloneParams({
+                    organizationAndTeamData,
+                    repository: {
+                        id: id as string,
+                        name: 'repo',
+                        fullName: 'group/repo',
+                        defaultBranch: 'main',
+                    },
+                });
+
+                expect(show).not.toHaveBeenCalled();
+                expect(cloneParams.url).toBe(
+                    'https://gitlab.example.com/group/repo',
+                );
+            },
+        );
+
         it('falls back to the stored fullName when the project lookup fails', async () => {
             mockAuthDetails();
             mockProjectsShow(

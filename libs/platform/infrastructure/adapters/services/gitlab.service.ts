@@ -3354,10 +3354,14 @@ export class GitlabService implements Omit<
      * The numeric id survives renames and moves, which is why every REST call in
      * this service keeps working while only the clone breaks. Falls back to the
      * stored `fullName` so a lookup failure is no worse than the old behaviour.
+     *
+     * Callers without a real project id are expected to skip this entirely —
+     * see `hasResolvableProjectId`.
      */
     private async resolveProjectPathWithNamespace(
         gitlabAuthDetail: GitlabAuthDetail,
         repository: Pick<Repository, 'id' | 'fullName'>,
+        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<string> {
         try {
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
@@ -3371,6 +3375,7 @@ export class GitlabService implements Omit<
                 message: `Project ${repository?.id} returned no path_with_namespace; falling back to the stored fullName`,
                 context: GitlabService.name,
                 metadata: {
+                    organizationAndTeamData,
                     repositoryId: repository?.id,
                     fullName: repository?.fullName,
                 },
@@ -3381,6 +3386,7 @@ export class GitlabService implements Omit<
                 context: GitlabService.name,
                 error,
                 metadata: {
+                    organizationAndTeamData,
                     repositoryId: repository?.id,
                     fullName: repository?.fullName,
                 },
@@ -3388,6 +3394,21 @@ export class GitlabService implements Omit<
         }
 
         return repository?.fullName || '';
+    }
+
+    /**
+     * Whether `repository.id` is a real GitLab project id worth a lookup.
+     *
+     * CLI mode has no project id to give — it builds its params straight from
+     * the local git remote and passes the placeholder `'0'` with a `fullName`
+     * parsed from that remote, which is already the authoritative slug. Note
+     * `'0'` is a truthy string, so a plain truthiness check does not catch it
+     * and every CLI clone would spend a guaranteed-failing round-trip.
+     */
+    private hasResolvableProjectId(id?: string | number): boolean {
+        const normalized = String(id ?? '').trim();
+
+        return normalized !== '' && normalized !== '0';
     }
 
     async getCloneParams(params: {
@@ -3413,11 +3434,18 @@ export class GitlabService implements Omit<
             }
 
             // Resolve the slug from the numeric project id instead of trusting
-            // the stored `fullName`. See resolveProjectPathWithNamespace.
-            const projectPath = await this.resolveProjectPathWithNamespace(
-                gitlabAuthDetail,
-                params.repository,
-            );
+            // the stored `fullName`. See resolveProjectPathWithNamespace. With
+            // no real id (CLI mode) `fullName` came straight from the local
+            // remote and is already authoritative, so skip the round-trip.
+            const projectPath = this.hasResolvableProjectId(
+                params.repository?.id,
+            )
+                ? await this.resolveProjectPathWithNamespace(
+                      gitlabAuthDetail,
+                      params.repository,
+                      params.organizationAndTeamData,
+                  )
+                : params.repository?.fullName || '';
 
             const encodedPath = projectPath
                 .split('/')
