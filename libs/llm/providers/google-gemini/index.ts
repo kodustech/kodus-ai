@@ -10,13 +10,15 @@ import { registerProvider } from '../kernel/registry';
 import { googleGeminiModelListing } from './listing';
 import type {
     ModelCapabilities,
-    ModelResult,
-    NormalizedUsage,
     ProviderBuildConfig,
     ProviderModule,
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
 
 /** Effort → thinking budget (mirrors reasoning-options.ts EFFORT_TO_BUDGET;
  *  local copy keeps this module free of a runtime LangChain import). */
@@ -82,26 +84,14 @@ export const googleGeminiModule: ProviderModule = {
     // usage.outputTokenDetails.reasoningTokens. So the generic reader below splits
     // reasoning correctly for a Gemini thinking call and yields 0 for a plain one.
     // output is the FULL completion count and is NEVER reduced by reasoning (Q4).
-    normalizeUsage(raw: unknown): NormalizedUsage {
-        const u =
-            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
-        return {
-            input: u.inputTokens ?? 0,
-            output: u.outputTokens ?? 0,
-            reasoning:
-                u.outputTokenDetails?.reasoningTokens ??
-                u.reasoningTokens ??
-                0,
-        };
-    },
-    normalize(raw: unknown): ModelResult {
-        return { usage: this.normalizeUsage(raw), raw };
-    },
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
 
     uiFields: [
         { key: 'apiKey', label: 'API key', type: 'password', required: true, scope: 'top' },
         { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top' },
     ],
+    providerOptionsNamespace: () => 'google',
     modelListing: googleGeminiModelListing,
 };
 

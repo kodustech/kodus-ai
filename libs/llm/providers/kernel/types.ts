@@ -159,8 +159,6 @@ export interface ProviderModule {
     normalize(raw: unknown): ModelResult;
     /** Normalize raw usage → NormalizedUsage. STUB in Phase 1; Phase 3 implements. */
     normalizeUsage(raw: unknown): NormalizedUsage;
-    /** Optional pure request transform for provider quirks. */
-    transformRequest?(cfg: ProviderBuildConfig): ProviderBuildConfig;
     /** Optional reasoning mapping: canonical effort → provider-native options.
      *  Folded from reasoning-options.ts in 01-04. */
     reasoning?(
@@ -177,6 +175,23 @@ export interface ProviderModule {
     systemCacheControl?(
         cfg: ProviderBuildConfig,
     ): Record<string, unknown> | undefined;
+    /** Whether sampling params (temperature / top_p / top_k) may be sent for
+     *  this model. Provider-specific knowledge lives HERE (the single source),
+     *  sibling to `reasoning()`: only the module knows, per its own id + model
+     *  id, whether a request carrying temperature 400s — e.g. real Anthropic
+     *  4.7+ rejects them while `anthropic_compatible` (Kimi/Z.ai) accepts them.
+     *  Absent/undefined ⇒ the provider accepts sampling params (the default for
+     *  every provider but Anthropic); generic callers treat a missing method as
+     *  `true`. */
+    supportsSamplingParams?(cfg: ProviderBuildConfig): boolean;
+    /** The Vercel AI SDK `providerOptions` namespace key this provider's adapter
+     *  listens on, per requested id (a module may serve several ids with
+     *  DIFFERENT namespaces — the openai module serves `openai` → 'openai' and
+     *  `openai_compatible` → 'openaiCompatible'). Used to auto-wrap a user-pasted
+     *  reasoning override under the right key and to enumerate the known
+     *  namespaces. Absent/undefined ⇒ no known namespace (the override passes
+     *  through unwrapped). */
+    providerOptionsNamespace?(providerId: string): string | undefined;
     /** UI fields for the BYOK settings screen. */
     uiFields: FieldDescriptor[];
     /** How to enumerate this provider's models, per requested id (a module may

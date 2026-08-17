@@ -25,18 +25,9 @@ import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils'
 import {
     buildModelFromSlot,
     getModelName,
-    KODUS_TRIAL_MODEL,
+    trialDefaultModel,
 } from '@libs/llm/byok-to-vercel';
 import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
-
-// Trial-only override: while the org is in the 14-day subscription trial
-// and hasn't wired a BYOK key, route reference detection through the
-// Kodus-funded Fireworks model so we don't burn the expensive production
-// default on Kodus's dime. Off-trial callers get no override, so the
-// resolver falls back to the production default (cloud) or
-// API_LLM_PROVIDER_MODEL (self-hosted). Any BYOK config takes precedence
-// over this in every case.
-const TRIAL_MODEL_OVERRIDE = KODUS_TRIAL_MODEL;
 
 /**
  * Kodus control markers are instructions to the sync engine, never file
@@ -121,10 +112,13 @@ export class ReferenceDetectorService {
     ): Promise<IDetectedReference[]> {
         const { organizationAndTeamData } = params;
 
-        const defaultModelOverride =
-            params.subscriptionStatus === 'trial'
-                ? TRIAL_MODEL_OVERRIDE
-                : undefined;
+        // Trial-only override: on the 14-day trial with no BYOK key, route
+        // reference detection through the Kodus-funded default so we don't burn
+        // the production model on Kodus's dime. Off-trial → undefined (resolver
+        // uses the production/env default). Any BYOK config still wins.
+        const defaultModelOverride = trialDefaultModel({
+            subscriptionStatus: params.subscriptionStatus,
+        });
 
         // The caller passes the already-resolved slot; build from it.
         const byokSlot = params.byokConfig;

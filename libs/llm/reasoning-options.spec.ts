@@ -384,6 +384,42 @@ describe('buildProviderOptions', () => {
             thinkingConfig: { thinkingLevel: 'high' },
         });
     });
+
+    it('auto-wraps a flat override under the provider namespace from the registry', () => {
+        // openai_compatible → 'openaiCompatible' namespace (declared by the
+        // openai module, resolved via REGISTRY — no hand-kept map).
+        const result = buildProviderOptions('main-loop', undefined, {
+            byokProvider: 'openai_compatible',
+            modelName: 'kimi-k2',
+            reasoningConfigOverride: JSON.stringify({
+                thinking: { type: 'enabled' },
+            }),
+        });
+        expect(result.openaiCompatible).toEqual({
+            thinking: { type: 'enabled' },
+        });
+    });
+
+    it('auto-wraps a flat override under anthropic', () => {
+        const result = buildProviderOptions('main-loop', undefined, {
+            byokProvider: BYOKProvider.ANTHROPIC,
+            modelName: 'claude-opus-5',
+            reasoningConfigOverride: JSON.stringify({
+                thinking: { type: 'disabled' },
+            }),
+        });
+        expect(result.anthropic).toEqual({ thinking: { type: 'disabled' } });
+    });
+
+    it('passes a flat override through unwrapped for a provider with no namespace', () => {
+        // moonshot/azure/bedrock declare no namespace → unwrapped (preserved).
+        const result = buildProviderOptions('main-loop', undefined, {
+            byokProvider: 'moonshot',
+            modelName: 'kimi-k2.7-code',
+            reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+        });
+        expect(result).toEqual({ foo: 'bar' });
+    });
 });
 
 describe('buildLangfuseTelemetry', () => {

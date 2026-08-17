@@ -64,7 +64,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
-import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
+import { resolveByokTemperature } from '@libs/llm/sampling-params';
 
 interface ClusteredSuggestion {
     id: string;

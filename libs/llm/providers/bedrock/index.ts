@@ -16,11 +16,13 @@ import {
 import { bedrockModelListing } from './listing';
 import type {
     ModelCapabilities,
-    ModelResult,
-    NormalizedUsage,
     ProviderBuildConfig,
     ProviderModule,
 } from '../kernel/types';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
 
 export const bedrockModule: ProviderModule = {
     id: 'amazon_bedrock',
@@ -75,21 +77,8 @@ export const bedrockModule: ProviderModule = {
     // ai@6 flat fallback (0 when a Bedrock model reports no thinking split).
     // Reasoning is a detail-OF output — `output` is the FULL completion count and
     // is NEVER reduced by reasoning (Q4 double-count trap).
-    normalizeUsage(raw: unknown): NormalizedUsage {
-        const u =
-            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
-        return {
-            input: u.inputTokens ?? 0,
-            output: u.outputTokens ?? 0,
-            reasoning:
-                u.outputTokenDetails?.reasoningTokens ??
-                u.reasoningTokens ??
-                0,
-        };
-    },
-    normalize(raw: unknown): ModelResult {
-        return { usage: this.normalizeUsage(raw), raw };
-    },
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
 
     uiFields: [
         { key: 'awsBearerToken', label: 'Bedrock API key (bearer)', type: 'password', required: false, scope: 'settings' },

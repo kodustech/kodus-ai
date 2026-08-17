@@ -30,6 +30,32 @@ const anthropicNativeCfg = {
     apiKey: 'test-key',
 } as any;
 
+describe('anthropicModule.reasoning — effort=none owns "thinking off"', () => {
+    const off = (model: string, provider = 'anthropic') =>
+        anthropicModule.reasoning!(
+            { provider, model, apiKey: '' } as any,
+            'none',
+        );
+
+    it('says `disabled` out loud on models that think by default (Opus 5)', () => {
+        expect(off('claude-opus-5')).toEqual({
+            anthropic: { thinking: { type: 'disabled' } },
+        });
+    });
+
+    it('omits the config on legacy models (never think unasked)', () => {
+        expect(off('claude-sonnet-4-5')).toEqual({});
+    });
+
+    it('leaves Fable thinking on — the API rejects `disabled`', () => {
+        expect(off('claude-fable-5')).toEqual({});
+    });
+
+    it('omits on anthropic_compatible (Kimi/Z.ai never think by default)', () => {
+        expect(off('kimi-k2.7-code', 'anthropic_compatible')).toEqual({});
+    });
+});
+
 describe('anthropicModule.normalizeUsage — real extraction (Q4: detail-OF output)', () => {
     it('extended-thinking fixture: input/output are the raw counts; reasoning === 0 (anthropic folds thinking into output_tokens)', () => {
         const usage = anthropicModule.normalizeUsage({ usage: reasoning.usage });

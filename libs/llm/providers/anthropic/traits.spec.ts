@@ -3,7 +3,7 @@ import {
     resolveAnthropicModelTraits,
     supportsSamplingParams,
     type AnthropicGeneration,
-} from '@libs/llm/anthropic-model-traits';
+} from './traits';
 
 describe('normalizeAnthropicModelName', () => {
     it.each([

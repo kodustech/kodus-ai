@@ -24,20 +24,19 @@
 import type { LanguageModel } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import {
-    shouldEnableJsonSchema,
-    isNeverDowngradeModel,
-} from '@libs/llm/structured-output-gate';
+import { isNeverDowngradeModel } from '@libs/llm/structured-output-gate';
 import { registerProvider } from '../kernel/registry';
 import { moonshotModelListing } from './listing';
 import type {
     ModelCapabilities,
-    ModelResult,
-    NormalizedUsage,
     ProviderBuildConfig,
     ProviderBuildOptions,
     ProviderModule,
 } from '../kernel/types';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
 
 export const moonshotModule: ProviderModule = {
     id: 'moonshot',
@@ -64,13 +63,12 @@ export const moonshotModule: ProviderModule = {
     },
 
     build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
-        // Never-downgrade family wins over the baseURL heuristic: a direct-Moonshot
-        // upstream keeps json_schema ON when opted in, even though
-        // shouldEnableJsonSchema('moonshot', …) alone would reject it (D-00b).
+        // Kimi/Moonshot is the never-downgrade family: keep json_schema ON when
+        // opted in (a baseURL heuristic would reject a direct-Moonshot upstream —
+        // D-00b). No other moonshot model qualifies, so this is the whole gate.
         const enableStructuredOutputs =
             opts?.structuredOutputs === true &&
-            (isNeverDowngradeModel(cfg.model) ||
-                shouldEnableJsonSchema('moonshot', cfg.model, cfg.baseURL));
+            isNeverDowngradeModel(cfg.model);
         return createOpenAICompatible({
             name: 'moonshot',
             apiKey: cfg.apiKey,
@@ -94,21 +92,8 @@ export const moonshotModule: ProviderModule = {
     // `reasoningTokens` is the ai@6 flat fallback; 0 for non-thinking calls).
     // Reasoning is a subset of output — `output` is the FULL completion count and is
     // NEVER reduced by reasoning (Q4 double-count trap).
-    normalizeUsage(raw: unknown): NormalizedUsage {
-        const u =
-            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
-        return {
-            input: u.inputTokens ?? 0,
-            output: u.outputTokens ?? 0,
-            reasoning:
-                u.outputTokenDetails?.reasoningTokens ??
-                u.reasoningTokens ??
-                0,
-        };
-    },
-    normalize(raw: unknown): ModelResult {
-        return { usage: this.normalizeUsage(raw), raw };
-    },
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
 
     uiFields: [
         { key: 'apiKey', label: 'API key', type: 'password', required: true, scope: 'top' },

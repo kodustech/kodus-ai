@@ -116,16 +116,15 @@ export function runStaticConformance(
             expect(opts).toBeDefined();
             expect(typeof opts).toBe('object');
             if (effort === 'none') {
-                expect(Object.keys(opts)).toHaveLength(0);
+                // 'none' must never ENABLE thinking. Most providers express that
+                // by emitting nothing; Anthropic must say `disabled` out loud on
+                // models that think by default, so an explicit disable payload is
+                // also valid "off" — what's forbidden is any enable directive.
+                expect(JSON.stringify(opts)).not.toMatch(
+                    /"type":"enabled"|"type":"adaptive"|budgetTokens|reasoningEffort/,
+                );
             }
         }
-    });
-
-    it(`${module.id}: transformRequest is idempotent when present`, () => {
-        if (!module.transformRequest) return; // optional
-        const once = module.transformRequest(cfg);
-        const twice = module.transformRequest(once);
-        expect(twice).toEqual(once);
     });
 }
 

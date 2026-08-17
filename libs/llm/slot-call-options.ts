@@ -1,4 +1,4 @@
-import { resolveByokTemperature } from './anthropic-model-traits';
+import { resolveByokTemperature } from './sampling-params';
 import type { NormalizedModel } from './byok-config';
 
 /**

@@ -8,19 +8,24 @@ import type { LanguageModel } from 'ai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
-import { resolveAnthropicModelTraits } from '@libs/llm/anthropic-model-traits';
+import {
+    resolveAnthropicModelTraits,
+    supportsSamplingParams,
+} from './traits';
 import { registerProvider } from '../kernel/registry';
 import { anthropicEphemeralCacheHint } from '../kernel/anthropic-cache';
 import { anthropicModelListing } from './listing';
 import type {
     ModelCapabilities,
-    ModelResult,
-    NormalizedUsage,
     ProviderBuildConfig,
     ProviderModule,
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
 
 const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
     none: 0,
@@ -93,7 +98,19 @@ export const anthropicModule: ProviderModule = {
         cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions {
-        if (effort === 'none') return {};
+        if (effort === 'none') {
+            // "Off" must be said OUT LOUD on the models that think by default
+            // (Opus 5, Sonnet 5), or the user who picked Off still pays for
+            // thinking. Only the adaptive generation both thinks-by-default AND
+            // accepts `disabled`; legacy models don't think unasked, Fable/Mythos
+            // reject `disabled` (400), and anthropic_compatible never thinks by
+            // default — for all three, omitting the config IS "off".
+            if ((cfg.provider as string) === 'anthropic_compatible') return {};
+            const traits = resolveAnthropicModelTraits(cfg.model);
+            return traits.thinkingShape === 'adaptive' && traits.canDisableThinking
+                ? { anthropic: { thinking: { type: 'disabled' } } }
+                : {};
+        }
 
         const budget: ProviderReasoningOptions = {
             anthropic: {
@@ -139,26 +156,23 @@ export const anthropicModule: ProviderModule = {
     // an anthropic-compatible upstream that DOES surface a split still works. output
     // is the FULL completion count and is NEVER reduced by reasoning (Q4 double-count
     // trap: reasoning is additive info only).
-    normalizeUsage(raw: unknown): NormalizedUsage {
-        const u =
-            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
-        return {
-            input: u.inputTokens ?? 0,
-            output: u.outputTokens ?? 0,
-            reasoning:
-                u.outputTokenDetails?.reasoningTokens ??
-                u.reasoningTokens ??
-                0,
-        };
+    supportsSamplingParams(cfg: ProviderBuildConfig): boolean {
+        // Only the REAL anthropic endpoint withholds sampling params on 4.7+
+        // (a 400 otherwise). `anthropic_compatible` upstreams (Kimi/Z.ai/DeepSeek)
+        // implement the legacy shape and accept temperature — never gate them.
+        return (cfg.provider as string) === 'anthropic_compatible'
+            ? true
+            : supportsSamplingParams(true, cfg.model);
     },
-    normalize(raw: unknown): ModelResult {
-        return { usage: this.normalizeUsage(raw), raw };
-    },
+
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
 
     uiFields: [
         { key: 'apiKey', label: 'API key', type: 'password', required: true, scope: 'top' },
         { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top' },
     ],
+    providerOptionsNamespace: () => 'anthropic',
     modelListing: anthropicModelListing,
 };
 

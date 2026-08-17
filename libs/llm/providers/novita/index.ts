@@ -8,17 +8,17 @@
 import type { LanguageModel } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import { shouldEnableJsonSchema } from '@libs/llm/structured-output-gate';
 import { registerProvider } from '../kernel/registry';
 import { novitaModelListing } from './listing';
 import type {
     ModelCapabilities,
-    ModelResult,
-    NormalizedUsage,
     ProviderBuildConfig,
-    ProviderBuildOptions,
     ProviderModule,
 } from '../kernel/types';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
 
 export const novitaModule: ProviderModule = {
     id: 'novita',
@@ -39,47 +39,28 @@ export const novitaModule: ProviderModule = {
         };
     },
 
-    build(cfg: ProviderBuildConfig, opts?: ProviderBuildOptions): LanguageModel {
+    build(cfg: ProviderBuildConfig): LanguageModel {
         return createOpenAICompatible({
             name: 'novita',
             apiKey: cfg.apiKey,
             baseURL: cfg.baseURL || 'https://api.novita.ai/v3/openai',
-            supportsStructuredOutputs:
-                opts?.structuredOutputs !== false &&
-                shouldEnableJsonSchema('novita', cfg.model, cfg.baseURL),
+            // Novita varies too wildly by upstream to trust strict json_schema;
+            // it always falls back to json_object (the removed
+            // shouldEnableJsonSchema('novita', …) was a constant false).
+            supportsStructuredOutputs: false,
         })(cfg.model);
     },
 
     // No reasoning() — Novita has no native thinking mapping (default: off).
 
-    // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
-    // Novita is OpenAI-compatible, so @ai-sdk/openai-compatible maps its
-    // { prompt_tokens, completion_tokens } onto the high-level ai@7
-    // LanguageModelUsage shape — the same extraction openai.module uses applies.
-    // ai@7 nests reasoning under `outputTokenDetails.reasoningTokens`; the
-    // top-level `reasoningTokens` is the ai@6 flat fallback (0 when a Novita
-    // upstream reports no split). Reasoning is a detail-OF output — `output` is
-    // the FULL completion count and is NEVER reduced by reasoning (Q4 trap).
-    normalizeUsage(raw: unknown): NormalizedUsage {
-        const u =
-            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
-        return {
-            input: u.inputTokens ?? 0,
-            output: u.outputTokens ?? 0,
-            reasoning:
-                u.outputTokenDetails?.reasoningTokens ??
-                u.reasoningTokens ??
-                0,
-        };
-    },
-    normalize(raw: unknown): ModelResult {
-        return { usage: this.normalizeUsage(raw), raw };
-    },
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
 
     uiFields: [
         { key: 'apiKey', label: 'API key', type: 'password', required: true, scope: 'top' },
         { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top', placeholder: 'https://api.novita.ai/v3/openai' },
     ],
+    providerOptionsNamespace: () => 'openaiCompatible',
     modelListing: novitaModelListing,
 };
 

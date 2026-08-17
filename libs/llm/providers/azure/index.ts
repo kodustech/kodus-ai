@@ -22,12 +22,14 @@ import { z } from 'zod';
 import { registerProvider } from '../kernel/registry';
 import type {
     ModelCapabilities,
-    ModelResult,
     ModelListing,
-    NormalizedUsage,
     ProviderBuildConfig,
     ProviderModule,
 } from '../kernel/types';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
 
 /** Best-effort: an Azure deployment named after an OpenAI reasoning family. */
 function looksLikeReasoner(deployment: string): boolean {
@@ -78,21 +80,8 @@ export const azureModule: ProviderModule = {
 
     // Same high-level LanguageModelUsage shape every other module reads, so cost
     // projection stays one source of truth. Azure reports OpenAI-style usage.
-    normalizeUsage(raw: unknown): NormalizedUsage {
-        const u =
-            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
-        return {
-            input: u.inputTokens ?? 0,
-            output: u.outputTokens ?? 0,
-            reasoning:
-                u.outputTokenDetails?.reasoningTokens ??
-                u.reasoningTokens ??
-                0,
-        };
-    },
-    normalize(raw: unknown): ModelResult {
-        return { usage: this.normalizeUsage(raw), raw };
-    },
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
 
     uiFields: [
         {

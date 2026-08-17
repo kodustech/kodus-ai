@@ -1,5 +1,9 @@
 /**
  * Anthropic model generations — which request shape a given Claude accepts.
+ * Internal to the anthropic provider module: the ONE place this Anthropic-
+ * specific knowledge lives, consumed by the module's `capabilities()` /
+ * `reasoning()` / `supportsSamplingParams()`. Generic callers never import this
+ * — they go through the ProviderModule contract via REGISTRY.
  *
  * Anthropic changed the thinking API twice, and each change is a hard 400 when
  * you send the wrong shape:
@@ -31,11 +35,10 @@
  *
  * Scope: real Anthropic endpoints only. `anthropic_compatible` providers (Kimi
  * Code, Z.ai, DeepSeek) speak the Anthropic protocol but implement only the
- * legacy thinking shape and do accept sampling params — callers must not run
- * their model ids through this module.
+ * legacy thinking shape and do accept sampling params — the module's
+ * `supportsSamplingParams()` short-circuits them to `true` and never runs their
+ * model ids through this module.
  */
-
-import { BYOKProvider } from '@libs/llm/model-providers';
 
 export type AnthropicGeneration =
     | 'legacy'
@@ -135,10 +138,10 @@ function resolveGeneration(name: string): AnthropicGeneration {
 }
 
 /**
- * Whether sampling params (temperature/top_p/top_k) may be sent for this BYOK
- * model. Only meaningful for the real `anthropic` provider — every other
- * provider accepts them, so callers pass `false` for `isAnthropic` and get
- * `true` back.
+ * Whether sampling params (temperature/top_p/top_k) may be sent for this
+ * Anthropic model. `isAnthropic` is the REAL-anthropic gate: every other
+ * provider (including `anthropic_compatible`) accepts them, so callers pass
+ * `false` and get `true` back.
  */
 export function supportsSamplingParams(
     isAnthropic: boolean,
@@ -151,25 +154,4 @@ export function supportsSamplingParams(
     // temperature to a 4.7+ model fails the whole request. Withholding it only
     // costs determinism, so bias toward the request succeeding.
     return generation === 'unknown' ? false : allowed;
-}
-
-/**
- * The temperature to actually send for a BYOK slot: the configured value,
- * unless the model would reject it outright.
- *
- * Returns `undefined` both when nothing is configured and when the value must
- * be withheld — callers already treat `undefined` as "omit the field and let
- * the provider default apply", so no call site needs new branching.
- */
-export function resolveByokTemperature(slot?: {
-    provider?: BYOKProvider | string;
-    model?: string;
-    temperature?: number;
-}): number | undefined {
-    if (slot?.temperature === undefined) return undefined;
-
-    const isAnthropic = slot.provider === BYOKProvider.ANTHROPIC;
-    return supportsSamplingParams(isAnthropic, slot.model)
-        ? slot.temperature
-        : undefined;
 }

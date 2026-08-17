@@ -131,7 +131,7 @@ describe('openaiModule never-downgrade capability (D-00b, Pitfall 2)', () => {
         expect(model.supportsStructuredOutputs).toBe(true);
     });
 
-    it('unknown openai_compatible upstream still defers to shouldEnableJsonSchema (stays OFF)', () => {
+    it('unknown openai_compatible upstream still defers to the baseURL gate (stays OFF)', () => {
         const model = openaiModule.build(unknownCfg, {
             structuredOutputs: true,
         }) as any;

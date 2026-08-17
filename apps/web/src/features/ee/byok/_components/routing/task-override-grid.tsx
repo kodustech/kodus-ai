@@ -19,6 +19,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
+import { TASK_ROUTING_FALLBACK } from "@libs/llm/byok-config";
 import {
     AlertTriangleIcon,
     ChevronsUpDownIcon,
@@ -29,10 +30,9 @@ import {
     ShieldCheckIcon,
     type LucideIcon,
 } from "lucide-react";
-import { TASK_ROUTING_FALLBACK } from "@libs/llm/byok-config";
 
 import type { LlmTask } from "../../_types";
-import { TASK_DESCRIPTIONS, TASK_LABELS, modelLabelFor } from "../../_utils";
+import { modelLabelFor, TASK_DESCRIPTIONS, TASK_LABELS } from "../../_utils";
 import { ProviderAvatar } from "../provider-avatar";
 import { capabilityGate, type SurfacedCapabilities } from "./capability-gate";
 
@@ -92,9 +92,7 @@ export const ModelCombobox = ({
                 if (!next) setSearch("");
             }}>
             <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-            <PopoverContent
-                align="end"
-                className="w-72 min-w-56 p-0">
+            <PopoverContent align="end" className="w-72 min-w-56 p-0">
                 <Command
                     filter={(itemValue, term) => {
                         // The default row always matches so it stays reachable.
@@ -139,10 +137,10 @@ export const ModelCombobox = ({
                         {models.map((model) => {
                             const gate = gateTask
                                 ? capabilityGate(
-                                      gateTask,
-                                      model.capabilities,
-                                      model.label,
-                                  )
+                                    gateTask,
+                                    model.capabilities,
+                                    model.label,
+                                )
                                 : { ok: true as const };
                             const selected = model.id === value;
 
@@ -168,8 +166,8 @@ export const ModelCombobox = ({
                                                 !gate.ok
                                                     ? "text-text-tertiary"
                                                     : selected
-                                                      ? "text-primary font-medium"
-                                                      : undefined
+                                                        ? "text-primary font-medium"
+                                                        : undefined
                                             }>
                                             {model.label}
                                         </span>
@@ -275,8 +273,8 @@ const TaskModelControl = ({
     const note =
         followingChildren.length > 0
             ? `Changing this also updates ${followingChildren
-                  .map((c) => TASK_LABELS[c])
-                  .join(", ")}, which follow it.`
+                .map((c) => TASK_LABELS[c])
+                .join(", ")}, which follow it.`
             : undefined;
 
     return (
@@ -314,7 +312,9 @@ const TaskModelControl = ({
                             <ChevronsUpDownIcon className="-mr-1 opacity-50" />
                         }>
                         <span className="flex min-w-0 items-center gap-2">
-                            <ProviderAvatar provider={effectiveModel?.provider} />
+                            <ProviderAvatar
+                                provider={effectiveModel?.provider}
+                            />
                             <span
                                 className={
                                     isCustom
@@ -339,16 +339,21 @@ const TaskModelControl = ({
 type AgentCard =
     | { kind: "single"; task: LlmTask; Icon: LucideIcon; title: string }
     | {
-          kind: "group";
-          key: string;
-          Icon: LucideIcon;
-          title: string;
-          desc: string;
-          subtasks: { task: LlmTask; label: string }[];
-      };
+        kind: "group";
+        key: string;
+        Icon: LucideIcon;
+        title: string;
+        desc: string;
+        subtasks: { task: LlmTask; label: string }[];
+    };
 
 const AGENT_CARDS: AgentCard[] = [
-    { kind: "single", task: "codeReview", Icon: GitPullRequestIcon, title: "Code Review" },
+    {
+        kind: "single",
+        task: "codeReview",
+        Icon: GitPullRequestIcon,
+        title: "Code Review",
+    },
     {
         kind: "group",
         key: "kodyRules",
@@ -357,10 +362,17 @@ const AGENT_CARDS: AgentCard[] = [
         desc: "Applies your curated code-style rule packs.",
         subtasks: [
             { task: "kodyRulesReview", label: "Review" },
-            { task: "ruleGeneration", label: "Generation" },
+            // Rule generation ("learning") is not independently routable for now:
+            // it always inherits the default (via TASK_ROUTING_FALLBACK →
+            // codeReview). Only the Review sub-task is user-configurable here.
         ],
     },
-    { kind: "single", task: "prSummary", Icon: FileTextIcon, title: "PR Summary" },
+    {
+        kind: "single",
+        task: "prSummary",
+        Icon: FileTextIcon,
+        title: "PR Summary",
+    },
     {
         kind: "single",
         task: "conversation",
@@ -398,10 +410,9 @@ export const TaskOverrideGrid = (props: {
             {AGENT_CARDS.map((card) => (
                 <div
                     key={card.kind === "single" ? card.task : card.key}
-                    data-routing-anchor={`task:${
-                        card.kind === "single" ? card.task : card.key
-                    }`}
-                    className="border-card-lv3/50 bg-card-lv1 flex flex-col gap-3 rounded-xl border p-4 scroll-mt-4">
+                    data-routing-anchor={`task:${card.kind === "single" ? card.task : card.key
+                        }`}
+                    className="border-card-lv3/50 bg-card-lv1 flex scroll-mt-4 flex-col gap-3 rounded-xl border p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
                             <IconTile Icon={card.Icon} />
@@ -427,11 +438,14 @@ export const TaskOverrideGrid = (props: {
                                 <div
                                     key={st.task}
                                     data-routing-anchor={`task:${st.task}`}
-                                    className="flex flex-wrap items-center justify-between gap-3 scroll-mt-4">
+                                    className="flex scroll-mt-4 flex-wrap items-center justify-between gap-3">
                                     <span className="text-text-secondary text-xs">
                                         {st.label}
                                     </span>
-                                    <TaskModelControl task={st.task} {...props} />
+                                    <TaskModelControl
+                                        task={st.task}
+                                        {...props}
+                                    />
                                 </div>
                             ))}
                         </div>

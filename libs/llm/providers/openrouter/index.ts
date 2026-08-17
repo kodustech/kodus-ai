@@ -8,19 +8,21 @@
 import type { LanguageModel } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { z } from 'zod';
-import { shouldEnableJsonSchema } from '@libs/llm/structured-output-gate';
+import { openRouterHonorsJsonSchema } from '@libs/llm/structured-output-gate';
 import { registerProvider } from '../kernel/registry';
 import { openRouterModelListing } from './listing';
 import type {
     ModelCapabilities,
-    ModelResult,
-    NormalizedUsage,
     ProviderBuildConfig,
     ProviderBuildOptions,
     ProviderModule,
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
 
 export const openRouterModule: ProviderModule = {
     id: 'open_router',
@@ -58,7 +60,7 @@ export const openRouterModule: ProviderModule = {
             baseURL: cfg.baseURL || 'https://openrouter.ai/api/v1',
             supportsStructuredOutputs:
                 opts?.structuredOutputs !== false &&
-                shouldEnableJsonSchema('open_router', cfg.model, cfg.baseURL),
+                openRouterHonorsJsonSchema(cfg.model),
         })(cfg.model);
     },
 
@@ -79,26 +81,14 @@ export const openRouterModule: ProviderModule = {
     // is the ai@6 flat fallback; 0 for non-reasoning upstreams). Reasoning is a
     // detail-OF output — `output` is the FULL completion count and is NEVER reduced
     // by reasoning (Q4 double-count trap).
-    normalizeUsage(raw: unknown): NormalizedUsage {
-        const u =
-            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
-        return {
-            input: u.inputTokens ?? 0,
-            output: u.outputTokens ?? 0,
-            reasoning:
-                u.outputTokenDetails?.reasoningTokens ??
-                u.reasoningTokens ??
-                0,
-        };
-    },
-    normalize(raw: unknown): ModelResult {
-        return { usage: this.normalizeUsage(raw), raw };
-    },
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
 
     uiFields: [
         { key: 'apiKey', label: 'API key', type: 'password', required: true, scope: 'top' },
         { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top', placeholder: 'https://openrouter.ai/api/v1' },
     ],
+    providerOptionsNamespace: () => 'openrouter',
     modelListing: openRouterModelListing,
 };
 

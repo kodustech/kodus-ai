@@ -17,13 +17,15 @@ import {
 import { vertexModelListing } from './listing';
 import type {
     ModelCapabilities,
-    ModelResult,
-    NormalizedUsage,
     ProviderBuildConfig,
     ProviderModule,
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
+import {
+    normalizeSdkResult,
+    normalizeSdkUsage,
+} from '../kernel/usage';
 
 const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
     none: 0,
@@ -96,26 +98,14 @@ export const vertexModule: ProviderModule = {
     // .reasoningTokens, so the generic reader splits reasoning for a Gemini thinking
     // call and yields 0 otherwise. output is the FULL completion count and is NEVER
     // reduced by reasoning (Q4 double-count trap).
-    normalizeUsage(raw: unknown): NormalizedUsage {
-        const u =
-            (raw as { usage?: Record<string, any> } | undefined)?.usage ?? {};
-        return {
-            input: u.inputTokens ?? 0,
-            output: u.outputTokens ?? 0,
-            reasoning:
-                u.outputTokenDetails?.reasoningTokens ??
-                u.reasoningTokens ??
-                0,
-        };
-    },
-    normalize(raw: unknown): ModelResult {
-        return { usage: this.normalizeUsage(raw), raw };
-    },
+    normalizeUsage: normalizeSdkUsage,
+    normalize: normalizeSdkResult,
 
     uiFields: [
         { key: 'apiKey', label: 'Service Account JSON', type: 'password', required: true, scope: 'top' },
         { key: 'vertexLocation', label: 'Location', type: 'text', required: false, scope: 'settings', placeholder: 'global' },
     ],
+    providerOptionsNamespace: () => 'google',
     modelListing: vertexModelListing,
 };
 
