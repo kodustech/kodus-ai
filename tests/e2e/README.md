@@ -121,7 +121,8 @@ pnpm run e2e:matrix matrix/full.yml
 | `TARGET_TUNNEL_URL` | Public tunnel URL for webhooks (self-hosted only) | `target=self-hosted` |
 | `GH_TEST_TOKEN` | Single human GitHub PAT used by the harness only for PR/comment authorship; high-volume reads and polling use the GitHub App. | `provider=github`, `provider=github-app` |
 | `GH_INTEGRATION_TOKEN` | Durable PAT stored by Kodus only in the explicit legacy token-auth cells. There is no fallback to `GH_TEST_TOKEN`. | `provider=github` |
-| `GH_APP_ID`, `GH_APP_PRIVATE_KEY`, `GH_APP_INSTALLATION_ID` | Existing E2E GitHub App credentials used to mint short-lived installation tokens. | GitHub cells |
+| `GH_APP_ID`, `GH_APP_PRIVATE_KEY`, `GH_APP_INSTALLATION_ID` | Harness GitHub App credentials used only to mint short-lived driver tokens. | GitHub cells |
+| `GH_PRODUCT_APP_INSTALLATION_ID` | Installation id for the GitHub App configured in the target Kodus backend. Do not reuse the harness installation id unless both Apps are intentionally the same. | `provider=github-app` |
 | `GH_APP_TEST_REPO` | Public fixture name where the App is installed (currently `kodus-e2e/tiny-url-app`); configure as a repository variable, not a secret. | `provider=github-app` |
 | `GH_REPO_ADMIN_TOKEN` | Token with org Administration on `kodus-e2e` (create + delete repos). Used ONLY by `trial-managed-review` to mint/delete its throwaway repo per run; everything else stays on `GH_TEST_TOKEN`. Falls back to `GH_TEST_TOKEN` if unset (a single fully-privileged token also works). | `scenario=trial-managed-review` |
 | `GH_TEST_REPO` | GitHub test repo `owner/repo` | `provider=github` |

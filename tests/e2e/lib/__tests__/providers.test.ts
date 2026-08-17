@@ -149,6 +149,7 @@ test("makeProvider github-app constructs and uses oauth + installation_id", () =
             GH_TEST_TOKEN: "gh-pat",
             GH_APP_TEST_REPO: "kodus-e2e/tiny-url-app",
             GH_APP_INSTALLATION_ID: "134164671",
+            GH_PRODUCT_APP_INSTALLATION_ID: "246813579",
         },
         () => {
             const p = makeProvider("github-app");
@@ -158,7 +159,7 @@ test("makeProvider github-app constructs and uses oauth + installation_id", () =
             assert.equal(p.authMode(), "oauth");
             assert.equal(
                 p.authToken(),
-                "134164671",
+                "246813579",
                 "authToken returns the installation id — the backend reads it as `code` for the oauth flow",
             );
         },
