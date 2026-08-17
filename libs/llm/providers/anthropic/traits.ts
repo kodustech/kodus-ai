@@ -40,6 +40,8 @@
  * model ids through this module.
  */
 
+import type { ReasoningConfig } from '../kernel/model-types';
+
 export type AnthropicGeneration =
     | 'legacy'
     | 'adaptive-4-6'
@@ -154,4 +156,33 @@ export function supportsSamplingParams(
     // temperature to a 4.7+ model fails the whole request. Withholding it only
     // costs determinism, so bias toward the request succeeding.
     return generation === 'unknown' ? false : allowed;
+}
+
+/**
+ * The reasoning config for a Claude model — the Anthropic family owner's single
+ * answer to "does this model think, and in which shape". Two axes the coarser
+ * `generation` alone can't express:
+ *   - WHICH thinks: extended thinking started at Claude 3.7, so 2.x / 3.0 / 3.5
+ *     have NO reasoning (their generation is 'legacy' too, but they don't think).
+ *   - WHICH SHAPE: budget (3.7 through 4.5) vs adaptive (4.6+, 5.x, Fable/Mythos).
+ *
+ * Every consumer (the model catalog, and the bedrock/vertex host modules that
+ * serve Claude) resolves reasoning through here, so there is ONE source instead
+ * of a per-host regex that drifts (bedrock reported none; vertex reported budget
+ * for adaptive-only 4.7+).
+ */
+export function anthropicReasoningConfig(
+    model?: string,
+): ReasoningConfig | undefined {
+    const name = normalizeAnthropicModelName(model);
+    // Extended thinking exists only on 3.7, the 4.x line, 5.x, and Fable/Mythos.
+    const reasons =
+        /^claude-3-7(\b|[-.])/.test(name) ||
+        /^claude-(opus|sonnet|haiku)-([4-9]|\d{2,})/.test(name) ||
+        /^claude-(fable|mythos)/.test(name);
+    if (!reasons) return undefined;
+
+    return resolveAnthropicModelTraits(model).thinkingShape === 'adaptive'
+        ? { type: 'adaptive', options: ['low', 'medium', 'high'] }
+        : { type: 'budget', options: { min: 1024, default: 3000 } };
 }

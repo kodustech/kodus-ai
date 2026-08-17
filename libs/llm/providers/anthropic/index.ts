@@ -9,6 +9,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
 import {
+    anthropicReasoningConfig,
     resolveAnthropicModelTraits,
     supportsSamplingParams,
 } from './traits';
@@ -40,10 +41,6 @@ const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
  *  `anthropic.` / `@date` id spellings all resolve the same way here as they
  *  do in reasoning-options — the previous inline regex only knew 4.6–4.x and
  *  silently mis-classified every Claude 5. */
-function isAdaptiveCapable(model: string): boolean {
-    return resolveAnthropicModelTraits(model).thinkingShape === 'adaptive';
-}
-
 export const anthropicModule: ProviderModule = {
     id: 'anthropic',
     aliases: ['anthropic_compatible'],
@@ -52,12 +49,7 @@ export const anthropicModule: ProviderModule = {
     settingsSchema: z.object({ baseURL: z.string().optional() }),
 
     capabilities(model: string): ModelCapabilities {
-        const claude = /^claude[-_]/i.test(model);
-        const reasoningConfig: ModelCapabilities['reasoningConfig'] = !claude
-            ? undefined
-            : isAdaptiveCapable(model)
-              ? { type: 'adaptive', options: ['low', 'medium', 'high'] }
-              : { type: 'budget', options: { min: 1024, default: 3000 } };
+        const reasoningConfig = anthropicReasoningConfig(model);
         return {
             supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,

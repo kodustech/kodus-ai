@@ -3,24 +3,24 @@
  * NestJS — the org-layer fetcher owns the request/SSRF; these only shape URLs,
  * headers and parsed catalogs.
  */
-import { getModelCapabilities } from './capabilities';
+import { reasoningConfigForModel } from './model-reasoning';
 import type { CatalogModel } from './types';
 
-/** Catalog entry that derives reasoning support from the capability table.
- *  `capKey` lets curated ids (e.g. Bedrock's `us.anthropic.*`) look up caps by
- *  their bare model name. */
+/** Catalog entry that derives reasoning support from the family owner (the single
+ *  source — see model-reasoning.ts). `capKey` lets curated ids (e.g. Bedrock's
+ *  `us.anthropic.*`) resolve reasoning by their bare model name. */
 export function catalogWithReasoning(
     id: string,
     name: string = id,
     capKey: string = id,
 ): CatalogModel {
-    const caps = getModelCapabilities(capKey);
+    const reasoningConfig = reasoningConfigForModel(capKey);
     return {
         id,
         name,
-        ...(caps.supportsReasoning && {
+        ...(reasoningConfig && {
             supportsReasoning: true as const,
-            reasoningConfig: caps.reasoningConfig,
+            reasoningConfig,
         }),
     };
 }

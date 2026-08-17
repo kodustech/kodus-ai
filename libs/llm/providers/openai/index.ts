@@ -20,6 +20,7 @@ import {
     isNeverDowngradeModel,
 } from '@libs/llm/structured-output-gate';
 import { registerProvider } from '../kernel/registry';
+import { isOpenAiReasoner, openaiReasoningConfig } from './reasoning';
 import { openAiModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -33,11 +34,6 @@ import {
     normalizeSdkResult,
     normalizeSdkUsage,
 } from '../kernel/usage';
-
-/** o-series and gpt-5 are OpenAI's reasoning families (level-based effort). */
-function isOpenAiReasoner(model: string): boolean {
-    return /^o[134](\b|[-_@])/i.test(model) || /^gpt-5(\b|[-_@])/i.test(model);
-}
 
 /**
  * Native OpenAI model families that honor strict `response_format: json_schema`
@@ -64,16 +60,10 @@ export const openaiModule: ProviderModule = {
     }),
 
     capabilities(model: string): ModelCapabilities {
+        // o-series / gpt-5 reject `temperature`; reasoning config comes from the
+        // central family resolver (single source).
         const reasoner = isOpenAiReasoner(model);
-        // gpt-5 exposes only medium/high; o-series exposes low/medium/high.
-        const reasoningConfig: ModelCapabilities['reasoningConfig'] = reasoner
-            ? {
-                  type: 'level',
-                  options: /^gpt-5(\b|[-_@])/i.test(model)
-                      ? ['medium', 'high']
-                      : ['low', 'medium', 'high'],
-              }
-            : undefined;
+        const reasoningConfig = openaiReasoningConfig(model);
         return {
             // o-series / gpt-5 reject `temperature`; other OpenAI models allow it.
             supportsTemperature: !reasoner,

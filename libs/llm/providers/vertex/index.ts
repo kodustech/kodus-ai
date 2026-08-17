@@ -10,6 +10,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { vertexModelFromSaJson } from '@libs/llm/model-builders';
 import { registerProvider } from '../kernel/registry';
+import { reasoningConfigForModel } from '../kernel/model-reasoning';
 import {
     anthropicEphemeralCacheHint,
     isAnthropicModel,
@@ -42,10 +43,10 @@ export const vertexModule: ProviderModule = {
     settingsSchema: z.object({ vertexLocation: z.string().optional() }),
 
     capabilities(model: string): ModelCapabilities {
-        const reasoner = /^claude[-_]/i.test(model) || /gemini-(2\.5|3)/i.test(model);
-        const reasoningConfig: ModelCapabilities['reasoningConfig'] = reasoner
-            ? { type: 'budget', options: { min: 128, default: 3000 } }
-            : undefined;
+        // Vertex serves both Claude and Gemini; reasoning is resolved centrally
+        // by family (was a local `budget`-for-everything regex, wrong for the
+        // adaptive-only Claude 4.7+/5 line).
+        const reasoningConfig = reasoningConfigForModel(model);
         return {
             supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,

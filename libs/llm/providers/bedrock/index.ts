@@ -9,6 +9,7 @@ import type { LanguageModel } from 'ai';
 import { z } from 'zod';
 import { bedrockModelFromCredentials } from '@libs/llm/model-builders';
 import { registerProvider } from '../kernel/registry';
+import { reasoningConfigForModel } from '../kernel/model-reasoning';
 import {
     anthropicEphemeralCacheHint,
     isAnthropicModel,
@@ -37,11 +38,14 @@ export const bedrockModule: ProviderModule = {
     }),
 
     capabilities(model: string): ModelCapabilities {
-        // Bedrock hosts many families; reasoning support is model-specific and
-        // not advertised generically at this tier. Refined in 01-04.
+        // Bedrock hosts many families; reasoning is a model-family property, so
+        // it is resolved centrally — a Claude on Bedrock gets the same reasoning
+        // config as native Anthropic (was hardcoded `false`, losing it entirely).
+        const reasoningConfig = reasoningConfigForModel(model);
         return {
             supportsTemperature: true,
-            supportsReasoning: false,
+            supportsReasoning: !!reasoningConfig,
+            reasoningConfig,
             structuredOutput: 'none',
             toolCalling: 'native',
             usageGranularity: 'output_only',

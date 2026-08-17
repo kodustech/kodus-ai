@@ -7,6 +7,7 @@ import type { LanguageModel } from 'ai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { registerProvider } from '../kernel/registry';
+import { geminiReasoningConfig } from './reasoning';
 import { googleGeminiModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -36,11 +37,7 @@ export const googleGeminiModule: ProviderModule = {
     settingsSchema: z.object({ baseURL: z.string().optional() }),
 
     capabilities(model: string): ModelCapabilities {
-        // Gemini 2.5 / 3.x thinking families use a numeric/level budget.
-        const reasoner = /gemini-(2\.5|3)/i.test(model);
-        const reasoningConfig: ModelCapabilities['reasoningConfig'] = reasoner
-            ? { type: 'budget', options: { min: 128, default: 3000 } }
-            : undefined;
+        const reasoningConfig = geminiReasoningConfig(model);
         return {
             supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,
