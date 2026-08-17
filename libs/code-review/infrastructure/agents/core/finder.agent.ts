@@ -351,6 +351,15 @@ export async function recoverFindingsFromProse(
                 const { object } = await generateObject({
                     model,
                     schema: RECOVERY_SCHEMA,
+                    // Same Langfuse trace every other finder LLM call emits — the
+                    // recovery pass is the only review-path call that was missing
+                    // it, so its tokens went untraced. Pure telemetry, no behavior
+                    // change (matches the 'finder-prose-recovery' label above).
+                    ...toAiSdkTelemetryArgs(
+                        buildLangfuseTelemetry('finder-prose-recovery', {
+                            organizationId,
+                        }),
+                    ),
                     prompt:
                         "The following is a code reviewer's analysis written as " +
                         'prose. Extract EVERY concrete finding it describes into ' +
