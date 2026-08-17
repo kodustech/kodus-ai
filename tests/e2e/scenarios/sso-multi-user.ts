@@ -45,9 +45,8 @@ function runScript(script: string): Promise<ScriptResult> {
             env: {
                 ...process.env,
                 SSO_E2E_HEADLESS: "1",
-                // See sso-cookie-domain: this dedicated topology has not been
-                // migrated to the matrix's AWS provisioner.
-                TEST_VM_PROVIDER: "digitalocean",
+                // See sso-cookie-domain: the shared SSO topology runs on EC2.
+                TEST_VM_PROVIDER: "aws",
             },
             stdio: ["ignore", "pipe", "pipe"],
         });

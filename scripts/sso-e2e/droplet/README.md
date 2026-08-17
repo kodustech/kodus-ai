@@ -1,7 +1,7 @@
-# SSO E2E — droplet mode
+# SSO E2E — cloud VM mode
 
 Real-deployment regression for the SSO handoff-cookie `Domain` attribute.
-Provisions a DigitalOcean droplet, layers Caddy (Let's Encrypt) + Keycloak
+Provisions an ephemeral AWS EC2 instance, layers Caddy + Keycloak
 on top of the standard Kodus self-hosted stack, and drives the full SAML
 round-trip with Playwright against the public sslip.io hostnames.
 
@@ -10,18 +10,19 @@ Why this exists alongside the local `scripts/sso-e2e/run.sh`:
 - Local mode runs against `*.kodus.lvh.me` (which resolves to 127.0.0.1).
   Browsers happily store cookies on a loopback address, but the **public**
   cert chain, real DNS, and >4-label common-parent shapes are never exercised.
-- Droplet mode lights up a 6-label common parent (`.<IP>.sslip.io`) which
+- Cloud VM mode lights up a 6-label common parent (`.<IP>.sslip.io`) which
   is the deepest production-realistic shape — strictly stricter than the
   3-label `.kodus.io` (SaaS) and 4-label `.web.scorpion.co` (Dmitry) cases.
 
 ## What you need before running
 
-Already-required for the existing self-hosted droplet scripts. **No new
+Already required by the self-hosted release matrix. **No new
 secrets**:
 
 | Variable                       | Where it lives             | What it's used for                  |
 |--------------------------------|----------------------------|-------------------------------------|
-| `DIGITALOCEAN_TOKEN`           | `~/.kodus-dev/config`      | Provision the droplet               |
+| Standard AWS CLI credentials   | environment / AWS profile  | Provision the EC2 instance in `us-east-2` |
+| `AWS_INSTANCE_TYPE`            | environment (optional)     | Instance size; defaults to `t3.large` |
 | `API_OPEN_AI_API_KEY`          | `~/.kodus-dev/config`      | Boot the Kodus API                  |
 | `API_OPENAI_FORCE_BASE_URL`    | `~/.kodus-dev/config`      | Moonshot / other proxies (optional) |
 | `API_LLM_PROVIDER_MODEL`       | `~/.kodus-dev/config`      | Default Kimi K2.6 (optional)        |
@@ -41,10 +42,10 @@ pnpm run sso-e2e:droplet:provision
 # Provision only (no Playwright)
 pnpm run sso-e2e:droplet:provision --skip-test
 
-# Reuse an existing droplet (skip the 5-min provision)
+# Reuse an existing VM (skip the 5-min provision)
 pnpm run sso-e2e:droplet:provision --reuse
 
-# Re-run Playwright against the already-provisioned droplet
+# Re-run Playwright against the already-provisioned VM
 pnpm run sso-e2e:droplet:run                # headless
 pnpm run sso-e2e:droplet:run --headed       # visible Chromium
 
