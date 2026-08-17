@@ -18,15 +18,10 @@ import { GitHubProvider } from "./github.js";
 //                             (e.g. kodus-e2e/tiny-url-app)
 //   GH_APP_INSTALLATION_ID    numeric installation id captured after the
 //                             one-time install on github.com
-//   GH_TEST_TOKEN             still required — used for opening PRs,
-//                             posting comments, listing webhooks, etc.
-//                             from a *user* viewpoint. The App's
-//                             installation token is short-lived and
-//                             can't easily drive a deterministic PR-open
-//                             flow from outside the integration. Reusing
-//                             the user PAT here keeps the E2E surface
-//                             identical to github (PAT) for everything
-//                             except the auth-integration step.
+//   GH_TEST_TOKEN             one human PAT used only for PR/comment
+//                             authorship because Kodus intentionally ignores
+//                             bot-authored review triggers. Reads and polling
+//                             use the short-lived App installation token.
 //
 // Backend prerequisites (cloud only): API_GITHUB_APP_ID,
 // API_GITHUB_APP_PRIVATE_KEY, GLOBAL_GITHUB_CLIENT_ID, API_GITHUB_CLIENT_SECRET.
@@ -37,11 +32,14 @@ export class GitHubAppProvider extends GitHubProvider {
 
     private readonly installationId: string;
 
-    constructor() {
+    constructor(tokenOverride?: string) {
         // Redirect the whole surface (clone URL, /repos/* calls,
         // webhook listing) to the App-bound repo via the parent's
         // repoOverride hook.
-        super({ repoOverride: requireEnv("GH_APP_TEST_REPO") });
+        super({
+            repoOverride: requireEnv("GH_APP_TEST_REPO"),
+            tokenOverride,
+        });
         this.installationId = requireEnv("GH_APP_INSTALLATION_ID");
     }
 

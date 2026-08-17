@@ -94,9 +94,8 @@ export class GitHubProvider extends BaseProvider {
         tokenOverride?: string;
     }) {
         super();
-        // tokenOverride is the round-robin token the matrix runner assigns
-        // from the bot-account pool (see lib/github-token-pool.ts). Falls back
-        // to the single GH_TEST_TOKEN when no pool is configured.
+        // tokenOverride is normally a freshly minted App installation token.
+        // GH_TEST_TOKEN remains the fallback for human-authored events.
         this.token = opts?.tokenOverride || requireEnv('GH_TEST_TOKEN');
         // Subclasses (notably GitHubAppProvider) need to target a
         // DIFFERENT repo than the PAT-driven default — the GitHub App
@@ -915,34 +914,31 @@ export class GitHubProvider extends BaseProvider {
     // long-lived base PAT; the assigned token keeps serving the harness's
     // own API calls (clone, PRs, polling).
     //
-    // Prefer a DEDICATED integration account (GH_INTEGRATION_TOKEN) so the
+    // Use a DEDICATED integration account (GH_INTEGRATION_TOKEN) so the
     // product's own GitHub calls (read diff/files, post comments, resolve
     // threads) draw on a separate 5,000 req/hr budget from the harness
-    // driver pool. Without it, the product and the harness both hammer
+    // driver credential. Without it, the product and the harness both hammer
     // GH_TEST_TOKEN — that single account's quota was tripping mid-cell and
-    // cascading scenarios into rate-limit SKIPs. Falls back to GH_TEST_TOKEN
-    // when the dedicated secret is unset, so this is a no-op until wired.
+    // cascading scenarios into rate-limit SKIPs. There is intentionally no
+    // fallback: storing the harness credential caused opaque HTTP 400s when
+    // that credential had different scopes.
     authToken(): string {
         // Installation tokens are prefixed ghs_ and die in ~1h. NOTHING with
         // that prefix may become the stored integration credential — not the
         // runner-assigned token, and not a misconfigured secret either (a
         // silent 1h credential in CI config would fail mid-run).
-        const durable =
-            process.env.GH_INTEGRATION_TOKEN || process.env.GH_TEST_TOKEN;
-        if (durable) {
-            if (durable.startsWith('ghs_')) {
-                throw new Error(
-                    'The GitHub integration credential (GH_INTEGRATION_TOKEN / GH_TEST_TOKEN) is a GitHub App installation token (ghs_) — it must be a durable PAT',
-                );
-            }
-            return durable;
-        }
-        if (this.token.startsWith('ghs_')) {
+        const durable = process.env.GH_INTEGRATION_TOKEN;
+        if (!durable) {
             throw new Error(
-                'GH_TEST_TOKEN (durable PAT) is required when the harness runs on a GitHub App installation token — the integration credential must not expire',
+                'GH_INTEGRATION_TOKEN is required for provider=github; it is the durable PAT stored by the product',
             );
         }
-        return this.token;
+        if (durable.startsWith('ghs_')) {
+            throw new Error(
+                'GH_INTEGRATION_TOKEN is a GitHub App installation token (ghs_) — it must be a durable PAT',
+            );
+        }
+        return durable;
     }
 
     // Identity, not traffic — and the two need DIFFERENT credentials.

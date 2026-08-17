@@ -299,18 +299,9 @@ jobs:
 
                   DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
 
-                  # GitHub bot-account token POOL. The runner round-robins
-                  # every github scenario across GH_TEST_TOKEN + GH_TEST_TOKEN_2..N
-                  # (see lib/github-token-pool.ts), so the ~26-scenario
-                  # license-paid cell spreads its polling/content-creation load
-                  # across multiple accounts instead of draining one account's
-                  # 5,000 req/hr primary quota and cascading into ~19 misleading
-                  # rate-limit SKIPs. GH_TEST_TOKEN_2 is a second dedicated bot
-                  # (Admin on the fixture repo). Empty siblings are dropped, so
-                  # this stays a single-token pool — identical to before — until
-                  # the secret is set.
+                  # One human PAT is kept for PR/comment authorship because
+                  # product review triggers intentionally ignore bot authors.
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
-                  GH_TEST_TOKEN_2: ${{ secrets.GH_TEST_TOKEN_FREE }}
                   # GitHub App installation token: 5000/h of its own, immune to
                   # the abuse flags that cap the bot PATs at ~60/h. The cloud
                   # workflow has passed these for a while; self-hosted could not
@@ -320,25 +311,20 @@ jobs:
                   # works here too -- but the secrets were never wired in, which
                   # is why run 31270321822 still burned the PAT quota on the
                   # FIRST scenario and reported 8 P0 cells unverified.
-                  # All three unset -> the PAT pool behaves exactly as before.
+                  # All three unset -> the single human PAT remains in use.
                   GH_APP_ID: ${{ secrets.GH_APP_ID }}
                   GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
                   GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
                   # Dedicated account for the PRODUCT's stored GitHub
                   # integration credential, separate from the harness driver
-                  # pool above. The self-hosted product uses this for all its
+                  # credential above. The self-hosted product uses this for its
                   # own GitHub calls (read diff/files, post comments) — pinning
                   # it to GH_TEST_TOKEN meant product + harness drained one
                   # account and tripped the rate limit mid-cell.
                   #
-                  # Split by license so the two github cells don't share ONE
-                  # product account: the license-paid cell (heavy — ~13 review
-                  # scenarios, several multi-PR) gets its own bot, license-free
-                  # keeps GH_INTEGRATION_TOKEN. Falls back to GH_INTEGRATION_TOKEN
-                  # when GH_INTEGRATION_TOKEN_PAID is unset (graceful until the
-                  # secret is added), and to GH_TEST_TOKEN when both are unset
-                  # (see github.ts authToken()).
-                  GH_INTEGRATION_TOKEN: ${{ (matrix.cell.license == 'license-paid' && secrets.GH_INTEGRATION_TOKEN_PAID) || secrets.GH_INTEGRATION_TOKEN }}
+                  # One durable product credential; plans do not need distinct
+                  # GitHub identities.
+                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   # Without this the centralized-config scenario self-skips as
                   # a setup gap, and the cell reports 8/9 verified forever. The
@@ -439,13 +425,14 @@ jobs:
                   # which — finding no ~/.kodus-dev/config — runs the INTERACTIVE
                   # setup.sh and aborts in ~1s on the non-TTY runner. Writing the
                   # config from the secrets we already pass lets the script find a
-                  # ready config instead. Plain values (not op:// refs) skip the
+                  # ready config instead. AWS credentials are inherited from
+                  # the job environment, just like the regular matrix VM. Plain
+                  # values (not op:// refs) skip the
                   # 1Password resolver in _common.sh. Harmless for non-SSO cells
                   # (nothing else reads it). Written to the file directly (never
                   # echoed) so secret values don't hit the log.
                   mkdir -p "$HOME/.kodus-dev"
                   {
-                      echo "DIGITALOCEAN_TOKEN=${DIGITALOCEAN_TOKEN:-}"
                       echo "SH_LICENSE_KEY=${SH_LICENSE_KEY_PAID:-}"
                       echo "GH_DEV_TOKEN=${GH_TEST_TOKEN:-}"
                       echo "API_OPEN_AI_API_KEY=${API_OPEN_AI_API_KEY:-}"

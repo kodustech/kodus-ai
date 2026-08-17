@@ -212,6 +212,7 @@ async function runLicenseScenario(opts: RunOpts): Promise<{
             }
         }
         process.env.GH_TEST_TOKEN = "fake-token";
+        process.env.GH_INTEGRATION_TOKEN = "fake-integration-token";
         process.env.GH_TEST_REPO = TEST_REPO;
         process.env.GH_TEST_PR_NUMBER = String(TEST_PR_NUMBER);
 
