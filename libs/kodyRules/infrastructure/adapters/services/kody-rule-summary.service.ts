@@ -716,9 +716,11 @@ export class KodyRuleSummaryService {
      * — see VERIFY_ATOMS_SYSTEM_PROMPT for the three failure modes checked.
      * `invalidIndexes` maps each bad atom's 0-based index (into `atoms`) to a
      * short reason, for atoms to drop; `missingRequirements` is observability
-     * only (nothing to drop — there's no atom to synthesize one from).
-     * Only atoms carrying examples are sent (nothing to verify otherwise, and
-     * hallucination/coverage checks still run over the full atom list).
+     * only (nothing to drop — there's no atom to synthesize one from). Only
+     * atoms carrying examples are sent (nothing to verify otherwise, and
+     * hallucination/coverage checks still run over the full atom list) — any
+     * returned index outside that sent set is dropped, not applied (see the
+     * comment on `sentIndexes` below).
      * Never throws: a failed/empty verification ships every atom unverified
      * rather than losing the whole decomposition over a flaky extra call.
      */
@@ -737,6 +739,14 @@ export class KodyRuleSummaryService {
         if (withExamples.length === 0) {
             return { invalidIndexes: new Map(), missingRequirements: [] };
         }
+        // The prompt shows atoms under their ORIGINAL (possibly sparse —
+        // atoms without examples are excluded) index, e.g. [1] ... [3] ...,
+        // and asks the model to echo that same number back. A model that
+        // instead re-numbers sequentially from 0 would otherwise cause the
+        // WRONG atom to be dropped downstream while the actually-bad one
+        // survives — silently defeating the gate. Only accept indexes we
+        // actually sent for verification.
+        const sentIndexes = new Set(withExamples.map((a) => a.index));
         try {
             const parsed = (await runStructuredReviewCall({
                 byokConfig: byokConfig ?? undefined,
@@ -748,12 +758,27 @@ export class KodyRuleSummaryService {
                 attrs: { ruleUuid: rule.uuid },
                 observabilityService: this.observabilityService,
             })) as z.infer<typeof verifyAtomsOutputSchema> | null;
-            const invalidIndexes = new Map<number, string>(
-                (parsed?.invalidAtoms ?? []).map((a) => [
-                    a.index,
-                    a.reason ?? 'unspecified',
-                ]),
-            );
+            const outOfRange: number[] = [];
+            const invalidIndexes = new Map<number, string>();
+            for (const a of parsed?.invalidAtoms ?? []) {
+                if (sentIndexes.has(a.index)) {
+                    invalidIndexes.set(a.index, a.reason ?? 'unspecified');
+                } else {
+                    outOfRange.push(a.index);
+                }
+            }
+            if (outOfRange.length > 0) {
+                this.logger.warn({
+                    message:
+                        '[kody-rule-atoms] verify pass returned index(es) outside the atoms it was sent — ignoring them rather than risk dropping the wrong atom',
+                    context: KodyRuleSummaryService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        ruleUuid: rule.uuid,
+                        outOfRange,
+                    },
+                });
+            }
             return {
                 invalidIndexes,
                 missingRequirements: parsed?.missingRequirements ?? [],

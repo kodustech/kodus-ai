@@ -764,5 +764,68 @@ describe('KodyRuleSummaryService', () => {
                 }),
             );
         });
+
+        it('ignores a returned index outside the atoms actually sent for verification (sparse-index correlation)', async () => {
+            const { service } = createService();
+            // Atom 0 has no examples (excluded from the verify call, so the
+            // prompt shows the remaining two under their ORIGINAL, sparse
+            // indexes 1 and 2 — not re-numbered 0/1). A model that ignores
+            // that and answers with a plain sequential index (0) must NOT be
+            // trusted to mean "drop atom 0" — atom 0 was never even shown to
+            // it, and blindly applying that index would drop the wrong atom
+            // while the truly inverted one (index 1) survives untouched.
+            structuredCallMock.mockImplementation(async ({ runName }: any) => {
+                if (runName === 'kody-rules.atom-decomposition') {
+                    return {
+                        atoms: [
+                            { title: 'no examples here', spec: 'WHAT: x\nHOW: y' },
+                            {
+                                title: 'Declaration is direct (not via a mixin)',
+                                spec: 'WHAT: x\nHOW: y',
+                                examples: [
+                                    { snippet: 'a', isCorrect: true },
+                                    { snippet: 'b', isCorrect: false },
+                                ],
+                            },
+                            {
+                                title: 'Property is font-family/size/weight',
+                                spec: 'WHAT: x\nHOW: y',
+                                examples: [
+                                    { snippet: 'c', isCorrect: true },
+                                    { snippet: 'd', isCorrect: false },
+                                ],
+                            },
+                        ],
+                    };
+                }
+                if (runName === 'kody-rules.atom-verify') {
+                    // Miscounted: should have said index 1 (the real
+                    // inverted atom), says 0 instead (never sent).
+                    return {
+                        invalidAtoms: [
+                            { index: 0, reason: 'inverted polarity' },
+                        ],
+                    };
+                }
+                return { mechanical: false, reason: 'semantic' };
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            // Nothing gets dropped on a miscounted index — safer than
+            // silently dropping whichever atom happens to sit at raw[0].
+            expect(atoms!.items).toHaveLength(3);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'outside the atoms it was sent',
+                    ),
+                    metadata: expect.objectContaining({ outOfRange: [0] }),
+                }),
+            );
+        });
     });
 });
