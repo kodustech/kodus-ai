@@ -110,6 +110,9 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn().mockReturnValue({}),
     buildPlatformModel: jest.fn().mockReturnValue({}),
     getModelName: jest.fn().mockReturnValue('mock-model'),
+    // Off-trial default: undefined override (the service falls back to the
+    // resolved slot / env default). The service now calls this before building.
+    trialDefaultModel: jest.fn().mockReturnValue(undefined),
 }));
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: jest.fn().mockReturnValue({}),
