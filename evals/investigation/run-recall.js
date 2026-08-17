@@ -211,7 +211,12 @@ function runMetaOf(args) {
         // heavy = passadas de resample ativadas. Eixo de regime: não comparar
         // entrada heavy com entrada normal sem rotular.
         heavy: process.env.RECALL_HEAVY === '1',
-        reasoning: { config: 'vendor-default', effortRequested: null },
+        // RECALL_REASONING_EFFORT ja injeta o effort de verdade na chamada
+        // (ver withReasoningEffort em agent-provider.js); sem isto o artefato
+        // registrava 'vendor-default' mesmo quando o run era em thinking high.
+        reasoning: process.env.RECALL_REASONING_EFFORT
+            ? { config: 'explicit', effortRequested: process.env.RECALL_REASONING_EFFORT }
+            : { config: 'vendor-default', effortRequested: null },
         runAt: new Date().toISOString(),
     };
 }

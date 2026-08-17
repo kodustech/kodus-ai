@@ -121,10 +121,16 @@ async function scoreCase({ findings, goldens, corpus = '', trace = null, judge }
     // (16 de 30 casos mudos entrando como 0) quando a precisao real era 73,9%.
     // `mean()` descarta null, entao o caso sai da media em vez de afunda-la.
     const precision = candidates.length ? tpFindings / candidates.length : null;
+    // `recall + precision` como guard e falsy quando os dois sao 0 (modelo
+    // reportou algo, mas errou tudo) — isso caia no ramo null, tratando "TODO
+    // ERRADO" igual a "SEM PREDICAO". So precision===null e abstencao real;
+    // precision===0 com qualquer recall deve dar f1=0, nao null.
     const f1 =
-        precision !== null && recall + precision
-            ? (2 * recall * precision) / (recall + precision)
-            : null;
+        precision === null
+            ? null
+            : recall + precision > 0
+              ? (2 * recall * precision) / (recall + precision)
+              : 0;
     const fairDenom = matched + realMiss + untestable;
     const fairRecall = fairDenom ? matched / fairDenom : recall;
 
