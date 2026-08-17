@@ -2,10 +2,9 @@ import { createLogger } from '@libs/core/log/logger';
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
 
-import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
-import type { NormalizedModel } from '@libs/llm/byok-config';
-import { resolveModelSlot } from '@libs/llm/resolve-model-slot';
-import { StaticTaskStrategy } from '@libs/llm/static-task-strategy';
+import { LLM_TASK } from '@libs/llm/byok-config';
+import type { BYOKConfig, NormalizedModel } from '@libs/llm/byok-config';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import {
@@ -30,10 +29,6 @@ import {
 import type { DistributedLock } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 
 type MainByokSlotConfig = NormalizedModel;
-
-// Manual routing policy (Phase 4) — stateless + dependency-free, so a single
-// module-level instance resolves the codeReview slot for every gate check.
-const routingStrategy = new StaticTaskStrategy();
 
 @Injectable()
 export class ByokConcurrencyGateService {
@@ -219,23 +214,16 @@ export class ByokConcurrencyGateService {
                     organizationAndTeamData,
                 );
 
-            // Resolve the SINGLE slot the run uses for the codeReview task off
-            // the raw config (StaticTaskStrategy → resolveModelSlot).
+            // Resolve the codeReview slot through the SAME resolution primitive
+            // every consumer uses (`resolveTaskSlot`: isByokConfig guard →
+            // StaticTaskStrategy → resolveModelSlot) — NOT a parallel resolver.
             // The slot carries CIPHERTEXT apiKey and is used only for the scope
             // key hash + the concurrency limit — the gate NEVER decrypts, so we
             // route to the slot WITHOUT building a model (no buildModelFromSlot).
-            const rawConfig = byokParameter?.configValue;
-            if (!isByokConfig(rawConfig)) {
-                return null;
-            }
-            const verdict = routingStrategy.resolve(
+            const { slot: mainConfig } = resolveTaskSlot(
+                byokParameter?.configValue as BYOKConfig | null | undefined,
                 LLM_TASK.codeReview,
-                {},
-                rawConfig,
             );
-            const mainConfig = verdict.modelId
-                ? resolveModelSlot(rawConfig, verdict.modelId)
-                : null;
 
             if (
                 !mainConfig?.provider ||
