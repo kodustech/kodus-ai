@@ -170,8 +170,12 @@ function submissionResultFromOutput(caseId, output, tokenUsage) {
         caseId,
         findings: findings.map((f) => ({
             path: f.relevantFile ?? f.path ?? null,
-            startLine: Number.isInteger(f.relevantLinesStart) ? f.relevantLinesStart : null,
-            endLine: Number.isInteger(f.relevantLinesEnd) ? f.relevantLinesEnd : null,
+            // 0 = "sem linha especifica" na saida de alguns modelos (achado
+            // conceitual, ex.: padrao duplicado em outro arquivo, decorator).
+            // Linha e 1-indexed, entao 0 nunca e valida — normaliza para null
+            // em vez de deixar o schema rejeitar a submission inteira.
+            startLine: Number.isInteger(f.relevantLinesStart) && f.relevantLinesStart > 0 ? f.relevantLinesStart : null,
+            endLine: Number.isInteger(f.relevantLinesEnd) && f.relevantLinesEnd > 0 ? f.relevantLinesEnd : null,
             severity: sev(f.severity),
             ...(f.severity && !sev(f.severity) ? { severityRaw: String(f.severity) } : {}),
             category: f.label ?? f.category ?? null,
@@ -303,8 +307,14 @@ async function main() {
     );
 
     const submissionResults = [];
-    const checkpointPath = path.join(RESULTS_DIR,
-        `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.submission.partial.json`);
+    // O checkpoint deriva do --output, nao do modelo: duas rodadas do MESMO
+    // modelo em paralelo (braços de A/B) escreviam no mesmo arquivo e se
+    // sobrescreviam. A submission final ja usava --output; o checkpoint nao,
+    // entao um recover pegaria casos misturados dos dois braços sem aviso.
+    const checkpointBase = args.output
+        ? path.basename(String(args.output)).replace(/\.json$/, '')
+        : `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}`;
+    const checkpointPath = path.join(RESULTS_DIR, `${checkpointBase}.submission.partial.json`);
 
     const runOneCase = async (test) => {
         const caseId = test.vars?.caseId || test.description || 'unknown-case';

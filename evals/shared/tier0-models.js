@@ -52,6 +52,8 @@ const TIER0 = {
     'grok-4.5': { provider: 'openai_compatible', keyEnvs: ['X_AI_KEY', 'BYOK_XAI_API_KEY'], baseURL: 'https://api.x.ai/v1' },
     // Alibaba DashScope (endpoint internacional, modo OpenAI-compatible).
     'qwen3.8-max': { provider: 'openai_compatible', keyEnvs: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'], baseURL: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1' },
+    // Rota Akash — catalogo confirmado por inferencia real (finish_reason: stop).
+    'qwen3.8-27b': { provider: 'openai_compatible', doModel: 'Qwen/Qwen3.8-27B', keyEnvs: ['AKASH_ML'], baseURL: 'https://api.akashml.com/v1' },
 
     // Rota de ASSINATURA (Codex OAuth): credencial vem de ~/.codex/auth.json,
     // nao de env. Cobra na cota semanal do plano ChatGPT, nao por token — sai
