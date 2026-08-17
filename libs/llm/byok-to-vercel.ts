@@ -597,6 +597,11 @@ export function getModelName(
         const googleAiStudioKey =
             process.env.API_GOOGLE_AI_API_KEY ||
             process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+        // Mirrors the selection in byokToVercelModel, including the keyless
+        // ADC paths — otherwise an ADC deployment reports the default model
+        // while Vertex is the one actually serving the request.
+        const usesAdc =
+            !process.env.API_VERTEX_AI_API_KEY && !!vertexProjectFromEnv();
         if (isGemini && !viaProxy) {
             if (googleAiStudioKey) {
                 return `google_ai_studio:${envMode}`;
@@ -604,12 +609,17 @@ export function getModelName(
             if (process.env.API_VERTEX_AI_API_KEY) {
                 return `google_vertex:${envMode}`;
             }
+            if (!process.env.API_OPEN_AI_API_KEY && usesAdc) {
+                return `google_vertex:${envMode}`;
+            }
         }
         if (isClaude && process.env.API_OPEN_AI_API_KEY && !viaProxy) {
             return `anthropic:${envMode}`;
         }
-        if (isClaude && process.env.API_VERTEX_AI_API_KEY && !viaProxy) {
-            return `google_vertex:${envMode}`;
+        if (isClaude && !viaProxy) {
+            if (process.env.API_VERTEX_AI_API_KEY || usesAdc) {
+                return `google_vertex:${envMode}`;
+            }
         }
         if (process.env.API_OPEN_AI_API_KEY) {
             return `openai_compatible:${envMode}`;
@@ -669,6 +679,19 @@ export function getInternalModel(
                 if (vertexModel) return vertexModel;
                 return createGoogleGenerativeAI({ apiKey: vertexKey })(envMode);
             }
+            // Keyless ADC, same precedence as byokToVercelModel. Without this
+            // an ADC deployment has no internal model at all: it falls past
+            // both Vertex branches, has no openaiKey either, and returns null
+            // below — which resolveSecondaryPassModel passes straight through,
+            // so the secondary pass (dedup, severity, formatting) is dropped
+            // and every duplicate suggestion ships to the PR.
+            if (!openaiKey) {
+                const adcModel = vertexModelFromAdc(
+                    envMode,
+                    process.env.API_VERTEX_AI_LOCATION,
+                );
+                if (adcModel) return adcModel;
+            }
         }
         if (isClaude && openaiKey && !viaProxy) {
             return createAnthropic({
@@ -676,14 +699,21 @@ export function getInternalModel(
                 ...(openaiBaseURL ? { baseURL: openaiBaseURL } : {}),
             })(envMode);
         }
-        if (isClaude && vertexKey && !viaProxy) {
+        if (isClaude && !viaProxy) {
             // Claude on Vertex (MaaS) — see byokToVercelModel for rationale.
-            const vertexModel = vertexModelFromSaJson(
-                vertexKey,
+            const vertexModel = vertexKey
+                ? vertexModelFromSaJson(
+                      vertexKey,
+                      envMode,
+                      process.env.API_VERTEX_AI_LOCATION,
+                  )
+                : null;
+            if (vertexModel) return vertexModel;
+            const adcClaude = vertexModelFromAdc(
                 envMode,
                 process.env.API_VERTEX_AI_LOCATION,
             );
-            if (vertexModel) return vertexModel;
+            if (adcClaude) return adcClaude;
         }
         if (openaiKey) {
             return createOpenAICompatible({

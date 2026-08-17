@@ -28,7 +28,11 @@ jest.mock('@libs/common/utils/crypto', () => ({ decrypt: (v: string) => v }));
 
 import { createVertex } from '@ai-sdk/google-vertex';
 import { createVertexAnthropic } from '@ai-sdk/google-vertex/anthropic';
-import { byokToVercelModel } from './byok-to-vercel';
+import {
+    byokToVercelModel,
+    getInternalModel,
+    getModelName,
+} from './byok-to-vercel';
 
 const createVertexMock = createVertex as unknown as jest.Mock;
 const createVertexAnthropicMock = createVertexAnthropic as unknown as jest.Mock;
@@ -234,6 +238,101 @@ describe('byokToVercelModel — Vertex keyless (ADC) auth', () => {
         expect(createVertexMock).toHaveBeenCalledWith({
             project: 'env-proj',
             location: 'global',
+        });
+    });
+
+    // getInternalModel mirrors byokToVercelModel's provider selection. Without
+    // the ADC paths it returned null on a keyless deployment, and
+    // resolveSecondaryPassModel passes that straight through — so the secondary
+    // pass (dedup, severity, formatting) was dropped and duplicates shipped.
+    describe('getInternalModel — keyless ADC', () => {
+        it('uses ADC for a gemini-* internal model with no SA key', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+            process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+
+            const result: any = getInternalModel(undefined);
+
+            expect(result?.sdk).toBe('vertex-gemini');
+            expect(createVertexMock).toHaveBeenCalledWith({
+                project: 'env-proj',
+                location: 'global',
+            });
+        });
+
+        it('uses ADC for a claude-* internal model with no SA key', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'claude-opus-4-6';
+            process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+            process.env.API_VERTEX_AI_LOCATION = 'us-east5';
+
+            const result: any = getInternalModel(undefined);
+
+            expect(result?.sdk).toBe('vertex-anthropic');
+            expect(createVertexAnthropicMock).toHaveBeenCalledWith({
+                project: 'env-proj',
+                location: 'us-east5',
+            });
+        });
+
+        it('no longer returns null on an ADC deployment', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+            process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+
+            expect(getInternalModel(undefined)).not.toBeNull();
+        });
+
+        it('lets an explicit API_OPEN_AI_API_KEY win over ambient ADC', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+            process.env.GOOGLE_CLOUD_PROJECT = 'ambient-proj';
+            process.env.API_OPEN_AI_API_KEY = 'sk-explicit';
+
+            getInternalModel(undefined);
+
+            expect(createVertexMock).not.toHaveBeenCalled();
+            expect(createVertexAnthropicMock).not.toHaveBeenCalled();
+        });
+
+        it('still returns null when no project and no key are configured', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+
+            expect(getInternalModel(undefined)).toBeNull();
+        });
+    });
+
+    // Reporting has to agree with routing, or an ADC deployment reports the
+    // default model while Vertex is the one serving the request.
+    describe('getModelName — keyless ADC', () => {
+        it('reports google_vertex for a gemini-* model on ADC', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+            process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+
+            expect(getModelName(undefined)).toBe('google_vertex:gemini-2.5-pro');
+        });
+
+        it('reports google_vertex for a claude-* model on ADC', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'claude-opus-4-6';
+            process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+
+            expect(getModelName(undefined)).toBe(
+                'google_vertex:claude-opus-4-6',
+            );
+        });
+
+        it('does not claim Vertex when only an OpenAI key is set', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+            process.env.GOOGLE_CLOUD_PROJECT = 'ambient-proj';
+            process.env.API_OPEN_AI_API_KEY = 'sk-explicit';
+
+            expect(getModelName(undefined)).toBe(
+                'openai_compatible:gemini-2.5-pro',
+            );
+        });
+
+        it('does not claim Vertex when no project is configured', () => {
+            process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+
+            expect(getModelName(undefined, 'fallback-model')).toBe(
+                'fallback-model',
+            );
         });
     });
 });
