@@ -16,7 +16,7 @@
  * `findModelReferences` is exported for reuse by the 04-06 model-delete guard
  * (which must reject a delete that would orphan a routing ref).
  */
-import { isByokConfig } from './byok-config';
+import { isByokConfig, type LlmTask } from './byok-config';
 
 export interface ByokRefValidationResult {
     valid: boolean;
@@ -96,7 +96,7 @@ export function validateByokConfigRefs(config: unknown): ByokRefValidationResult
 
 /** Human labels for the routing tasks — the delete guard's message is shown to
  *  the user, so it must read in product terms, not raw config paths. */
-const TASK_LABEL: Record<string, string> = {
+const TASK_LABEL: Record<LlmTask, string> = {
     codeReview: 'the Code Review model',
     kodyRulesReview: 'the Kody Rules review model',
     ruleGeneration: 'the Kody Rules generation model',
