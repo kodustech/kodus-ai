@@ -133,6 +133,8 @@ pnpm run e2e:matrix matrix/full.yml
 | `BB_TEST_REPO` | Bitbucket repo `workspace/slug` | `provider=bitbucket` |
 | `AZ_TEST_TOKEN` | Azure DevOps PAT | `provider=azure-devops` |
 | `AZ_TEST_ORG`, `AZ_TEST_PROJECT`, `AZ_TEST_REPO` | Azure DevOps coords | `provider=azure-devops` |
+| `CONVERSATION_USER_TOKEN` | GitHub PAT for a non-`kody`/`kodus`-named account with PR R/W on `GH_TEST_REPO`. Kody's `isKodyComment` filter ignores any comment whose author login contains those substrings — and `GH_TEST_TOKEN` IS such an account (`kodus-e2e-bot-N`) — so the `@kody` mention in `conversation-*` scenarios needs this separate identity. GitLab/Bitbucket/Azure DevOps don't need an equivalent var: their `GL_TEST_TOKEN`/`BB_TEST_USER`+`BB_TEST_APP_PASSWORD`/`AZ_TEST_TOKEN` are already plain human accounts (no dedicated bot was ever set up there), so `conversation-*` reuses them directly. | `scenario=conversation-*`, `provider=github` |
+| `CONVERSATION_ANTHROPIC_KEY` (or `API_ANTHROPIC_API_KEY`) | Anthropic API key used as the BYOK key under test. | `scenario=conversation-anthropic-byok` |
 | `CLOUD_TENANT_FREE_EMAIL`, `CLOUD_TENANT_FREE_PASSWORD` | Free tenant creds | `target=cloud, license=free` |
 | `CLOUD_TENANT_TRIAL_*` | Trial tenant creds | `target=cloud, license=trial` |
 | `CLOUD_TENANT_PAID_*` | Paid tenant creds | `target=cloud, license=paid` |

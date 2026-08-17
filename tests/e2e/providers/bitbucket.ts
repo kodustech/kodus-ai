@@ -568,6 +568,77 @@ export class BitbucketProvider extends BaseProvider {
         return { id: String(resp.body.id) };
     }
 
+    // Posts a comment as a (possibly different) Bitbucket identity —
+    // `token` overrides the app password while the username stays
+    // `this.user` (BB_TEST_USER). The conversation scenario calls this with
+    // BB_TEST_APP_PASSWORD by default: unlike GitHub's dedicated e2e bot
+    // (kody-e2e-bot-N, filtered by isKodyComment), BB_TEST_USER is already a
+    // plain human account, so no separate non-Kody identity is needed here.
+    // Kept as a token override (not a hardcoded call to postComment) so a
+    // dedicated Bitbucket bot account can be introduced later without
+    // touching this signature.
+    async postCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const auth = `Basic ${Buffer.from(`${this.user}:${token}`).toString("base64")}`;
+        const resp = await http<BitbucketComment>(
+            `${this.apiBase}/repositories/${this.workspaceSlug}/pullrequests/${prNumber}/comments`,
+            {
+                method: "POST",
+                headers: { Authorization: auth, Accept: "application/json" },
+                body: { content: { raw: body } },
+            },
+        );
+        ensureOk(resp, "bitbucket:postCommentAs");
+        return { id: String(resp.body.id) };
+    }
+
+    // Kody's getPullRequestReviewComment lists ALL PR comments
+    // (pullrequests.listComments), not diff-scoped — a plain top-level
+    // comment (unlike GitHub) is already visible there. No inline
+    // positioning needed.
+    async postReviewCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        return this.postCommentAs(prNumber, body, token);
+    }
+
+    // Polls for Kody's conversational reply to an `@kody <question>`
+    // comment. Returns the first NEW comment that is neither ours
+    // (`@kody …`) nor empty. Bitbucket does NOT inject the
+    // `<!-- kody-codereview -->` marker into its comments (see
+    // classifyReviewComment above), so unlike the other providers there's
+    // nothing review-specific to filter out here. null at timeout.
+    async pollForKodyReply(
+        pr: { number: number },
+        opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
+    ): Promise<{ id: string; body: string } | null> {
+        return pollUntil(
+            async () => {
+                const resp = await http<{ values: BitbucketComment[] }>(
+                    `${this.apiBase}/repositories/${this.workspaceSlug}/pullrequests/${pr.number}/comments?pagelen=50&sort=-created_on`,
+                    { headers: this.headers() },
+                );
+                ensureOk(resp, "bitbucket:pollForKodyReply");
+                for (const c of resp.body.values ?? []) {
+                    if (c.created_on <= opts.sinceIso) continue;
+                    if (opts.triggerId && String(c.id) === opts.triggerId)
+                        continue;
+                    const raw = c.content?.raw ?? "";
+                    if (raw.toLowerCase().startsWith("@kody")) continue;
+                    if (!raw.trim()) continue;
+                    return { id: String(c.id), body: raw.slice(0, 600) };
+                }
+                return null;
+            },
+            { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
+        );
+    }
+
     authMode(): "token" {
         // Bitbucket's "app password" / "API token" auth flows are both
         // routed through Kodus's AuthMode.TOKEN branch — the backend

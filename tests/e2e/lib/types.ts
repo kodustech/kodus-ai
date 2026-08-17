@@ -163,8 +163,9 @@ export interface Provider {
         token: string,
     ): Promise<{ id: string }>;
     // Optional: polls for Kody's conversational reply to an `@kody <question>`
-    // new non-trigger, non-code-review comment, or null at timeout. Only GitHub
-    // is wired; the conversation scenario gates on its presence.
+    // new non-trigger, non-code-review comment, or null at timeout. Wired on
+    // github/gitlab/bitbucket/azure-devops; the conversation scenario gates
+    // on its presence.
     pollForKodyReply?(
         pr: { number: number },
         opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
