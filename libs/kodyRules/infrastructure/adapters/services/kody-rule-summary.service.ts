@@ -23,6 +23,7 @@ import {
     IKodyRuleSummary,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { z } from 'zod';
+import type { BYOKConfig } from '@kodus/kodus-common/llm';
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     compileRuleDetector,
@@ -99,6 +100,61 @@ export const decomposeOutputSchema = z.object({
         )
         .default([]),
 });
+
+type DecomposedAtom = z.infer<typeof decomposeOutputSchema>['atoms'][number];
+
+/**
+ * Guards against a decomposition atom whose examples got labeled backwards
+ * relative to the ORIGINAL rule — e.g. an atom titled after the flaggable
+ * state itself ("Declaration is direct") where the decomposition call then
+ * marks the prohibited pattern `isCorrect:true` and the required one
+ * `isCorrect:false`. The atom stays internally self-consistent (nothing in
+ * compileRuleDetector's own example gate would catch it — it only checks a
+ * detector against ITS atom's examples, not against the parent's intent),
+ * but the review-time judge then faithfully tells developers to do the
+ * opposite of what the rule wants. One extra structured call per rule, at
+ * generation time only — atoms are cached and reused on every future
+ * review, so this cost is not paid per-review.
+ */
+const VERIFY_ATOMS_SYSTEM_PROMPT = `You audit atomic requirements decomposed from a team code-review rule for a labeling error.
+
+For each atom, its examples carry "isCorrect:true" (claimed compliant with the ORIGINAL rule) and "isCorrect:false" (claimed a violation of the ORIGINAL rule). Judge each example against the ORIGINAL rule's actual stated intent below — NOT against the atom's own title or spec wording, which may be self-consistent while still contradicting the original rule.
+
+An atom is INVERTED when what it labels "isCorrect:true" is actually what the original rule prohibits, or what it labels "isCorrect:false" is actually what the original rule requires/allows.
+
+Return ONLY JSON: {"invalidAtomIndexes":[<the atom's own [n] index, for every atom with an inverted or otherwise contradictory example>]}. Empty array if every atom's labels match the original rule's intent.`;
+
+export const verifyAtomsOutputSchema = z.object({
+    invalidAtomIndexes: z.array(z.number().int().nonnegative()).default([]),
+});
+
+function buildVerifyAtomsUserPrompt(
+    rule: Partial<IKodyRule>,
+    atoms: Array<{ index: number } & DecomposedAtom>,
+): string {
+    const atomBlocks = atoms
+        .map((a) => {
+            const exampleLines = (a.examples ?? [])
+                .map(
+                    (e) =>
+                        `    - isCorrect:${e.isCorrect}: ${JSON.stringify(e.snippet)}`,
+                )
+                .join('\n');
+            return `[${a.index}] ${a.title}\n  spec: ${a.spec}\n  examples:\n${exampleLines}`;
+        })
+        .join('\n\n');
+
+    return [
+        `<OriginalRule>`,
+        `Title: ${rule.title ?? ''}`,
+        rule.rule ?? '',
+        `</OriginalRule>`,
+        ``,
+        `<Atoms>`,
+        atomBlocks,
+        `</Atoms>`,
+    ].join('\n');
+}
 
 /**
  * Verbatim from the validated experiment (evals/kody-rules/summarize-rules.js,
@@ -501,6 +557,45 @@ export class KodyRuleSummaryService {
                 return null;
             }
 
+            // Polarity gate: drop any atom whose examples contradict the
+            // ORIGINAL rule's intent before it ever reaches the T0 compiler
+            // or a review. Never blocks decomposition — an unverifiable
+            // batch ships as-is rather than losing every atom.
+            const invalidIndexes = await this.verifyAtomPolarity(
+                rule,
+                raw,
+                byokConfig,
+                organizationAndTeamData,
+            );
+            const verifiedAtoms = raw.filter(
+                (_, i) => !invalidIndexes.has(i),
+            );
+            if (invalidIndexes.size > 0) {
+                this.logger.warn({
+                    message: `[kody-rule-atoms] dropped ${invalidIndexes.size}/${raw.length} atom(s) — examples contradicted the parent rule's intent`,
+                    context: KodyRuleSummaryService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        ruleUuid: rule.uuid,
+                        droppedTitles: raw
+                            .filter((_, i) => invalidIndexes.has(i))
+                            .map((a) => a.title),
+                    },
+                });
+            }
+            if (verifiedAtoms.length === 0) {
+                this.logger.warn({
+                    message:
+                        '[kody-rule-atoms] every decomposed atom failed the polarity check — rule stays on summary/full-text path',
+                    context: KodyRuleSummaryService.name,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        ruleUuid: rule.uuid,
+                    },
+                });
+                return null;
+            }
+
             // T0 attempt per atom via the shipped compiler + example gate.
             // A compiler failure only keeps that atom semantic — never fails
             // the decomposition.
@@ -518,8 +613,8 @@ export class KodyRuleSummaryService {
             });
 
             const items: IKodyRuleAtom[] = [];
-            for (let i = 0; i < raw.length; i++) {
-                const a = raw[i];
+            for (let i = 0; i < verifiedAtoms.length; i++) {
+                const a = verifiedAtoms[i];
                 const atom: IKodyRuleAtom = {
                     id: `${rule.uuid}-atom-${i + 1}`,
                     title: a.title,
@@ -575,6 +670,53 @@ export class KodyRuleSummaryService {
                 },
             });
             return null;
+        }
+    }
+
+    /**
+     * Returns the 0-based indexes (into `atoms`) of every atom whose examples
+     * contradict the ORIGINAL rule's intent — see VERIFY_ATOMS_SYSTEM_PROMPT.
+     * Only atoms carrying examples are sent (nothing to verify otherwise).
+     * Never throws: a failed/empty verification ships every atom unverified
+     * rather than losing the whole decomposition over a flaky extra call.
+     */
+    private async verifyAtomPolarity(
+        rule: Partial<IKodyRule>,
+        atoms: DecomposedAtom[],
+        byokConfig: BYOKConfig | null | undefined,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<Set<number>> {
+        const withExamples = atoms
+            .map((a, index) => ({ ...a, index }))
+            .filter((a) => a.examples?.length);
+        if (withExamples.length === 0) {
+            return new Set();
+        }
+        try {
+            const parsed = (await runStructuredReviewCall({
+                byokConfig: byokConfig ?? undefined,
+                schema: verifyAtomsOutputSchema,
+                system: VERIFY_ATOMS_SYSTEM_PROMPT,
+                user: buildVerifyAtomsUserPrompt(rule, withExamples),
+                runName: 'kody-rules.atom-polarity-verify',
+                organizationId: organizationAndTeamData.organizationId,
+                attrs: { ruleUuid: rule.uuid },
+                observabilityService: this.observabilityService,
+            })) as z.infer<typeof verifyAtomsOutputSchema> | null;
+            return new Set(parsed?.invalidAtomIndexes ?? []);
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    '[kody-rule-atoms] polarity verification failed — atoms ship unverified',
+                context: KodyRuleSummaryService.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    ruleUuid: rule.uuid,
+                    error:
+                        error instanceof Error ? error.message : String(error),
+                },
+            });
+            return new Set();
         }
     }
 
