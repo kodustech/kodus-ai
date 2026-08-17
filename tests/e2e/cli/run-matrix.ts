@@ -85,12 +85,14 @@ const PROVIDER_REQUIRED_ENV: Record<string, string[]> = {
     // GitHub App variant: shares GH_TEST_TOKEN with `github` (used for
     // PR open / comment posting / webhook listing — those code paths
     // still run as a user, not as the App). The App-specific bits are
-    // GH_APP_TEST_REPO (where the App is installed, scope-limited) and
-    // GH_APP_INSTALLATION_ID (the numeric id captured after install).
+    // GH_APP_TEST_REPO (where both Apps are installed), the harness App
+    // installation used for driver traffic, and the target product App
+    // installation registered during onboarding.
     "github-app": [
         "GH_TEST_TOKEN",
         "GH_APP_TEST_REPO",
         "GH_APP_INSTALLATION_ID",
+        "GH_PRODUCT_APP_INSTALLATION_ID",
     ],
     gitlab: ["GL_TEST_TOKEN", "GL_TEST_REPO"],
     bitbucket: ["BB_TEST_USER", "BB_TEST_APP_PASSWORD", "BB_TEST_REPO"],

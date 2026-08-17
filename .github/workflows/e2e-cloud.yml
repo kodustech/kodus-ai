@@ -284,12 +284,17 @@ jobs:
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
                   # The product stores this only in provider=github cells.
                   # No fallback: a missing credential must fail in preflight.
-                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN }}
+                  # This existing PAT has org-wide repository and webhook
+                  # access. Expose it under the canonical runtime name.
+                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN_PAID }}
                   # GitHub App installation used by provider=github-app and
                   # for high-volume reads/polls in the compatibility cell.
                   GH_APP_ID: ${{ secrets.GH_APP_ID }}
                   GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
                   GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
+                  # Installation of the App configured in the QA backend,
+                  # deliberately distinct from the harness App above.
+                  GH_PRODUCT_APP_INSTALLATION_ID: ${{ vars.GH_PRODUCT_APP_INSTALLATION_ID }}
                   GH_APP_TEST_REPO: ${{ vars.GH_APP_TEST_REPO }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}

@@ -9,15 +9,18 @@ import { GitHubProvider } from "./github.js";
 //     same run, on different cells, exercising different code paths
 //     in github.service.ts (authenticateWithToken vs authenticateWithCodeOauth);
 //   - keeps the matrix filter pruning trivial (no scenario has to know
-//     "github means PAT, env GH_APP_INSTALLATION_ID overrides to App");
+//     "github means PAT, one App drives the harness, another is stored by Kodus");
 //   - matches how the backend models it — authMode is per-integration,
 //     not per-instance.
 //
 // Required env (set in scripts/e2e/.env or ~/.kodus-dev/config):
 //   GH_APP_TEST_REPO          full_name of the repo the App is installed in
 //                             (e.g. kodus-e2e/tiny-url-app)
-//   GH_APP_INSTALLATION_ID    numeric installation id captured after the
-//                             one-time install on github.com
+//   GH_APP_INSTALLATION_ID    harness App installation; used only to mint the
+//                             short-lived token that drives test traffic
+//   GH_PRODUCT_APP_INSTALLATION_ID
+//                             installation of the App configured in the target
+//                             Kodus backend; sent during product onboarding
 //   GH_TEST_TOKEN             one human PAT used only for PR/comment
 //                             authorship because Kodus intentionally ignores
 //                             bot-authored review triggers. Reads and polling
@@ -40,7 +43,7 @@ export class GitHubAppProvider extends GitHubProvider {
             repoOverride: requireEnv("GH_APP_TEST_REPO"),
             tokenOverride,
         });
-        this.installationId = requireEnv("GH_APP_INSTALLATION_ID");
+        this.installationId = requireEnv("GH_PRODUCT_APP_INSTALLATION_ID");
     }
 
     override authMode(): "token" | "oauth" | "app-password" {
