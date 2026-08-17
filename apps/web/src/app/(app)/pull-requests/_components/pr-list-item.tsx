@@ -14,6 +14,7 @@ import {
 import { useGetTimezone } from "@services/organizationParameters/hooks";
 import {
     buildPullRequestUrl,
+    buildReviewDeepLinkUrl,
     usePrefetchPullRequestReview,
     type CodeReviewTimelineItem,
     type ReviewWarning,
@@ -416,6 +417,16 @@ export const PrListItem = ({ group }: PrListItemProps) => {
         () => new Set(executions.slice(1).map((_, i) => i + 1)),
     );
     const prUrl = buildPullRequestUrl(latest);
+    // The review screen already deep-links to a finding via
+    // `?file=<path>&suggestion=<id>` (scrolls to it and lights it up). The list
+    // only knows counts, so the backend tags each row with the first delivered
+    // suggestion; pass it through so the count click lands on the comments
+    // instead of the top of a large diff.
+    const reviewHref = buildReviewDeepLinkUrl(
+        latest.repositoryId,
+        latest.prNumber,
+        latest.firstSentSuggestion,
+    );
 
     const toggleReview = (index: number) => {
         setCollapsedReviews((prev) => {
@@ -583,7 +594,7 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                     shown so "0 / 0" reads as "reviewed, nothing to send" — not
                     as missing data. */}
                 <NextLink
-                    href={`/pull-requests/${latest.repositoryId}/${latest.prNumber}`}
+                    href={reviewHref}
                     onClick={(e) => e.stopPropagation()}
                     onMouseEnter={prefetchThisReview}
                     onFocus={prefetchThisReview}
