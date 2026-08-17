@@ -1,0 +1,10 @@
+{
+    "_note": "Recorded generate result for an Amazon Bedrock call (e.g. anthropic.claude-3-5-sonnet on Bedrock, no extended thinking). Usage is stored in the high-level ai@7 LanguageModelUsage shape — the @ai-sdk/amazon-bedrock provider maps Bedrock's { inputTokens, outputTokens } onto this canonical shape, and generateText's asLanguageModelUsage is what module.normalize/normalizeUsage consume in prod. No reasoning details, so normalizeUsage.reasoning must be 0 (a number, never null).",
+    "text": "{\"decisions\":[]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 842,
+        "outputTokens": 176,
+        "totalTokens": 1018
+    }
+}

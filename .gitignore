@@ -61,6 +61,12 @@ _*
 # the `__fixtures__` dir, so un-ignore it (its JSON files don't start with `_`).
 !libs/llm/providers/__fixtures__/
 !libs/llm/providers/__fixtures__/**
+# Per-provider recorded fixtures (openai/__fixtures__, anthropic/__fixtures__,
+# …) — same committed-artifact rule; the shared pattern above does not reach the
+# nested dirs, so un-ignore them explicitly (otherwise `_*` swallows them and CI
+# can't load the offline conformance specs).
+!libs/llm/providers/**/__fixtures__/
+!libs/llm/providers/**/__fixtures__/**
 !**/__tests__/
 !scripts/selfhosted/_*.sh
 
