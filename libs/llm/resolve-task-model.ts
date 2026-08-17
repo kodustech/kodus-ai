@@ -77,7 +77,9 @@ export function resolveTaskSlot(
     if (!isByokConfig(config)) {
         return { slot: null, verdict: null };
     }
+
     const verdict = strategy.resolve(task, options.ctx ?? {}, config);
+
     if (!verdict.modelId) {
         return { slot: null, verdict };
     }
@@ -88,6 +90,7 @@ export function resolveTaskSlot(
         routed && verdict.modelName
             ? { ...routed, model: verdict.modelName }
             : (routed ?? null);
+
     return { slot, verdict };
 }
 

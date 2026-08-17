@@ -157,7 +157,7 @@ export class PermissionValidationService {
                 );
             }
 
-            this.logger.log({
+            this.logger.debug({
                 message:
                     '@@VALID PERMISSION@@ - Validating execution permissions',
                 context: contextName || PermissionValidationService.name,
@@ -170,7 +170,7 @@ export class PermissionValidationService {
                     organizationAndTeamData,
                 );
 
-            this.logger.log({
+            this.logger.debug({
                 message:
                     '@@VALID PERMISSION@@ - Organization license validated',
                 context: contextName || PermissionValidationService.name,
@@ -569,22 +569,10 @@ export class PermissionValidationService {
                 };
             }
 
-            this.logger.log({
-                message: '@@VALID PERMISSION@@ - Validating basic license',
-                context: contextName || PermissionValidationService.name,
-                metadata: { organizationAndTeamData },
-            });
-
             const validation =
                 await this.licenseService.validateOrganizationLicense(
                     organizationAndTeamData,
                 );
-
-            this.logger.log({
-                message: '@@VALID PERMISSION@@ - Basic license validated',
-                context: contextName || PermissionValidationService.name,
-                metadata: { organizationAndTeamData, result: validation },
-            });
 
             if (!validation?.valid) {
                 this.logger.warn({
@@ -653,21 +641,6 @@ export class PermissionValidationService {
                 validation?.planType,
             );
 
-            // Managed plans usam nossas keys
-            // if (identifiedPlanType === PlanType.MANAGED) {
-            //     this.logger.log({
-            //         message: 'Using managed keys for operation',
-            //         context: contextName || PermissionValidationService.name,
-            //         metadata: {
-            //             organizationAndTeamData,
-            //             planType: validation?.planType,
-            //             identifiedPlanType,
-            //         },
-            //     });
-            //     return null;
-            // }
-
-            // Free ou BYOK plans precisam de BYOK config
             const byokConfig = await this.resolveTaskSlot(
                 organizationAndTeamData,
                 LLM_TASK.codeReview,
@@ -819,6 +792,7 @@ export class PermissionValidationService {
         const { slot, verdict } = resolveTaskSlotFromConfig(rawConfig, task, {
             ctx: options.ctx,
         });
+
         this.logRoutingVerdict(organizationAndTeamData, task, verdict);
         return slot;
     }
@@ -930,7 +904,10 @@ export class PermissionValidationService {
                     organizationAndTeamData,
                 );
 
-            if (!validation?.valid || validation.subscriptionStatus !== 'trial') {
+            if (
+                !validation?.valid ||
+                validation.subscriptionStatus !== 'trial'
+            ) {
                 return;
             }
 
