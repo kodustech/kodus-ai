@@ -254,7 +254,22 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             // otherwise hand it a NON-managed credential's ciphertext, storing a
             // contradictory `managed: true` + stale key. Force apiKey undefined.
             if (cred?.managed) {
-                return { ...cred, apiKey: undefined };
+                // Defense-in-depth: this path skips encryptCredentialSecrets, so
+                // strip any BYOK_SECRET_SETTINGS (aws*) a caller may have attached
+                // — otherwise a plaintext secret would be persisted unencrypted on
+                // a credential that is supposed to carry none. Non-secret settings
+                // (baseURL, vertexLocation) are preserved.
+                const managed = { ...cred, apiKey: undefined };
+                if (managed.settings && typeof managed.settings === 'object') {
+                    const cleaned = {
+                        ...(managed.settings as Record<string, unknown>),
+                    };
+                    for (const field of BYOK_SECRET_SETTINGS) {
+                        delete cleaned[field];
+                    }
+                    managed.settings = cleaned;
+                }
+                return managed;
             }
             const prior =
                 (cred.id ? existingById.get(cred.id) : undefined) ??

@@ -44,9 +44,7 @@ import {
     resolveReviewAgentModel,
     type AgentModelParams,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
-import {
-    providerErrorFromResult,
-} from '@libs/code-review/infrastructure/agents/collaborators/model-fallback';
+import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
 import {
     recordAgentUsageSpans,
     runAgentWithTrace,

@@ -26,13 +26,11 @@ type ModelInput = Pick<
 >;
 
 /**
- * A resolved model plus the knobs the agent loop needs. The `role` union still
- * carries `'fallback'` only for the legacy collaborator typing that dies in the
- * cleanup wave — the runtime fallback itself was removed in 04b-05, so only
- * `'main'` is ever produced here.
+ * A resolved model plus the knobs the agent loop needs. One model per task
+ * (the runtime fallback was removed in 04b-05), so `role` is always `'main'`.
  */
 export interface AgentModelParams {
-    role: 'main' | 'fallback';
+    role: 'main';
     model: LanguageModel;
     modelName: string;
     maxInputTokens?: number;
