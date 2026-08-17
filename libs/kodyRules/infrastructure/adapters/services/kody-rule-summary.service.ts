@@ -716,11 +716,12 @@ export class KodyRuleSummaryService {
      * — see VERIFY_ATOMS_SYSTEM_PROMPT for the three failure modes checked.
      * `invalidIndexes` maps each bad atom's 0-based index (into `atoms`) to a
      * short reason, for atoms to drop; `missingRequirements` is observability
-     * only (nothing to drop — there's no atom to synthesize one from). Only
-     * atoms carrying examples are sent (nothing to verify otherwise, and
-     * hallucination/coverage checks still run over the full atom list) — any
-     * returned index outside that sent set is dropped, not applied (see the
-     * comment on `sentIndexes` below).
+     * only (nothing to drop — there's no atom to synthesize one from). EVERY
+     * atom is sent, including example-free ones — coverage is checked
+     * against the original rule regardless of examples, so restricting the
+     * call to example-bearing atoms would silently skip that check on an
+     * all-semantic decomposition. Any returned index outside the sent set is
+     * dropped, not applied (see the comment on `sentIndexes` below).
      * Never throws: a failed/empty verification ships every atom unverified
      * rather than losing the whole decomposition over a flaky extra call.
      */
@@ -733,26 +734,30 @@ export class KodyRuleSummaryService {
         invalidIndexes: Map<number, string>;
         missingRequirements: string[];
     }> {
-        const withExamples = atoms
-            .map((a, index) => ({ ...a, index }))
-            .filter((a) => a.examples?.length);
-        if (withExamples.length === 0) {
+        if (atoms.length === 0) {
             return { invalidIndexes: new Map(), missingRequirements: [] };
         }
-        // The prompt shows atoms under their ORIGINAL (possibly sparse —
-        // atoms without examples are excluded) index, e.g. [1] ... [3] ...,
-        // and asks the model to echo that same number back. A model that
-        // instead re-numbers sequentially from 0 would otherwise cause the
-        // WRONG atom to be dropped downstream while the actually-bad one
-        // survives — silently defeating the gate. Only accept indexes we
-        // actually sent for verification.
-        const sentIndexes = new Set(withExamples.map((a) => a.index));
+        // Send EVERY atom, not just ones with examples: the missing-coverage
+        // check needs the full picture regardless of examples (an
+        // all-semantic, example-free decomposition must still be auditable
+        // for coverage gaps — restricting the call to example-bearing atoms
+        // would silently skip that check and read as "fully enforced").
+        // Polarity/fidelity naturally has nothing to flag on an
+        // example-free atom's (empty) examples block; that's fine, it just
+        // won't be a source of INVERTED POLARITY findings.
+        const indexed = atoms.map((a, index) => ({ ...a, index }));
+        // The prompt shows atoms under their own index and asks the model to
+        // echo that same number back. A model that instead re-numbers
+        // sequentially would otherwise cause the WRONG atom to be dropped
+        // downstream while the actually-bad one survives — silently
+        // defeating the gate. Only accept indexes we actually sent.
+        const sentIndexes = new Set(indexed.map((a) => a.index));
         try {
             const parsed = (await runStructuredReviewCall({
                 byokConfig: byokConfig ?? undefined,
                 schema: verifyAtomsOutputSchema,
                 system: VERIFY_ATOMS_SYSTEM_PROMPT,
-                user: buildVerifyAtomsUserPrompt(rule, withExamples),
+                user: buildVerifyAtomsUserPrompt(rule, indexed),
                 runName: 'kody-rules.atom-verify',
                 organizationId: organizationAndTeamData.organizationId,
                 attrs: { ruleUuid: rule.uuid },

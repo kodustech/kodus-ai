@@ -742,7 +742,11 @@ describe('KodyRuleSummaryService', () => {
             );
         });
 
-        it('does not call the verify pass for atoms with no examples', async () => {
+        it('still calls the verify pass when no atom has examples, so coverage gaps are caught', async () => {
+            // An all-semantic decomposition (no atom carries examples) must
+            // still get its coverage checked — restricting the call to
+            // example-bearing atoms would make a coverage gap silently read
+            // as "fully enforced" just because nothing had examples.
             const { service } = createService();
             structuredCallMock.mockImplementation(async ({ runName }: any) => {
                 if (runName === 'kody-rules.atom-decomposition') {
@@ -750,61 +754,10 @@ describe('KodyRuleSummaryService', () => {
                         atoms: [{ title: 'no examples here', spec: 'WHAT: x\nHOW: y' }],
                     };
                 }
-                return { mechanical: false, reason: 'semantic' };
-            });
-
-            await service.generateAtoms(
-                { uuid: 'r1', rule: LONG_TEXT },
-                orgData,
-            );
-
-            expect(structuredCallMock).not.toHaveBeenCalledWith(
-                expect.objectContaining({
-                    runName: 'kody-rules.atom-verify',
-                }),
-            );
-        });
-
-        it('ignores a returned index outside the atoms actually sent for verification (sparse-index correlation)', async () => {
-            const { service } = createService();
-            // Atom 0 has no examples (excluded from the verify call, so the
-            // prompt shows the remaining two under their ORIGINAL, sparse
-            // indexes 1 and 2 — not re-numbered 0/1). A model that ignores
-            // that and answers with a plain sequential index (0) must NOT be
-            // trusted to mean "drop atom 0" — atom 0 was never even shown to
-            // it, and blindly applying that index would drop the wrong atom
-            // while the truly inverted one (index 1) survives untouched.
-            structuredCallMock.mockImplementation(async ({ runName }: any) => {
-                if (runName === 'kody-rules.atom-decomposition') {
-                    return {
-                        atoms: [
-                            { title: 'no examples here', spec: 'WHAT: x\nHOW: y' },
-                            {
-                                title: 'Declaration is direct (not via a mixin)',
-                                spec: 'WHAT: x\nHOW: y',
-                                examples: [
-                                    { snippet: 'a', isCorrect: true },
-                                    { snippet: 'b', isCorrect: false },
-                                ],
-                            },
-                            {
-                                title: 'Property is font-family/size/weight',
-                                spec: 'WHAT: x\nHOW: y',
-                                examples: [
-                                    { snippet: 'c', isCorrect: true },
-                                    { snippet: 'd', isCorrect: false },
-                                ],
-                            },
-                        ],
-                    };
-                }
                 if (runName === 'kody-rules.atom-verify') {
-                    // Miscounted: should have said index 1 (the real
-                    // inverted atom), says 0 instead (never sent).
                     return {
-                        invalidAtoms: [
-                            { index: 0, reason: 'inverted polarity' },
-                        ],
+                        invalidAtoms: [],
+                        missingRequirements: ['icon-vs-text scoping is never checked'],
                     };
                 }
                 return { mechanical: false, reason: 'semantic' };
@@ -815,15 +768,51 @@ describe('KodyRuleSummaryService', () => {
                 orgData,
             );
 
-            // Nothing gets dropped on a miscounted index — safer than
-            // silently dropping whichever atom happens to sit at raw[0].
-            expect(atoms!.items).toHaveLength(3);
+            expect(structuredCallMock).toHaveBeenCalledWith(
+                expect.objectContaining({ runName: 'kody-rules.atom-verify' }),
+            );
+            expect(atoms!.items).toHaveLength(1);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'missing coverage for 1 requirement(s)',
+                    ),
+                }),
+            );
+        });
+
+        it('ignores a returned index outside the atoms actually sent for verification', async () => {
+            const { service } = createService();
+            mockDecompositionWithTwoAtoms();
+            const decompose = structuredCallMock.getMockImplementation()!;
+            structuredCallMock.mockImplementation(async (args: any) => {
+                if (args.runName === 'kody-rules.atom-verify') {
+                    // Hallucinated: only 2 atoms exist (indexes 0-1), but
+                    // the model answers with an out-of-bounds index.
+                    return {
+                        invalidAtoms: [
+                            { index: 5, reason: 'inverted polarity' },
+                        ],
+                    };
+                }
+                return decompose(args);
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            // Nothing gets dropped on a hallucinated index — safer than
+            // risking a drop that doesn't correspond to what the model
+            // actually judged.
+            expect(atoms!.items).toHaveLength(2);
             expect(loggerSpy.warn).toHaveBeenCalledWith(
                 expect.objectContaining({
                     message: expect.stringContaining(
                         'outside the atoms it was sent',
                     ),
-                    metadata: expect.objectContaining({ outOfRange: [0] }),
+                    metadata: expect.objectContaining({ outOfRange: [5] }),
                 }),
             );
         });
