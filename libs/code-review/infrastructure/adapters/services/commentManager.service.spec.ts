@@ -499,7 +499,6 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
         const result = await service.repeatedCodeReviewSuggestionClustering(
             stubOrg as any,
             7,
-            'openai_gpt-4o' as any,
             codeSuggestions,
         );
 
@@ -545,7 +544,6 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
         const result = await service.repeatedCodeReviewSuggestionClustering(
             stubOrg as any,
             7,
-            'openai_gpt-4o' as any,
             codeSuggestions,
         );
 

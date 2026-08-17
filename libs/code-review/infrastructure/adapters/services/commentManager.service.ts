@@ -1,4 +1,3 @@
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
@@ -42,6 +41,7 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import {
     buildModelFromSlot,
+    getModelName,
     KODUS_TRIAL_MODEL,
 } from '@libs/llm/byok-to-vercel';
 import { LLM_TASK } from '@libs/llm/byok-config';
@@ -1814,7 +1814,6 @@ ${reviewOptions}
     async repeatedCodeReviewSuggestionClustering(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        provider: LLMModelProvider,
         codeSuggestions: any[],
         byokConfig?: NormalizedModel,
     ) {
@@ -1829,11 +1828,6 @@ ${reviewOptions}
         let repeteadSuggetionsClustered;
 
         try {
-            const fallbackProvider =
-                provider === LLMModelProvider.OPENAI_GPT_4O
-                    ? LLMModelProvider.NOVITA_DEEPSEEK_V3
-                    : LLMModelProvider.OPENAI_GPT_4O;
-
             const userPrompt = `<codeSuggestionsContext>${JSON.stringify(baseContext?.codeSuggestions) || 'No code suggestions provided'}</codeSuggestionsContext>`;
 
             const runName = 'repeatedCodeReviewSuggestionClustering';
@@ -1873,12 +1867,10 @@ ${reviewOptions}
                     metadata: {
                         organizationAndTeamData,
                         prNumber,
-                        // This method delegates its model build to the
-                        // out-of-scope runStructuredReviewCall({main,fallback})
-                        // helper; its telemetry reads go native when that
-                        // helper does (04b-05).
-                        provider: byokConfig?.provider || provider, // removed in 04b-05
-                        fallbackProvider, // removed in 04b-05
+                        // The actual model that ran (same name
+                        // runStructuredReviewCall traces): BYOK slot or the
+                        // managed default.
+                        model: getModelName(byokConfig),
                     },
                 });
                 throw new Error(message);
@@ -1899,7 +1891,7 @@ ${reviewOptions}
                 metadata: {
                     organizationAndTeamData,
                     prNumber,
-                    provider,
+                    model: getModelName(byokConfig),
                 },
             });
 

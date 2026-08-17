@@ -1,6 +1,7 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
+import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
@@ -204,7 +205,6 @@ export class LLMAnalysisService implements IAIAnalysisService {
         context: AnalysisContext,
         byokConfig: NormalizedModel,
     ): Promise<AIAnalysisResult> {
-        const defaultProvider = LLMModelProvider.GEMINI_2_5_PRO;
         const runName = 'analyzeCodeWithAI_v2';
 
         const baseContext = await this.prepareAnalysisContext(
@@ -253,9 +253,13 @@ export class LLMAnalysisService implements IAIAnalysisService {
 
             const analysisResult: AIAnalysisResult = {
                 codeSuggestions: analysis.codeSuggestions,
+                // Record the model that ACTUALLY ran — the same name
+                // runStructuredReviewCall traces (getModelName(slot)): the org's
+                // BYOK model, or the managed default (DeepSeek) when no BYOK. The
+                // old `byokConfig?.provider || GEMINI_2_5_PRO` label lied for the
+                // no-BYOK path (reported Gemini, ran DeepSeek).
                 codeReviewModelUsed: {
-                    generateSuggestions:
-                        byokConfig?.provider || defaultProvider,
+                    generateSuggestions: getModelName(byokConfig),
                 },
             };
 

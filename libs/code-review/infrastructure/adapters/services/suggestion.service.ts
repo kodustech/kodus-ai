@@ -758,7 +758,6 @@ export class SuggestionService implements ISuggestionService {
                     ? await this.commentManagerService.repeatedCodeReviewSuggestionClustering(
                           organizationAndTeamData,
                           prNumber,
-                          LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
                           suggestionsToCluster,
                           byokConfig,
                       )

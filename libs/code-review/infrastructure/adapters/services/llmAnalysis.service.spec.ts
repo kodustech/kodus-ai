@@ -139,8 +139,10 @@ describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK p
         expect(result).toEqual({
             codeSuggestions: MODEL_SUGGESTIONS.codeSuggestions,
             codeReviewModelUsed: {
-                // byokConfig.provider wins over the default provider.
-                generateSuggestions: 'openai',
+                // The ACTUAL resolved model name (getModelName(slot)) — the same
+                // name runStructuredReviewCall traces — not a hardcoded provider
+                // label. Mock returns 'byok-main'.
+                generateSuggestions: 'byok-main',
             },
         });
     });
@@ -163,7 +165,7 @@ describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK p
         expect(observability.runLLMInSpan).not.toHaveBeenCalled();
     });
 
-    it('falls back to the default provider label when no BYOK provider is set', async () => {
+    it('records the real resolved model name (getModelName) even with no BYOK, not a hardcoded label', async () => {
         const service = buildService();
 
         const result = await service.analyzeCodeWithAI_v2(
@@ -175,9 +177,11 @@ describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK p
             {} as any,
         );
 
-        // GEMINI_2_5_PRO enum value — the pre-migration default label.
+        // Telemetry-truth: the field reports whatever model actually resolved
+        // (getModelName → mock 'byok-main'), NOT the old GEMINI_2_5_PRO label
+        // that lied for the no-BYOK path (reported Gemini while DeepSeek ran).
         expect(result?.codeReviewModelUsed?.generateSuggestions).toBe(
-            'google:gemini-2.5-pro',
+            'byok-main',
         );
         expect(result?.codeSuggestions).toEqual(
             MODEL_SUGGESTIONS.codeSuggestions,

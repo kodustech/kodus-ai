@@ -1,6 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import { PromptRole } from '@libs/llm/prompt-role';
+import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
@@ -136,8 +136,6 @@ export class SafeguardPipelineService {
             remoteCommands,
         } = params;
 
-        const provider = LLMModelProvider.GEMINI_2_5_PRO;
-
         const pipelineStart = Date.now();
         const fileLabel = file?.filename || 'unknown';
 
@@ -158,7 +156,7 @@ export class SafeguardPipelineService {
                 });
                 return {
                     suggestions,
-                    codeReviewModelUsed: { safeguard: provider },
+                    codeReviewModelUsed: { safeguard: getModelName(byokConfig) },
                 };
             }
 
@@ -487,7 +485,7 @@ export class SafeguardPipelineService {
             return {
                 suggestions: kept,
                 codeReviewModelUsed: {
-                    safeguard: byokConfig?.provider || provider,
+                    safeguard: getModelName(byokConfig),
                 },
             };
         } catch (error) {
@@ -498,7 +496,7 @@ export class SafeguardPipelineService {
             });
             return {
                 suggestions,
-                codeReviewModelUsed: { safeguard: provider },
+                codeReviewModelUsed: { safeguard: getModelName(byokConfig) },
             };
         }
     }

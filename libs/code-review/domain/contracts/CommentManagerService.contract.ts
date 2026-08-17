@@ -1,4 +1,3 @@
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
@@ -97,7 +96,6 @@ export interface ICommentManagerService {
     repeatedCodeReviewSuggestionClustering(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        provider: LLMModelProvider,
         suggestions: any[],
         byokConfig?: NormalizedModel,
     ): Promise<any>;
