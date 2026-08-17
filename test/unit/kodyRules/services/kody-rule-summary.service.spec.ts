@@ -537,7 +537,7 @@ describe('KodyRuleSummaryService', () => {
         });
     });
 
-    describe('atom polarity verification', () => {
+    describe('atom verification (polarity, fidelity, coverage)', () => {
         // Both atoms decomposed here carry examples, so both are eligible
         // for the verify call regardless of which index the test flags.
         function mockDecompositionWithTwoAtoms() {
@@ -586,8 +586,12 @@ describe('KodyRuleSummaryService', () => {
             mockDecompositionWithTwoAtoms();
             const decompose = structuredCallMock.getMockImplementation()!;
             structuredCallMock.mockImplementation(async (args: any) => {
-                if (args.runName === 'kody-rules.atom-polarity-verify') {
-                    return { invalidAtomIndexes: [0] };
+                if (args.runName === 'kody-rules.atom-verify') {
+                    return {
+                        invalidAtoms: [
+                            { index: 0, reason: 'inverted polarity' },
+                        ],
+                    };
                 }
                 return decompose(args);
             });
@@ -613,7 +617,76 @@ describe('KodyRuleSummaryService', () => {
             );
         });
 
-        it('falls back to summary/full text when every atom fails the polarity check', async () => {
+        it('drops an atom flagged as invented (not present in the original rule)', async () => {
+            const { service } = createService();
+            mockDecompositionWithTwoAtoms();
+            const decompose = structuredCallMock.getMockImplementation()!;
+            structuredCallMock.mockImplementation(async (args: any) => {
+                if (args.runName === 'kody-rules.atom-verify') {
+                    return {
+                        invalidAtoms: [
+                            { index: 1, reason: 'not in original rule' },
+                        ],
+                    };
+                }
+                return decompose(args);
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(atoms!.items).toHaveLength(1);
+            expect(atoms!.items[0].title).toBe(
+                'Declaration is direct (not via a mixin)',
+            );
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining('dropped 1/2 atom(s)'),
+                    metadata: expect.objectContaining({
+                        dropped: [
+                            expect.objectContaining({
+                                reason: 'not in original rule',
+                            }),
+                        ],
+                    }),
+                }),
+            );
+        });
+
+        it('logs missing coverage without dropping any atom or blocking generation', async () => {
+            const { service } = createService();
+            mockDecompositionWithTwoAtoms();
+            const decompose = structuredCallMock.getMockImplementation()!;
+            structuredCallMock.mockImplementation(async (args: any) => {
+                if (args.runName === 'kody-rules.atom-verify') {
+                    return {
+                        invalidAtoms: [],
+                        missingRequirements: [
+                            'icon-vs-text scoping is never checked',
+                        ],
+                    };
+                }
+                return decompose(args);
+            });
+
+            const atoms = await service.generateAtoms(
+                { uuid: 'r1', rule: LONG_TEXT },
+                orgData,
+            );
+
+            expect(atoms!.items).toHaveLength(2);
+            expect(loggerSpy.warn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    message: expect.stringContaining(
+                        'missing coverage for 1 requirement(s)',
+                    ),
+                }),
+            );
+        });
+
+        it('falls back to summary/full text when every atom fails verification', async () => {
             const { service } = createService();
             structuredCallMock.mockImplementation(async ({ runName }: any) => {
                 if (runName === 'kody-rules.atom-decomposition') {
@@ -630,8 +703,8 @@ describe('KodyRuleSummaryService', () => {
                         ],
                     };
                 }
-                if (runName === 'kody-rules.atom-polarity-verify') {
-                    return { invalidAtomIndexes: [0] };
+                if (runName === 'kody-rules.atom-verify') {
+                    return { invalidAtoms: [{ index: 0, reason: 'inverted polarity' }] };
                 }
                 return { mechanical: false, reason: 'semantic' };
             });
@@ -644,12 +717,12 @@ describe('KodyRuleSummaryService', () => {
             expect(atoms).toBeNull();
         });
 
-        it('ships atoms unverified when the polarity check call itself fails', async () => {
+        it('ships atoms unverified when the verify call itself fails', async () => {
             const { service } = createService();
             mockDecompositionWithTwoAtoms();
             const originalImpl = structuredCallMock.getMockImplementation();
             structuredCallMock.mockImplementation(async (args: any) => {
-                if (args.runName === 'kody-rules.atom-polarity-verify') {
+                if (args.runName === 'kody-rules.atom-verify') {
                     throw new Error('verify call down');
                 }
                 return originalImpl!(args);
@@ -664,9 +737,7 @@ describe('KodyRuleSummaryService', () => {
             expect(atoms!.items).toHaveLength(2);
             expect(loggerSpy.warn).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    message: expect.stringContaining(
-                        'polarity verification failed',
-                    ),
+                    message: expect.stringContaining('verification failed'),
                 }),
             );
         });
@@ -689,7 +760,7 @@ describe('KodyRuleSummaryService', () => {
 
             expect(structuredCallMock).not.toHaveBeenCalledWith(
                 expect.objectContaining({
-                    runName: 'kody-rules.atom-polarity-verify',
+                    runName: 'kody-rules.atom-verify',
                 }),
             );
         });
