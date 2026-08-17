@@ -5,22 +5,19 @@ description: "调整 AI 代码审查，仅显示最相关的建议，避免警�
 
 过多的低优先级建议会让开发者完全忽略代码审查反馈。关键是调整审查，使其显示重要的内容，对不重要的保持安静。
 
-## 建议控制
+## 审查过滤器
 
-Kodus 为您提供对建议数量和严重性的精细控制：
+Kodus 会过滤哪些发现真正被发布:
 
-- **每个 PR 的最大建议数** — 限制建议总数（例如 9 个）
-- **严重性过滤器** — 仅显示达到或超过阈值的建议（例如中等及以上）
-- **分组模式** — 控制建议在 PR 中的组织方式
+- **最低严重性** —— 只显示达到或高于阈值的建议(默认:Medium)
+- **对 Kody Rules 应用过滤器** —— 默认关闭,让团队自己的规则始终出现
 
-在**代码审查设置** → **建议控制**中配置，或在 `kodus-config.yml` 中：
+在 **Code Review Settings** → **Review filters** 或 `kodus-config.yml` 中配置:
 
 ```yaml
 suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
-  severityLevelFilter: medium
+  severityLevelFilter: medium   # low | medium | high | critical
+  applyFiltersToKodyRules: false
 ```
 
 ## 忽略文件和路径
@@ -52,14 +49,14 @@ ignoredTitleKeywords:
 
 ```yaml
 reviewOptions:
+  bug: true
   security: true
-  code_style: true
-  refactoring: false
-  documentation_and_comments: false
+  performance: false        # 噪音过多时可关闭
+  business_logic: false     # 不相关时可关闭
 ```
 
 ## 审查节奏
 
 使用**自动暂停**防止活跃开发期间的垃圾信息 — 当 Kodus 检测到快速连续推送时暂停审查（默认：15 分钟内 3 次推送）。
 
-更多详情，请参阅[通用配置](/how_to_use/en/code_review/configs/general)和[建议控制](/how_to_use/en/code_review/configs/suggestion_control)。
+更多详情，请参阅[通用配置](/how_to_use/zh/code_review/configs/general)和[建议控制](/how_to_use/zh/code_review/configs/suggestion_control)。

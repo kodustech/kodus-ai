@@ -1,6 +1,8 @@
 import { CloneParamsResolverService } from './services/clone-params-resolver.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { McpCoreModule } from '@libs/mcp-server/mcp-core.module';
+import { PromptsModule } from '../modules/prompts.module';
+import { TraceContextModule } from '@libs/cli-review/trace-context.module';
 
 // Stages
 import { AggregateResultsStage } from './stages/aggregate-result.stage';
@@ -13,7 +15,6 @@ import { UserCoreModule } from '@libs/identity/modules/user-core.module';
 
 import { RequestChangesOrApproveStage } from './stages/finish-process-review.stage';
 import { InitialCommentStage } from './stages/initial-comment.stage';
-import { LoadExternalContextStage } from './stages/load-external-context.stage';
 import { ProcessFilesPrLevelReviewStage } from './stages/process-files-pr-level-review.stage';
 import { BusinessLogicValidationStage } from './stages/business-logic-validation.stage';
 import { ProcessFilesReview } from './stages/process-files-review.stage';
@@ -34,7 +35,6 @@ import { NullChecksAdapter } from '@libs/core/infrastructure/pipeline/services/n
 import { PipelineChecksService } from '@libs/core/infrastructure/pipeline/services/pipeline-checks.service';
 import { WorkflowCoreModule } from '@libs/core/workflow/modules/workflow-core.module';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
-import { DryRunCoreModule } from '@libs/dryRun/dry-run-core.module';
 import { FileReviewModule } from '@libs/ee/codeReview/fileReviewContextPreparation/fileReview.module';
 import { KodyFineTuningStage } from '@libs/ee/codeReview/stages/kody-fine-tuning.stage';
 import { LicenseModule } from '@libs/ee/license/license.module';
@@ -64,7 +64,6 @@ import { ByokConcurrencyGateService } from '../workflow/byok-concurrency-gate.se
 import { GitHubRateLimitGateService } from '@libs/platform/infrastructure/adapters/services/github/github-rate-limit-gate.service';
 import { RATE_LIMIT_GATE_SERVICE_TOKEN } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
 import { ImplementationVerificationProcessor } from '../workflow/implementation-verification.processor';
-import { LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN } from './stages/contracts/loadExternalContextStage.contract';
 import { ValidateSuggestionsStage } from './stages/validate-suggestions.stage';
 import { CodeReviewPipelineStrategy } from './strategy/code-review-pipeline.strategy';
 
@@ -114,10 +113,14 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         AstGraphModule,
         forwardRef(() => McpCoreModule),
         WorkflowCoreModule,
-        DryRunCoreModule,
         SandboxModule,
         NotificationModule,
         UserCoreModule,
+        // Owns and exports the single LoadExternalContextStage instance,
+        // including its Trace decision reader dependency.
+        forwardRef(() => PromptsModule),
+        // UpdateCommentsAndGenerateSummaryStage posts the selected Trace pack.
+        TraceContextModule,
     ],
     providers: [
         // Strategy
@@ -147,11 +150,6 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         ResolveConfigStage,
         ValidateConfigStage,
         FetchChangedFilesStage,
-        {
-            provide: LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN,
-            useExisting: LoadExternalContextStage,
-        },
-        LoadExternalContextStage,
         InitialCommentStage,
         ProcessFilesPrLevelReviewStage,
         BusinessLogicValidationStage,
@@ -215,8 +213,7 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         FetchChangedFilesStage,
         InitialCommentStage,
         AggregateResultsStage,
-        LoadExternalContextStage,
-        LOAD_EXTERNAL_CONTEXT_STAGE_TOKEN,
+        PromptsModule,
         ValidateSuggestionsStage,
         ImplementationVerificationProcessor,
         // V3

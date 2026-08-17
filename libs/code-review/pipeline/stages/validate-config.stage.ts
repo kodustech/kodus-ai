@@ -390,10 +390,6 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         context: CodeReviewPipelineContext,
         config: any,
     ): Promise<boolean> {
-        if (context.dryRun?.enabled) {
-            return false;
-        }
-
         const pushesToTrigger = config.reviewCadence?.pushesToTrigger || 3;
         const timeWindowMinutes = config.reviewCadence?.timeWindow || 15;
 

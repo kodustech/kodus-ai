@@ -238,7 +238,14 @@ export class PermissionValidationService {
                 if (
                     usesTrialCredits &&
                     noByok &&
-                    validation.trialReviewCreditsRemaining === 0
+                    // <= 0, not === 0: consumption happens post-delivery, so a
+                    // burst of concurrent reviews can over-commit a single
+                    // credit and leave the billing counter negative. Blocking
+                    // only at exactly 0 would let a negative-balance org keep
+                    // running free reviews. `undefined <= 0` is false, so legacy
+                    // trials without a remaining value are unaffected.
+                    typeof validation.trialReviewCreditsRemaining === 'number' &&
+                    validation.trialReviewCreditsRemaining <= 0
                 ) {
                     this.logger.warn({
                         message: 'Trial managed review credits exhausted',
@@ -759,6 +766,84 @@ export class PermissionValidationService {
             });
             // In case of error, limit resources for safety
             return true;
+        }
+    }
+
+    /**
+     * Consume ONE managed trial review credit AFTER a review reaches a
+     * successful terminal state (the caller gates on SUCCESS / PARTIAL_ERROR).
+     *
+     * Split from the prerequisites gate on purpose: the gate blocks when
+     * credits are exhausted, but consumption must NOT happen up-front — a
+     * review that ends in ERROR or SKIPPED should never cost the user a free
+     * trial review. Mirrors the same eligibility the gate uses (managed-credit
+     * trial + no BYOK); everything else is a no-op. Idempotent per `usageKey`
+     * (repo:pr) so retries of the same PR never double-charge.
+     *
+     * Best-effort: never throws into the caller — a billing hiccup must not
+     * fail an already-successful review.
+     */
+    async consumeTrialReviewCreditOnSuccess(
+        organizationAndTeamData: OrganizationAndTeamData,
+        usageKey?: string,
+    ): Promise<void> {
+        try {
+            const validation =
+                await this.licenseService.validateOrganizationLicense(
+                    organizationAndTeamData,
+                );
+
+            if (!validation?.valid || validation.subscriptionStatus !== 'trial') {
+                return;
+            }
+
+            // Fail CLOSED on BYOK here (opposite of the gate, which fails open):
+            // if we can't confirm there's no BYOK, don't consume a managed
+            // credit — a BYOK org runs on its own key and owes nothing.
+            let byokConfig: BYOKConfig | null = null;
+            try {
+                byokConfig = await this.getBYOKConfig(organizationAndTeamData);
+            } catch {
+                return;
+            }
+            if (byokConfig) {
+                return;
+            }
+
+            // Only trials created under the managed-credit model carry these
+            // fields; legacy trials have none and must not consume.
+            const usesTrialCredits =
+                typeof validation.trialReviewCreditsTotal === 'number' ||
+                typeof validation.trialReviewCreditsRemaining === 'number';
+            if (!usesTrialCredits) {
+                return;
+            }
+
+            const consumeResult =
+                await this.licenseService.consumeTrialReviewCredit(
+                    organizationAndTeamData,
+                    usageKey,
+                );
+
+            if (!consumeResult.allowed) {
+                this.logger.warn({
+                    message:
+                        'Post-success trial review credit consumption denied',
+                    context: PermissionValidationService.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        usageKey,
+                        reason: consumeResult.reason,
+                    },
+                });
+            }
+        } catch (error) {
+            this.logger.error({
+                message: 'consumeTrialReviewCreditOnSuccess failed',
+                context: PermissionValidationService.name,
+                error,
+                metadata: { organizationAndTeamData, usageKey },
+            });
         }
     }
 

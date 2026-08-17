@@ -1,0 +1,106 @@
+name: "E2E: matrix health report"
+
+# The matrix's weekly checkup, built from the durable history log on the
+# `e2e-history` orphan branch (written by the history job in e2e-cloud.yml
+# and e2e-self-hosted-matrix.yml).
+#
+# It answers, per cell, the questions that previously required grepping
+# Actions logs by hand:
+#   - when did this cell last actually pass?
+#   - what is flaky, and how flaky?
+#   - how much of what we meant to check is really running?
+#
+# Monday 12:00 UTC (09:00 BRT) — before the week's work is planned, and far
+# enough from the Friday release train that its numbers are already in.
+
+permissions:
+    contents: read
+
+on:
+    schedule:
+        - cron: "0 12 * * 1"
+    workflow_dispatch:
+        inputs:
+            days:
+                description: "Window in days"
+                required: false
+                default: "30"
+                type: string
+            target:
+                description: "Filter to one target (blank = both)"
+                required: false
+                default: ""
+                type: choice
+                options:
+                    - ""
+                    - cloud
+                    - self-hosted
+
+jobs:
+    report:
+        name: E2E health report
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            # The history branch is orphan and shallow — a plain checkout of
+            # the repo does not contain it.
+            - name: Fetch history branch
+              id: fetch
+              run: |
+                  set -uo pipefail
+                  if git fetch origin e2e-history --depth=1 2>/dev/null; then
+                      git show FETCH_HEAD:history/e2e-history.jsonl > /tmp/e2e-history.jsonl 2>/dev/null || true
+                  fi
+                  if [ -s /tmp/e2e-history.jsonl ]; then
+                      echo "rows=$(wc -l < /tmp/e2e-history.jsonl | tr -d ' ')" >> "$GITHUB_OUTPUT"
+                      echo "found=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "found=false" >> "$GITHUB_OUTPUT"
+                      echo "::warning::No e2e history yet. It fills as runs complete; to seed it from surviving artifacts run tests/e2e/provisioning/history-backfill.sh"
+                  fi
+
+            - name: Build report
+              id: report
+              if: steps.fetch.outputs.found == 'true'
+              working-directory: tests/e2e
+              env:
+                  DAYS: ${{ inputs.days || '30' }}
+                  TARGET: ${{ inputs.target }}
+              run: |
+                  set -uo pipefail
+                  ARGS=(--history /tmp/e2e-history.jsonl --days "$DAYS" --format md)
+                  [ -n "${TARGET:-}" ] && ARGS+=(--target "$TARGET")
+                  ./node_modules/.bin/tsx cli/report.ts "${ARGS[@]}" > /tmp/report.md
+                  cat /tmp/report.md >> "$GITHUB_STEP_SUMMARY"
+
+                  # Discord embeds cap out well below a full report, so the
+                  # message carries the headline sections and links to the run
+                  # for the long per-cell table.
+                  {
+                      echo "digest<<__EOF__"
+                      sed -n '/## Cells with NO green/,/## Flakiest/p' /tmp/report.md | head -20
+                      sed -n '/## Quarantine candidates/,$p' /tmp/report.md | head -12
+                      echo "__EOF__"
+                  } >> "$GITHUB_OUTPUT"
+
+            - name: Notify Discord
+              if: steps.fetch.outputs.found == 'true'
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: cancelled
+                  title: "📊 E2E matrix health — last ${{ inputs.days || '30' }} days"
+                  description: |
+                      ${{ steps.report.outputs.digest }}
+                      Full per-cell table: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

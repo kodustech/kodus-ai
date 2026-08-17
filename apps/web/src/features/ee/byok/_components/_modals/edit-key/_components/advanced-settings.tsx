@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
     Collapsible,
     CollapsibleContent,
@@ -17,9 +18,10 @@ import {
     ExternalLinkIcon,
     Settings2Icon,
 } from "lucide-react";
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
 
 import type { EditKeyForm } from "../_types";
+import { anthropicRejectsTemperature } from "../../../../_utils";
 
 const THINKING_OPTIONS = [
     { value: "none", label: "Off" },
@@ -30,7 +32,9 @@ const THINKING_OPTIONS = [
 ] as const;
 
 const CUSTOM_PLACEHOLDERS: Record<string, string> = {
-    anthropic: `{\n  "thinking": { "type": "enabled", "budgetTokens": 25000 }\n}`,
+    // Adaptive is the shape every Claude from 4.6 on accepts; the older
+    // budgetTokens form is a 400 on 4.7+, so it makes a poor default example.
+    anthropic: `{\n  "thinking": { "type": "adaptive" },\n  "effort": "high"\n}`,
     google_gemini: `{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}`,
     google_vertex: `{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}`,
     openai: `{\n  "reasoningEffort": "high",\n  "serviceTier": "flex"\n}`,
@@ -65,7 +69,9 @@ const NumberField = ({
             control={control}
             render={({ field, fieldState }) => (
                 <FormControl.Root>
-                    <FormControl.Label htmlFor={name}>{label}</FormControl.Label>
+                    <FormControl.Label htmlFor={name}>
+                        {label}
+                    </FormControl.Label>
                     <FormControl.Input>
                         <Input
                             id={name}
@@ -109,12 +115,35 @@ export const ByokAdvancedSettings = ({
 }: {
     defaultOpen?: boolean;
 }) => {
-    const { control, watch } = useFormContext<EditKeyForm>();
-    const currentEffort = watch("reasoningEffort");
-    const isCustom = currentEffort === ("custom" as string);
-    const currentProvider = watch("provider");
+    const { control, setValue } = useFormContext<EditKeyForm>();
+    // useWatch (a hook), not watch(): the React Compiler is enabled for this
+    // app and memoizes `watch("name")` — a plain call on a stable function
+    // with a constant argument — so its result froze at the first render and
+    // the Custom textarea never appeared when the toggle changed.
+    const currentEffort = useWatch({ control, name: "reasoningEffort" });
+    const configOverride = useWatch({
+        control,
+        name: "reasoningConfigOverride",
+    });
+    const isCustom = currentEffort === "custom";
+    const currentProvider = useWatch({ control, name: "provider" });
+    const currentModel = useWatch({ control, name: "model" });
     const isOpenRouter = currentProvider === "open_router";
     const customPlaceholder = getCustomPlaceholder(currentProvider);
+
+    // Claude 4.7+ rejects sampling params outright, so the field is hidden
+    // rather than shown-but-ignored. Clearing the stored value matters as much
+    // as hiding the input: a config saved before the model was switched would
+    // otherwise keep submitting a temperature the provider 400s on.
+    const temperatureUnsupported = anthropicRejectsTemperature(
+        currentProvider,
+        currentModel,
+    );
+    useEffect(() => {
+        if (temperatureUnsupported) {
+            setValue("temperature", null, { shouldDirty: true });
+        }
+    }, [temperatureUnsupported, setValue]);
 
     return (
         <Collapsible
@@ -152,9 +181,7 @@ export const ByokAdvancedSettings = ({
                                     className="bg-card-lv2 grid grid-cols-5 gap-px overflow-hidden rounded-lg p-0.5"
                                     value={
                                         field.value ??
-                                        (watch("reasoningConfigOverride")
-                                            ? "custom"
-                                            : "none")
+                                        (configOverride ? "custom" : "none")
                                     }
                                     onValueChange={(value) => {
                                         if (!value) return;
@@ -166,7 +193,7 @@ export const ByokAdvancedSettings = ({
                                         <ToggleGroup.Item
                                             key={opt.value}
                                             value={opt.value}
-                                            className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 data-[state=on]:shadow-sm rounded-md px-2 py-1.5 text-xs font-medium transition-colors data-[state=on]:ring-1">
+                                            className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 rounded-md px-2 py-1.5 text-xs font-medium transition-colors data-[state=on]:shadow-sm data-[state=on]:ring-1">
                                             {opt.label}
                                         </ToggleGroup.Item>
                                     ))}
@@ -196,9 +223,9 @@ export const ByokAdvancedSettings = ({
                                         <FormControl.Helper>
                                             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                                 <span>
-                                                    Paste the options directly
-                                                    — Kodus wraps them under
-                                                    the active provider's
+                                                    Paste the options directly —
+                                                    Kodus wraps them under the
+                                                    active provider&apos;s
                                                     namespace automatically.
                                                 </span>
                                                 <a
@@ -221,25 +248,29 @@ export const ByokAdvancedSettings = ({
                             />
                         )}
 
-                        {!isCustom && currentEffort && currentEffort !== "none" && (
-                            <p className="text-text-tertiary text-xs">
-                                Mapped automatically to your provider (Claude
-                                extended thinking, Gemini thinking level, OpenAI
-                                reasoning effort).
-                            </p>
-                        )}
+                        {!isCustom &&
+                            currentEffort &&
+                            currentEffort !== "none" && (
+                                <p className="text-text-tertiary text-xs">
+                                    Mapped automatically to your provider
+                                    (Claude extended thinking, Gemini thinking
+                                    level, OpenAI reasoning effort).
+                                </p>
+                            )}
                     </div>
 
                     <Separator className="bg-card-lv2" />
 
                     {/* ── Model Parameters ──────────────────── */}
                     <div className="grid grid-cols-2 gap-4">
-                        <NumberField
-                            name="temperature"
-                            label="Temperature"
-                            placeholder="Default"
-                            helper="0 = deterministic, 2 = creative"
-                        />
+                        {!temperatureUnsupported && (
+                            <NumberField
+                                name="temperature"
+                                label="Temperature"
+                                placeholder="Default"
+                                helper="0 = deterministic, 2 = creative"
+                            />
+                        )}
                         <NumberField
                             name="maxOutputTokens"
                             label="Max output tokens"
@@ -247,6 +278,14 @@ export const ByokAdvancedSettings = ({
                             helper="Empty uses model default"
                         />
                     </div>
+
+                    {temperatureUnsupported && (
+                        <p className="text-text-tertiary text-xs text-pretty">
+                            Claude 4.7 and newer removed temperature — the
+                            provider rejects any request that sets it. Steer the
+                            model with the thinking level above instead.
+                        </p>
+                    )}
 
                     <Separator className="bg-card-lv2" />
 

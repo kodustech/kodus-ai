@@ -14,7 +14,7 @@ description: "すべてのコードレビュー設定と Kody ルールを 1 つ
 
 ## 仕組み
 
-1. 集中設定を保持する 1 つのリポジトリを選択します。
+1. 集中設定を保持する 1 つのリポジトリを選択します。Kodus で選択済みのリポジトリの 1 つである必要があります。
 2. UI で集中設定を有効にし、そのリポジトリを指定します。
 3. **初期同期モード**を選択します：
    - `pr` — Kodus は現在の有効な設定とルールで初期化 PR を開きます。
@@ -74,16 +74,15 @@ kodus-config/
 最小限の例：
 
 ```yaml
-version: '1.2'
+version: 2.0
 reviewOptions:
+  bug: true
   security: true
-  kody_rules: true
-  error_handling: true
+  performance: true
+  business_logic: true
 suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
   severityLevelFilter: medium
+  applyFiltersToKodyRules: false
 ignorePaths:
   - yarn.lock
   - package-lock.json

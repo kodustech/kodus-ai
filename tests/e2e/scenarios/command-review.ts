@@ -1,7 +1,10 @@
 import type { RunContext, Scenario } from "../lib/types.js";
 import { http } from "../lib/http.js";
 import { ensureLicenseSeat } from "../lib/onboarding.js";
-import { assertHealthyExecution } from "../lib/execution-health.js";
+import {
+    assertHealthyExecution,
+    waitForAutomationToSettle,
+} from "../lib/execution-health.js";
 
 // Same fixture branches as code-review-basic. The diff doesn't matter
 // for the command-review path — what's under test is whether posting
@@ -103,17 +106,23 @@ export const commandReview: Scenario = {
         });
 
         try {
-            // Brief sanity wait: if auto-review wasn't actually
-            // disabled (config didn't land for some reason), Kody would
-            // start reviewing the freshly-opened PR within ~10s. We
-            // give it 20s to surface that bug. If a review DOES land
-            // here we still proceed, because:
-            //   - pollForReview after the command uses a fresh sinceIso
-            //     timestamp, so older reviews aren't counted; and
-            //   - we capture the pre-command review count as evidence
-            //     so a release engineer can confirm "the command
-            //     review came AFTER the command, not before".
-            await new Promise((r) => setTimeout(r, 20_000));
+            // Wait for the PR-opened automation to LET GO before posting the
+            // command, instead of sleeping a fixed 20s and hoping.
+            //
+            // Opening a PR starts an automation that takes a per-PR
+            // distributed lock (automationCodeReview.ts:
+            // `CODE_REVIEW:<org>:<repo>:<pr>`, 60s TTL) BEFORE the pipeline
+            // decides anything. This scenario disables auto-review, so that
+            // run ends in `skipped` -- but it holds the lock while it gets
+            // there (clone, config, validation), and the lock is only
+            // released when it finishes. A `@kody review` arriving inside
+            // that window is refused with "Code review already being
+            // processed" and never retried, so NO review ever happens.
+            //
+            // 20s was enough on the faster providers and not on bitbucket,
+            // which is why this failed there and nowhere else (#1699). Waiting
+            // for the settled row makes it deterministic on all of them.
+            await waitForAutomationToSettle(ctx, session, pr.number);
             const preCommandSnapshot = await ctx.provider.pollForReview(
                 { number: pr.number },
                 { sinceIso: new Date(0).toISOString(), timeoutSec: 1 },

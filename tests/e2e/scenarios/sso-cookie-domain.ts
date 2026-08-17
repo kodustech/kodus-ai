@@ -43,6 +43,11 @@ function runScript(script: string, args: string[]): Promise<ScriptResult> {
             cwd: REPO_ROOT,
             env: {
                 ...process.env,
+                // The release matrix provisions its regular cells on AWS,
+                // but the dedicated SSO topology still uses the standalone
+                // selfhosted provisioner, which supports DigitalOcean and
+                // Hetzner only. Do not leak TEST_VM_PROVIDER=aws into it.
+                TEST_VM_PROVIDER: "digitalocean",
                 // Force headless — the matrix runner has no display.
                 // The standalone script defaults to headless too, but
                 // we set it explicitly so a stray --headed in someone's

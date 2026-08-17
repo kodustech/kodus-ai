@@ -42,6 +42,7 @@ graph LR
 - API: 处理业务逻辑和请求处理的中央服务层
 - Worker: 用于队列和后台作业的异步处理
 - Webhooks: 用于 Git 提供商 webhook 的专用服务
+- Analytics Worker: 可选的采集 worker(`WORKER_ROLE=analytics`),为驾驶舱仪表盘提供数据。仅 Enterprise —— 参见 [Analytics Worker](/how_to_deploy/zh/deploy_kodus/analytics_worker)
 
 ### 3. MCP Manager
 
@@ -62,7 +63,7 @@ Prometheus 和 Grafana 是可选的，用于监控和可视化。
 
 ### 6. 辅助服务 (Kodus Cloud)
 
-Kodus Cloud 包括闭源辅助服务（计费、分析和聊天集成），这些服务不是自托管部署所必需的。
+Kodus Cloud 包括闭源辅助服务（计费和聊天集成），这些服务不是自托管部署所必需的。分析并非仅限云端:已授权的自托管 Enterprise 会在本地运行同一个采集 worker。
 
 ## 下一步
 <CardGroup cols={2}>

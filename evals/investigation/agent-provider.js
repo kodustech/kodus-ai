@@ -434,6 +434,7 @@ function buildCurrentPrompts(caseData) {
         repositoryFullName: caseData.repositoryFullName || 'eval/repo',
         languageResultPrompt: caseData.languageResultPrompt || '',
         memoryRules: parseMaybeJson(caseData.memoryRules) || [],
+        traceDecisions: parseMaybeJson(caseData.traceDecisions) || undefined,
         v2PromptOverrides: parseMaybeJson(caseData.v2PromptOverrides),
         generationMain: caseData.generationMain,
         prTitle: caseData.prTitle,

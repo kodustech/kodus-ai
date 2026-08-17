@@ -1,0 +1,47 @@
+---
+title: "PRs Abertos vs Fechados"
+description: "Compare quantos pull requests seu time abre e quantos fecha por semana, para enxergar um backlog de revisão crescendo."
+---
+
+## O que é PRs Abertos vs Fechados
+
+Este gráfico coloca duas contagens semanais lado a lado: quantos pull requests foram **abertos** e
+quantos foram **fechados** na mesma semana. Ele responde uma pergunta que nenhuma métrica de
+velocidade responde — seu time está dando conta do próprio throughput, ou o trabalho está se
+acumulando mais rápido do que é mergeado?
+
+## Como Calculamos
+
+Para cada semana do período selecionado contamos:
+
+- **Abertos** — pull requests criados naquela semana.
+- **Fechados** — pull requests fechados naquela semana (mergeados ou fechados de outra forma).
+
+As duas contagens são independentes: um PR aberto numa semana e fechado três semanas depois
+aparece na barra de "abertos" da primeira e na de "fechados" da terceira. Isso é proposital — é o
+que torna o backlog visível.
+
+## Como Ler
+
+- **Fechados ≈ Abertos, semana após semana** — regime estável. O time absorve o que assume.
+- **Abertos consistentemente acima de Fechados** — o backlog está crescendo. O gargalo costuma
+  ser capacidade de revisão, não de escrita de código.
+- **Picos de Fechados bem acima de Abertos** — geralmente uma limpeza: alguém fechou um lote de
+  PRs parados. Vale confirmar antes de ler como ganho de produtividade.
+- **Ambos despencam juntos** — normalmente efeito de calendário (feriado, freeze, incidente), não
+  mudança de comportamento.
+
+<Tip>
+  Leia junto com [PR Cycle Time](/how_to_use/pt-br/cockpit/metrics/lead_time_for_changes). Uma
+  distância crescente aqui somada a um cycle time subindo é o sinal mais claro de que o gargalo
+  está na revisão, não no desenvolvimento.
+</Tip>
+
+## Onde Encontrar
+
+Cockpit → aba **Productivity**, na seção de gráficos detalhados.
+
+<Note>
+  Este gráfico pode ser escondido para toda a organização. Se você não o vê, confira
+  [Configuração do Cockpit](/how_to_use/pt-br/cockpit/configuration).
+</Note>

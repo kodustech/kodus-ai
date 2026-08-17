@@ -14,6 +14,7 @@ import {
     Building2Icon,
     CheckIcon,
     GitPullRequestIcon,
+    InfoIcon,
     KeyRoundIcon,
     MailCheckIcon,
     SparklesIcon,
@@ -144,6 +145,11 @@ export const TrialCreditsSummary = ({
           ? `${balance.remaining} of ${balance.total} free reviews left while you try.`
           : "Unlimited reviews during your trial.";
 
+    // Highlighted, non-BYOK-only disclosure: trial reviews run on our managed
+    // models, and BYOK unlocks larger ones. Kept short so it reads as a callout.
+    const trialModelsCopy =
+        "Trial reviews run on efficient models we provide (DeepSeek V4 Flash on Fireworks, GPT Luna, Kimi K2.7). Connect your AI key for larger, frontier models.";
+
     return (
         <section className="flex flex-col gap-5">
             <div className="flex flex-col gap-3">
@@ -159,8 +165,8 @@ export const TrialCreditsSummary = ({
                         {byok
                             ? `Reviews run on your AI key, so there's no review limit. Your ${TRIAL_DAYS}-day trial just unlocks the full Team features.`
                             : showCredits
-                              ? `Reviews run on your AI key — free and unlimited, on any plan. To let you start with zero setup, we cover your first ${balance.total} reviews. Add your key anytime to keep going.`
-                              : `Reviews are unlimited during your ${TRIAL_DAYS}-day trial. Connect your AI key anytime to keep them unlimited after it ends.`}
+                              ? `Your first ${balance.total} reviews are on us — start reviewing with zero setup.`
+                              : `Reviews are unlimited during your ${TRIAL_DAYS}-day trial.`}
                     </p>
                 </div>
 
@@ -216,18 +222,16 @@ export const TrialCreditsSummary = ({
                                 balance.remaining === 0 ? "tertiary" : "primary"
                             }
                         />
-                        <p className="text-text-tertiary text-xs">
-                            Trial reviews run on a model we pick for you.
-                            Connect your own key to run frontier models for the
-                            best quality.
-                        </p>
+                        <div className="bg-primary-light/10 text-primary-light flex items-start gap-2 rounded-lg p-3 text-sm">
+                            <InfoIcon className="mt-0.5 size-4 shrink-0" />
+                            <p>{trialModelsCopy}</p>
+                        </div>
                     </div>
                 ) : (
-                    <p className="text-text-tertiary text-xs">
-                        Trial reviews run on a model we pick for you. Connect
-                        your own key to run frontier models for the best
-                        quality.
-                    </p>
+                    <div className="bg-primary-light/10 text-primary-light flex items-start gap-2 rounded-lg p-3 text-sm">
+                        <InfoIcon className="mt-0.5 size-4 shrink-0" />
+                        <p>{trialModelsCopy}</p>
+                    </div>
                 )}
             </div>
 

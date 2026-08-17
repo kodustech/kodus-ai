@@ -6,17 +6,28 @@ import {
     PullRequestIngestionService,
     ReviewOperationalIngestionService,
 } from '@libs/ee/analytics-warehouse';
+import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+
+const LOCK_KEY = 'CRON:ANALYTICS_INGESTION';
+// 25min — the run typically takes 5–15min; the tick is every 30min so
+// this covers the slowest observed pass while still auto-clearing if
+// a worker crashes mid-run.
+const LOCK_TTL_MS = 25 * 60 * 1000;
 
 /**
  * Cron wrapper that drives cockpit warehouse ingestion on a schedule.
  * Interval is tunable via `ANALYTICS_INGESTION_CRON` (standard cron
- * expression). Default = every 15 minutes.
+ * expression). Default = every 30 minutes.
  *
- * Concurrency: a second instance landing while one is still running
- * would cause transaction contention, not correctness issues — UPSERTs
- * and the per-PR DELETE/INSERT children run inside a single tx per
- * batch, and the watermark is idempotent. We keep a local in-memory
- * guard as a cheap mutex so we don't stack up runs on a single node.
+ * Concurrency: the worker deployment runs 15 replicas in prod
+ * (`worker_desired_count = 15`), so an in-process `running` mutex is
+ * not enough — without a distributed lock every replica would run the
+ * warehouse ingestion (LLM calls + DELETE/INSERT children in tx per
+ * batch) simultaneously every 30min. That produces 15× the OpenAI
+ * spend on classification + burns warehouse write capacity for no
+ * benefit. The local `running` flag is still kept as a cheap short-
+ * circuit against reentry on the same node (e.g. the boot spawn
+ * overlapping the first cron tick).
  */
 @Injectable()
 export class AnalyticsIngestionCron implements OnApplicationBootstrap {
@@ -27,6 +38,7 @@ export class AnalyticsIngestionCron implements OnApplicationBootstrap {
         private readonly ingestion: PullRequestIngestionService,
         private readonly feedbackIngestion: FeedbackIngestionService,
         private readonly reviewOperationalIngestion: ReviewOperationalIngestionService,
+        private readonly distributedLockService: DistributedLockService,
     ) {}
 
     onApplicationBootstrap(): void {
@@ -62,6 +74,23 @@ export class AnalyticsIngestionCron implements OnApplicationBootstrap {
         if (this.running) {
             this.logger.warn(
                 `skipping analytics ingestion (${trigger}) — previous run still in flight`,
+            );
+            return;
+        }
+
+        // Cross-replica gate: only one worker across the fleet runs.
+        const lock = await this.distributedLockService
+            .acquire(LOCK_KEY, { ttl: LOCK_TTL_MS })
+            .catch((err: unknown) => {
+                this.logger.warn(
+                    `analytics ingestion (${trigger}) lock acquire threw: ${err instanceof Error ? err.message : String(err)}`,
+                );
+                return null;
+            });
+
+        if (!lock) {
+            this.logger.log(
+                `skipping analytics ingestion (${trigger}) — another replica holds the lock`,
             );
             return;
         }
@@ -109,6 +138,11 @@ export class AnalyticsIngestionCron implements OnApplicationBootstrap {
             }
         } finally {
             this.running = false;
+            await lock.release().catch((err: unknown) => {
+                this.logger.warn(
+                    `analytics ingestion lock release failed: ${err instanceof Error ? err.message : String(err)}`,
+                );
+            });
         }
     }
 }

@@ -52,7 +52,7 @@ PR が開かれる → まだメッセージなし
 
 ファイルごとの追加と削除を示す変更ファイルの概要。プルリクエストで変更された内容の詳細な内訳を提供します。
 
-### changedSummary
+### changeSummary
 
 プルリクエストのすべての変更の包括的な概要。変更範囲全体の概観を提供します。
 
@@ -89,6 +89,50 @@ PR が開かれる → まだメッセージなし
   これらのコンテキスト変数は、Kody がメッセージを送信する際に
   プルリクエストの実際のデータで自動的に入力されます。
 </Info>
+
+<Note>
+  `kodus-config.yml` では、これらのトークンは `@` プレフィックス付きで書きます —
+  `@changedFiles`、`@changeSummary`、`@reviewOptions`、`@reviewCadence`、`@reviewScope`、
+  `@agentPrompt` — メッセージの `content` 内のどこにでも置けます。Web UI の
+  **Add Context** ボタンは同じトークンを挿入します。
+</Note>
+
+## エラーメッセージ
+
+開始／終了メッセージとは別に、レビューが**失敗**したときに Kody が投稿するコメントへ独自の
+テキストを追記できます。たとえば BYOK プロバイダーが未設定のとき、プロバイダーがリクエストを
+拒否したときなどです。
+
+- **Off**（デフォルト）— Kody は標準のエラーコメントをそのまま投稿します。
+- **Active** — 標準のエラーコメントの下にあなたのテキストが追記されます。
+
+汎用的な失敗メッセージで放置せず、社内の担当者や runbook へ誘導するのに使います：
+
+```yaml
+customMessages:
+    errorReviewMessage:
+        status: 'active' # off | active
+        content: |
+            レビューが失敗しますか？ #platform-eng に連絡してください（Kodus の API キー管理担当）。
+```
+
+`content` を空のままにすると、デフォルトのエラーメッセージは変更されません。
+
+## グローバル設定
+
+カスタムメッセージだけでなく、Kody のすべてのコメントに適用される 2 つのトグルです：
+
+| 設定 | デフォルト | 内容 |
+| --- | --- | --- |
+| `hideComments` | `false` | すべてのレビューメッセージを非表示／最小化コメントとして投稿します。UI では **Post as hidden comment** と表示されます。**GitHub のみ** — 他のプラットフォームではトグル自体が表示されません。 |
+| `suggestionCopyPrompt` | `true` | サジェストにプロンプトとしてコピーする機能を追加し、コーディングエージェントに貼り付けられるようにします。**Bitbucket では利用できません。** |
+
+```yaml
+customMessages:
+    globalSettings:
+        hideComments: false # GitHub のみ
+        suggestionCopyPrompt: true # Bitbucket では利用できません
+```
 
 <Note>
   両方のカスタムメッセージを無効にするか、メッセージコンテンツをクリアすることで、

@@ -14,7 +14,7 @@ Use it when you want:
 
 ## How It Works
 
-1. Choose one repository to hold your centralized config.
+1. Choose one repository to hold your centralized config. It has to be one of the repositories selected in Kodus.
 2. Enable Centralized Config in the UI and point it at that repository.
 3. Pick an **initial sync mode**:
    - `pr` — Kodus opens the initialization PR with your current effective settings and rules.
@@ -74,16 +74,15 @@ Each `kodus-config.yml` uses the same schema as the per-repo `kodus-config.yml` 
 Minimal example:
 
 ```yaml
-version: '1.2'
+version: 2.0
 reviewOptions:
+  bug: true
   security: true
-  kody_rules: true
-  error_handling: true
+  performance: true
+  business_logic: true
 suggestionControl:
-  groupingMode: full
-  limitationType: pr
-  maxSuggestions: 9
   severityLevelFilter: medium
+  applyFiltersToKodyRules: false
 ignorePaths:
   - yarn.lock
   - package-lock.json

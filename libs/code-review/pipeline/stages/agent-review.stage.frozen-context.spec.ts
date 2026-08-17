@@ -70,7 +70,6 @@ describe('AgentReviewStage — frozen context (regression #1522)', () => {
             validSuggestions: [],
             discardedSuggestions: [],
             errors: [],
-            dryRun: { enabled: false },
             ...over,
         }) as any as CodeReviewPipelineContext;
 

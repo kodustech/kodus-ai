@@ -10,7 +10,9 @@ function formatPatternList(patterns: string[]): string {
 }
 
 function formatEnabledLabel(enabled: boolean): string {
-    return enabled ? chalk.greenBright.bold('enabled') : chalk.redBright.bold('disabled');
+    return enabled
+        ? chalk.greenBright.bold('enabled')
+        : chalk.redBright.bold('disabled');
 }
 
 function formatLabel(label: string): string {

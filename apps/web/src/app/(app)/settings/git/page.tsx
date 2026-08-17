@@ -13,7 +13,10 @@ import {
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
 import { getCurrentPathnameOnServerComponents } from "src/core/utils/headers";
 import { safeArray } from "src/core/utils/safe-array";
-import { getOrganizationMembers } from "src/features/ee/subscription/_services/billing/fetch";
+import {
+    getOrganizationMembers,
+    MEMBERS_UNAVAILABLE,
+} from "src/features/ee/subscription/_services/billing/fetch";
 import { getAutoLicenseAssignmentConfig } from "src/lib/services/organizationParameters/fetch";
 
 import { GitProviders } from "./_components/_providers";
@@ -33,7 +36,7 @@ export default async function GitSettings() {
     > = undefined;
     let organizationMembersRaw: Awaited<
         ReturnType<typeof getOrganizationMembers>
-    > = [];
+    > = MEMBERS_UNAVAILABLE;
     let connectionsError = false;
 
     try {
@@ -46,7 +49,7 @@ export default async function GitSettings() {
             getConnections(teamId),
             getIntegrationConfig({ teamId }),
             getAutoLicenseAssignmentConfig().catch(() => undefined),
-            getOrganizationMembers({ teamId }).catch(() => []),
+            getOrganizationMembers({ teamId }).catch(() => MEMBERS_UNAVAILABLE),
         ]);
     } catch (err) {
         console.error("[GitSettings] error fetching data:", err);
@@ -55,18 +58,19 @@ export default async function GitSettings() {
 
     const connections = safeArray(connectionsResult);
 
-    const organizationMembers = Array.isArray(organizationMembersRaw)
-        ? organizationMembersRaw.map((member) => {
-              const normalizedName =
-                  member.name?.trim() ||
-                  member.displayName?.trim() ||
-                  member.username?.trim() ||
-                  member.login?.trim() ||
-                  "Unknown member";
+    const organizationMembers =
+        organizationMembersRaw.status === "ok"
+            ? organizationMembersRaw.members.map((member) => {
+                  const normalizedName =
+                      member.name?.trim() ||
+                      member.displayName?.trim() ||
+                      member.username?.trim() ||
+                      member.login?.trim() ||
+                      "Unknown member";
 
-              return { id: member.id.toString(), name: normalizedName };
-          })
-        : [];
+                  return { id: member.id.toString(), name: normalizedName };
+              })
+            : [];
 
     const gitConnection = connections.find(
         (c) => c.category === "CODE_MANAGEMENT",

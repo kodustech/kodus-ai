@@ -44,8 +44,10 @@ import {
 } from './messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import {
+    byokToVercelModel,
+    KODUS_TRIAL_MODEL,
+} from '@libs/llm/byok-to-vercel';
 import {
     attachClassification,
     classifyLLMError,
@@ -64,6 +66,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
+import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
 
 interface ClusteredSuggestion {
     id: string;
@@ -127,14 +130,14 @@ export class CommentManagerService implements ICommentManagerService {
         const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
             spanName,
             runName,
-            model: byokConfig?.main?.model ?? 'kimi-k2.7-code',
+            model: byokConfig?.main?.model ?? KODUS_TRIAL_MODEL,
             attrs,
             exec: async () => {
                 const model = byokToVercelModel(
                     byokConfig ?? undefined,
                     'main',
                     {},
-                    'kimi-k2.7-code',
+                    KODUS_TRIAL_MODEL,
                 );
                 // Only pin temperature when the BYOK config sets one. Forcing 0
                 // broke models that reject a non-default temperature — Moonshot's
@@ -142,7 +145,11 @@ export class CommentManagerService implements ICommentManagerService {
                 // silently failed for kimi users while reviews kept working. The
                 // finder omits temperature for the same reason (finder.agent.ts),
                 // letting the provider default apply.
-                const configuredTemperature = byokConfig?.main?.temperature;
+                // Also withheld on Anthropic 4.7+, which removed sampling
+                // params and 400s the request when one is present.
+                const configuredTemperature = resolveByokTemperature(
+                    byokConfig?.main,
+                );
                 return await tracedGenerateText({
                     model: model as any,
                     system: systemPrompt,
@@ -647,7 +654,6 @@ You must always respond in ${languageResultPrompt}.`;
         prNumber: number,
         repository: { name: string; id: string },
         summary: string,
-        dryRun: CodeReviewPipelineContext['dryRun'],
     ): Promise<void> {
         try {
             if (!summary) {
@@ -663,9 +669,8 @@ You must always respond in ${languageResultPrompt}.`;
                         id: repository.id,
                     },
                     summary,
-                    dryRun,
                 },
-                dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+                undefined,
             );
 
             this.logger.log({
@@ -697,7 +702,6 @@ You must always respond in ${languageResultPrompt}.`;
         platformType: PlatformType,
         codeReviewConfig?: CodeReviewConfig,
         pullRequestMessages?: IPullRequestMessages,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
     ): Promise<{ commentId: number; noteId: number; threadId?: number }> {
         try {
             let commentBody: string;
@@ -751,9 +755,8 @@ You must always respond in ${languageResultPrompt}.`;
                         id: repository.id,
                     },
                     body: commentBody,
-                    dryRun,
                 },
-                dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+                undefined,
             );
 
             if (
@@ -769,7 +772,7 @@ You must always respond in ${languageResultPrompt}.`;
                                 : comment.id.toString(),
                             reason: 'OUTDATED',
                         },
-                        dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+                        undefined,
                     );
                 } catch (error) {
                     this.logger.warn({
@@ -875,7 +878,6 @@ You must always respond in ${languageResultPrompt}.`;
         codeReviewConfig?: CodeReviewConfig,
         threadId?: number,
         finalCommentBody?: string,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
         reviewHasPartialErrors?: boolean,
@@ -933,9 +935,8 @@ You must always respond in ${languageResultPrompt}.`;
                     body: commentBody,
                     noteId,
                     threadId,
-                    dryRun,
                 },
-                dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+                undefined,
             );
 
             this.logger.log({
@@ -999,7 +1000,6 @@ You must always respond in ${languageResultPrompt}.`;
         repository: { name: string; id: string; language: string },
         lineComments: Comment[],
         language: string,
-        dryRun: CodeReviewPipelineContext['dryRun'],
         suggestionCopyPrompt?: boolean,
         fallbackSuggestionsBySeverity?: FallbackSuggestionsBySeverity,
     ): Promise<{
@@ -1067,7 +1067,6 @@ You must always respond in ${languageResultPrompt}.`;
                             prNumber,
                             lineComment: comment,
                             language,
-                            dryRun,
                             suggestionCopyPrompt,
                         });
 
@@ -1129,7 +1128,6 @@ You must always respond in ${languageResultPrompt}.`;
                         commit: lastAnalyzedCommit,
                         prNumber,
                         language,
-                        dryRun,
                         suggestionCopyPrompt,
                     });
 
@@ -1231,10 +1229,9 @@ You must always respond in ${languageResultPrompt}.`;
         prNumber: number;
         lineComment: Comment;
         language: string;
-        dryRun: CodeReviewPipelineContext['dryRun'];
         suggestionCopyPrompt?: boolean;
     }): Promise<{ createdComment: any; attemptUsed: number }> {
-        const { lineComment, dryRun, ...restParams } = params;
+        const { lineComment, ...restParams } = params;
         const NON_RETRYABLE_STATUS_CODES = [401, 403, 404];
         const TRANSIENT_RETRY_DELAY_MS = 500;
 
@@ -1263,9 +1260,8 @@ You must always respond in ${languageResultPrompt}.`;
                 {
                     ...restParams,
                     lineComment: comment,
-                    dryRun,
                 },
-                dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+                undefined,
             );
         };
 
@@ -1369,7 +1365,6 @@ You must always respond in ${languageResultPrompt}.`;
         commit: any;
         prNumber: number;
         language: string;
-        dryRun: CodeReviewPipelineContext['dryRun'];
         suggestionCopyPrompt?: boolean;
     }): Promise<{
         success: boolean;
@@ -1384,7 +1379,6 @@ You must always respond in ${languageResultPrompt}.`;
             commit,
             prNumber,
             language,
-            dryRun,
             suggestionCopyPrompt,
         } = params;
 
@@ -1451,7 +1445,6 @@ You must always respond in ${languageResultPrompt}.`;
                         prNumber,
                         lineComment: fallbackComment,
                         language,
-                        dryRun,
                         suggestionCopyPrompt,
                     });
 
@@ -2151,7 +2144,6 @@ ${reviewOptions}
         prLevelSuggestions: ISuggestionByPR[],
         language: string,
         suggestionCopyPrompt?: boolean,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
     ): Promise<{ commentResults: Array<CommentResult> }> {
         try {
             if (!prLevelSuggestions?.length) {
@@ -2194,7 +2186,7 @@ ${reviewOptions}
                                 organizationAndTeamData,
                                 suggestionCopyPrompt,
                             },
-                            dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+                            undefined,
                         );
 
                     // Create general comment
@@ -2208,10 +2200,9 @@ ${reviewOptions}
                                 },
                                 prNumber,
                                 body: commentBody,
-                                dryRun,
                                 suggestion,
                             },
-                            dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+                            undefined,
                         );
 
                     if (createdComment?.id) {
@@ -2445,7 +2436,6 @@ ${reviewOptions}
         codeReviewConfig?: CodeReviewConfig,
         endReviewMessage?: string,
         pullRequestMessagesConfig?: IPullRequestMessages,
-        dryRun?: CodeReviewPipelineContext['dryRun'],
         prLevelCommentResults?: Array<CommentResult>,
         reviewFailed?: boolean,
         reviewErrorMessage?: string,
@@ -2511,13 +2501,12 @@ ${reviewOptions}
                 prNumber,
                 body: commentBody,
             },
-            dryRun?.enabled ? PlatformType.INTERNAL : undefined,
+            undefined,
         );
 
         if (
             platformType === PlatformType.GITHUB &&
-            pullRequestMessagesConfig?.globalSettings?.hideComments &&
-            !dryRun?.enabled
+            pullRequestMessagesConfig?.globalSettings?.hideComments
         ) {
             await this.codeManagementService.minimizeComment({
                 organizationAndTeamData,

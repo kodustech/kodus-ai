@@ -9,6 +9,7 @@ vi.mock('../../services/git.service.js', () => ({
     gitService: {
         isGitRepository: vi.fn().mockResolvedValue(true),
         getGitRoot: vi.fn(),
+        getHooksDir: vi.fn(),
     },
 }));
 
@@ -34,6 +35,7 @@ beforeEach(async () => {
 
     vi.mocked(gitService.isGitRepository).mockResolvedValue(true);
     vi.mocked(gitService.getGitRoot).mockResolvedValue(tmpDir);
+    vi.mocked(gitService.getHooksDir).mockResolvedValue(hooksDir);
 });
 
 afterEach(async () => {
@@ -114,6 +116,30 @@ describe('hook uninstall', () => {
 
         const content = await fs.readFile(hookPath(), 'utf-8');
         expect(content).toContain('third-party');
+    });
+
+    it('removes only the review hook and preserves the Trace pre-push block', async () => {
+        await fs.writeFile(
+            hookPath(),
+            [
+                '#!/bin/sh',
+                KODUS_MARKER,
+                'kodus review --fail-on error',
+                '',
+                '# kodus-trace',
+                'kodus trace distill --branch feature --head abc',
+                '# /kodus-trace',
+                '',
+            ].join('\n'),
+        );
+
+        await uninstallAction();
+
+        const content = await fs.readFile(hookPath(), 'utf-8');
+        expect(content).not.toContain(KODUS_MARKER);
+        expect(content).not.toContain('kodus review');
+        expect(content).toContain('# kodus-trace');
+        expect(content).toContain('kodus trace distill');
     });
 });
 

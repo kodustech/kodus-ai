@@ -1,4 +1,5 @@
 import type {
+    ChangedFile,
     OpenPRArgs,
     OpenPRFromBranchesArgs,
     OpenedPR,
@@ -35,6 +36,44 @@ function classifyLicenseNotice(
     if (/(no|invalid).*license|activate.*plan|subscribe/.test(b))
         return 'no-license';
     return 'other';
+}
+
+/**
+ * Classify a Kody comment on a PR. Hoisted and exported because it has
+ * misread comments twice: once ranking an incidental status above a real
+ * one, and once reading a security finding that mentions BYOK as a BYOK
+ * license notice (cloud run 31616209955).
+ */
+export function classifyKodyComment(
+    body: string,
+): 'started' | 'license-block' | 'review' {
+    if (!body.includes('<!-- kody-codereview')) return 'review';
+    if (body.includes('kody-codereview-completed'))
+        return 'review';
+    // A severity badge means this is a FINDING, whatever words
+    // it happens to contain. License notices never carry one.
+    //
+    // Without this, a review finding that mentions BYOK is read
+    // as a BYOK license notice -- and on THIS codebase that is
+    // routine: cloud run 31616209955 failed
+    // license-attribution x community-byok on a genuine
+    // Security/critical finding about /stats exposing an API
+    // key. The keyword match below cannot tell "Kody is telling
+    // you to configure a key" from "Kody found a key problem in
+    // your code", so the badge has to decide first.
+    if (/severity_level-/.test(body)) return 'review';
+    // Trial / BYOK / plan-activation prompts. Stable
+    // markers: the "Your trial has ended" and "activate
+    // your plan" / "BYOK" wording. Loose match so minor
+    // copy edits don't silently flip the classification.
+    if (
+        /trial.*ended|trial.*expired|byok|activate.*plan|talk.*to.*our.*founders/i.test(
+            body,
+        )
+    ) {
+        return 'license-block';
+    }
+    return 'started';
 }
 
 export class GitHubProvider extends BaseProvider {
@@ -500,7 +539,16 @@ export class GitHubProvider extends BaseProvider {
                 await this.refreshInstallationTokenIfNeeded();
                 const [reviewComments, issueComments, reviews] =
                     await Promise.all([
-                        this.conditionalGet<{ id: number; body: string }[]>(
+                        this.conditionalGet<
+                            {
+                                id: number;
+                                body: string;
+                                path?: string;
+                                line?: number | null;
+                                side?: string;
+                                start_line?: number | null;
+                            }[]
+                        >(
                             `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/comments?since=${since}`,
                         ),
                         this.conditionalGet<{ id: number; body: string }[]>(
@@ -532,25 +580,7 @@ export class GitHubProvider extends BaseProvider {
                 //      summary with "Kody Review Complete" / "Kody
                 //      Guide") or individual finding comments with the
                 //      docs.kodus.io footer. Keep as a review signal.
-                const classify = (
-                    body: string,
-                ): 'started' | 'license-block' | 'review' => {
-                    if (!body.includes('<!-- kody-codereview')) return 'review';
-                    if (body.includes('kody-codereview-completed'))
-                        return 'review';
-                    // Trial / BYOK / plan-activation prompts. Stable
-                    // markers: the "Your trial has ended" and "activate
-                    // your plan" / "BYOK" wording. Loose match so minor
-                    // copy edits don't silently flip the classification.
-                    if (
-                        /trial.*ended|trial.*expired|byok|activate.*plan|talk.*to.*our.*founders/i.test(
-                            body,
-                        )
-                    ) {
-                        return 'license-block';
-                    }
-                    return 'started';
-                };
+                const classify = classifyKodyComment;
                 const filterNonTrigger = <
                     T extends { id: number; body: string },
                 >(
@@ -606,11 +636,27 @@ export class GitHubProvider extends BaseProvider {
                         icRes.reviews[0]?.body ??
                         reviewsList[0]?.body ??
                         '';
+                    // Anchors of the inline findings, for the placement
+                    // assertion (lib/diff-position.ts). Only comments with a
+                    // `path` are inline; the rest are PR-level.
+                    const inlineComments = rcRes.reviews
+                        .filter((c) => typeof c.path === 'string')
+                        .map((c) => ({
+                            path: c.path as string,
+                            ...(typeof c.line === 'number'
+                                ? { line: c.line }
+                                : {}),
+                            ...(c.side ? { side: c.side } : {}),
+                            ...(typeof c.start_line === 'number'
+                                ? { startLine: c.start_line }
+                                : {}),
+                        }));
                     return {
                         reviewComments: rcRes.reviews.length,
                         issueComments: icRes.reviews.length,
                         reviews: reviewsList.length,
                         sample: sample.slice(0, 240),
+                        ...(inlineComments.length ? { inlineComments } : {}),
                         ...(licenseNotice
                             ? {
                                   licenseBlockedNotice: {
@@ -899,10 +945,37 @@ export class GitHubProvider extends BaseProvider {
         return this.token;
     }
 
+    // Identity, not traffic — and the two need DIFFERENT credentials.
+    //
+    // `GET /user` is the one call a GitHub App installation token cannot
+    // make (it has no user identity), which is why the runner only handed
+    // App tokens to cloud cells: self-hosted needs this id for seat
+    // assignment, so it stayed on the abuse-flagged PAT for ALL its GitHub
+    // traffic, quota limit included.
+    //
+    // Resolving the id from the durable PAT while everything else keeps
+    // using `this.token` lifts that restriction: the heavy traffic (clone,
+    // PRs, comment polling) can ride the App's own 5000/h budget on
+    // self-hosted too. The PAT spends exactly one request per cell here.
+    // Files + patches for the PR under test. Used by the review-placement
+    // assertion to decide whether a comment's line is one this PR added.
+    async listChangedFiles(pr: { number: number }): Promise<ChangedFile[]> {
+        const resp = await http<{ filename: string; patch?: string }[]>(
+            `${this.apiBase}/repos/${this.repoFullName}/pulls/${pr.number}/files?per_page=100`,
+            { headers: this.headers(), timeoutMs: 30_000 },
+        );
+        ensureOk(resp, 'github:listChangedFiles');
+        const files = this.listOrThrow(resp, 'github:listChangedFiles');
+        return files.map((f) => ({ path: f.filename, patch: f.patch }));
+    }
+
     async currentUserId(): Promise<string> {
+        // authorHeaders() already resolves to the durable PAT whenever the
+        // assigned token is an App installation token — exactly what this
+        // call needs, since installation tokens have no user identity.
         const resp = await http<{ id: number; login: string }>(
             `${this.apiBase}/user`,
-            { headers: this.headers(), timeoutMs: 15_000 },
+            { headers: this.authorHeaders(), timeoutMs: 15_000 },
         );
         ensureOk(resp, 'github:currentUserId');
         return String(resp.body.id);

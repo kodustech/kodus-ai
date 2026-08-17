@@ -208,9 +208,12 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
 /**
  * Default model config when no BYOK is configured.
  */
+export const KODUS_TRIAL_MODEL =
+    'accounts/fireworks/models/deepseek-v4-flash-0731';
+
 const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,
-    model: 'kimi-k2.7-code',
+    model: KODUS_TRIAL_MODEL,
 };
 
 /**
@@ -279,6 +282,10 @@ function shouldEnableJsonSchema(
         if (!baseURL) return false;
         // vLLM defaults to port 8000 and the issue's target case.
         if (/:8000(\/|$)/.test(baseURL)) return true;
+        // Fireworks supports strict json_schema via structuredOutputs.
+        // Without this flag the AI SDK emits legacy response_format and the
+        // provider warns (and may ignore the schema).
+        if (/api\.fireworks\.ai/i.test(baseURL)) return true;
         // Opt-in comma-separated allowlist of substrings, e.g.
         // "vllm.internal,my-llm-proxy.example.com". Set by ops when
         // running behind a non-vLLM but schema-capable proxy.
@@ -442,10 +449,43 @@ export function byokToVercelModel(
             // (it'll fail fast on the API call instead of here).
         }
 
-        // Kimi (Moonshot AI) — used by the public-demo trial flow.
-        // Detected by model-name prefix so we don't need a new BYOK
-        // provider entry just for the default-only path. Wires through
-        // the OpenAI-compatible adapter pointed at Moonshot's endpoint.
+        // Fireworks AI — the managed default model for the trial / no-BYOK
+        // flow. Detected by the `accounts/fireworks/models/` prefix so we
+        // don't need a new BYOK provider entry just for the default-only path.
+        // Wires through the OpenAI-compatible adapter pointed at Fireworks.
+        if (/^accounts\/fireworks\/models\//i.test(defaultModel)) {
+            const fireworksKey =
+                process.env.API_FIREWORKS_API_KEY ||
+                process.env.FIREWORKS_API_KEY ||
+                '';
+            return createOpenAICompatible({
+                name: 'fireworks',
+                apiKey: fireworksKey,
+                baseURL:
+                    process.env.API_FIREWORKS_BASE_URL ||
+                    'https://api.fireworks.ai/inference/v1',
+                supportsStructuredOutputs: true,
+            })(defaultModel);
+        }
+
+        // DeepSeek — legacy managed fallback, kept for any lingering explicit
+        // `deepseek-*` override still in flight. New default is Fireworks above.
+        if (/^deepseek[-_.]/i.test(defaultModel)) {
+            const deepseekKey =
+                process.env.API_DEEPSEEK_API_KEY ||
+                process.env.DEEPSEEK_API_KEY ||
+                '';
+            return createOpenAICompatible({
+                name: 'deepseek',
+                apiKey: deepseekKey,
+                baseURL:
+                    process.env.API_DEEPSEEK_BASE_URL ||
+                    'https://api.deepseek.com/v1',
+            })(defaultModel);
+        }
+
+        // Kimi (Moonshot AI) — legacy managed fallback, kept for any lingering
+        // `kimi-*` override still in flight. New default is Fireworks above.
         if (/^kimi[-_.]/i.test(defaultModel)) {
             const moonshotKey =
                 process.env.API_MOONSHOT_API_KEY ||
@@ -504,7 +544,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || 'https://openrouter.ai/api/v1',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 
@@ -514,7 +554,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || '',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 
@@ -524,7 +564,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || 'https://api.novita.ai/v3/openai',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 

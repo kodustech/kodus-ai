@@ -9,13 +9,31 @@ describe("resolveKodyRuleBadgeState", () => {
         ).toBeNull();
     });
 
-    it("returns 'locked' for a rule paused by the plan limit", () => {
+    it("returns 'locked' for a rule paused by the plan limit on free plan", () => {
+        expect(
+            resolveKodyRuleBadgeState({
+                status: KodyRulesStatus.PAUSED,
+                lockedByPlan: true,
+            }, true),
+        ).toBe("locked");
+    });
+
+    it("returns 'locked' by default when isFreePlan not provided (backward compat)", () => {
         expect(
             resolveKodyRuleBadgeState({
                 status: KodyRulesStatus.PAUSED,
                 lockedByPlan: true,
             }),
         ).toBe("locked");
+    });
+
+    it("returns 'paused' even with lockedByPlan on a paid plan", () => {
+        expect(
+            resolveKodyRuleBadgeState({
+                status: KodyRulesStatus.PAUSED,
+                lockedByPlan: true,
+            }, false),
+        ).toBe("paused");
     });
 
     it("returns 'paused' for a rule the user paused themselves", () => {

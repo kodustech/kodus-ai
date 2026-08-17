@@ -1,9 +1,8 @@
-import * as yaml from 'js-yaml';
-
 import {
     CentralizedConfigPrService,
     CentralizedMutationPullRequestRequest,
 } from '@libs/centralized-config/infrastructure/adapters/services/centralized-config-pr.service';
+import { dumpCentralizedYaml } from '@libs/centralized-config/utils/yaml-dump';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     IKodyRule,
@@ -130,5 +129,8 @@ export function formatRuleToYaml(rule: Partial<IKodyRule>): string {
         ...(rule.status === KodyRulesStatus.PAUSED ? { enabled: false } : {}),
     };
 
-    return yaml.dump(ruleForYaml);
+    // `examples`/`inheritance` arrive as DTO class instances, which js-yaml
+    // refuses to dump. Same hazard on every centralized-config dump, so it is
+    // handled in one place.
+    return dumpCentralizedYaml(ruleForYaml);
 }

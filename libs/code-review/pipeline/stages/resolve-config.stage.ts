@@ -18,10 +18,6 @@ import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
-import {
-    DRY_RUN_SERVICE_TOKEN,
-    IDryRunService,
-} from '@libs/dryRun/domain/contracts/dryRun.service.contract';
 import { createLogger } from '@libs/core/log/logger';
 import { ParametersKey } from '@libs/core/domain/enums';
 import {
@@ -49,9 +45,6 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
         private readonly pullRequestMessagesService: IPullRequestMessagesService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
-
-        @Inject(DRY_RUN_SERVICE_TOKEN)
-        private readonly dryRunService: IDryRunService,
 
         private readonly moduleRef: ModuleRef,
     ) {
@@ -111,24 +104,6 @@ export class ResolveConfigStage extends BasePipelineStage<CodeReviewPipelineCont
 
             const pullRequestMessagesConfig =
                 await this.setPullRequestMessagesConfig(context);
-
-            if (context.dryRun?.enabled) {
-                const codeReviewConfigId = (
-                    await this.parametersService.findByKey(
-                        ParametersKey.CODE_REVIEW_CONFIG,
-                        context.organizationAndTeamData,
-                    )
-                )?.uuid;
-
-                await this.dryRunService.addConfigsToDryRun({
-                    id: context.dryRun?.id,
-                    organizationAndTeamData: context.organizationAndTeamData,
-                    config,
-                    configId: codeReviewConfigId,
-                    pullRequestMessagesConfig,
-                    pullRequestMessagesId: pullRequestMessagesConfig?.uuid,
-                });
-            }
 
             return this.updateContext(context, (draft) => {
                 draft.codeReviewConfig = config;

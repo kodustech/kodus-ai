@@ -58,6 +58,16 @@ export class IntegrationConfigService implements IIntegrationConfigService {
         return this.integrationConfigRepository.findByInstallId(installId);
     }
 
+    findByOrganizationAndConfigKey(
+        organizationId: string,
+        configKey: IntegrationConfigKey,
+    ): Promise<IntegrationConfigEntity[]> {
+        return this.integrationConfigRepository.findByOrganizationAndConfigKey(
+            organizationId,
+            configKey,
+        );
+    }
+
     findById(uuid: string): Promise<IntegrationConfigEntity> {
         return this.integrationConfigRepository.findById(uuid);
     }

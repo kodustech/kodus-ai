@@ -60,6 +60,11 @@ _*
 !scripts/selfhosted/_*.sh
 
 # Playwright failure / debug dumps
+# Local working copy of the durable e2e history log. The log of record lives
+# on the `e2e-history` orphan branch; this is just what history-backfill.sh
+# and `run report` read locally.
+tests/e2e/history/
+
 tests/e2e/playwright/failure-*.html
 tests/e2e/playwright/failure-*.png
 tests/e2e/playwright/stripe-*.png
@@ -251,3 +256,9 @@ scripts/benchmark/golden-context.py
 scripts/benchmark/golden-context.py.bak
 evals/kody-rules/prod-rules.json
 .grok/settings.json
+
+.tessl
+.claude/skills/tlc-spec-driven
+
+# runo: validation evidence downloaded per-run (see .kodus/workspace.yaml)
+.kodus/evidence/

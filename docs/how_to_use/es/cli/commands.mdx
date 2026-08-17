@@ -42,12 +42,25 @@ kodus review --prompt-only            # Salida optimizada para agentes de IA
 | `--branch <name>`      | `-b`  | Comparar la rama actual contra la rama especificada         |
 | `--rules-only`         | —     | Revisar usando solo las reglas configuradas (sin sugerencias generales) |
 | `--fast`               | —     | Modo rápido: análisis más ágil con verificaciones más ligeras |
+| `--focus <text>`       | —     | Dirige la revisión a un área específica — consulta [Dirigir una Revisión](/how_to_use/es/code_review/review_directive) |
+| `--heavy`              | —     | Pasada más profunda: rondas extra de crítico para mayor recall (alpha, ver abajo) |
 | `--interactive`        | `-i`  | Modo interactivo: navegar y aplicar correcciones            |
 | `--fix`                | —     | Aplicar automáticamente todos los problemas corregibles     |
 | `--prompt-only`        | —     | Salida optimizada para agentes de IA                        |
 | `--fail-on <severity>` | —     | Salir con código 1 si los problemas alcanzan o superan la severidad |
 | `--context <file>`     | —     | Archivo de contexto personalizado para incluir en la revisión |
 | `--fields <csv>`       | —     | Seleccionar campos de respuesta (modo JSON/agente), p. ej. `summary,issues.file` |
+| `--github-pat <token>` | —     | Token de GitHub (`read:repo`) usado para clonar repositorios privados. Solo usuarios en trial. También vía `KODUS_GITHUB_PAT`. Se mantiene solo en memoria, nunca se persiste. |
+| `--no-hunk`            | —     | Omite el visor hunk y usa la lista interactiva antigua (solo sesiones interactivas) |
+
+<Warning>
+  `--heavy` es una función **alpha**, **con acceso bajo petición** — está desactivada para todas
+  las organizaciones hasta que la habilitemos. Solo cloud por ahora; no disponible en self-hosted.
+  Hasta que te habilitemos, la flag se acepta pero la revisión se ejecuta con normalidad, sin
+  error ni aviso. Solicita acceso en [Discord](https://discord.gg/TFZBRk9fT6) o en
+  [support@kodus.io](mailto:support@kodus.io). Consulta
+  [Heavy mode](/how_to_use/es/code_review/review_directive#heavy-mode).
+</Warning>
 
 ### Modos de Revisión
 
@@ -234,66 +247,6 @@ KODUS_SKIP_HOOK=1 git push
 
 ---
 
-## `kodus decisions`
-
-Captura y persiste las decisiones de los agentes de IA en tu repositorio para referencia futura. Las decisiones se almacenan como markdown estructurado en `.kody/`.
-
-### `decisions enable`
-
-```bash
-kodus decisions enable                                    # Todos los agentes
-kodus decisions enable --agents claude,cursor            # Agentes específicos
-kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
-kodus decisions enable --force                           # Sobrescribir configuración existente
-```
-
-| Flag                    | Predeterminado         | Descripción                      |
-| ----------------------- | ---------------------- | -------------------------------- |
-| `--agents <agents>`     | `claude,cursor,codex`  | Lista de agentes separados por comas |
-| `--codex-config <path>` | `~/.codex/config.toml` | Ruta a la configuración de Codex |
-| `--force`               | —                      | Sobrescribir `modules.yml` existente |
-
-### `decisions disable`
-
-```bash
-kodus decisions disable
-```
-
-Elimina todos los hooks de decisión. Los datos preservados en `.kody/` no se eliminan.
-
-### `decisions status`
-
-```bash
-kodus decisions status
-```
-
-Muestra la memoria del PR, las sesiones, el último SHA, el agente y la configuración del módulo.
-
-### `decisions show`
-
-```bash
-kodus decisions show                  # Memoria del PR de la rama actual
-kodus decisions show auth             # Decisiones del módulo 'auth'
-kodus decisions show feat/new-api     # Decisiones del PR para una rama específica
-```
-
-### `decisions promote`
-
-```bash
-kodus decisions promote                                   # Rama actual, todos los módulos
-kodus decisions promote --branch feat/auth                # Rama específica
-kodus decisions promote --branch feat/auth --modules auth,users
-```
-
-| Flag              | Descripción                                       |
-| ----------------- | ------------------------------------------------- |
-| `--branch <name>` | Nombre de la rama (predeterminado: rama actual)   |
-| `--modules <ids>` | IDs de módulos separados por comas (predeterminado: todos los coincidentes) |
-
-Promueve las decisiones a nivel de PR a la memoria de módulo a largo plazo.
-
----
-
 ## `kodus config centralized`
 
 Gestiona la configuración centralizada desde el CLI.
@@ -326,7 +279,7 @@ kodus config centralized download --out ./centralized-config.zip
 | `--out <path>`                 | `download`                  | Ruta de salida requerida para el archivo ZIP |
 | `--json`                       | todos los subcomandos centralizados | Salida JSON estructurada   |
 
-Para una guía completa, consulta: [/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section](/how_to_use/es/code_review/configs/centralized_config#cli-dedicated-section)
+Para una guía completa, consulta: [/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section](/how_to_use/es/code_review/configs/centralized_config#cli)
 
 ---
 
@@ -471,13 +424,32 @@ kodus skills uninstall                                   # Eliminar los skills i
 
 ## `kodus status`
 
-Muestra un estado consolidado de Kodus: modo de autenticación, organización, repositorio, hook, decisiones, skills incluidos y versión del CLI.
+Muestra un estado consolidado de Kodus: modo de autenticación, organización, repositorio, hook, skills incluidos y versión del CLI.
 
 ```bash
 kodus status
 ```
 
 Útil como primer diagnóstico cuando algo falla o al incorporar una nueva máquina.
+
+---
+
+## `kodus diff`
+
+Abre el changeset actual en el visor de diff de Hunk en la terminal.
+
+```bash
+kodus diff
+```
+
+Es un wrapper fino sobre `hunk diff` — cada argumento que pases se reenvía sin cambios, así que
+cualquier flag que Hunk soporte también funciona aquí.
+
+<Note>
+  Útil para revisar visualmente un changeset antes de ejecutar `kodus review` sobre él. El mismo
+  visor respalda la experiencia de revisión interactiva; pasa `--no-hunk` a `kodus review` si
+  prefieres la lista antigua.
+</Note>
 
 ---
 
@@ -526,3 +498,4 @@ Los problemas se categorizan por severidad, de mayor a menor:
 | `complexity`             | Problemas de complejidad del código    |
 | `maintainability`        | Preocupaciones de mantenibilidad       |
 | `style`                  | Problemas de estilo de código          |
+| `documentation`          | Carencias de documentación (aceptado por `--category` en `kodus pr suggestions`) |

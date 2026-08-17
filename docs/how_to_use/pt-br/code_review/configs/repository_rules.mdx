@@ -64,20 +64,31 @@ Descreva o que revisar e como decidir. Seja direto e objetivo.
 
 ### Campos Obrigatórios
 
+Só duas coisas são estritamente obrigatórias: um `title` não vazio e um corpo de regra não vazio.
+Um arquivo sem um dos dois é ignorado por completo.
+
 | Campo | Descrição | Valores |
 |-------|-------------|---------|
 | `title` | Nome da regra exibido na interface | Qualquer string descritiva |
-| `scope` | Escopo de análise da regra | `"file"` ou `"pull-request"` |
-| `path` | Caminhos de arquivo onde a regra se aplica. A regra dispara em arquivos que casam com **qualquer** um dos globs | Array de padrões glob |
-| `severity_min` | Nível mínimo de severidade | `"low"`, `"medium"`, `"high"`, `"critical"` |
 
-### Campos Opcionais
+### Campos com valor padrão
 
-| Campo | Descrição |
-|-------|-------------|
-| `uuid` | Identificador estável da regra — mantém a mesma regra na plataforma entre renomeações |
-| `enabled` | Defina `false` para pular a importação deste arquivo (uma regra já importada não é removida) |
-| `languages`, `buckets` | Metadados informativos |
+Todo o resto é opcional — se omitir, vale o padrão.
+
+| Campo | Descrição | Valores | Padrão |
+|-------|-------------|---------|---------|
+| `scope` | Escopo de análise da regra | `"file"` ou `"pull-request"` | `"file"` |
+| `path` | Caminhos onde a regra se aplica. A regra dispara em arquivos que casem com **qualquer** um dos globs | Array de padrões glob | `**/*` (todos os arquivos) |
+| `severity_min` | Nível mínimo de severidade | `"low"`, `"medium"`, `"high"`, `"critical"` | `"medium"` |
+| `enabled` | Defina `false` para não importar este arquivo (uma regra já importada não é removida) | boolean | `true` |
+| `uuid` | Identificador estável da regra — mantém a mesma regra na plataforma mesmo se o arquivo for renomeado | string | nenhum |
+| `languages`, `buckets` | Metadados informativos | — | — |
+
+<Note>
+  `severity` é aceito como alias de `severity_min`, já que é um erro fácil de digitar e a
+  intenção é inequívoca. Qualquer valor fora dos quatro níveis cai para `"medium"`, e qualquer
+  `scope` diferente de `"pull-request"` é tratado como `"file"`.
+</Note>
 
 ## Exemplos de Regras
 

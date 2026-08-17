@@ -4,7 +4,6 @@ import {
     CrossFileContextSnippet,
     RemoteCommands,
 } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     DocumentationContextItem,
@@ -305,7 +304,6 @@ export interface ISuggestionService {
         repository: Partial<Repository>;
         prNumber: number;
         platformType: PlatformType;
-        dryRun?: CodeReviewPipelineContext['dryRun'];
     }): Promise<void>;
 }
 

@@ -111,6 +111,7 @@ KEYS=(
     "/prod/kodus-orchestrator/API_GOOGLE_AI_API_KEY"
     "/prod/kodus-orchestrator/API_ANTHROPIC_API_KEY"
     "/prod/kodus-orchestrator/COHERE_API_KEY"
+    "/prod/kodus-orchestrator/API_FIREWORKS_BASE_URL"
     "/prod/kodus-orchestrator/API_FIREWORKS_API_KEY"
 
     "/prod/kodus-orchestrator/N8N_WEBHOOK_URL"
@@ -157,6 +158,9 @@ KEYS=(
 
     "/prod/kodus-orchestrator/API_CEREBRAS_BASE_URL"
     "/prod/kodus-orchestrator/API_CEREBRAS_API_KEY"
+
+    "/prod/kodus-orchestrator/API_DEEPSEEK_BASE_URL"
+    "/prod/kodus-orchestrator/API_DEEPSEEK_API_KEY"
 
     "/prod/kodus-orchestrator/API_MORPHLLM_API_KEY"
 

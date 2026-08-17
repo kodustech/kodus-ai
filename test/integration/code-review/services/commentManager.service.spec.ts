@@ -115,7 +115,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -157,7 +156,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -203,7 +201,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -245,7 +242,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -283,7 +279,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             const elapsedTime = Date.now() - startTime;
@@ -324,7 +319,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -356,7 +350,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -386,7 +379,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -416,7 +408,6 @@ describe('CommentManagerService - createLineComments retry logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
             );
 
             expect(result.commentResults).toHaveLength(1);
@@ -568,7 +559,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -640,7 +630,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -697,7 +686,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -747,7 +735,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -810,7 +797,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [mockComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );
@@ -899,7 +885,6 @@ describe('CommentManagerService - fallback suggestion logic', () => {
                 mockRepository,
                 [successComment, failComment],
                 'en-US',
-                { enabled: false },
                 undefined,
                 fallbackSuggestionsBySeverity,
             );

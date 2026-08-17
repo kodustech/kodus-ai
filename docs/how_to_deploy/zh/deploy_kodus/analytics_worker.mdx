@@ -111,7 +111,7 @@ ANALYTICS_CLASSIFIER_CRON=*/15 * * * *
 
 `worker-analytics` 容器与 `api`/`worker`/`webhooks` 共享相同的
 `prod-entrypoint.sh`。当 `RUN_MIGRATIONS=true`（安装程序默认）时，
-analytics 仓库的 migrations（`yarn analytics:migration:run:prod`）
+analytics 仓库的 migrations（`pnpm run analytics:migration:run:prod`）
 会在首次启动时运行，创建 `analytics` schema 及其表。
 
 ## 参考

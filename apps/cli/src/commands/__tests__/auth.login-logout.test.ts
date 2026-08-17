@@ -70,10 +70,15 @@ function forceBrowserAvailable() {
             configurable: true,
             get: () => originalIsTTY,
         });
-        if (originalSsh !== undefined) {process.env.SSH_CONNECTION = originalSsh;}
-        if (originalSshClient !== undefined)
-            {process.env.SSH_CLIENT = originalSshClient;}
-        if (originalCi !== undefined) {process.env.CI = originalCi;}
+        if (originalSsh !== undefined) {
+            process.env.SSH_CONNECTION = originalSsh;
+        }
+        if (originalSshClient !== undefined) {
+            process.env.SSH_CLIENT = originalSshClient;
+        }
+        if (originalCi !== undefined) {
+            process.env.CI = originalCi;
+        }
     };
 }
 

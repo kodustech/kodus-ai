@@ -42,12 +42,24 @@ kodus review --prompt-only            # AI エージェント向けに最適化�
 | `--branch <name>`      | `-b`   | 現在のブランチを指定ブランチと比較                          |
 | `--rules-only`         | —      | 設定されたルールのみを使用してレビュー（一般提案なし）      |
 | `--fast`               | —      | 高速モード: より軽いチェックによる迅速な分析                |
+| `--focus <text>`       | —      | レビューを特定の領域に向ける — [レビューの誘導](/how_to_use/ja/code_review/review_directive) を参照 |
+| `--heavy`              | —      | より深いパス: リコール向上のための追加の批評ラウンド（アルファ、下記参照） |
 | `--interactive`        | `-i`   | インタラクティブモード: 修正をナビゲートして適用            |
 | `--fix`                | —      | 修正可能な問題を全て自動適用                                |
 | `--prompt-only`        | —      | AI エージェント向けに最適化された出力                       |
 | `--fail-on <severity>` | —      | 問題が重要度に達した場合に終了コード1で終了                 |
 | `--context <file>`     | —      | レビューに含めるカスタムコンテキストファイル                |
 | `--fields <csv>`       | —      | レスポンスフィールドを選択（JSON/エージェントモード）、例: `summary,issues.file` |
+| `--github-pat <token>` | —      | プライベートリポジトリのクローンに使う GitHub トークン（`read:repo`）。トライアルユーザーのみ。`KODUS_GITHUB_PAT` でも設定可能。メモリ上のみで保持され、永続化されません。 |
+| `--no-hunk`            | —      | hunk ビューアーをスキップし、従来のインタラクティブリストを使用（インタラクティブセッションのみ） |
+
+<Warning>
+  `--heavy` は**アルファ**機能で、**申請制**です — 有効化するまでどの組織でもオフです。現時点
+  ではクラウドのみで、セルフホストでは利用できません。有効化されるまでフラグは受け付けられます
+  が、レビューは通常どおり実行され、エラーも警告も出ません。アクセスは
+  [Discord](https://discord.gg/TFZBRk9fT6) または [support@kodus.io](mailto:support@kodus.io)
+  からご依頼ください。[Heavy mode](/how_to_use/ja/code_review/review_directive#heavy-mode) を参照。
+</Warning>
 
 ### レビューモード
 
@@ -234,66 +246,6 @@ KODUS_SKIP_HOOK=1 git push
 
 ---
 
-## `kodus decisions`
-
-AIエージェントの決定をキャプチャしてリポジトリに永続化します。決定は `.kody/` に構造化マークダウンとして保存されます。
-
-### `decisions enable`
-
-```bash
-kodus decisions enable                                    # 全エージェント
-kodus decisions enable --agents claude,cursor            # 特定のエージェント
-kodus decisions enable --agents codex --codex-config ~/.codex/config.toml
-kodus decisions enable --force                           # 既存の設定を上書き
-```
-
-| フラグ                  | デフォルト             | 説明                                 |
-| ----------------------- | ---------------------- | ------------------------------------ |
-| `--agents <agents>`     | `claude,cursor,codex`  | カンマ区切りのエージェントリスト     |
-| `--codex-config <path>` | `~/.codex/config.toml` | Codex 設定のパス                     |
-| `--force`               | —                      | 既存の `modules.yml` を上書き        |
-
-### `decisions disable`
-
-```bash
-kodus decisions disable
-```
-
-全ての決定フックを削除します。`.kody/` に保存されたデータは削除されません。
-
-### `decisions status`
-
-```bash
-kodus decisions status
-```
-
-PR メモリ、セッション、最後の SHA、エージェント、モジュール設定を表示します。
-
-### `decisions show`
-
-```bash
-kodus decisions show                  # 現在のブランチの PR メモリ
-kodus decisions show auth             # 'auth' のモジュール決定
-kodus decisions show feat/new-api     # 特定のブランチの PR 決定
-```
-
-### `decisions promote`
-
-```bash
-kodus decisions promote                                   # 現在のブランチ、全モジュール
-kodus decisions promote --branch feat/auth                # 特定のブランチ
-kodus decisions promote --branch feat/auth --modules auth,users
-```
-
-| フラグ            | 説明                                                |
-| ----------------- | --------------------------------------------------- |
-| `--branch <name>` | ブランチ名（デフォルト: 現在のブランチ）            |
-| `--modules <ids>` | カンマ区切りのモジュール ID（デフォルト: 全マッチ） |
-
-PR レベルの決定を長期モジュールメモリに昇格します。
-
----
-
 ## `kodus config centralized`
 
 CLI から集中管理設定を管理します。
@@ -326,7 +278,7 @@ kodus config centralized download --out ./centralized-config.zip
 | `--out <path>`                   | `download`                  | ZIP ファイルの必須出力パス        |
 | `--json`                         | 全集中管理サブコマンド      | 構造化 JSON を出力                |
 
-完全なウォークスルーは: [/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section](/how_to_use/ja/code_review/configs/centralized_config#cli-dedicated-section)
+完全なウォークスルーは: [/how_to_use/en/code_review/configs/centralized_config#cli-dedicated-section](/how_to_use/ja/code_review/configs/centralized_config#cli)
 
 ---
 
@@ -481,6 +433,25 @@ kodus status
 
 ---
 
+## `kodus diff`
+
+現在の変更セットを Hunk のターミナル diff ビューアーで開きます。
+
+```bash
+kodus diff
+```
+
+`hunk diff` の薄いラッパーです。渡した引数はすべてそのまま転送されるため、Hunk がサポートする
+フラグはここでも使えます。
+
+<Note>
+  `kodus review` を実行する前に変更セットをざっと確認するのに便利です。同じビューアーが
+  インタラクティブなレビュー体験を支えています。従来のリストがよい場合は `kodus review` に
+  `--no-hunk` を渡してください。
+</Note>
+
+---
+
 ## `kodus update`
 
 npm から Kodus CLI を最新バージョンに更新します。
@@ -526,3 +497,4 @@ kodus subscribe
 | `complexity`             | コードの複雑性の問題                   |
 | `maintainability`        | 保守性の懸念                           |
 | `style`                  | コードスタイルの問題                   |
+| `documentation`          | ドキュメントの不足（`kodus pr suggestions` の `--category` で指定可能） |

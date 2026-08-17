@@ -84,7 +84,10 @@ export const stripeBilling: Scenario = {
         // control plane. Single cell because the endpoints are
         // provider-agnostic.
         target: ["cloud"],
-        provider: ["github"],
+        // github-app too: the cloud paid cell now authenticates as the App,
+        // and billing is entirely independent of the git provider's auth mode.
+        // Pinned to `github` alone this scenario had no cell to run on at all.
+        provider: ["github", "github-app"],
         license: ["paid"],
     },
     // 4 × (login + Checkout/Portal navigation + webhook poll ≤60s) +

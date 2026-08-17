@@ -14,13 +14,16 @@ permissions:
 # an RC build, before any promotion is allowed.
 #
 # Inputs:
-#   image_tag    DOCKER image tag to test against (REQUIRED, e.g. 1.42.0-rc.1 —
-#                the ghcr tag, NOT the selfhosted-* git tag)
+#   image_tag    DOCKER image tag to test against (e.g. 2.1.30 or
+#                2.1.30-rc.117) - the GHCR tag, NOT the `selfhosted-*` git
+#                tag. Optional on the cron, which resolves it from the newest
+#                published release and strips the prefix.
 #   matrix_file  Path to a matrix YAML file in tests/e2e/matrix/ (default fast.yml)
 #   keep_running Optional — leave droplets alive after each cell for debug
 #
 # Required secrets:
-#   DIGITALOCEAN_TOKEN
+#   AWS_E2E_ACCESS_KEY_ID, AWS_E2E_SECRET_ACCESS_KEY  (default provider)
+#   DIGITALOCEAN_TOKEN                                (fallback provider)
 #   GH_TEST_TOKEN, GL_TEST_TOKEN, BB_TEST_USER, BB_TEST_APP_PASSWORD,
 #   AZ_TEST_TOKEN, and their *_TEST_REPO / *_TEST_PR_NUMBER companions
 #   SH_LICENSE_KEY_PAID, SH_LICENSE_KEY_FREE
@@ -28,25 +31,56 @@ permissions:
 on:
     workflow_call:
         inputs:
+            # Not required: an on-demand run whose PR only touched the harness
+            # has no image to build, and an empty tag makes the plan job resolve
+            # the newest published release — the right baseline for that case.
             image_tag:
-                description: "Image tag (e.g. selfhosted-1.42.0-rc.1 or 1.42.0-rc.1)"
-                required: true
+                description: "GHCR image tag (e.g. 2.1.30 or test-a1b2c3d). Blank = newest published release."
+                required: false
+                default: ""
+                type: string
+            registry:
+                description: "Image registry override (e.g. ghcr.io/<user>). Blank = the published images."
+                required: false
+                default: ""
                 type: string
             matrix_file:
                 description: "Matrix YAML path under tests/e2e/"
                 required: false
                 default: matrix/fast.yml
                 type: string
+            only_provider:
+                description: "Narrow to one provider. 'all' runs every self-hosted cell."
+                required: false
+                default: all
+                type: string
             keep_running:
                 description: "Skip droplet teardown"
                 required: false
                 default: false
                 type: boolean
+    # Own cadence — Tue/Thu 04:00 UTC (01:00 BRT).
+    #
+    # Until now the ONLY automatic caller was the release train, where this
+    # job sits BEHIND the cloud gate. So whenever cloud QA had an infra
+    # problem (WAF, slow rollout) the train stopped at the gate and the
+    # self-hosted matrix never ran at all — on 2026-07-31 and 2026-08-07 it
+    # was skipped outright. Self-hosted validation must not depend on the
+    # health of the cloud QA environment: different target, different infra,
+    # different failure modes. The scheduled run resolves its own image tag
+    # (see the `plan` job) and reports independently.
+    schedule:
+        - cron: "0 4 * * 2,4"
     workflow_dispatch:
         inputs:
             image_tag:
-                description: "Image tag (e.g. selfhosted-1.42.0-rc.1)"
-                required: true
+                description: "GHCR image tag, NOT the git tag (e.g. 2.1.30 or 2.1.30-rc.117). Blank on the cron - resolved from the newest release."
+                required: false
+                type: string
+            registry:
+                description: "Image registry override (e.g. ghcr.io/<user>) for testing unreleased builds. Blank = the published images."
+                required: false
+                default: ""
                 type: string
             matrix_file:
                 description: "Matrix YAML path under tests/e2e/"
@@ -71,7 +105,7 @@ on:
                     - azure-devops
 
 concurrency:
-    group: e2e-self-hosted-matrix-${{ inputs.image_tag }}
+    group: e2e-self-hosted-matrix-${{ inputs.image_tag || github.run_id }}
     cancel-in-progress: true
 
 jobs:
@@ -83,16 +117,91 @@ jobs:
         runs-on: ubuntu-latest
         outputs:
             cells: ${{ steps.gen.outputs.cells }}
+            image_tag: ${{ steps.tag.outputs.image_tag }}
         steps:
+            # Validate the matrix file BEFORE anything is provisioned. A cell
+            # whose appliesTo excludes every scenario has nothing to run, and
+            # used to surface only at the END of the job -- after a droplet had
+            # been created and ~15 minutes spent -- as an inconclusive run with
+            # zero results. Here it costs seconds and names the cell.
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            - name: Validate matrix configuration
+              working-directory: tests/e2e
+              run: ./node_modules/.bin/tsx cli/run-matrix.ts "${{ inputs.matrix_file || 'matrix/fast.yml' }}" --validate
+
+            # The release train passes the RC tag it just built. The cron has
+            # no tag to pass, so it tests the newest published self-hosted
+            # release — "is the thing customers actually run still working?",
+            # which is the question a scheduled self-hosted run should answer.
+            - name: Resolve image tag
+              id: tag
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  INPUT_TAG: ${{ inputs.image_tag }}
+              run: |
+                  set -uo pipefail
+                  if [ -n "${INPUT_TAG:-}" ]; then
+                      echo "image_tag=$INPUT_TAG" >> "$GITHUB_OUTPUT"
+                      echo "Using caller-provided tag: $INPUT_TAG"
+                      exit 0
+                  fi
+                  TAG=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 30 \
+                      --json tagName --jq '[.[] | select(.tagName | startswith("selfhosted-")) | select(.tagName | contains("-rc.") | not)] | .[0].tagName' 2>/dev/null || true)
+                  if [ -z "$TAG" ] || [ "$TAG" = "null" ]; then
+                      echo "::error::No published selfhosted-* release found to test against."
+                      exit 1
+                  fi
+                  # The GIT tag is `selfhosted-2.1.30`; the GHCR tag that
+                  # selfhosted-promote.yml actually writes is `2.1.30`. Passing
+                  # the git tag straight through yields
+                  # `kodus-ai-api:selfhosted-2.1.30: not found` and every cell
+                  # dies in provisioning -- which is exactly how the 2026-08-07
+                  # dispatch failed too, because the input hint below used to
+                  # suggest the git tag.
+                  IMAGE="${TAG#selfhosted-}"
+                  echo "image_tag=$IMAGE" >> "$GITHUB_OUTPUT"
+                  echo "Scheduled run - newest release $TAG -> image tag $IMAGE"
+
+            # Cells come from the MATRIX FILE, not from a list kept here.
+            #
+            # They used to be hardcoded, which made this a second source of
+            # truth: removing the uncovered `license-free` cell from fast.yml
+            # left the workflow still fanning out a job for it, and that job
+            # provisioned a droplet to run zero scenarios (run 31318234481).
+            # Deriving them means the matrix file cannot disagree with the jobs
+            # that run it.
             - id: gen
+              working-directory: tests/e2e
               env:
                   ONLY: ${{ inputs.only_provider || 'all' }}
+                  MATRIX: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
               run: |
-                  ALL='[{"provider":"github","license":"license-paid"},{"provider":"gitlab","license":"license-paid"},{"provider":"bitbucket","license":"license-paid"},{"provider":"azure-devops","license":"license-paid"},{"provider":"github","license":"license-free"}]'
-                  if [ "$ONLY" = "all" ] || [ -z "$ONLY" ]; then
-                      CELLS="$ALL"
-                  else
-                      CELLS=$(printf '%s' "$ALL" | jq -c --arg p "$ONLY" '[.[] | select(.provider == $p)]')
+                  set -euo pipefail
+                  CELLS=$(ONLY="$ONLY" MATRIX="$MATRIX" ./node_modules/.bin/tsx -e '
+                    import { parse } from "yaml";
+                    import { readFileSync } from "node:fs";
+                    const m: any = parse(readFileSync(process.env.MATRIX!, "utf8"));
+                    const only = process.env.ONLY;
+                    const cells = m.cells
+                        .filter((c: any) => c.target === "self-hosted")
+                        .filter((c: any) => !only || only === "all" || c.provider === only)
+                        .map((c: any) => ({ provider: c.provider, license: c.license }));
+                    process.stdout.write(JSON.stringify(cells));
+                  ')
+                  if [ "$CELLS" = "[]" ]; then
+                      echo "::error::No self-hosted cells in $MATRIX${ONLY:+ for provider $ONLY}"
+                      exit 1
                   fi
                   echo "Selected cells: $CELLS"
                   echo "cells=$CELLS" >> "$GITHUB_OUTPUT"
@@ -105,7 +214,12 @@ jobs:
         # toggle (3 sequential PRs, ~10-12min real though its internal poll
         # ceiling is 40min) + rbac. Headroom over the observed ~35min so a
         # slow LLM round on one scenario doesn't kill the whole cell.
-        timeout-minutes: 60
+        # Bitbucket legitimately takes 27-53 min while the other providers
+        # take ~20 (Atlassian's per-endpoint burst limits force a slower
+        # fan-out). At 60 it sat on the edge and run 31526446836 tipped over,
+        # which GitHub reports as `cancelled` -- indistinguishable from
+        # someone hitting stop.
+        timeout-minutes: 90
         environment: ci
         strategy:
             fail-fast: false
@@ -131,6 +245,15 @@ jobs:
               working-directory: tests/e2e
               run: npm install --no-audit --no-fund
 
+            # Browser scenarios currently apply only to the GitHub cell. The
+            # Playwright npm package does not install Chromium by itself on a
+            # fresh GitHub runner, so without this step rbac-ui-render and the
+            # Cockpit render check fail before opening a page.
+            - name: Install Playwright Chromium
+              if: matrix.cell.provider == 'github'
+              working-directory: tests/e2e
+              run: npx playwright install --with-deps chromium
+
             - name: Resolve cell-specific secrets
               id: secrets
               env:
@@ -145,11 +268,33 @@ jobs:
 
             - name: Run provisioning + matrix runner
               env:
-                  IMAGE_TAG: ${{ inputs.image_tag }}
-                  SOURCE_MATRIX_FILE: ${{ inputs.matrix_file }}
+                  IMAGE_TAG: ${{ needs.plan.outputs.image_tag }}
+                  SOURCE_MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
                   LICENSE_MODE: ${{ matrix.cell.license }}
                   KODUS_INSTALLER_PATH: ${{ github.workspace }}/kodus-installer
-                  TEST_VM_PROVIDER: digitalocean
+                  # AWS by default: Kodus has credit there, and DigitalOcean
+                  # was the direct cause of two failure classes — 504s on
+                  # droplet create (which is also how orphans appear: DO may
+                  # create it anyway and the script dies before recording the
+                  # id) and a reaper watching the wrong name prefix.
+                  #
+                  # vars.E2E_VM_PROVIDER flips it back to `digitalocean`
+                  # without a code change if AWS misbehaves.
+                  TEST_VM_PROVIDER: ${{ vars.E2E_VM_PROVIDER || 'aws' }}
+                  # Empty = the published images, i.e. today's behaviour.
+                  KODUS_REGISTRY: ${{ inputs.registry }}
+                  # Images in a non-public namespace are PRIVATE by default and
+                  # the VM pulls anonymously, so without these the stack fails
+                  # to pull with a 401 that reads like a missing tag. Empty when
+                  # pulling the public release images, where no login is needed.
+                  KODUS_REGISTRY_USER: ${{ inputs.registry && github.actor || '' }}
+                  KODUS_REGISTRY_TOKEN: ${{ inputs.registry && (secrets.GHCR_PUBLISH_TOKEN || secrets.GITHUB_TOKEN) || '' }}
+                  # Region-boxed agent credential (us-east-2). It cannot reach
+                  # us-east-1, where prod and QA live, and an IAM guardrail
+                  # caps instance families at t3/t3a/t4g.
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_E2E_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_E2E_SECRET_ACCESS_KEY }}
+                  AWS_DEFAULT_REGION: us-east-2
                   TEST_KEEP_RUNNING: ${{ inputs.keep_running && '1' || '0' }}
 
                   DIGITALOCEAN_TOKEN: ${{ secrets.DIGITALOCEAN_TOKEN }}
@@ -166,15 +311,39 @@ jobs:
                   # the secret is set.
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
                   GH_TEST_TOKEN_2: ${{ secrets.GH_TEST_TOKEN_FREE }}
+                  # GitHub App installation token: 5000/h of its own, immune to
+                  # the abuse flags that cap the bot PATs at ~60/h. The cloud
+                  # workflow has passed these for a while; self-hosted could not
+                  # use them because seat assignment needs GET /user, which an
+                  # installation token cannot make. provider.currentUserId() now
+                  # resolves that single call from the durable PAT, so the App
+                  # works here too -- but the secrets were never wired in, which
+                  # is why run 31270321822 still burned the PAT quota on the
+                  # FIRST scenario and reported 8 P0 cells unverified.
+                  # All three unset -> the PAT pool behaves exactly as before.
+                  GH_APP_ID: ${{ secrets.GH_APP_ID }}
+                  GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+                  GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
                   # Dedicated account for the PRODUCT's stored GitHub
                   # integration credential, separate from the harness driver
                   # pool above. The self-hosted product uses this for all its
                   # own GitHub calls (read diff/files, post comments) — pinning
                   # it to GH_TEST_TOKEN meant product + harness drained one
-                  # account and tripped the rate limit mid-cell. Falls back to
-                  # GH_TEST_TOKEN when unset (see github.ts authToken()).
-                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN }}
+                  # account and tripped the rate limit mid-cell.
+                  #
+                  # Split by license so the two github cells don't share ONE
+                  # product account: the license-paid cell (heavy — ~13 review
+                  # scenarios, several multi-PR) gets its own bot, license-free
+                  # keeps GH_INTEGRATION_TOKEN. Falls back to GH_INTEGRATION_TOKEN
+                  # when GH_INTEGRATION_TOKEN_PAID is unset (graceful until the
+                  # secret is added), and to GH_TEST_TOKEN when both are unset
+                  # (see github.ts authToken()).
+                  GH_INTEGRATION_TOKEN: ${{ (matrix.cell.license == 'license-paid' && secrets.GH_INTEGRATION_TOKEN_PAID) || secrets.GH_INTEGRATION_TOKEN }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
+                  # Without this the centralized-config scenario self-skips as
+                  # a setup gap, and the cell reports 8/9 verified forever. The
+                  # secret holds a repository NAME, not a credential.
+                  CENTRALIZED_CONFIG_TEST_REPO_SELF_HOSTED: ${{ secrets.CENTRALIZED_CONFIG_TEST_REPO_SELF_HOSTED }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}
 
                   GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
@@ -221,8 +390,17 @@ jobs:
                   # FORCE_BASE_URL override. Same model the cloud BYOK seed
                   # configures (setup-tenants configureByok), so cloud and
                   # self-hosted run the identical model — one variable to debug.
-                  API_OPEN_AI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
-                  API_LLM_PROVIDER_MODEL: gpt-5.4-mini
+                  # E2E_LLM_API_KEY is the key for whatever vendor E2E_LLM_BASE_URL
+                  # points at (Fireworks today). Falls back to the OpenAI secret so
+                  # nothing breaks before it is set.
+                  API_OPEN_AI_API_KEY: ${{ secrets.E2E_LLM_API_KEY || secrets.BYOK_OPENAI_API_KEY }}
+                  # DeepSeek V4 Flash via Fireworks. The harness writes these
+                  # into the tenant's byok_config (runner.ts:applyByokToTenant),
+                  # which the product reads BEFORE the env fallback — so the
+                  # provider is stated, never inferred from the model name.
+                  API_LLM_PROVIDER: ${{ vars.E2E_LLM_PROVIDER || 'openai_compatible' }}
+                  API_OPENAI_FORCE_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
+                  API_LLM_PROVIDER_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
 
                   TARGET_FILTER_PROVIDER: ${{ matrix.cell.provider }}
 
@@ -327,7 +505,7 @@ jobs:
     aggregate:
         name: Aggregate evidence
         runs-on: ubuntu-latest
-        needs: matrix
+        needs: [plan, matrix]
         if: always()
         steps:
             - name: Download all evidence
@@ -343,6 +521,54 @@ jobs:
                   name: e2e-self-hosted-matrix
                   path: evidence/
                   retention-days: 30
+
+            # A cell that times out uploads nothing, and its job result is
+            # `cancelled` -- which is not `failure`, so the notification below
+            # stays quiet too. The cell then simply is not in the aggregate,
+            # and a run missing a whole provider reads exactly like a run that
+            # never had one. Compare what came back against what was planned,
+            # so lost coverage is stated instead of inferred.
+            # A cell that times out uploads nothing, and its job result is
+            # `cancelled` -- which is not `failure`, so the notification below
+            # stays quiet too. The cell then simply is not in the aggregate,
+            # and a run missing a whole provider reads exactly like a run that
+            # never had one. Compare what came back against what was planned,
+            # so lost coverage is stated rather than inferred.
+            - name: Check every planned cell reported
+              if: always()
+              env:
+                  PLANNED: ${{ needs.plan.outputs.cells }}
+              run: |
+                  set -uo pipefail
+                  printf '%s' "$PLANNED" > planned.json
+                  python3 - <<'PYCHECK'
+                  import glob, json, sys
+
+                  planned = json.load(open('planned.json'))
+                  # Cells are matched on (provider, license) -- the shape the
+                  # plan job emits. Substring matching would be wrong here:
+                  # "github-app" contains "github".
+                  seen = set()
+                  for path in glob.glob('evidence/**/result.json', recursive=True):
+                      try:
+                          data = json.load(open(path))
+                      except Exception:
+                          continue
+                      for r in data.get('results', []):
+                          cell = r.get('cell') or {}
+                          seen.add((cell.get('provider'), cell.get('license')))
+
+                  missing = [
+                      c for c in planned
+                      if (c['provider'], c['license']) not in seen
+                  ]
+                  if missing:
+                      print('::error::Planned cells produced NO evidence (timed out, or died before upload):')
+                      for c in missing:
+                          print('::error::  - {} x {}'.format(c['provider'], c['license']))
+                      sys.exit(1)
+                  print('All {} planned cells reported evidence.'.format(len(planned)))
+                  PYCHECK
 
             - name: Checkout monorepo (for composite action)
               if: needs.matrix.result == 'failure'
@@ -360,5 +586,41 @@ jobs:
                   status: failure
                   title: "❌ E2E self-hosted matrix failed"
                   description: |
-                      `${{ inputs.matrix_file }}` failed against image `${{ inputs.image_tag }}`.
+                      `${{ inputs.matrix_file || 'matrix/fast.yml' }}` failed against image `${{ needs.plan.outputs.image_tag }}`.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    # Durable history — same rationale as the cloud workflow: a separate job
+    # so `contents: write` never touches the job that holds provider tokens.
+    # Without this the self-hosted matrix leaves no trace after 30 days, which
+    # is why nobody could say when a self-hosted cell last passed.
+    history:
+        name: Append run to e2e history
+        runs-on: ubuntu-latest
+        needs: aggregate
+        if: always()
+        permissions:
+            contents: write
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            - name: Download combined evidence
+              uses: actions/download-artifact@v4
+              continue-on-error: true
+              with:
+                  name: e2e-self-hosted-matrix
+                  path: tests/e2e/evidence
+
+            - name: Append + push history
+              env:
+                  MATRIX_FILE: ${{ inputs.matrix_file || 'matrix/fast.yml' }}
+              run: bash tests/e2e/provisioning/history-push.sh

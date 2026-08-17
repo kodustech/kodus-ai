@@ -50,7 +50,7 @@ import {
 } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 
 import { DeleteRepositoryCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/delete-repository-code-review-parameter.use-case';
-import { CentralizedConfigDownloadUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-download.use-case';
+import { CentralizedConfigDownloadZipUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-download-zip.use-case';
 import { CentralizedConfigInitUseCase } from '@libs/centralized-config/application/use-cases/centralized-config-init.use-case';
 import { GenerateKodusConfigFileUseCase } from '@libs/code-review/application/use-cases/configuration/generate-kodus-config-file.use-case';
 import { GetCodeReviewParameterUseCase } from '@libs/code-review/application/use-cases/configuration/get-code-review-parameter.use-case';
@@ -91,7 +91,7 @@ export class ParametersController {
         private readonly getDefaultConfigUseCase: GetDefaultConfigUseCase,
         private readonly getCodeReviewParameterUseCase: GetCodeReviewParameterUseCase,
         private readonly centralizedConfigSyncUseCase: CentralizedConfigSyncUseCase,
-        private readonly centralizedConfigDownloadUseCase: CentralizedConfigDownloadUseCase,
+        private readonly centralizedConfigDownloadZipUseCase: CentralizedConfigDownloadZipUseCase,
         private readonly centralizedConfigInitUseCase: CentralizedConfigInitUseCase,
 
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
@@ -548,10 +548,11 @@ export class ParametersController {
             throw new Error('Organization ID is missing from request');
         }
 
-        const entries = await this.centralizedConfigDownloadUseCase.execute(
-            this.request.user,
-            teamId,
-        );
+        const archive =
+            await this.centralizedConfigDownloadZipUseCase.execute(
+                this.request.user,
+                teamId,
+            );
 
         response.set({
             'Content-Type': 'application/zip',
@@ -559,18 +560,11 @@ export class ParametersController {
                 'attachment; filename=centralized-config.zip',
         });
 
-        const { default: archiver } = await import('archiver');
-        const archive = archiver('zip', { zlib: { level: 9 } });
         archive.on('error', (err) => {
             response.destroy(err);
         });
         archive.pipe(response);
 
-        for (const entry of entries) {
-            archive.append(entry.content, { name: entry.path });
-        }
-
-        await archive.finalize();
         if (typeof (response as any).on === 'function') {
             await finished(response as any);
         }

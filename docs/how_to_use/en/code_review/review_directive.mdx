@@ -63,6 +63,62 @@ Use a directive to say *"look here hardest"* — not *"only look here."*
   </Tab>
 </Tabs>
 
+## Heavy mode
+
+<Warning>
+  **Alpha — access by request.** Heavy mode is not on by default for anyone. To try it, ask us
+  to enable it for your organization on [Discord](https://discord.gg/TFZBRk9fT6) or at
+  [support@kodus.io](mailto:support@kodus.io). Until then the flag is accepted but has no
+  effect — see [Availability](#availability) below.
+</Warning>
+
+A focus directive tells Kody *where* to look hardest. `--heavy` tells it to look *longer*: the
+finder runs extra "what did you miss?" critic passes over the same diff, surfacing more real
+issues at the cost of a slower review and more candidates to triage.
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+kodus review --heavy
+```
+
+`--heavy` can sit anywhere on the command line — before or after your focus text — and it is
+stripped from the directive either way, so `@kody review focus on the retry logic --heavy`
+focuses on "the retry logic".
+
+<Warning>
+  **To combine it with `--force`, put `--force` first.** `--force` is only recognized
+  immediately after the command word, so `@kody review --force --heavy` runs a forced heavy
+  review, while `@kody review --heavy --force` runs a heavy review that is **not** forced.
+</Warning>
+
+A dash is required: a bare `heavy` is read as directive text, so `@kody review heavy checkout
+path` focuses on "heavy checkout path" rather than enabling the flag.
+
+### Availability
+
+Heavy mode is an **alpha** feature. It only runs for organizations we've explicitly opted in:
+
+| | Status |
+| --- | --- |
+| **Cloud** | Available on request — we move your organization to the `alpha` release track. |
+| **Self-hosted** | Not available yet. Alpha features stay off regardless of `BETA_FEATURES`; it ships to self-hosted once it's promoted to beta. |
+
+<Note>
+  **The flag fails open, not loud.** If your organization isn't opted in, `--heavy` is accepted
+  and the review **runs normally** — no error, no warning, no different result. If you asked for
+  access and can't tell whether it's active, ping us rather than assuming it ran.
+</Note>
+
+To request access, message us on [Discord](https://discord.gg/TFZBRk9fT6) or email
+[support@kodus.io](mailto:support@kodus.io) with your organization name.
+
+<Tip>
+  Reach for it on the changes where missing something is expensive — a migration, an auth
+  change, a payment path — not as a default. On everyday PRs the extra candidates are usually
+  noise you have to filter.
+</Tip>
+
 ## Writing a Good Directive
 
 - **Be specific about the area, not the verdict.** "focus on concurrency in the queue consumer" works better than "find bugs".

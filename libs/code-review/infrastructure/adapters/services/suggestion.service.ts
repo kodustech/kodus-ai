@@ -41,7 +41,6 @@ import { SeverityLevel } from '@libs/common/utils/enums/severityLevel.enum';
 import { extractLinesFromUnifiedDiff } from '@libs/common/utils/patch';
 import { LLM_ANALYSIS_SERVICE_TOKEN } from './llmAnalysis.service';
 
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { CacheService } from '@libs/core/cache/cache.service';
 import {
@@ -143,6 +142,8 @@ export class SuggestionService implements ISuggestionService {
                     savedSuggestions?.map((s) => [s.id, s]) ?? [],
                 );
 
+                const persistedSuggestions = [];
+
                 for (const suggestion of implementedSuggestions) {
                     const savedSuggestion = savedSuggestionsMap.get(
                         suggestion.id,
@@ -158,11 +159,15 @@ export class SuggestionService implements ISuggestionService {
                             },
                             organizationAndTeamData,
                         );
+
+                        persistedSuggestions.push(suggestion);
                     }
                 }
+
+                return persistedSuggestions;
             }
 
-            return implementedSuggestions;
+            return [];
         } catch (error) {
             this.logger.log({
                 message: `Error when trying to validate implemented suggestions for PR#${prNumber}`,
@@ -2091,18 +2096,12 @@ export class SuggestionService implements ISuggestionService {
         repository,
         prNumber,
         platformType,
-        dryRun,
     }: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
         platformType: PlatformType;
-        dryRun?: CodeReviewPipelineContext['dryRun'];
     }) {
-        if (dryRun?.enabled) {
-            return;
-        }
-
         try {
             const codeManagementRequestData = {
                 organizationAndTeamData,

@@ -1,5 +1,6 @@
 ---
 title: "Flujo de Revisión de Código"
+description: "Cómo se ejecuta una revisión de Kody de principio a fin: cuándo se dispara, cuándo se omite, qué recibes y qué significa cada emoji de estado."
 ---
 
 ## Descripción General
@@ -48,8 +49,11 @@ Referencia: <a href="https://www.figma.com/board/ZZJcIJMJWGuyzRGMh3w5di/Kodus-Co
 Kody usa reacciones con emojis para mostrar el estado en vivo de tu revisión de código directamente en tu proveedor de Git. Sin necesidad de adivinar si está trabajando, terminó o tuvo un problema. Siempre reemplaza el emoji anterior con el estado más reciente (por ejemplo: 🚀 → 🎉, 👀, 👎 o 😕).
 
 <Note>
-  Compatible con GitHub y GitLab. Azure DevOps y Bitbucket aún no soportan
-  reacciones.
+  **Las reacciones nativas** funcionan en GitHub, GitLab y Forgejo.
+
+  Azure DevOps y Bitbucket no tienen API de reacciones, así que Kody publica el emoji de estado
+  como **comentario** — ahí verás 👀 (omitido), 😕 (error) y 👎 (sin licencia), pero no el par
+  de progreso 🚀 / 🎉.
 </Note>
 
 ### Qué significa cada emoji
@@ -94,7 +98,8 @@ Kody usa reacciones con emojis para mostrar el estado en vivo de tu revisión de
 
 **No veo reacciones**
 
-- GitHub/GitLab: ✅ | Azure DevOps/Bitbucket: ❌ (aún no soportado)
+- GitHub / GitLab / Forgejo: ✅ reacciones nativas
+- Azure DevOps / Bitbucket: ❌ sin API de reacciones — busca el emoji de estado publicado como comentario
 
 **¿Por qué cambió el emoji?**
 
@@ -119,7 +124,7 @@ Kody usa reacciones con emojis para mostrar el estado en vivo de tu revisión de
 - Revisiones automatizadas vs manuales y cadencia de seguimiento
 - Patrones de ignorado y ramas base en el alcance
 - Reglas personalizadas y análisis entre archivos
-- Controles de sugerencias: filtro de severidad, agrupación y máximo de sugerencias
+- Filtros de revisión: severidad mínima y si se aplican a las Kody Rules
 - Límites de archivos y tiempos de espera
 
 <CardGroup cols={2}>

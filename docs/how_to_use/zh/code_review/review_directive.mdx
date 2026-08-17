@@ -63,6 +63,60 @@ description: "通过 PR 评论或 CLI 使用一次性的评审指令，将 Kody 
   </Tab>
 </Tabs>
 
+## Heavy mode
+
+<Warning>
+  **Alpha —— 需申请开通。** Heavy mode 对任何组织都不是默认开启的。想试用请通过
+  [Discord](https://discord.gg/TFZBRk9fT6) 或 [support@kodus.io](mailto:support@kodus.io)
+  联系我们为你的组织开通。在此之前该标志会被接受但不产生任何效果 —— 参见下方的
+  [可用性](#可用性)。
+</Warning>
+
+聚焦指令告诉 Kody *在哪里*看得最仔细。`--heavy` 则告诉它看得*更久*:finder 会对同一份 diff
+额外执行几轮"你漏掉了什么?"的批评式检查,以更慢的审查和更多待筛选的候选为代价,发现更多
+真实问题。
+
+```text
+@kody review --heavy
+@kody review --heavy focus on the payment reconciliation logic
+kodus review --heavy
+```
+
+`--heavy` 可以放在命令行的任意位置 —— 在聚焦文本之前或之后 —— 两种情况下都会从指令中被剔除,
+因此 `@kody review 关注重试逻辑 --heavy` 聚焦的是"关注重试逻辑"。
+
+<Warning>
+  **要与 `--force` 组合使用时,请把 `--force` 放在前面。** `--force` 只有紧跟在命令之后才会被
+  识别,因此 `@kody review --force --heavy` 会执行一次强制的 heavy 审查,而
+  `@kody review --heavy --force` 执行的是**未**被强制的 heavy 审查。
+</Warning>
+
+短横线是必需的:单独的 `heavy` 会被当作指令文本,因此 `@kody review heavy 结账路径` 聚焦的是
+"heavy 结账路径",而不会启用该标志。
+
+### 可用性
+
+Heavy mode 是一个 **alpha** 功能。它只对我们显式开通的组织生效:
+
+| | 状态 |
+| --- | --- |
+| **云端** | 可申请开通 —— 我们会把你的组织切换到 `alpha` 发布轨道。 |
+| **自托管** | 尚未提供。无论 `BETA_FEATURES` 如何设置,alpha 功能都保持关闭;等它升级为 beta 后才会进入自托管。 |
+
+<Note>
+  **该标志会静默降级,而不是报错。** 如果你的组织未开通,`--heavy` 会被接受,审查则**按正常方式
+  运行** —— 没有报错、没有警告、结果也没有区别。如果你申请了访问却无法判断它是否生效,请联系
+  我们,不要凭猜测。
+</Note>
+
+如需申请访问,请带上你的组织名称,通过 [Discord](https://discord.gg/TFZBRk9fT6) 或
+[support@kodus.io](mailto:support@kodus.io) 联系我们。
+
+<Tip>
+  在漏掉问题代价高昂的改动上使用它 —— 迁移、认证改动、支付链路 —— 而不是把它当默认。
+  在日常 PR 上,多出来的候选通常是你还得再筛一遍的噪音。
+</Tip>
+
 ## 如何写好一条指令
 
 - **明确区域，而非结论。**"聚焦于队列消费者的并发"比"找出缺陷"更有效。

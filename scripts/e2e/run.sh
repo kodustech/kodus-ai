@@ -259,6 +259,24 @@ case "$MODE" in
             [[ "$REPLY" =~ ^[Yy]$ ]] || { warn "Aborted."; exit 0; }
         fi
 
+        # ----- review model -----
+        # The harness writes these onto the tenant as byok_config, so provider,
+        # base URL and model travel together and nothing is inferred from the
+        # model name. CI defaults to the same three values as repo variables:
+        # a local default that differs from CI is how "passes on my machine"
+        # gets manufactured.
+        #
+        # The trio is all-or-nothing. Taking E2E_LLM_API_KEY while leaving a
+        # stale API_OPENAI_FORCE_BASE_URL in place would send a Fireworks key
+        # to OpenAI and report it as a rejected key.
+        resolve_op_refs E2E_LLM_API_KEY
+        if [ -n "${E2E_LLM_API_KEY:-}" ]; then
+            export API_OPEN_AI_API_KEY="$E2E_LLM_API_KEY"
+            export API_LLM_PROVIDER="${E2E_LLM_PROVIDER:-openai_compatible}"
+            export API_OPENAI_FORCE_BASE_URL="${E2E_LLM_BASE_URL:-https://api.fireworks.ai/inference/v1}"
+            export API_LLM_PROVIDER_MODEL="${E2E_LLM_MODEL:-accounts/fireworks/models/deepseek-v4-flash-0731}"
+        fi
+
         # Resolve only the secrets the matrix will actually use. Cloud-only
         # runs don't need DO/Hetzner/SH_LICENSE_KEY (those drive self-hosted
         # droplet provisioning); resolving them via 1Password forces an
@@ -271,8 +289,42 @@ case "$MODE" in
                 AZ_TEST_TOKEN \
                 CLOUD_TENANT_PAID_PASSWORD CLOUD_TENANT_FREE_PASSWORD CLOUD_TENANT_TRIAL_PASSWORD
         else
+            # Self-hosted provisions a VM. Which credentials that needs depends
+            # on the provider, and the default is AWS to match CI — a local
+            # default of `digitalocean` while CI runs on AWS is how "works in CI,
+            # fails on my machine" gets manufactured.
+            export TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-aws}"
+            case "$TEST_VM_PROVIDER" in
+                aws)
+                    resolve_op_refs AWS_E2E_ACCESS_KEY_ID AWS_E2E_SECRET_ACCESS_KEY
+                    # vm.sh reads the standard names; ~/.kodus-dev/config keeps
+                    # the e2e credential under AWS_E2E_* so it never shadows a
+                    # personal AWS profile.
+                    # AWS_E2E_* WINS over an ambient credential, deliberately.
+                    # The other order let a developer's own AWS_ACCESS_KEY_ID
+                    # (aws-vault, a sourced profile, a shell from another
+                    # project) silently take over -- and since the default
+                    # provider is now aws, that provisions e2e droplets in
+                    # someone's personal or production account, tagged
+                    # Project=kodus-e2e, where our reaper will never look.
+                    export AWS_ACCESS_KEY_ID="${AWS_E2E_ACCESS_KEY_ID:-${AWS_ACCESS_KEY_ID:-}}"
+                    export AWS_SECRET_ACCESS_KEY="${AWS_E2E_SECRET_ACCESS_KEY:-${AWS_SECRET_ACCESS_KEY:-}}"
+                    export AWS_DEFAULT_REGION="${AWS_E2E_REGION:-${AWS_DEFAULT_REGION:-us-east-2}}"
+                    if [ -z "${AWS_ACCESS_KEY_ID:-}" ]; then
+                        err "TEST_VM_PROVIDER=aws but no AWS credential found."
+                        err "  Add to ~/.kodus-dev/config:"
+                        err "    AWS_E2E_ACCESS_KEY_ID=..."
+                        err "    AWS_E2E_SECRET_ACCESS_KEY=..."
+                        err "    AWS_E2E_REGION=us-east-2"
+                        err "  Or set TEST_VM_PROVIDER=digitalocean to use the old provider."
+                        exit 1
+                    fi
+                    ;;
+                digitalocean) resolve_op_refs DIGITALOCEAN_TOKEN ;;
+                hetzner)      resolve_op_refs HCLOUD_TOKEN ;;
+                *) err "Unknown TEST_VM_PROVIDER: $TEST_VM_PROVIDER (aws|digitalocean|hetzner)"; exit 1 ;;
+            esac
             resolve_op_refs \
-                DIGITALOCEAN_TOKEN HCLOUD_TOKEN \
                 SH_LICENSE_KEY GH_DEV_TOKEN \
                 GH_TEST_TOKEN GL_TEST_TOKEN \
                 BB_TEST_USER BB_TEST_APP_PASSWORD \
