@@ -46,6 +46,9 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
     withStructuredOutputFallback: jest.fn(),
     NoStructuredFallbackModelError: class extends Error {},
     getModelName: jest.fn().mockReturnValue('test-model'),
+    // Split into byok-defaults + re-exported; the agent-review stage calls it
+    // before building. Off-trial default → undefined.
+    trialDefaultModel: jest.fn().mockReturnValue(undefined),
     getInternalModel: jest.fn().mockReturnValue({ __mockModel: 'internal' }),
     byokToVercelModel: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
 }));

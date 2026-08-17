@@ -36,6 +36,10 @@ jest.mock(
             mockWithStructuredOutputFallback(...args),
         NoStructuredFallbackModelError: class extends Error {},
         getModelName: jest.fn().mockReturnValue('test-model'),
+        // Off-trial default: undefined override (the stage falls through to the
+        // resolved slot / managed default). Split out of byok-to-vercel into
+        // byok-defaults and re-exported; the stage calls it before building.
+        trialDefaultModel: jest.fn().mockReturnValue(undefined),
         // Used by resolveSecondaryPassModel when platform OpenAI key is absent.
         getInternalModel: jest.fn().mockReturnValue({ __mockModel: 'internal' }),
         byokToVercelModel: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
