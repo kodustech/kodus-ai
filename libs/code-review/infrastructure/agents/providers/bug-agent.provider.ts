@@ -45,12 +45,19 @@ export class BugAgentProvider extends BaseCodeReviewAgentProvider {
                 // deepseek com 54 chamadas. Isso vira recall menor sem que o
                 // modelo tenha achado menos. Aqui trocamos filtro-na-origem por
                 // reporte-tudo + confianca, deixando o filtro para o verify.
-                (process.env.RECALL_REPORT_ALL === '1'
-                    ? 'Report every issue you find, including ones you are uncertain about or ' +
-                      'consider low-severity. Do not filter for importance or confidence at this ' +
-                      'stage — a separate verification step does that. For each finding, include ' +
-                      'your confidence level and an estimated severity.'
-                    : 'Only report issues backed by concrete evidence from the code.'),
+                // RECALL_NO_EVIDENCE_BAR=1 REMOVE a barra sem por nada no lugar —
+                // o teste limpo da hipotese. RECALL_REPORT_ALL=1 troca por
+                // permissao qualitativa, que e a forma que a Greptile documenta
+                // como ineficaz ("internal debates about whether to follow the
+                // developer or the user instructions").
+                (process.env.RECALL_NO_EVIDENCE_BAR === '1'
+                    ? ''
+                    : process.env.RECALL_REPORT_ALL === '1'
+                      ? 'Report every issue you find, including ones you are uncertain about or ' +
+                        'consider low-severity. Do not filter for importance or confidence at this ' +
+                        'stage — a separate verification step does that. For each finding, include ' +
+                        'your confidence level and an estimated severity.'
+                      : 'Only report issues backed by concrete evidence from the code.'),
             expertise: [
                 'Bug detection and logic analysis',
                 'Edge case identification',
