@@ -54,6 +54,102 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
 }
 
 /**
+ * The SINGLE source of truth for the self-hosted (`API_LLM_PROVIDER_MODEL`)
+ * provider-selection cascade. `resolveManagedSlot` (which BUILDS the model) and
+ * `getModelName` (which builds the telemetry NAME for that same model) both read
+ * it, so the two can never drift out of sync — the previous copies of this
+ * prefix/key cascade had to be kept identical by hand. Returns `null` for
+ * `auto` (cloud) or a self-hosted mode with no usable env key → the caller
+ * falls through to the cloud/managed default. `name` is the telemetry label;
+ * `kind` drives the SDK/auth branch.
+ */
+type EnvProviderResolution =
+    | { kind: 'gemini_studio'; name: 'google_ai_studio'; apiKey: string }
+    | {
+          kind: 'gemini_vertex';
+          name: 'google_vertex';
+          apiKey: string;
+          vertexLocation?: string;
+      }
+    | {
+          kind: 'claude_anthropic';
+          name: 'anthropic';
+          apiKey: string;
+          baseURL?: string;
+      }
+    | {
+          kind: 'claude_vertex';
+          name: 'google_vertex';
+          apiKey: string;
+          vertexLocation?: string;
+      }
+    | { kind: 'openai_compat'; name: 'openai_compatible'; apiKey: string; baseURL: string };
+
+function resolveEnvProvider(): EnvProviderResolution | null {
+    const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
+    if (envMode === 'auto') return null;
+
+    const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
+    const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
+    const openaiKey = process.env.API_OPEN_AI_API_KEY;
+    const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL;
+    const vertexKey = process.env.API_VERTEX_AI_API_KEY;
+    const googleAiStudioKey =
+        process.env.API_GOOGLE_AI_API_KEY ||
+        process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const viaProxy = isProxyBaseURL(openaiBaseURL);
+    const vertexLocation = process.env.API_VERTEX_AI_LOCATION;
+
+    if (isGemini && !viaProxy) {
+        // 1. AI Studio key → google_gemini. 2. Vertex SA JSON → google_vertex
+        // (the module also handles a plain AIzaSy key pasted into the Vertex
+        // slot). No Google key → fall through to the cloud default.
+        if (googleAiStudioKey) {
+            return {
+                kind: 'gemini_studio',
+                name: 'google_ai_studio',
+                apiKey: googleAiStudioKey,
+            };
+        }
+        if (vertexKey) {
+            return {
+                kind: 'gemini_vertex',
+                name: 'google_vertex',
+                apiKey: vertexKey,
+                vertexLocation,
+            };
+        }
+    }
+    // Native Anthropic key takes precedence over Claude-on-Vertex.
+    if (isClaude && openaiKey && !viaProxy) {
+        return {
+            kind: 'claude_anthropic',
+            name: 'anthropic',
+            apiKey: openaiKey,
+            baseURL: openaiBaseURL || undefined,
+        };
+    }
+    if (isClaude && vertexKey && !viaProxy) {
+        return {
+            kind: 'claude_vertex',
+            name: 'google_vertex',
+            apiKey: vertexKey,
+            vertexLocation,
+        };
+    }
+    // Any other self-hosted model with an OpenAI-style key → OpenAI-compatible.
+    if (openaiKey) {
+        return {
+            kind: 'openai_compat',
+            name: 'openai_compatible',
+            apiKey: openaiKey,
+            baseURL: openaiBaseURL || 'https://api.openai.com/v1',
+        };
+    }
+    return null;
+}
+
+/**
  * The Kodus-funded model for the trial / no-BYOK (cloud) flow — the SINGLE
  * source of truth for the managed default id. Every entitlement flow that forces
  * "Kodus pays" (code-review trial/demo, Kody Rules generation, reference
@@ -163,90 +259,49 @@ export function resolveManagedSlot(
     // Cloud (managed/trial): fall back to Kodus's bundled managed default
     //   (`DEFAULT_MODEL.model` = KODUS_TRIAL_MODEL → Fireworks-hosted
     //   deepseek-v4-flash; the Fireworks branch below builds it).
-    const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
-    if (envMode !== 'auto') {
-        const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
-        const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
-        const openaiKey = process.env.API_OPEN_AI_API_KEY;
-        const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL;
-        const vertexKey = process.env.API_VERTEX_AI_API_KEY;
-        const googleAiStudioKey =
-            process.env.API_GOOGLE_AI_API_KEY ||
-            process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-        const viaProxy = isProxyBaseURL(openaiBaseURL);
-
-        if (isGemini && !viaProxy) {
-            // Order of preference:
-            //   1. Explicit AI Studio key (API_GOOGLE_AI_API_KEY) → google_gemini.
-            //   2. Vertex SA JSON (API_VERTEX_AI_API_KEY, base64) → google_vertex.
-            //   3. A plain AIzaSy… key pasted into the Vertex slot (NOT SA JSON):
-            //      the google_vertex module's vertexModelFromSaJson returns null
-            //      for it and falls back to createGoogleGenerativeAI({apiKey}) —
-            //      EXACTLY the inline case-3 fall-through, so both 2 & 3 route
-            //      through the ONE google_vertex slot (the module discriminates).
-            if (googleAiStudioKey) {
+    // Self-hosted env provider selection — the single-source cascade. A null
+    // result (cloud, or self-hosted with no usable key) falls through to the
+    // Fireworks/managed default below.
+    const env = resolveEnvProvider();
+    if (env) {
+        const envMode = process.env.API_LLM_PROVIDER_MODEL as string;
+        switch (env.kind) {
+            case 'gemini_studio':
                 return managedSlot(
                     BYOKProvider.GOOGLE_GEMINI,
-                    googleAiStudioKey,
+                    env.apiKey,
                     envMode,
                 );
-            }
-            if (vertexKey) {
+            case 'gemini_vertex':
+            case 'claude_vertex':
+                // Both Gemini-on-Vertex and Claude-on-Vertex (MaaS) route through
+                // the ONE google_vertex module, which discriminates the id.
                 return managedSlot(
                     BYOKProvider.GOOGLE_VERTEX,
-                    vertexKey,
+                    env.apiKey,
                     envMode,
-                    {
-                        vertexLocation: process.env.API_VERTEX_AI_LOCATION,
-                    },
+                    { vertexLocation: env.vertexLocation },
                 );
-            }
-            // No Google-side key — fall through to the cloud Gemini default below.
+            case 'claude_anthropic':
+                return managedSlot(BYOKProvider.ANTHROPIC, env.apiKey, envMode, {
+                    baseURL: env.baseURL,
+                });
+            case 'openai_compat':
+                // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
+                // 'self-hosted', default baseURL api.openai.com, raw
+                // structuredOutputs opt-in — the openai_compatible provider
+                // module can't reproduce this without changing its BYOK behavior.
+                return {
+                    kind: 'inline',
+                    model: createOpenAICompatible({
+                        name: 'self-hosted',
+                        apiKey: env.apiKey,
+                        baseURL: env.baseURL,
+                        supportsStructuredOutputs:
+                            options.structuredOutputs === true,
+                    })(envMode),
+                };
         }
-        if (isClaude && openaiKey && !viaProxy) {
-            // case-4b: forward the baseURL override ONLY when set. `!viaProxy`
-            // guarantees it is empty or an api.anthropic.com host, so the
-            // anthropic module forwards it verbatim (native) / omits it (default).
-            return managedSlot(BYOKProvider.ANTHROPIC, openaiKey, envMode, {
-                baseURL: openaiBaseURL || undefined,
-            });
-        }
-        if (isClaude && vertexKey && !viaProxy) {
-            // Claude on Vertex (MaaS): the google_vertex module's
-            // vertexModelFromSaJson routes a claude-* id through
-            // @ai-sdk/google-vertex/anthropic. Only reached when no direct
-            // Anthropic key (API_OPEN_AI_API_KEY) is set — that native path above
-            // takes precedence.
-            return managedSlot(BYOKProvider.GOOGLE_VERTEX, vertexKey, envMode, {
-                vertexLocation: process.env.API_VERTEX_AI_LOCATION,
-            });
-        }
-        if (openaiKey) {
-            // INLINE EXCEPTION (self-hosted OpenAI-compatible). The
-            // openai_compatible provider module tags `name:'openai-compatible'`,
-            // defaults an empty baseURL to '' (not api.openai.com), and gates
-            // `supportsStructuredOutputs` through `shouldEnableJsonSchema` — none
-            // of which match this managed path (name:'self-hosted', default
-            // api.openai.com, raw structuredOutputs opt-in). Reproducing it would
-            // change the module's BYOK behavior, so it stays inline (point 3(b)).
-            return {
-                kind: 'inline',
-                model: createOpenAICompatible({
-                    name: 'self-hosted',
-                    apiKey: openaiKey,
-                    // `@ai-sdk/openai-compatible` has no default baseURL (unlike
-                    // `@ai-sdk/openai`), so an empty value throws "Invalid URL" on
-                    // the first request. Default to api.openai.com to match the
-                    // legacy v2 getChatGPT behavior when no endpoint is configured.
-                    baseURL: openaiBaseURL || 'https://api.openai.com/v1',
-                    supportsStructuredOutputs:
-                        options.structuredOutputs === true,
-                })(envMode),
-            };
-        }
-        // self-hosted mode declared but no usable env key — fall through to the
-        // default below so the call still has a model to attach (it fails fast on
-        // the API call instead of here).
     }
 
     // Fireworks AI — the managed default model for the trial / no-BYOK flow.
@@ -371,32 +426,11 @@ export function getModelName(
         return `${slot.provider}:${slot.model}`;
     }
 
-    const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
-    if (envMode !== 'auto') {
-        const isGemini = GEMINI_MODEL_PATTERN.test(envMode);
-        const isClaude = CLAUDE_MODEL_PATTERN.test(envMode);
-        const openaiBaseURL = process.env.API_OPENAI_FORCE_BASE_URL;
-        const viaProxy = isProxyBaseURL(openaiBaseURL);
-        const googleAiStudioKey =
-            process.env.API_GOOGLE_AI_API_KEY ||
-            process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-        if (isGemini && !viaProxy) {
-            if (googleAiStudioKey) {
-                return `google_ai_studio:${envMode}`;
-            }
-            if (process.env.API_VERTEX_AI_API_KEY) {
-                return `google_vertex:${envMode}`;
-            }
-        }
-        if (isClaude && process.env.API_OPEN_AI_API_KEY && !viaProxy) {
-            return `anthropic:${envMode}`;
-        }
-        if (isClaude && process.env.API_VERTEX_AI_API_KEY && !viaProxy) {
-            return `google_vertex:${envMode}`;
-        }
-        if (process.env.API_OPEN_AI_API_KEY) {
-            return `openai_compatible:${envMode}`;
-        }
+    // Same single-source cascade the model is BUILT from (resolveManagedSlot),
+    // so the telemetry name always matches the model actually used.
+    const env = resolveEnvProvider();
+    if (env) {
+        return `${env.name}:${process.env.API_LLM_PROVIDER_MODEL}`;
     }
 
     return defaultModelOverride || DEFAULT_MODEL.model;
