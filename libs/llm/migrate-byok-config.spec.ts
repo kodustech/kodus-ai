@@ -13,7 +13,14 @@ import { resolveDefaultSlot } from './resolve-model-slot';
 
 // A minimal legacy `{main,fallback}` slot with the sensitive apiKey ENCRYPTED,
 // mirroring how a real stored legacy blob looked.
-function legacySlot(overrides: Record<string, unknown> = {}) {
+function legacySlot(overrides: Record<string, unknown> = {}): {
+    provider: string;
+    apiKey: string;
+    model: string;
+    // The legacy slot also carries optional aws* / baseURL / tuning fields via
+    // `overrides`; the index signature makes reading them back type-safe.
+    [key: string]: unknown;
+} {
     return {
         provider: 'openai',
         apiKey: encrypt('sk-main-plaintext-key'),
