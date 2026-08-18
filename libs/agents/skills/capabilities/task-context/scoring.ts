@@ -87,6 +87,10 @@ function looksLikeTaskContextFailure(value: TaskContextNormalized): boolean {
         'unauthorized',
         'forbidden',
         'tenant info',
+        'mcp error',
+        'input validation error',
+        'invalid arguments',
+        '-32602',
     ];
 
     return failureIndicators.some((indicator) => combined.includes(indicator));
