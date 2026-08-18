@@ -126,30 +126,31 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
                                 ?.suggestionCopyPrompt,
                         );
 
-                    const rawCommentResults = result?.commentResults || [];
+                    commentResults = result?.commentResults || [];
 
                     // Only count comments that were actually delivered. The
                     // underlying platform call can fail (e.g. GitHub 503) and
                     // still return a result entry with deliveryStatus=FAILED.
-                    commentResults = rawCommentResults.filter(
+                    // Keep the full result set for persistence/auditing, but
+                    // report delivered vs failed counts separately.
+                    const deliveredResults = commentResults.filter(
                         (r: any) =>
                             r?.deliveryStatus === DeliveryStatus.SENT ||
                             r?.deliveryStatus === 'sent',
                     );
-
                     const failedCount =
-                        rawCommentResults.length - commentResults.length;
+                        commentResults.length - deliveredResults.length;
 
-                    if (commentResults.length > 0) {
+                    if (deliveredResults.length > 0) {
                         this.logger.log({
-                            message: `Successfully created ${commentResults.length} PR-level comments for PR#${context.pullRequest.number}`,
+                            message: `Successfully created ${deliveredResults.length} PR-level comments for PR#${context.pullRequest.number}`,
                             context: this.stageName,
                             metadata: {
                                 prNumber: context.pullRequest.number,
                                 organizationAndTeamData:
                                     context.organizationAndTeamData,
                                 suggestionsCount: prLevelSuggestions.length,
-                                commentsCreated: commentResults.length,
+                                commentsCreated: deliveredResults.length,
                                 commentsFailed: failedCount,
                             },
                         });
