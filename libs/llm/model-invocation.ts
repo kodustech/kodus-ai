@@ -77,11 +77,12 @@ export interface ResolveModelInvocationOptions
  * pins and the slot's own `reasoningEffort` are all honored here — so a consumer
  * can never again forget one of them the way the hand-rolled copies did.
  *
- * A `null`/`undefined` slot resolves the env/managed default model and yields
- * empty tuning + reasoning (the provider's own defaults apply).
+ * An `undefined` slot resolves the env/managed default model and yields
+ * empty tuning + reasoning (the provider's own defaults apply). Absence is
+ * always `undefined` (one convention) — resolvers never hand back `null`.
  */
 export function resolveModelInvocation(
-    slot: NormalizedModel | null | undefined,
+    slot: NormalizedModel | undefined,
     opts: ResolveModelInvocationOptions,
 ): ModelInvocation {
     const {

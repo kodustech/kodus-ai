@@ -63,7 +63,7 @@ export class KodyIssuesAnalysisService {
         organizationAndTeamData: OrganizationAndTeamData,
         pullRequest: any,
         promptData: any,
-        byokConfig: NormalizedModel | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<any> {
         try {
             const runName = 'mergeSuggestionsIntoIssues';
@@ -116,7 +116,7 @@ export class KodyIssuesAnalysisService {
             'organizationAndTeamData' | 'repository' | 'pullRequest'
         >,
         promptData: any,
-        byokConfig: NormalizedModel | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<any> {
         try {
             const runName = 'resolveExistingIssues';

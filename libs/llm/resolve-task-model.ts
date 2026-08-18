@@ -9,9 +9,9 @@
  * (ciphertext-bearing), and builds the LanguageModel via `buildModelFromSlot`.
  *
  * Degradation contract (never throws):
- *  - no BYOK (config null/undefined/non-v2) → null slot → env/managed default.
- *  - BLOCKED verdict (modelId null) → null slot → env/managed default.
- *  - an unresolvable routed slot (managed/incomplete) → null slot → env default.
+ *  - no BYOK (config null/undefined/non-v2) → undefined slot → env/managed default.
+ *  - BLOCKED verdict (modelId null) → undefined slot → env/managed default.
+ *  - an unresolvable routed slot (managed/incomplete) → undefined slot → env default.
  *
  * Secret hygiene (T-04b-01-01): the slot carries ENCRYPTED apiKey ciphertext;
  * only `buildModelFromSlot`'s `decrypt()` touches plaintext, in local scope. No
@@ -47,10 +47,10 @@ export interface ResolvedTaskModel {
     model: LanguageModel;
     /** `${provider}:${model}` for the resolved slot, or the env-default name. */
     modelName: string;
-    /** The resolved slot (ciphertext apiKey), or null for the env/managed path. */
-    slot: NormalizedModel | null;
-    /** The routing verdict, or null when the config is not v2. */
-    verdict: RoutingVerdict | null;
+    /** The resolved slot (ciphertext apiKey), or undefined for the env/managed path. */
+    slot: NormalizedModel | undefined;
+    /** The routing verdict, or undefined when the config is not v2. */
+    verdict: RoutingVerdict | undefined;
 }
 
 /**
@@ -63,7 +63,7 @@ export interface ResolvedTaskModel {
  * flags in `withStructuredOutputFallback`) call this directly and read `.slot`.
  *
  * Degrade contract (never throws): non-v2 / BLOCKED verdict / unresolvable slot
- * → `{ slot: null }`.
+ * → `{ slot: undefined }`.
  *
  * Secret hygiene: the slot carries ENCRYPTED apiKey ciphertext
  * (`resolveModelSlot` never decrypts); only `buildModelFromSlot` touches
@@ -73,15 +73,15 @@ export function resolveTaskSlot(
     config: BYOKConfig | null | undefined,
     task: LlmTask,
     options: { ctx?: RequestContext } = {},
-): { slot: NormalizedModel | null; verdict: RoutingVerdict | null } {
+): { slot: NormalizedModel | undefined; verdict: RoutingVerdict | undefined } {
     if (!isByokConfig(config)) {
-        return { slot: null, verdict: null };
+        return { slot: undefined, verdict: undefined };
     }
 
     const verdict = strategy.resolve(task, options.ctx ?? {}, config);
 
     if (!verdict.modelId) {
-        return { slot: null, verdict };
+        return { slot: undefined, verdict };
     }
     const routed = resolveModelSlot(config, verdict.modelId);
     // id-THEN-name: a legacy NAME override applies onto the resolved slot's
@@ -89,7 +89,7 @@ export function resolveTaskSlot(
     const slot =
         routed && verdict.modelName
             ? { ...routed, model: verdict.modelName }
-            : (routed ?? null);
+            : routed;
 
     return { slot, verdict };
 }
@@ -107,7 +107,7 @@ export function resolveTaskModel(
     });
 
     const model = buildModelFromSlot(
-        slot ?? undefined,
+        slot,
         { structuredOutputs: options.structuredOutputs },
         options.defaultModelOverride,
     );

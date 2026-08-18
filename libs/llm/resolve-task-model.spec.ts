@@ -155,8 +155,8 @@ describe('resolveTaskModel', () => {
                 defaultModelOverride: 'gemini-2.5-flash',
             });
 
-            expect(res.slot).toBeNull();
-            expect(res.verdict).toBeNull();
+            expect(res.slot).toBeUndefined();
+            expect(res.verdict).toBeUndefined();
             // The cloud managed default routes through the google_gemini provider
             // module (same registry build() as BYOK), carrying the default model.
             expect(registryBuild).toHaveBeenCalledTimes(1);
@@ -180,7 +180,7 @@ describe('resolveTaskModel', () => {
             // managed credential → StaticTaskStrategy skips → BLOCKED (modelId null)
             // → null slot → managed cloud default (google_gemini). Never throws.
             expect(res.verdict?.modelId).toBeNull();
-            expect(res.slot).toBeNull();
+            expect(res.slot).toBeUndefined();
             expect((res.model as any).provider).toBe('google_gemini');
         });
     });
@@ -204,7 +204,7 @@ describe('resolveTaskModel', () => {
         it('resolves a model from the env config with no DB row', () => {
             const res = resolveTaskModel(null, 'codeReview', {});
 
-            expect(res.slot).toBeNull();
+            expect(res.slot).toBeUndefined();
             expect((res.model as any).__sentinel).toBe('env-openai-compatible');
             expect((res.model as any).modelId).toBe('gpt-4o-self');
         });

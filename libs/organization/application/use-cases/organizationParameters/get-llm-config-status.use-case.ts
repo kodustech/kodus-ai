@@ -20,10 +20,11 @@ import {
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { Inject, Injectable } from '@nestjs/common';
 
+import type { NormalizedModel } from '@libs/llm/byok-config';
+
 import {
     isByokSlotConfigured,
     isV2ModelResolvable,
-    type BYOKSlot,
 } from './byok-config.util';
 
 export type LLMConfigSource = 'byok' | 'env' | 'none';
@@ -96,11 +97,11 @@ export class GetLLMConfigStatusUseCase implements IUseCase {
         const configValue = parameter?.configValue;
 
         // Derive the effective default slot via resolveDefaultSlot, which
-        // resolves routing.defaultModelId → model → credential and yields null
-        // for a managed / non-v2 / empty config (so it falls to env/none).
-        const byokMain: Partial<BYOKSlot> | undefined =
-            (resolveDefaultSlot(configValue) as Partial<BYOKSlot> | null) ??
-            undefined;
+        // resolves routing.defaultModelId → model → credential and yields
+        // undefined for a managed / non-v2 / empty config (so it falls to
+        // env/none).
+        const byokMain: Partial<NormalizedModel> | undefined =
+            resolveDefaultSlot(configValue);
 
         // Provider-aware: most providers gate on `apiKey`, but Amazon
         // Bedrock authenticates with `awsBearerToken` / IAM credentials

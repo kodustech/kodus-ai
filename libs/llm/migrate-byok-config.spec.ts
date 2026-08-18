@@ -146,8 +146,8 @@ describe('migrateLegacyToV2', () => {
                 expect(v2.version).toBe(2);
                 expect(v2.credentials).toHaveLength(0);
                 expect(v2.models).toHaveLength(0);
-                // resolves to null (env/managed default) — no behavior change.
-                expect(resolveDefaultSlot(v2)).toBeNull();
+                // resolves to undefined (env/managed default) — no behavior change.
+                expect(resolveDefaultSlot(v2)).toBeUndefined();
             }
         });
     });

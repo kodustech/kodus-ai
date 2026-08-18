@@ -6,11 +6,6 @@ import type {
     BYOKModelConfig,
 } from '@libs/llm/byok-config';
 
-/**
- * A single BYOK credential slot — one resolved model of a stored BYOK config.
- */
-export type BYOKSlot = NormalizedModel;
-
 const asString = (value: unknown): string | undefined =>
     typeof value === 'string' && value.length > 0 ? value : undefined;
 
@@ -28,7 +23,7 @@ const asString = (value: unknown): string | undefined =>
  * (create-or-update.use-case.ts).
  */
 export function isByokSlotConfigured(
-    slot: Partial<BYOKSlot> | null | undefined,
+    slot: Partial<NormalizedModel> | null | undefined,
 ): boolean {
     if (!slot) {
         return false;
@@ -81,8 +76,8 @@ export function isV2ModelResolvable(
     const settings = (credential.settings ?? {}) as Record<string, unknown>;
     // Reconstruct only the provider + auth-material fields the provider-aware
     // `isByokSlotConfigured` check reads. This local slot is NEVER returned.
-    const slot: Partial<BYOKSlot> = {
-        provider: credential.provider as BYOKSlot['provider'],
+    const slot: Partial<NormalizedModel> = {
+        provider: credential.provider as NormalizedModel['provider'],
         apiKey: asString(credential.apiKey),
         awsBearerToken: asString(settings.awsBearerToken),
         awsAccessKeyId: asString(settings.awsAccessKeyId),

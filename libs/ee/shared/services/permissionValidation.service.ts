@@ -60,7 +60,7 @@ export class ValidationError extends Error {
 
 export interface ValidationResult {
     allowed: boolean;
-    byokConfig?: NormalizedModel | null;
+    byokConfig?: NormalizedModel | undefined;
     errorType?: ValidationErrorType;
     metadata?: Record<string, any>;
     // Subscription status of the org (e.g. 'trial', 'active'). Exposed so
@@ -194,7 +194,7 @@ export class PermissionValidationService {
             // 2. Trial skips user validation, but still honors BYOK and
             // billing-managed review credits when those fields are present.
             if (validation.subscriptionStatus === 'trial') {
-                let trialByokConfig: NormalizedModel | null = null;
+                let trialByokConfig: NormalizedModel | undefined;
                 let byokLookupFailed = false;
 
                 try {
@@ -621,19 +621,19 @@ export class PermissionValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
         validation: OrganizationLicenseValidationResult,
         contextName?: string,
-    ): Promise<NormalizedModel | null> {
+    ): Promise<NormalizedModel | undefined> {
         try {
             // Self-hosted sempre usa config das env vars (não usa BYOK)
             if (!this.isCloud) {
-                return null;
+                return undefined;
             }
 
             if (!validation) {
-                return null;
+                return undefined;
             }
 
             if (!validation?.valid) {
-                return null;
+                return undefined;
             }
 
             // Identificar tipo de plano de forma robusta
@@ -684,7 +684,7 @@ export class PermissionValidationService {
             });
 
             // Em caso de erro, falhar seguramente sem usar BYOK
-            return null;
+            return undefined;
         }
     }
 
@@ -787,7 +787,7 @@ export class PermissionValidationService {
         organizationAndTeamData: OrganizationAndTeamData,
         task: LlmTask,
         options: { ctx?: RequestContext } = {},
-    ): Promise<NormalizedModel | null> {
+    ): Promise<NormalizedModel | undefined> {
         const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
         const { slot, verdict } = resolveTaskSlotFromConfig(rawConfig, task, {
             ctx: options.ctx,

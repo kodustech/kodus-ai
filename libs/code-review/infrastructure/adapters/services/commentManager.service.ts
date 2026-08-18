@@ -118,7 +118,7 @@ export class CommentManagerService implements ICommentManagerService {
      * (DeepSeek) when no BYOK is configured (cloud/trial default).
      */
     private async runSummaryPromptV5(params: {
-        slot: NormalizedModel | null;
+        slot: NormalizedModel | undefined;
         systemPrompt: string;
         userPrompt: string;
         runName: string;
@@ -218,9 +218,9 @@ export class CommentManagerService implements ICommentManagerService {
         // by the `prSummary` task. There is no caller-supplied slot — passing the
         // codeReview-resolved slot here used to make the summary silently reuse
         // the review model and skip any prSummary override. Absent / legacy /
-        // BLOCKED config → null slot → managed default downstream, exactly as
-        // the review agents (which resolve their own BYOK) degrade.
-        let byokConfigValue: NormalizedModel | null = null;
+        // BLOCKED config → undefined slot → managed default downstream, exactly
+        // as the review agents (which resolve their own BYOK) degrade.
+        let byokConfigValue: NormalizedModel | undefined;
         try {
             byokConfigValue =
                 await this.permissionValidationService.resolveTaskSlot(
@@ -228,7 +228,7 @@ export class CommentManagerService implements ICommentManagerService {
                     LLM_TASK.prSummary,
                 );
         } catch {
-            byokConfigValue = null;
+            byokConfigValue = undefined;
         }
 
         const maxRetries = 2;

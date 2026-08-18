@@ -182,7 +182,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         context: contextToGenerateIssues,
         filePath: string,
         newSuggestions: any[],
-        byokConfig: NormalizedModel | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<any> {
         const { organizationAndTeamData, repository, pullRequest } = context;
 
@@ -370,7 +370,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             'organizationAndTeamData' | 'repository' | 'pullRequest'
         >,
         files: any[],
-        byokConfig: NormalizedModel | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<void> {
         try {
             if (!files || files?.length === 0) {

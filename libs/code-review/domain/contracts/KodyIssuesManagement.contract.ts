@@ -17,7 +17,7 @@ export interface IKodyIssuesManagementService {
         >,
         filePath: string,
         newSuggestions: Partial<CodeSuggestion>[],
-        byokConfig: NormalizedModel | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<any>;
 
     createNewIssues(
@@ -34,6 +34,6 @@ export interface IKodyIssuesManagementService {
             'organizationAndTeamData' | 'repository' | 'pullRequest'
         >,
         files: any[],
-        byokConfig: NormalizedModel | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<void>;
 }

@@ -21,7 +21,7 @@ export interface SlotCallOptions {
 }
 
 export function resolveSlotCallOptions(
-    slot: NormalizedModel | null | undefined,
+    slot: NormalizedModel | undefined,
 ): SlotCallOptions {
     const options: SlotCallOptions = {};
 

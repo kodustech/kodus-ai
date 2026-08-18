@@ -47,7 +47,7 @@ describe('resolveDefaultSlot — the effective default slot for a config', () =>
             credentials: [{ id: 'mgd', provider: 'openai_compatible', managed: true }],
             models: [{ id: 'm1', credentialId: 'mgd', model: 'kimi-k2.7-code' }],
         };
-        expect(resolveDefaultSlot(v2)).toBeNull();
+        expect(resolveDefaultSlot(v2)).toBeUndefined();
     });
 
     it('degrades (does not throw) on an unknown/credential-less model → null', () => {
@@ -57,17 +57,17 @@ describe('resolveDefaultSlot — the effective default slot for a config', () =>
             models: [{ id: 'm1', credentialId: 'missing', model: 'gpt-4o' }],
         };
         expect(() => resolveDefaultSlot(v2)).not.toThrow();
-        expect(resolveDefaultSlot(v2)).toBeNull();
+        expect(resolveDefaultSlot(v2)).toBeUndefined();
     });
 
     it('empty / undefined / malformed / non-v2 → null (env default), never throws', () => {
-        expect(resolveDefaultSlot(undefined)).toBeNull();
-        expect(resolveDefaultSlot(null)).toBeNull();
-        expect(resolveDefaultSlot('garbage')).toBeNull();
-        expect(resolveDefaultSlot({ version: 2 })).toBeNull();
-        expect(resolveDefaultSlot({ version: 1, main: {} } as any)).toBeNull();
+        expect(resolveDefaultSlot(undefined)).toBeUndefined();
+        expect(resolveDefaultSlot(null)).toBeUndefined();
+        expect(resolveDefaultSlot('garbage')).toBeUndefined();
+        expect(resolveDefaultSlot({ version: 2 })).toBeUndefined();
+        expect(resolveDefaultSlot({ version: 1, main: {} } as any)).toBeUndefined();
         expect(() => resolveDefaultSlot({ main: 42, fallback: [] } as any)).not.toThrow();
-        expect(resolveDefaultSlot({ main: 42, fallback: [] } as any)).toBeNull();
+        expect(resolveDefaultSlot({ main: 42, fallback: [] } as any)).toBeUndefined();
     });
 });
 
@@ -95,9 +95,9 @@ describe('resolveModelSlot — materialize ONE v2 model slot by id (04b)', () =>
     });
 
     it('returns null for an absent / unknown / managed model id', () => {
-        expect(resolveModelSlot(v2, null)).toBeNull();
-        expect(resolveModelSlot(v2, undefined)).toBeNull();
-        expect(resolveModelSlot(v2, 'nope')).toBeNull();
-        expect(resolveModelSlot(v2, 'm-managed')).toBeNull();
+        expect(resolveModelSlot(v2, null)).toBeUndefined();
+        expect(resolveModelSlot(v2, undefined)).toBeUndefined();
+        expect(resolveModelSlot(v2, 'nope')).toBeUndefined();
+        expect(resolveModelSlot(v2, 'm-managed')).toBeUndefined();
     });
 });

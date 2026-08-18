@@ -15,7 +15,7 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 
 /** True when secondary should bill the client BYOK key (one resolved slot). */
 export function isSecondaryByok(
-    byokConfig?: NormalizedModel | null,
+    byokConfig?: NormalizedModel | undefined,
 ): boolean {
     return !!byokConfig;
 }
