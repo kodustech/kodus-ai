@@ -284,7 +284,7 @@ describe('GitlabService', () => {
             });
 
             expect(cacheService.getFromCache).toHaveBeenCalledWith(
-                'gitlab-project-path-org-1-team-1-https://gitlab.example.com/-repo-5',
+                'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-5',
             );
             expect(show).not.toHaveBeenCalled();
             expect(cloneParams.url).toBe(
@@ -311,7 +311,7 @@ describe('GitlabService', () => {
             });
 
             expect(cacheService.addToCache).toHaveBeenCalledWith(
-                'gitlab-project-path-org-1-team-1-https://gitlab.example.com/-repo-6',
+                'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-6',
                 'group/repo',
                 1800000,
             );
@@ -343,7 +343,53 @@ describe('GitlabService', () => {
             });
 
             expect(cacheService.getFromCache).toHaveBeenCalledWith(
-                'gitlab-project-path-org-1-team-2-https://gitlab.example.com/-repo-6',
+                'gitlab-project-path-org-1-team-2-https://gitlab.example.com-repo-6',
+            );
+        });
+
+        // The clone URL and API client both normalize the host through
+        // getGitlabWebBaseUrl; the cache key must go through the same
+        // normalization or `gitlab.example.com`, `https://gitlab.example.com`
+        // and a trailing-slash variant each produce their own entry for the
+        // same instance, missing the cache on every raw-string mismatch.
+        it('shares one cache entry across raw host variants of the same instance', async () => {
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            for (const host of [
+                'gitlab.example.com',
+                'https://gitlab.example.com',
+                'https://gitlab.example.com/',
+            ]) {
+                jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue(
+                    {
+                        accessToken: 'oauth-token',
+                        authMode: AuthMode.OAUTH,
+                        host,
+                    },
+                );
+
+                await service.getCloneParams({
+                    organizationAndTeamData,
+                    repository: {
+                        id: 'repo-8',
+                        name: 'repo',
+                        fullName: 'group/repo',
+                        defaultBranch: 'main',
+                    },
+                });
+            }
+
+            const keysUsed = new Set(
+                cacheService.getFromCache.mock.calls.map((call) => call[0]),
+            );
+            expect(keysUsed).toEqual(
+                new Set([
+                    'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-8',
+                ]),
             );
         });
 

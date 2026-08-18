@@ -3376,7 +3376,12 @@ export class GitlabService implements Omit<
         // org can point to different GitLab instances and share a numeric
         // project id, so the key must include teamId and the instance host
         // or one team can serve another's cached path_with_namespace.
-        const cacheKey = `gitlab-project-path-${organizationAndTeamData?.organizationId}-${organizationAndTeamData?.teamId}-${gitlabAuthDetail?.host ?? ''}-${repository?.id}`;
+        // Normalized through the same getGitlabWebBaseUrl used to build the
+        // clone URL and the API client host, so equivalent raw values
+        // (`gitlab.example.com`, `https://gitlab.example.com/`, ...) share
+        // one cache entry instead of missing on every representation.
+        const normalizedHost = this.getGitlabWebBaseUrl(gitlabAuthDetail?.host);
+        const cacheKey = `gitlab-project-path-${organizationAndTeamData?.organizationId}-${organizationAndTeamData?.teamId}-${normalizedHost}-${repository?.id}`;
 
         try {
             const cachedPath =
