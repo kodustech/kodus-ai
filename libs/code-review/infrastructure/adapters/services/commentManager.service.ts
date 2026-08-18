@@ -147,7 +147,9 @@ export class CommentManagerService implements ICommentManagerService {
         const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
             spanName,
             runName,
-            model: slot?.model ?? KODUS_TRIAL_MODEL,
+            // Canonical `provider:model` via getModelName — same derivation as
+            // every other span (readers collapse on ':'), instead of a bare name.
+            model: getModelName(slot, KODUS_TRIAL_MODEL),
             attrs,
             exec: async () => {
                 // Build the single resolved slot (native). Off-BYOK →
