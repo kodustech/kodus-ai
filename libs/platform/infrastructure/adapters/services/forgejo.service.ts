@@ -1512,6 +1512,21 @@ export class ForgejoService implements Omit<
                 }
             }
 
+            // An account that belongs to no organization still has an owner
+            // who opens pull requests. Without this the list comes back empty
+            // and no seat can be assigned to anyone.
+            if (allMembers.length === 0) {
+                const owner = await userGetCurrent({ client });
+
+                if (owner.data?.id) {
+                    allMembers.push({
+                        name: owner.data.login ?? owner.data.full_name ?? '',
+                        id: owner.data.id,
+                        type: 'user',
+                    });
+                }
+            }
+
             return allMembers;
         } catch (error) {
             this.logger.error({
