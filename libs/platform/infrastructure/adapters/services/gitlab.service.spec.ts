@@ -24,7 +24,7 @@ describe('GitlabService', () => {
     let integrationConfigService: Record<string, never>;
     let authIntegrationService: Record<string, never>;
     let configService: ConfigService;
-    let cacheService: Record<string, never>;
+    let cacheService: { getFromCache: jest.Mock; addToCache: jest.Mock };
 
     const mockedAxios = axios as jest.Mocked<typeof axios>;
     const mockedGitlab = Gitlab as unknown as jest.Mock;
@@ -38,7 +38,10 @@ describe('GitlabService', () => {
         configService = {
             get: jest.fn(),
         } as unknown as ConfigService;
-        cacheService = {};
+        cacheService = {
+            getFromCache: jest.fn().mockResolvedValue(undefined),
+            addToCache: jest.fn().mockResolvedValue(undefined),
+        };
 
         service = new GitlabService(
             integrationService as any,
@@ -257,6 +260,159 @@ describe('GitlabService', () => {
             expect(cloneParams.url).toBe(
                 'https://gitlab.example.com/group/repo%20name',
             );
+        });
+
+        // Every clone otherwise pays the Projects.show round-trip on its
+        // critical path, including repeated clones of the same repository
+        // across reviews.
+        it('reuses a cached path_with_namespace instead of calling Projects.show again', async () => {
+            mockAuthDetails();
+            const show = jest.fn().mockResolvedValue({
+                path_with_namespace: 'should-not-be-used',
+            });
+            mockProjectsShow(show);
+            cacheService.getFromCache.mockResolvedValue('group/cached-repo');
+
+            const cloneParams = await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-5',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.getFromCache).toHaveBeenCalledWith(
+                'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-5',
+            );
+            expect(show).not.toHaveBeenCalled();
+            expect(cloneParams.url).toBe(
+                'https://gitlab.example.com/group/cached-repo',
+            );
+        });
+
+        it('caches a resolved path_with_namespace on a cache miss', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-6',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.addToCache).toHaveBeenCalledWith(
+                'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-6',
+                'group/repo',
+                1800000,
+            );
+        });
+
+        // The GitLab integration is resolved per team, and two teams in the
+        // same org can point to different GitLab hosts and still share a
+        // numeric project id — the key must be scoped past organizationId
+        // alone or one team's clone can serve another team's cached slug.
+        it('scopes the cache key by team and GitLab host, not just organization', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            await service.getCloneParams({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-2',
+                },
+                repository: {
+                    id: 'repo-6',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.getFromCache).toHaveBeenCalledWith(
+                'gitlab-project-path-org-1-team-2-https://gitlab.example.com-repo-6',
+            );
+        });
+
+        // The clone URL and API client both normalize the host through
+        // getGitlabWebBaseUrl; the cache key must go through the same
+        // normalization or `gitlab.example.com`, `https://gitlab.example.com`
+        // and a trailing-slash variant each produce their own entry for the
+        // same instance, missing the cache on every raw-string mismatch.
+        it('shares one cache entry across raw host variants of the same instance', async () => {
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            for (const host of [
+                'gitlab.example.com',
+                'https://gitlab.example.com',
+                'https://gitlab.example.com/',
+            ]) {
+                jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue(
+                    {
+                        accessToken: 'oauth-token',
+                        authMode: AuthMode.OAUTH,
+                        host,
+                    },
+                );
+
+                await service.getCloneParams({
+                    organizationAndTeamData,
+                    repository: {
+                        id: 'repo-8',
+                        name: 'repo',
+                        fullName: 'group/repo',
+                        defaultBranch: 'main',
+                    },
+                });
+            }
+
+            const keysUsed = new Set(
+                cacheService.getFromCache.mock.calls.map((call) => call[0]),
+            );
+            expect(keysUsed).toEqual(
+                new Set([
+                    'gitlab-project-path-org-1-team-1-https://gitlab.example.com-repo-8',
+                ]),
+            );
+        });
+
+        // A failed lookup must not be cached — caching the fullName fallback
+        // would keep retrying the stored (possibly wrong) path for the full
+        // TTL instead of the API on the very next clone.
+        it('does not cache the fallback when the project lookup fails', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockRejectedValue(new Error('404 Not Found')),
+            );
+
+            await service.getCloneParams({
+                organizationAndTeamData,
+                repository: {
+                    id: 'repo-7',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.addToCache).not.toHaveBeenCalled();
         });
     });
 
