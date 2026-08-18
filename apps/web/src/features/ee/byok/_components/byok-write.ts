@@ -1,6 +1,6 @@
 import type {
-    BYOKConnectInput,
     BYOKConfig,
+    BYOKConnectInput,
     BYOKCredential,
     BYOKModelConfig,
     BYOKRouting,
@@ -46,7 +46,11 @@ export type NewCredentialInput = {
  * - edit-model          — replace a model's config fields, preserving its id/credentialId
  */
 export type BuildV2Edit =
-    | { kind: "connect"; newCredential: NewCredentialInput; model: BYOKModelFields }
+    | {
+          kind: "connect";
+          newCredential: NewCredentialInput;
+          model: BYOKModelFields;
+      }
     | {
           kind: "add-new-provider";
           newCredential: NewCredentialInput;
@@ -93,7 +97,9 @@ export const credentialSettingsFromConfig = (
 };
 
 /** Lift the per-model config fields out of a legacy {@link BYOKConnectInput}. */
-export const modelFieldsFromConfig = (cfg: BYOKConnectInput): BYOKModelFields => ({
+export const modelFieldsFromConfig = (
+    cfg: BYOKConnectInput,
+): BYOKModelFields => ({
     model: cfg.model,
     reasoningEffort: cfg.reasoningEffort,
     reasoningConfigOverride: cfg.reasoningConfigOverride,
@@ -159,13 +165,9 @@ const hasNoVisibleModel = (
 ): boolean => {
     if (!existing) return true;
     const nonManaged = new Set(
-        (existing.credentials ?? [])
-            .filter((c) => !c.managed)
-            .map((c) => c.id),
+        (existing.credentials ?? []).filter((c) => !c.managed).map((c) => c.id),
     );
-    return !(existing.models ?? []).some((m) =>
-        nonManaged.has(m.credentialId),
-    );
+    return !(existing.models ?? []).some((m) => nonManaged.has(m.credentialId));
 };
 
 /**

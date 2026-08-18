@@ -5,8 +5,12 @@
  * instead of the real model).
  *
  * Two drift-prone fields are derived here ONCE, never at the call-site:
- *   - `model`  = the resolved BYOK slot's model (NEVER `spec.modelId`, which is
- *                the literal 'resolved' sentinel the runner resolves by).
+ *   - `model`  = the model the run ACTUALLY used, via `getModelName` (NEVER
+ *                `spec.modelId`, the literal 'resolved' sentinel the runner
+ *                resolves by). Slot-less runs are NOT model-less: they run on
+ *                the env/managed default, so the name comes from the same
+ *                cascade that BUILT the model — `slot?.model` alone dropped
+ *                `gen_ai.response.model` from every Kodus-funded span.
  *   - `isByok` = slot presence (a resolved slot = the org's own key → 'byok').
  *
  * `recordAgentRunUsage` owns the span/attribute schema; this owns the per-run
@@ -14,6 +18,7 @@
  * observability-agnostic — RunState/TokenUsage are imported type-only.
  */
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import { getModelName } from '@libs/llm/managed-slot';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import type {
     RunState,
@@ -23,14 +28,17 @@ import type {
 /** The drift-prone pair, derived from the resolved slot in ONE place. Spread it
  *  wherever a cost record needs `{ model, isByok }` so no call-site re-derives
  *  (and mis-derives) them. */
-export function agentModelIdentity(slot: NormalizedModel | null | undefined): {
-    model: string | undefined;
+export function agentModelIdentity(slot: NormalizedModel | undefined): {
+    model: string;
     isByok: boolean;
     byokModelId: string | undefined;
     credentialId: string | undefined;
 } {
     return {
-        model: slot?.model,
+        // `provider:model` for a BYOK slot, the env/managed default name when
+        // there is none — every reader collapses on ':' (deriveTu, backfill-tu,
+        // byok-cost), so this is the same canonical model either way.
+        model: getModelName(slot),
         isByok: !!slot,
         // Stable attribution ids from the resolved slot (undefined on the
         // env/managed-default path). Stamped on the usage span so spend
@@ -68,7 +76,7 @@ export interface AgentUsageMeta {
  * shape through this — the duplication where the model-sentinel bug lived.
  */
 export function agentRunUsage(
-    slot: NormalizedModel | null | undefined,
+    slot: NormalizedModel | undefined,
     state: RunState,
     meta: AgentUsageMeta,
 ) {

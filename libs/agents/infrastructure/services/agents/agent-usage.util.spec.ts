@@ -1,9 +1,15 @@
 import { agentModelIdentity, agentRunUsage } from './agent-usage.util';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import { DEFAULT_MODEL } from '@libs/llm/byok-defaults';
 import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 
 const slot = (over: Partial<NormalizedModel> = {}): NormalizedModel =>
-    ({ provider: 'openai', apiKey: 'enc', model: 'gpt-x', ...over }) as NormalizedModel;
+    ({
+        provider: 'openai',
+        apiKey: 'enc',
+        model: 'gpt-x',
+        ...over,
+    }) as NormalizedModel;
 
 const state = (over: Partial<RunState> = {}): RunState =>
     ({
@@ -20,24 +26,25 @@ const state = (over: Partial<RunState> = {}): RunState =>
 describe('agentModelIdentity — the drift-prone {model, isByok} pair, derived once', () => {
     it('takes model from the slot and marks BYOK present', () => {
         expect(agentModelIdentity(slot({ model: 'kimi-k2.7-code' }))).toEqual({
-            model: 'kimi-k2.7-code',
+            model: 'openai:kimi-k2.7-code',
             isByok: true,
+            byokModelId: undefined,
+            credentialId: undefined,
         });
     });
 
-    it('no slot → no model, system (not byok)', () => {
-        expect(agentModelIdentity(undefined)).toEqual({
-            model: undefined,
+    // The regression: a slot-less run is NOT a model-less run — it runs on the
+    // env/managed default, and the span must still carry that model or the
+    // Kodus-funded spend lands in observability with no model to price it by.
+    it('no slot → the env/managed default model, system (not byok)', () => {
+        const managed = {
+            model: DEFAULT_MODEL.model,
             isByok: false,
             byokModelId: undefined,
             credentialId: undefined,
-        });
-        expect(agentModelIdentity(null)).toEqual({
-            model: undefined,
-            isByok: false,
-            byokModelId: undefined,
-            credentialId: undefined,
-        });
+        };
+        expect(agentModelIdentity(undefined)).toEqual(managed);
+        expect(agentModelIdentity(null)).toEqual(managed);
     });
 
     it('carries the stable attribution ids (byokModelId + credentialId) from the slot', () => {
@@ -46,7 +53,7 @@ describe('agentModelIdentity — the drift-prone {model, isByok} pair, derived o
                 slot({ byokModelId: 'm-kimi', credentialId: 'c-moonshot' }),
             ),
         ).toEqual({
-            model: 'gpt-x',
+            model: 'openai:gpt-x',
             isByok: true,
             byokModelId: 'm-kimi',
             credentialId: 'c-moonshot',
@@ -66,7 +73,7 @@ describe('agentRunUsage — full cost record from slot + RunState', () => {
             agentName: 'ConversationalAgent',
             phase: 'conversation',
             source: 'harness',
-            model: 'gpt-x', // NOT the 'resolved' spec sentinel
+            model: 'openai:gpt-x', // NOT the 'resolved' spec sentinel
             isByok: true,
             usage: { inputTokens: 10, outputTokens: 5 },
             steps: 3,
@@ -78,7 +85,10 @@ describe('agentRunUsage — full cost record from slot + RunState', () => {
         const record = agentRunUsage(slot(), state(), {
             agentName: 'X',
             phase: 'p',
-            organizationAndTeamData: { organizationId: 'org-9', teamId: 'team-3' },
+            organizationAndTeamData: {
+                organizationId: 'org-9',
+                teamId: 'team-3',
+            },
         });
         expect(record.organizationId).toBe('org-9');
         expect(record.teamId).toBe('team-3');
@@ -92,12 +102,12 @@ describe('agentRunUsage — full cost record from slot + RunState', () => {
         expect(record.finishReason).toBe('budget');
     });
 
-    it('carries no BYOK flag / model when the slot is absent (managed run)', () => {
+    it('bills a slot-less run as system, still naming the managed model', () => {
         const record = agentRunUsage(undefined, state(), {
             agentName: 'X',
             phase: 'p',
         });
-        expect(record.model).toBeUndefined();
+        expect(record.model).toBe(DEFAULT_MODEL.model);
         expect(record.isByok).toBe(false);
     });
 });

@@ -12,6 +12,7 @@ import type { LanguageModel } from 'ai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import { DEFAULT_MODEL } from './byok-defaults';
 
 // Model-name protocol patterns, used by the self-hosted / trial default-model
 // resolution below (the BYOK provider builders moved to the provider modules
@@ -94,7 +95,12 @@ export type EnvProviderResolution =
           apiKey: string;
           vertexLocation?: string;
       }
-    | { kind: 'openai_compat'; name: 'openai_compatible'; apiKey: string; baseURL: string };
+    | {
+          kind: 'openai_compat';
+          name: 'openai_compatible';
+          apiKey: string;
+          baseURL: string;
+      };
 
 export function resolveEnvProvider(): EnvProviderResolution | null {
     const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
@@ -240,9 +246,14 @@ export function resolveManagedSlot(
                     { vertexLocation: env.vertexLocation },
                 );
             case 'claude_anthropic':
-                return managedSlot(BYOKProvider.ANTHROPIC, env.apiKey, envMode, {
-                    baseURL: env.baseURL,
-                });
+                return managedSlot(
+                    BYOKProvider.ANTHROPIC,
+                    env.apiKey,
+                    envMode,
+                    {
+                        baseURL: env.baseURL,
+                    },
+                );
             case 'openai_compat':
                 // INLINE EXCEPTION (self-hosted OpenAI-compatible): name
                 // 'self-hosted', default baseURL api.openai.com, raw
@@ -351,4 +362,29 @@ export function hasManagedModelKey(): boolean {
     return !!(
         process.env.API_FIREWORKS_API_KEY || process.env.FIREWORKS_API_KEY
     );
+}
+
+/**
+ * Extract a human-readable model name from ONE resolved model slot.
+ * Mirrors the env/default logic in `buildModelFromSlot` so telemetry/logs
+ * reflect the model that will actually be used. A `undefined` slot resolves
+ * the env/managed default name (the no-BYOK path), never a `.main`/`.fallback`
+ * read.
+ */
+export function getModelName(
+    slot?: NormalizedModel,
+    defaultModelOverride?: string,
+): string {
+    if (slot) {
+        return `${slot.provider}:${slot.model}`;
+    }
+
+    // Same single-source cascade the model is BUILT from (resolveManagedSlot),
+    // so the telemetry name always matches the model actually used.
+    const env = resolveEnvProvider();
+    if (env) {
+        return `${env.name}:${process.env.API_LLM_PROVIDER_MODEL}`;
+    }
+
+    return defaultModelOverride || DEFAULT_MODEL.model;
 }

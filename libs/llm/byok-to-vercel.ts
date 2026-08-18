@@ -14,7 +14,6 @@ import { decrypt } from '@libs/common/utils/crypto';
 import { REGISTRY } from '@libs/llm/providers';
 import {
     resolveManagedSlot,
-    resolveEnvProvider,
     hasManagedModelKey,
     type ByokModelOptions,
 } from './managed-slot';
@@ -32,7 +31,15 @@ export {
 // Wave 4 split: env/managed default resolution → ./managed-slot; managed/trial
 // constants + the "who pays" decision → ./byok-defaults. Re-exported for
 // back-compat so `@libs/llm/byok-to-vercel` stays the stable import surface.
-export { resolveManagedSlot, type ByokModelOptions } from './managed-slot';
+export {
+    resolveManagedSlot,
+    // getModelName lives next to the env cascade it mirrors (so a telemetry-only
+    // caller doesn't have to pull in the provider REGISTRY this file builds
+    // from); re-exported here since `@libs/llm/byok-to-vercel` is its stable
+    // import surface.
+    getModelName,
+    type ByokModelOptions,
+} from './managed-slot';
 export {
     KODUS_DEFAULT_MODEL,
     KODUS_TRIAL_MODEL,
@@ -80,31 +87,6 @@ export function buildModelFromSlot(
     // BYOKProvider enum, but fail-loud.
     const apiKey = decrypt(slot.apiKey);
     return REGISTRY.get(slot.provider).build({ ...slot, apiKey }, options);
-}
-
-/**
- * Extract a human-readable model name from ONE resolved model slot.
- * Mirrors the env/default logic in `buildModelFromSlot` so telemetry/logs
- * reflect the model that will actually be used. A `undefined` slot resolves
- * the env/managed default name (the no-BYOK path), never a `.main`/`.fallback`
- * read.
- */
-export function getModelName(
-    slot?: NormalizedModel,
-    defaultModelOverride?: string,
-): string {
-    if (slot) {
-        return `${slot.provider}:${slot.model}`;
-    }
-
-    // Same single-source cascade the model is BUILT from (resolveManagedSlot),
-    // so the telemetry name always matches the model actually used.
-    const env = resolveEnvProvider();
-    if (env) {
-        return `${env.name}:${process.env.API_LLM_PROVIDER_MODEL}`;
-    }
-
-    return defaultModelOverride || DEFAULT_MODEL.model;
 }
 
 /**
