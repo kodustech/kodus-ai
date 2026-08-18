@@ -715,17 +715,14 @@ export class ForgejoService implements Omit<
                         operation: 'create',
                         path: EMPTY_REPO_SEED_PATH,
                         // Forgejo's change-files API requires base64 content.
-                        content:
-                            Buffer.from(EMPTY_REPO_SEED_CONTENT).toString(
-                                'base64',
-                            ),
+                        content: Buffer.from(EMPTY_REPO_SEED_CONTENT).toString(
+                            'base64',
+                        ),
                     },
                 ] as any,
                 message: EMPTY_REPO_SEED_COMMIT_MESSAGE,
                 branch: baseBranch,
-                ...(identity
-                    ? { author: identity, committer: identity }
-                    : {}),
+                ...(identity ? { author: identity, committer: identity } : {}),
             },
         });
 
@@ -3406,8 +3403,10 @@ export class ForgejoService implements Omit<
     async getRepositoryContentFile(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         repository: { name: string };
-        path: string;
+        path?: string;
         ref?: string;
+        file?: { filename?: string };
+        pullRequest?: { head?: { ref?: string }; base?: { ref?: string } };
     }): Promise<any | null> {
         try {
             const authDetail = await this.getAuthDetails(
@@ -3422,14 +3421,21 @@ export class ForgejoService implements Omit<
             if (!repoInfo) return null;
 
             const client = this.createForgejoClient(authDetail);
+            const filePath = params.path ?? params.file?.filename;
+            const ref =
+                params.ref ??
+                params.pullRequest?.head?.ref ??
+                params.pullRequest?.base?.ref;
+            if (!filePath) return null;
+
             const result = await repoGetContents({
                 client,
                 path: {
                     owner: repoInfo.owner,
                     repo: repoInfo.repo,
-                    filepath: params.path,
+                    filepath: filePath,
                 },
-                query: { ref: params.ref },
+                query: { ref },
             });
             const content = result.data;
 

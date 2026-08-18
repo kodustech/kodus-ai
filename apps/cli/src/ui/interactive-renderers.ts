@@ -116,7 +116,9 @@ export function renderFileHeaderLines(
         chalk.bold.cyan(
             `┌─ ${file} ────────────────────────────────────────────────`,
         ),
-        chalk.dim(`│ ${issueCount} issue${issueCount > 1 ? 's' : ''} in this file`),
+        chalk.dim(
+            `│ ${issueCount} issue${issueCount > 1 ? 's' : ''} in this file`,
+        ),
         chalk.bold.cyan(
             '└────────────────────────────────────────────────────────────',
         ),
@@ -137,7 +139,8 @@ export function renderReviewSummaryLines(
             '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
         ),
         '',
-        chalk.dim('Total issues: ') + chalk.white(result.issues.length.toString()),
+        chalk.dim('Total issues: ') +
+            chalk.white(result.issues.length.toString()),
         chalk.dim('Fixed: ') + chalk.green(fixedCount.toString()),
         chalk.dim('Remaining: ') +
             chalk.yellow((result.issues.length - fixedCount).toString()),

@@ -15,6 +15,7 @@ import {
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import { createLogger } from '@libs/core/log/logger';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 
 @Injectable()
 export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -127,17 +128,47 @@ export class CreatePrLevelCommentsStage extends BasePipelineStage<CodeReviewPipe
 
                     commentResults = result?.commentResults || [];
 
-                    this.logger.log({
-                        message: `Successfully created ${commentResults.length} PR-level comments for PR#${context.pullRequest.number}`,
-                        context: this.stageName,
-                        metadata: {
-                            prNumber: context.pullRequest.number,
-                            organizationAndTeamData:
-                                context.organizationAndTeamData,
-                            suggestionsCount: prLevelSuggestions.length,
-                            commentsCreated: commentResults.length,
-                        },
-                    });
+                    // Only count comments that were actually delivered. The
+                    // underlying platform call can fail (e.g. GitHub 503) and
+                    // still return a result entry with deliveryStatus=FAILED.
+                    // Keep the full result set for persistence/auditing, but
+                    // report delivered vs failed counts separately.
+                    const deliveredResults = commentResults.filter(
+                        (r: any) =>
+                            r?.deliveryStatus === DeliveryStatus.SENT ||
+                            r?.deliveryStatus === 'sent',
+                    );
+                    const failedCount =
+                        commentResults.length - deliveredResults.length;
+
+                    if (deliveredResults.length > 0) {
+                        this.logger.log({
+                            message: `Successfully created ${deliveredResults.length} PR-level comments for PR#${context.pullRequest.number}`,
+                            context: this.stageName,
+                            metadata: {
+                                prNumber: context.pullRequest.number,
+                                organizationAndTeamData:
+                                    context.organizationAndTeamData,
+                                suggestionsCount: prLevelSuggestions.length,
+                                commentsCreated: deliveredResults.length,
+                                commentsFailed: failedCount,
+                            },
+                        });
+                    }
+
+                    if (failedCount > 0) {
+                        this.logger.warn({
+                            message: `${failedCount} PR-level comment(s) failed to deliver for PR#${context.pullRequest.number}`,
+                            context: this.stageName,
+                            metadata: {
+                                prNumber: context.pullRequest.number,
+                                organizationAndTeamData:
+                                    context.organizationAndTeamData,
+                                suggestionsCount: prLevelSuggestions.length,
+                                commentsFailed: failedCount,
+                            },
+                        });
+                    }
                 } catch (error) {
                     this.logger.error({
                         message: `Error creating PR level comments for PR#${context.pullRequest.number}`,

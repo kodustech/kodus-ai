@@ -34,9 +34,43 @@ const PR_CASES = [
     'implement-access-token-context-encoding-framework-keycloak',
 ];
 
+const LIGHT_CASES = [
+    'fix-handle-collective-multiple-host-on-destinationcalendar-cal-com',
+    'add-guest-management-functionality-to-existing-bookings-cal-com',
+    'oauth-credential-sync-and-app-integration-enhancements-cal-com',
+    'sms-workflow-reminder-retry-count-tracking-cal-com',
+    'feat-2fa-backup-codes-cal-com',
+    'feat-convert-insightsbookingservice-to-use-prisma-sql-raw-queries-cal-com',
+    'enhance-embed-url-handling-and-validation-system-discourse-cursor',
+    'feature-can-edit-category-host-relationships-for-embedding-discourse-cursor',
+    'optimize-header-layout-performance-with-flexbox-mixins-discourse-cursor',
+    'feature-automatically-downsize-large-images-discourse-cursor',
+    'fix-proper-handling-of-group-memberships-discourse-cursor',
+    'feature-localization-fallbacks-server-side-discourse-cursor',
+    'anonymous-add-configurable-device-limit-grafana-codex',
+    'frontend-asset-optimization-grafana-codex',
+    'plugins-chore-renamed-instrumentation-middleware-to-metrics-middleware-grafana-codex',
+    'dual-storage-architecture-grafana-codex',
+    'unified-storage-performance-optimizations-grafana-codex',
+    'notification-rule-processing-engine-grafana-codex',
+    'implement-access-token-context-encoding-framework-keycloak',
+    'fix-concurrent-group-access-to-prevent-nullpointerexception-keycloak',
+    'add-html-sanitizer-for-translated-message-resources-keycloak',
+    'add-client-resource-type-and-scopes-to-authorization-schema-keycloak',
+    'fixing-re-authentication-with-passkeys-keycloak',
+    'add-caching-support-for-identityproviderstorageprovider-getforlogin-operations-keycloak',
+    'replays-self-serve-bulk-delete-system-sentry',
+    'span-buffer-multiprocess-enhancement-with-health-monitoring-sentry',
+    'feat-ecosystem-implement-cross-system-issue-synchronization-sentry',
+    'github-oauth-security-enhancement-sentry',
+    'feat-workflow-engine-add-in-hook-for-producing-occurrences-from-the-stateful-det-sentry',
+    'ref-crons-reorganize-incident-creation-issue-occurrence-logic-sentry',
+];
+
 const CASE_SETS = {
     smoke: SMOKE_CASES,
     pr: PR_CASES,
+    light: LIGHT_CASES,
 };
 
 module.exports = async () => {

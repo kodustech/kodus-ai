@@ -5,7 +5,7 @@
 # What this script does:
 #   1. Re-uses scripts/selfhosted/provision.sh to provision the base
 #      stack (api/web/worker/webhooks/mcp/postgres/mongo/rabbit) on a
-#      DigitalOcean droplet — same path as every other E2E droplet,
+#      ephemeral AWS EC2 VM — the same provider as the release matrix,
 #      so secrets live in one place (~/.kodus-dev/config).
 #   2. Layers Caddy + Keycloak on top via docker/sso-e2e/droplet/compose.yml.
 #      Caddy fronts three sslip.io hostnames:
@@ -26,7 +26,7 @@
 #
 # Variables you need to have set BEFORE running (all already used by
 # the existing selfhosted scripts — nothing new):
-#   DIGITALOCEAN_TOKEN          DO API token         (via ~/.kodus-dev/config)
+#   AWS credentials            standard AWS CLI credentials
 #   API_OPEN_AI_API_KEY         LLM key              (via ~/.kodus-dev/config)
 #   API_OPENAI_FORCE_BASE_URL   (optional, e.g. Moonshot)
 #   API_LLM_PROVIDER_MODEL      (optional)
@@ -49,6 +49,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 # ~/.kodus-dev/config and scripts/selfhosted/.env in the right order.
 # shellcheck disable=SC1091
 . "${REPO_ROOT}/scripts/selfhosted/_common.sh"
+
+# SSO release validation follows the matrix's EC2 provider even though the
+# general-purpose developer provisioner retains its legacy provider default.
+export TEST_VM_PROVIDER="aws"
 
 # ---------- args ----------
 NAME_RAW="${SSO_E2E_DROPLET_NAME:-sso-e2e}"
@@ -86,32 +90,30 @@ CADDY_ACME_CA="${CADDY_ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}"
 # Playwright/bootstrap tolerate them. Override with SSO_E2E_TLS_MODE=acme.
 SSO_E2E_TLS_MODE="${SSO_E2E_TLS_MODE:-internal}"
 
-# ---------- step 1: base droplet ----------
+# ---------- step 1: base VM ----------
 if [ "${REUSE}" = "1" ] && state_exists "${NAME}"; then
-    log "Reusing existing droplet '${NAME}'"
+    log "Reusing existing VM '${NAME}'"
     SERVER_IP=$(state_get "${NAME}" .server_ip)
 else
     if state_exists "${NAME}"; then
-        warn "Droplet '${NAME}' already exists (IP $(state_get "${NAME}" .server_ip))."
+        warn "VM '${NAME}' already exists (IP $(state_get "${NAME}" .server_ip))."
         warn "Pass --reuse to reuse it, or destroy first: pnpm run sso-e2e:droplet:destroy --name ${NAME}"
         exit 1
     fi
-    log "Provisioning base Kodus stack on a fresh droplet (~5 min)…"
-    # This droplet runs the full Kodus stack PLUS Keycloak (Quarkus/Java,
-    # memory-hungry) PLUS local image builds/extracts. The default
-    # s-2vcpu-4gb OOM/thrashes during the rabbitmq build + image extraction
-    # and hangs the provision. Default to 8GB here (overridable via DO_SIZE).
-    export DO_SIZE="${DO_SIZE:-s-4vcpu-8gb}"
-    log "  droplet size: ${DO_SIZE}"
+    log "Provisioning base Kodus stack on a fresh EC2 instance (~5 min)…"
+    # The full stack plus Keycloak needs 8GB. t3.large matches the release
+    # matrix default and remains overridable for local debugging.
+    export AWS_INSTANCE_TYPE="${AWS_INSTANCE_TYPE:-t3.large}"
+    log "  EC2 instance type: ${AWS_INSTANCE_TYPE}"
     "${REPO_ROOT}/scripts/selfhosted/provision.sh" --name "${NAME}"
     SERVER_IP=$(state_get "${NAME}" .server_ip)
 fi
 
 if [ -z "${SERVER_IP}" ]; then
-    err "Failed to resolve droplet IP from state file ${STATE_FILE}"
+    err "Failed to resolve VM IP from state file ${STATE_FILE}"
     exit 1
 fi
-ok "Droplet '${NAME}' at ${SERVER_IP}"
+ok "VM '${NAME}' at ${SERVER_IP}"
 
 # Hostnames derived from the droplet's public IP via sslip.io wildcard DNS.
 # sslip.io resolves *.<ip>.sslip.io → <ip> for any prefix — no DNS setup
@@ -189,9 +191,9 @@ env_set NEXTAUTH_URL "${APP_BASE_URL}"
 # sign-in form's /auth/sso/check call). The public API origin lives
 # in API_URL above for cookie-domain / SAML purposes — those code
 # paths read API_URL directly, not WEB_HOSTNAME_API.
-# Use the compose SERVICE name `api` (Docker DNS always resolves it on the
-# shared network) — NOT the literal `kodus-api`, which matches neither the
-# service (`api`) nor the container (`kodus_api`, GLOBAL_API_CONTAINER_NAME's
+# Use the compose SERVICE name "api" (Docker DNS always resolves it on the
+# shared network) — NOT the literal "kodus-api", which matches neither the
+# service ("api") nor the container ("kodus_api", GLOBAL_API_CONTAINER_NAME's
 # installer default) and so 502s every web→API server-side call.
 env_set WEB_HOSTNAME_API "api"
 env_set WEB_PORT_API "3001"
@@ -374,6 +376,7 @@ STATE_JSON="$(jq -n \
     --arg app "${APP_BASE_URL}" \
     --arg kc "${KC_BASE_URL}" \
     --arg org "${ORG_ID}" \
+    --arg ssh_key "${LOCAL_SSH_KEY}" \
     --arg ignore_tls "${IGNORE_TLS}" \
     '{
         base: $base,
@@ -381,6 +384,7 @@ STATE_JSON="$(jq -n \
         app_url: $app,
         kc_url: $kc,
         org_id: $org,
+        ssh_key: $ssh_key,
         ignore_tls: $ignore_tls
     }')"
 echo "${STATE_JSON}" > "${REPO_ROOT}/.tmp/sso-e2e-droplet.json"

@@ -84,6 +84,57 @@ function vertexModelFromSaJson(
     }
 }
 
+/**
+ * Resolve the Vertex project id for keyless auth from the environment.
+ *
+ * `GOOGLE_CLOUD_PROJECT` and `GCLOUD_PROJECT` are the variables
+ * google-auth-library itself reads, so a deployment already configured for
+ * Application Default Credentials will normally have one of them set.
+ */
+function vertexProjectFromEnv(): string | undefined {
+    const project = (
+        process.env.GOOGLE_CLOUD_PROJECT ||
+        process.env.GCLOUD_PROJECT ||
+        ''
+    ).trim();
+    return project || undefined;
+}
+
+/**
+ * Build a Vertex model that authenticates with Application Default
+ * Credentials instead of an explicit service-account key.
+ *
+ * Omitting `googleAuthOptions` lets google-auth-library resolve credentials
+ * on its own, which covers GKE/EKS Workload Identity, attached service
+ * accounts on GCE/Cloud Run, and a local `gcloud auth
+ * application-default login`. That means a deployment can run Vertex with no
+ * long-lived key material on disk at all.
+ *
+ * The project id cannot come from the credentials in this mode — a workload
+ * identity credential is an `external_account` file with no `project_id` — so
+ * it is read from the environment instead. Returns null when no project is
+ * configured, so callers keep their existing behaviour and this stays an
+ * opt-in: setting `GOOGLE_CLOUD_PROJECT` (or `GCLOUD_PROJECT`) with no key is
+ * what selects the keyless path.
+ */
+function vertexModelFromAdc(
+    modelId: string,
+    locationOverride?: string,
+): LanguageModel | null {
+    const project = vertexProjectFromEnv();
+    if (!project) return null;
+    try {
+        const location = locationOverride?.trim() || 'global';
+        const settings = { project, location };
+        if (CLAUDE_MODEL_PATTERN.test(modelId)) {
+            return createVertexAnthropic(settings)(modelId);
+        }
+        return createVertex(settings)(modelId);
+    } catch {
+        return null;
+    }
+}
+
 const CLAUDE_MODEL_PATTERN = /^claude[-_]/i;
 const GEMINI_MODEL_PATTERN = /^gemini[-_]/i;
 
@@ -157,9 +208,12 @@ function isProxyBaseURL(baseURL: string | undefined): boolean {
 /**
  * Default model config when no BYOK is configured.
  */
+export const KODUS_TRIAL_MODEL =
+    'accounts/fireworks/models/deepseek-v4-flash-0731';
+
 const DEFAULT_MODEL = {
     provider: BYOKProvider.OPENAI_COMPATIBLE,
-    model: 'deepseek-v4-flash',
+    model: KODUS_TRIAL_MODEL,
 };
 
 /**
@@ -228,6 +282,10 @@ function shouldEnableJsonSchema(
         if (!baseURL) return false;
         // vLLM defaults to port 8000 and the issue's target case.
         if (/:8000(\/|$)/.test(baseURL)) return true;
+        // Fireworks supports strict json_schema via structuredOutputs.
+        // Without this flag the AI SDK emits legacy response_format and the
+        // provider warns (and may ignore the schema).
+        if (/api\.fireworks\.ai/i.test(baseURL)) return true;
         // Opt-in comma-separated allowlist of substrings, e.g.
         // "vllm.internal,my-llm-proxy.example.com". Set by ops when
         // running behind a non-vLLM but schema-capable proxy.
@@ -320,6 +378,25 @@ export function byokToVercelModel(
                         envMode,
                     );
                 }
+                //   4. No key at all, but a project is configured — use
+                //      Application Default Credentials (Workload Identity,
+                //      attached service account, or `gcloud auth
+                //      application-default login`).
+                //
+                //      Gated on `!openaiKey` so an explicitly configured key
+                //      always wins over an ambient identity: GOOGLE_CLOUD_PROJECT
+                //      is set by default on GCE/Cloud Run, so without this a
+                //      deployment that only set API_OPEN_AI_API_KEY would be
+                //      switched to Vertex by an env var it never opted into.
+                //      Mirrors the claude branch, where the native Anthropic key
+                //      takes precedence over the Vertex path.
+                if (!openaiKey) {
+                    const adcModel = vertexModelFromAdc(
+                        envMode,
+                        process.env.API_VERTEX_AI_LOCATION,
+                    );
+                    if (adcModel) return adcModel;
+                }
                 // No Google-side key at all — fall through to the cloud
                 // Gemini default below.
             }
@@ -332,17 +409,26 @@ export function byokToVercelModel(
                     ...(openaiBaseURL ? { baseURL: openaiBaseURL } : {}),
                 })(envMode);
             }
-            if (isClaude && vertexKey && !viaProxy) {
+            if (isClaude && !viaProxy) {
                 // Claude on Vertex (MaaS): the SA JSON in API_VERTEX_AI_API_KEY
                 // routes through @ai-sdk/google-vertex/anthropic. Only reached
                 // when no direct Anthropic key (API_OPEN_AI_API_KEY) is set —
-                // that native path above takes precedence.
-                const vertexModel = vertexModelFromSaJson(
-                    vertexKey,
+                // that native path above takes precedence. With no SA JSON,
+                // fall back to Application Default Credentials when a project
+                // is configured.
+                const vertexModel = vertexKey
+                    ? vertexModelFromSaJson(
+                          vertexKey,
+                          envMode,
+                          process.env.API_VERTEX_AI_LOCATION,
+                      )
+                    : null;
+                if (vertexModel) return vertexModel;
+                const adcClaude = vertexModelFromAdc(
                     envMode,
                     process.env.API_VERTEX_AI_LOCATION,
                 );
-                if (vertexModel) return vertexModel;
+                if (adcClaude) return adcClaude;
             }
             if (openaiKey) {
                 return createOpenAICompatible({
@@ -363,10 +449,27 @@ export function byokToVercelModel(
             // (it'll fail fast on the API call instead of here).
         }
 
-        // DeepSeek — the managed default model for the trial / no-BYOK flow.
-        // Detected by model-name prefix so we don't need a new BYOK
-        // provider entry just for the default-only path. Wires through
-        // the OpenAI-compatible adapter pointed at DeepSeek's endpoint.
+        // Fireworks AI — the managed default model for the trial / no-BYOK
+        // flow. Detected by the `accounts/fireworks/models/` prefix so we
+        // don't need a new BYOK provider entry just for the default-only path.
+        // Wires through the OpenAI-compatible adapter pointed at Fireworks.
+        if (/^accounts\/fireworks\/models\//i.test(defaultModel)) {
+            const fireworksKey =
+                process.env.API_FIREWORKS_API_KEY ||
+                process.env.FIREWORKS_API_KEY ||
+                '';
+            return createOpenAICompatible({
+                name: 'fireworks',
+                apiKey: fireworksKey,
+                baseURL:
+                    process.env.API_FIREWORKS_BASE_URL ||
+                    'https://api.fireworks.ai/inference/v1',
+                supportsStructuredOutputs: true,
+            })(defaultModel);
+        }
+
+        // DeepSeek — legacy managed fallback, kept for any lingering explicit
+        // `deepseek-*` override still in flight. New default is Fireworks above.
         if (/^deepseek[-_.]/i.test(defaultModel)) {
             const deepseekKey =
                 process.env.API_DEEPSEEK_API_KEY ||
@@ -381,8 +484,8 @@ export function byokToVercelModel(
             })(defaultModel);
         }
 
-        // Kimi (Moonshot AI) — legacy managed default, kept for any lingering
-        // `kimi-*` override still in flight. New default is DeepSeek above.
+        // Kimi (Moonshot AI) — legacy managed fallback, kept for any lingering
+        // `kimi-*` override still in flight. New default is Fireworks above.
         if (/^kimi[-_.]/i.test(defaultModel)) {
             const moonshotKey =
                 process.env.API_MOONSHOT_API_KEY ||
@@ -441,7 +544,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || 'https://openrouter.ai/api/v1',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 
@@ -451,7 +554,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || '',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 
@@ -461,7 +564,7 @@ export function byokToVercelModel(
                 apiKey,
                 baseURL: baseURL || 'https://api.novita.ai/v3/openai',
                 supportsStructuredOutputs:
-                    options.structuredOutputs === true &&
+                    options.structuredOutputs !== false &&
                     shouldEnableJsonSchema(provider, model, baseURL),
             })(model);
 
@@ -478,6 +581,17 @@ export function byokToVercelModel(
                 config.vertexLocation,
             );
             if (vertexModel) return vertexModel;
+            // No key configured at all: use Application Default Credentials
+            // when a project is set. Guarded on an empty apiKey so a value
+            // that simply isn't SA JSON still takes the AI Studio path below
+            // rather than silently ignoring what the user typed.
+            if (!apiKey?.trim()) {
+                const adcModel = vertexModelFromAdc(
+                    model,
+                    config.vertexLocation,
+                );
+                if (adcModel) return adcModel;
+            }
             return createGoogleGenerativeAI({ apiKey })(model);
         }
 
@@ -523,6 +637,11 @@ export function getModelName(
         const googleAiStudioKey =
             process.env.API_GOOGLE_AI_API_KEY ||
             process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+        // Mirrors the selection in byokToVercelModel, including the keyless
+        // ADC paths — otherwise an ADC deployment reports the default model
+        // while Vertex is the one actually serving the request.
+        const usesAdc =
+            !process.env.API_VERTEX_AI_API_KEY && !!vertexProjectFromEnv();
         if (isGemini && !viaProxy) {
             if (googleAiStudioKey) {
                 return `google_ai_studio:${envMode}`;
@@ -530,12 +649,17 @@ export function getModelName(
             if (process.env.API_VERTEX_AI_API_KEY) {
                 return `google_vertex:${envMode}`;
             }
+            if (!process.env.API_OPEN_AI_API_KEY && usesAdc) {
+                return `google_vertex:${envMode}`;
+            }
         }
         if (isClaude && process.env.API_OPEN_AI_API_KEY && !viaProxy) {
             return `anthropic:${envMode}`;
         }
-        if (isClaude && process.env.API_VERTEX_AI_API_KEY && !viaProxy) {
-            return `google_vertex:${envMode}`;
+        if (isClaude && !viaProxy) {
+            if (process.env.API_VERTEX_AI_API_KEY || usesAdc) {
+                return `google_vertex:${envMode}`;
+            }
         }
         if (process.env.API_OPEN_AI_API_KEY) {
             return `openai_compatible:${envMode}`;
@@ -595,6 +719,19 @@ export function getInternalModel(
                 if (vertexModel) return vertexModel;
                 return createGoogleGenerativeAI({ apiKey: vertexKey })(envMode);
             }
+            // Keyless ADC, same precedence as byokToVercelModel. Without this
+            // an ADC deployment has no internal model at all: it falls past
+            // both Vertex branches, has no openaiKey either, and returns null
+            // below — which resolveSecondaryPassModel passes straight through,
+            // so the secondary pass (dedup, severity, formatting) is dropped
+            // and every duplicate suggestion ships to the PR.
+            if (!openaiKey) {
+                const adcModel = vertexModelFromAdc(
+                    envMode,
+                    process.env.API_VERTEX_AI_LOCATION,
+                );
+                if (adcModel) return adcModel;
+            }
         }
         if (isClaude && openaiKey && !viaProxy) {
             return createAnthropic({
@@ -602,14 +739,21 @@ export function getInternalModel(
                 ...(openaiBaseURL ? { baseURL: openaiBaseURL } : {}),
             })(envMode);
         }
-        if (isClaude && vertexKey && !viaProxy) {
+        if (isClaude && !viaProxy) {
             // Claude on Vertex (MaaS) — see byokToVercelModel for rationale.
-            const vertexModel = vertexModelFromSaJson(
-                vertexKey,
+            const vertexModel = vertexKey
+                ? vertexModelFromSaJson(
+                      vertexKey,
+                      envMode,
+                      process.env.API_VERTEX_AI_LOCATION,
+                  )
+                : null;
+            if (vertexModel) return vertexModel;
+            const adcClaude = vertexModelFromAdc(
                 envMode,
                 process.env.API_VERTEX_AI_LOCATION,
             );
-            if (vertexModel) return vertexModel;
+            if (adcClaude) return adcClaude;
         }
         if (openaiKey) {
             return createOpenAICompatible({

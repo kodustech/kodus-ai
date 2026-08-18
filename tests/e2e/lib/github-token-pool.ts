@@ -1,5 +1,5 @@
 /**
- * GitHub e2e token pool.
+ * GitHub e2e harness credential.
  *
  * GitHub's rate limits — both the 5k/h primary budget and (worse for us) the
  * per-account *secondary* limits on content creation (branches/PRs/comments) —
@@ -7,41 +7,16 @@
  * single bot token, so one account's budget is the ceiling for the whole run;
  * when it trips we get `HTTP 403` / opaque `items is not iterable` failures.
  *
- * Spreading the cells across several bot accounts multiplies both budgets
- * linearly. This module just resolves the available tokens; the runner does
- * the round-robin assignment per GitHub cell.
- *
- * Sources, in priority order:
- *   1. `GH_TEST_TOKENS` — a single secret holding a comma/space/newline list
- *      (easiest to manage as one secret).
- *   2. `GH_TEST_TOKEN` + `GH_TEST_TOKEN_2..N` — the base token plus numbered
- *      siblings, one per extra bot account.
- *
- * Always backward compatible: with only `GH_TEST_TOKEN` set, the pool is a
- * single token and behaviour is identical to before.
+ * High-volume traffic now uses the GitHub App installation token. A single
+ * human PAT remains solely for PR/comment authorship because Kodus ignores
+ * bot-authored review triggers. Keeping this resolver's array shape avoids a
+ * broad runner rewrite while deliberately rejecting token pools.
  */
-
-const MAX_NUMBERED = 9;
-
-function dedupe(tokens: string[]): string[] {
-    return [...new Set(tokens.map((t) => t.trim()).filter(Boolean))];
-}
 
 export function githubTokenPool(
     env: NodeJS.ProcessEnv = process.env,
 ): string[] {
-    const list = env.GH_TEST_TOKENS?.split(/[\s,]+/);
-    if (list && dedupe(list).length > 0) {
-        return dedupe(list);
-    }
-
-    const numbered: string[] = [];
-    if (env.GH_TEST_TOKEN) numbered.push(env.GH_TEST_TOKEN);
-    for (let i = 2; i <= MAX_NUMBERED; i++) {
-        const v = env[`GH_TEST_TOKEN_${i}`];
-        if (v) numbered.push(v);
-    }
-    return dedupe(numbered);
+    return env.GH_TEST_TOKEN ? [env.GH_TEST_TOKEN.trim()].filter(Boolean) : [];
 }
 
 export interface GithubTokenAssignment {
@@ -102,15 +77,13 @@ export interface RateLimitInfo {
  * validate it against GitHub, and the stored credential has to outlive the
  * run, so an installation token (~1h) is rejected there.
  *
- * The fallback is the trap. With GH_INTEGRATION_TOKEN unset this silently
- * becomes GH_TEST_TOKEN -- the same abuse-flagged bot account the harness is
- * already draining -- and the two consumers share one penalised budget. That
- * is what exhausted run 31270321822 on its FIRST scenario, in a call that no
- * amount of App migration would have covered.
+ * There is deliberately no fallback. The harness author and the credential
+ * stored by the product have different permission and lifetime contracts;
+ * conflating them caused opaque onboarding HTTP 400 failures.
  */
 export function integrationTokenInfo(env: NodeJS.ProcessEnv = process.env): {
     token?: string;
-    source: 'GH_INTEGRATION_TOKEN' | 'GH_TEST_TOKEN' | 'none';
+    source: 'GH_INTEGRATION_TOKEN' | 'none';
     sharedWithDriverPool: boolean;
 } {
     if (env.GH_INTEGRATION_TOKEN) {
@@ -120,13 +93,6 @@ export function integrationTokenInfo(env: NodeJS.ProcessEnv = process.env): {
             sharedWithDriverPool: githubTokenPool(env).includes(
                 env.GH_INTEGRATION_TOKEN,
             ),
-        };
-    }
-    if (env.GH_TEST_TOKEN) {
-        return {
-            token: env.GH_TEST_TOKEN,
-            source: 'GH_TEST_TOKEN',
-            sharedWithDriverPool: true,
         };
     }
     return { source: 'none', sharedWithDriverPool: false };
@@ -201,17 +167,11 @@ export async function preflightIntegrationToken(
     const info = integrationTokenInfo(env);
     if (!info.token) {
         log.warn(
-            '[preflight] no GitHub integration credential (GH_INTEGRATION_TOKEN / GH_TEST_TOKEN) - the product cannot register its integration',
+            '[preflight] GH_INTEGRATION_TOKEN is missing - provider=github cannot register its integration',
         );
         return undefined;
     }
-    if (info.source === 'GH_TEST_TOKEN') {
-        log.warn(
-            "[preflight] GH_INTEGRATION_TOKEN is UNSET - the product's stored GitHub credential falls back to GH_TEST_TOKEN, " +
-                'so the harness and the product drain the SAME account. Set GH_INTEGRATION_TOKEN (and GH_INTEGRATION_TOKEN_PAID) ' +
-                'to a separate, non-abuse-flagged account.',
-        );
-    } else if (info.sharedWithDriverPool) {
+    if (info.sharedWithDriverPool) {
         log.warn(
             '[preflight] GH_INTEGRATION_TOKEN is ALSO in the driver pool - the product and the harness share one budget. ' +
                 'Use a dedicated account for the integration credential.',

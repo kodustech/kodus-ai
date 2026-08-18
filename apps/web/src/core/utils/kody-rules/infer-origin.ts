@@ -25,6 +25,7 @@ const IDE_RULE_SOURCE_PATTERNS: RegExp[] = [
     /(?:^|\/)\.github\/instructions\//i,
     /(?:^|\/)AGENTS\.md$/i,
     /(?:^|\/)\.agents?\.md$/i,
+    /(?:^|\/)\.agents\/rules\//i,
     /(?:^|\/)CLAUDE\.md$/i,
     /(?:^|\/)\.claude\//i,
     /(?:^|\/)\.windsurfrules$/i,

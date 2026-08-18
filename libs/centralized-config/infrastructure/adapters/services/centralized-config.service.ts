@@ -495,6 +495,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
     }> {
         const { organizationAndTeamData, configFiles, actor } = params;
 
+
         try {
             const codeReviewConfig = await this.parametersService.findByKey(
                 ParametersKey.CODE_REVIEW_CONFIG,
@@ -508,7 +509,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 };
             }
 
-            // #1518 guard: an empty discovery would reset the global config
+            // An empty discovery would reset the global config
             // (default model / BYOK) to {}, delete every repository config, and
             // wipe custom messages. An empty configFiles set almost always
             // means a failed/empty read, not "the user removed everything" —
@@ -534,10 +535,10 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             // Repository-scope files only: `{repo}/kodus-config.yml`, never a
             // directory scope underneath it. Both spellings are checked
             // because discovery stopped setting `directoryPath` on config-file
-            // metas in 7ca98c8d9 ("Fixing sync multi directories") and emits
+            // metas once multi-directory groups landed, and emits
             // `directoryPaths` instead — the singular check alone therefore
             // admits every directory scope. That was invisible while this set
-            // only meant "keep"; as the #1579 baseline it makes a repository
+            // only meant "keep"; as an ownership baseline it makes a repository
             // whose sole centralized file is a directory scope look like the
             // owner of a repository-level config, so removing that directory
             // deselects the entire repository.
@@ -552,7 +553,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     .map((meta) => meta.repositoryId as string),
             );
 
-            // #1579 guard: a repository with no `{repo}/kodus-config.yml` is
+            // A repository with no `{repo}/kodus-config.yml` is
             // inheriting the global config, NOT asking to be unconfigured.
             // Deriving "stale" from the current discovery alone conflates the
             // two and wipes every repo the config repo simply doesn't mention.
@@ -580,10 +581,36 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     .map((meta) => meta.repositoryId as string),
             );
 
-            /** Is this repository owned by the centralized config at all? */
-            const isManagedRepository = (repositoryId: string) =>
-                discoveredRepositoryIds.has(repositoryId) ||
-                managedRepositoryIds.has(repositoryId);
+            // Directory scopes need their own baseline, at their own
+            // granularity. `managedRepositoryIds` cannot stand in for it:
+            //
+            //  - it only records repositories carrying a
+            //    `{repo}/kodus-config.yml`, so a repository whose sole
+            //    centralized file is a directory scope was in no baseline at
+            //    all. Delete that file and discovery and baseline went blank
+            //    on the same round, so the reconcile skipped the repository
+            //    whose scope it was meant to clean and the scope outlived its
+            //    own removal;
+            //  - and reconciling by repository is too coarse in the other
+            //    direction. `mergeConfigScopes` folds Kody-rule files into the
+            //    config scopes, so `{repo}/.kody-rules/review/x.yml` makes the
+            //    repository look managed while saying nothing about its
+            //    directories — and every directory scope created in the UI
+            //    then looked stale.
+            //
+            // Recording the scopes themselves answers both: a directory is
+            // removable only when a previous sync owned THAT directory.
+            const managedDirectoryScopes = new Map<string, Set<string>>(
+                Object.entries(
+                    centralizedConfigParameter?.configValue
+                        ?.managedDirectoryScopes ?? {},
+                ).map(([repositoryId, groupFolderNames]) => [
+                    repositoryId,
+                    new Set(
+                        Array.isArray(groupFolderNames) ? groupFolderNames : [],
+                    ),
+                ]),
+            );
 
             /** Owned before, gone now — a genuine removal. */
             const isStaleRepository = (repositoryId: string) =>
@@ -662,9 +689,11 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             // Reuse existing deletion logic for directory scope removals.
             for (const repository of codeReviewConfig.configValue
                 .repositories ?? []) {
-                // #1579: never reconcile directories of a repository the
-                // centralized config does not own.
-                if (!isManagedRepository(repository.id)) {
+                // No record of this repository ever having centralized
+                // directory scopes — nothing here is ours to reconcile.
+                const managedScopes = managedDirectoryScopes.get(repository.id);
+
+                if (!managedScopes?.size) {
                     continue;
                 }
 
@@ -703,7 +732,17 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                             primaryPath &&
                             desiredDirectoryPaths.has(primaryPath);
 
-                        return !isTrackedByGroup && !isTrackedByPath;
+                        if (isTrackedByGroup || isTrackedByPath) {
+                            return false;
+                        }
+
+                        // Absent from the config repo now. Only a removal if
+                        // a previous sync owned this exact scope; anything
+                        // else was created outside the centralized config.
+                        return (
+                            dbGroupFolderName !== null &&
+                            managedScopes.has(dbGroupFolderName)
+                        );
                     },
                 );
 
@@ -737,7 +776,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             for (const repository of refreshedCodeReviewConfig.configValue
                 .repositories ?? []) {
-                // #1579: only a repository that was managed before and is
+                // Only a repository that was managed before and is
                 // absent now is a genuine removal. Everything else is either
                 // still configured or was never ours to unconfigure.
                 if (!isStaleRepository(repository.id)) {
@@ -787,7 +826,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             let hasChanges = false;
 
-            // #1579: same rule for the global config — only reset it if a
+            // Same rule for the global config — only reset it if a
             // previous sync owned a global `kodus-config.yml` that is now gone.
             const globalWasManaged =
                 centralizedConfigParameter?.configValue?.managedGlobalConfig ===
@@ -841,9 +880,72 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 hasChanges = true;
             }
 
+            // Directory ids the centralized config may reconcile: exactly the
+            // scopes a previous sync owned, by the same rule the directory
+            // loop uses. A scope created in the UI is not Sync's to clean up,
+            // and neither are its messages.
+            const reconcilableDirectoryIds = new Set<string>(
+                (refreshedCodeReviewConfig.configValue.repositories ?? [])
+                    .flatMap((repository) => {
+                        const managedScopes = managedDirectoryScopes.get(
+                            repository.id,
+                        );
+
+                        if (!managedScopes?.size) {
+                            return [];
+                        }
+
+                        return (repository.directories ?? [])
+                            .filter((directory) => {
+                                if (!directory.folders?.length) {
+                                    return false;
+                                }
+
+                                try {
+                                    return managedScopes.has(
+                                        buildGroupFolderName(
+                                            directory.folders.map(
+                                                (folder) => folder.path,
+                                            ),
+                                        ),
+                                    );
+                                } catch (error) {
+                                    // Folder paths that cannot be encoded are
+                                    // a data anomaly, not a normal outcome.
+                                    // Treating the scope as unreconcilable is
+                                    // the safe answer, but it must leave a
+                                    // trace — otherwise its messages are
+                                    // silently skipped forever.
+                                    this.logger.warn({
+                                        message:
+                                            'Skipping directory scope with unencodable folder paths while resolving reconcilable scopes',
+                                        context: CentralizedConfigService.name,
+                                        metadata: {
+                                            organizationAndTeamData,
+                                            repositoryId: repository.id,
+                                            directoryId: directory.id,
+                                            folderPaths: directory.folders.map(
+                                                (folder) => folder.path,
+                                            ),
+                                        },
+                                        error,
+                                    });
+
+                                    return false;
+                                }
+                            })
+                            .map((directory) => directory.id);
+                    }),
+            );
+
             const staleMessagesResult = await this.removeStaleCustomMessages(
                 configFiles,
                 organizationAndTeamData,
+                {
+                    isStaleRepository,
+                    globalWasManaged,
+                    reconcilableDirectoryIds,
+                },
             );
 
             if (!staleMessagesResult.success) {
@@ -857,7 +959,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 });
             }
 
-            // #1579: record what this sync owns so the NEXT one can tell a
+            // Record what this sync owns so the NEXT one can tell a
             // deleted `kodus-config.yml` from one that never existed. Written
             // even when nothing changed — the baseline is what makes the very
             // first run safe and every later run precise.
@@ -895,6 +997,15 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                         ...freshCentralizedConfig.configValue,
                         managedRepositoryIds: Array.from(
                             desiredRepositoryConfigs,
+                        ),
+                        managedDirectoryScopes: Object.fromEntries(
+                            Array.from(
+                                desiredGroupFolderNamesByRepository,
+                                ([repositoryId, groupFolderNames]) => [
+                                    repositoryId,
+                                    Array.from(groupFolderNames),
+                                ],
+                            ),
                         ),
                         managedGlobalConfig: desiredHasGlobalConfig,
                     },
@@ -1027,7 +1138,17 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         success: boolean;
         message: string;
     }> {
-        const { repositoryId, directoryPath } = configFileMeta;
+        const { repositoryId } = configFileMeta;
+
+        // Discovery emits `directoryPaths` and stopped setting `directoryPath`
+        // when multi-directory groups landed. Reading only the singular
+        // spelling put every directory scope through the REPOSITORY branch
+        // below, so a directory's custom messages were written onto the
+        // repository — overwriting the repository's own messages, and never
+        // producing a directory-level message at all.
+        const directoryPath =
+            configFileMeta.directoryPath ??
+            configFileMeta.directoryPaths?.[0];
 
         // 1. Determine config level and resolve directory ID FIRST
         let configLevel: ConfigLevel;
@@ -1455,9 +1576,23 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         };
     }
 
+    /**
+     * @param ownership what the centralized config is allowed to reconcile.
+     *        Without it this sweep deletes every message whose scope the
+     *        current discovery does not mention: a repository inheriting the
+     *        global config is not a repository the user unconfigured.
+     */
     private async removeStaleCustomMessages(
         configFiles: IConfigFileMeta[],
         organizationAndTeamData: OrganizationAndTeamData,
+        ownership: {
+            /** Owned by a previous sync and absent now — a genuine removal. */
+            isStaleRepository: (repositoryId: string) => boolean;
+            /** A previous sync owned a global `kodus-config.yml`. */
+            globalWasManaged: boolean;
+            /** Directory ids belonging to repositories the config owns. */
+            reconcilableDirectoryIds: Set<string>;
+        },
     ): Promise<{
         success: boolean;
         message: string;
@@ -1489,41 +1624,70 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 repositories?.map((repo) => [repo.id, repo]) ?? [],
             );
 
+            // Any directory scope this sweep could not resolve to an id leaves
+            // the desired `DIR:` set incomplete, which would read as "these
+            // scopes are gone". Fail closed: skip directory messages entirely.
+            let directoryScopesFullyResolved = true;
+
             for (const meta of configFiles) {
                 if (!meta.repositoryId) {
                     desiredKeys.add(`GLOBAL`);
-                } else if (!meta.directoryPath) {
+                    continue;
+                }
+
+                // Discovery stopped setting `directoryPath` when
+                // multi-directory groups landed and
+                // emits `directoryPaths` instead. Reading only the singular
+                // spelling produced an empty desired `DIR:` set on every sync,
+                // so every directory-level message was permanently stale.
+                const scopePaths = meta.directoryPaths?.length
+                    ? meta.directoryPaths
+                    : meta.directoryPath
+                      ? [meta.directoryPath]
+                      : [];
+
+                if (scopePaths.length === 0) {
                     desiredKeys.add(`REPO:${meta.repositoryId}`);
-                } else {
-                    const targetRepo = repositoriesMap.get(meta.repositoryId);
+                    continue;
+                }
 
-                    if (targetRepo?.name) {
-                        try {
-                            const directoryId =
-                                await this.codeBaseConfigService.getDirectoryIdForPath(
-                                    organizationAndTeamData,
-                                    {
-                                        id: targetRepo.id,
-                                        name: targetRepo.name,
-                                    },
-                                    meta.directoryPath,
-                                );
+                const targetRepo = repositoriesMap.get(meta.repositoryId);
 
-                            if (directoryId) {
-                                desiredKeys.add(`DIR:${directoryId}`);
-                            }
-                        } catch (error) {
-                            this.logger.warn({
-                                message: `Failed to resolve directory ID for stale message cleanup for path: ${meta.directoryPath}`,
-                                context: CentralizedConfigService.name,
-                                metadata: {
-                                    organizationAndTeamData,
-                                    repositoryId: meta.repositoryId,
-                                    directoryPath: meta.directoryPath,
+                if (!targetRepo?.name) {
+                    directoryScopesFullyResolved = false;
+                    continue;
+                }
+
+                for (const scopePath of scopePaths) {
+                    try {
+                        const directoryId =
+                            await this.codeBaseConfigService.getDirectoryIdForPath(
+                                organizationAndTeamData,
+                                {
+                                    id: targetRepo.id,
+                                    name: targetRepo.name,
                                 },
-                                error,
-                            });
+                                scopePath,
+                            );
+
+                        if (directoryId) {
+                            desiredKeys.add(`DIR:${directoryId}`);
+                        } else {
+                            directoryScopesFullyResolved = false;
                         }
+                    } catch (error) {
+                        directoryScopesFullyResolved = false;
+
+                        this.logger.warn({
+                            message: `Failed to resolve directory ID for stale message cleanup for path: ${scopePath}`,
+                            context: CentralizedConfigService.name,
+                            metadata: {
+                                organizationAndTeamData,
+                                repositoryId: meta.repositoryId,
+                                directoryPath: scopePath,
+                            },
+                            error,
+                        });
                     }
                 }
             }
@@ -1531,22 +1695,35 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             // 3. Compare and delete stale entities
             for (const message of existingMessages) {
                 let key: string | undefined;
+                // Absence only means "removed" for a scope the centralized
+                // config owned. Everything else in this organization's
+                // messages was authored elsewhere and is not Sync's to delete.
+                let isOwnedScope = false;
 
                 if (message.configLevel === ConfigLevel.GLOBAL) {
                     key = 'GLOBAL';
+                    isOwnedScope = ownership.globalWasManaged;
                 } else if (
                     message.configLevel === ConfigLevel.REPOSITORY &&
                     message.repositoryId
                 ) {
                     key = `REPO:${message.repositoryId}`;
+                    isOwnedScope = ownership.isStaleRepository(
+                        message.repositoryId,
+                    );
                 } else if (
                     message.configLevel === ConfigLevel.DIRECTORY &&
                     message.directoryId
                 ) {
                     key = `DIR:${message.directoryId}`;
+                    isOwnedScope =
+                        directoryScopesFullyResolved &&
+                        ownership.reconcilableDirectoryIds.has(
+                            message.directoryId,
+                        );
                 }
 
-                if (key && !desiredKeys.has(key)) {
+                if (key && isOwnedScope && !desiredKeys.has(key)) {
                     // Extract the UUID from the entity
                     const entityUuid = message.uuid;
 
@@ -2192,7 +2369,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             }
 
             return {
-                // #1518: a partial sync must NOT report success — the use-case
+                // A partial sync must NOT report success — the use-case
                 // surfaces this so the caller sees the real state (not a
                 // success-shaped result), and removeStale* does not run on an
                 // incomplete materialization.
@@ -2261,6 +2438,14 @@ export class CentralizedConfigService implements ICentralizedConfigService {
     async removeStaleKodyRules(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         ruleFiles: IKodyRuleFileMeta[];
+        /**
+         * Config files found by the SAME repository-tree read that produced
+         * `ruleFiles`. A configured centralized repository always holds at
+         * least the root `kodus-config.yml`, so finding any config file is
+         * proof the read worked — which is what tells "the user deleted the
+         * last rule" apart from "the tree came back empty".
+         */
+        configFiles?: IConfigFileMeta[];
         actor: {
             organizationId: string;
             source: 'sync' | 'web' | 'cli';
@@ -2272,7 +2457,8 @@ export class CentralizedConfigService implements ICentralizedConfigService {
         message: string;
         removedRuleCount?: number;
     }> {
-        const { organizationAndTeamData, ruleFiles, actor } = params;
+        const { organizationAndTeamData, ruleFiles, configFiles, actor } =
+            params;
 
         try {
             const existingEntity =
@@ -2295,14 +2481,26 @@ export class CentralizedConfigService implements ICentralizedConfigService {
 
             const existingRules = existingEntity?.toJson?.()?.rules || [];
 
-            // #1518 guard: an empty discovery (currentSourcePaths empty) while
-            // centralized rules exist would delete every synced rule. That is
-            // almost always a failed/empty read, not an intentional "delete
-            // all" — refuse to wipe and surface it.
+            // An empty discovery (currentSourcePaths empty) while
+            // centralized rules exist would delete every synced rule, and a
+            // failed read looks exactly like that.
+            //
+            // Unqualified, though, this guard also made the LAST rule
+            // undeletable: removing one of two propagated, removing the
+            // survivor did not, because "none left" and "read failed" are the
+            // same zero. `configFiles` breaks the tie — it comes from the same
+            // tree read, and a configured centralized repository always holds
+            // the root `kodus-config.yml`, so finding one proves the read
+            // worked and the rules really are gone.
             const centralizedRuleCount = existingRules.filter(
                 (rule) => rule.centralizedConfig?.path,
             ).length;
-            if (currentSourcePaths.size === 0 && centralizedRuleCount > 0) {
+            const treeReadProven = (configFiles?.length ?? 0) > 0;
+            if (
+                currentSourcePaths.size === 0 &&
+                centralizedRuleCount > 0 &&
+                !treeReadProven
+            ) {
                 this.logger.warn({
                     message:
                         'Skipping stale Kody rule removal: discovery returned zero rule files but centralized rules exist — refusing to wipe (likely a failed read)',
@@ -2429,7 +2627,7 @@ export class CentralizedConfigService implements ICentralizedConfigService {
             // A missing/failed repositories mapping is a READ FAILURE, not
             // "zero files". Returning [] here made discovery indistinguishable
             // from an empty repo, which then drove removeStale* to wipe every
-            // rule and reset the org's global config (issue #1518). Throw so
+            // rule and reset the org's global config. Throw so
             // the sync aborts before any deletion runs.
             this.logger.error({
                 message:

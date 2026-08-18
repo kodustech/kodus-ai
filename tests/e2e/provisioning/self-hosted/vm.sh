@@ -37,7 +37,10 @@ if [ -f "$E2E_ROOT/.env" ]; then
     set -a; . "$E2E_ROOT/.env"; set +a
 fi
 
-TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-digitalocean}"
+# AWS is the default: DigitalOcean is retired, and defaulting to a provider
+# whose credentials no longer exist turns an unset variable into a confusing
+# 401 instead of a working provision.
+TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-aws}"
 MATRIX_FILE="${MATRIX_FILE:-matrix/fast.yml}"
 LICENSE_MODE="${LICENSE_MODE:-license-paid}"
 # Which product topology this stack runs.
@@ -475,7 +478,23 @@ for i in $(seq 1 30); do
     if [ -n "$URL" ]; then SERVER_TUNNEL_URL="$URL"; break; fi
     sleep 3
 done
-[ -n "$SERVER_TUNNEL_URL" ] || { err "tunnel URL never appeared"; exit 1; }
+if [ -z "$SERVER_TUNNEL_URL" ]; then
+    # Say WHY before the instance dies. This path used to fail and terminate
+    # the VM one second later, destroying the only record of what cloudflared
+    # was doing -- so "the tunnel did not come up" was all anyone ever learned,
+    # run after run (gitlab and azure-devops, run 31638485154).
+    err "tunnel URL never appeared after 90s — dumping tunnel state before teardown"
+    echo "----- systemctl status kodus-tunnel -----"
+    ssh_vm "systemctl status kodus-tunnel --no-pager 2>&1 | tail -n 20" || true
+    echo "----- journalctl -u kodus-tunnel -----"
+    ssh_vm "journalctl -u kodus-tunnel --no-pager -n 30 2>&1" || true
+    echo "----- /var/log/cloudflared.log (tail) -----"
+    ssh_vm "tail -n 40 /var/log/cloudflared.log 2>&1" || true
+    echo "----- cloudflared binary -----"
+    ssh_vm "ls -l /usr/local/bin/cloudflared 2>&1; /usr/local/bin/cloudflared --version 2>&1" || true
+    echo "---------------------------------------"
+    exit 1
+fi
 ok "Tunnel: $SERVER_TUNNEL_URL"
 
 # ---------- write .env on VM ----------
@@ -529,9 +548,9 @@ env_set IMAGE_TAG "$IMAGE_TAG"
 env_set API_LOG_LEVEL "info"
 # Point the web's server-side API calls (next-auth authorize → /auth/login,
 # used by rbac-frontend-routes / rbac-ui-render) at the compose SERVICE name
-# `api`, which Docker DNS always resolves on the shared network regardless of
-# container_name. The old literal `kodus-api` matched neither the service
-# (`api`) nor the actual container (`kodus_api` once GLOBAL_API_CONTAINER_NAME
+# \`api\`, which Docker DNS always resolves on the shared network regardless of
+# container_name. The old literal \`kodus-api\` matched neither the service
+# (\`api\`) nor the actual container (\`kodus_api\` once GLOBAL_API_CONTAINER_NAME
 # is set), so authorize() got ENOTFOUND → returned null → the next-auth login
 # 302'd with no session → both RBAC web scenarios failed on self-hosted only
 # (cloud passes: it reaches the API over the public URL, not a docker host).

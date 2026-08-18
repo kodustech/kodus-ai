@@ -7,6 +7,7 @@
 export const FEATURE_KEYS = {
     githubEnterpriseServerPat: 'github-enterprise-server-pat',
     heavyReview: 'heavy-review',
+    kodusTraceReviewContext: 'kodus-trace-review-context',
 } as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[keyof typeof FEATURE_KEYS];

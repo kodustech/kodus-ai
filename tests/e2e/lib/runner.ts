@@ -290,9 +290,50 @@ async function refreshCloudTenantByok(log: {
     const seen = new Set<string>();
     for (const entry of entries) {
         if (entry.license === 'free') {
-            log.info(
-                `[byok-refresh] ${entry.provider}/free: SKIPPED — a free tenant with a BYOK key is a community tenant, and reviews for it are expected`,
-            );
+            // Skipping the write is not enough: the key persists on the tenant
+            // from every run before this one, so the free tenant stays a
+            // community tenant forever and license-attribution keeps failing
+            // (observed on cloud runs 31601925282 and 31608293474 -- the second
+            // one WITH the skip in place). Its identity has to be ENFORCED each
+            // run, not assumed.
+            try {
+                const session = await login(target, {
+                    email: entry.email,
+                    password: entry.password,
+                });
+                const resp = await http(
+                    `${target.apiBaseUrl}/organization-parameters/delete-byok-config?configType=main`,
+                    {
+                        method: 'DELETE',
+                        headers: {
+                            Authorization: `Bearer ${session.accessToken}`,
+                        },
+                        timeoutMs: 30_000,
+                    },
+                );
+                // 2xx cleared something; 400/404 means there was nothing to
+                // clear, which is the state we want and not a failure. Saying
+                // "CLEARED" on a 400 was a line that lied about its own
+                // result -- the exact habit this matrix spent the day
+                // removing from everywhere else.
+                if (resp.status >= 200 && resp.status < 300) {
+                    log.info(
+                        `[byok-refresh] ${entry.provider}/free: byok_config CLEARED — a free tenant is defined by having no key of its own`,
+                    );
+                } else if (resp.status === 400 || resp.status === 404) {
+                    log.info(
+                        `[byok-refresh] ${entry.provider}/free: no byok_config to clear (HTTP ${resp.status}) — already in the state a free tenant should be in`,
+                    );
+                } else {
+                    log.warn(
+                        `[byok-refresh] ${entry.provider}/free: clearing byok_config returned HTTP ${resp.status} — license-attribution will fail if a key is still stored`,
+                    );
+                }
+            } catch (err) {
+                log.warn(
+                    `[byok-refresh] ${entry.provider}/free: could not clear byok_config (${(err as Error).message.slice(0, 120)}) — license-attribution will fail if a key is still stored`,
+                );
+            }
             continue;
         }
         if (seen.has(entry.email)) continue;
@@ -574,9 +615,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                 repo,
             });
         }
-        // Spread cleanup's repo/PR listing across the bot-account pool too —
-        // otherwise every fixture lists on the single default account and helps
-        // exhaust its per-account GitHub rate limit before the cells even run.
+        // Cleanup uses the single human credential before cells start.
         const pickCleanupToken = makeGithubTokenPicker();
         for (const { provider: providerName, repo } of fixtures.values()) {
             const label = `${providerName}${repo ? ` (${repo})` : ''}`;
@@ -608,8 +647,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
         }
     }
 
-    // Round-robins GitHub cells across the bot-account token pool so no single
-    // account's rate limit caps the run (no-op with a single token).
+    // Single human author credential. High-volume scenario traffic is moved
+    // to the App installation token below.
     const pickGithubToken = makeGithubTokenPicker();
 
     // Report each bot account's remaining GitHub budget up front (free — GET
@@ -617,9 +656,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // visible before the cells run instead of as an opaque mid-run 403 cascade.
     if (!opts.dryRun && opts.cells.some((c) => c.provider === "github")) {
         await preflightGithubRateLimits(log);
-        // …and the credential the PRODUCT stores, which the pool preflight
-        // never looked at. It is a DIFFERENT account (or, when
-        // GH_INTEGRATION_TOKEN is unset, silently the same one), and it is the
+        // …and the credential the PRODUCT stores, which the driver preflight
+        // never looked at. It is a DIFFERENT account, and it is the
         // one /code-management/auth-integration validates against GitHub —
         // the exact call that exhausted run 31270321822 on its first scenario.
         await preflightIntegrationToken(log);
@@ -745,9 +783,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
 
             log.info(`RUN   ${cellLabel}`);
 
-            // Assign this GitHub run a token from the bot-account pool
-            // (round-robin). Same token across both attempts so a retry stays
-            // on the same account; other cells keep draining the other tokens.
+            // Resolve the one human author credential before replacing the
+            // high-volume driver token with an App installation token below.
             const ghAssignment =
                 cell.provider === "github" ? pickGithubToken() : undefined;
             let githubToken = ghAssignment?.token;
@@ -768,16 +805,17 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
             // provider.currentUserId() now resolves that ONE call from the
             // durable PAT, so both targets can put their heavy traffic on
             // the App budget — which is where the quota SKIPs came from.
-            if (cell.provider === "github") {
+            if (cell.provider === "github" || cell.provider === "github-app") {
                 try {
                     const appToken = await githubAppToken();
                     if (appToken) {
                         githubToken = appToken;
-                        log.info("  github → App installation token");
+                        log.info(`  ${cell.provider} → App installation token`);
                     }
                 } catch (err) {
+                    if (cell.provider === "github-app") throw err;
                     log.err(
-                        `  github → App token mint FAILED (${(err as Error).message.slice(0, 160)}) — falling back to PAT pool`,
+                        `  github → App token mint FAILED (${(err as Error).message.slice(0, 160)}) — using the single human PAT`,
                     );
                 }
             }

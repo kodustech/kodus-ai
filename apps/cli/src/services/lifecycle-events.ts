@@ -6,6 +6,7 @@ import type {
     ToolCall,
 } from '../types/session.js';
 import type { SessionApiEvent } from '../types/session-events.js';
+import { redact, redactDeep, type Redacted } from './trace/redaction.js';
 
 export function buildSessionStartEvent(input: {
     sessionId: string;
@@ -16,7 +17,7 @@ export function buildSessionStartEvent(input: {
     cliVersion: string;
     timestamp: string;
 }): SessionApiEvent {
-    return {
+    return redactDeep({
         type: 'session_start',
         sessionId: input.sessionId,
         branch: input.branch,
@@ -25,18 +26,22 @@ export function buildSessionStartEvent(input: {
         gitRemote: input.gitRemote,
         baseCommit: input.baseCommit,
         cliVersion: input.cliVersion,
-    };
+    });
 }
 
+/**
+ * `prompt` is `Redacted`, not `string`, so an unredacted transcript cannot
+ * reach the API by accident — the only way to produce that type is `redact()`.
+ */
 export function buildTurnStartEvent(input: {
     sessionId: string;
     branch: string;
     turnId: string;
-    prompt: string;
+    prompt: Redacted;
     commitBefore: string;
     timestamp: string;
 }): SessionApiEvent {
-    return {
+    return redactDeep({
         type: 'turn_start',
         sessionId: input.sessionId,
         branch: input.branch,
@@ -44,14 +49,15 @@ export function buildTurnStartEvent(input: {
         turnId: input.turnId,
         prompt: input.prompt,
         commitBefore: input.commitBefore,
-    };
+    });
 }
 
+/** `response` is `Redacted` for the same reason as `buildTurnStartEvent`. */
 export function buildTurnEndEvent(input: {
     sessionId: string;
     branch: string;
     turnId: string;
-    response: string;
+    response: Redacted;
     toolCalls: ToolCall[];
     filesModified: FileChange[];
     filesRead: string[];
@@ -60,20 +66,26 @@ export function buildTurnEndEvent(input: {
     commitAfter: string;
     timestamp: string;
 }): SessionApiEvent {
-    return {
+    return redactDeep({
         type: 'turn_end',
         sessionId: input.sessionId,
         branch: input.branch,
         timestamp: input.timestamp,
         turnId: input.turnId,
-        response: input.response,
-        toolCalls: input.toolCalls,
+        response: redact(input.response),
+        // Tool inputs and shell commands are free text the agent assembled, so
+        // they get the same treatment as the prompt rather than being trusted.
+        toolCalls: input.toolCalls.map((call) => ({
+            ...call,
+            input: redactDeep(call.input),
+            output: call.output ? redact(call.output) : call.output,
+        })),
         filesModified: input.filesModified,
         filesRead: input.filesRead,
-        commands: input.commands,
+        commands: input.commands.map((command) => redact(command)),
         tokenUsage: input.tokenUsage,
         commitAfter: input.commitAfter,
-    };
+    });
 }
 
 export function buildSessionEndEvent(input: {
@@ -81,12 +93,12 @@ export function buildSessionEndEvent(input: {
     branch: string;
     timestamp: string;
 }): SessionApiEvent {
-    return {
+    return redactDeep({
         type: 'session_end',
         sessionId: input.sessionId,
         branch: input.branch,
         timestamp: input.timestamp,
-    };
+    });
 }
 
 export function buildSubagentStartEvent(input: {
@@ -113,15 +125,15 @@ export function buildSubagentStartEvent(input: {
         ) ??
         '';
 
-    return {
+    return redactDeep({
         type: 'subagent_start',
         sessionId: input.event.sessionId,
         branch: input.branch,
         timestamp: input.timestamp,
         toolUseId: input.event.toolUseId ?? '',
         subagentType,
-        taskDescription,
-    };
+        taskDescription: redact(taskDescription),
+    });
 }
 
 export function buildSubagentEndEvent(input: {
@@ -130,13 +142,13 @@ export function buildSubagentEndEvent(input: {
     toolUseId: string;
     timestamp: string;
 }): SessionApiEvent {
-    return {
+    return redactDeep({
         type: 'subagent_end',
         sessionId: input.sessionId,
         branch: input.branch,
         timestamp: input.timestamp,
         toolUseId: input.toolUseId,
-    };
+    });
 }
 
 function pickString(

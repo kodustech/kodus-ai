@@ -259,3 +259,7 @@ evals/kody-rules/prod-rules.json
 
 .tessl
 .claude/skills/tlc-spec-driven
+
+# runo: validation evidence downloaded per-run (see .kodus/workspace.yaml)
+.kodus/evidence/
+runo

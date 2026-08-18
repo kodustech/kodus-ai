@@ -1,0 +1,173 @@
+[
+  {
+    "description": "helpful context baseline: 12h dedupe retention looks locally plausible",
+    "vars": {
+      "caseId": "webhook-retention-violation-baseline",
+      "pairId": "webhook-retention-violation",
+      "variant": "baseline",
+      "mode": "full",
+      "prTitle": "Reduce webhook dedupe storage",
+      "prBody": "Shortens dedupe retention to reduce Redis memory usage.",
+      "repositoryFullName": "eval/trace-context",
+      "reviewMode": "normal",
+      "maxSteps": 6,
+      "requestedCategories": "[\"bug\",\"performance\"]",
+      "changedFiles": [
+        {
+          "filename": "src/webhooks/dedupe-store.ts",
+          "patchWithLinesStr": "## file: 'src/webhooks/dedupe-store.ts'\n@@ -3,1 +3,1 @@\n-const DEDUPE_TTL_SECONDS = 86_400;\n+const DEDUPE_TTL_SECONDS = 43_200;\n"
+        }
+      ],
+      "toolReplay": {
+        "readFile": [
+          {
+            "match": { "path": "src/webhooks/dedupe-store.ts" },
+            "result": "const DEDUPE_TTL_SECONDS = 43_200;\n\nexport async function claimDelivery(deliveryId: string): Promise<boolean> {\n  const created = await redis.set(`webhook:${deliveryId}`, '1', { NX: true, EX: DEDUPE_TTL_SECONDS });\n  return created === 'OK';\n}\n"
+          },
+          {
+            "match": { "path": "src/webhooks/handler.ts" },
+            "result": "export async function handleWebhook(delivery: Delivery) {\n  if (!(await claimDelivery(delivery.id))) return;\n  await applyDeliverySideEffects(delivery);\n}\n"
+          }
+        ],
+        "grep": [
+          {
+            "match": { "patternIncludes": "claimDelivery" },
+            "result": "src/webhooks/dedupe-store.ts:3:export async function claimDelivery(deliveryId: string): Promise<boolean> {\nsrc/webhooks/handler.ts:2:  if (!(await claimDelivery(delivery.id))) return;\n"
+          }
+        ]
+      },
+      "expectedMaxFindings": 0,
+      "expectedMaxSteps": 6
+    },
+    "assert": [{ "type": "javascript", "value": "file://investigation-assertion.js" }]
+  },
+  {
+    "description": "helpful context: pinned retry-window constraint exposes 12h retention bug",
+    "vars": {
+      "caseId": "webhook-retention-violation-trace",
+      "pairId": "webhook-retention-violation",
+      "variant": "trace",
+      "mode": "full",
+      "prTitle": "Reduce webhook dedupe storage",
+      "prBody": "Shortens dedupe retention to reduce Redis memory usage.",
+      "repositoryFullName": "eval/trace-context",
+      "reviewMode": "normal",
+      "maxSteps": 6,
+      "requestedCategories": "[\"bug\",\"performance\"]",
+      "traceDecisions": [
+        {
+          "type": "architectural_decision",
+          "origin": "human",
+          "decision": "Webhook deduplication entries must remain valid for at least eighteen hours.",
+          "rationale": "Supported providers can retry the same delivery id for up to eighteen hours after a timeout; expiring earlier repeats externally visible side effects.",
+          "confidence": 1,
+          "scope": ["src/webhooks"],
+          "pinned": true
+        }
+      ],
+      "changedFiles": [
+        {
+          "filename": "src/webhooks/dedupe-store.ts",
+          "patchWithLinesStr": "## file: 'src/webhooks/dedupe-store.ts'\n@@ -3,1 +3,1 @@\n-const DEDUPE_TTL_SECONDS = 86_400;\n+const DEDUPE_TTL_SECONDS = 43_200;\n"
+        }
+      ],
+      "toolReplay": {
+        "readFile": [
+          {
+            "match": { "path": "src/webhooks/dedupe-store.ts" },
+            "result": "const DEDUPE_TTL_SECONDS = 43_200;\n\nexport async function claimDelivery(deliveryId: string): Promise<boolean> {\n  const created = await redis.set(`webhook:${deliveryId}`, '1', { NX: true, EX: DEDUPE_TTL_SECONDS });\n  return created === 'OK';\n}\n"
+          },
+          {
+            "match": { "path": "src/webhooks/handler.ts" },
+            "result": "export async function handleWebhook(delivery: Delivery) {\n  if (!(await claimDelivery(delivery.id))) return;\n  await applyDeliverySideEffects(delivery);\n}\n"
+          }
+        ],
+        "grep": [
+          {
+            "match": { "patternIncludes": "claimDelivery" },
+            "result": "src/webhooks/dedupe-store.ts:3:export async function claimDelivery(deliveryId: string): Promise<boolean> {\nsrc/webhooks/handler.ts:2:  if (!(await claimDelivery(delivery.id))) return;\n"
+          }
+        ]
+      },
+      "expectedFindingFiles": ["src/webhooks/dedupe-store.ts"],
+      "expectedMinFindings": 1,
+      "expectedMaxSteps": 6
+    },
+    "assert": [{ "type": "javascript", "value": "file://investigation-assertion.js" }]
+  },
+  {
+    "description": "helpful context control baseline: 20h retention remains locally plausible",
+    "vars": {
+      "caseId": "webhook-retention-control-baseline",
+      "pairId": "webhook-retention-control",
+      "variant": "baseline",
+      "mode": "full",
+      "prTitle": "Reduce webhook dedupe storage conservatively",
+      "prBody": "Shortens dedupe retention while keeping a safety margin.",
+      "repositoryFullName": "eval/trace-context",
+      "reviewMode": "normal",
+      "maxSteps": 6,
+      "requestedCategories": "[\"bug\",\"performance\"]",
+      "changedFiles": [
+        {
+          "filename": "src/webhooks/dedupe-store.ts",
+          "patchWithLinesStr": "## file: 'src/webhooks/dedupe-store.ts'\n@@ -3,1 +3,1 @@\n-const DEDUPE_TTL_SECONDS = 86_400;\n+const DEDUPE_TTL_SECONDS = 72_000;\n"
+        }
+      ],
+      "toolReplay": {
+        "readFile": [
+          {
+            "match": { "path": "src/webhooks/dedupe-store.ts" },
+            "result": "const DEDUPE_TTL_SECONDS = 72_000;\n\nexport async function claimDelivery(deliveryId: string): Promise<boolean> {\n  const created = await redis.set(`webhook:${deliveryId}`, '1', { NX: true, EX: DEDUPE_TTL_SECONDS });\n  return created === 'OK';\n}\n"
+          }
+        ]
+      },
+      "expectedMaxFindings": 0,
+      "expectedMaxSteps": 6
+    },
+    "assert": [{ "type": "javascript", "value": "file://investigation-assertion.js" }]
+  },
+  {
+    "description": "helpful context control: 20h retention satisfies pinned 18h constraint",
+    "vars": {
+      "caseId": "webhook-retention-control-trace",
+      "pairId": "webhook-retention-control",
+      "variant": "trace",
+      "mode": "full",
+      "prTitle": "Reduce webhook dedupe storage conservatively",
+      "prBody": "Shortens dedupe retention while keeping a safety margin.",
+      "repositoryFullName": "eval/trace-context",
+      "reviewMode": "normal",
+      "maxSteps": 6,
+      "requestedCategories": "[\"bug\",\"performance\"]",
+      "traceDecisions": [
+        {
+          "type": "architectural_decision",
+          "origin": "human",
+          "decision": "Webhook deduplication entries must remain valid for at least eighteen hours.",
+          "rationale": "Supported providers can retry the same delivery id for up to eighteen hours after a timeout; expiring earlier repeats externally visible side effects.",
+          "confidence": 1,
+          "scope": ["src/webhooks"],
+          "pinned": true
+        }
+      ],
+      "changedFiles": [
+        {
+          "filename": "src/webhooks/dedupe-store.ts",
+          "patchWithLinesStr": "## file: 'src/webhooks/dedupe-store.ts'\n@@ -3,1 +3,1 @@\n-const DEDUPE_TTL_SECONDS = 86_400;\n+const DEDUPE_TTL_SECONDS = 72_000;\n"
+        }
+      ],
+      "toolReplay": {
+        "readFile": [
+          {
+            "match": { "path": "src/webhooks/dedupe-store.ts" },
+            "result": "const DEDUPE_TTL_SECONDS = 72_000;\n\nexport async function claimDelivery(deliveryId: string): Promise<boolean> {\n  const created = await redis.set(`webhook:${deliveryId}`, '1', { NX: true, EX: DEDUPE_TTL_SECONDS });\n  return created === 'OK';\n}\n"
+          }
+        ]
+      },
+      "expectedMaxFindings": 0,
+      "expectedMaxSteps": 6
+    },
+    "assert": [{ "type": "javascript", "value": "file://investigation-assertion.js" }]
+  }
+]

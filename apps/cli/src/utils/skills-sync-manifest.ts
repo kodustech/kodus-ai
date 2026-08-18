@@ -13,7 +13,10 @@ export async function readManagedSkillNames(
     target: SkillSyncTarget,
 ): Promise<string[]> {
     try {
-        const raw = await fs.readFile(resolveManagedManifestPath(target), 'utf8');
+        const raw = await fs.readFile(
+            resolveManagedManifestPath(target),
+            'utf8',
+        );
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed)) {
             return [];

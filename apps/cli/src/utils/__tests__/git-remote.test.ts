@@ -6,32 +6,34 @@ import {
 
 describe('inferPlatformFromRemote', () => {
     it('detects GitHub from HTTPS URL', () => {
-        expect(
-            inferPlatformFromRemote('https://github.com/org/repo.git'),
-        ).toBe('GITHUB');
+        expect(inferPlatformFromRemote('https://github.com/org/repo.git')).toBe(
+            'GITHUB',
+        );
     });
 
     it('detects GitHub from SSH URL', () => {
-        expect(
-            inferPlatformFromRemote('git@github.com:org/repo.git'),
-        ).toBe('GITHUB');
+        expect(inferPlatformFromRemote('git@github.com:org/repo.git')).toBe(
+            'GITHUB',
+        );
     });
 
     it('detects GitLab from HTTPS URL', () => {
-        expect(
-            inferPlatformFromRemote('https://gitlab.com/org/repo.git'),
-        ).toBe('GITLAB');
+        expect(inferPlatformFromRemote('https://gitlab.com/org/repo.git')).toBe(
+            'GITLAB',
+        );
     });
 
     it('detects Bitbucket from SSH URL', () => {
-        expect(
-            inferPlatformFromRemote('git@bitbucket.org:org/repo.git'),
-        ).toBe('BITBUCKET');
+        expect(inferPlatformFromRemote('git@bitbucket.org:org/repo.git')).toBe(
+            'BITBUCKET',
+        );
     });
 
     it('detects Azure DevOps from dev.azure.com URL', () => {
         expect(
-            inferPlatformFromRemote('https://dev.azure.com/org/project/_git/repo'),
+            inferPlatformFromRemote(
+                'https://dev.azure.com/org/project/_git/repo',
+            ),
         ).toBe('AZURE_REPOS');
     });
 
@@ -45,7 +47,9 @@ describe('inferPlatformFromRemote', () => {
 
     it('detects Azure DevOps from SSH URL', () => {
         expect(
-            inferPlatformFromRemote('git@ssh.dev.azure.com:v3/org/project/repo'),
+            inferPlatformFromRemote(
+                'git@ssh.dev.azure.com:v3/org/project/repo',
+            ),
         ).toBe('AZURE_REPOS');
     });
 
@@ -93,9 +97,7 @@ describe('extractOrgRepoFromRemote', () => {
 
     it('extracts from GitLab SSH with subgroups', () => {
         expect(
-            extractOrgRepoFromRemote(
-                'git@gitlab.com:group/subgroup/repo.git',
-            ),
+            extractOrgRepoFromRemote('git@gitlab.com:group/subgroup/repo.git'),
         ).toEqual({ org: 'group', repo: 'repo' });
     });
 
@@ -107,9 +109,7 @@ describe('extractOrgRepoFromRemote', () => {
 
     it('extracts from self-hosted GitLab HTTPS', () => {
         expect(
-            extractOrgRepoFromRemote(
-                'https://gitlab.company.com/org/repo.git',
-            ),
+            extractOrgRepoFromRemote('https://gitlab.company.com/org/repo.git'),
         ).toEqual({ org: 'org', repo: 'repo' });
     });
 

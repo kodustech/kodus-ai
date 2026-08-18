@@ -17,7 +17,11 @@ import {
     SANDBOX_LEASE_MANAGER_TOKEN,
     buildPrKey,
 } from '@libs/sandbox/domain/contracts/sandbox-lease-manager.contract';
-import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import {
+    CreateSandboxParams,
+    SandboxInstance,
+} from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/null-sandbox.service';
 // Shared with libs/code-review/.../commentAnalysis.service.ts so the
 // read-side filter that drops Kody's own past comments stays in sync
 // with what every provider emitter actually writes.
@@ -124,6 +128,8 @@ interface Repository {
     name: string;
     id: string;
     owner?: string;
+    /** Canonical provider path, e.g. GitLab's `namespace/project-slug`. */
+    fullName?: string;
 }
 
 interface Sender {
@@ -156,6 +162,8 @@ interface Comment {
         id?: string;
     };
     diff_hunk?: string;
+    /** Normalized provider discussion identifier (GitLab mapper output). */
+    discussionId?: string;
     discussion_id?: string;
     originalCommit?: any;
     subject_type?: string;
@@ -1141,6 +1149,11 @@ export class ChatWithKodyFromGitUseCase {
                 return {
                     name: params.payload?.project?.name,
                     id: params.payload?.project?.id,
+                    // `namespace` is GitLab's display name (for example,
+                    // "Junior Sartori"), not necessarily its URL path. Keep
+                    // the canonical path so GitLab clones use the project
+                    // slug, rather than an encoded display name.
+                    fullName: params.payload?.project?.path_with_namespace,
                     owner:
                         params.payload?.project?.namespace ||
                         params.payload?.project?.path_with_namespace
@@ -1381,30 +1394,42 @@ export class ChatWithKodyFromGitUseCase {
             case PlatformType.GITHUB:
                 // Se for issue_comment, pegar description do issue
                 if (params.event === 'issue_comment') {
-                    description = params.payload?.issue?.body || '';
+                    description = this.normalizeDescription(
+                        params.payload?.issue?.body,
+                    );
                 } else {
                     // Caso normal (PR webhook)
                     description =
-                        params.payload?.pull_request?.body ||
-                        params.payload?.pull_request?.description ||
-                        '';
+                        this.normalizeDescription(
+                            params.payload?.pull_request?.body,
+                        ) ||
+                        this.normalizeDescription(
+                            params.payload?.pull_request?.description,
+                        );
                 }
                 break;
             case PlatformType.GITLAB:
                 description =
-                    params.payload?.merge_request?.description ||
-                    params.payload?.merge_request?.body ||
-                    '';
+                    this.normalizeDescription(
+                        params.payload?.merge_request?.description,
+                    ) ||
+                    this.normalizeDescription(
+                        params.payload?.merge_request?.body,
+                    );
                 break;
             case PlatformType.BITBUCKET:
                 description =
-                    params.payload?.pullrequest?.description ||
-                    params.payload?.pullrequest?.summary ||
-                    '';
+                    this.normalizeDescription(
+                        params.payload?.pullrequest?.description,
+                    ) ||
+                    this.normalizeDescription(
+                        params.payload?.pullrequest?.summary,
+                    );
                 break;
             case PlatformType.AZURE_REPOS:
-                description =
-                    params.payload?.resource?.pullRequest?.description || '';
+                description = this.normalizeDescription(
+                    params.payload?.resource?.pullRequest?.description,
+                );
                 break;
             default:
                 this.logger.warn({
@@ -1428,6 +1453,35 @@ export class ChatWithKodyFromGitUseCase {
         });
 
         return description;
+    }
+
+    /**
+     * Normalizes a PR description value into a plain string.
+     *
+     * Some platforms (notably Bitbucket Cloud and Bitbucket Data Center) send the
+     * description as an object with `raw`/`html`/`markup` fields instead of a bare
+     * string. This helper accepts both shapes so the downstream code never calls
+     * `.substring()` on an object.
+     */
+    private normalizeDescription(value: unknown): string {
+        if (typeof value === 'string') {
+            return value;
+        }
+
+        if (value && typeof value === 'object') {
+            const record = value as Record<string, unknown>;
+            if (typeof record.raw === 'string') {
+                return record.raw;
+            }
+            if (typeof record.text === 'string') {
+                return record.text;
+            }
+            if (typeof record.html === 'string') {
+                return record.html;
+            }
+        }
+
+        return '';
     }
 
     private getReviewThreadByCommentId(
@@ -1684,8 +1738,7 @@ export class ChatWithKodyFromGitUseCase {
                 return allComments.filter(
                     (reply) =>
                         ((reply.in_reply_to_id !== undefined &&
-                            reply.in_reply_to_id ===
-                                comment.in_reply_to_id) ||
+                            reply.in_reply_to_id === comment.in_reply_to_id) ||
                             reply.discussionId === comment.discussionId) &&
                         !this.isKodyComment(reply, platformType),
                 );
@@ -1965,12 +2018,31 @@ export class ChatWithKodyFromGitUseCase {
             organizationAndTeamData,
         );
 
-        const { sandbox, leaseId } = await this.leaseManager.acquire(
-            prKey,
-            'conversation',
-            5 * 60 * 1000,
-            cloneParams,
-        );
+        // A sandbox enriches the answer with repository-native tools, but it
+        // must not be a prerequisite for replying. For example, an inaccessible
+        // fork or a transient E2B/Git error should still result in a useful
+        // conversational response from the agent.
+        let sandbox: SandboxInstance = NULL_SANDBOX_INSTANCE;
+        let leaseId: string | undefined;
+
+        try {
+            const lease = await this.leaseManager.acquire(
+                prKey,
+                'conversation',
+                5 * 60 * 1000,
+                cloneParams,
+            );
+            sandbox = lease.sandbox;
+            leaseId = lease.leaseId;
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Sandbox unavailable; conversation will continue without native repository tools',
+                context: ChatWithKodyFromGitUseCase.name,
+                error,
+                metadata: { prKey, organizationAndTeamData },
+            });
+        }
 
         try {
             return await this.conversationAgentUseCase.execute({
@@ -1981,7 +2053,9 @@ export class ChatWithKodyFromGitUseCase {
                 sandbox,
             });
         } finally {
-            await this.leaseManager.release(leaseId);
+            if (leaseId) {
+                await this.leaseManager.release(leaseId);
+            }
         }
     }
 
@@ -1991,8 +2065,7 @@ export class ChatWithKodyFromGitUseCase {
     ): Promise<CreateSandboxParams | undefined> {
         const repository = prepareContext.repository;
         const pr = prepareContext.pullRequest;
-        const platform: PlatformType | undefined =
-            prepareContext.platformType;
+        const platform: PlatformType | undefined = prepareContext.platformType;
 
         if (!repository || !pr || !platform) {
             this.logger.warn({
@@ -2013,16 +2086,15 @@ export class ChatWithKodyFromGitUseCase {
             // `issue_comment` give us { id, name, owner } but no `fullName`.
             // GitHub's getCloneParams builds the clone URL from `fullName`,
             // so we synthesize it here from owner/name when missing.
-            const enrichedRepository =
-                repository.fullName
-                    ? repository
-                    : {
-                          ...repository,
-                          fullName:
-                              repository.owner && repository.name
-                                  ? `${repository.owner}/${repository.name}`
-                                  : repository.name,
-                      };
+            const enrichedRepository = repository.fullName
+                ? repository
+                : {
+                      ...repository,
+                      fullName:
+                          repository.owner && repository.name
+                              ? `${repository.owner}/${repository.name}`
+                              : repository.name,
+                  };
 
             const cp = await this.codeManagementService.getCloneParams(
                 {

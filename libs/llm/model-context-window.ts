@@ -39,6 +39,8 @@ const MANUAL_OVERRIDES: Record<string, number> = {
     'kimik27': 262_144,
     'kimik25': 262_144,
     'kimik2': 262_144,
+    // DeepSeek
+    'deepseekv4flash': 128_000,
     // Z.ai
     'glm51': 200_000,
     'glm5': 200_000,
