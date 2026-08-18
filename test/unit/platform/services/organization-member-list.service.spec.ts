@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { CacheService } from '@libs/core/cache/cache.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -19,6 +20,11 @@ describe('OrganizationMemberListService', () => {
         getListMembers: jest.Mock;
         getPullRequestAuthors: jest.Mock;
     };
+    let mockCacheService: {
+        getFromCache: jest.Mock;
+        addToCache: jest.Mock;
+        removeFromCache: jest.Mock;
+    };
 
     const organizationAndTeamData = {
         organizationId: 'org-uuid-123',
@@ -31,12 +37,22 @@ describe('OrganizationMemberListService', () => {
             getPullRequestAuthors: jest.fn().mockResolvedValue([]),
         };
 
+        mockCacheService = {
+            getFromCache: jest.fn().mockResolvedValue(null),
+            addToCache: jest.fn().mockResolvedValue(undefined),
+            removeFromCache: jest.fn().mockResolvedValue(undefined),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 OrganizationMemberListService,
                 {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
+                },
+                {
+                    provide: CacheService,
+                    useValue: mockCacheService,
                 },
             ],
         }).compile();
@@ -237,6 +253,77 @@ describe('OrganizationMemberListService', () => {
             const result = await service.fetch(organizationAndTeamData);
 
             expect(result).toEqual({ status: 'unavailable', members: [] });
+        });
+    });
+
+    // Listing pull request authors fans out one API request per configured
+    // repository, and the prune cron sweeps every opted-in team on a schedule.
+    // Uncached, that re-scans every repo's history on every run.
+    describe('pull request author caching', () => {
+        it('serves the authors from cache without calling the provider', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCacheService.getFromCache.mockResolvedValue([
+                { id: '99', name: 'ci-agent', type: 'bot' },
+            ]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).not.toHaveBeenCalled();
+            expect(result.members.map((m) => m.id)).toContain('99');
+        });
+
+        it('caches the authors it fetched on a miss', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '99', name: 'ci-agent', type: 'bot' },
+            ]);
+
+            await service.fetch(organizationAndTeamData);
+
+            expect(mockCacheService.addToCache).toHaveBeenCalledWith(
+                'org_member_pr_authors_org-uuid-123_team-uuid-456',
+                [{ id: '99', name: 'ci-agent', type: 'bot' }],
+                10 * 60 * 1000,
+            );
+        });
+
+        // "Refresh members" exists precisely to pick up somebody who just
+        // appeared, so it must not be answered from a stale cache.
+        it('bypasses and clears the cache when the caller forces a refresh', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+
+            await service.fetch(organizationAndTeamData, { skipCache: true });
+
+            expect(mockCacheService.getFromCache).not.toHaveBeenCalled();
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalled();
+        });
+
+        it('still fetches when the cache read throws', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCacheService.getFromCache.mockRejectedValue(
+                new Error('redis down'),
+            );
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result.status).toBe('ok');
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalled();
         });
     });
 });

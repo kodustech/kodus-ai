@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { CacheService } from '@libs/core/cache/cache.service';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { createLogger } from '@libs/core/log/logger';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
@@ -41,7 +42,14 @@ const unavailable = (): OrganizationMemberListResult => ({
 export class OrganizationMemberListService {
     private readonly logger = createLogger(OrganizationMemberListService.name);
 
-    constructor(private readonly codeManagementService: CodeManagementService) {}
+    // Listing pull request authors costs one API request per configured
+    // repository. Matches the TTL of the shared PR-author cache used elsewhere.
+    private static readonly AUTHORS_CACHE_TTL = 10 * 60 * 1000;
+
+    constructor(
+        private readonly codeManagementService: CodeManagementService,
+        private readonly cacheService: CacheService,
+    ) {}
 
     /**
      * Every provider models "who belongs here" differently — GitHub and
@@ -57,16 +65,14 @@ export class OrganizationMemberListService {
      */
     public async fetch(
         organizationAndTeamData: OrganizationAndTeamData,
+        options: { skipCache?: boolean } = {},
     ): Promise<OrganizationMemberListResult> {
         const [memberResult, authorResult] = await Promise.allSettled([
             this.codeManagementService.getListMembers({
                 organizationAndTeamData,
                 determineBots: true,
             }),
-            this.codeManagementService.getPullRequestAuthors({
-                organizationAndTeamData,
-                determineBots: true,
-            }),
+            this.fetchPullRequestAuthors(organizationAndTeamData, options),
         ]);
 
         this.warnOnRejection(
@@ -117,6 +123,47 @@ export class OrganizationMemberListService {
         }
 
         return { status: 'ok', members: normalized };
+    }
+
+    /**
+     * The scan behind this is expensive and the prune cron sweeps every
+     * opted-in team on a schedule, so the result is cached. `skipCache` is for
+     * the explicit "refresh members" action, which exists to pick up somebody
+     * who just appeared and must never be answered from a stale entry.
+     */
+    private async fetchPullRequestAuthors(
+        organizationAndTeamData: OrganizationAndTeamData,
+        options: { skipCache?: boolean },
+    ): Promise<RawMember[]> {
+        const cacheKey = `org_member_pr_authors_${organizationAndTeamData.organizationId}_${organizationAndTeamData.teamId}`;
+
+        if (!options.skipCache) {
+            try {
+                const cached =
+                    await this.cacheService.getFromCache<RawMember[]>(cacheKey);
+
+                if (cached) {
+                    return cached;
+                }
+            } catch {
+                // Cache miss or backend error — fall through and fetch.
+            }
+        }
+
+        const authors = await this.codeManagementService.getPullRequestAuthors({
+            organizationAndTeamData,
+            determineBots: true,
+        });
+
+        await this.cacheService
+            .addToCache(
+                cacheKey,
+                authors,
+                OrganizationMemberListService.AUTHORS_CACHE_TTL,
+            )
+            .catch(() => {});
+
+        return authors;
     }
 
     private valueOf(result: PromiseSettledResult<RawMember[]>): RawMember[] {

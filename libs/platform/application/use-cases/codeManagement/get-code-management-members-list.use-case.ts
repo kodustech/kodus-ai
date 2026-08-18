@@ -24,6 +24,7 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
 
     public async execute(
         teamId?: string,
+        options: { skipCache?: boolean } = {},
     ): Promise<OrganizationMemberListResult> {
         const organizationAndTeamData: OrganizationAndTeamData = {
             organizationId: this.request.user.organization.uuid,
@@ -35,21 +36,24 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
             teamId,
         );
 
-        try {
-            const cached =
-                await this.cacheService.getFromCache<
-                    OrganizationMemberSummary[]
-                >(cacheKey);
+        if (!options.skipCache) {
+            try {
+                const cached =
+                    await this.cacheService.getFromCache<
+                        OrganizationMemberSummary[]
+                    >(cacheKey);
 
-            if (cached?.length > 0) {
-                return { status: 'ok', members: cached };
+                if (cached?.length > 0) {
+                    return { status: 'ok', members: cached };
+                }
+            } catch {
+                // Cache miss or error, proceed with fetch
             }
-        } catch {
-            // Cache miss or error, proceed with fetch
         }
 
         const result = await this.organizationMemberListService.fetch(
             organizationAndTeamData,
+            options,
         );
 
         if (result.status === 'ok') {
@@ -75,7 +79,7 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
 
         await this.cacheService.removeFromCache(cacheKey);
 
-        return this.execute(teamId);
+        return this.execute(teamId, { skipCache: true });
     }
 
     private buildCacheKey(organizationId: string, teamId?: string): string {
