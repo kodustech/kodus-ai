@@ -3199,37 +3199,65 @@ export class GithubService
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
-            // Usar cache do accountType se disponível
-            let isOrgAccount = githubAuthDetail.accountType === 'organization';
-
-            // Para integrações legadas, assumir organização (historicamente só orgs eram permitidas)
-            if (!githubAuthDetail.accountType) {
-                isOrgAccount = true;
-                this.logger.log({
-                    message:
-                        'Legacy integration detected - assuming organization',
-                    context: 'GitHubService',
-                    metadata: { org: githubAuthDetail?.org },
-                });
+            if (githubAuthDetail.accountType === 'user') {
+                return await this.getAccountOwnerAsMember(
+                    octokit,
+                    githubAuthDetail.org,
+                );
             }
 
-            if (isOrgAccount) {
-                const members = await octokit.paginate(
-                    octokit.rest.orgs.listMembers,
-                    {
-                        org: githubAuthDetail?.org,
-                        per_page: 100,
-                    },
+            try {
+                return await octokit.paginate(octokit.rest.orgs.listMembers, {
+                    org: githubAuthDetail?.org,
+                    per_page: 100,
+                });
+            } catch (err) {
+                // Integrations created before `accountType` was recorded have
+                // no way to tell an org from a personal account, and personal
+                // accounts 404 here. Anything else is a real failure.
+                if (githubAuthDetail.accountType || this.statusOf(err) !== 404) {
+                    throw err;
+                }
+
+                this.logger.log({
+                    message:
+                        'Legacy integration 404d as an organization - treating it as a personal account',
+                    context: GithubService.name,
+                    metadata: { org: githubAuthDetail?.org },
+                });
+
+                return await this.getAccountOwnerAsMember(
+                    octokit,
+                    githubAuthDetail.org,
                 );
-                return members;
-            } else {
-                // Para contas pessoais, retornar o próprio usuário como "membro"
-                const user = await octokit.rest.users.getAuthenticated();
-                return [user.data];
             }
         } catch (err) {
             throw new BadRequestException(err);
         }
+    }
+
+    /**
+     * A personal account has no members, so the account owner is the whole
+     * list. Resolved by login rather than via `users.getAuthenticated()`:
+     * on cloud this octokit carries a GitHub App *installation* token, which
+     * answers 403 on `GET /user`. `GET /users/{login}` is public data and
+     * works under both an installation token and a PAT.
+     */
+    private async getAccountOwnerAsMember(octokit: Octokit, login: string) {
+        const owner = await octokit.rest.users.getByUsername({
+            username: login,
+        });
+
+        return [owner.data];
+    }
+
+    private statusOf(err: unknown): number | undefined {
+        const candidate = err as {
+            status?: number;
+            response?: { status?: number };
+        };
+
+        return candidate?.status ?? candidate?.response?.status;
     }
 
     async getAllCommits(
