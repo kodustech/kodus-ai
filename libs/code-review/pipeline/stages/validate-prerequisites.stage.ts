@@ -678,22 +678,52 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         const configValue =
             config?.configValue as OrganizationParametersAutoAssignConfig;
 
-        if (
+        const excludedByAllowList =
             Array.isArray(configValue?.allowedUsers) &&
             configValue.allowedUsers.length > 0 &&
-            !configValue.allowedUsers.includes(userGitId)
-        ) {
-            return true;
-        }
+            !configValue.allowedUsers.includes(userGitId);
 
-        if (
+        const onIgnoreList =
             configValue?.ignoredUsers?.length > 0 &&
-            configValue?.ignoredUsers.includes(userGitId)
-        ) {
-            return true;
+            configValue?.ignoredUsers.includes(userGitId);
+
+        if (!excludedByAllowList && !onIgnoreList) {
+            return false;
         }
 
-        return false;
+        // Bots land on the ignore list automatically when an integration is
+        // created, which would leave an app that authors PRs unreviewable even
+        // after an admin deliberately spends a seat on it. Holding a seat is
+        // the clearest statement that this identity should be reviewed, so it
+        // overrides both filters. Checked only when a filter already matched,
+        // so the common path costs nothing.
+        return !(await this.holdsLicense(organizationAndTeamData, userGitId));
+    }
+
+    private async holdsLicense(
+        organizationAndTeamData: OrganizationAndTeamData,
+        userGitId: string,
+    ): Promise<boolean> {
+        try {
+            const users =
+                await this.licenseService.getAllUsersWithLicense(
+                    organizationAndTeamData,
+                );
+
+            return Boolean(users?.some((user) => user?.git_id === userGitId));
+        } catch (error) {
+            // Fail closed: an unreadable seat list must not turn the ignore
+            // list off and start reviewing identities an admin excluded.
+            this.logger.warn({
+                message:
+                    'Could not confirm seat while checking the ignore list; keeping the user filtered',
+                context: this.stageName,
+                metadata: { organizationAndTeamData, userGitId },
+                error,
+            });
+
+            return false;
+        }
     }
 
     private async isCentralizedConfigRepositoryReviewDisabled(

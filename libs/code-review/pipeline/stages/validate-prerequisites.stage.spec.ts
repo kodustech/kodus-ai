@@ -40,6 +40,7 @@ describe('ValidatePrerequisitesStage', () => {
     };
     let mockLicenseService: {
         startTrial: jest.Mock;
+        getAllUsersWithLicense: jest.Mock;
     };
     let mockAutoAssignLicenseUseCase: {
         execute: jest.Mock;
@@ -108,6 +109,7 @@ describe('ValidatePrerequisitesStage', () => {
 
         mockLicenseService = {
             startTrial: jest.fn().mockResolvedValue(false),
+            getAllUsersWithLicense: jest.fn().mockResolvedValue([]),
         };
 
         mockAutoAssignLicenseUseCase = {
@@ -480,6 +482,109 @@ describe('ValidatePrerequisitesStage', () => {
             expect(result.statusInfo?.message).toBeDefined();
             expect(
                 mockPermissionValidationService.validateExecutionPermissions,
+            ).not.toHaveBeenCalled();
+        });
+
+        // Bots are auto-populated into ignoredUsers when an integration is
+        // created, so an app that authors PRs starts out ignored. Paying for
+        // a seat is the clearest possible statement that this identity should
+        // be reviewed, so it has to win over the filter.
+        it('reviews an ignored identity that holds a seat instead of skipping it', async () => {
+            const context = makeContext();
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['user-1'] },
+            });
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'user-1' },
+            ]);
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalled();
+        });
+
+        it('reviews an identity excluded by allowedUsers when it holds a seat', async () => {
+            const context = makeContext();
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { allowedUsers: ['someone-else'] },
+            });
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'user-1' },
+            ]);
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).not.toBe(
+                AutomationStatus.SKIPPED,
+            );
+        });
+
+        it('keeps skipping an ignored identity when the seat lookup fails', async () => {
+            const context = makeContext();
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['user-1'] },
+            });
+            mockLicenseService.getAllUsersWithLicense.mockRejectedValue(
+                new Error('billing unreachable'),
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            const result = await stage.execute(context);
+
+            expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
+        });
+
+        it('does not look up seats when the identity is not filtered out', async () => {
+            const context = makeContext();
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['somebody-else'] },
+            });
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            expect(
+                mockLicenseService.getAllUsersWithLicense,
             ).not.toHaveBeenCalled();
         });
 
