@@ -4,10 +4,6 @@ jest.mock(
     () => ({ ExecuteCliReviewUseCase: class {} }),
 );
 jest.mock(
-    '@libs/cli-review/application/use-cases/submit-cli-session-capture.use-case',
-    () => ({ SubmitCliSessionCaptureUseCase: class {} }),
-);
-jest.mock(
     '@libs/cli-review/infrastructure/services/authenticated-rate-limiter.service',
     () => ({ AuthenticatedRateLimiterService: class {} }),
 );
@@ -66,7 +62,6 @@ describe('CliReviewController.ingestSessionEvent', () => {
             { execute: jest.fn() } as any, // getCliReviewJobStatusUseCase
             { execute: jest.fn() } as any, // waitForCliReviewJobUseCase
             ingestUseCase as any, // ingestSessionEventUseCase
-            {} as any, // submitCliSessionCaptureUseCase
             {} as any, // trialRateLimiter
             authenticatedRateLimiter as any, // authenticatedRateLimiter
             {} as any, // githubPublicPrService

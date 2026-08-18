@@ -25,7 +25,9 @@ const mockResolveTeamKeyAccess = vi.mocked(resolveTeamKeyAccess);
 describe('rulesService', () => {
     beforeEach(() => {
         vi.clearAllMocks();
-        mockResolveTeamKeyAccess.mockResolvedValue({ teamKey: 'kodus_team_key' });
+        mockResolveTeamKeyAccess.mockResolvedValue({
+            teamKey: 'kodus_team_key',
+        });
     });
 
     it('requires team-key auth on create', async () => {

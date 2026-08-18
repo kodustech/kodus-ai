@@ -5,22 +5,20 @@ import os from 'os';
 import {
     installSessionHooks,
     removeSessionHooks,
-} from '../memory/session-hooks-install.js';
+} from '../trace/session-hooks-install.js';
 import {
     installCursorSessionHooks,
     removeCursorSessionHooks,
-} from '../memory/session-hooks-install-cursor.js';
+} from '../trace/session-hooks-install-cursor.js';
 import {
     installCodexSessionHooks,
     removeCodexSessionHooks,
-} from '../memory/session-hooks-install-codex.js';
+} from '../trace/session-hooks-install-codex.js';
 
 let tmpDir: string;
 
 beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), 'kodus-hook-contracts-'),
-    );
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kodus-hook-contracts-'));
 });
 
 afterEach(async () => {
@@ -69,10 +67,7 @@ function parseTomlHookBlocks(
             continue;
         }
 
-        if (
-            inBlock &&
-            (trimmed.startsWith('[[') || trimmed.startsWith('['))
-        ) {
+        if (inBlock && (trimmed.startsWith('[[') || trimmed.startsWith('['))) {
             blocks.push({ event: currentEvent, command: currentCommand });
             inBlock = false;
             currentEvent = '';
@@ -165,7 +160,10 @@ describe('Claude Code hook contract', () => {
         const hooks = settings.hooks as Record<string, unknown>;
 
         for (const eventKey of EXPECTED_CLAUDE_EVENTS) {
-            expect(hooks[eventKey], `Missing event "${eventKey}"`).toBeDefined();
+            expect(
+                hooks[eventKey],
+                `Missing event "${eventKey}"`,
+            ).toBeDefined();
         }
     });
 
@@ -200,7 +198,7 @@ describe('Claude Code hook contract', () => {
         }
     });
 
-    it('all commands start with "kodus decisions hooks claude-code"', async () => {
+    it('all commands start with "kodus trace hooks claude-code"', async () => {
         await installSessionHooks(tmpDir, 'claude-code');
         const raw = await fs.readFile(claudeSettingsPath(), 'utf-8');
         const settings = JSON.parse(raw);
@@ -211,7 +209,7 @@ describe('Claude Code hook contract', () => {
                 for (const hookEntry of matcher.hooks) {
                     expect(
                         hookEntry.command.startsWith(
-                            'kodus decisions hooks claude-code',
+                            'kodus trace hooks claude-code',
                         ),
                         `Command in "${eventKey}" does not start with expected prefix: "${hookEntry.command}"`,
                     ).toBe(true);
@@ -290,7 +288,10 @@ describe('Cursor hook contract', () => {
         const hooks = config.hooks as Record<string, unknown>;
 
         for (const eventKey of EXPECTED_CURSOR_EVENTS) {
-            expect(hooks[eventKey], `Missing event "${eventKey}"`).toBeDefined();
+            expect(
+                hooks[eventKey],
+                `Missing event "${eventKey}"`,
+            ).toBeDefined();
         }
     });
 
@@ -313,7 +314,7 @@ describe('Cursor hook contract', () => {
         }
     });
 
-    it('all commands start with "kodus decisions hooks cursor"', async () => {
+    it('all commands start with "kodus trace hooks cursor"', async () => {
         await installCursorSessionHooks(tmpDir);
         const raw = await fs.readFile(cursorHooksPath(), 'utf-8');
         const config = JSON.parse(raw);
@@ -322,7 +323,7 @@ describe('Cursor hook contract', () => {
         for (const [eventKey, entries] of Object.entries(hooks)) {
             for (const entry of entries as any[]) {
                 expect(
-                    entry.command.startsWith('kodus decisions hooks cursor'),
+                    entry.command.startsWith('kodus trace hooks cursor'),
                     `Command in "${eventKey}" does not start with expected prefix: "${entry.command}"`,
                 ).toBe(true);
             }
@@ -352,10 +353,7 @@ describe('Codex hook contract', () => {
         const blocks = parseTomlHookBlocks(content);
 
         for (const block of blocks) {
-            expect(
-                block.event,
-                'Hook block missing event field',
-            ).toBeTruthy();
+            expect(block.event, 'Hook block missing event field').toBeTruthy();
             expect(
                 block.command,
                 'Hook block missing command field',
@@ -376,14 +374,14 @@ describe('Codex hook contract', () => {
         }
     });
 
-    it('all commands start with "kodus decisions hooks codex"', async () => {
+    it('all commands start with "kodus trace hooks codex"', async () => {
         await installCodexSessionHooks(codexConfigPath());
         const content = await fs.readFile(codexConfigPath(), 'utf-8');
         const blocks = parseTomlHookBlocks(content);
 
         for (const block of blocks) {
             expect(
-                block.command.startsWith('kodus decisions hooks codex'),
+                block.command.startsWith('kodus trace hooks codex'),
                 `Command does not start with expected prefix: "${block.command}"`,
             ).toBe(true);
         }
@@ -396,7 +394,10 @@ describe('Codex hook contract', () => {
 
         for (const line of lines) {
             const trimmed = line.trim();
-            if (trimmed.startsWith('event =') || trimmed.startsWith('command =')) {
+            if (
+                trimmed.startsWith('event =') ||
+                trimmed.startsWith('command =')
+            ) {
                 // Value must be a double-quoted string
                 expect(
                     trimmed,
@@ -516,7 +517,7 @@ describe('Cross-platform hook contracts', () => {
         expect(settings.hooks).toBeUndefined();
 
         // No kodus references anywhere in the file
-        expect(raw).not.toContain('kodus decisions hooks');
+        expect(raw).not.toContain('kodus trace hooks');
     });
 
     it('Cursor: install then remove leaves config clean', async () => {
@@ -530,7 +531,7 @@ describe('Cross-platform hook contracts', () => {
         expect(Object.keys(config.hooks)).toHaveLength(0);
 
         // No kodus references anywhere in the file
-        expect(raw).not.toContain('kodus decisions hooks');
+        expect(raw).not.toContain('kodus trace hooks');
     });
 
     it('Codex: install then remove leaves config clean', async () => {
@@ -540,7 +541,7 @@ describe('Cross-platform hook contracts', () => {
         const content = await fs.readFile(codexConfigPath(), 'utf-8');
 
         // No kodus references
-        expect(content).not.toContain('kodus decisions hooks');
+        expect(content).not.toContain('kodus trace hooks');
 
         // No leftover [[hooks]] blocks (only kodus block was present)
         expect(content).not.toContain('[[hooks]]');

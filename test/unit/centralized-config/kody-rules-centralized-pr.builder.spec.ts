@@ -1,6 +1,10 @@
 import * as yaml from 'js-yaml';
 
 import { formatRuleToYaml } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
+import {
+    KodyRulesExampleDto,
+    KodyRulesInheritanceDto,
+} from '@libs/ee/kodyRules/dtos/create-kody-rule.dto';
 import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
 describe('formatRuleToYaml — enabled field', () => {
@@ -26,5 +30,48 @@ describe('formatRuleToYaml — enabled field', () => {
             formatRuleToYaml({ ...base, status: KodyRulesStatus.PAUSED }),
         ) as Record<string, unknown>;
         expect(parsed.enabled).toBe(false);
+    });
+});
+
+describe('formatRuleToYaml — Nest class instances', () => {
+    const base = { title: 'No console.log', rule: 'Do not commit console.log' };
+
+    it('dumps examples that are KodyRulesExampleDto class instances', () => {
+        const example = new KodyRulesExampleDto();
+        example.snippet = 'if (value == null) return;';
+        example.isCorrect = false;
+
+        const parsed = yaml.load(
+            formatRuleToYaml({ ...base, examples: [example] }),
+        ) as {
+            examples: Array<{ snippet: string; isCorrect: boolean }>;
+        };
+
+        expect(parsed.examples).toEqual([
+            { snippet: 'if (value == null) return;', isCorrect: false },
+        ]);
+    });
+
+    it('dumps inheritance that is a KodyRulesInheritanceDto class instance', () => {
+        const inheritance = new KodyRulesInheritanceDto();
+        inheritance.inheritable = true;
+        inheritance.include = ['src/**'];
+        inheritance.exclude = ['src/legacy/**'];
+
+        const parsed = yaml.load(
+            formatRuleToYaml({ ...base, inheritance }),
+        ) as {
+            inheritance: {
+                inheritable: boolean;
+                include: string[];
+                exclude: string[];
+            };
+        };
+
+        expect(parsed.inheritance).toEqual({
+            inheritable: true,
+            include: ['src/**'],
+            exclude: ['src/legacy/**'],
+        });
     });
 });

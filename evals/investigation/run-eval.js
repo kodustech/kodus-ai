@@ -79,6 +79,20 @@ const MODEL_PRESETS = {
         allowFallbacks: false,
         label: 'kimi-k2.5-openrouter-moonshot-investigation',
     },
+    'kimi-k2.7-code-fast-fireworks': {
+        provider: 'openai-compatible',
+        model: 'accounts/fireworks/routers/kimi-k2p7-code-fast',
+        apiKeyEnv: 'FIREWORKS_API_KEY',
+        baseURL: 'https://api.fireworks.ai/inference/v1',
+        label: 'kimi-k2.7-code-fast-fireworks-investigation',
+    },
+    'deepseek-v4-flash-fireworks': {
+        provider: 'openai-compatible',
+        model: 'accounts/fireworks/models/deepseek-v4-flash-0731',
+        apiKeyEnv: 'FIREWORKS_API_KEY',
+        baseURL: 'https://api.fireworks.ai/inference/v1',
+        label: 'deepseek-v4-flash-fireworks-investigation',
+    },
     'glm-5': {
         provider: 'openrouter',
         model: 'z-ai/glm-5',

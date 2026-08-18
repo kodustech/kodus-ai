@@ -24,6 +24,13 @@ const RUNNER = resolve(
     "droplet",
     "run-multi-user.sh",
 );
+const DESTROY = resolve(
+    REPO_ROOT,
+    "scripts",
+    "sso-e2e",
+    "droplet",
+    "destroy.sh",
+);
 
 interface ScriptResult {
     code: number;
@@ -35,7 +42,12 @@ function runScript(script: string): Promise<ScriptResult> {
     return new Promise((done) => {
         const child = spawn("bash", [script], {
             cwd: REPO_ROOT,
-            env: { ...process.env, SSO_E2E_HEADLESS: "1" },
+            env: {
+                ...process.env,
+                SSO_E2E_HEADLESS: "1",
+                // See sso-cookie-domain: the shared SSO topology runs on EC2.
+                TEST_VM_PROVIDER: "aws",
+            },
             stdio: ["ignore", "pipe", "pipe"],
         });
         let stdout = "";
@@ -68,7 +80,18 @@ export const ssoMultiUser: Scenario = {
     async run(ctx: RunContext) {
         ctx.assert(existsSync(RUNNER), `runner not found at ${RUNNER}`);
 
-        const result = await runScript(RUNNER);
+        let result: ScriptResult;
+        try {
+            result = await runScript(RUNNER);
+        } finally {
+            // The cookie-domain scenario intentionally leaves the shared SSO
+            // droplet alive so this scenario can reuse it. CI has no human
+            // follow-up, so the last SSO scenario owns teardown even on
+            // failure. Local/manual runs preserve the existing debug flow.
+            if (process.env.CI === "true" && existsSync(DESTROY)) {
+                await runScript(DESTROY);
+            }
+        }
 
         // Each sub-flow logs `[sso-multi-user] PASS sub-flow-N: …`.
         // We require all 4 PASS lines AND a zero exit code.
@@ -92,7 +115,10 @@ export const ssoMultiUser: Scenario = {
             droplet: "sso-e2e",
             subFlowsPassed: passLines.length,
             evidence: passLines.map((l) => l.trim()),
-            note: "Droplet kept alive for follow-up debugging. Tear down with `pnpm run sso-e2e:droplet:destroy --name sso-e2e`.",
+            note:
+                process.env.CI === "true"
+                    ? "Dedicated SSO droplet cleaned up after the final SSO scenario."
+                    : "Droplet kept alive for follow-up debugging. Tear down with `pnpm run sso-e2e:droplet:destroy --name sso-e2e`.",
         };
     },
 };

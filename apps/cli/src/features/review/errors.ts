@@ -1,8 +1,6 @@
 import type { NormalizedCommandError } from '../../utils/command-errors.js';
 
-export function buildReviewErrorHints(
-    error: NormalizedCommandError,
-): string[] {
+export function buildReviewErrorHints(error: NormalizedCommandError): string[] {
     switch (error.code) {
         case 'AUTH_REQUIRED':
             return [

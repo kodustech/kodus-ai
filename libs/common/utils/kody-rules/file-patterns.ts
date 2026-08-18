@@ -18,6 +18,7 @@ export const RULE_FILE_PATTERNS = [
     'AGENTS.md',
     '.agents.md',
     '.agent.md',
+    '.agents/rules/**',
 
     // Claude
     'CLAUDE.md',

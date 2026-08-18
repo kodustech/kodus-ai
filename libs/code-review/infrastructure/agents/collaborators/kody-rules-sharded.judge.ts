@@ -187,6 +187,20 @@ export interface ShardedJudgeInput {
      *  failure (e.g. a provider rejecting the response schema) is visible
      *  in the worker logs instead of only as an `N errored` counter. */
     logger?: { warn: (entry: any) => void };
+    /**
+     * Human-readable language label (e.g. "Portuguese (Brazil)"), already
+     * resolved via `resolveLanguageLabel` in prompt-builder.ts — the SAME
+     * helper every other review agent (bug/security/performance/generalist)
+     * uses to localize its output. When set, both the file-shard and
+     * PR-shard user prompts get an explicit "respond in this language"
+     * instruction; the shard's `suggestionContent`/WHAT-WHY-HOW body is
+     * otherwise LLM-generated raw English with no downstream translation
+     * guarantee for PR-scope findings (see kody-rules-agent.provider.ts).
+     * Optional and backward compatible: omitting it (evals, older callers,
+     * unit tests) leaves the shard prompts byte-identical to before this
+     * field existed.
+     */
+    languageLabel?: string | null;
 }
 
 export interface ShardedJudgeResult {
@@ -226,9 +240,30 @@ function ruleBlock(rules: Array<Partial<IKodyRule>>): string {
         .join('\n');
 }
 
+/**
+ * Extra user-prompt lines instructing the model to answer in `languageLabel`
+ * (a resolved label like "Portuguese (Brazil)", not a raw locale code). Both
+ * shard prompts have zero language templating on their own (the root cause
+ * of the Starian GitLab MR !16111 bug: a PR-scope kody-rules comment shipped
+ * in raw English despite the org's Kody Language being pt-BR), so this is
+ * the ONLY place a language instruction enters either shard's prompt.
+ * Returns `[]` when no label is given, so callers that splice this in with
+ * `...languageInstructionLines(x)` produce a BYTE-IDENTICAL prompt to before
+ * this existed whenever `languageLabel` is absent — no regression for evals
+ * or other callers that don't pass one.
+ */
+function languageInstructionLines(languageLabel?: string | null): string[] {
+    if (!languageLabel) return [];
+    return [
+        `Respond in ${languageLabel}: write "suggestionContent" and "oneSentenceSummary" in ${languageLabel}, not English. This is mandatory — do not fall back to English.`,
+        ``,
+    ];
+}
+
 function fileShardUser(
     file: FileChange,
     rules: Array<Partial<IKodyRule>>,
+    languageLabel?: string | null,
 ): string {
     const diff = (file as any).patchWithLinesStr ?? file.patch ?? '';
     return [
@@ -243,6 +278,7 @@ function fileShardUser(
         '```',
         `</File>`,
         ``,
+        ...languageInstructionLines(languageLabel),
         `Return ONLY JSON (ruleId is the rule's [n] number):`,
         `{"violations":[{"ruleId":<n>,"relevantLinesStart":<line>,"relevantLinesEnd":<line>,"existingCode":"<offending code>","suggestionContent":"WHAT/WHY/HOW","oneSentenceSummary":"<short>"}]}`,
     ].join('\n');
@@ -264,6 +300,7 @@ function prShardUser(
     rules: Array<Partial<IKodyRule>>,
     prTitle?: string,
     prBody?: string,
+    languageLabel?: string | null,
 ): string {
     let used = 0;
     const diffs: string[] = [];
@@ -299,6 +336,7 @@ function prShardUser(
         '```',
         `</PR>`,
         ``,
+        ...languageInstructionLines(languageLabel),
         `Return ONLY JSON (ruleId is the rule's [n] number): {"violations":[{"ruleId":<n>,"suggestionContent":"WHAT/WHY","oneSentenceSummary":"<short>"}]}`,
     ].join('\n');
 }
@@ -576,7 +614,15 @@ function resolveShardViolations(
 export async function judgeKodyRulesSharded(
     input: ShardedJudgeInput,
 ): Promise<ShardedJudgeResult> {
-    const { changedFiles, rules, runJudge, prTitle, prBody, logger } = input;
+    const {
+        changedFiles,
+        rules,
+        runJudge,
+        prTitle,
+        prBody,
+        logger,
+        languageLabel,
+    } = input;
     const concurrency = input.concurrency ?? 4;
 
     const fileRules = rules.filter((r) => !isPrLevel(r));
@@ -603,7 +649,7 @@ export async function judgeKodyRulesSharded(
             try {
                 const vs = await runJudge({
                     system: SHARD_SYSTEM_PROMPT,
-                    user: fileShardUser(file, applicable),
+                    user: fileShardUser(file, applicable, languageLabel),
                     filename: file.filename,
                     ruleUuids,
                 });
@@ -636,7 +682,13 @@ export async function judgeKodyRulesSharded(
         try {
             const vs = await runJudge({
                 system: SHARD_PR_SYSTEM_PROMPT,
-                user: prShardUser(changedFiles, prRules, prTitle, prBody),
+                user: prShardUser(
+                    changedFiles,
+                    prRules,
+                    prTitle,
+                    prBody,
+                    languageLabel,
+                ),
                 filename: null,
                 ruleUuids,
             });

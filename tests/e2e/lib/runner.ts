@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -8,6 +8,8 @@ import type {
     Scenario,
     ScenarioResult,
     ScenarioStatus,
+    KodusSession,
+    SkipKind,
     Target,
     TargetContext,
     TenantCredentials,
@@ -17,7 +19,15 @@ import { makeProvider } from "../providers/index.js";
 import {
     makeGithubTokenPicker,
     preflightGithubRateLimits,
+    preflightIntegrationToken,
+    integrationQuota,
 } from "./github-token-pool.js";
+import type { RateLimitInfo } from "./github-token-pool.js";
+import {
+    IDLE,
+    describeQuotaCurve,
+    startQuotaSampler,
+} from "./quota-curve.js";
 import { githubAppToken } from "./github-app-token.js";
 import {
     finishOnboarding,
@@ -52,7 +62,14 @@ export interface RunOutcome {
     results: ScenarioResult[];
 }
 
-function appliesToCell(scenario: Scenario, cell: MatrixCell): boolean {
+export function appliesToCell(
+    scenario: Scenario,
+    cell: MatrixCell,
+): boolean {
+    // A cell may pin itself to a subset of scenarios (canary cells — see
+    // MatrixCell.only). Checked first: it narrows, never widens, so a scenario
+    // whose appliesTo excludes the cell still cannot run here.
+    if (cell.only && !cell.only.includes(scenario.id)) return false;
     const at = scenario.appliesTo;
     if (at.target && !at.target.includes(cell.target)) return false;
     if (at.provider && !at.provider.includes(cell.provider)) return false;
@@ -186,6 +203,63 @@ function readCloudTenantsFile(): CloudTenantEntry[] {
 // all paid cloud cells after the 2026-07-24 rotation. One login + one POST
 // per unique tenant, idempotent (same create-or-update endpoint the seeder
 // uses), best-effort per tenant, and skipped when no env key is configured.
+/**
+ * Write a tenant's BYOK config through the API — the same row the product UI
+ * writes, and the same one `resolveKodyRulesModelPolicy` and the review path
+ * read FIRST.
+ *
+ * This is how the e2e states the provider EXPLICITLY. The env path
+ * (`API_LLM_PROVIDER_MODEL`) cannot: `describeEnvLLMConfig` infers the provider
+ * from the model name and only recognises Gemini and Claude, so every OpenAI
+ * model routes as `openai_compatible`. Harmless for gpt-5.4-mini, fatal for a
+ * reasoning model — `Function tools with reasoning_effort are not supported for
+ * gpt-5.6-luna in /v1/chat/completions` — which is a real self-hosted bug, but
+ * one the harness should not be blocked on.
+ *
+ * Writing the DB config takes the same route a customer takes, so the test
+ * exercises the supported path instead of the inferred one.
+ */
+async function applyByokToTenant(
+    target: TargetContext,
+    session: KodusSession,
+): Promise<{ ok: boolean; status: number }> {
+    const resp = await http(
+        `${target.apiBaseUrl}/organization-parameters/create-or-update`,
+        {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${session.accessToken}` },
+            body: {
+                key: 'byok_config',
+                configValue: { main: byokFromEnv() },
+            },
+            timeoutMs: 30_000,
+        },
+    );
+    return { ok: resp.status >= 200 && resp.status < 300, status: resp.status };
+}
+
+/**
+ * The BYOK block the matrix wants every tenant to use. `API_LLM_PROVIDER`
+ * defaults to `openai`; point it (with `API_OPENAI_FORCE_BASE_URL`) at any
+ * OpenAI- or Anthropic-compatible vendor to run the matrix on a different
+ * model without touching the product.
+ */
+function byokFromEnv(): {
+    provider: string;
+    apiKey: string;
+    baseURL: string;
+    model: string;
+} {
+    return {
+        provider: process.env.API_LLM_PROVIDER ?? 'openai',
+        apiKey: process.env.API_OPEN_AI_API_KEY ?? '',
+        baseURL:
+            process.env.API_OPENAI_FORCE_BASE_URL ??
+            'https://api.openai.com/v1',
+        model: process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini',
+    };
+}
+
 async function refreshCloudTenantByok(log: {
     info: (m: string) => void;
     warn: (m: string) => void;
@@ -206,8 +280,62 @@ async function refreshCloudTenantByok(log: {
         process.env.API_OPENAI_FORCE_BASE_URL ?? 'https://api.openai.com/v1';
     const model = process.env.API_LLM_PROVIDER_MODEL ?? 'gpt-5.4-mini';
 
+    // The `free` tenant is DEFINED by not having a key of its own: that is what
+    // makes it a free tenant rather than a community-plan one, and
+    // license-attribution asserts it receives no review. Writing byok_config
+    // onto it turns it into exactly the tenant the registry already keeps
+    // separately as `community-byok`, and the product then reviews its PRs --
+    // correctly. The test was refuting an entitlement rule it had just spent
+    // the run start dismantling (observed live, cloud run 31601925282).
     const seen = new Set<string>();
     for (const entry of entries) {
+        if (entry.license === 'free') {
+            // Skipping the write is not enough: the key persists on the tenant
+            // from every run before this one, so the free tenant stays a
+            // community tenant forever and license-attribution keeps failing
+            // (observed on cloud runs 31601925282 and 31608293474 -- the second
+            // one WITH the skip in place). Its identity has to be ENFORCED each
+            // run, not assumed.
+            try {
+                const session = await login(target, {
+                    email: entry.email,
+                    password: entry.password,
+                });
+                const resp = await http(
+                    `${target.apiBaseUrl}/organization-parameters/delete-byok-config?configType=main`,
+                    {
+                        method: 'DELETE',
+                        headers: {
+                            Authorization: `Bearer ${session.accessToken}`,
+                        },
+                        timeoutMs: 30_000,
+                    },
+                );
+                // 2xx cleared something; 400/404 means there was nothing to
+                // clear, which is the state we want and not a failure. Saying
+                // "CLEARED" on a 400 was a line that lied about its own
+                // result -- the exact habit this matrix spent the day
+                // removing from everywhere else.
+                if (resp.status >= 200 && resp.status < 300) {
+                    log.info(
+                        `[byok-refresh] ${entry.provider}/free: byok_config CLEARED — a free tenant is defined by having no key of its own`,
+                    );
+                } else if (resp.status === 400 || resp.status === 404) {
+                    log.info(
+                        `[byok-refresh] ${entry.provider}/free: no byok_config to clear (HTTP ${resp.status}) — already in the state a free tenant should be in`,
+                    );
+                } else {
+                    log.warn(
+                        `[byok-refresh] ${entry.provider}/free: clearing byok_config returned HTTP ${resp.status} — license-attribution will fail if a key is still stored`,
+                    );
+                }
+            } catch (err) {
+                log.warn(
+                    `[byok-refresh] ${entry.provider}/free: could not clear byok_config (${(err as Error).message.slice(0, 120)}) — license-attribution will fail if a key is still stored`,
+                );
+            }
+            continue;
+        }
         if (seen.has(entry.email)) continue;
         seen.add(entry.email);
         try {
@@ -215,21 +343,8 @@ async function refreshCloudTenantByok(log: {
                 email: entry.email,
                 password: entry.password,
             });
-            const resp = await http(
-                `${target.apiBaseUrl}/organization-parameters/create-or-update`,
-                {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${session.accessToken}` },
-                    body: {
-                        key: 'byok_config',
-                        configValue: {
-                            main: { provider, apiKey, baseURL, model },
-                        },
-                    },
-                    timeoutMs: 30_000,
-                },
-            );
-            if (resp.status >= 200 && resp.status < 300) {
+            const resp = await applyByokToTenant(target, session);
+            if (resp.ok) {
                 log.info(
                     `[byok-refresh] ${entry.provider}/${entry.license}: byok_config updated`,
                 );
@@ -377,12 +492,19 @@ async function resolveTenantForCell(
 // "Kody posted one", wrong subscriptionStatus — deliberately do NOT
 // match: re-running cannot change a wrong value, it only burns an LLM
 // review and 10 minutes.
+// NOTE on the first entry: a BARE /timeout/i used to head this list. It
+// matched any message containing the word — including deterministic
+// mismatches like "expected timeout config 30, got 60" — so a wrong value
+// bought itself a retry and a second LLM review. Transport timeouts are
+// already covered by the network shapes below (ETIMEDOUT, "operation was
+// aborted"), so the bare word is gone and only the phrasings that actually
+// denote a waited-and-nothing-came failure remain.
 const TRANSIENT_FAILURE_PATTERNS: RegExp[] = [
-    /\btimed?\s?-?out\b|timeout/i,
     /within \d+\s*s/i,
     /after \d+\s*s/i,
+    /within timeout/i,
     /no review activity|none arrived|never arrived|never (reached|registered|woke|started)|did not (arrive|appear|start)/i,
-    /HTTP 5\d\d|HTTP 429|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang ?up|network error|Recv failure|operation was aborted/i,
+    /HTTP 5\d\d|HTTP 429|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang ?up|network error|Recv failure|operation was aborted|(connection|request|socket) timed ?-?out/i,
 ];
 
 export function isTransientFailure(message: string): boolean {
@@ -428,8 +550,22 @@ export function absenceRetryDelayMs(message: string): number {
 export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     const startedAt = new Date().toISOString();
     const results: ScenarioResult[] = [];
+    // Carried ACROSS cells, not per cell: the gap this detects is the time
+    // between two scenarios, and cell boundaries are just another gap.
+    let lastQuotaAfter: RateLimitInfo | undefined;
     const artifactDir = join(opts.artifactRoot, opts.runId);
     mkdirSync(artifactDir, { recursive: true });
+
+    // Timer-based quota sampling, alongside the per-scenario deltas below.
+    // The two answer different questions: the deltas say what a scenario cost,
+    // the curve says what was ACTUALLY burning and when. They disagree
+    // whenever work is asynchronous -- the onboarding backfill is dispatched
+    // in the background, so its spend gets charged to whatever scenario
+    // happens to be in the foreground when it lands. See quota-curve.ts.
+    const quotaSampler =
+        opts.dryRun || !opts.cells.some((c) => c.provider === 'github')
+            ? undefined
+            : startQuotaSampler({ probe: () => integrationQuota() });
 
     // Idempotency pre-flight: abandon every PR (or MR) on each
     // fixture repo whose title starts with `[e2e]` and is still
@@ -479,9 +615,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                 repo,
             });
         }
-        // Spread cleanup's repo/PR listing across the bot-account pool too —
-        // otherwise every fixture lists on the single default account and helps
-        // exhaust its per-account GitHub rate limit before the cells even run.
+        // Cleanup uses the single human credential before cells start.
         const pickCleanupToken = makeGithubTokenPicker();
         for (const { provider: providerName, repo } of fixtures.values()) {
             const label = `${providerName}${repo ? ` (${repo})` : ''}`;
@@ -513,8 +647,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
         }
     }
 
-    // Round-robins GitHub cells across the bot-account token pool so no single
-    // account's rate limit caps the run (no-op with a single token).
+    // Single human author credential. High-volume scenario traffic is moved
+    // to the App installation token below.
     const pickGithubToken = makeGithubTokenPicker();
 
     // Report each bot account's remaining GitHub budget up front (free — GET
@@ -522,6 +656,11 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // visible before the cells run instead of as an opaque mid-run 403 cascade.
     if (!opts.dryRun && opts.cells.some((c) => c.provider === "github")) {
         await preflightGithubRateLimits(log);
+        // …and the credential the PRODUCT stores, which the driver preflight
+        // never looked at. It is a DIFFERENT account, and it is the
+        // one /code-management/auth-integration validates against GitHub —
+        // the exact call that exhausted run 31270321822 on its first scenario.
+        await preflightIntegrationToken(log);
     }
 
     // Cloud tenants are seeded ONCE (setup-tenants) and persist their BYOK
@@ -555,6 +694,46 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                   opts.runId,
               );
 
+        // Self-hosted: state the BYOK config EXPLICITLY on this cell's tenant.
+        //
+        // Without it the stack falls back to `API_LLM_PROVIDER_MODEL`, and
+        // `describeEnvLLMConfig` infers the provider from the model name —
+        // recognising only Gemini and Claude, so every OpenAI model routes as
+        // `openai_compatible`. That is harmless for gpt-5.4-mini and fatal for
+        // a reasoning model ("Function tools with reasoning_effort are not
+        // supported ... in /v1/chat/completions").
+        //
+        // Writing the row takes the same path a customer takes through the UI,
+        // so the matrix exercises the supported configuration rather than the
+        // inferred one. Best-effort: a tenant that keeps its existing config is
+        // still testable, and failing the cell here would trade a product
+        // signal for a setup detail.
+        if (
+            cell.target === 'self-hosted' &&
+            !opts.dryRun &&
+            tenant &&
+            process.env.API_OPEN_AI_API_KEY
+        ) {
+            try {
+                const session = await login(target, tenant);
+                const applied = await applyByokToTenant(target, session);
+                const cfg = byokFromEnv();
+                if (applied.ok) {
+                    log.info(
+                        `[byok] ${cell.provider}/${cell.license}: ${cfg.provider}:${cfg.model} written to the tenant`,
+                    );
+                } else {
+                    log.warn(
+                        `[byok] ${cell.provider}/${cell.license}: HTTP ${applied.status} — tenant keeps its existing config (env inference applies)`,
+                    );
+                }
+            } catch (err) {
+                log.warn(
+                    `[byok] ${cell.provider}/${cell.license}: ${(err as Error).message.slice(0, 120)} — continuing on the tenant's existing config`,
+                );
+            }
+        }
+
         // Circuit breaker: once a github bot account's quota is exhausted,
         // every remaining scenario in the cell would either re-hit the 403 or
         // hang polling for a product action the (also rate-limited) product
@@ -568,7 +747,9 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
 
             if (!appliesToCell(scenario, cell)) {
                 log.info(`SKIP  ${cellLabel}`);
-                results.push(makeResult(scenario, cell, 'skipped', 0, {}));
+                results.push(
+                    makeSkip(scenario, cell, 0, 'not-applicable'),
+                );
                 continue;
             }
 
@@ -577,10 +758,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     `SKIP  ${cellLabel}: GitHub rate limit already tripped this cell — short-circuiting (quota resets hourly, NOT a product pass)`,
                 );
                 results.push(
-                    makeResult(scenario, cell, 'skipped', 0, {
-                        skipReason:
-                            'github-rate-limit: cell circuit breaker (a prior scenario exhausted the account quota)',
-                    }),
+                    makeSkip(
+                        scenario,
+                        cell,
+                        0,
+                        'infra',
+                        'github-rate-limit: cell circuit breaker (a prior scenario exhausted the account quota)',
+                    ),
                 );
                 continue;
             }
@@ -599,9 +783,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
 
             log.info(`RUN   ${cellLabel}`);
 
-            // Assign this GitHub run a token from the bot-account pool
-            // (round-robin). Same token across both attempts so a retry stays
-            // on the same account; other cells keep draining the other tokens.
+            // Resolve the one human author credential before replacing the
+            // high-volume driver token with an App installation token below.
             const ghAssignment =
                 cell.provider === "github" ? pickGithubToken() : undefined;
             let githubToken = ghAssignment?.token;
@@ -612,22 +795,27 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
             }
             // GitHub App installation token (opt-in via GH_APP_* envs):
             // 5000/h of its own, immune to the bot-account abuse flags that
-            // cap the PATs at ~60/h. CLOUD cells only — installation tokens
-            // can't call GET /user, which self-hosted needs for seat
-            // assignment (provider.currentUserId). Resolved per scenario so
-            // the ~1h token auto-refreshes across long runs. A configured-
-            // but-broken App fails the mint loudly; we surface it and fall
-            // back to the PAT so one bad secret doesn't zero the coverage.
-            if (cell.provider === "github" && cell.target === "cloud") {
+            // cap the PATs at ~60/h. Resolved per scenario so the ~1h token
+            // auto-refreshes across long runs. A configured-but-broken App
+            // fails the mint loudly; we surface it and fall back to the PAT
+            // so one bad secret doesn't zero the coverage.
+            //
+            // Self-hosted used to be excluded because installation tokens
+            // cannot call GET /user and seat assignment needs the user id.
+            // provider.currentUserId() now resolves that ONE call from the
+            // durable PAT, so both targets can put their heavy traffic on
+            // the App budget — which is where the quota SKIPs came from.
+            if (cell.provider === "github" || cell.provider === "github-app") {
                 try {
                     const appToken = await githubAppToken();
                     if (appToken) {
                         githubToken = appToken;
-                        log.info("  github → App installation token");
+                        log.info(`  ${cell.provider} → App installation token`);
                     }
                 } catch (err) {
+                    if (cell.provider === "github-app") throw err;
                     log.err(
-                        `  github → App token mint FAILED (${(err as Error).message.slice(0, 160)}) — falling back to PAT pool`,
+                        `  github → App token mint FAILED (${(err as Error).message.slice(0, 160)}) — using the single human PAT`,
                     );
                 }
             }
@@ -643,8 +831,28 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                 artifactDir,
                 `${scenario.id}-${cell.target}-${cell.provider}-${cell.license}`,
             );
+            quotaSampler?.mark(scenario.id);
             for (let attempt = 1; attempt <= 2; attempt++) {
                 const t0 = Date.now();
+                // Attribute GitHub spend to a scenario, or to whatever else
+                // shares this account. See integrationQuota().
+                const quotaBefore =
+                    cell.provider === 'github' && !opts.dryRun
+                        ? await integrationQuota()
+                        : undefined;
+                if (quotaBefore && lastQuotaAfter) {
+                    const idleSpend =
+                        lastQuotaAfter.remaining - quotaBefore.remaining;
+                    // Nothing of ours ran in this gap. A non-trivial number
+                    // here means the account is shared, and no amount of
+                    // tuning our own request volume will save the run.
+                    if (idleSpend > 50) {
+                        log.warn(
+                            `[quota] integration account lost ${idleSpend} requests while NO scenario was running — ` +
+                                'something outside this run shares that credential. Give the product a dedicated account.',
+                        );
+                    }
+                }
                 try {
                     const provider = makeProvider(
                         cell.provider,
@@ -714,8 +922,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     log.ok(
                         `PASS  ${cellLabel}  (${(duration / 1000).toFixed(1)}s)${retriedAfter ? ' [on retry]' : ''}`,
                     );
-                    results.push(
-                        makeResult(
+                    results.push({
+                        ...makeResult(
                             scenario,
                             cell,
                             'passed',
@@ -724,7 +932,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                                 ? { ...evidence, retriedAfter }
                                 : evidence,
                         ),
-                    );
+                        // A cell that only passes on attempt 2 is a flake.
+                        // It still counts as passed, but it is counted
+                        // SEPARATELY — an intermittent product bug that the
+                        // retry keeps absorbing is exactly what nobody was
+                        // able to see before.
+                        ...(retriedAfter ? { flaky: true } : {}),
+                    });
                     break;
                 } catch (err) {
                     const duration = Date.now() - t0;
@@ -742,9 +956,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     ) {
                         log.info(`SKIP  ${cellLabel}  (${e.message})`);
                         results.push(
-                            makeResult(scenario, cell, 'skipped', duration, {
-                                skipReason: e.message,
-                            }),
+                            makeSkip(
+                                scenario,
+                                cell,
+                                duration,
+                                'setup',
+                                e.message,
+                            ),
                         );
                         break;
                     }
@@ -761,9 +979,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                             `SKIP  ${cellLabel}: GitHub rate limit — quota exhausted, NOT a product pass (${e.message.slice(0, 160)})`,
                         );
                         results.push(
-                            makeResult(scenario, cell, 'skipped', duration, {
-                                skipReason: `github-rate-limit: ${e.message.slice(0, 200)}`,
-                            }),
+                            makeSkip(
+                                scenario,
+                                cell,
+                                duration,
+                                'infra',
+                                `github-rate-limit: ${e.message.slice(0, 200)}`,
+                            ),
                         );
                         break;
                     }
@@ -791,9 +1013,13 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                             `SKIP  ${cellLabel}: target unreachable after failure — INCONCLUSIVE, not a product fail (${e.message.slice(0, 140)})`,
                         );
                         results.push(
-                            makeResult(scenario, cell, 'skipped', duration, {
-                                skipReason: `target-unreachable: ${e.message.slice(0, 200)}`,
-                            }),
+                            makeSkip(
+                                scenario,
+                                cell,
+                                duration,
+                                'infra',
+                                `target-unreachable: ${e.message.slice(0, 200)}`,
+                            ),
                         );
                         break;
                     }
@@ -819,10 +1045,47 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                     );
                     if (opts.failFast) failFastHit = true;
                     break;
+                } finally {
+                    if (quotaBefore) {
+                        const after = await integrationQuota();
+                        if (after) {
+                            const spent =
+                                quotaBefore.remaining - after.remaining;
+                            // Logged on every scenario, not only when it goes
+                            // wrong: the number that matters is the one from
+                            // the run that PASSED, because that is the budget
+                            // the next scenario has left to work with.
+                            log.info(
+                                `[quota] ${scenario.id}: integration account spent ${spent} github requests ` +
+                                    `(${after.remaining}/${after.limit} left, resets ${after.resetIso})`,
+                            );
+                            lastQuotaAfter = after;
+                        }
+                    }
                 }
             }
+            quotaSampler?.mark(IDLE);
             if (failFastHit) break;
         }
+    }
+
+    if (quotaSampler) {
+        const curve = quotaSampler.stop();
+        for (const line of describeQuotaCurve(curve)) {
+            log.info(line);
+        }
+        writeFileSync(
+            join(artifactDir, 'quota-curve.json'),
+            JSON.stringify(
+                {
+                    samples: quotaSampler.samples,
+                    marks: quotaSampler.marks,
+                    summary: curve,
+                },
+                null,
+                2,
+            ),
+        );
     }
 
     return {
@@ -853,5 +1116,27 @@ function makeResult(
         errorStack,
         startedAt: now,
         finishedAt: now,
+    };
+}
+
+// Every `skipped` result goes through here so it CANNOT be recorded without
+// saying why. `not-applicable` is the only silent kind; `setup` and `infra`
+// both mean a check we believe we have did not actually run.
+function makeSkip(
+    scenario: Scenario,
+    cell: MatrixCell,
+    durationMs: number,
+    kind: SkipKind,
+    reason?: string,
+): ScenarioResult {
+    return {
+        ...makeResult(
+            scenario,
+            cell,
+            'skipped',
+            durationMs,
+            reason ? { skipReason: reason } : {},
+        ),
+        skipKind: kind,
     };
 }

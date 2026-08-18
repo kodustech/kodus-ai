@@ -59,7 +59,7 @@ export const perSeatLicenseToggle: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["self-hosted"],
-        provider: ["github", "gitlab", "bitbucket", "azure-devops"],
+        provider: ["github", "gitlab", "bitbucket", "azure-devops", "github-app"],
         license: ["license-paid"],
     },
     // Outer budget: 1500s assigned-phase + 2× 120s unassigned + ~300s

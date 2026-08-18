@@ -22,5 +22,10 @@
  */
 export function supportsStrictTools(modelId: string | undefined): boolean {
     if (!modelId) return false;
+    // A/B: o comentario acima mede strict CRATERANDO recall no Claude
+    // (0.357 -> 0.100). O Gemini roda com strict LIGADO e pontua 11.6% no
+    // finder-recall — mesma ordem do Claude degradado. RECALL_NO_STRICT=1
+    // desliga para medir se a causa e a mesma.
+    if (process.env.RECALL_NO_STRICT === '1') return false;
     return /^gemini[-_]/i.test(modelId);
 }

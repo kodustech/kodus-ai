@@ -61,7 +61,7 @@ export const trialManagedReview: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["cloud"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         license: ["trial"],
     },
     // Onboarding (~3-5 min incl. kody-rules generation) + 600s pipeline-start

@@ -6,10 +6,11 @@ import {
     IKodyRuleFileMeta,
 } from '@libs/centralized-config/domain/contracts/CentralizedConfigService.contract';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { Inject, Injectable } from '@nestjs/common';
 
 @Injectable()
-export class CentralizedConfigSyncUseCase {
+export class CentralizedConfigSyncUseCase implements IUseCase {
     private readonly logger = createLogger(CentralizedConfigSyncUseCase.name);
 
     constructor(
@@ -129,6 +130,10 @@ export class CentralizedConfigSyncUseCase {
                 await this.centralizedConfigService.removeStaleKodyRules({
                     organizationAndTeamData,
                     ruleFiles: ruleFilesMeta,
+                    // Same tree read as the rules: proof the repository was
+                    // reachable, so an empty rule set means the user deleted
+                    // them rather than the read having failed.
+                    configFiles: configFilesMeta,
                     actor,
                 });
 

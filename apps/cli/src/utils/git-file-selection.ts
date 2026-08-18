@@ -1,5 +1,8 @@
 import type { FileDiff } from '../types/cli.js';
-import { buildFileStatusMap, listFilesFromNameStatus } from './git-file-targets.js';
+import {
+    buildFileStatusMap,
+    listFilesFromNameStatus,
+} from './git-file-targets.js';
 
 export function createFileSelectionFromPaths(files: string[]): {
     filesToRead: string[];
@@ -21,9 +24,7 @@ export function createFileSelectionFromNameStatus(nameStatus: string): {
     };
 }
 
-export function createFileSelectionFromModifiedFiles(
-    files: FileDiff[],
-): {
+export function createFileSelectionFromModifiedFiles(files: FileDiff[]): {
     filesToRead: string[];
     fileStatusMap: Map<string, FileDiff['status']>;
 } {

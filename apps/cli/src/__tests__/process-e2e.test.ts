@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import { repoKey } from '../services/trace/store-paths.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,7 +31,9 @@ let mockServer: http.Server;
 let mockServerPort: number;
 let capturedRequests: CapturedRequest[];
 let tmpDir: string;
+let homeDir: string;
 let cliEntryPoint: string;
+let mockServerStatus = 200;
 
 // ---------------------------------------------------------------------------
 // Mock HTTP server
@@ -59,6 +62,14 @@ function startMockServer(): Promise<{ server: http.Server; port: number }> {
                 body,
             });
 
+            if (mockServerStatus >= 400) {
+                res.writeHead(mockServerStatus, {
+                    'Content-Type': 'application/json',
+                });
+                res.end(JSON.stringify({ message: 'simulated failure' }));
+                return;
+            }
+
             const responseBody = JSON.stringify({
                 data: { accepted: true },
                 statusCode: 200,
@@ -84,31 +95,49 @@ function startMockServer(): Promise<{ server: http.Server; port: number }> {
 // Helper: spawn the CLI as a child process
 // ---------------------------------------------------------------------------
 
+interface RunHookOptions {
+    cwd?: string;
+    /** Replaces the default environment entries, key by key. */
+    env?: Record<string, string | undefined>;
+}
+
 async function runHook(
     agent: string,
     hookName: string,
     payload: object,
-    options?: { cwd?: string },
+    options?: RunHookOptions,
 ): Promise<RunResult> {
     const cwd = options?.cwd ?? tmpDir;
+
+    const baseEnv: Record<string, string | undefined> = {
+        PATH: process.env.PATH,
+        NODE_PATH: process.env.NODE_PATH,
+        KODUS_API_URL: `http://127.0.0.1:${mockServerPort}`,
+        KODUS_TEAM_KEY: 'kodus_test_key_e2e_12345',
+        // Use the dedicated Trace seam. Never repurpose HOME in a process
+        // test: doing so can redirect unrelated tools and configuration.
+        KODUS_TRACE_HOME: path.join(homeDir, '.kodus'),
+        KODUS_VERBOSE: 'true',
+        NO_UPDATE_NOTIFIER: '1',
+        NODE_OPTIONS: '',
+        ...(options?.env ?? {}),
+    };
+
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(baseEnv)) {
+        if (value !== undefined) {
+            env[key] = value;
+        }
+    }
 
     return new Promise<RunResult>((resolve) => {
         const child = spawn(
             process.execPath,
-            [cliEntryPoint, 'decisions', 'hooks', agent, hookName],
+            [cliEntryPoint, 'trace', 'hooks', agent, hookName],
             {
                 cwd,
                 stdio: ['pipe', 'pipe', 'pipe'],
-                env: {
-                    PATH: process.env.PATH,
-                    NODE_PATH: process.env.NODE_PATH,
-                    KODUS_API_URL: `http://127.0.0.1:${mockServerPort}`,
-                    KODUS_TEAM_KEY: 'kodus_test_key_e2e_12345',
-                    HOME: tmpDir,
-                    KODUS_VERBOSE: 'true',
-                    NO_UPDATE_NOTIFIER: '1',
-                    NODE_OPTIONS: '',
-                },
+                env,
                 timeout: 15_000,
             },
         );
@@ -214,9 +243,7 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
             git.on('error', reject);
         });
 
-        // Create .kody and .kodus directories
-        await fs.mkdir(path.join(tmpDir, '.kody'), { recursive: true });
-        await fs.mkdir(path.join(tmpDir, '.kodus'), { recursive: true });
+        homeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kodus-e2e-home-'));
 
         // Start mock HTTP server
         const { server, port } = await startMockServer();
@@ -231,15 +258,18 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
             });
         }
 
-        if (tmpDir) {
-            await fs
-                .rm(tmpDir, { recursive: true, force: true })
-                .catch(() => {});
+        for (const dir of [tmpDir, homeDir]) {
+            if (dir) {
+                await fs
+                    .rm(dir, { recursive: true, force: true })
+                    .catch(() => {});
+            }
         }
     });
 
     beforeEach(() => {
         capturedRequests = [];
+        mockServerStatus = 200;
     });
 
     // -----------------------------------------------------------------------
@@ -500,8 +530,289 @@ describe('Process E2E — session hooks', { timeout: 60_000 }, () => {
         expect(event.body.sessionId).toBe('');
     });
 
+    // -----------------------------------------------------------------------
+    // Local store, no-auth mode, and redaction
+    // -----------------------------------------------------------------------
+
+    async function readLocalRecord(sessionId: string): Promise<string> {
+        const recordsDir = path.join(
+            homeDir,
+            '.kodus',
+            'sessions',
+            repoKey(await fs.realpath(tmpDir)),
+            'records',
+        );
+        return fs.readFile(
+            path.join(recordsDir, `${sessionId}.jsonl`),
+            'utf-8',
+        );
+    }
+
+    async function driveSession(
+        sessionId: string,
+        prompt: string,
+        env?: Record<string, string | undefined>,
+    ): Promise<RunResult[]> {
+        const transcriptPath = path.join(tmpDir, '.claude', 'transcript.jsonl');
+        const results: RunResult[] = [];
+
+        results.push(
+            await runHook(
+                'claude-code',
+                'session-start',
+                { session_id: sessionId, transcript_path: transcriptPath },
+                { env },
+            ),
+        );
+        results.push(
+            await runHook(
+                'claude-code',
+                'user-prompt-submit',
+                {
+                    session_id: sessionId,
+                    transcript_path: transcriptPath,
+                    prompt,
+                },
+                { env },
+            ),
+        );
+        results.push(
+            await runHook(
+                'claude-code',
+                'stop',
+                { session_id: sessionId, transcript_path: transcriptPath },
+                { env },
+            ),
+        );
+        results.push(
+            await runHook(
+                'claude-code',
+                'session-end',
+                { session_id: sessionId, transcript_path: transcriptPath },
+                { env },
+            ),
+        );
+
+        return results;
+    }
+
+    it('with a token, a session writes locally and posts to the API', async () => {
+        const sessionId = `local-and-api-${Date.now()}`;
+
+        await driveSession(sessionId, 'add a retry to the webhook sender');
+        await waitForRequests(4, 10_000);
+
+        const record = await readLocalRecord(sessionId);
+        expect(record).toContain('"kind":"session-start"');
+        expect(record).toContain('"kind":"turn-start"');
+        expect(record).toContain('"kind":"turn-end"');
+        expect(record).toContain('"kind":"session-end"');
+        expect(record).toContain('add a retry to the webhook sender');
+
+        const eventRequests = capturedRequests.filter((r) =>
+            r.url?.includes('/cli/sessions/events'),
+        );
+        expect(eventRequests.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('with no token and no reachable API, every hook exits zero with empty stderr and the record is complete', async () => {
+        const sessionId = `offline-${Date.now()}`;
+
+        const results = await driveSession(
+            sessionId,
+            'switch the queue to at-least-once delivery',
+            {
+                // No credentials at all, and an API that refuses connections.
+                KODUS_TEAM_KEY: undefined,
+                KODUS_API_URL: 'http://127.0.0.1:1',
+                KODUS_VERBOSE: undefined,
+            },
+        );
+
+        for (const result of results) {
+            expect(result.exitCode).toBe(0);
+            expect(result.stderr).toBe('');
+        }
+
+        const record = await readLocalRecord(sessionId);
+        expect(record).toContain('"kind":"session-start"');
+        expect(record).toContain('"kind":"session-end"');
+        expect(record).toContain('at-least-once delivery');
+
+        const eventRequests = capturedRequests.filter((r) =>
+            r.url?.includes('/cli/sessions/events'),
+        );
+        expect(eventRequests).toHaveLength(0);
+    });
+
+    it('with a token and the API returning 500, the local record is complete and the event is buffered for retry', async () => {
+        mockServerStatus = 500;
+        const sessionId = `api-500-${Date.now()}`;
+
+        const results = await driveSession(sessionId, 'cache the tax table');
+        for (const result of results) {
+            expect(result.exitCode).toBe(0);
+        }
+
+        const record = await readLocalRecord(sessionId);
+        expect(record).toContain('"kind":"session-end"');
+        expect(record).toContain('cache the tax table');
+
+        const pendingPath = path.join(
+            homeDir,
+            '.kodus',
+            'sessions',
+            repoKey(await fs.realpath(tmpDir)),
+            'pending-events.jsonl',
+        );
+        const buffered = await fs.readFile(pendingPath, 'utf-8');
+        expect(buffered).toContain('"type":"session_start"');
+
+        // …and the retry drains it once the API recovers.
+        mockServerStatus = 200;
+        capturedRequests = [];
+        await driveSession(`api-recovered-${Date.now()}`, 'unrelated');
+        await waitForRequests(5, 10_000);
+
+        const replayed = capturedRequests.filter(
+            (r) =>
+                r.url?.includes('/cli/sessions/events') &&
+                r.body.sessionId === sessionId,
+        );
+        expect(replayed.length).toBeGreaterThan(0);
+    });
+
+    it('a planted secret never reaches a captured request, the local store, or the repository', async () => {
+        const sessionId = `secret-${Date.now()}`;
+        // Force every sanitized request into the pending retry buffer too, so
+        // this one flow searches both transport and offline persistence.
+        mockServerStatus = 500;
+        // Assembled rather than written as a literal: a literal with this
+        // shape trips GitHub's push protection on a string that was never a
+        // credential.
+        const secret = [
+            'sk-',
+            'ant-',
+            'api03-',
+            'PLANTED',
+            '0'.repeat(30),
+        ].join('');
+
+        await driveSession(
+            sessionId,
+            `use this key to call the API: ${secret} and then summarise`,
+        );
+        await waitForRequests(4, 10_000);
+
+        for (const request of capturedRequests) {
+            expect(JSON.stringify(request.body)).not.toContain(secret);
+        }
+
+        const record = await readLocalRecord(sessionId);
+        expect(record).not.toContain(secret);
+        expect(record).toContain('[REDACTED]');
+
+        // Nowhere else in the store either — the hook log carries the same
+        // prompt and is just as much a file on the developer's disk.
+        const storeOffenders: string[] = [];
+        const walkStore = async (dir: string): Promise<void> => {
+            for (const entry of await fs.readdir(dir, {
+                withFileTypes: true,
+            })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    await walkStore(full);
+                    continue;
+                }
+                const content = await fs
+                    .readFile(full, 'utf-8')
+                    .catch(() => '');
+                if (content.includes(secret)) {
+                    storeOffenders.push(full);
+                }
+            }
+        };
+        await walkStore(path.join(homeDir, '.kodus'));
+        expect(storeOffenders).toEqual([]);
+
+        // Nothing anywhere under the repository working tree, either.
+        const offenders: string[] = [];
+        const walk = async (dir: string): Promise<void> => {
+            for (const entry of await fs.readdir(dir, {
+                withFileTypes: true,
+            })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    if (entry.name === '.git') {
+                        continue;
+                    }
+                    await walk(full);
+                    continue;
+                }
+                const content = await fs
+                    .readFile(full, 'utf-8')
+                    .catch(() => '');
+                if (content.includes(secret)) {
+                    offenders.push(full);
+                }
+            }
+        };
+        await walk(tmpDir);
+        expect(offenders).toEqual([]);
+    });
+
+    it('leaves the working tree clean and writes nothing inside the repository', async () => {
+        const sessionId = `clean-tree-${Date.now()}`;
+        await driveSession(sessionId, 'rename the settings module');
+
+        const status = await new Promise<string>((resolve) => {
+            const child = spawn('git', ['status', '--porcelain'], {
+                cwd: tmpDir,
+            });
+            let out = '';
+            child.stdout.on('data', (chunk: Buffer) => {
+                out += chunk.toString();
+            });
+            child.on('close', () => resolve(out));
+        });
+
+        expect(status.trim()).toBe('');
+
+        // The old release buffered raw events into the repository root.
+        await expect(
+            fs.access(path.join(tmpDir, '.kody', 'pending-events.jsonl')),
+        ).rejects.toThrow();
+    });
+
+    it('never spawns an agent CLI during a turn hook', async () => {
+        const fakeBin = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'kodus-fake-bin-'),
+        );
+        const marker = path.join(fakeBin, 'spawned');
+
+        try {
+            for (const name of ['claude', 'codex', 'gemini', 'cursor-agent']) {
+                await fs.writeFile(
+                    path.join(fakeBin, name),
+                    `#!/bin/sh
+echo "$0" >> ${JSON.stringify(marker)}
+`,
+                    { mode: 0o755 },
+                );
+            }
+
+            await driveSession(`no-spawn-${Date.now()}`, 'do something', {
+                PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+            });
+
+            await expect(fs.access(marker)).rejects.toThrow();
+        } finally {
+            await fs.rm(fakeBin, { recursive: true, force: true });
+        }
+    });
+
     it('Invalid agent name exits with no events sent', async () => {
-        const result = await runHook('nonexistent-agent', 'session-start', {
+        await runHook('nonexistent-agent', 'session-start', {
             session_id: 'should-not-send',
         });
 

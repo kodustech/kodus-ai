@@ -5,7 +5,7 @@ import type { FeaturesSnapshot } from '../domain/snapshot.types';
 
 export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
     "schema_version": 1,
-    "generated_at": "2026-07-07T14:47:56.505Z",
+    "generated_at": "2026-08-11T19:06:02.620Z",
     "source": "manual",
     "features": {
         "github-enterprise-server-pat": {
@@ -24,6 +24,14 @@ export const FEATURES_SNAPSHOT: FeaturesSnapshot = {
             "audience": [
                 "cloud",
                 "self-hosted"
+            ]
+        },
+        "kodus-trace-review-context": {
+            "name": "Kodus Trace review context",
+            "stage": "alpha",
+            "description": "Use sanitized decisions distilled from local coding-agent sessions as repository-scoped context for Kody code reviews.",
+            "audience": [
+                "cloud"
             ]
         }
     }

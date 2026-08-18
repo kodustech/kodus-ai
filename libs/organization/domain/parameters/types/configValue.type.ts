@@ -81,6 +81,34 @@ export type CentralizedConfigParameter = {
         id: string;
     } | null;
     activePullRequest?: CentralizedConfigActivePullRequest | null;
+
+    /**
+     * Repositories whose config the centralized repo actually owns, as recorded
+     * by the last successful sync. Stale cleanup needs this to tell "this repo
+     * never had a `kodus-config.yml`, it just inherits the global one" from
+     * "its `kodus-config.yml` was deleted". `undefined` means no sync has
+     * recorded a baseline yet — absence proves nothing, so nothing is removed.
+     */
+    managedRepositoryIds?: string[];
+
+    /**
+     * Per-repository directory scopes the centralized repo owns, keyed by
+     * repository id and holding the encoded group folder names
+     * (`buildGroupFolderName`) the last successful sync wrote.
+     *
+     * Ownership is tracked per SCOPE, not per repository, because reconciling
+     * directories by repository is wrong in both directions: a repository
+     * whose only file is a directory scope is absent from
+     * `managedRepositoryIds` entirely (its scope could never be cleaned up),
+     * while a repository present only through `.kody-rules` files looks
+     * managed and says nothing about directories (its UI-created scopes all
+     * looked stale). A directory is removable only when a previous sync
+     * owned that directory.
+     */
+    managedDirectoryScopes?: Record<string, string[]>;
+
+    /** Same idea for the global `kodus-config.yml`. */
+    managedGlobalConfig?: boolean;
 };
 
 interface KnownConfigs {

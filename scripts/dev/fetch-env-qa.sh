@@ -119,6 +119,9 @@ KEYS=(
     "/qa/kodus-orchestrator/API_CEREBRAS_BASE_URL"
     "/qa/kodus-orchestrator/API_CEREBRAS_API_KEY"
 
+    "/qa/kodus-orchestrator/API_FIREWORKS_BASE_URL"
+    "/qa/kodus-orchestrator/API_FIREWORKS_API_KEY"
+
     "/qa/kodus-orchestrator/API_DEEPSEEK_BASE_URL"
     "/qa/kodus-orchestrator/API_DEEPSEEK_API_KEY"
 
