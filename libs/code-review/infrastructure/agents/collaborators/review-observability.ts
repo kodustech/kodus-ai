@@ -9,7 +9,8 @@
 import type { ObservabilityService } from '@libs/core/log/observability.service';
 import { propagateAttributes, startActiveObservation } from '@langfuse/tracing';
 import { pullRequestSessionId, shouldTrace } from '@libs/core/log/langfuse';
-import type { LlmTask } from '@libs/llm/byok-config';
+import type { LlmTask, NormalizedModel } from '@libs/llm/byok-config';
+import { agentModelIdentity } from '@libs/llm/model-identity';
 
 export interface AgentTraceMeta {
     traceName: string;
@@ -85,13 +86,13 @@ export interface RecordAgentUsageParams {
         finishReason: string;
         source: string;
     };
+    /** The model that ACTUALLY ran — may carry a per-file override, so it wins
+     *  over the slot's canonical name (`agentModelIdentity(slot).model`). */
     modelName: string;
-    /** byokConfig present → 'byok', else 'system'. */
-    isByok: boolean;
-    /** #1388 LLM-metadata + spend attribution keys, from the resolved slot
-     *  (undefined on the env/managed-default path). */
-    byokModelId?: string;
-    credentialId?: string;
+    /** The resolved BYOK slot (undefined on the env/managed-default path). The
+     *  single source for `isByok` + the #1388 spend-attribution ids — derived via
+     *  `agentModelIdentity`, never re-spelled here. */
+    slot?: NormalizedModel;
     /** Routing task this run served — constrained to the LLM_TASK taxonomy at
      *  this (code-review) boundary. The core/log sink keeps `route?: string`
      *  on purpose: it's the lower layer and must not import libs/llm. */
@@ -140,10 +141,10 @@ export async function recordAgentUsageSpans(
         agentName: p.identityName,
         phase: 'review',
         runName: `code-review-${p.categoryLabel}`,
+        ...agentModelIdentity(p.slot),
+        // Override the canonical slot name with the model that actually ran
+        // (per-file override); isByok + ids stay from the ONE derivation.
         model: p.modelName,
-        isByok: p.isByok,
-        byokModelId: p.byokModelId,
-        credentialId: p.credentialId,
         route: p.route,
         usedFallback: p.usedFallback,
         usage: {
@@ -175,10 +176,8 @@ export async function recordAgentUsageSpans(
             agentName: p.identityName,
             phase: 'verify',
             runName: `code-review-${p.categoryLabel}-verify`,
+            ...agentModelIdentity(p.slot),
             model: p.modelName,
-            isByok: p.isByok,
-            byokModelId: p.byokModelId,
-            credentialId: p.credentialId,
             route: p.route,
             usedFallback: p.usedFallback,
             usage: {

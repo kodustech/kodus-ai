@@ -27,9 +27,9 @@ import {
     withStructuredOutputFallback,
     NoStructuredFallbackModelError,
     getModelName,
-    KODUS_DEFAULT_MODEL,
 } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import { agentModelIdentity } from '@libs/llm/model-identity';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
 import {
     buildLangfuseTelemetry,
@@ -1937,12 +1937,12 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     phase: 'dedup',
                     spanName: 'dedup-suggestions',
                     runName: 'code-review-dedup',
-                    model: secondaryByok
-                        ? (resolvedSlot?.model ?? 'byok-dedup')
-                        : KODUS_DEFAULT_MODEL,
-                    isByok: secondaryByok,
-                    byokModelId: resolvedSlot?.byokModelId,
-                    credentialId: resolvedSlot?.credentialId,
+                    // Identity from the ONE derivation: BYOK slot when the dedup
+                    // ran on the org's key, else undefined → the env/managed
+                    // default name (getModelName), not a placeholder.
+                    ...agentModelIdentity(
+                        secondaryByok ? resolvedSlot : undefined,
+                    ),
                     usage: {
                         inputTokens: dedupUsage.inputTokens,
                         outputTokens: dedupUsage.outputTokens,

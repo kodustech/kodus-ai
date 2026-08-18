@@ -1,52 +1,23 @@
 /**
- * The single assembly for a harness agent's cost record — the shape that used to
- * be hand-copied at every `recordAgentRunUsage` call-site (and drifted: the
- * conversation retry once recorded `model: 'resolved'`, the spec sentinel,
- * instead of the real model).
- *
- * Two drift-prone fields are derived here ONCE, never at the call-site:
- *   - `model`  = the model the run ACTUALLY used, via `getModelName` (NEVER
- *                `spec.modelId`, the literal 'resolved' sentinel the runner
- *                resolves by). Slot-less runs are NOT model-less: they run on
- *                the env/managed default, so the name comes from the same
- *                cascade that BUILT the model — `slot?.model` alone dropped
- *                `gen_ai.response.model` from every Kodus-funded span.
- *   - `isByok` = slot presence (a resolved slot = the org's own key → 'byok').
+ * Assembles the full `recordAgentRunUsage` payload for a RunState-based agent
+ * run (conversation / business-rules): the model-identity quartet from the
+ * slot + usage/steps/finishReason from the RunState. The model-identity
+ * derivation itself lives in @libs/llm (`agentModelIdentity`) so agents,
+ * code-review, and observability share ONE derivation.
  *
  * `recordAgentRunUsage` owns the span/attribute schema; this owns the per-run
  * value assembly. Kept in @libs/agents (not the harness) so the engine stays
  * observability-agnostic — RunState/TokenUsage are imported type-only.
  */
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { getModelName } from '@libs/llm/managed-slot';
+import { agentModelIdentity } from '@libs/llm/model-identity';
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import type {
     RunState,
     TokenUsage,
 } from '@libs/agent-harness/domain/contracts/run-state.contract';
 
-/** The drift-prone pair, derived from the resolved slot in ONE place. Spread it
- *  wherever a cost record needs `{ model, isByok }` so no call-site re-derives
- *  (and mis-derives) them. */
-export function agentModelIdentity(slot: NormalizedModel | undefined): {
-    model: string;
-    isByok: boolean;
-    byokModelId: string | undefined;
-    credentialId: string | undefined;
-} {
-    return {
-        // `provider:model` for a BYOK slot, the env/managed default name when
-        // there is none — every reader collapses on ':' (deriveTu, backfill-tu,
-        // byok-cost), so this is the same canonical model either way.
-        model: getModelName(slot),
-        isByok: !!slot,
-        // Stable attribution ids from the resolved slot (undefined on the
-        // env/managed-default path). Stamped on the usage span so spend
-        // attributes by id, not the versioned response model-name.
-        byokModelId: slot?.byokModelId,
-        credentialId: slot?.credentialId,
-    };
-}
+export { agentModelIdentity } from '@libs/llm/model-identity';
 
 /** Call-site labels + pass-through attributes for a cost record — everything the
  *  assembler does NOT derive from the slot/state. */

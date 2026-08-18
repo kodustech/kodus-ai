@@ -674,9 +674,7 @@ export abstract class BaseCodeReviewAgentProvider {
             await recordAgentUsageSpans({
                 agentResult,
                 modelName: effectiveModelName,
-                isByok: !!byokConfig,
-                byokModelId: byokConfig?.byokModelId,
-                credentialId: byokConfig?.credentialId,
+                slot: byokConfig,
                 route: LLM_TASK.codeReview,
                 categoryLabel: this.getCategoryLabel(),
                 identityName: identity.name,
