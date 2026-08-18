@@ -142,7 +142,13 @@ export class OrganizationMemberListService {
                 const cached =
                     await this.cacheService.getFromCache<RawMember[]>(cacheKey);
 
-                if (cached) {
+                // Empty is treated as a miss, matching the summary cache.
+                // An empty scan is indistinguishable from a transient one —
+                // the adapters swallow per-repository failures and return
+                // whatever they collected — and serving that for the full TTL
+                // would drop PR-author-only identities out of the union, which
+                // the prune cron reads as "left the organization".
+                if (cached?.length > 0) {
                     return cached;
                 }
             } catch {
@@ -155,13 +161,15 @@ export class OrganizationMemberListService {
             determineBots: true,
         });
 
-        await this.cacheService
-            .addToCache(
-                cacheKey,
-                authors,
-                OrganizationMemberListService.AUTHORS_CACHE_TTL,
-            )
-            .catch(() => {});
+        if (authors?.length) {
+            await this.cacheService
+                .addToCache(
+                    cacheKey,
+                    authors,
+                    OrganizationMemberListService.AUTHORS_CACHE_TTL,
+                )
+                .catch(() => {});
+        }
 
         return authors;
     }

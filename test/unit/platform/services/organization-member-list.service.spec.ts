@@ -309,6 +309,39 @@ describe('OrganizationMemberListService', () => {
             ).toHaveBeenCalled();
         });
 
+        // An empty author scan is indistinguishable from a transient one: the
+        // GitHub adapter swallows per-repo failures and returns whatever it
+        // collected. Serving that for the full TTL would drop PR-author-only
+        // identities — outside collaborators above all — out of the member
+        // union, and the prune cron reads their absence as "left the org".
+        it('treats an empty cached author list as a miss and re-scans', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCacheService.getFromCache.mockResolvedValue([]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '77', name: 'outside-collaborator' },
+            ]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalled();
+            expect(result.members.map((m) => m.id)).toContain('77');
+        });
+
+        it('does not cache an empty author scan', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+
+            await service.fetch(organizationAndTeamData);
+
+            expect(mockCacheService.addToCache).not.toHaveBeenCalled();
+        });
+
         it('still fetches when the cache read throws', async () => {
             mockCodeManagementService.getListMembers.mockResolvedValue([
                 { id: 1, name: 'Alice' },
