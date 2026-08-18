@@ -299,7 +299,6 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         // Phase 3 consumer migrations.
         'libs/cli-review/application/use-cases/classify-cli-session-capture.use-case.ts', // LLMDecisionExtractionSchema
         'libs/cli-review/application/use-cases/classify-session.use-case.ts', // LLMDecisionExtractionSchema
-        'libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service.ts', // CrossFileContextPlannerSchema, CrossFileContextSufficiencySchema
         'libs/code-review/infrastructure/adapters/services/commentManager.service.ts', // repeatedClusteringSchema
         'libs/code-review/infrastructure/adapters/services/crossFileAnalysis.service.ts', // CrossFileAnalysisSchema
         'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts', // DocumentationPlannerSchema
