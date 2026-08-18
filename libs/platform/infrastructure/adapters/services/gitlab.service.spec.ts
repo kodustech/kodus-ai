@@ -284,7 +284,7 @@ describe('GitlabService', () => {
             });
 
             expect(cacheService.getFromCache).toHaveBeenCalledWith(
-                'gitlab-project-path-org-1-repo-5',
+                'gitlab-project-path-org-1-team-1-https://gitlab.example.com/-repo-5',
             );
             expect(show).not.toHaveBeenCalled();
             expect(cloneParams.url).toBe(
@@ -311,9 +311,39 @@ describe('GitlabService', () => {
             });
 
             expect(cacheService.addToCache).toHaveBeenCalledWith(
-                'gitlab-project-path-org-1-repo-6',
+                'gitlab-project-path-org-1-team-1-https://gitlab.example.com/-repo-6',
                 'group/repo',
                 1800000,
+            );
+        });
+
+        // The GitLab integration is resolved per team, and two teams in the
+        // same org can point to different GitLab hosts and still share a
+        // numeric project id — the key must be scoped past organizationId
+        // alone or one team's clone can serve another team's cached slug.
+        it('scopes the cache key by team and GitLab host, not just organization', async () => {
+            mockAuthDetails();
+            mockProjectsShow(
+                jest.fn().mockResolvedValue({
+                    path_with_namespace: 'group/repo',
+                }),
+            );
+
+            await service.getCloneParams({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-2',
+                },
+                repository: {
+                    id: 'repo-6',
+                    name: 'repo',
+                    fullName: 'group/repo',
+                    defaultBranch: 'main',
+                },
+            });
+
+            expect(cacheService.getFromCache).toHaveBeenCalledWith(
+                'gitlab-project-path-org-1-team-2-https://gitlab.example.com/-repo-6',
             );
         });
 

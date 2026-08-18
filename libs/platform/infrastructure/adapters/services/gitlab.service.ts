@@ -3371,7 +3371,12 @@ export class GitlabService implements Omit<
         repository: Pick<Repository, 'id' | 'fullName'>,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<string> {
-        const cacheKey = `gitlab-project-path-${organizationAndTeamData?.organizationId}-${repository?.id}`;
+        // The GitLab integration (and therefore the numeric project id) is
+        // resolved per team, not per organization — two teams in the same
+        // org can point to different GitLab instances and share a numeric
+        // project id, so the key must include teamId and the instance host
+        // or one team can serve another's cached path_with_namespace.
+        const cacheKey = `gitlab-project-path-${organizationAndTeamData?.organizationId}-${organizationAndTeamData?.teamId}-${gitlabAuthDetail?.host ?? ''}-${repository?.id}`;
 
         try {
             const cachedPath =
