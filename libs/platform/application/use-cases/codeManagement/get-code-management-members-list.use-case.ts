@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { REQUEST } from '@nestjs/core';
 
 import { CacheService } from '@libs/core/cache/cache.service';
+import { createLogger } from '@libs/core/log/logger';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
@@ -13,6 +14,10 @@ import {
 
 @Injectable()
 export class GetCodeManagementMemberListUseCase implements IUseCase {
+    private readonly logger = createLogger(
+        GetCodeManagementMemberListUseCase.name,
+    );
+
     private static readonly CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
     constructor(
@@ -46,8 +51,16 @@ export class GetCodeManagementMemberListUseCase implements IUseCase {
                 if (cached?.length > 0) {
                     return { status: 'ok', members: cached };
                 }
-            } catch {
-                // Cache miss or error, proceed with fetch
+            } catch (error) {
+                // Not fatal — the fetch below still serves the request — but a
+                // silent swallow makes a failing cache backend invisible.
+                this.logger.warn({
+                    message:
+                        'Could not read the cached member list; fetching from the code integration',
+                    context: GetCodeManagementMemberListUseCase.name,
+                    error,
+                    metadata: { ...organizationAndTeamData },
+                });
             }
         }
 
