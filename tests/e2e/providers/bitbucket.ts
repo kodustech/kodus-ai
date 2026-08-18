@@ -634,7 +634,8 @@ export class BitbucketProvider extends BaseProvider {
                         continue;
                     const raw = c.content?.raw ?? "";
                     if (raw.toLowerCase().startsWith("@kody")) continue;
-                    if (raw.includes("Analyzing your request")) continue;
+                    if (raw.toLowerCase().trim().startsWith("analyzing your request"))
+                        continue;
                     if (!raw.trim()) continue;
                     return { id: String(c.id), body: raw.slice(0, 600) };
                 }
