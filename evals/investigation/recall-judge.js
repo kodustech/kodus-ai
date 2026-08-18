@@ -108,6 +108,24 @@ function loadJudgeKey() {
     return loadKeyForModel(JUDGE_MODEL);
 }
 
+// Token OAuth (`ant auth login`) expira em horas — em runs longos ele vence no
+// MEIO da rodada e derruba os ultimos casos. Antes isso virava INFRA silencioso.
+// Aqui relemos a credencial do CLI sob 401 e tentamos de novo; so vale para
+// tokens OAuth (API key nao expira, entao 401 nela e erro real de config).
+let refreshedToken = null;
+function refreshOAuthToken() {
+    try {
+        const { execFileSync } = require('child_process');
+        const t = execFileSync('ant', ['auth', 'print-credentials', '--access-token'], {
+            encoding: 'utf8',
+            timeout: 15000,
+        }).trim();
+        return /^sk-ant-oat/.test(t) ? t : null;
+    } catch {
+        return null;
+    }
+}
+
 function isHardError(status) {
     return status === 400 || status === 401 || status === 403 || status === 404;
 }
@@ -125,8 +143,15 @@ async function judgeCall(model, apiKey, prompt) {
             let body;
             if (provider === 'anthropic') {
                 url = 'https://api.anthropic.com/v1/messages';
+                // Credencial OAuth (`ant auth login` → sk-ant-oat…) vai em
+                // Authorization: Bearer + header beta; API key vai em x-api-key.
+                // Trocar isso devolve 401 "invalid x-api-key", que engana.
+                if (refreshedToken) apiKey = refreshedToken;
+                const isOAuth = /^sk-ant-oat/.test(String(apiKey || ''));
                 headers = {
-                    'x-api-key': apiKey,
+                    ...(isOAuth
+                        ? { authorization: `Bearer ${apiKey}`, 'anthropic-beta': 'oauth-2025-04-20' }
+                        : { 'x-api-key': apiKey }),
                     'anthropic-version': '2023-06-01',
                     'content-type': 'application/json',
                 };
@@ -166,6 +191,21 @@ async function judgeCall(model, apiKey, prompt) {
                 return extractText(provider, data);
             }
             const errBody = await resp.text();
+            // 401 por token OAuth vencido nao e erro de config: renova e retenta.
+            if (
+                resp.status === 401 &&
+                provider === 'anthropic' &&
+                /expired/i.test(errBody) &&
+                /^sk-ant-oat/.test(String(apiKey || ''))
+            ) {
+                const fresh = refreshOAuthToken();
+                if (fresh && fresh !== apiKey) {
+                    refreshedToken = fresh;
+                    apiKey = fresh;
+                    lastErr = new Error('judge 401: token renovado, retentando');
+                    continue;
+                }
+            }
             if (isHardError(resp.status)) {
                 throw new Error(`judge HTTP ${resp.status} ${errBody.slice(0, 150)}`);
             }

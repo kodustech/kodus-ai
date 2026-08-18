@@ -82,34 +82,39 @@ test("authToken: the integration credential stays the durable PAT even when the 
     // for harness-side quota. That token must NEVER become the credential
     // Kodus stores on the integration — the product would be left with an
     // expired secret mid-run.
-    const saved = process.env.GH_TEST_TOKEN;
+    const savedTestToken = process.env.GH_TEST_TOKEN;
+    const savedIntegrationToken = process.env.GH_INTEGRATION_TOKEN;
     process.env.GH_TEST_TOKEN = "ghp_durable_pat";
+    process.env.GH_INTEGRATION_TOKEN = "ghp_integration_pat";
     process.env.GH_TEST_REPO = "kodustech/qa-fixture";
     try {
         const provider = new GitHubProvider({
             target: "self-hosted",
             tokenOverride: "ghs_expiring_app_token",
         });
-        assert.equal(provider.authToken(), "ghp_durable_pat");
+        assert.equal(provider.authToken(), "ghp_integration_pat");
         // Without the durable PAT, an App-token provider must fail loudly
         // rather than hand the backend a ~1h credential.
-        delete process.env.GH_TEST_TOKEN;
+        delete process.env.GH_INTEGRATION_TOKEN;
         assert.throws(
             () => provider.authToken(),
-            /GH_TEST_TOKEN.*required/,
+            /GH_INTEGRATION_TOKEN.*required/,
             "App token without durable PAT must throw, not be stored",
         );
         // A misconfigured GH_TEST_TOKEN holding an installation token must
         // also be rejected — no ghs_ in the durable slot, ever.
-        process.env.GH_TEST_TOKEN = "ghs_misconfigured_secret";
+        process.env.GH_INTEGRATION_TOKEN = "ghs_misconfigured_secret";
         assert.throws(
             () => provider.authToken(),
             /ghs_.*durable PAT/,
-            "ghs_ GH_TEST_TOKEN must throw, not be stored",
+            "ghs_ GH_INTEGRATION_TOKEN must throw, not be stored",
         );
     } finally {
-        if (saved === undefined) delete process.env.GH_TEST_TOKEN;
-        else process.env.GH_TEST_TOKEN = saved;
+        if (savedTestToken === undefined) delete process.env.GH_TEST_TOKEN;
+        else process.env.GH_TEST_TOKEN = savedTestToken;
+        if (savedIntegrationToken === undefined)
+            delete process.env.GH_INTEGRATION_TOKEN;
+        else process.env.GH_INTEGRATION_TOKEN = savedIntegrationToken;
     }
 });
 

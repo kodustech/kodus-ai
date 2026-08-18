@@ -21,6 +21,7 @@ import {
     type RawShardViolation,
     type ShardViolation,
 } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-sharded.judge';
+import { resolveLanguageLabel } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { ExternalReferenceLoaderService } from '@libs/kodyRules/infrastructure/adapters/services/externalReferenceLoader.service';
 import { buildDetectorViolations } from '@libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler';
 import {
@@ -169,6 +170,22 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                 // to the org's codeReview model when no override is set.
                 LLM_TASK.kodyRulesReview,
             );
+
+            // Resolve the org's Kody Language into a human-readable label
+            // (e.g. "pt-BR" -> "Portuguese (Brazil)") via the SAME helper
+            // every other review agent uses (prompt-builder.ts), and thread
+            // it into the sharded judge below. Without this, both shard
+            // prompts are static English strings with no language
+            // templating, so a PR-scope kody-rules finding's
+            // suggestionContent ships in raw English regardless of the
+            // org's configured language — the exact bug reported on
+            // Starian's GitLab MR !16111 (file-scope findings get a second
+            // chance via formatSuggestionContent downstream; PR-scope ones
+            // do not — see kody-rules-sharded.judge.ts's ShardedJudgeInput
+            // doc comment).
+            const languageLabel = resolveLanguageLabel(
+                input.languageResultPrompt,
+            );
             this.shardLogger.log({
                 message: `[AGENT] ${this.getIdentity().name} (sharded) using model: ${main.modelName} for PR#${input.prNumber} (${semanticRules.length} semantic, ${mechanicalRules.length} mechanical rules)`,
                 context: this.getIdentity().name,
@@ -257,6 +274,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         prTitle: input.prTitle,
                         prBody: input.prBody,
                         logger: this.shardLogger,
+                        languageLabel,
                     }),
             );
             judgeViolations = result.violations;

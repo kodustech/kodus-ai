@@ -24,6 +24,7 @@
 //   SSO_E2E_APP_URL       https://app.<IP>.sslip.io
 //   SSO_E2E_BASE          <IP>.sslip.io
 //   SSO_E2E_ORG_ID        org uuid from provision.sh
+//   SSO_E2E_SSH_KEY       private key for the provisioned VM
 //   SSO_E2E_ADMIN_EMAIL   (default: sso-user@kodus-test.com)
 //   SSO_E2E_ADMIN_PASSWORD (default: TestSso!2026)
 //   SSO_E2E_NEWBIE_EMAIL  (default: newbie-sso@kodus-test.com)
@@ -45,6 +46,7 @@ const {
     SSO_E2E_APP_URL,
     SSO_E2E_BASE,
     SSO_E2E_ORG_ID,
+    SSO_E2E_SSH_KEY,
     SSO_E2E_ADMIN_EMAIL = "sso-user@kodus-test.com",
     SSO_E2E_ADMIN_PASSWORD = "TestSso!2026",
     SSO_E2E_NEWBIE_EMAIL = "newbie-sso@kodus-test.com",
@@ -59,6 +61,7 @@ for (const [k, v] of Object.entries({
     SSO_E2E_APP_URL,
     SSO_E2E_BASE,
     SSO_E2E_ORG_ID,
+    SSO_E2E_SSH_KEY,
 })) {
     if (!v) {
         console.error(`error: env ${k} is required`);
@@ -396,7 +399,7 @@ async function subFlow4() {
         "ssh",
         [
             "-i",
-            ".kodus-dev/ssh-keys/sso-e2e",
+            SSO_E2E_SSH_KEY,
             "-o",
             "StrictHostKeyChecking=no",
             "-o",

@@ -443,6 +443,56 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         expect(out.suggestions[0].relevantFile).toBe('src/a.ts');
     });
 
+    // ── language resolution + forwarding (Starian GitLab MR !16111) ──────────
+    // The sharded judge's system prompts have zero language templating on
+    // their own; execute() must resolve `input.languageResultPrompt` via the
+    // SAME `resolveLanguageLabel` helper the other review agents use
+    // (prompt-builder.ts) and forward it into the shard user prompt that
+    // `runStructuredReviewCall` receives as `user`.
+    it('resolves languageResultPrompt and forwards a respond-in-language instruction to the shard prompt', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        await provider.execute(
+            input({
+                languageResultPrompt: 'pt-BR',
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.user).toContain('Respond in');
+        expect(call.user.toLowerCase()).toContain('portuguese');
+    });
+
+    it('does NOT add a language instruction when languageResultPrompt is absent (no regression)', async () => {
+        const { provider } = makeProvider([{ violations: [] }]);
+        await provider.execute(
+            input({
+                kodyRules: [
+                    {
+                        uuid: 'no-any',
+                        title: 'no any',
+                        rule: 'do not use any',
+                        status: 'active',
+                        severity: 'high',
+                        path: '**/*.ts',
+                    },
+                ],
+            }) as any,
+        );
+        expect(mockRunStructuredReviewCall).toHaveBeenCalledTimes(1);
+        const call = mockRunStructuredReviewCall.mock.calls[0][0];
+        expect(call.user).not.toContain('Respond in');
+    });
+
     it('mechanical path: detector regex fires with ZERO LLM calls', async () => {
         const { provider, judge } = makeProvider([]);
         const out = await provider.execute(

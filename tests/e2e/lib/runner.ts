@@ -615,9 +615,7 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
                 repo,
             });
         }
-        // Spread cleanup's repo/PR listing across the bot-account pool too —
-        // otherwise every fixture lists on the single default account and helps
-        // exhaust its per-account GitHub rate limit before the cells even run.
+        // Cleanup uses the single human credential before cells start.
         const pickCleanupToken = makeGithubTokenPicker();
         for (const { provider: providerName, repo } of fixtures.values()) {
             const label = `${providerName}${repo ? ` (${repo})` : ''}`;
@@ -649,8 +647,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
         }
     }
 
-    // Round-robins GitHub cells across the bot-account token pool so no single
-    // account's rate limit caps the run (no-op with a single token).
+    // Single human author credential. High-volume scenario traffic is moved
+    // to the App installation token below.
     const pickGithubToken = makeGithubTokenPicker();
 
     // Report each bot account's remaining GitHub budget up front (free — GET
@@ -658,9 +656,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
     // visible before the cells run instead of as an opaque mid-run 403 cascade.
     if (!opts.dryRun && opts.cells.some((c) => c.provider === "github")) {
         await preflightGithubRateLimits(log);
-        // …and the credential the PRODUCT stores, which the pool preflight
-        // never looked at. It is a DIFFERENT account (or, when
-        // GH_INTEGRATION_TOKEN is unset, silently the same one), and it is the
+        // …and the credential the PRODUCT stores, which the driver preflight
+        // never looked at. It is a DIFFERENT account, and it is the
         // one /code-management/auth-integration validates against GitHub —
         // the exact call that exhausted run 31270321822 on its first scenario.
         await preflightIntegrationToken(log);
@@ -786,9 +783,8 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
 
             log.info(`RUN   ${cellLabel}`);
 
-            // Assign this GitHub run a token from the bot-account pool
-            // (round-robin). Same token across both attempts so a retry stays
-            // on the same account; other cells keep draining the other tokens.
+            // Resolve the one human author credential before replacing the
+            // high-volume driver token with an App installation token below.
             const ghAssignment =
                 cell.provider === "github" ? pickGithubToken() : undefined;
             let githubToken = ghAssignment?.token;
@@ -809,16 +805,17 @@ export async function runMatrix(opts: RunOptions): Promise<RunOutcome> {
             // provider.currentUserId() now resolves that ONE call from the
             // durable PAT, so both targets can put their heavy traffic on
             // the App budget — which is where the quota SKIPs came from.
-            if (cell.provider === "github") {
+            if (cell.provider === "github" || cell.provider === "github-app") {
                 try {
                     const appToken = await githubAppToken();
                     if (appToken) {
                         githubToken = appToken;
-                        log.info("  github → App installation token");
+                        log.info(`  ${cell.provider} → App installation token`);
                     }
                 } catch (err) {
+                    if (cell.provider === "github-app") throw err;
                     log.err(
-                        `  github → App token mint FAILED (${(err as Error).message.slice(0, 160)}) — falling back to PAT pool`,
+                        `  github → App token mint FAILED (${(err as Error).message.slice(0, 160)}) — using the single human PAT`,
                     );
                 }
             }

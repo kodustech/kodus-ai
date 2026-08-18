@@ -13,6 +13,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { DEFAULT_MODEL } from './byok-defaults';
+import { vertexModelFromAdc } from './model-builders';
 
 // Model-name protocol patterns, used by the self-hosted / trial default-model
 // resolution below (the BYOK provider builders moved to the provider modules
@@ -100,7 +101,27 @@ export type EnvProviderResolution =
           name: 'openai_compatible';
           apiKey: string;
           baseURL: string;
+      }
+    | {
+          // Keyless Vertex via ambient Application Default Credentials — no
+          // apiKey; the SDK discovers auth from the environment. Carries the
+          // project (GOOGLE_CLOUD_PROJECT) the SDK needs pinned.
+          kind: 'vertex_adc';
+          name: 'google_vertex';
+          project: string;
+          vertexLocation?: string;
+          isClaude: boolean;
       };
+
+/** Resolve the Vertex project id for keyless (ADC) auth from the environment. */
+function vertexProjectFromEnv(): string | undefined {
+    const project = (
+        process.env.GOOGLE_CLOUD_PROJECT ||
+        process.env.GCLOUD_PROJECT ||
+        ''
+    ).trim();
+    return project || undefined;
+}
 
 export function resolveEnvProvider(): EnvProviderResolution | null {
     const envMode = process.env.API_LLM_PROVIDER_MODEL ?? 'auto';
@@ -136,6 +157,19 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
                 vertexLocation,
             };
         }
+        // 3. Keyless: ambient ADC (GOOGLE_CLOUD_PROJECT). An explicit OpenAI key
+        // WINS — a deployment that only set API_OPEN_AI_API_KEY must not be
+        // switched to Vertex by an ambient identity it never opted into.
+        const geminiProject = vertexProjectFromEnv();
+        if (!openaiKey && geminiProject) {
+            return {
+                kind: 'vertex_adc',
+                name: 'google_vertex',
+                project: geminiProject,
+                vertexLocation,
+                isClaude: false,
+            };
+        }
     }
     // Native Anthropic key takes precedence over Claude-on-Vertex.
     if (isClaude && openaiKey && !viaProxy) {
@@ -153,6 +187,21 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
             apiKey: vertexKey,
             vertexLocation,
         };
+    }
+    // Keyless Claude-on-Vertex via ambient ADC. Reached only when no native
+    // Anthropic key and no Vertex SA JSON (those branches return first) — mirrors
+    // the SA-JSON precedence.
+    if (isClaude && !viaProxy) {
+        const claudeProject = vertexProjectFromEnv();
+        if (claudeProject) {
+            return {
+                kind: 'vertex_adc',
+                name: 'google_vertex',
+                project: claudeProject,
+                vertexLocation,
+                isClaude: true,
+            };
+        }
     }
     // Any other self-hosted model with an OpenAI-style key → OpenAI-compatible.
     if (openaiKey) {
@@ -269,6 +318,23 @@ export function resolveManagedSlot(
                             options.structuredOutputs === true,
                     })(envMode),
                 };
+            case 'vertex_adc': {
+                // INLINE EXCEPTION (keyless Vertex via ambient ADC): there is no
+                // apiKey — the google_vertex module's build() requires a decrypted
+                // SA JSON, so a keyless deployment can't route through it. Build
+                // from the ambient project here (claude-vs-gemini split mirrors
+                // the SA path). A null build (SDK error) FALLS THROUGH to the
+                // managed/cloud default below, exactly like main's ADC branch.
+                const adcModel = vertexModelFromAdc(
+                    envMode,
+                    env.project,
+                    env.vertexLocation,
+                );
+                if (adcModel) {
+                    return { kind: 'inline', model: adcModel };
+                }
+                break;
+            }
         }
     }
 
@@ -352,7 +418,11 @@ export function hasManagedModelKey(): boolean {
             process.env.API_OPEN_AI_API_KEY ||
             process.env.API_GOOGLE_AI_API_KEY ||
             process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-            process.env.API_VERTEX_AI_API_KEY
+            process.env.API_VERTEX_AI_API_KEY ||
+            // Keyless Vertex (ADC): no literal key, but the ambient project makes
+            // the managed model resolvable — the coarse "has a backing key" check
+            // must count it so secondary passes aren't skipped.
+            vertexProjectFromEnv()
         );
     }
     // Cloud managed default is Fireworks (KODUS_DEFAULT_MODEL) — match the key

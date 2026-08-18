@@ -84,6 +84,34 @@ export function vertexModelFromSaJson(
     }
 }
 
+/**
+ * Build a Vercel AI SDK Vertex model with KEYLESS auth (Application Default
+ * Credentials): no Service Account JSON — the SDK discovers credentials from the
+ * ambient environment (GKE Workload Identity, `gcloud auth application-default`,
+ * a metadata server, etc.). Only the `project` (from `GOOGLE_CLOUD_PROJECT`) and
+ * region are pinned; auth is ambient. `claude-*` ids route through Anthropic MaaS
+ * (`createVertexAnthropic`), every other id (Gemini) through `createVertex` —
+ * mirroring `vertexModelFromSaJson`. Returns null on any SDK error so the caller
+ * can degrade to the managed/cloud default.
+ */
+export function vertexModelFromAdc(
+    modelId: string,
+    project: string,
+    locationOverride?: string,
+): LanguageModel | null {
+    if (!project) return null;
+    try {
+        const location = locationOverride?.trim() || 'global';
+        const settings = { project, location };
+        if (CLAUDE_MODEL_PATTERN.test(modelId)) {
+            return createVertexAnthropic(settings)(modelId);
+        }
+        return createVertex(settings)(modelId);
+    } catch {
+        return null;
+    }
+}
+
 /** Bedrock auth fields (structural — no NormalizedByokConfig import). aws* values are the
  *  ENCRYPTED ciphertext; this builder decrypts them internally. */
 export interface BedrockCredentials {

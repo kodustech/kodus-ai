@@ -441,7 +441,13 @@ export class ProcessFilesPrLevelReviewStage extends BasePipelineStage<CodeReview
         const currentHash = this.computePrBodyHash(prBody);
         const lastHash = (context.pipelineMetadata?.lastExecution as any)
             ?.businessLogicHash;
-        if (lastHash && lastHash === currentHash) {
+        const forceFullRerun =
+            (context.pipelineMetadata as any)?.forceFullRerun ?? false;
+
+        // A --force re-review should re-run business logic even if the PR body
+        // hasn't changed. Otherwise a transient failure (e.g. GitHub 503 when
+        // posting the comment) can never be retried without editing the PR.
+        if (!forceFullRerun && lastHash && lastHash === currentHash) {
             return false;
         }
 

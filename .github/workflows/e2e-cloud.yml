@@ -279,21 +279,23 @@ jobs:
                   # change (set it to matrix/midweek-smoke.yml to dial back).
                   MATRIX_FILE: ${{ inputs.matrix_file || (github.event_name == 'schedule' && (vars.E2E_CLOUD_NIGHTLY_MATRIX || 'matrix/fast.yml')) || 'matrix/fast.yml' }}
 
-                  # Provider tokens — cells without the right token are
-                  # skipped (target.sh passes --skip-missing-tokens).
+                  # One human PAT authors PRs/comments (the product ignores
+                  # bot-authored events) and exercises the legacy PAT canary.
                   GH_TEST_TOKEN: ${{ secrets.GH_TEST_TOKEN }}
-                  # Extra bot-account tokens for the round-robin pool (see
-                  # tests/e2e/lib/github-token-pool.ts). Optional — the pool
-                  # collapses to GH_TEST_TOKEN alone when these are unset.
-                  GH_TEST_TOKEN_2: ${{ secrets.GH_TEST_TOKEN_2 }}
-                  GH_TEST_TOKEN_3: ${{ secrets.GH_TEST_TOKEN_3 }}
-                  # GitHub App installation token (opt-in, preferred over the
-                  # PAT pool for cloud cells): 5000/h of its own budget,
-                  # immune to the bot-account abuse flags. All three unset →
-                  # PAT pool behavior unchanged. See lib/github-app-token.ts.
+                  # The product stores this only in provider=github cells.
+                  # No fallback: a missing credential must fail in preflight.
+                  # This existing PAT has org-wide repository and webhook
+                  # access. Expose it under the canonical runtime name.
+                  GH_INTEGRATION_TOKEN: ${{ secrets.GH_INTEGRATION_TOKEN_PAID }}
+                  # GitHub App installation used by provider=github-app and
+                  # for high-volume reads/polls in the compatibility cell.
                   GH_APP_ID: ${{ secrets.GH_APP_ID }}
                   GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
                   GH_APP_INSTALLATION_ID: ${{ secrets.GH_APP_INSTALLATION_ID }}
+                  # Installation of the App configured in the QA backend,
+                  # deliberately distinct from the harness App above.
+                  GH_PRODUCT_APP_INSTALLATION_ID: ${{ vars.GH_PRODUCT_APP_INSTALLATION_ID }}
+                  GH_APP_TEST_REPO: ${{ vars.GH_APP_TEST_REPO }}
                   GH_TEST_REPO: ${{ secrets.GH_TEST_REPO }}
                   GH_TEST_REPO_CLOUD: ${{ secrets.GH_TEST_REPO_CLOUD }}
                   GH_TEST_PR_NUMBER: ${{ secrets.GH_TEST_PR_NUMBER }}

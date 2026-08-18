@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Tear down a Kodus SSO E2E droplet provisioned by provision.sh.
+# Tear down a Kodus SSO E2E VM provisioned by provision.sh.
 #
 # Thin wrapper around scripts/selfhosted/destroy.sh — the droplet is
 # just a self-hosted instance with the SSO E2E overlay layered on top.
-# Removing the droplet wipes the overlay containers + Caddy + Keycloak
+# Removing the VM wipes the overlay containers + Caddy + Keycloak
 # alongside the base stack.
 #
 # Usage:
@@ -34,4 +34,6 @@ rm -f \
     "${REPO_ROOT}/.tmp/sso-e2e-droplet-keycloak.json" \
     "${REPO_ROOT}/.tmp/sso-e2e-org-id.txt"
 
-exec "${REPO_ROOT}/scripts/selfhosted/destroy.sh" --name "${NAME_RAW}"
+# This wrapper is itself the explicit destructive command. Keep it
+# non-interactive so CI teardown cannot stop at a confirmation prompt.
+exec "${REPO_ROOT}/scripts/selfhosted/destroy.sh" --name "${NAME_RAW}" --yes

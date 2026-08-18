@@ -16,7 +16,9 @@ import {
     resolveEnvProvider,
     resolveManagedSlot,
     hasManagedModelKey,
+    getModelName,
 } from './managed-slot';
+import { vertexModelFromAdc } from './model-builders';
 import { BYOKProvider } from './model-providers';
 
 jest.mock('@ai-sdk/openai-compatible', () => ({
@@ -24,6 +26,17 @@ jest.mock('@ai-sdk/openai-compatible', () => ({
         const factory = (model: string) => ({ __compat: cfg, model });
         return factory;
     }),
+}));
+
+// Mock the vertex ADC builder so the keyless path can be asserted by its args
+// (project/model/location) without touching the real @ai-sdk/google-vertex SDK.
+jest.mock('./model-builders', () => ({
+    ...jest.requireActual('./model-builders'),
+    vertexModelFromAdc: jest.fn(
+        (model: string, project: string, location?: string) => ({
+            __adc: { model, project, location },
+        }),
+    ),
 }));
 
 // Every env var the cascade reads. Cleared before each test so a stray value
@@ -43,6 +56,10 @@ const ENV_KEYS = [
     'DEEPSEEK_API_KEY',
     'API_MOONSHOT_API_KEY',
     'MOONSHOT_API_KEY',
+    // GCE / Cloud Run set GOOGLE_CLOUD_PROJECT by default, so it MUST be cleared
+    // per test — otherwise the developer's ambient project leaks the ADC path in.
+    'GOOGLE_CLOUD_PROJECT',
+    'GCLOUD_PROJECT',
 ];
 
 let savedEnv: Record<string, string | undefined>;
@@ -54,6 +71,7 @@ beforeEach(() => {
         delete process.env[k];
     }
     (createOpenAICompatible as jest.Mock).mockClear();
+    (vertexModelFromAdc as jest.Mock).mockClear();
 });
 
 afterEach(() => {
@@ -305,6 +323,107 @@ describe('hasManagedModelKey — fail-soft skip-vs-run guard', () => {
         process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
         expect(hasManagedModelKey()).toBe(false);
         process.env.API_GOOGLE_AI_API_KEY = 'g';
+        expect(hasManagedModelKey()).toBe(true);
+    });
+});
+
+// Keyless Vertex (Application Default Credentials) — ported from main's
+// byok-to-vercel ADC tests into the refactored env cascade. The feature: a
+// self-hosted deployment with an ambient GOOGLE_CLOUD_PROJECT (GKE Workload
+// Identity / Cloud Run) runs Vertex with NO API key.
+describe('resolveEnvProvider — keyless Vertex (ADC)', () => {
+    it('gemini-* + ambient project, no keys → vertex_adc (isClaude false)', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GOOGLE_CLOUD_PROJECT = 'adc-proj';
+        expect(resolveEnvProvider()).toEqual({
+            kind: 'vertex_adc',
+            name: 'google_vertex',
+            project: 'adc-proj',
+            vertexLocation: undefined,
+            isClaude: false,
+        });
+    });
+
+    it('accepts GCLOUD_PROJECT as an alias', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GCLOUD_PROJECT = 'alias-proj';
+        expect(resolveEnvProvider()).toMatchObject({
+            kind: 'vertex_adc',
+            project: 'alias-proj',
+        });
+    });
+
+    it('claude-* + ambient project, no keys → vertex_adc (isClaude true)', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'claude-sonnet-4-5';
+        process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+        expect(resolveEnvProvider()).toMatchObject({
+            kind: 'vertex_adc',
+            project: 'env-proj',
+            isClaude: true,
+        });
+    });
+
+    it('an explicit Vertex SA key WINS over ADC (gemini)', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GOOGLE_CLOUD_PROJECT = 'adc-proj';
+        process.env.API_VERTEX_AI_API_KEY = 'sa-json';
+        expect(resolveEnvProvider()).toMatchObject({ kind: 'gemini_vertex' });
+    });
+
+    it('an explicit API_OPEN_AI_API_KEY WINS over ambient ADC (gemini)', () => {
+        // GOOGLE_CLOUD_PROJECT is set by default on GCE/Cloud Run, so it must
+        // not hijack a deployment that only opted into an OpenAI key.
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GOOGLE_CLOUD_PROJECT = 'ambient-proj';
+        process.env.API_OPEN_AI_API_KEY = 'sk-openai';
+        expect(resolveEnvProvider()).toMatchObject({ kind: 'openai_compat' });
+    });
+
+    it('no project → no ADC (falls through)', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        expect(resolveEnvProvider()).toBeNull();
+    });
+});
+
+describe('resolveManagedSlot / getModelName / hasManagedModelKey — keyless Vertex (ADC)', () => {
+    it('builds the keyless Vertex model inline, passing project + location', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+        process.env.API_VERTEX_AI_LOCATION = 'us-east5';
+        const res = resolveManagedSlot('gemini-2.5-pro', {} as any);
+        expect(res).toEqual({
+            kind: 'inline',
+            model: { __adc: { model: 'gemini-2.5-pro', project: 'env-proj', location: 'us-east5' } },
+        });
+        expect(vertexModelFromAdc).toHaveBeenCalledWith(
+            'gemini-2.5-pro',
+            'env-proj',
+            'us-east5',
+        );
+    });
+
+    it('a failed ADC build falls through to the managed/cloud default', () => {
+        (vertexModelFromAdc as jest.Mock).mockReturnValueOnce(null);
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+        const res = resolveManagedSlot('gemini-2.5-pro', {} as any);
+        // Not the inline ADC model — degraded to the cloud google_gemini slot.
+        expect(res).toMatchObject({
+            kind: 'slot',
+            slot: { provider: BYOKProvider.GOOGLE_GEMINI },
+        });
+    });
+
+    it('getModelName reports google_vertex for a model on ADC', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
+        expect(getModelName(undefined)).toBe('google_vertex:gemini-2.5-pro');
+    });
+
+    it('hasManagedModelKey counts the ambient project (secondary passes run)', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        expect(hasManagedModelKey()).toBe(false);
+        process.env.GOOGLE_CLOUD_PROJECT = 'env-proj';
         expect(hasManagedModelKey()).toBe(true);
     });
 });
