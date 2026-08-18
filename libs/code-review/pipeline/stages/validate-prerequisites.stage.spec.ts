@@ -565,6 +565,42 @@ describe('ValidatePrerequisitesStage', () => {
             expect(result.statusInfo?.status).toBe(AutomationStatus.SKIPPED);
         });
 
+        // The seat list is fetched to decide whether the ignore list applies;
+        // handing it to the permission check reuses it instead of paying a
+        // second round trip to billing for the same answer.
+        it('reuses the seat list it already fetched for the permission check', async () => {
+            const context = makeContext();
+            const seats = [{ git_id: 'user-1' }];
+
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { ignoredUsers: ['user-1'] },
+            });
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue(seats);
+            mockPermissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                { allowed: true, errorType: ValidationErrorType.NOT_ERROR },
+            );
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    configs: { showStatusFeedback: true },
+                    repositories: [],
+                },
+            });
+
+            await stage.execute(context);
+
+            expect(
+                mockLicenseService.getAllUsersWithLicense,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockPermissionValidationService.validateExecutionPermissions,
+            ).toHaveBeenCalledWith(
+                expect.anything(),
+                'user-1',
+                expect.any(String),
+                expect.objectContaining({ usersWithLicense: seats }),
+            );
+        });
+
         it('does not look up seats when the identity is not filtered out', async () => {
             const context = makeContext();
 

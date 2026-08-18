@@ -24,6 +24,7 @@ import { environment } from '@libs/ee/configs/environment';
 import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
+    UserWithLicense,
 } from '@libs/ee/license/interfaces/license.interface';
 import { AutoAssignLicenseUseCase } from '@libs/ee/license/use-cases/auto-assign-license.use-case';
 import {
@@ -158,10 +159,8 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         }
 
         // Check if user is ignored BEFORE validation
-        const isIgnored = await this.isUserIgnored(
-            organizationAndTeamData,
-            userGitId,
-        );
+        const { ignored: isIgnored, usersWithLicense } =
+            await this.resolveIgnoreState(organizationAndTeamData, userGitId);
 
         if (isIgnored) {
             this.logger.log({
@@ -250,6 +249,9 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         // the same repo:pr usageKey, keeping it idempotent per PR.
         const validationOptions = {
             consumeTrialReviewCredit: false,
+            // Reuse the seat list already fetched to evaluate the ignore list
+            // rather than asking billing for the same answer twice.
+            usersWithLicense,
         };
 
         let validationResult =
@@ -662,12 +664,12 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         return true;
     }
 
-    private async isUserIgnored(
+    private async resolveIgnoreState(
         organizationAndTeamData: OrganizationAndTeamData,
         userGitId?: string,
-    ): Promise<boolean> {
+    ): Promise<{ ignored: boolean; usersWithLicense?: UserWithLicense[] }> {
         if (!userGitId) {
-            return false;
+            return { ignored: false };
         }
 
         const config = await this.organizationParametersService.findByKey(
@@ -688,7 +690,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             configValue?.ignoredUsers.includes(userGitId);
 
         if (!excludedByAllowList && !onIgnoreList) {
-            return false;
+            return { ignored: false };
         }
 
         // Bots land on the ignore list automatically when an integration is
@@ -697,20 +699,22 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         // the clearest statement that this identity should be reviewed, so it
         // overrides both filters. Checked only when a filter already matched,
         // so the common path costs nothing.
-        return !(await this.holdsLicense(organizationAndTeamData, userGitId));
+        const users = await this.fetchSeats(organizationAndTeamData, userGitId);
+        const holdsSeat = Boolean(
+            users?.some((user) => user?.git_id === userGitId),
+        );
+
+        return { ignored: !holdsSeat, usersWithLicense: users };
     }
 
-    private async holdsLicense(
+    private async fetchSeats(
         organizationAndTeamData: OrganizationAndTeamData,
         userGitId: string,
-    ): Promise<boolean> {
+    ): Promise<UserWithLicense[] | undefined> {
         try {
-            const users =
-                await this.licenseService.getAllUsersWithLicense(
-                    organizationAndTeamData,
-                );
-
-            return Boolean(users?.some((user) => user?.git_id === userGitId));
+            return await this.licenseService.getAllUsersWithLicense(
+                organizationAndTeamData,
+            );
         } catch (error) {
             // Fail closed: an unreadable seat list must not turn the ignore
             // list off and start reviewing identities an admin excluded.
@@ -722,7 +726,9 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 error,
             });
 
-            return false;
+            // Undefined, not []: an empty list would look like a confirmed
+            // "no seats" and let the permission check skip its own lookup.
+            return undefined;
         }
     }
 
