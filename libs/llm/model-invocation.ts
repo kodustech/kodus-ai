@@ -116,7 +116,10 @@ export function resolveModelInvocation(
 
     return {
         model,
-        modelName: getModelName(resolvedSlot),
+        // `defaultModelOverride` (in agentModelOptions) already reached the model
+        // build via resolveAgentModel; honor it here too so the env/managed-default
+        // NAME matches the model actually built (no slot → the override wins).
+        modelName: getModelName(resolvedSlot, agentModelOptions.defaultModelOverride),
         callOptions: resolveSlotCallOptions(resolvedSlot),
         providerOptions,
     };

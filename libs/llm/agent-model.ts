@@ -24,6 +24,10 @@ export interface ResolveAgentModelOptions {
      *  `structuredOutputs` for the structured-output (generateObject) path.
      *  Omit for the plain agentic loop. */
     modelOptions?: ByokModelOptions;
+    /** Force a default model id on the env/managed path (no BYOK slot) — the
+     *  trial / public-demo override (e.g. cli-review's SUMMARY_MODEL). Threaded
+     *  to `buildModelFromSlot`; ignored when a real slot resolves. */
+    defaultModelOverride?: string;
     /** Wire to `ByokErrorCounter.record` so BYOK failures drive the
      *  `byok.llm_errors_threshold` notification — parity with code-review. */
     reporter?: (input: {
@@ -38,7 +42,9 @@ export function resolveAgentModel(
     opts: ResolveAgentModelOptions = {},
 ): LanguageModel {
     // Build the model from the ONE resolved slot; the limiter keys off that slot.
-    return wrapByokModel(buildModelFromSlot(slot, opts.modelOptions), {
+    return wrapByokModel(
+        buildModelFromSlot(slot, opts.modelOptions, opts.defaultModelOverride),
+        {
         byokConfig: slot,
         organizationId: opts.organizationId,
         provider: opts.provider ?? slot?.provider,

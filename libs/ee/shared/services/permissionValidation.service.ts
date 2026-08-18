@@ -5,6 +5,11 @@ import {
     type ResolveTaskModelOptions,
     type ResolvedTaskModel,
 } from '@libs/llm/resolve-task-model';
+import {
+    resolveTaskInvocation as resolveTaskInvocationFromConfig,
+    type ResolveTaskInvocationOptions,
+    type TaskInvocation,
+} from '@libs/llm/resolve-task-invocation';
 import type {
     RequestContext,
     RoutingVerdict,
@@ -864,6 +869,31 @@ export class PermissionValidationService {
         const resolved = resolveTaskModelFromConfig(rawConfig, task, options);
         this.logRoutingVerdict(organizationAndTeamData, task, resolved.verdict);
         return resolved;
+    }
+
+    /**
+     * Porta 1 (org-aware) — the single door every consumer that RUNS a model
+     * should use: reads the org's raw config and returns the full
+     * `TaskInvocation` for `task` (built model + limiter + `callOptions` +
+     * `providerOptions` reasoning + `usageIdentity` + slot + verdict), composed
+     * once by the pure `resolveTaskInvocation`. Same degrade contract — no BYOK
+     * → the managed/env default model with empty tuning. Consumers spread
+     * `callOptions`/`providerOptions` into the SDK call and stamp usage from
+     * `usageIdentity`, instead of re-deriving (and dropping) any of them.
+     */
+    async resolveTaskInvocation(
+        organizationAndTeamData: OrganizationAndTeamData,
+        task: LlmTask,
+        options: ResolveTaskInvocationOptions,
+    ): Promise<TaskInvocation> {
+        const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
+        const invocation = resolveTaskInvocationFromConfig(
+            rawConfig,
+            task,
+            options,
+        );
+        this.logRoutingVerdict(organizationAndTeamData, task, invocation.verdict);
+        return invocation;
     }
 
     /**

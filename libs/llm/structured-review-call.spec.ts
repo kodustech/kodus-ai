@@ -26,9 +26,13 @@ jest.mock('@libs/core/log/langfuse', () => ({
         telemetry: { isEnabled: false },
     })),
 }));
+jest.mock('@libs/llm/reasoning-options', () => ({
+    buildProviderOptions: jest.fn(() => ({ __providerOptions: 'reasoning' })),
+}));
 
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { tracedGenerateText } from '@libs/llm/llm-call';
+import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import {
     buildModelFromSlot,
     getLimiterForSlot,
@@ -74,6 +78,48 @@ beforeEach(() => {
     mockGetLimiter.mockReset();
     mockGetLimiter.mockReturnValue(null); // default: slot not in cooldown
     observabilityService.runAiSdkLLMInSpan.mockClear();
+    (buildProviderOptions as jest.Mock).mockClear();
+});
+
+describe('runStructuredReviewCall — reasoning (honors the slot, no added default)', () => {
+    it("passes the slot's reasoning through the SHARED mapping into the call", async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
+
+        await runStructuredReviewCall({
+            ...base,
+            byokConfig: {
+                provider: 'openai',
+                apiKey: 'enc',
+                model: 'gpt-5',
+                reasoningEffort: 'high',
+            } as any,
+        });
+
+        // The slot's effort reaches the provider mapping (the drop this fixes)...
+        expect(buildProviderOptions).toHaveBeenCalledWith(
+            'test.run',
+            undefined,
+            expect.objectContaining({
+                reasoningEffort: 'high',
+                byokProvider: 'openai',
+                modelName: 'gpt-5',
+            }),
+        );
+        // ...and its result is spread as providerOptions on the SDK call.
+        expect(mockGenerate.mock.calls[0][0].providerOptions).toEqual({
+            __providerOptions: 'reasoning',
+        });
+    });
+
+    it('an unset slot reasoning still calls the mapping with undefined effort (→ none)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
+        await runStructuredReviewCall({ ...base }); // no byokConfig
+        expect(buildProviderOptions).toHaveBeenCalledWith(
+            'test.run',
+            undefined,
+            expect.objectContaining({ reasoningEffort: undefined }),
+        );
+    });
 });
 
 describe('runStructuredReviewCall — single-model policy (no runtime fallback)', () => {

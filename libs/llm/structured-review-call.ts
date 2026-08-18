@@ -23,6 +23,7 @@ import {
 } from '@libs/llm/byok-to-vercel';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import { resolveSlotCallOptions } from '@libs/llm/slot-call-options';
+import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import {
     tracedGenerateText,
     timeoutSignal,
@@ -130,6 +131,23 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
     );
     const mainModelName = getModelName(mainSlot);
 
+    // Honor the slot's OWN reasoning (effort + JSON override) and OpenRouter
+    // pinning through the SHARED provider mapping — the same one every other
+    // consumer uses. Fixes the review path silently dropping a BYOK user's
+    // configured `reasoningEffort`. Policy: the slot's effort wins; UNSET adds NO
+    // reasoning (buildReasoningProviderOptions falls to 'none' → {} for providers
+    // that don't think by default, explicit-off only where one does), so a slot
+    // that never set reasoning behaves as before. Computed once — the same model
+    // (and reasoning) is reused by the D-00c latency re-issue below.
+    const providerOptions = buildProviderOptions(runName, undefined, {
+        reasoningEffort: mainSlot?.reasoningEffort,
+        reasoningConfigOverride: mainSlot?.reasoningConfigOverride,
+        byokProvider: mainSlot?.provider,
+        modelName: mainSlot?.model,
+        openrouterProviderOrder: (mainSlot as any)?.openrouterProviderOrder,
+        openrouterAllowFallbacks: (mainSlot as any)?.openrouterAllowFallbacks,
+    });
+
     const call = (model: LanguageModel, modelName: string): Promise<any> =>
         observabilityService
             .runAiSdkLLMInSpan<any>({
@@ -158,6 +176,9 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
                         // every consumer uses, so the review path can't silently
                         // drop temperature / max-output again.
                         ...resolveSlotCallOptions(mainSlot),
+                        // Provider-specific reasoning/thinking + OpenRouter routing
+                        // (the other SDK channel; empty when the slot sets none).
+                        providerOptions,
                         // Pin the AI SDK's OWN retry to 0 (default is 2 in
                         // ai@7 — verified against node_modules/ai). Without this
                         // the SDK silently retries UNDER the app-level D-00c

@@ -34,7 +34,7 @@ describe('resolveAgentModel', () => {
         const out = resolveAgentModel(slot);
 
         expect(buildModelFromSlot).toHaveBeenCalledTimes(1);
-        expect(buildModelFromSlot).toHaveBeenCalledWith(slot, undefined);
+        expect(buildModelFromSlot).toHaveBeenCalledWith(slot, undefined, undefined);
         // The wrapped model IS what buildModelFromSlot returned.
         expect((wrapByokModel as jest.Mock).mock.calls[0][0]).toEqual({
             __built: true,
@@ -44,9 +44,20 @@ describe('resolveAgentModel', () => {
 
     it('forwards modelOptions (e.g. structuredOutputs) to the build', () => {
         resolveAgentModel(slot, { modelOptions: { structuredOutputs: true } });
-        expect(buildModelFromSlot).toHaveBeenCalledWith(slot, {
-            structuredOutputs: true,
-        });
+        expect(buildModelFromSlot).toHaveBeenCalledWith(
+            slot,
+            { structuredOutputs: true },
+            undefined,
+        );
+    });
+
+    it('threads defaultModelOverride to the build (trial / cli-review default)', () => {
+        resolveAgentModel(undefined, { defaultModelOverride: 'kimi-k2.7-code' });
+        expect(buildModelFromSlot).toHaveBeenCalledWith(
+            undefined,
+            undefined,
+            'kimi-k2.7-code',
+        );
     });
 
     it('keys the wrapper off the same slot and defaults provider to the slot provider', () => {
@@ -83,7 +94,11 @@ describe('resolveAgentModel', () => {
 
     it('handles an undefined slot (managed / no-BYOK) — build resolves the default, provider is undefined', () => {
         resolveAgentModel(undefined, { organizationId: 'org-2' });
-        expect(buildModelFromSlot).toHaveBeenCalledWith(undefined, undefined);
+        expect(buildModelFromSlot).toHaveBeenCalledWith(
+            undefined,
+            undefined,
+            undefined,
+        );
         const cfg = (wrapByokModel as jest.Mock).mock.calls[0][1];
         expect(cfg.byokConfig).toBeUndefined();
         expect(cfg.provider).toBeUndefined();
