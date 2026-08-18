@@ -1925,30 +1925,43 @@ export class BitbucketDataCenterService implements Omit<
                 let isLastPage = false;
                 let start = 0;
 
-                // Fetch users with explicit permission granted to the project
-                while (!isLastPage) {
-                    const response = await axiosClient.get(
-                        `/projects/${projectKey}/permissions/users`,
-                        {
-                            params: { limit: 100, start },
-                        },
-                    );
+                // Only users holding an EXPLICIT project grant show up here —
+                // access inherited through a group is invisible to this
+                // endpoint. Recent pull request authors are unioned in by
+                // OrganizationMemberListService to close that gap.
+                try {
+                    while (!isLastPage) {
+                        const response = await axiosClient.get(
+                            `/projects/${projectKey}/permissions/users`,
+                            {
+                                params: { limit: 100, start },
+                            },
+                        );
 
-                    const users = response.data.values || [];
+                        const users = response.data.values || [];
 
-                    for (const permission of users) {
-                        const user = permission.user;
-                        if (!user || uniqueMembers.has(user.name)) continue;
+                        for (const permission of users) {
+                            const user = permission.user;
+                            if (!user || uniqueMembers.has(user.name)) continue;
 
-                        uniqueMembers.set(user.name, {
-                            id: user.name, // Username is the primary ID in DC
-                            name: user.displayName || user.name,
-                            type: 'user',
-                        });
+                            uniqueMembers.set(user.name, {
+                                id: user.name, // Username is the primary ID in DC
+                                name: user.displayName || user.name,
+                                type: 'user',
+                            });
+                        }
+
+                        isLastPage = response.data.isLastPage;
+                        start = response.data.nextPageStart;
                     }
-
-                    isLastPage = response.data.isLastPage;
-                    start = response.data.nextPageStart;
+                } catch (error) {
+                    // One project the token cannot read must not discard the
+                    // members already collected from the others.
+                    this.logger.warn({
+                        message: `Error fetching members for project ${projectKey}`,
+                        context: BitbucketDataCenterService.name,
+                        error,
+                    });
                 }
             }
 
