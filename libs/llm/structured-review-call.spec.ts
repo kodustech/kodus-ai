@@ -187,6 +187,23 @@ describe('runStructuredReviewCall — reasoning (honors the slot, no added defau
     });
 });
 
+describe('span attrs.fallback — caller override vs default', () => {
+    const spanAttrs = () =>
+        observabilityService.runAiSdkLLMInSpan.mock.calls[0][0].attrs;
+
+    it("defaults to false (there's no 2nd-model cascade) when the caller sets none", async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
+        await runStructuredReviewCall({ ...base });
+        expect(spanAttrs().fallback).toBe(false);
+    });
+
+    it('respects attrs.fallback:true (a caller marking its OWN retry, e.g. kody-rules raw-JSON)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
+        await runStructuredReviewCall({ ...base, attrs: { fallback: true } });
+        expect(spanAttrs().fallback).toBe(true);
+    });
+});
+
 describe('runStructuredReviewCall — single-model policy (no runtime fallback)', () => {
     it('trial (no BYOK): runs the ONE resolved model and returns its output', async () => {
         mockGenerate.mockResolvedValueOnce(ok({ violations: [] }));

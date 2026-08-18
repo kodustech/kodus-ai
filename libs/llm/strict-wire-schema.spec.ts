@@ -52,6 +52,16 @@ import {
     kodyRulesClassifierSchema,
     kodyRulesGeneratorSchema,
 } from '@libs/common/utils/prompts/kodyRules';
+// commentAnalysis migration (structured executor): its schemas now flow through
+// zodToStrictWireSchema, so cover them here to prove they're OpenAI-strict-safe.
+import {
+    commentCategorizerSchema,
+    commentIrrelevanceFilterSchema,
+} from '@libs/common/utils/prompts/commentAnalysis';
+import {
+    kodyRulesGeneratorDuplicateFilterSchema,
+    kodyRulesGeneratorQualityFilterSchema,
+} from '@libs/common/utils/prompts/kodyRulesGenerator';
 
 // OpenAI strict structured outputs impose TWO rules on every object node, and
 // 400 the request if either is violated:
@@ -145,6 +155,23 @@ describe('zodToStrictWireSchema', () => {
         ],
         ['prLevelAnalyzerSchema (pr-level analyzer)', prLevelAnalyzerSchema],
         ['prLevelGroupSchema (pr-level grouping)', prLevelGroupSchema],
+        // commentAnalysis migration → its schemas now flow through strict-wire.
+        [
+            'commentCategorizerSchema (comment categorizer)',
+            commentCategorizerSchema,
+        ],
+        [
+            'commentIrrelevanceFilterSchema (irrelevance filter)',
+            commentIrrelevanceFilterSchema,
+        ],
+        [
+            'kodyRulesGeneratorDuplicateFilterSchema (rule dedup filter)',
+            kodyRulesGeneratorDuplicateFilterSchema,
+        ],
+        [
+            'kodyRulesGeneratorQualityFilterSchema (rule quality filter)',
+            kodyRulesGeneratorQualityFilterSchema,
+        ],
         // Phase 3 call sites reusing prompt-file schemas.
         [
             'CrossFileContextPlannerSchema (cross-file planner)',
@@ -300,6 +327,7 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/cli-review/application/use-cases/classify-cli-session-capture.use-case.ts', // LLMDecisionExtractionSchema
         'libs/cli-review/application/use-cases/classify-session.use-case.ts', // LLMDecisionExtractionSchema
         'libs/code-review/infrastructure/adapters/services/commentManager.service.ts', // repeatedClusteringSchema
+        'libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts', // commentCategorizerSchema, commentIrrelevanceFilterSchema, kodyRulesGenerator{,DuplicateFilter,QualityFilter}Schema
         'libs/code-review/infrastructure/adapters/services/crossFileAnalysis.service.ts', // CrossFileAnalysisSchema
         'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts', // DocumentationPlannerSchema
         'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts', // documentationSearchExaFormatSchema

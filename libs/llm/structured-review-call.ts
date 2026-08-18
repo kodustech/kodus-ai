@@ -167,7 +167,12 @@ async function runReviewCall<T>(
                 // default). Derived from slot presence, never from key material.
                 attrs: {
                     ...(attrs ?? {}),
-                    fallback: false,
+                    // Default: not a fallback (there is no 2nd-model cascade here).
+                    // A caller may set `attrs.fallback` to mark its OWN retry
+                    // semantics (e.g. the kody-rules raw-JSON re-issue after a
+                    // structured parse failed) — respect it, the same way `type`
+                    // lets a caller override the slot-derived default.
+                    fallback: (attrs?.fallback as boolean | undefined) ?? false,
                     type:
                         (attrs?.type as string | undefined) ??
                         (mainSlot ? 'byok' : 'system'),
