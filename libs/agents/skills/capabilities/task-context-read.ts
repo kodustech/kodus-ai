@@ -28,6 +28,7 @@ import {
 import { extractTaskContextFromToolResult } from './task-context/result-normalization';
 import { buildToolAliasKey } from './task-context/tool-aliases';
 import { buildTaskContextArgsCandidates } from './task-context/arg-building';
+import { resolveTaskContextSiteHints } from './task-context/site-resolution';
 import type {
     TaskContextHints,
     TaskContextReadParams,
@@ -129,6 +130,24 @@ export async function fetchTaskContext(
     const allowAgenticFallback =
         params.enableAgenticFallback !== false &&
         discovery.registeredTools.length > 0;
+
+    // Tenant-scoped tools (Atlassian's getJiraIssue et al) require a site id the
+    // PR text usually doesn't carry. Resolve it before args are built, otherwise
+    // those tools yield zero candidates and get skipped for the whole run.
+    const siteHints = await resolveTaskContextSiteHints({
+        toolCaller,
+        registeredTools: discovery.registeredTools,
+        organizationId: params.organizationId,
+        providerType,
+        logger,
+    });
+    if (siteHints.siteIds.length || siteHints.siteUrls.length) {
+        hints.siteIds = siteHints.siteIds;
+        hints.siteUrls = uniqueNonEmpty([
+            ...hints.siteUrls,
+            ...siteHints.siteUrls,
+        ]);
+    }
 
     const traces: CapabilityExecutionTrace[] = [];
 
@@ -436,6 +455,7 @@ function resolveTaskContextHints(
             .join('\n'),
         urlHosts: [...urlHosts],
         siteUrls: [...siteUrls],
+        siteIds: [],
         resourceIds,
     };
 }

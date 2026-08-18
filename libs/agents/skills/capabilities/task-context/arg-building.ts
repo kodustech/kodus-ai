@@ -146,6 +146,7 @@ function getCandidateValuesForParam(
     ]).slice(0, 4);
     const urlHosts = uniqueNonEmpty(hints.urlHosts).slice(0, 2);
     const siteUrls = uniqueNonEmpty(hints.siteUrls).slice(0, 2);
+    const siteIds = uniqueNonEmpty(hints.siteIds ?? []).slice(0, 2);
     const resourceIds = uniqueNonEmpty(hints.resourceIds).slice(0, 4);
     const queryTokens = uniqueNonEmpty([
         ...explicitIssueKeys,
@@ -171,7 +172,9 @@ function getCandidateValuesForParam(
     }
 
     if (intent === 'context') {
-        return siteUrls.length ? siteUrls : urlHosts.length ? urlHosts : [];
+        // Resolved tenant ids first: a host mined from PR prose is often from an
+        // unrelated link, which the provider rejects outright.
+        return uniqueNonEmpty([...siteIds, ...siteUrls, ...urlHosts]);
     }
 
     if (intent === 'url') {
