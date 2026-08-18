@@ -367,14 +367,7 @@ jobs:
                   # adapter fix — until that release it runs red, not skip.
                   VERTEX_SA_JSON: ${{ secrets.VERTEX_SA_JSON }}
                   VERTEX_REGION: global
-                  # TEMP (this branch only, not for main): claude-haiku-4-5 is
-                  # stuck on a 0-quota partner-model wall on the current
-                  # VERTEX_SA_JSON project. Gemini is first-party (no partner
-                  # quota) and routes through the OTHER v2 adapter
-                  # (VertexAdapter, not VertexAnthropicAdapter) — enough to
-                  # validate the gitlab/bitbucket/azure provider wiring, not
-                  # the Claude-on-Vertex routing itself.
-                  VERTEX_MODEL: gemini-3.5-flash-lite
+                  VERTEX_MODEL: claude-haiku-4-5
                   CONVERSATION_USER_TOKEN: ${{ secrets.CONVERSATION_USER_TOKEN }}
 
                   # LLM provider — vm.sh expects these to write to the VM's .env.
