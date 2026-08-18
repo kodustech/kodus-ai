@@ -51,6 +51,7 @@ export default async function SubscriptionTabs() {
             return {
                 id: member.id,
                 name: normalizedName,
+                isBot: member.type === "bot",
                 licenseStatus:
                     license.valid && license.subscriptionStatus === "trial"
                         ? "active"

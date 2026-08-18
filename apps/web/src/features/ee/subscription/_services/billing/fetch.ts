@@ -20,6 +20,8 @@ type OrganizationMember = {
     login?: string | null;
     username?: string | null;
     displayName?: string | null;
+    /** Absent on responses from an API older than the bot-aware member list. */
+    type?: "user" | "bot";
 };
 
 export type OrganizationMemberListResult =
