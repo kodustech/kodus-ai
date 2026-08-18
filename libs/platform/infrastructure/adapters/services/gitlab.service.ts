@@ -3337,6 +3337,80 @@ export class GitlabService implements Omit<
         }
     }
 
+    /**
+     * The current `path_with_namespace` for a project, looked up by its numeric
+     * id.
+     *
+     * `repository.fullName` is whatever was persisted when the repository was
+     * first selected, and it is not reliably the URL slug: it can hold the
+     * display form (`My Group/My Project` rather than `my-group/my-project`)
+     * and it goes stale when a project is renamed or moved between groups, which
+     * also drops any subgroup added along the way (`group/project` where the
+     * project now lives at `parent/group/project`). Cloning such a URL fails
+     * with a 302 to `/users/sign_in` — git reports it as
+     * `unable to update url base from redirection`, which reads like an auth
+     * problem but is really a path that GitLab won't resolve.
+     *
+     * The numeric id survives renames and moves, which is why every REST call in
+     * this service keeps working while only the clone breaks. Falls back to the
+     * stored `fullName` so a lookup failure is no worse than the old behaviour.
+     *
+     * Callers without a real project id are expected to skip this entirely —
+     * see `hasResolvableProjectId`.
+     */
+    private async resolveProjectPathWithNamespace(
+        gitlabAuthDetail: GitlabAuthDetail,
+        repository: Pick<Repository, 'id' | 'fullName'>,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<string> {
+        try {
+            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+            const project = await gitlabAPI.Projects.show(repository.id);
+
+            if (project?.path_with_namespace) {
+                return project.path_with_namespace as string;
+            }
+
+            this.logger.warn({
+                message: `Project ${repository?.id} returned no path_with_namespace; falling back to the stored fullName`,
+                context: GitlabService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    fullName: repository?.fullName,
+                },
+            });
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not resolve path_with_namespace for project ${repository?.id}; falling back to the stored fullName`,
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    fullName: repository?.fullName,
+                },
+            });
+        }
+
+        return repository?.fullName || '';
+    }
+
+    /**
+     * Whether `repository.id` is a real GitLab project id worth a lookup.
+     *
+     * CLI mode has no project id to give — it builds its params straight from
+     * the local git remote and passes the placeholder `'0'` with a `fullName`
+     * parsed from that remote, which is already the authoritative slug. Note
+     * `'0'` is a truthy string, so a plain truthiness check does not catch it
+     * and every CLI clone would spend a guaranteed-failing round-trip.
+     */
+    private hasResolvableProjectId(id?: string | number): boolean {
+        const normalized = String(id ?? '').trim();
+
+        return normalized !== '' && normalized !== '0';
+    }
+
     async getCloneParams(params: {
         repository: Pick<
             Repository,
@@ -3359,7 +3433,21 @@ export class GitlabService implements Omit<
                 throw new Error('GitLab authentication details not found');
             }
 
-            const encodedPath = (params?.repository?.fullName || '')
+            // Resolve the slug from the numeric project id instead of trusting
+            // the stored `fullName`. See resolveProjectPathWithNamespace. With
+            // no real id (CLI mode) `fullName` came straight from the local
+            // remote and is already authoritative, so skip the round-trip.
+            const projectPath = this.hasResolvableProjectId(
+                params.repository?.id,
+            )
+                ? await this.resolveProjectPathWithNamespace(
+                      gitlabAuthDetail,
+                      params.repository,
+                      params.organizationAndTeamData,
+                  )
+                : params.repository?.fullName || '';
+
+            const encodedPath = projectPath
                 .split('/')
                 .map(encodeURIComponent)
                 .join('/');
