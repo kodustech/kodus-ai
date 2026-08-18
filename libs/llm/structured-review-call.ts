@@ -20,6 +20,7 @@ import {
     buildModelFromSlot,
     getModelName,
     getLimiterForSlot,
+    type ByokModelOptions,
 } from '@libs/llm/byok-to-vercel';
 import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
 import { resolveSlotCallOptions } from '@libs/llm/slot-call-options';
@@ -59,12 +60,10 @@ function isAbortOrHardTimeout(err: unknown): boolean {
     return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
 }
 
-export interface StructuredReviewCallParams<S extends z.ZodType | Schema> {
+/** Fields shared by every review call (structured or plain-text). `byokConfig`
+ *  is the bare resolved slot; `buildModelFromSlot`/`getModelName` take it directly. */
+export interface BaseReviewCallParams {
     byokConfig?: NormalizedModel;
-    /** A zod schema, or an AI-SDK `jsonSchema()` Schema when the caller
-     *  needs the wire JSON schema to differ from the parse validation
-     *  (e.g. OpenAI-strict `required` semantics vs lenient providers). */
-    schema: S;
     system: string;
     user: string;
     /** Used for both the observability span and its runName. */
@@ -74,20 +73,43 @@ export interface StructuredReviewCallParams<S extends z.ZodType | Schema> {
     observabilityService: ObservabilityService;
 }
 
+export interface StructuredReviewCallParams<
+    S extends z.ZodType | Schema,
+> extends BaseReviewCallParams {
+    /** A zod schema, or an AI-SDK `jsonSchema()` Schema when the caller
+     *  needs the wire JSON schema to differ from the parse validation
+     *  (e.g. OpenAI-strict `required` semantics vs lenient providers). */
+    schema: S;
+}
+
+/** A plain-text review call — same model policy + reasoning + limiter + span +
+ *  D-00c retry as the structured path, but no schema: returns the raw string. */
+export type TextReviewCallParams = BaseReviewCallParams;
+
+/** Per-output-mode knobs the shared core is parameterized on. */
+interface ReviewCallMode<T> {
+    /** Model-build options — structured opts the OpenAI-compatible branch into
+     *  json_schema response_format; text passes none. */
+    modelOptions: ByokModelOptions;
+    /** Extra generateText args for the mode (the `output` object, or nothing). */
+    outputArgs: Record<string, unknown>;
+    /** Pull the caller-facing result from the SDK response. */
+    extract: (r: any) => T;
+}
+
 /**
- * Run a structured-output call on the ONE resolved review model (BYOK or the
- * managed default). No 2nd-model fallback: a failure/timeout throws (bar the
- * single same-model latency-guard re-issue). Returns the parsed object validated
- * against `schema`.
+ * The ONE review-call executor: resolves the SINGLE review model (BYOK or the
+ * managed default), honors the slot's tuning + reasoning + limiter, runs it in an
+ * observability span, and owns the single cooldown-aware D-00c latency re-issue.
+ * `mode` is the only thing that differs between structured and text output — so
+ * both public entry points share this exact model policy and retry contract.
  */
-export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
-    params: StructuredReviewCallParams<S>,
-): Promise<
-    S extends z.ZodType ? z.infer<S> : S extends Schema<infer T> ? T : never
-> {
+async function runReviewCall<T>(
+    params: BaseReviewCallParams,
+    mode: ReviewCallMode<T>,
+): Promise<T> {
     const {
         byokConfig,
-        schema,
         system,
         user,
         runName,
@@ -96,37 +118,9 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         observabilityService,
     } = params;
 
-    // A raw zod schema would go through the AI SDK's zodSchema(), whose
-    // INPUT-side conversion drops `.optional()` fields from `required` —
-    // OpenAI strict structured outputs 400 on that, which silently killed
-    // kody-rules shards and guidance-file extraction for BYOK-OpenAI orgs.
-    // Convert centrally so every caller (present and future) sends a
-    // strict-compatible wire schema; AI-SDK Schema objects pass through
-    // untouched (the caller already controls its wire format).
-    let wireSchema: unknown = schema;
-    if (schema instanceof z.ZodType) {
-        try {
-            wireSchema = zodToStrictWireSchema(schema);
-        } catch (err) {
-            // Unconvertible zod shape — fall back to the SDK's own
-            // conversion rather than failing the call outright. That
-            // fallback still 400s on OpenAI strict when the schema has
-            // optional fields, so make the degradation loud: this is the
-            // exact silence that hid the shard/extraction failures.
-            logger.warn({
-                message: `[strict-wire-schema] conversion failed for ${runName}; falling back to raw zod schema (OpenAI-strict callers may reject it): ${err instanceof Error ? err.message : String(err)}`,
-                context: 'runStructuredReviewCall',
-                metadata: { runName, organizationId, err },
-            });
-            wireSchema = schema;
-        }
-    }
-
-    // `byokConfig` is the bare resolved slot: the builder (`buildModelFromSlot`)
-    // and `getModelName` take that single slot directly.
     const mainSlot = byokConfig;
     const mainModel = wrapByokModel(
-        buildModelFromSlot(mainSlot, { structuredOutputs: true }),
+        buildModelFromSlot(mainSlot, mode.modelOptions),
         { byokConfig, organizationId, role: 'main' },
     );
     const mainModelName = getModelName(mainSlot);
@@ -148,7 +142,7 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         openrouterAllowFallbacks: (mainSlot as any)?.openrouterAllowFallbacks,
     });
 
-    const call = (model: LanguageModel, modelName: string): Promise<any> =>
+    const call = (model: LanguageModel, modelName: string): Promise<T> =>
         observabilityService
             .runAiSdkLLMInSpan<any>({
                 spanName: runName,
@@ -170,7 +164,9 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
                         model: model as any,
                         system,
                         prompt: user,
-                        output: Output.object({ schema: wireSchema as any }),
+                        // Output mode: structured spreads `output: Output.object`,
+                        // text spreads nothing (plain generateText → r.text).
+                        ...mode.outputArgs,
                         // Honor the resolved slot's per-model tuning (RFC §4.1
                         // "limits") through the SHARED mapping — same primitive
                         // every consumer uses, so the review path can't silently
@@ -200,7 +196,7 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
                         ),
                     } as any),
             })
-            .then((r: any) => (r.experimental_output ?? r.output) as any);
+            .then((r: any) => mode.extract(r));
 
     try {
         return await call(mainModel, mainModelName);
@@ -248,4 +244,67 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         }
         throw err;
     }
+}
+
+/**
+ * Run a STRUCTURED-output call on the ONE resolved review model (BYOK or the
+ * managed default). No 2nd-model fallback: a failure/timeout throws (bar the
+ * single same-model latency-guard re-issue). Returns the parsed object validated
+ * against `schema`.
+ */
+export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
+    params: StructuredReviewCallParams<S>,
+): Promise<
+    S extends z.ZodType ? z.infer<S> : S extends Schema<infer T> ? T : never
+> {
+    const { schema, runName, organizationId } = params;
+
+    // A raw zod schema would go through the AI SDK's zodSchema(), whose
+    // INPUT-side conversion drops `.optional()` fields from `required` —
+    // OpenAI strict structured outputs 400 on that, which silently killed
+    // kody-rules shards and guidance-file extraction for BYOK-OpenAI orgs.
+    // Convert centrally so every caller (present and future) sends a
+    // strict-compatible wire schema; AI-SDK Schema objects pass through
+    // untouched (the caller already controls its wire format).
+    let wireSchema: unknown = schema;
+    if (schema instanceof z.ZodType) {
+        try {
+            wireSchema = zodToStrictWireSchema(schema);
+        } catch (err) {
+            // Unconvertible zod shape — fall back to the SDK's own
+            // conversion rather than failing the call outright. That
+            // fallback still 400s on OpenAI strict when the schema has
+            // optional fields, so make the degradation loud: this is the
+            // exact silence that hid the shard/extraction failures.
+            logger.warn({
+                message: `[strict-wire-schema] conversion failed for ${runName}; falling back to raw zod schema (OpenAI-strict callers may reject it): ${err instanceof Error ? err.message : String(err)}`,
+                context: 'runStructuredReviewCall',
+                metadata: { runName, organizationId, err },
+            });
+            wireSchema = schema;
+        }
+    }
+
+    return runReviewCall(params, {
+        modelOptions: { structuredOutputs: true },
+        outputArgs: { output: Output.object({ schema: wireSchema as any }) },
+        extract: (r) => (r.experimental_output ?? r.output) as any,
+    });
+}
+
+/**
+ * Run a PLAIN-TEXT call on the ONE resolved review model — same model policy,
+ * reasoning, limiter, span and D-00c retry as the structured path, but no schema:
+ * returns the raw generated string (e.g. the PR summary). This is the text half
+ * of the single review executor, so a prose call can't drift back into a
+ * hand-rolled `buildModelFromSlot` + telemetry copy.
+ */
+export async function runTextReviewCall(
+    params: TextReviewCallParams,
+): Promise<string> {
+    return runReviewCall(params, {
+        modelOptions: {},
+        outputArgs: {},
+        extract: (r) => (r.text ?? '') as string,
+    });
 }

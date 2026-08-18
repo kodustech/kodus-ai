@@ -30,7 +30,10 @@ jest.mock('@libs/llm/reasoning-options', () => ({
     buildProviderOptions: jest.fn(() => ({ __providerOptions: 'reasoning' })),
 }));
 
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import {
+    runStructuredReviewCall,
+    runTextReviewCall,
+} from '@libs/llm/structured-review-call';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import {
@@ -79,6 +82,55 @@ beforeEach(() => {
     mockGetLimiter.mockReturnValue(null); // default: slot not in cooldown
     observabilityService.runAiSdkLLMInSpan.mockClear();
     (buildProviderOptions as jest.Mock).mockClear();
+});
+
+describe('runTextReviewCall — plain-text half of the shared executor', () => {
+    const textBase = {
+        system: 'sys',
+        user: 'usr',
+        runName: 'summary.run',
+        observabilityService,
+    };
+
+    it('returns the raw generated string and sends NO structured-output arg', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'a prose summary', usage: {} });
+
+        const out = await runTextReviewCall({ ...textBase });
+
+        expect(out).toBe('a prose summary');
+        // Plain generateText: no `output` (Output.object) on the call.
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
+        // And the model is NOT built in structured-output mode.
+        expect(mockBuild).toHaveBeenCalledWith(undefined, {});
+    });
+
+    it('shares the reasoning path — honors the slot the same way', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'x', usage: {} });
+
+        await runTextReviewCall({
+            ...textBase,
+            byokConfig: {
+                provider: 'anthropic',
+                apiKey: 'enc',
+                model: 'claude-sonnet-4-5',
+                reasoningEffort: 'medium',
+            } as any,
+        });
+
+        expect(buildProviderOptions).toHaveBeenCalledWith(
+            'summary.run',
+            undefined,
+            expect.objectContaining({ reasoningEffort: 'medium' }),
+        );
+        expect(mockGenerate.mock.calls[0][0].providerOptions).toEqual({
+            __providerOptions: 'reasoning',
+        });
+    });
+
+    it('an empty response degrades to an empty string (never throws)', async () => {
+        mockGenerate.mockResolvedValueOnce({ usage: {} }); // no .text
+        await expect(runTextReviewCall({ ...textBase })).resolves.toBe('');
+    });
 });
 
 describe('runStructuredReviewCall — reasoning (honors the slot, no added default)', () => {
