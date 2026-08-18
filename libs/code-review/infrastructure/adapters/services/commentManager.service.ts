@@ -39,22 +39,16 @@ import {
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
-import {
-    buildModelFromSlot,
-    getModelName,
-    KODUS_TRIAL_MODEL,
-} from '@libs/llm/byok-to-vercel';
+import { getModelName, KODUS_TRIAL_MODEL } from '@libs/llm/byok-to-vercel';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     attachClassification,
     classifyLLMError,
 } from '@libs/llm/error-classifier';
-import { tracedGenerateText } from '@libs/llm/llm-call';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
+    runStructuredReviewCall,
+    runTextReviewCall,
+} from '@libs/llm/structured-review-call';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -64,7 +58,6 @@ import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
-import { resolveByokTemperature } from '@libs/llm/sampling-params';
 
 interface ClusteredSuggestion {
     id: string;
@@ -140,52 +133,28 @@ export class CommentManagerService implements ICommentManagerService {
             metadata,
         } = params;
 
-        // This is an AI SDK call (tracedGenerateText), so use runAiSdkLLMInSpan —
-        // it reads token usage from result.usage. runLLMInSpan is the
-        // LangChain-callback path (TokenTrackingHandler) and can't see AI SDK
-        // usage, which is why summary spans were recorded with 0 tokens.
-        const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
-            spanName,
+        // One-shot PLAIN-TEXT call through the shared review executor (Porta 2).
+        // It resolves the ONE model (org BYOK slot, else the KODUS_TRIAL_MODEL
+        // default), honors the slot's temperature + reasoning, wraps it in the
+        // BYOK concurrency limiter, and records the observability span — the same
+        // policy every structured review call uses. Replaces the hand-rolled
+        // buildModelFromSlot + telemetry copy this used to be, which silently
+        // dropped the limiter (the user's maxConcurrentRequests) and the slot's
+        // reasoning. Temperature handling is preserved (resolveSlotCallOptions
+        // withholds it on models that reject sampling params, e.g. kimi-k2.7-code
+        // and Anthropic 4.7+).
+        return runTextReviewCall({
+            byokConfig: slot,
+            system: systemPrompt,
+            user: userPrompt,
             runName,
-            // Canonical `provider:model` via getModelName — same derivation as
-            // every other span (readers collapse on ':'), instead of a bare name.
-            model: getModelName(slot, KODUS_TRIAL_MODEL),
+            spanName,
             attrs,
-            exec: async () => {
-                // Build the single resolved slot (native). Off-BYOK →
-                // deepseek-v4-flash default (cloud/trial). buildModelFromSlot
-                // decrypts the ciphertext key only in this local scope.
-                const model = buildModelFromSlot(
-                    slot ?? undefined,
-                    {},
-                    KODUS_TRIAL_MODEL,
-                );
-                // Only pin temperature when the BYOK config sets one. Forcing 0
-                // broke models that reject a non-default temperature — Moonshot's
-                // kimi-k2.7-code rejects anything but 1 (HTTP 400), so the summary
-                // silently failed for kimi users while reviews kept working. The
-                // finder omits temperature for the same reason (finder.agent.ts),
-                // letting the provider default apply.
-                // Also withheld on Anthropic 4.7+, which removed sampling
-                // params and 400s the request when one is present.
-                const configuredTemperature = resolveByokTemperature(
-                    slot ?? undefined,
-                );
-                return await tracedGenerateText({
-                    model: model as any,
-                    system: systemPrompt,
-                    prompt: userPrompt,
-                    ...(configuredTemperature !== undefined
-                        ? { temperature: configuredTemperature }
-                        : {}),
-                    ...toAiSdkTelemetryArgs(
-                        buildLangfuseTelemetry(runName, metadata),
-                    ),
-                });
-            },
+            organizationId: metadata?.organizationId,
+            telemetryMetadata: metadata,
+            defaultModelOverride: KODUS_TRIAL_MODEL,
+            observabilityService: this.observabilityService,
         });
-
-        return (result?.text as string) ?? '';
     }
 
     async generateSummaryPR(

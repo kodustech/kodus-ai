@@ -101,7 +101,7 @@ describe('runTextReviewCall — plain-text half of the shared executor', () => {
         // Plain generateText: no `output` (Output.object) on the call.
         expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
         // And the model is NOT built in structured-output mode.
-        expect(mockBuild).toHaveBeenCalledWith(undefined, {});
+        expect(mockBuild).toHaveBeenCalledWith(undefined, {}, undefined);
     });
 
     it('shares the reasoning path — honors the slot the same way', async () => {
@@ -130,6 +130,19 @@ describe('runTextReviewCall — plain-text half of the shared executor', () => {
     it('an empty response degrades to an empty string (never throws)', async () => {
         mockGenerate.mockResolvedValueOnce({ usage: {} }); // no .text
         await expect(runTextReviewCall({ ...textBase })).resolves.toBe('');
+    });
+
+    it('threads defaultModelOverride to the build (trial default, e.g. the PR summary)', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'x', usage: {} });
+        await runTextReviewCall({
+            ...textBase,
+            defaultModelOverride: 'accounts/fireworks/models/deepseek-v4-flash',
+        });
+        expect(mockBuild).toHaveBeenCalledWith(
+            undefined,
+            {},
+            'accounts/fireworks/models/deepseek-v4-flash',
+        );
     });
 });
 

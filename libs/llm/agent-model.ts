@@ -45,12 +45,13 @@ export function resolveAgentModel(
     return wrapByokModel(
         buildModelFromSlot(slot, opts.modelOptions, opts.defaultModelOverride),
         {
-        byokConfig: slot,
-        organizationId: opts.organizationId,
-        provider: opts.provider ?? slot?.provider,
-        ...(opts.queueTimeoutMs != null
-            ? { queueTimeoutMs: opts.queueTimeoutMs }
-            : {}),
-        ...(opts.reporter ? { reporter: opts.reporter } : {}),
-    });
+            byokConfig: slot,
+            organizationId: opts.organizationId,
+            provider: opts.provider ?? slot?.provider,
+            ...(opts.queueTimeoutMs != null
+                ? { queueTimeoutMs: opts.queueTimeoutMs }
+                : {}),
+            ...(opts.reporter ? { reporter: opts.reporter } : {}),
+        },
+    );
 }

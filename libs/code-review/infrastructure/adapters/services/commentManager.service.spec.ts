@@ -21,6 +21,8 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
     buildModelFromSlot: jest.fn(() => ({ __mockModel: true })),
     // runStructuredReviewCall (clustering path) reads getModelName for the span.
     getModelName: jest.fn(() => 'test-model'),
+    // The shared review executor consults the slot's limiter on its error path.
+    getLimiterForSlot: jest.fn(() => null),
 }));
 // `tracedGenerateText` moved to @libs/llm/llm-call (the legacy
 // agents/engine/agent-loop module was removed). requireActual keeps the rest of
@@ -38,6 +40,9 @@ jest.mock('@libs/llm/llm-call', () => ({
             return { text: NEW_SUMMARY_TEXT };
         },
     ),
+    // The summary now runs through runTextReviewCall, which arms a real 10-min
+    // timeoutSignal — stub it so the suite doesn't leak long-lived timers.
+    timeoutSignal: jest.fn(() => undefined),
 }));
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: () => ({ isEnabled: false, functionId: 'test' }),

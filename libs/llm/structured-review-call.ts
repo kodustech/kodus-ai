@@ -33,6 +33,7 @@ import {
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
+    type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
@@ -66,11 +67,20 @@ export interface BaseReviewCallParams {
     byokConfig?: NormalizedModel;
     system: string;
     user: string;
-    /** Used for both the observability span and its runName. */
+    /** Used for the runName and (unless `spanName` is set) the span name. */
     runName: string;
     organizationId?: string;
     attrs?: Record<string, unknown>;
     observabilityService: ObservabilityService;
+    /** Force a default model on the env/managed path (no BYOK slot) — the trial
+     *  default (e.g. the PR summary's KODUS_TRIAL_MODEL). Ignored when a real slot
+     *  resolves. Threaded to both `buildModelFromSlot` and the span's model name. */
+    defaultModelOverride?: string;
+    /** Langfuse span metadata (org / team / PR ...). Defaults to
+     *  `{ organizationId }` when omitted — the structured callers' existing shape. */
+    telemetryMetadata?: LangfuseTelemetryMetadata;
+    /** Observability span name; defaults to `runName`. */
+    spanName?: string;
 }
 
 export interface StructuredReviewCallParams<
@@ -116,14 +126,17 @@ async function runReviewCall<T>(
         organizationId,
         attrs,
         observabilityService,
+        defaultModelOverride,
+        telemetryMetadata,
+        spanName,
     } = params;
 
     const mainSlot = byokConfig;
     const mainModel = wrapByokModel(
-        buildModelFromSlot(mainSlot, mode.modelOptions),
+        buildModelFromSlot(mainSlot, mode.modelOptions, defaultModelOverride),
         { byokConfig, organizationId, role: 'main' },
     );
-    const mainModelName = getModelName(mainSlot);
+    const mainModelName = getModelName(mainSlot, defaultModelOverride);
 
     // Honor the slot's OWN reasoning (effort + JSON override) and OpenRouter
     // pinning through the SHARED provider mapping — the same one every other
@@ -145,7 +158,7 @@ async function runReviewCall<T>(
     const call = (model: LanguageModel, modelName: string): Promise<T> =>
         observabilityService
             .runAiSdkLLMInSpan<any>({
-                spanName: runName,
+                spanName: spanName ?? runName,
                 runName,
                 model: modelName,
                 // No 2nd-model cascade: every attempt is the same resolved model.
@@ -190,9 +203,10 @@ async function runReviewCall<T>(
                         // BYOK limiter cancellation. Matches peer AI-SDK callers.
                         abortSignal: timeoutSignal(LLM_CALL_TIMEOUT_MS),
                         ...toAiSdkTelemetryArgs(
-                            buildLangfuseTelemetry(runName, {
-                                organizationId,
-                            }),
+                            buildLangfuseTelemetry(
+                                runName,
+                                telemetryMetadata ?? { organizationId },
+                            ),
                         ),
                     } as any),
             })
