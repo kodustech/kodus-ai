@@ -1961,6 +1961,10 @@ export class BitbucketDataCenterService implements Omit<
                         message: `Error fetching members for project ${projectKey}`,
                         context: BitbucketDataCenterService.name,
                         error,
+                        metadata: {
+                            ...organizationAndTeamData,
+                            projectKey,
+                        },
                     });
                 }
             }

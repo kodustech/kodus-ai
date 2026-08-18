@@ -3223,7 +3223,10 @@ export class GithubService
                     message:
                         'Legacy integration 404d as an organization - treating it as a personal account',
                     context: GithubService.name,
-                    metadata: { org: githubAuthDetail?.org },
+                    metadata: {
+                        ...organizationAndTeamData,
+                        org: githubAuthDetail?.org,
+                    },
                 });
 
                 return await this.getAccountOwnerAsMember(
