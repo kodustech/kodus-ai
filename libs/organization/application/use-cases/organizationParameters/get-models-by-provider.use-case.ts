@@ -14,20 +14,6 @@ import axios from 'axios';
 import { resolveByokSlot } from './byok-credentials.util';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 
-/**
- * Providers whose model list is a CURATED static catalog (not fetched live), so
- * it isn't exhaustive — a model missing from it is NOT proof the model is
- * invalid. Callers must not treat a miss as a hard mismatch/failure for these.
- *
- * Derived from the registry (`modelListing.kind === 'static'`) so a new curated
- * provider is covered automatically — no second place to edit.
- */
-export const CURATED_CATALOG_PROVIDERS: ReadonlySet<BYOKProvider> = new Set(
-    REGISTRY.all()
-        .filter((m) => m.modelListing?.(m.id)?.kind === 'static')
-        .map((m) => m.id as BYOKProvider),
-);
-
 export interface ModelResponse {
     provider: BYOKProvider;
     models: CatalogModel[];
