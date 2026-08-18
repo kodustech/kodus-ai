@@ -3357,18 +3357,69 @@ export class GitlabService implements Omit<
      *
      * Callers without a real project id are expected to skip this entirely —
      * see `hasResolvableProjectId`.
+     *
+     * The result is cached for 30 minutes per
+     * `(organizationId, repository.id)`: every clone otherwise pays this
+     * round-trip on its critical path, including repeated clones of the same
+     * repository across reviews. The slug only changes on a rename or group
+     * move, so a short TTL is enough to pick that up without keeping the
+     * common case on the network. A failed lookup is not cached — that falls
+     * back to `fullName` for this call only, and retries the API next time.
      */
     private async resolveProjectPathWithNamespace(
         gitlabAuthDetail: GitlabAuthDetail,
         repository: Pick<Repository, 'id' | 'fullName'>,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<string> {
+        const cacheKey = `gitlab-project-path-${organizationAndTeamData?.organizationId}-${repository?.id}`;
+
+        try {
+            const cachedPath =
+                await this.cacheService.getFromCache<string>(cacheKey);
+            if (cachedPath) {
+                return cachedPath;
+            }
+        } catch (cacheError) {
+            this.logger.warn({
+                message: 'Error reading project path from cache, continuing with API call',
+                context: GitlabService.name,
+                serviceName: 'GitlabService resolveProjectPathWithNamespace',
+                error: cacheError,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                },
+            });
+        }
+
         try {
             const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
             const project = await gitlabAPI.Projects.show(repository.id);
 
             if (project?.path_with_namespace) {
-                return project.path_with_namespace as string;
+                const path = project.path_with_namespace as string;
+
+                try {
+                    await this.cacheService.addToCache(
+                        cacheKey,
+                        path,
+                        1800000, // 30 minutos
+                    );
+                } catch (cacheError) {
+                    this.logger.warn({
+                        message: 'Error caching project path',
+                        context: GitlabService.name,
+                        serviceName:
+                            'GitlabService resolveProjectPathWithNamespace',
+                        error: cacheError,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repository?.id,
+                        },
+                    });
+                }
+
+                return path;
             }
 
             this.logger.warn({
