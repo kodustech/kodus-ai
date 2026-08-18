@@ -1,22 +1,12 @@
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { Output } from 'ai';
 import z from 'zod';
 import filteredLibraryKodyRules from '@libs/code-review/infrastructure/data/filtered-rules.json';
 import { Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
 
 import { LLM_TASK } from '@libs/llm/byok-config';
-import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
-import {
-    LLM_CALL_TIMEOUT_MS,
-    timeoutSignal,
-    tracedGenerateText,
-} from '@libs/llm/llm-call';
-import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
+import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import { isKodyAuthoredBody } from '@libs/common/utils/kody-identifiers';
@@ -104,57 +94,37 @@ export class CommentAnalysisService {
             attrs,
         } = args;
 
-        // Resolve the codeReview slot from the org's raw config (matching
-        // model-factory). `modelOverride` is the default-model override (trial
-        // forces Kimi); it only applies when there is no BYOK. Off-BYOK yields
-        // the env/managed default.
-        const resolved =
-            await this.permissionValidationService.resolveTaskModel(
-                organizationAndTeamData,
-                LLM_TASK.codeReview,
-                { defaultModelOverride: modelConfig.modelOverride },
-            );
-        const model = wrapByokModel(resolved.model, {
-            byokConfig: resolved.slot ?? undefined,
-            organizationId: organizationAndTeamData.organizationId,
-            role: 'main',
-        });
+        // Resolve the routed codeReview slot (org-aware), then run it through the
+        // shared STRUCTURED executor — the same path every other structured review
+        // call uses: BYOK limiter, the slot's tuning + reasoning, the span, the
+        // central strict-wire-schema conversion and the D-00c latency re-issue.
+        // Replaces the hand-rolled resolveTaskModel + wrapByokModel +
+        // tracedGenerateText copy. `modelOverride` (trial default) only applies
+        // when there is no BYOK; off-BYOK yields the env/managed default.
+        const slot = await this.permissionValidationService.resolveTaskSlot(
+            organizationAndTeamData,
+            LLM_TASK.codeReview,
+        );
 
-        const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
-            spanName: `${CommentAnalysisService.name}::${runName}`,
+        // Cast: runStructuredReviewCall's return is a conditional over
+        // `z.ZodType | Schema`; here `S extends z.ZodType`, so it resolves to
+        // `z.infer<S>` — TS just can't narrow the conditional through the call.
+        return runStructuredReviewCall({
+            byokConfig: slot,
+            schema,
+            system,
+            user,
             runName,
-            model: resolved.modelName,
-            // Attribute BYOK-vs-system so this org's comment-analysis spend lands
-            // in its BYOK usage view (a resolved slot = the org's own key).
-            attrs: {
-                ...(attrs ?? {}),
-                type:
-                    ((attrs as Record<string, unknown>)?.type as
-                        | string
-                        | undefined) ?? (resolved.slot ? 'byok' : 'system'),
+            spanName: `${CommentAnalysisService.name}::${runName}`,
+            attrs,
+            organizationId: organizationAndTeamData.organizationId,
+            telemetryMetadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
             },
-            // Structured output via generateText + Output.object (generateObject
-            // is deprecated in ai@6). The casts bridge the generic
-            // `S extends z.ZodType` to the SDK's schema type while the public
-            // return stays typed as `z.infer<S>`.
-            exec: () =>
-                tracedGenerateText({
-                    model: model as any,
-                    system,
-                    prompt: user,
-                    output: Output.object({ schema: schema as any }),
-                    abortSignal: timeoutSignal(LLM_CALL_TIMEOUT_MS),
-                    ...toAiSdkTelemetryArgs(
-                        buildLangfuseTelemetry(runName, {
-                            organizationId:
-                                organizationAndTeamData.organizationId,
-                            teamId: organizationAndTeamData.teamId,
-                        }),
-                    ),
-                } as any),
-        });
-
-        return (result.experimental_output ?? result.output) as z.infer<S>;
+            defaultModelOverride: modelConfig.modelOverride,
+            observabilityService: this.observabilityService,
+        }) as Promise<z.infer<S>>;
     }
 
     async categorizeComments(params: {

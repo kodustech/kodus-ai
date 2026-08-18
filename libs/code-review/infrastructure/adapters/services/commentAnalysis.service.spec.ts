@@ -1,74 +1,50 @@
 /**
- * commentAnalysis.service.spec.ts — native model resolution parity
- * (slice 04b, plan 04b-03).
+ * commentAnalysis.service.spec.ts — structured-call delegation.
  *
- * Proves the code-review comment-analysis consumer resolves its structured-LLM
- * model through the per-task entry point owned by the permission service
- * (`permissionService.resolveTaskModel(org, 'codeReview', …)`, matching
- * model-factory) instead of `buildModelFromSlot(byokConfig, 'main', …)`:
- *  - the org + task drive the resolution (no separate raw-config fetch);
- *  - `modelConfig.modelOverride` flows through as the default-model override
- *    (trial forces Kimi; off-BYOK still yields a model);
- *  - the observability span records the resolver's `modelName`;
- *  - secret hygiene: the CIPHERTEXT slot is what reaches `wrapByokModel`; no
- *    decrypted-key marker appears in any console log.
+ * Proves the comment-analysis consumer resolves the routed `codeReview` slot via
+ * the permission service and then runs it through the SHARED structured executor
+ * (`runStructuredReviewCall`) — instead of a hand-rolled resolveTaskModel +
+ * wrapByokModel + tracedGenerateText copy. The executor owns the limiter,
+ * reasoning, span, wire-schema conversion and retry (tested in its own spec), so
+ * here we only assert the delegation boundary:
+ *  - the org + `codeReview` task drive the slot resolution;
+ *  - the CIPHERTEXT slot + trial default + telemetry metadata reach the executor;
+ *  - decryption never happens here (the ciphertext slot is passed through as-is).
  *
- * Seam strategy: mock `resolveTaskModel` (proven in 04b-01) + `wrapByokModel`,
- * and drive the observability span's `exec` through the mocked `tracedGenerateText`
- * seam (NOT MockLanguageModelV4 over Output.object, which hangs).
+ * Seam strategy: mock `resolveTaskSlot` (the permission-service method) and
+ * `runStructuredReviewCall` (the shared executor) — no real model / network.
  */
-
-// resolveReviewAgentModel/commentAnalysis now call permissionService.resolveTaskModel;
-// this mock IS that method (wired into the permission-service stub below).
-const resolveTaskModel = jest.fn();
-
-const wrapByokModel = jest.fn(() => ({ __wrapped: true }));
-jest.mock('@libs/llm/byok-model-wrapper', () => ({
-    wrapByokModel: (...args: any[]) => (wrapByokModel as any)(...args),
-}));
-
-const tracedGenerateText = jest.fn();
-jest.mock('@libs/llm/llm-call', () => ({
-    ...jest.requireActual('@libs/llm/llm-call'),
-    tracedGenerateText: (...args: any[]) =>
-        (tracedGenerateText as any)(...args),
-}));
-jest.mock('@libs/core/log/langfuse', () => ({
-    buildLangfuseTelemetry: () => ({ isEnabled: false, functionId: 'test' }),
-    toAiSdkTelemetryArgs: (cfg: any) => ({ telemetry: cfg }),
+const runStructuredReviewCall = jest.fn();
+jest.mock('@libs/llm/structured-review-call', () => ({
+    runStructuredReviewCall: (...args: any[]) =>
+        (runStructuredReviewCall as any)(...args),
 }));
 
 import { CommentAnalysisService } from './commentAnalysis.service';
 
-describe('CommentAnalysisService — native model resolution', () => {
+describe('CommentAnalysisService — structured-call delegation', () => {
     let service: CommentAnalysisService;
     let observabilityService: { runAiSdkLLMInSpan: jest.Mock };
-    let permissionValidationService: { resolveTaskModel: jest.Mock };
+    let permissionValidationService: { resolveTaskSlot: jest.Mock };
+    const resolveTaskSlot = jest.fn();
 
     const org = { organizationId: 'org-1', teamId: 'team-1' } as any;
+    // A CIPHERTEXT-bearing slot (never plaintext) — the executor decrypts, not us.
+    const CIPHERTEXT_SLOT = {
+        provider: 'openai',
+        apiKey: 'enc-oa',
+        model: 'gpt-4o',
+    };
 
     beforeEach(() => {
         jest.clearAllMocks();
+        resolveTaskSlot.mockResolvedValue(CIPHERTEXT_SLOT);
+        // Irrelevance filter returns no ids → filterComments short-circuits to []
+        // after exactly one structured call.
+        runStructuredReviewCall.mockResolvedValue({ ids: [] });
 
-        // Resolver returns a CIPHERTEXT-bearing slot (never plaintext).
-        resolveTaskModel.mockReturnValue({
-            model: { __model: true },
-            modelName: 'openai:gpt-4o',
-            slot: { provider: 'openai', apiKey: 'enc-oa', model: 'gpt-4o' },
-            verdict: null,
-        });
-        // Irrelevance filter returns no ids → filterComments short-circuits to
-        // [] after exactly one runStructuredLLM call.
-        tracedGenerateText.mockResolvedValue({
-            experimental_output: { ids: [] },
-        });
-
-        observabilityService = {
-            runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
-        };
-        permissionValidationService = {
-            resolveTaskModel,
-        };
+        observabilityService = { runAiSdkLLMInSpan: jest.fn() };
+        permissionValidationService = { resolveTaskSlot };
 
         service = new CommentAnalysisService(
             observabilityService as any,
@@ -76,57 +52,37 @@ describe('CommentAnalysisService — native model resolution', () => {
         );
     });
 
-    it('resolves the codeReview slot from the raw config (not buildModelFromSlot)', async () => {
+    it('resolves the codeReview slot and delegates to the shared structured executor', async () => {
         await service.categorizeComments({
             comments: [{ id: 1, body: 'a comment' } as any],
             organizationAndTeamData: org,
         });
 
-        // The per-task resolver is driven by the org + task (no raw-config fetch).
-        expect(resolveTaskModel).toHaveBeenCalledWith(
-            org,
-            'codeReview',
-            expect.objectContaining({ defaultModelOverride: undefined }),
-        );
-        // The observability span records the resolver's model name.
-        expect(
-            observabilityService.runAiSdkLLMInSpan.mock.calls[0][0].model,
-        ).toBe('openai:gpt-4o');
-    });
-
-    it('keeps the slot ciphertext at the limiter boundary and never logs plaintext', async () => {
-        const spies = [
-            jest.spyOn(console, 'log').mockImplementation(() => {}),
-            jest.spyOn(console, 'warn').mockImplementation(() => {}),
-            jest.spyOn(console, 'error').mockImplementation(() => {}),
-            jest.spyOn(console, 'info').mockImplementation(() => {}),
-            jest.spyOn(console, 'debug').mockImplementation(() => {}),
-        ];
-
-        await service.categorizeComments({
-            comments: [{ id: 1, body: 'a comment' } as any],
-            organizationAndTeamData: org,
-        });
-
-        // wrapByokModel is handed the bare ciphertext slot (no `{ main }` carrier).
-        expect(wrapByokModel).toHaveBeenCalledWith(
-            { __model: true },
+        expect(resolveTaskSlot).toHaveBeenCalledWith(org, 'codeReview');
+        expect(runStructuredReviewCall).toHaveBeenCalledWith(
             expect.objectContaining({
-                byokConfig: {
-                    provider: 'openai',
-                    apiKey: 'enc-oa',
-                    model: 'gpt-4o',
+                byokConfig: CIPHERTEXT_SLOT,
+                defaultModelOverride: undefined,
+                observabilityService,
+                spanName: expect.stringContaining(
+                    `${CommentAnalysisService.name}::`,
+                ),
+                telemetryMetadata: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
                 },
-                role: 'main',
             }),
         );
+    });
 
-        const logged = spies
-            .flatMap((s) => s.mock.calls)
-            .map((args) => args.map((a) => String(a)).join(' '))
-            .join(' | ');
-        expect(logged).not.toContain('PLAINTEXT');
+    it('hands the executor the CIPHERTEXT slot — decryption stays inside the executor', async () => {
+        await service.categorizeComments({
+            comments: [{ id: 1, body: 'a comment' } as any],
+            organizationAndTeamData: org,
+        });
 
-        spies.forEach((s) => s.mockRestore());
+        const arg = runStructuredReviewCall.mock.calls[0][0];
+        expect(arg.byokConfig).toEqual(CIPHERTEXT_SLOT);
+        expect(arg.byokConfig.apiKey).toBe('enc-oa'); // ciphertext, not decrypted here
     });
 });
