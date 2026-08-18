@@ -10,7 +10,6 @@ import { uniqueNonEmpty } from './text-utils';
 
 const ISSUE_KEY_REGEX = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
 const ISSUE_NUMBER_REGEX = /(?:#|\bissue\s*#?\s*|\bissues\s*#?\s*)(\d+)\b/gi;
-const AZURE_BOARDS_REF_REGEX = /\bAB#(\d+)\b/gi;
 const URL_REGEX = /https?:\/\/[^\s)]+/gi;
 const ARI_REGEX = /\bari:[^\s,]+/gi;
 
@@ -26,14 +25,6 @@ export function extractIssueNumbers(text: string): number[] {
     const issueNumbers = new Set<number>();
 
     for (const match of text.matchAll(ISSUE_NUMBER_REGEX)) {
-        const rawNumber = match[1];
-        const parsed = Number.parseInt(rawNumber, 10);
-        if (!Number.isNaN(parsed) && parsed > 0) {
-            issueNumbers.add(parsed);
-        }
-    }
-
-    for (const match of text.matchAll(AZURE_BOARDS_REF_REGEX)) {
         const rawNumber = match[1];
         const parsed = Number.parseInt(rawNumber, 10);
         if (!Number.isNaN(parsed) && parsed > 0) {

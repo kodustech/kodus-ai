@@ -22,6 +22,10 @@ describe('task-references (characterization)', () => {
         ).toEqual([7, 42]);
     });
 
+    it('extractIssueNumbers finds the id inside Azure Boards AB# refs', () => {
+        expect(extractIssueNumbers('feat(AB#5625): x')).toEqual([5625]);
+    });
+
     it('extractLinks pulls + normalizes urls, dropping trailing punctuation', () => {
         expect(
             extractLinks('docs at (https://x.com/a). also https://x.com/a'),
