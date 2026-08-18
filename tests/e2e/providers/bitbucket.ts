@@ -609,10 +609,14 @@ export class BitbucketProvider extends BaseProvider {
 
     // Polls for Kody's conversational reply to an `@kody <question>`
     // comment. Returns the first NEW comment that is neither ours
-    // (`@kody …`) nor empty. Bitbucket does NOT inject the
-    // `<!-- kody-codereview -->` marker into its comments (see
-    // classifyReviewComment above), so unlike the other providers there's
-    // nothing review-specific to filter out here. null at timeout.
+    // (`@kody …`), empty, nor the "Analyzing your request..." acknowledgment
+    // BitbucketResponsePolicy posts immediately after the trigger
+    // (requiresAcknowledgment()=true) — that ack has no
+    // `<!-- kody-codereview -->` marker either, so without this check a poll
+    // landing between the ack and the real answer would return the ack as
+    // if it were Kody's terminal reply (a false green: caught live —
+    // replySample came back as literally "Analyzing your request..." on a
+    // passing run). null at timeout.
     async pollForKodyReply(
         pr: { number: number },
         opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
@@ -630,6 +634,7 @@ export class BitbucketProvider extends BaseProvider {
                         continue;
                     const raw = c.content?.raw ?? "";
                     if (raw.toLowerCase().startsWith("@kody")) continue;
+                    if (raw.includes("Analyzing your request")) continue;
                     if (!raw.trim()) continue;
                     return { id: String(c.id), body: raw.slice(0, 600) };
                 }
