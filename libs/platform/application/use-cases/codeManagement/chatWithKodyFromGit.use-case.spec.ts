@@ -492,4 +492,77 @@ describe('ChatWithKodyFromGitUseCase', () => {
             PlatformType.GITLAB,
         );
     });
+
+    it('answers an @kody mention that starts a brand-new Azure DevOps thread (not a reply)', async () => {
+        // Regression test: getPullRequestReviewComment groups Azure comments
+        // by thread and puts everything AFTER the first comment into
+        // `.replies` — the thread's root comment lives on the thread object
+        // itself. getReviewThreadByCommentId used to only search `.replies`,
+        // so a brand-new `@kody <question>` (the root comment of a fresh
+        // thread, not a reply to an existing one) was never found and Kody
+        // silently never answered. Confirmed live against a real Azure
+        // DevOps PR: a single-comment thread's lone comment never got a
+        // reply.
+        const ORG_UUID = '11111111-1111-4111-8111-111111111111';
+        const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
+        codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValue(
+            {
+                integration: { organization: { uuid: ORG_UUID } },
+                team: { uuid: TEAM_UUID },
+            },
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            {
+                id: 1,
+                threadId: 3239,
+                replies: [],
+                body: '@kody what does this pull request change?',
+                createdAt: '2026-08-18T18:19:00.000Z',
+                author: { id: 'author-1', name: 'alice' },
+            },
+        ]);
+        codeManagementService.updateResponseToComment = jest
+            .fn()
+            .mockResolvedValue({});
+        permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            { allowed: true },
+        );
+
+        await useCase.execute({
+            event: 'ms.vss-code.git-pullrequest-comment-event',
+            platformType: PlatformType.AZURE_REPOS,
+            payload: {
+                resource: {
+                    comment: {
+                        id: 1,
+                        content: '@kody what does this pull request change?',
+                        parentCommentId: 0,
+                        author: { displayName: 'alice', id: 'author-1' },
+                        _links: {
+                            threads: {
+                                href: 'https://dev.azure.com/org/proj/_apis/git/repositories/repo/pullRequests/55/threads/3239',
+                            },
+                        },
+                    },
+                    pullRequest: {
+                        pullRequestId: 55,
+                        repository: { id: 'repo-1', name: 'kodus-e2e' },
+                        sourceRefName: 'refs/heads/feature',
+                        targetRefName: 'refs/heads/main',
+                        description: 'PR description',
+                    },
+                    repository: { project: { name: 'kodus-e2e-project' } },
+                },
+                resourceContainers: { project: { id: 'project-1' } },
+            },
+        } as any);
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    userQuestion: '@kody what does this pull request change?',
+                }),
+            }),
+        );
+    });
 });
