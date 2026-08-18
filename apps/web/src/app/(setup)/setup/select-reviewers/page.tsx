@@ -70,11 +70,7 @@ export default function SelectReviewersPage() {
     const goNext = () => router.push(NEXT_STEP);
 
     const handleContinue = async () => {
-        // Nothing to exclude, or no repos to apply it to → just move on. The
-        // generator config lives per-repo (the toggle is repo-scoped), so we
-        // write the exclusions to each onboarded repo rather than to a global
-        // list that no per-repo screen would surface for editing.
-        if (!teamId || excluded.length === 0 || selectedRepoIds.length === 0) {
+        if (!teamId || selectedRepoIds.length === 0) {
             goNext();
             return;
         }
