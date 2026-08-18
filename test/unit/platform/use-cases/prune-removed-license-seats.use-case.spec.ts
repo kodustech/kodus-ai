@@ -4,6 +4,7 @@ import { LICENSE_SERVICE_TOKEN } from '@libs/ee/license/interfaces/license.inter
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
 import { PruneRemovedLicenseSeatsUseCase } from '@libs/platform/application/use-cases/codeManagement/prune-removed-license-seats.use-case';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { ORGANIZATION_PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -23,6 +24,7 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
         unassignLicenses: jest.Mock;
     };
     let mockCodeManagementService: { getTypeIntegration: jest.Mock };
+    let mockOrganizationParametersService: { findByKey: jest.Mock };
 
     const organizationAndTeamData = {
         organizationId: 'org-1',
@@ -56,6 +58,10 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
             getTypeIntegration: jest.fn().mockResolvedValue('github'),
         };
 
+        mockOrganizationParametersService = {
+            findByKey: jest.fn().mockResolvedValue(undefined),
+        };
+
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 PruneRemovedLicenseSeatsUseCase,
@@ -70,6 +76,10 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
                 {
                     provide: LICENSE_SERVICE_TOKEN,
                     useValue: mockLicenseService,
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: mockOrganizationParametersService,
                 },
             ],
         }).compile();
@@ -215,6 +225,81 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
             });
 
             expect(result.candidates).toEqual([]);
+            expect(mockLicenseService.unassignLicenses).not.toHaveBeenCalled();
+        });
+    });
+
+    // An app or bot is not enumerable through any provider's member listing —
+    // GitHub's orgs.listMembers never returns apps at all, and the pull
+    // request author fallback only reaches back 60 days. Its absence is
+    // therefore never evidence that it "left the organization", so revoking
+    // its seat would silently break reviews for an idle agent.
+    describe('seats held by bots', () => {
+        it('never proposes a bot seat for revocation when the bot is a known bot id', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'still-here' },
+                { git_id: 'quiet-bot' },
+            ]);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { seededBotIds: ['quiet-bot'] },
+            });
+
+            const result = await useCase.execute({
+                organizationAndTeamData,
+                dryRun: true,
+            });
+
+            expect(result.candidates).toEqual([]);
+        });
+
+        it('never proposes a bot seat when the member list still reports it as a bot', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'active-bot' },
+            ]);
+            mockMemberListService.fetch.mockResolvedValue({
+                status: 'ok',
+                members: [{ id: 'active-bot', name: 'ci-agent', type: 'bot' }],
+            });
+
+            const result = await useCase.execute({
+                organizationAndTeamData,
+                dryRun: true,
+            });
+
+            expect(result.candidates).toEqual([]);
+        });
+
+        it('still revokes a human who left even when bots hold seats', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'quiet-bot' },
+                { git_id: 'left-the-company' },
+            ]);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { seededBotIds: ['quiet-bot'] },
+            });
+
+            const result = await useCase.execute({
+                organizationAndTeamData,
+                dryRun: true,
+            });
+
+            expect(result.candidates).toEqual(['left-the-company']);
+        });
+
+        it('does not revoke a bot seat when an explicit gitIds request names it', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'quiet-bot' },
+            ]);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { seededBotIds: ['quiet-bot'] },
+            });
+
+            const result = await useCase.execute({
+                organizationAndTeamData,
+                gitIds: ['quiet-bot'],
+            });
+
+            expect(result.revoked).toEqual([]);
             expect(mockLicenseService.unassignLicenses).not.toHaveBeenCalled();
         });
     });
