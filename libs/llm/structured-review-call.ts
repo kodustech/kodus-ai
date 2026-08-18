@@ -71,7 +71,14 @@ export interface BaseReviewCallParams {
     runName: string;
     organizationId?: string;
     attrs?: Record<string, unknown>;
-    observabilityService: ObservabilityService;
+    /** Observability span wrapper. OPTIONAL: bare callers that never recorded a
+     *  span (e.g. severity classification, reference detection) can omit it and
+     *  still get the shared model policy (limiter, reasoning, timeout, retry) —
+     *  the call just runs without a span, exactly as those consumers did before. */
+    observabilityService?: ObservabilityService;
+    /** Per-call hard-timeout budget (ms). Defaults to LLM_CALL_TIMEOUT_MS (10min).
+     *  Secondary passes that must not hold a pipeline slot pass a shorter one. */
+    timeoutMs?: number;
     /** Force a default model on the env/managed path (no BYOK slot) — the trial
      *  default (e.g. the PR summary's KODUS_TRIAL_MODEL). Ignored when a real slot
      *  resolves. Threaded to both `buildModelFromSlot` and the span's model name. */
@@ -126,6 +133,7 @@ async function runReviewCall<T>(
         organizationId,
         attrs,
         observabilityService,
+        timeoutMs,
         defaultModelOverride,
         telemetryMetadata,
         spanName,
@@ -155,67 +163,66 @@ async function runReviewCall<T>(
         openrouterAllowFallbacks: (mainSlot as any)?.openrouterAllowFallbacks,
     });
 
-    const call = (model: LanguageModel, modelName: string): Promise<T> =>
-        observabilityService
-            .runAiSdkLLMInSpan<any>({
-                spanName: spanName ?? runName,
-                runName,
-                model: modelName,
-                // No 2nd-model cascade: every attempt is the same resolved model.
-                // Tag BYOK-vs-system so deriveTu attributes the spend correctly
-                // (a resolved main slot = the org's own key; no slot = managed/env
-                // default). Derived from slot presence, never from key material.
-                attrs: {
-                    ...(attrs ?? {}),
-                    // Default: not a fallback (there is no 2nd-model cascade here).
-                    // A caller may set `attrs.fallback` to mark its OWN retry
-                    // semantics (e.g. the kody-rules raw-JSON re-issue after a
-                    // structured parse failed) — respect it, the same way `type`
-                    // lets a caller override the slot-derived default.
-                    fallback: (attrs?.fallback as boolean | undefined) ?? false,
-                    type:
-                        (attrs?.type as string | undefined) ??
-                        (mainSlot ? 'byok' : 'system'),
-                },
-                exec: () =>
-                    tracedGenerateText({
-                        model: model as any,
-                        system,
-                        prompt: user,
-                        // Output mode: structured spreads `output: Output.object`,
-                        // text spreads nothing (plain generateText → r.text).
-                        ...mode.outputArgs,
-                        // Honor the resolved slot's per-model tuning (RFC §4.1
-                        // "limits") through the SHARED mapping — same primitive
-                        // every consumer uses, so the review path can't silently
-                        // drop temperature / max-output again.
-                        ...resolveSlotCallOptions(mainSlot),
-                        // Provider-specific reasoning/thinking + OpenRouter routing
-                        // (the other SDK channel; empty when the slot sets none).
-                        providerOptions,
-                        // Pin the AI SDK's OWN retry to 0 (default is 2 in
-                        // ai@7 — verified against node_modules/ai). Without this
-                        // the SDK silently retries UNDER the app-level D-00c
-                        // re-issue AND the wrapper catch — three retry layers
-                        // stacking (RESEARCH Pitfall 1) that can multiply the
-                        // 10-min timeout budget. Collapsing them to the single
-                        // cooldown-aware D-00c owner below is the whole point.
-                        maxRetries: 0,
-                        // Cap hung provider calls at LLM_CALL_TIMEOUT_MS (10min)
-                        // instead of the 30min agent-level fallback — these run
-                        // in parallel shards, so a stuck call must not hold a
-                        // pipeline slot for the full agent budget. Also feeds the
-                        // BYOK limiter cancellation. Matches peer AI-SDK callers.
-                        abortSignal: timeoutSignal(LLM_CALL_TIMEOUT_MS),
-                        ...toAiSdkTelemetryArgs(
-                            buildLangfuseTelemetry(
-                                runName,
-                                telemetryMetadata ?? { organizationId },
-                            ),
-                        ),
-                    } as any),
-            })
-            .then((r: any) => mode.extract(r));
+    // No 2nd-model cascade: every attempt is the same resolved model. Tag
+    // BYOK-vs-system so deriveTu attributes the spend correctly (resolved main
+    // slot = the org's own key; no slot = managed/env default) — derived from
+    // slot presence, never key material. `fallback` defaults false but a caller
+    // may set attrs.fallback to mark its OWN retry (kody-rules raw-JSON re-issue).
+    const spanAttrs = {
+        ...(attrs ?? {}),
+        fallback: (attrs?.fallback as boolean | undefined) ?? false,
+        type:
+            (attrs?.type as string | undefined) ??
+            (mainSlot ? 'byok' : 'system'),
+    };
+
+    const call = (model: LanguageModel, modelName: string): Promise<T> => {
+        const exec = () =>
+            tracedGenerateText({
+                model: model as any,
+                system,
+                prompt: user,
+                // Output mode: structured spreads `output: Output.object`, text
+                // spreads nothing (plain generateText → r.text).
+                ...mode.outputArgs,
+                // Honor the slot's per-model tuning (temperature / max-output)
+                // through the SHARED mapping — the review path can't silently
+                // drop it again.
+                ...resolveSlotCallOptions(mainSlot),
+                // Provider-specific reasoning/thinking + OpenRouter routing (the
+                // other SDK channel; empty when the slot sets none).
+                providerOptions,
+                // Pin the AI SDK's OWN retry to 0 (ai@7 defaults to 2) so it can't
+                // stack under the app-level D-00c re-issue and the wrapper catch.
+                maxRetries: 0,
+                // Cap hung provider calls at `timeoutMs` (default 10min) instead of
+                // the 30min agent-level fallback; also feeds the BYOK limiter
+                // cancellation. A secondary pass may pass a shorter budget.
+                abortSignal: timeoutSignal(timeoutMs ?? LLM_CALL_TIMEOUT_MS),
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        runName,
+                        telemetryMetadata ?? { organizationId },
+                    ),
+                ),
+            } as any);
+
+        // With an observability service, wrap the call in its span (reads usage
+        // from result.usage). Without one — a bare caller that never recorded a
+        // span — run it directly; it still gets the limiter, reasoning, timeout
+        // and retry, only the span is skipped.
+        const run = observabilityService
+            ? observabilityService.runAiSdkLLMInSpan<any>({
+                  spanName: spanName ?? runName,
+                  runName,
+                  model: modelName,
+                  attrs: spanAttrs,
+                  exec,
+              })
+            : exec();
+
+        return run.then((r: any) => mode.extract(r));
+    };
 
     try {
         return await call(mainModel, mainModelName);

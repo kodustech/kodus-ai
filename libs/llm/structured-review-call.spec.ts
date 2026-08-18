@@ -34,7 +34,7 @@ import {
     runStructuredReviewCall,
     runTextReviewCall,
 } from '@libs/llm/structured-review-call';
-import { tracedGenerateText } from '@libs/llm/llm-call';
+import { tracedGenerateText, timeoutSignal } from '@libs/llm/llm-call';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import {
     buildModelFromSlot,
@@ -44,6 +44,7 @@ import {
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
 const mockBuild = buildModelFromSlot as unknown as jest.Mock;
 const mockGetLimiter = getLimiterForSlot as unknown as jest.Mock;
+const mockTimeoutSignal = timeoutSignal as unknown as jest.Mock;
 
 // runAiSdkLLMInSpan just runs the exec and returns its result.
 const observabilityService = {
@@ -143,6 +144,24 @@ describe('runTextReviewCall — plain-text half of the shared executor', () => {
             {},
             'accounts/fireworks/models/deepseek-v4-flash',
         );
+    });
+
+    it('runs WITHOUT an observability service (bare caller) — no span, still returns text', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'no-span', usage: {} });
+        const out = await runTextReviewCall({
+            system: 'sys',
+            user: 'usr',
+            runName: 'bare.run',
+        }); // no observabilityService
+        expect(out).toBe('no-span');
+        expect(observabilityService.runAiSdkLLMInSpan).not.toHaveBeenCalled();
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it('honors a custom timeoutMs (secondary passes cap shorter than 10min)', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: 'x', usage: {} });
+        await runTextReviewCall({ ...textBase, timeoutMs: 90_000 });
+        expect(mockTimeoutSignal).toHaveBeenCalledWith(90_000);
     });
 });
 

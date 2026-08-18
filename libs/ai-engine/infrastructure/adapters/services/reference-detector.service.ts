@@ -10,10 +10,6 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
-import {
     prompt_detect_external_references_system,
     prompt_detect_external_references_user,
 } from '@libs/common/utils/prompts/externalReferences';
@@ -22,12 +18,8 @@ import {
     prompt_kodyrules_detect_references_user,
 } from '@libs/common/utils/prompts/kodyRulesExternalReferences';
 import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
-import {
-    buildModelFromSlot,
-    getModelName,
-    trialDefaultModel,
-} from '@libs/llm/byok-to-vercel';
-import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
+import { getModelName, trialDefaultModel } from '@libs/llm/byok-to-vercel';
+import { runTextReviewCall } from '@libs/llm/structured-review-call';
 
 /**
  * Kodus control markers are instructions to the sync engine, never file
@@ -120,11 +112,8 @@ export class ReferenceDetectorService {
             subscriptionStatus: params.subscriptionStatus,
         });
 
-        // The caller passes the already-resolved slot; build from it.
+        // The caller passes the already-resolved slot.
         const byokSlot = params.byokConfig;
-
-        const model = buildModelFromSlot(byokSlot, {}, defaultModelOverride);
-
         const resolvedModelName = getModelName(byokSlot, defaultModelOverride);
         this.logger.log({
             message: `[REF-DETECTOR-DEBUG] Resolved model: ${resolvedModelName}`,
@@ -162,19 +151,23 @@ export class ReferenceDetectorService {
                   context: params.context,
               });
 
-        const result = await generateText({
-            model,
+        // Run through the shared text executor (Porta 2): builds the same model
+        // (slot, else the trial default), adds the BYOK limiter + the slot's
+        // reasoning + a timeout, and preserves the telemetry. No observability
+        // span here — this call never recorded one, so observabilityService is
+        // omitted (the executor runs the call directly).
+        const raw = await runTextReviewCall({
+            byokConfig: byokSlot,
             system: systemPrompt,
-            prompt: userPrompt,
-            ...toAiSdkTelemetryArgs(
-                buildLangfuseTelemetry('detectExternalReferences', {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                }),
-            ),
+            user: userPrompt,
+            runName: 'detectExternalReferences',
+            defaultModelOverride,
+            organizationId: organizationAndTeamData.organizationId,
+            telemetryMetadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            },
         });
-
-        const raw = result.text;
         if (!raw) {
             return [];
         }
