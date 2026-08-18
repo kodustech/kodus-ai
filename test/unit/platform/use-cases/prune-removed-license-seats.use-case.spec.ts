@@ -302,5 +302,26 @@ describe('PruneRemovedLicenseSeatsUseCase', () => {
             expect(result.revoked).toEqual([]);
             expect(mockLicenseService.unassignLicenses).not.toHaveBeenCalled();
         });
+
+        // A seat granted through "assign by git id" is, by definition, for an
+        // identity the member list could not show. Treating its absence as
+        // "left the organization" would revoke the seat that the escape hatch
+        // was built to grant.
+        it('never proposes a seat that was assigned manually by git id', async () => {
+            mockLicenseService.getAllUsersWithLicense.mockResolvedValue([
+                { git_id: 'unlisted-agent' },
+                { git_id: 'left-the-company' },
+            ]);
+            mockOrganizationParametersService.findByKey.mockResolvedValue({
+                configValue: { manuallyAssignedIds: ['unlisted-agent'] },
+            });
+
+            const result = await useCase.execute({
+                organizationAndTeamData,
+                dryRun: true,
+            });
+
+            expect(result.candidates).toEqual(['left-the-company']);
+        });
     });
 });

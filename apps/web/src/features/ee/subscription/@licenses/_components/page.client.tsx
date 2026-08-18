@@ -246,6 +246,9 @@ export const LicensesPageClient = ({
                         skeleton={<Skeleton className="h-8 w-36" />}>
                         <AssignByGitIdButton
                             onAssigned={() => router.refresh()}
+                            autoLicenseAssignmentConfig={
+                                autoLicenseAssignmentConfig
+                            }
                         />
                     </AsyncBoundary>
                 )}

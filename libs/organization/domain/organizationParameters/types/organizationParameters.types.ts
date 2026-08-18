@@ -19,4 +19,10 @@ export type OrganizationParametersAutoAssignConfig = {
      * discovery run, while genuinely new bots still get picked up.
      */
     seededBotIds?: string[];
+    /**
+     * Seats granted through "assign by git id". That escape hatch exists for
+     * identities the member list cannot show, so their absence from it is never
+     * evidence they left — they are excluded from automatic seat revocation.
+     */
+    manuallyAssignedIds?: string[];
 };

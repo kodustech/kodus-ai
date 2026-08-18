@@ -14,6 +14,11 @@ import { Input } from "@components/ui/input";
 import { magicModal } from "@components/ui/magic-modal";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
+import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
+import {
+    OrganizationParametersConfigKey,
+    type OrganizationParametersAutoAssignConfig,
+} from "@services/parameters/types";
 import { useSuspenseGetConnections } from "@services/setup/hooks";
 import { UserPlusIcon } from "lucide-react";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
@@ -26,8 +31,10 @@ import { assignOrDeassignUserLicenseAction } from "../../_actions/assign-or-deas
  */
 export const AssignByGitIdButton = ({
     onAssigned,
+    autoLicenseAssignmentConfig,
 }: {
     onAssigned: () => void;
+    autoLicenseAssignmentConfig?: OrganizationParametersAutoAssignConfig;
 }) => {
     const { teamId } = useSelectedTeamId();
     const connections = useSuspenseGetConnections(teamId);
@@ -49,6 +56,9 @@ export const AssignByGitIdButton = ({
                         teamId={teamId}
                         gitTool={gitTool}
                         onAssigned={onAssigned}
+                        autoLicenseAssignmentConfig={
+                            autoLicenseAssignmentConfig
+                        }
                     />
                 ))
             }>
@@ -67,10 +77,12 @@ export const AssignByGitIdModal = ({
     teamId,
     gitTool,
     onAssigned,
+    autoLicenseAssignmentConfig,
 }: {
     teamId: string;
     gitTool: string;
     onAssigned: () => void;
+    autoLicenseAssignmentConfig?: OrganizationParametersAutoAssignConfig;
 }) => {
     const [gitId, setGitId] = useState("");
     const [error, setError] = useState<string | undefined>();
@@ -103,6 +115,28 @@ export const AssignByGitIdModal = ({
                 );
                 return;
             }
+
+            // This identity is one the member list could not show, so record
+            // it: otherwise the seat-revocation cron reads its absence as
+            // "left the organization" and reclaims the seat days later.
+            await createOrUpdateOrganizationParameter(
+                OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
+                {
+                    enabled: false,
+                    ignoredUsers: [],
+                    ...autoLicenseAssignmentConfig,
+                    manuallyAssignedIds: Array.from(
+                        new Set([
+                            ...(autoLicenseAssignmentConfig?.manuallyAssignedIds ??
+                                []),
+                            trimmedGitId,
+                        ]),
+                    ),
+                },
+            ).catch(() => {
+                // The seat is already granted; losing the marker only means the
+                // cron may later propose it, which the admin can decline.
+            });
 
             toast({
                 variant: "success",

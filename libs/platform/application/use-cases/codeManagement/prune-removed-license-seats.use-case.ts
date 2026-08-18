@@ -86,8 +86,9 @@ export class PruneRemovedLicenseSeatsUseCase {
         // request author fallback only reaches back 60 days. A bot missing
         // from the list is therefore never evidence that it left the
         // organization — revoking its seat would silently stop reviews on an
-        // agent that simply had a quiet month.
-        const botIds = await this.resolveKnownBotIds(
+        // agent that simply had a quiet month. The same holds for any seat an
+        // admin granted by git id precisely because the list could not show it.
+        const protectedIds = await this.resolveProtectedIds(
             organizationAndTeamData,
             memberList.members,
         );
@@ -95,7 +96,7 @@ export class PruneRemovedLicenseSeatsUseCase {
         const candidates = activeSeats
             .map((seat) => String(seat.git_id))
             .filter((gitId) => !memberIds.has(gitId))
-            .filter((gitId) => !botIds.has(gitId))
+            .filter((gitId) => !protectedIds.has(gitId))
             .filter((gitId) => !requested || requested.has(gitId));
 
         if (dryRun || candidates.length === 0) {
@@ -128,7 +129,7 @@ export class PruneRemovedLicenseSeatsUseCase {
         return { status: 'ok', candidates, revoked, failed };
     }
 
-    private async resolveKnownBotIds(
+    private async resolveProtectedIds(
         organizationAndTeamData: OrganizationAndTeamData,
         members: ReadonlyArray<{ id: string | number; type?: string }>,
     ): Promise<Set<string>> {
@@ -151,13 +152,16 @@ export class PruneRemovedLicenseSeatsUseCase {
             const config =
                 parameter?.configValue as OrganizationParametersAutoAssignConfig;
 
-            for (const gitId of config?.seededBotIds ?? []) {
+            for (const gitId of [
+                ...(config?.seededBotIds ?? []),
+                ...(config?.manuallyAssignedIds ?? []),
+            ]) {
                 botIds.add(String(gitId));
             }
         } catch (error) {
             this.logger.warn({
                 message:
-                    'Could not read known bot ids; a bot seat may be proposed for revocation',
+                    'Could not read protected seat ids; a bot or manually assigned seat may be proposed for revocation',
                 context: PruneRemovedLicenseSeatsUseCase.name,
                 metadata: { ...organizationAndTeamData },
                 error,

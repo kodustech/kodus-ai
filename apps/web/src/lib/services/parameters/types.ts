@@ -150,6 +150,11 @@ export type OrganizationParametersAutoAssignConfig = {
      * run on the API side.
      */
     seededBotIds?: string[];
+    /**
+     * Seats granted through "assign by git id", excluded from automatic seat
+     * revocation because the member list cannot confirm they are still present.
+     */
+    manuallyAssignedIds?: string[];
 };
 
 export interface CockpitMetricsVisibility {
