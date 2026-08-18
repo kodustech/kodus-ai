@@ -1,8 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
-import {
-    LLMModelProvider,
-    MODEL_INPUT_MAX_TOKENS,
-} from '@libs/llm/model-providers';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import { managedModelMaxInputTokens } from '@libs/llm/managed-model-window';
 import { Injectable } from '@nestjs/common';
 import { encoding_for_model, TiktokenModel } from 'tiktoken';
 
@@ -242,10 +240,9 @@ export class TokenChunkingService {
         }
 
         // Only a handful of managed models pin a window that differs from the
-        // caller default; everything else (incl. every BYOK model) uses it.
-        return (
-            MODEL_INPUT_MAX_TOKENS[model as LLMModelProvider] ?? inputMaxTokens
-        );
+        // caller default; the window comes from the provider registry (the single
+        // home), and everything else — incl. every BYOK model — uses the default.
+        return managedModelMaxInputTokens(model) ?? inputMaxTokens;
     }
 
     /**

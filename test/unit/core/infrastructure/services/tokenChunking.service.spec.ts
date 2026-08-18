@@ -1,8 +1,10 @@
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
-import {
-    LLMModelProvider,
-    MODEL_INPUT_MAX_TOKENS,
-} from '@libs/llm/model-providers';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+
+// GEMINI_2_5_PRO's managed input window — moved off MODEL_INPUT_MAX_TOKENS into
+// the Gemini provider's capabilities().maxInputTokens, resolved via
+// managedModelMaxInputTokens. This spec pins the value tokenChunking sizes to.
+const GEMINI_2_5_PRO_MAX_INPUT = 1_000_000;
 
 // Mock logger
 jest.mock('@libs/core/log/logger', () => ({
@@ -55,7 +57,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
     describe('without overrideMaxTokens', () => {
         it('should use model strategy inputMaxTokens when model is provided', () => {
             const modelMaxTokens =
-                MODEL_INPUT_MAX_TOKENS[LLMModelProvider.GEMINI_2_5_PRO];
+                GEMINI_2_5_PRO_MAX_INPUT;
 
             // Single small item that fits in any budget
             const result = service.chunkDataByTokens({
@@ -147,7 +149,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
     describe('with overrideMaxTokens = 0 or falsy', () => {
         it('should fall back to model strategy when overrideMaxTokens is 0', () => {
             const modelMaxTokens =
-                MODEL_INPUT_MAX_TOKENS[LLMModelProvider.GEMINI_2_5_PRO];
+                GEMINI_2_5_PRO_MAX_INPUT;
 
             const result = service.chunkDataByTokens({
                 model: LLMModelProvider.GEMINI_2_5_PRO,
@@ -162,7 +164,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
 
         it('should fall back to model strategy when overrideMaxTokens is undefined', () => {
             const modelMaxTokens =
-                MODEL_INPUT_MAX_TOKENS[LLMModelProvider.GEMINI_2_5_PRO];
+                GEMINI_2_5_PRO_MAX_INPUT;
 
             const result = service.chunkDataByTokens({
                 model: LLMModelProvider.GEMINI_2_5_PRO,
@@ -325,7 +327,7 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
 
         it('should handle negative overrideMaxTokens as not configured', () => {
             const modelMaxTokens =
-                MODEL_INPUT_MAX_TOKENS[LLMModelProvider.GEMINI_2_5_PRO];
+                GEMINI_2_5_PRO_MAX_INPUT;
 
             const result = service.chunkDataByTokens({
                 model: LLMModelProvider.GEMINI_2_5_PRO,

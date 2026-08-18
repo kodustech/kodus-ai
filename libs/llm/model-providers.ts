@@ -6,11 +6,11 @@
  * key stored config, DB rows, and cost attribution. Never rename a member or edit
  * a value without a data migration.
  *
- * TOKEN LIMITS — the fat `MODEL_STRATEGIES` table (provider/modelName/…​) is gone.
- * Its sole consumer (tokenChunking) read exactly one field, `inputMaxTokens`, for
- * exactly three models, and derived the OpenAI tiktoken name from the enum value
- * itself. What survives is `MODEL_INPUT_MAX_TOKENS` — that one field, for those
- * models. Everything else in the old table was dead metadata.
+ * TOKEN LIMITS — the fat `MODEL_STRATEGIES` table (provider/modelName/…) is gone,
+ * and so is its slim successor `MODEL_INPUT_MAX_TOKENS`. Per-model input windows
+ * now live where every other capability does: the provider module's
+ * `capabilities().maxInputTokens`, resolved for a managed id by
+ * `managedModelMaxInputTokens` (libs/llm/managed-model-window.ts). One home.
  */
 
 export enum BYOKProvider {
@@ -57,18 +57,3 @@ export enum LLMModelProvider {
     NOVITA_MOONSHOTAI_KIMI_K2_INSTRUCT = 'novita:moonshotai/kimi-k2-instruct',
 }
 
-/**
- * Per-model INPUT-token ceiling — the only field any consumer read from the old
- * `MODEL_STRATEGIES` table (tokenChunking, to size its chunk budget). Models
- * absent here fall to the caller's default budget, so only the models whose
- * window differs materially from that default need an entry. Keyed by the
- * managed-model id; BYOK models (arbitrary strings) never hit this map and use
- * the default. `VERTEX_CLAUDE_3_5_SONNET` is deprecated/non-functional but keeps
- * its historical value so behavior is byte-identical to the old table.
- */
-export const MODEL_INPUT_MAX_TOKENS: Partial<Record<LLMModelProvider, number>> =
-    {
-        [LLMModelProvider.GEMINI_2_5_PRO]: 1_000_000,
-        [LLMModelProvider.GEMINI_3_1_FLASH_LITE_PREVIEW]: 1_048_576,
-        [LLMModelProvider.VERTEX_CLAUDE_3_5_SONNET]: 200_000,
-    };
