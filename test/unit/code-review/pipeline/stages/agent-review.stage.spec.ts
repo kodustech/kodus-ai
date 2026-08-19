@@ -61,6 +61,18 @@ jest.mock('@libs/llm/llm', () => ({
     LLM: { run: (...args: any[]) => mockLlmRun(...args) },
 }));
 
+// The dedup gate is `!slot && !hasManagedModelKey()` — skip (keep all) only when
+// there is neither a BYOK slot NOR a managed key. These tests exercise the dedup
+// MERGE logic (LLM.run is mocked), not the gate, so force a managed model to be
+// "available". Without this the gate reads real env: hasManagedModelKey()'s cloud
+// path checks API_FIREWORKS_API_KEY (NOT the API_OPEN_AI_API_KEY the tests set),
+// so it passed only via ambient .env and flaked to keep-all when another suite
+// left that env unset — surfacing as "expected 3, received 4".
+jest.mock('@libs/llm/managed-slot', () => ({
+    ...jest.requireActual('@libs/llm/managed-slot'),
+    hasManagedModelKey: jest.fn(() => true),
+}));
+
 jest.mock('ai', () => ({
     generateText: jest.fn().mockResolvedValue({
         object: { classifications: [] },
