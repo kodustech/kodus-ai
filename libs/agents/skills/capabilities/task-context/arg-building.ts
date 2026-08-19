@@ -175,8 +175,12 @@ function getCandidateValuesForParam(
 
     if (intent === 'context') {
         // Resolved tenant ids first: a host mined from PR prose is often from an
-        // unrelated link, which the provider rejects outright.
-        return uniqueNonEmpty([...siteIds, ...siteUrls, ...urlHosts]);
+        // unrelated link, which the provider rejects outright. Bounded because
+        // every candidate costs one sequential remote call downstream.
+        return uniqueNonEmpty([...siteIds, ...siteUrls, ...urlHosts]).slice(
+            0,
+            6,
+        );
     }
 
     if (intent === 'url') {

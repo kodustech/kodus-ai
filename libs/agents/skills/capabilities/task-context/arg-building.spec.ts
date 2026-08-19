@@ -126,6 +126,20 @@ describe('buildTaskContextArgsCandidates (characterization)', () => {
             ]);
         });
 
+        it('bounds the tenant candidates, since each one costs a remote call', () => {
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({
+                    issueKeys: ['CLF-1'],
+                    siteIds: ['s1', 's2', 's3', 's4'],
+                    siteUrls: ['https://a.example', 'https://b.example'],
+                    urlHosts: ['c.example', 'd.example'],
+                }),
+                jiraSig,
+            );
+            expect(out).toHaveLength(6);
+        });
+
         it('prefers the resolved site id over a host mined from PR prose', () => {
             const out = buildTaskContextArgsCandidates(
                 params(),

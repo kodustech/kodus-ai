@@ -141,13 +141,11 @@ export async function fetchTaskContext(
         providerType,
         logger,
     });
-    if (siteHints.siteIds.length || siteHints.siteUrls.length) {
-        hints.siteIds = siteHints.siteIds;
-        hints.siteUrls = uniqueNonEmpty([
-            ...hints.siteUrls,
-            ...siteHints.siteUrls,
-        ]);
-    }
+    // One representation per tenant: ids and urls from the resolver identify the
+    // same sites, so keeping both would probe every tenant twice.
+    hints.siteIds = siteHints.siteIds.length
+        ? siteHints.siteIds
+        : siteHints.siteUrls;
 
     const traces: CapabilityExecutionTrace[] = [];
 
