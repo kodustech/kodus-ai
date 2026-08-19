@@ -135,8 +135,11 @@ export function CuratedModelCard({
     // Strengths/weaknesses live behind ONE consistent "Details" reveal so every
     // card presents the same evidence structure at rest — a flagship with no
     // bullets no longer looks worse than a card that happens to have them.
-    const hasEvidence =
-        model.strengths.length > 0 || model.weaknesses.length > 0;
+    // Backend-sourced catalog entries may omit these arrays — guard against
+    // `.length` on undefined.
+    const strengths = model.strengths ?? [];
+    const weaknesses = model.weaknesses ?? [];
+    const hasEvidence = strengths.length > 0 || weaknesses.length > 0;
 
     return (
         <Card
@@ -269,9 +272,9 @@ export function CuratedModelCard({
 
                         {showDetails && (
                             <div className="flex flex-col gap-1.5">
-                                {model.strengths.length > 0 && (
+                                {strengths.length > 0 && (
                                     <ul className="flex flex-col gap-0.5">
-                                        {model.strengths.map((s) => (
+                                        {strengths.map((s) => (
                                             <li
                                                 key={s}
                                                 className="text-success flex items-start gap-1.5 text-xs">
@@ -284,9 +287,9 @@ export function CuratedModelCard({
                                         ))}
                                     </ul>
                                 )}
-                                {model.weaknesses.length > 0 && (
+                                {weaknesses.length > 0 && (
                                     <ul className="flex flex-col gap-0.5">
-                                        {model.weaknesses.map((w) => (
+                                        {weaknesses.map((w) => (
                                             <li
                                                 key={w}
                                                 className="text-warning flex items-start gap-1.5 text-xs">

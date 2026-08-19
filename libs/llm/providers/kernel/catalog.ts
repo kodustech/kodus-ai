@@ -107,6 +107,10 @@ export function resolveCatalogFrom(
             provider: entry.provider ?? m.id,
             providerKey: m.id,
             providerDisplayName: m.label,
+            // Always emit the evidence arrays so the web `CuratedModel` (which
+            // types them as required) never reads `.length` on undefined.
+            strengths: entry.strengths ?? [],
+            weaknesses: entry.weaknesses ?? [],
         })),
     );
 }
