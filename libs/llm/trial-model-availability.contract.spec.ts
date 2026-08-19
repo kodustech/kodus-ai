@@ -65,12 +65,17 @@ describeIfKey('KODUS_TRIAL_MODEL availability (contract)', () => {
             resp.status === 400 &&
             /max_tokens|output limit|could not finish/i.test(raw);
 
-        expect(
-            resp.ok || ranAnyway,
-            `KODUS_TRIAL_MODEL ('${KODUS_TRIAL_MODEL}') is not answering at ${BASE_URL} — ` +
-                `HTTP ${resp.status}: ${raw.slice(0, 300)}. If Fireworks deprecated/renamed this ` +
-                'id again, every trial org and every no-BYOK self-hosted install just went dark, ' +
-                'silently (see PR #1734).',
-        ).toBe(true);
+        // Jest's expect() takes exactly one argument (no custom message, unlike
+        // Vitest/chai) — throw with the diagnostic so a failure says WHICH
+        // assumption broke, not just "expected true, received false".
+        if (!(resp.ok || ranAnyway)) {
+            throw new Error(
+                `KODUS_TRIAL_MODEL ('${KODUS_TRIAL_MODEL}') is not answering at ${BASE_URL} — ` +
+                    `HTTP ${resp.status}: ${raw.slice(0, 300)}. If Fireworks deprecated/renamed this ` +
+                    'id again, every trial org and every no-BYOK self-hosted install just went dark, ' +
+                    'silently (see PR #1734).',
+            );
+        }
+        expect(resp.ok || ranAnyway).toBe(true);
     }, 35_000);
 });

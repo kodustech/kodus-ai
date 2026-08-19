@@ -84,27 +84,36 @@ describeIfKey('Fireworks structured-output support (contract)', () => {
         });
 
         const raw = await resp.text();
-        expect(
-            resp.ok,
-            `Fireworks rejected a json_schema response_format request for ${KODUS_TRIAL_MODEL} — ` +
-                `HTTP ${resp.status}: ${raw.slice(0, 300)}. If Fireworks stopped honoring strict ` +
-                'json_schema, both shouldEnableJsonSchema() and the trial-fallback ' +
-                'supportsStructuredOutputs flag rest on a false assumption.',
-        ).toBe(true);
+        // Jest's expect() takes exactly one argument (no custom message, unlike
+        // Vitest/chai) — throw with the diagnostic so a failure says WHICH
+        // assumption broke, not just "expected true, received false".
+        if (!resp.ok) {
+            throw new Error(
+                `Fireworks rejected a json_schema response_format request for ${KODUS_TRIAL_MODEL} — ` +
+                    `HTTP ${resp.status}: ${raw.slice(0, 300)}. If Fireworks stopped honoring strict ` +
+                    'json_schema, both shouldEnableJsonSchema() and the trial-fallback ' +
+                    'supportsStructuredOutputs flag rest on a false assumption.',
+            );
+        }
 
         const body = JSON.parse(raw);
         const content = body?.choices?.[0]?.message?.content;
-        expect(
-            typeof content,
-            `Expected a JSON string in choices[0].message.content, got: ${JSON.stringify(body).slice(0, 300)}`,
-        ).toBe('string');
+        if (typeof content !== 'string') {
+            throw new Error(
+                `Expected a JSON string in choices[0].message.content, got: ${JSON.stringify(body).slice(0, 300)}`,
+            );
+        }
 
         // The real proof: the content must be valid JSON matching the exact
         // schema shape, not prose, not a loosely-formatted best-effort blob.
         let parsed: unknown;
-        expect(() => {
-            parsed = JSON.parse(content as string);
-        }, `Model output was not valid JSON despite a json_schema request: ${content}`).not.toThrow();
+        try {
+            parsed = JSON.parse(content);
+        } catch {
+            throw new Error(
+                `Model output was not valid JSON despite a json_schema request: ${content}`,
+            );
+        }
 
         expect(parsed).toEqual(
             expect.objectContaining({
