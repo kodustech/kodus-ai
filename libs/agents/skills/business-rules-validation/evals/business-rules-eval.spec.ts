@@ -1,4 +1,3 @@
-import { resolveAgentModel } from '@libs/llm/agent-model';
 import { runBusinessRulesVerifierEval } from './business-rules-eval';
 
 /**
@@ -18,10 +17,8 @@ const RUN = process.env.RUN_BR_EVAL === '1';
     () => {
         it('measures the verify delta (post-verify vs raw)', async () => {
             const report = await runBusinessRulesVerifierEval({
-                resolveModel: () =>
-                    resolveAgentModel(undefined, {
-                        provider: undefined,
-                    }) as never,
+                // undefined slot → the env/managed default model.
+                slot: undefined,
             });
             // Measurement, not pass/fail — surface the numbers for a human call.
 

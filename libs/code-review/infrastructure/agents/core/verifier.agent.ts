@@ -56,6 +56,10 @@ const submitVerdictTool = {
 
 export interface BuildVerifierSpecParams {
     modelId: string;
+    /** Cost-span run name (e.g. `code-review-bug-verify`) + agentName for the
+     *  verify leaf usage span (bucketed to `review` by deriveArea). */
+    runName?: string;
+    agentName?: string;
     /** Same investigation tools as the finder (grep/readFile/...). */
     tools: ToolRegistry;
     maxSteps?: number;
@@ -63,7 +67,6 @@ export interface BuildVerifierSpecParams {
     providerOptions?: Readonly<Record<string, unknown>>;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the verifier's system prompt is cached across steps. */
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
 }
 
 export function buildVerifierAgentSpec(
@@ -80,8 +83,12 @@ export function buildVerifierAgentSpec(
     ]);
     return {
         id: 'verifier',
+        // Cost-span identity: LLM.run records the ONE verify usage span with this
+        // runName; deriveArea buckets `code-review*` under `review`.
+        runName: params.runName ?? 'code-review-verify',
+        agentName: params.agentName,
+        phase: 'verify',
         systemPrompt: system,
-        modelId: params.modelId,
         tools,
         policies: [new BudgetPolicy()],
         maxSteps: params.maxSteps ?? 6,
@@ -89,7 +96,6 @@ export function buildVerifierAgentSpec(
         // RunState.artifacts — extractVerdict reads that, never re-scans steps.
         resultToolName: VERIFY_DONE_TOOL,
         providerOptions: params.providerOptions,
-        systemProviderOptions: params.systemProviderOptions,
     };
 }
 
@@ -180,12 +186,15 @@ export interface LlmVerifierParams {
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
     /** System-message provider options (e.g. Anthropic prompt caching). */
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
     /** Langfuse telemetry context (org/team/PR/repo) — each per-finding verify
      *  run is named so the trace shows WHICH finding each verdict judged. */
     telemetryMetadata?: LangfuseTelemetryMetadata;
     /** Agent name (finder/security/...) — prefixes the verify observation name. */
     agentName?: string;
+    /** Cost-span run name base (e.g. `code-review-bug`). The verify runs record
+     *  their leaf usage span under `${usageRunName}-verify` so `deriveArea`
+     *  buckets them to `review` (verify is part of the review cost). */
+    usageRunName?: string;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -213,19 +222,24 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         private readonly runner: AgentRunner,
         private readonly params: LlmVerifierParams,
     ) {
+        const verifyRunName = params.usageRunName
+            ? `${params.usageRunName}-verify`
+            : 'code-review-verify';
         this.lightSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
+            runName: verifyRunName,
+            agentName: params.agentName,
             tools: params.tools,
             maxSteps: params.lightMaxSteps ?? 5,
             providerOptions: params.providerOptions,
-            systemProviderOptions: params.systemProviderOptions,
         });
         this.fullSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
+            runName: verifyRunName,
+            agentName: params.agentName,
             tools: params.tools,
             maxSteps: params.fullMaxSteps ?? 10,
             providerOptions: params.providerOptions,
-            systemProviderOptions: params.systemProviderOptions,
         });
     }
 

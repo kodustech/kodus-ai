@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { LLM } from '@libs/llm/llm';
 import { PromptRole } from '@libs/llm/prompt-role';
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -41,7 +42,6 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 
 interface SafeguardPipelineParams {
     organizationAndTeamData: OrganizationAndTeamData;
@@ -546,13 +546,12 @@ export class SafeguardPipelineService {
         // trailing safeParse is unnecessary; a parse/LLM failure throws and we
         // keep the original safe default (return no features → keep all).
         try {
-            return await runStructuredReviewCall({
+            return await LLM.run({
                 schema,
                 system: systemPrompt,
                 user: userPrompt,
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
-                observabilityService: this.observability,
                 byokConfig,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,
@@ -631,13 +630,12 @@ Evidence field in ${params.languageResultPrompt}.`;
         // or LLM failure throws and we keep the suggestion (the same safe default
         // the old safeParse-fail branch produced).
         try {
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 schema,
                 system: systemPrompt,
                 user: userPrompt,
                 runName,
                 organizationId: params.organizationAndTeamData?.organizationId,
-                observabilityService: this.observability,
                 byokConfig: params.byokConfig,
                 attrs: {
                     organizationId:
@@ -734,13 +732,12 @@ Evidence field in ${params.languageResultPrompt}.`;
                 )
                 .join('\n\n');
 
-            const response = await runStructuredReviewCall({
+            const response = await LLM.run({
                 schema: agentTurnSchema,
                 system: systemPrompt,
                 user: conversation,
                 runName: `${runName}_turn${turn}`,
                 organizationId: organizationAndTeamData?.organizationId,
-                observabilityService: this.observability,
                 byokConfig,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,

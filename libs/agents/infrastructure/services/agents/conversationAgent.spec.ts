@@ -6,11 +6,17 @@
  */
 import { mockTextModel } from './__test-utils__/mock-model';
 
-// resolveAgentModel is mocked to return our mock model, so the agent's real
-// loop runs without touching BYOK / a provider.
+// The runner resolves the model via LLM.run -> resolveModelConfig; mock it to
+// return our mock model so the agent's real loop runs without touching BYOK.
 const modelRef: { model: any } = { model: null };
-jest.mock('@libs/llm/agent-model', () => ({
-    resolveAgentModel: () => modelRef.model,
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: () => ({
+        model: modelRef.model,
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    }),
 }));
 
 // Captures the Langfuse TRACE-level attributes the run propagates. Real
@@ -24,13 +30,20 @@ jest.mock('@langfuse/tracing', () => ({
     },
 }));
 
+import { setLlmObservability } from '@libs/llm/llm-observability';
+
 import { ConversationAgentProvider } from './conversationAgent';
 import { CONVERSATION_FALLBACK_MESSAGE } from './conversation-response.util';
 
 const makeModel = (text: string) => mockTextModel(text);
 
+afterEach(() => setLlmObservability(undefined));
+
 function build() {
-    const recordAgentRunUsage = jest.fn().mockResolvedValue(undefined);
+    // Cost is recorded by LLM.run's observability span (the port), not by the
+    // agent. Register a spy port to assert the span carries the conversation attrs.
+    const runAiSdkLLMInSpan = jest.fn((p: any) => p.exec());
+    setLlmObservability({ runAiSdkLLMInSpan } as any);
     const parametersService = {
         findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
     };
@@ -40,17 +53,15 @@ function build() {
         // harness wiring runs regardless of the resolved slot.
         resolveTaskSlot: jest.fn().mockResolvedValue(null),
     };
-    const observabilityService = { recordAgentRunUsage };
     const mcpManagerService = {
         getConnections: jest.fn().mockResolvedValue([]),
     };
     const provider = new ConversationAgentProvider(
         parametersService as any,
         permissionValidationService as any,
-        observabilityService as any,
         mcpManagerService as any,
     );
-    return { provider, recordAgentRunUsage };
+    return { provider, runAiSdkLLMInSpan };
 }
 
 const ctx = {
@@ -61,17 +72,18 @@ const ctx = {
 describe('ConversationAgentProvider (harness wiring)', () => {
     it('runs on the harness and returns the model answer', async () => {
         modelRef.model = makeModel('here is your answer');
-        const { provider, recordAgentRunUsage } = build();
+        const { provider, runAiSdkLLMInSpan } = build();
 
         const res = await provider.execute('hi', ctx);
 
         expect(res).toContain('here is your answer');
-        // cost emitted via the canonical emitter, tagged as the conversation phase
-        expect(recordAgentRunUsage).toHaveBeenCalledTimes(1);
-        expect(recordAgentRunUsage).toHaveBeenCalledWith(
+        // cost recorded by LLM.run's span, tagged with the conversation attrs.
+        expect(runAiSdkLLMInSpan).toHaveBeenCalledWith(
             expect.objectContaining({
-                agentName: 'ConversationalAgent',
-                phase: 'conversation',
+                attrs: expect.objectContaining({
+                    agentName: 'ConversationalAgent',
+                    phase: 'conversation',
+                }),
             }),
         );
     });

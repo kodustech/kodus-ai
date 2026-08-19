@@ -1,7 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
+import { LLM } from '@libs/llm/llm';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import {
     CliSessionClassifiedDecision,
@@ -350,13 +350,12 @@ export class ClassifySessionUseCase {
         // (per-task model routing is Phase 4). `.setTemperature(0)` is likewise
         // dropped — runStructuredReviewCall does not thread temperature; acceptable
         // for this structured extraction. Parity is on the parsed decisions[] mapping.
-        const result = await runStructuredReviewCall({
+        const result = await LLM.run({
             schema: LLMDecisionExtractionSchema,
             system: systemPrompt,
             user: JSON.stringify(userPayload),
             runName: 'ClassifySessionUseCase::classifySession',
             organizationId,
-            observabilityService: this.observabilityService,
             byokConfig: undefined,
         });
 

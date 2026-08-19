@@ -1,4 +1,5 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM } from '@libs/llm/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
@@ -45,10 +46,6 @@ import {
     attachClassification,
     classifyLLMError,
 } from '@libs/llm/error-classifier';
-import {
-    runStructuredReviewCall,
-    runTextReviewCall,
-} from '@libs/llm/structured-review-call';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
@@ -143,7 +140,7 @@ export class CommentManagerService implements ICommentManagerService {
         // reasoning. Temperature handling is preserved (resolveSlotCallOptions
         // withholds it on models that reject sampling params, e.g. kimi-k2.7-code
         // and Anthropic 4.7+).
-        return runTextReviewCall({
+        return LLM.run({
             byokConfig: slot,
             system: systemPrompt,
             user: userPrompt,
@@ -153,7 +150,6 @@ export class CommentManagerService implements ICommentManagerService {
             organizationId: metadata?.organizationId,
             telemetryMetadata: metadata,
             defaultModelOverride: KODUS_TRIAL_MODEL,
-            observabilityService: this.observabilityService,
         });
     }
 
@@ -1811,7 +1807,7 @@ ${reviewOptions}
             // the downstream clustering/enrichment mapping. `prompt_repeated_*` is
             // a payload-taking prompt fn (the builder called it with the payload),
             // so it is invoked explicitly here with the language.
-            const clustered = await runStructuredReviewCall({
+            const clustered = await LLM.run({
                 schema: repeatedClusteringSchema,
                 system: prompt_repeated_suggestion_clustering_system({
                     language,
@@ -1819,7 +1815,6 @@ ${reviewOptions}
                 user: userPrompt,
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
-                observabilityService: this.observabilityService,
                 byokConfig,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,

@@ -320,10 +320,19 @@ export interface ReviewAgentOutput {
 // now commented out.
 
 export interface AgentLoopInput {
-    model: LanguageModel;
+    // No built model here — LLM.run resolves it from the slot (in AgentLoopSecrets.
+    // byokConfig). The finder reads the slot's model id for the strict-tools
+    // decision; nothing downstream needs a pre-built LanguageModel.
     systemPrompt: string;
     userPrompt: string;
     agentName?: string; // e.g. 'kodus-bug-review-agent' — used as Langfuse observation name
+    /** Cost-span run name base for THIS review category (e.g. `code-review-bug`).
+     *  Threaded onto every leaf model call the review makes (finder + verify +
+     *  resample + prose-recovery) so `deriveArea` buckets them all under
+     *  `review`. LLM.run records the ONE usage span per call — there is no
+     *  separate aggregate recording. Absent → the finder default (`code-review`),
+     *  which still buckets to `review`. */
+    usageRunName?: string;
     telemetryMetadata?: LangfuseTelemetryMetadata;
     maxSteps?: number;
     onStepFinish?: (event: any) => void;

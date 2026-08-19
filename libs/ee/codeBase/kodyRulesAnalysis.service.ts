@@ -1,9 +1,9 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { LLM } from '@libs/llm/llm';
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 
@@ -325,7 +325,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         try {
             const runName = 'extractKodyRuleIdsFromContent';
 
-            const extraction = await runStructuredReviewCall({
+            const extraction = await LLM.run({
                 byokConfig,
                 schema: kodyRulesExtractIdSchema,
                 system: prompt_kodyrules_extract_id_system(),
@@ -339,7 +339,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                     prNumber,
                     suggestionId: suggestion?.id,
                 },
-                observabilityService: this.observabilityService,
             });
 
             if (extraction?.ids?.length) {
@@ -592,7 +591,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         organizationId: string | undefined,
         prNumber: number,
     ): Promise<KodyRulesClassifierSchema> {
-        return runStructuredReviewCall({
+        return LLM.run({
             byokConfig,
             schema: kodyRulesClassifierSchema,
             system: prompt_kodyrules_classifier_system(),
@@ -603,7 +602,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 teamId: context?.organizationAndTeamData?.teamId,
                 pullRequestId: prNumber,
             },
-            observabilityService: this.observabilityService,
         });
     }
 
@@ -619,7 +617,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         organizationId: string | undefined,
         prNumber: number,
     ): Promise<string> {
-        const result = await runStructuredReviewCall({
+        const result = await LLM.run({
             byokConfig,
             schema: kodyRulesUpdateSchema,
             system: prompt_kodyrules_updatestdsuggestions_system(),
@@ -630,7 +628,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 teamId: context?.organizationAndTeamData?.teamId,
                 pullRequestId: prNumber,
             },
-            observabilityService: this.observabilityService,
         });
 
         return JSON.stringify(result ?? {});
@@ -646,7 +643,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         organizationId: string | undefined,
         prNumber: number,
     ): Promise<z.infer<typeof kodyRulesGeneratorSchema>> {
-        return runStructuredReviewCall({
+        return LLM.run({
             byokConfig,
             schema: kodyRulesGeneratorSchema,
             system: prompt_kodyrules_suggestiongeneration_system(),
@@ -657,7 +654,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 teamId: context?.organizationAndTeamData?.teamId,
                 pullRequestId: prNumber,
             },
-            observabilityService: this.observabilityService,
         });
     }
 

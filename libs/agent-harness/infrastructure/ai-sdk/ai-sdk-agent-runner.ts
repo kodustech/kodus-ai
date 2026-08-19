@@ -1,33 +1,28 @@
 /**
- * agent-harness — AgentRunner over the Vercel AI SDK (the thin core loop).
+ * agent-harness — AgentRunner over `LLM.run` (the thin core loop).
  *
  * This is the ONLY agent loop in the harness. It maps our domain-agnostic
- * Policy seams onto the AI SDK's documented seams:
+ * Policy seams onto the AI SDK's documented loop seams:
  *   policy.shouldStop   -> stopWhen (OR semantics) + hard stepCountIs fail-open
- *   policy.prepareStep  -> prepareStep (messages / activeTools / model / note)
+ *   policy.prepareStep  -> prepareStep (messages / activeTools / note)
  *   policy.onStepFinish -> onStepFinish (progress marking, trace)
  *
- * It contains NO domain logic and NO cross-cutting concern — every concern
- * is a Policy injected via AgentSpec. That is the whole point: the loop is
- * thin and stable; behavior lives in composable, unit-testable policies.
+ * It contains NO domain logic and NO cross-cutting model concern. The model
+ * itself — BYOK resolution, tuning, reasoning, prompt-cache, the observability
+ * span that records usage — is owned by `LLM.run`; the runner passes ONLY the
+ * loop (tools + the seams above) and the slot, and maps the result onto a
+ * RunState. That is the whole point: one door to the model (`LLM.run`), and the
+ * loop stays thin, stable, and unit-testable via composable policies.
  */
-import {
-    generateObject,
-    generateText,
-    jsonSchema,
-    NoSuchToolError,
-    stepCountIs,
-    tool as aiTool,
-    type LanguageModel,
-    type ModelMessage,
-} from 'ai';
+import { jsonSchema, tool as aiTool, type ModelMessage } from 'ai';
+import { LLM, type AgentLoopResult } from '@libs/llm/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import type {
     AgentRunInput,
     AgentRunner,
     AgentSpec,
 } from '../../domain/contracts/agent.contract';
-import type { ModelResolver } from '../../domain/contracts/model.contract';
 import type {
     AgentPolicy,
     StepDirectives,
@@ -43,62 +38,26 @@ import type {
 } from '../../domain/contracts/run-state.contract';
 import type { ToolContext } from '../../domain/contracts/tool.contract';
 import { isAiSdkToolSource } from './ai-sdk-tool-registry';
-import {
-    markLastToolForCache,
-    markLatestUserForCache,
-} from './prompt-cache';
-
-/**
- * Tool-call self-heal for the AI SDK `repairToolCall` seam. When a tool call's
- * input fails schema validation, re-ask the SAME model to correct the arguments
- * against the tool's schema. Fully fail-soft: a wrong tool NAME can't be repaired
- * here (pass through), and ANY error resolves to `null` — exactly the SDK's
- * default "don't repair, let the step fail" behaviour. Extracted (not inlined)
- * so the repair policy is unit-testable in isolation.
- */
-export async function repairInvalidToolInput(opts: {
-    model: LanguageModel;
-    abortSignal?: AbortSignal;
-    toolCall: { toolName: string; input: unknown; [k: string]: unknown };
-    inputSchema: (o: { toolName: string }) => PromiseLike<unknown>;
-    error: unknown;
-}): Promise<Record<string, unknown> | null> {
-    const { model, abortSignal, toolCall, inputSchema, error } = opts;
-    if (NoSuchToolError.isInstance(error)) {
-        return null;
-    }
-    try {
-        const { object: repaired } = await generateObject({
-            model,
-            schema: jsonSchema(
-                (await inputSchema({ toolName: toolCall.toolName })) as any,
-            ),
-            abortSignal,
-            prompt: [
-                `The tool "${toolCall.toolName}" was called with arguments that failed schema validation.`,
-                `Invalid arguments: ${JSON.stringify(toolCall.input)}`,
-                `Validation error: ${(error as Error)?.message ?? String(error)}`,
-                `Return corrected arguments that satisfy the schema. Keep the original intent; only fix what is malformed.`,
-            ].join('\n'),
-        });
-        return { ...toolCall, input: JSON.stringify(repaired) };
-    } catch {
-        // Repair itself failed → behave exactly as before (fail the call).
-        return null;
-    }
-}
-
-/**
- * SDK-native per-step retry for the agentic loop. Distinct from the one-shot
- * app-level re-issue (that lives in `@libs/llm/retry-policy`, with the error
- * taxonomy + cooldown the harness intentionally stays free of). 3 retries
- * (4 attempts) survives the fast empty-body responses some BYOK providers return
- * (Neuralwatt/GLM, Synthetic, Z.AI) without extending the per-call timeout.
- */
-const AGENT_STEP_MAX_RETRIES = 3;
 
 export class AiSdkAgentRunner implements AgentRunner {
-    constructor(private readonly models: ModelResolver<LanguageModel>) {}
+    /**
+     * The runner no longer resolves the model — `LLM.run` does, from `slot`.
+     * `modelOpts` carries the limiter/reporter knobs LLM.run threads into
+     * resolution (the finder passes its own queueTimeoutMs / provider).
+     */
+    constructor(
+        private readonly slot: NormalizedModel | undefined,
+        private readonly modelOpts: {
+            organizationId?: string;
+            reporter?: (input: {
+                organizationId?: string;
+                provider: string;
+                errorMessage: string;
+            }) => void;
+            queueTimeoutMs?: number;
+            provider?: string;
+        } = {},
+    ) {}
 
     async run(
         spec: AgentSpec,
@@ -163,182 +122,125 @@ export class AiSdkAgentRunner implements AgentRunner {
         );
 
         let stopReason: string | undefined;
+        let result: AgentLoopResult;
 
-        let result: Awaited<ReturnType<typeof generateText>>;
+        // ── loop seams built from the policies; forwarded to LLM.run, which owns
+        // the model / tuning / reasoning / prompt-cache / observability span. ──
 
-        // Resolve once so the tool-call repair path reuses the SAME model
-        // (correct BYOK attribution — the repair must not fall to a system model).
-        const model = this.models.resolve(spec.modelId);
+        // shouldStop: stop if ANY policy says so (LLM.run appends stepCountIs).
+        const policyStopWhen = async ({ steps: aiSteps }: any) => {
+            const view = buildView(
+                aiSteps?.length ?? 0,
+                messages,
+                allToolNames,
+            );
+            for (const p of spec.policies) {
+                if (p.shouldStop && (await p.shouldStop(view))) {
+                    stopReason = p.name;
+                    emit(p.name, { kind: 'stop' });
+                    return true;
+                }
+            }
+            return false;
+        };
 
-        // Broad prompt-cache breakpoints. `systemProviderOptions` is the opaque
-        // inline-cache hint the domain resolved from the provider registry —
-        // present ONLY for vendors that honor inline markers (Anthropic family);
-        // the implicit-cache ones (OpenAI/Gemini/Azure) leave it undefined, so
-        // this whole block is a no-op for them. Gate on a real multi-step loop:
-        // on a single call the write-side cache premium never pays back. The
-        // system prompt is marked below via `system`; here we add the two other
-        // breakpoints (last tool + latest user message) the harness owns.
-        const cacheHint =
-            spec.maxSteps > 1 ? spec.systemProviderOptions : undefined;
-        const callMessages = cacheHint
-            ? markLatestUserForCache(messages, cacheHint)
-            : messages;
-        const callTools = cacheHint
-            ? markLastToolForCache(toolMap, cacheHint)
-            : toolMap;
+        // prepareStep: merge directives from all policies. Model switching is NOT
+        // applied — every consumer runs a single model and LLM.run owns it, so a
+        // policy's modelId stays trace-only (mergeDirectives records the conflict).
+        const policyPrepareStep = async ({
+            stepNumber,
+            messages: msgs,
+        }: any) => {
+            const active = [...allToolNames];
+            const view = buildView(stepNumber, msgs ?? messages, active);
+            const merged = await this.mergeDirectives(spec.policies, view, emit);
+            const out: Record<string, unknown> = {};
+
+            if (merged.activeTools) {
+                out.activeTools = merged.activeTools;
+            }
+            // injectNote -> trailing message (cache-prefix friendly)
+            if (merged.injectNote) {
+                out.messages = [
+                    ...(msgs ?? messages),
+                    {
+                        role: merged.injectNote.role,
+                        content: merged.injectNote.content,
+                    },
+                ];
+            } else if (merged.messages) {
+                out.messages = merged.messages.map(toModelMessage);
+            }
+            // HARD invariant: the conversation array must NEVER contain a
+            // system-role message — Google Gemini rejects any system message that
+            // is not the first message. Coerce any stray system turn to a user turn.
+            if (Array.isArray(out.messages)) {
+                out.messages = sanitizeNoSystem(out.messages as ModelMessage[]);
+            }
+            return out;
+        };
+
+        // onStepFinish: collect the step + run policy hooks.
+        const stepCollector = async (event: any) => {
+            steps.push({
+                index: steps.length,
+                message: eventToMessage(event),
+                usage: event?.usage ? readAiSdkUsage(event.usage) : undefined,
+            });
+            const view = buildView(steps.length, messages, allToolNames);
+            for (const p of spec.policies) {
+                if (p.onStepFinish) await p.onStepFinish(view);
+            }
+        };
 
         try {
-            result = await generateText({
-                model,
-                // Cap SDK-level retries to 3 on the main loop. Some BYOK
-                // providers (Neuralwatt/GLM, Synthetic, Z.AI) intermittently
-                // return empty response bodies (output: null, usage.total: 0).
-                // These are fast failures — the provider returns quickly —
-                // so extra retries don't burn meaningful timeout budget.
-                // At 3 retries (4 total attempts) the loop survives transient
-                // empty-body responses without changing the per-call timeout.
-                maxRetries: AGENT_STEP_MAX_RETRIES,
-                // When the domain supplies systemProviderOptions (e.g. Anthropic
-                // prompt caching), send the system prompt as a system message
-                // carrying those options; otherwise a plain string.
-                system: spec.systemProviderOptions
-                    ? ({
-                          role: 'system',
-                          content: spec.systemPrompt,
-                          providerOptions: spec.systemProviderOptions,
-                      } as any)
-                    : spec.systemPrompt,
-                messages: callMessages,
-                tools: callTools,
-                // Tool-call self-heal (AI SDK stable): when the model emits a
-                // tool call whose input fails schema validation, re-ask the SAME
-                // model to fix the arguments against the tool's schema instead of
-                // failing the step. Fires only on a failed call (rare), reuses the
-                // resolved BYOK model, and is fully fail-soft — any error returns
-                // null, which is exactly today's "don't repair, let it fail"
-                // behavior. A wrong tool NAME (NoSuchToolError) is not repairable
-                // here, so pass it through unchanged.
-                // Cast: the helper returns the original tool call with a repaired
-                // `input` (a superset of LanguageModelV4ToolCall); the SDK's
-                // generic return type can't see the spread preserves the shape.
-                repairToolCall: ((opts: {
-                    toolCall: { toolName: string; input: unknown };
-                    inputSchema: (o: {
-                        toolName: string;
-                    }) => PromiseLike<unknown>;
-                    error: unknown;
-                }) =>
-                    repairInvalidToolInput({
-                        model,
-                        abortSignal: ctx.signal,
-                        toolCall: opts.toolCall,
-                        inputSchema: opts.inputSchema,
-                        error: opts.error,
-                    })) as any,
-                // Generic model-call config (omit -> provider default).
+            // ── the model call: ONE door. LLM.run resolves the slot → model +
+            // tuning + reasoning + prompt-cache, runs the loop from these seams,
+            // and records the run's usage in ONE span. The harness supplies only
+            // the loop; it never touches the model nor records usage. ──
+            result = await LLM.run({
+                byokConfig: this.slot,
+                organizationId: this.modelOpts.organizationId,
+                reporter: this.modelOpts.reporter,
+                queueTimeoutMs: this.modelOpts.queueTimeoutMs,
+                provider: this.modelOpts.provider,
+                // Observability naming: runName drives the Langfuse observation +
+                // cost row; agentName/phase are the cost attrs; spanName the span.
+                runName: spec.runName ?? spec.agentName ?? spec.id,
+                spanName: spec.spanName,
+                attrs: {
+                    agentName: spec.agentName ?? spec.id,
+                    ...(spec.phase ? { phase: spec.phase } : {}),
+                    source: 'harness',
+                },
+                system: spec.systemPrompt,
+                messages,
+                // Sampling / max-output overrides (else the slot's own defaults).
                 ...(spec.temperature != null
                     ? { temperature: spec.temperature }
                     : {}),
                 ...(spec.maxOutputTokens != null
                     ? { maxOutputTokens: spec.maxOutputTokens }
                     : {}),
-                // Cancellation / timeout: forwarded from the caller (the domain
-                // composes parent-job signal + a hard per-agent timeout into it).
-                abortSignal: ctx.signal,
-                // Opaque provider options (reasoning/thinking config) — domain-built.
+                // Reasoning override: the finder passes config-derived
+                // providerOptions; unset → LLM.run derives from the slot.
                 ...(spec.providerOptions
-                    ? { providerOptions: spec.providerOptions as any }
+                    ? {
+                          providerOptions: spec.providerOptions as Record<
+                              string,
+                              unknown
+                          >,
+                      }
                     : {}),
-                // Opaque per-run telemetry / runtime context → AI SDK 7
-                // `telemetry` + `runtimeContext`, verbatim. The domain builds
-                // the SDK shape (e.g. toAiSdkTelemetryArgs); the harness
-                // forwards and never interprets — no vendor knowledge here.
-                ...(input.telemetry ? { telemetry: input.telemetry } : {}),
-                ...(input.runtimeContext
-                    ? { runtimeContext: input.runtimeContext }
-                    : {}),
-                // shouldStop seam: stop if ANY policy says so; hard fail-open at maxSteps.
-                stopWhen: [
-                    async ({ steps: aiSteps }: any) => {
-                        const view = buildView(
-                            aiSteps?.length ?? 0,
-                            messages,
-                            allToolNames,
-                        );
-
-                        for (const p of spec.policies) {
-                            if (p.shouldStop && (await p.shouldStop(view))) {
-                                stopReason = p.name;
-                                emit(p.name, { kind: 'stop' });
-                                return true;
-                            }
-                        }
-                        return false;
-                    },
-                    stepCountIs(spec.maxSteps),
-                ],
-                // prepareStep seam: merge directives from all policies in order.
-                prepareStep: async ({ stepNumber, messages: msgs }: any) => {
-                    const active = [...allToolNames];
-                    const view = buildView(
-                        stepNumber,
-                        msgs ?? messages,
-                        active,
-                    );
-                    const merged = await this.mergeDirectives(
-                        spec.policies,
-                        view,
-                        emit,
-                    );
-                    const out: Record<string, unknown> = {};
-
-                    if (merged.activeTools) {
-                        out.activeTools = merged.activeTools;
-                    }
-                    if (merged.modelId) {
-                        out.model = this.models.resolve(merged.modelId);
-                    }
-                    // injectNote -> trailing message (cache-prefix friendly)
-                    if (merged.injectNote) {
-                        out.messages = [
-                            ...(msgs ?? messages),
-                            {
-                                role: merged.injectNote.role,
-                                content: merged.injectNote.content,
-                            },
-                        ];
-                    } else if (merged.messages) {
-                        out.messages = merged.messages.map(toModelMessage);
-                    }
-                    // HARD invariant: the model `system` prompt is passed via
-                    // generateText({ system }). The conversation array must NEVER
-                    // contain a system-role message — Google Gemini rejects any
-                    // system message that is not the first message. Coerce any
-                    // stray system turn (from any policy/path) to a user turn.
-                    if (Array.isArray(out.messages)) {
-                        out.messages = sanitizeNoSystem(
-                            out.messages as ModelMessage[],
-                        );
-                    }
-                    return out;
-                },
-                onStepFinish: async (event: any) => {
-                    const step: RunStep = {
-                        index: steps.length,
-                        message: eventToMessage(event),
-                        usage: event?.usage
-                            ? readAiSdkUsage(event.usage)
-                            : undefined,
-                    };
-                    steps.push(step);
-                    const view = buildView(
-                        steps.length,
-                        messages,
-                        allToolNames,
-                    );
-                    for (const p of spec.policies) {
-                        if (p.onStepFinish) await p.onStepFinish(view);
-                    }
+                // Cancellation / timeout composed by the caller (parent + hard timeout).
+                signal: ctx.signal,
+                telemetryMetadata: input.telemetryMetadata as any,
+                loop: {
+                    tools: toolMap,
+                    maxSteps: spec.maxSteps,
+                    stopWhen: [policyStopWhen],
+                    prepareStep: policyPrepareStep,
+                    onStepFinish: stepCollector,
                 },
             });
         } catch (err) {
@@ -504,7 +406,7 @@ export class AiSdkAgentRunner implements AgentRunner {
             // Mid-conversation steering notes MUST be a user turn, not system:
             // providers like Google Gemini reject system messages that aren't
             // the first message. The real system prompt stays at the top via
-            // generateText({ system }). This matches the legacy loop's pattern.
+            // LLM.run({ system }). This matches the legacy loop's pattern.
             merged.injectNote = { role: 'user', content: notes.join('\n\n') };
         }
         return merged;
@@ -528,7 +430,7 @@ export class AiSdkAgentRunner implements AgentRunner {
 }
 
 /** Coerce any system-role message in a conversation array to a user turn.
- *  The real system prompt is carried by generateText({ system }); providers
+ *  The real system prompt is carried by LLM.run({ system }); providers
  *  like Google Gemini reject system messages outside the first position. */
 function sanitizeNoSystem(messages: ModelMessage[]): ModelMessage[] {
     return messages.map((m) =>

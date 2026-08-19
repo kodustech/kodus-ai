@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { LLM } from '@libs/llm/llm';
 import { createLogger } from '@libs/core/log/logger';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     prompt_validateCodeSemantics,
     ValidateCodeSemanticsResult,
@@ -44,7 +44,7 @@ export class SuggestionLLMValidator {
             // managed default; per-task routing is Phase 4). The outer LangChain
             // span wrapper is dropped — runStructuredReviewCall owns the single
             // span path (Q4). setTemperature(0) is likewise dropped (not threaded).
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 schema: validateCodeSemanticsSchema,
                 system: '',
                 user: prompt_validateCodeSemantics(payload),
@@ -55,7 +55,6 @@ export class SuggestionLLMValidator {
                     filePath: payload.filePath,
                     teamId: organizationAndTeamData?.teamId,
                 },
-                observabilityService: this.observabilityService,
                 byokConfig: undefined,
             });
 
@@ -89,7 +88,7 @@ export class SuggestionLLMValidator {
             // is intentionally dropped (RESEARCH Pattern 1 — consolidation; routing
             // is Phase 4). Outer LangChain span wrapper dropped — one span path via
             // runStructuredReviewCall (Q4). setTemperature(0) dropped (not threaded).
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 schema: checkSuggestionSimplicitySchema,
                 system: prompt_checkSuggestionSimplicity_system(),
                 user: prompt_checkSuggestionSimplicity_user({
@@ -104,7 +103,6 @@ export class SuggestionLLMValidator {
                     teamId: organizationAndTeamData?.teamId,
                     suggestionId: suggestion.id,
                 },
-                observabilityService: this.observabilityService,
                 byokConfig: undefined,
             });
 

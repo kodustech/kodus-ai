@@ -10,6 +10,9 @@
  * output onto the same downstream shapes the STRING parser produced.
  */
 jest.mock('@libs/llm/byok-to-vercel', () => ({
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
     buildModelFromSlot: jest.fn(() => ({ __model: 'main' })),
     getModelName: jest.fn(() => 'test-model'),
 }));

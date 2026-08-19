@@ -1,4 +1,5 @@
 import { forwardRef, Inject, Injectable } from '@nestjs/common';
+import { LLM } from '@libs/llm/llm';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     ICodeBaseConfigService,
@@ -44,10 +45,6 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { GLOBAL_RULES_TRIAL_IMPORT_LIMIT } from '@libs/kodyRules/domain/interfaces/global-rules-source.interface';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
-import {
-    runStructuredReviewCall,
-    runTextReviewCall,
-} from '@libs/llm/structured-review-call';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 import { hasNonManagedCredential, LLM_TASK } from '@libs/llm/byok-config';
 import { ObservabilityService } from '@libs/core/log/observability.service';
@@ -2225,7 +2222,7 @@ export class KodyRulesSyncService {
         const mainRun = options?.runName ?? 'kodyRulesFileToRules';
 
         try {
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 byokConfig: byokConfigValue ?? undefined,
                 schema: kodyRulesIDEGeneratorSchema,
                 organizationId:
@@ -2236,7 +2233,6 @@ export class KodyRulesSyncService {
                     filePath: params.filePath,
                     fallback: false,
                 },
-                observabilityService: this.observabilityService,
                 system: [
                                 'Convert repository rule files (Cursor, Claude, GitHub rules, coding standards, etc.) into a JSON array of Kody Rules. IMPORTANT: Enforce exactly one rule per file. If multiple candidate rules exist, merge them COMPREHENSIVELY into one unified rule that preserves all essential details.',
                                 'Output ONLY a valid JSON object with a "rules" array. Format: {"rules": [...]}. If no rules, output {"rules": []}. No comments or explanations.',
@@ -2355,7 +2351,7 @@ export class KodyRulesSyncService {
                 // extractJsonArray can salvage.
                 // Raw-JSON re-issue through the shared text executor (Porta 2):
                 // same resolved slot as the structured call above, plain-text out.
-                const raw = await runTextReviewCall({
+                const raw = await LLM.run({
                     byokConfig: byokConfigValue ?? undefined,
                     system: 'Return ONLY the JSON array for the rules, without code fences. Include a "sourceSnippet" field when you can copy an exact excerpt from the file for each rule. No explanations.',
                     user: `File: ${params.filePath}\n\nContent:\n${effectiveContent}`,
@@ -2368,7 +2364,6 @@ export class KodyRulesSyncService {
                     },
                     organizationId:
                         params.organizationAndTeamData?.organizationId,
-                    observabilityService: this.observabilityService,
                 });
 
                 const parsed = this.extractJsonArray(raw);
@@ -2436,7 +2431,7 @@ export class KodyRulesSyncService {
             .join('\n\n');
 
         try {
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 byokConfig: byokConfigValue ?? undefined,
                 schema: kodyRulesIDEGeneratorSchemaOnboarding,
                 organizationId:
@@ -2447,7 +2442,6 @@ export class KodyRulesSyncService {
                     filesCount: params.files.length,
                     fallback: false,
                 },
-                observabilityService: this.observabilityService,
                 system: [
                     'You will receive multiple repository rule files. Return ONLY a JSON object { "rules": [...] } (no code fences) with up to 3 MOST IMPORTANT Kody Rules across all files (prioritize critical/high impact, security/compliance, or broad applicability). If none, return { "rules": [] }.',
                     'Each rule must include: title, rule, path, sourcePath, severity ("low"|"medium"|"high"|"critical"), optional scope ("file"|"pull-request"), examples: [{ "snippet": string, "isCorrect": boolean }], and optional sourceSnippet.',
@@ -2480,7 +2474,7 @@ export class KodyRulesSyncService {
             try {
                 // Raw-JSON re-issue through the shared text executor (Porta 2):
                 // same resolved slot as the structured call above, plain-text out.
-                const raw = await runTextReviewCall({
+                const raw = await LLM.run({
                     byokConfig: byokConfigValue ?? undefined,
                     system: [
                         'Return ONLY a JSON object { "rules": [...] } (no code fences, no text), capped at 3 rules.',
@@ -2499,7 +2493,6 @@ export class KodyRulesSyncService {
                     },
                     organizationId:
                         params.organizationAndTeamData?.organizationId,
-                    observabilityService: this.observabilityService,
                 });
 
                 const parsed = this.extractJsonArray(raw);
@@ -2554,7 +2547,7 @@ export class KodyRulesSyncService {
             .join('\n\n');
 
         try {
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 byokConfig: byokConfigValue ?? undefined,
                 schema: kodyRulesManifestGeneratorSchemaOnboarding,
                 organizationId:
@@ -2565,7 +2558,6 @@ export class KodyRulesSyncService {
                     filesCount: params.files.length,
                     fallback: false,
                 },
-                observabilityService: this.observabilityService,
                 system: [
                     'You will receive dependency manifests (package.json, requirements.txt, pyproject.toml, go.mod, Cargo.toml, pom.xml, build.gradle(.kts), csproj, Gemfile, mix.exs, etc.). Use them ONLY to infer stack, frameworks, and tooling.',
                     'Produce up to 3 HIGH-IMPACT Kody Rules tailored to this stack. Prioritize security/auth, secrets handling, logging/observability, testing/linting/type-check, dependency hygiene. Avoid generic style nits.',
@@ -2593,7 +2585,7 @@ export class KodyRulesSyncService {
             try {
                 // Raw-JSON re-issue through the shared text executor (Porta 2):
                 // same resolved slot as the structured call above, plain-text out.
-                const raw = await runTextReviewCall({
+                const raw = await LLM.run({
                     byokConfig: byokConfigValue ?? undefined,
                     system: [
                         'Return ONLY a JSON object { "rules": [...] } (no code fences, no text), capped at 3 rules.',
@@ -2612,7 +2604,6 @@ export class KodyRulesSyncService {
                     },
                     organizationId:
                         params.organizationAndTeamData?.organizationId,
-                    observabilityService: this.observabilityService,
                 });
 
                 const parsed = this.extractJsonArray(raw);

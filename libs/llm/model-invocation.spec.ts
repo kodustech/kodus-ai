@@ -1,4 +1,4 @@
-import { resolveModelInvocation } from './model-invocation';
+import { resolveModelConfig } from './model-invocation';
 import type { NormalizedModel } from './byok-config';
 
 // The primitive is a pure composition of resolveAgentModel + resolveSlotCallOptions
@@ -30,14 +30,14 @@ const slot = (over: Partial<NormalizedModel> = {}): NormalizedModel =>
         ...over,
     }) as NormalizedModel;
 
-describe('resolveModelInvocation — the single slot → invocation composition', () => {
+describe('resolveModelConfig — the single slot → invocation composition', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         buildProviderOptionsMock.mockReturnValue({ some: 'reasoning' });
     });
 
     it('composes model + name + tuning + reasoning from the slot', () => {
-        const inv = resolveModelInvocation(
+        const inv = resolveModelConfig(
             slot({ temperature: 0.4, maxOutputTokens: 4096 }),
             { runName: 'finder', organizationId: 'org-1' },
         );
@@ -53,7 +53,7 @@ describe('resolveModelInvocation — the single slot → invocation composition'
 
     it('forwards org/provider/reporter/modelOptions to resolveAgentModel', () => {
         const reporter = jest.fn();
-        resolveModelInvocation(slot({ provider: 'anthropic' as any }), {
+        resolveModelConfig(slot({ provider: 'anthropic' as any }), {
             runName: 'review',
             organizationId: 'org-2',
             reporter,
@@ -72,7 +72,7 @@ describe('resolveModelInvocation — the single slot → invocation composition'
     });
 
     it('honors the slot reasoning fields AND forwards reasoningConfigOverride (the drop the hand-rolled copies made)', () => {
-        resolveModelInvocation(
+        resolveModelConfig(
             slot({
                 reasoningEffort: 'high',
                 reasoningConfigOverride: '{"thinking":{"type":"enabled"}}',
@@ -93,7 +93,7 @@ describe('resolveModelInvocation — the single slot → invocation composition'
     });
 
     it("defaults reasoning effort to 'low' when neither the slot nor opts set it", () => {
-        resolveModelInvocation(slot(), { runName: 'conv' });
+        resolveModelConfig(slot(), { runName: 'conv' });
 
         expect(buildProviderOptionsMock).toHaveBeenCalledWith(
             'conv',
@@ -103,7 +103,7 @@ describe('resolveModelInvocation — the single slot → invocation composition'
     });
 
     it("lets a consumer override the default effort (e.g. 'none' to disable)", () => {
-        resolveModelInvocation(slot(), {
+        resolveModelConfig(slot(), {
             runName: 'shard',
             reasoningEffortDefault: 'none',
         });
@@ -116,7 +116,7 @@ describe('resolveModelInvocation — the single slot → invocation composition'
     });
 
     it('forwards OpenRouter pinning to the reasoning mapping', () => {
-        resolveModelInvocation(slot({ provider: 'open_router' as any }), {
+        resolveModelConfig(slot({ provider: 'open_router' as any }), {
             runName: 'finder',
             openrouterProviderOrder: ['anthropic', 'openai'],
             openrouterAllowFallbacks: false,
@@ -133,7 +133,7 @@ describe('resolveModelInvocation — the single slot → invocation composition'
     });
 
     it('resolves the env/managed default (empty tuning) for a null slot', () => {
-        const inv = resolveModelInvocation(null, { runName: 'x' });
+        const inv = resolveModelConfig(null, { runName: 'x' });
 
         expect(resolveAgentModel).toHaveBeenCalledWith(
             undefined,

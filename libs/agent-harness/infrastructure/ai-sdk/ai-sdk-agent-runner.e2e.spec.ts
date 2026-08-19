@@ -7,11 +7,17 @@
  * finalize; the CompletionGatePolicy stops the loop; the BudgetPolicy composes
  * alongside. Asserts the loop drove the tool and recorded the run.
  */
+// The runner drives the loop through LLM.run, which resolves the model via
+// resolveModelConfig — mock it to inject the scripted MockLanguageModelV3.
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+
 import { MockLanguageModelV3 } from 'ai/test';
+import { resolveModelConfig } from '@libs/llm/model-invocation';
 
 import type { AgentSpec } from '../../domain/contracts/agent.contract';
 import type { ProgressLedger } from '../../domain/contracts/progress.contract';
-import type { ModelResolver } from '../../domain/contracts/model.contract';
 import type { ToolContext, AgentTool } from '../../domain/contracts/tool.contract';
 import { BudgetPolicy } from '../policies/budget.policy';
 import { CompletionGatePolicy } from '../policies/completion-gate.policy';
@@ -44,9 +50,18 @@ function scriptedModel() {
     return new MockLanguageModelV3({ doGenerate });
 }
 
-const resolver: ModelResolver<any> = {
-    resolve: () => scriptedModel() as any,
-};
+const mockResolve = resolveModelConfig as jest.Mock;
+
+/** Point the mocked resolution at a given model (fresh per run). */
+function wireModel(model: any) {
+    mockResolve.mockReturnValue({
+        model,
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    });
+}
 
 const echoTool: AgentTool = {
     name: 'echo',
@@ -86,7 +101,6 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
         const spec: AgentSpec = {
             id: 'finder',
             systemPrompt: 'find bugs',
-            modelId: 'mock',
             tools: new InMemoryToolRegistry([echoTool, doneTool]),
             policies: [
                 new BudgetPolicy(),
@@ -98,7 +112,8 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
             resultToolName: 'submitResult',
         };
 
-        const runner = new AiSdkAgentRunner(resolver);
+        wireModel(scriptedModel());
+        const runner = new AiSdkAgentRunner(undefined);
         const state = await runner.run(spec, { prompt: 'go' }, ctx);
 
         // the loop executed multiple steps (echo, then submitResult)
@@ -120,18 +135,16 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
     });
 
     it('turns a model/provider throw into a RunState{status:error}, not an exception', async () => {
-        const throwingResolver: ModelResolver<any> = {
-            resolve: () =>
-                new MockLanguageModelV3({
-                    doGenerate: (async () => {
-                        throw new Error('boom: provider rejected request');
-                    }) as any,
+        wireModel(
+            new MockLanguageModelV3({
+                doGenerate: (async () => {
+                    throw new Error('boom: provider rejected request');
                 }) as any,
-        };
+            }),
+        );
         const spec: AgentSpec = {
             id: 'finder',
             systemPrompt: 'find bugs',
-            modelId: 'mock',
             tools: new InMemoryToolRegistry([echoTool, doneTool]),
             policies: [
                 new CompletionGatePolicy(noCriticalLedger(), {
@@ -141,7 +154,7 @@ describe('AiSdkAgentRunner (end-to-end, mocked model)', () => {
             maxSteps: 10,
         };
 
-        const runner = new AiSdkAgentRunner(throwingResolver);
+        const runner = new AiSdkAgentRunner(undefined);
 
         // MUST NOT throw — the failure is captured into the RunState.
         const state = await runner.run(spec, { prompt: 'go' }, ctx);

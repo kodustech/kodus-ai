@@ -10,7 +10,6 @@
  */
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { type MCPAdapter } from '@libs/mcp-server/mcp-adapter';
-import { type LanguageModel } from 'ai';
 
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import type {
@@ -23,12 +22,6 @@ import type {
 } from '@libs/agent-harness/domain/contracts';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
-import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
-import { resolveModelInvocation } from '@libs/llm/model-invocation';
-import { systemCacheControl } from '@libs/llm/system-cache';
 import { isContextOverflowResult } from '@libs/llm/context-overflow';
 
 /**
@@ -137,37 +130,14 @@ export async function runMcpFetcherAgent(params: {
         provider?: string;
     };
 }): Promise<FetcherRunResult> {
-    // ONE resolution for model + tuning + reasoning via the shared primitive
-    // every agent uses. The fetcher now honors the slot's temperature /
-    // maxOutputTokens (previously dropped) and its reasoning — including
-    // reasoningConfigOverride — instead of receiving a half-built providerOptions
-    // from the caller. Same derivation as conversation / business-rules / review.
-    const invocation = resolveModelInvocation(params.byokConfig, {
-        runName: params.telemetry?.functionId ?? params.agentId,
+    // The fetcher resolves ONLY the slot — LLM.run (inside the runner) resolves
+    // the model + tuning + reasoning + prompt-cache from it and records the cost
+    // span. Same derivation as before (resolveModelConfig with the 'low' default),
+    // now owned by LLM.run instead of hand-rolled here.
+    const runner = new AiSdkAgentRunner(params.byokConfig, {
         organizationId: params.telemetry?.organizationId,
-        // provider is derived from the slot inside the primitive — same as the
-        // conversation / business-rules call-sites (no per-site provider arg).
         reporter: params.reporter,
     });
-    const model: LanguageModel = invocation.model;
-    const runner = new AiSdkAgentRunner({ resolve: () => model });
-    // Anthropic prompt caching for the static system prompt — the fetcher is a
-    // multi-step tool loop, so on Claude the prompt is read from cache across
-    // steps instead of re-billed each one. No-op on non-Anthropic models.
-    const systemCache = systemCacheControl({
-        provider: params.byokConfig?.provider,
-        model: params.byokConfig?.model,
-    });
-
-    const telemetryArgs = params.telemetry
-        ? toAiSdkTelemetryArgs(
-              buildLangfuseTelemetry(params.telemetry.functionId, {
-                  organizationId: params.telemetry.organizationId,
-                  teamId: params.telemetry.teamId,
-                  provider: params.telemetry.provider,
-              }),
-          )
-        : undefined;
 
     // Build + run the loop for a given compression window. Extracted so the
     // reactive overflow net can re-run with a tighter window. Compression is a
@@ -183,21 +153,27 @@ export async function runMcpFetcherAgent(params: {
             : [];
         const spec: AgentSpec = {
             id: params.agentId,
+            agentName: params.agentId,
+            runName: params.telemetry?.functionId ?? params.agentId,
             systemPrompt: params.systemPrompt,
-            modelId: 'resolved',
             tools: params.tools,
             policies,
             maxSteps: params.maxSteps,
-            // Slot tuning — omitted keys fall to the provider default.
-            ...invocation.callOptions,
-            ...(Object.keys(invocation.providerOptions).length
-                ? { providerOptions: invocation.providerOptions }
-                : {}),
-            ...(systemCache ? { systemProviderOptions: systemCache } : {}),
         };
         return runner.run(
             spec,
-            { prompt: params.prompt, ...(telemetryArgs ?? {}) },
+            {
+                prompt: params.prompt,
+                ...(params.telemetry
+                    ? {
+                          telemetryMetadata: {
+                              organizationId: params.telemetry.organizationId,
+                              teamId: params.telemetry.teamId,
+                              provider: params.telemetry.provider,
+                          },
+                      }
+                    : {}),
+            },
             { runId: params.runId, signal: params.signal },
         );
     };

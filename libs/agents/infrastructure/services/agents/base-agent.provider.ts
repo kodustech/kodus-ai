@@ -1,4 +1,3 @@
-import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { LlmTask, NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
@@ -12,13 +11,15 @@ export abstract class BaseAgentProvider {
     protected byokConfig?: NormalizedModel;
     protected organizationAndTeamData?: OrganizationAndTeamData;
 
-    protected abstract readonly defaultLLMConfig: {
-        llmProvider: LLMModelProvider;
-        temperature: number;
-        maxTokens: number;
-        maxReasoningTokens: number;
-        stop: string[] | undefined;
-    };
+    /**
+     * Task-level max-output fallback: a concrete agent's cap that LLM.run applies
+     * ONLY when the BYOK slot leaves `maxOutputTokens` unset (`slot ?? this`).
+     * The model, temperature and reasoning all come from the slot via LLM.run —
+     * this is the one tuning value an agent still owns, and only as a fallback.
+     * (Replaces the legacy `defaultLLMConfig` object, whose provider/temperature/
+     * reasoning fields the BYOK slot now owns.)
+     */
+    protected abstract readonly maxOutputTokensFallback: number;
 
     /**
      * Abstract method to create MCP adapter

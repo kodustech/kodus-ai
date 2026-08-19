@@ -1,7 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
+import { LLM } from '@libs/llm/llm';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import {
     CliSessionClassifiedDecision,
@@ -181,13 +181,12 @@ export class ClassifyCliSessionCaptureUseCase {
         // runStructuredReviewCall owns the single observability span path (Q4).
         // setTemperature(0) is likewise dropped (not threaded by
         // runStructuredReviewCall). Parity is on the parsed decisions[] mapping.
-        const result = await runStructuredReviewCall({
+        const result = await LLM.run({
             schema: LLMDecisionExtractionSchema,
             system: prompt,
             user: JSON.stringify(userPayload),
             runName: 'ClassifyCliSessionCaptureUseCase::classifyCliSessionCapture',
             organizationId: capture.organizationId,
-            observabilityService: this.observabilityService,
             byokConfig: undefined,
         });
 

@@ -19,7 +19,7 @@ import {
 } from '@libs/common/utils/prompts/kodyRulesExternalReferences';
 import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
 import { getModelName, trialDefaultModel } from '@libs/llm/byok-to-vercel';
-import { runTextReviewCall } from '@libs/llm/structured-review-call';
+import { LLM } from '@libs/llm/llm';
 
 /**
  * Kodus control markers are instructions to the sync engine, never file
@@ -156,7 +156,7 @@ export class ReferenceDetectorService {
         // reasoning + a timeout, and preserves the telemetry. No observability
         // span here — this call never recorded one, so observabilityService is
         // omitted (the executor runs the call directly).
-        const raw = await runTextReviewCall({
+        const raw = await LLM.run({
             byokConfig: byokSlot,
             system: systemPrompt,
             user: userPrompt,

@@ -6,6 +6,7 @@ import {
     Optional,
 } from '@nestjs/common';
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
+import { LLM } from '@libs/llm/llm';
 import { v4 } from 'uuid';
 import bucketsData from './data/buckets.json';
 import libraryKodyRules from './data/library-kody-rules.json';
@@ -39,7 +40,6 @@ import {
 } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
@@ -1635,7 +1635,7 @@ ${JSON.stringify(filteredLibrary)}
 
 Analyze the suggestions and recommend the most relevant rules.`;
 
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 byokConfig: byokConfigValue ?? undefined,
                 schema: kodyRulesRecommendationSchema,
                 system: systemPrompt,
@@ -1647,7 +1647,6 @@ Analyze the suggestions and recommend the most relevant rules.`;
                     suggestionsCount: allSuggestions.length,
                     libraryRulesCount: filteredLibrary.length,
                 },
-                observabilityService: this.observabilityService,
             });
 
             if (
@@ -2130,7 +2129,7 @@ Analyze the suggestions and recommend the most relevant rules.`;
             path: existingMemory.path,
         }));
 
-        const result = await runStructuredReviewCall({
+        const result = await LLM.run({
             byokConfig: byokConfigValue ?? undefined,
             schema: kodyMemoryResolutionSchema,
             system: prompt_kodyMemoryResolution_system(),
@@ -2143,7 +2142,6 @@ Analyze the suggestions and recommend the most relevant rules.`;
             attrs: {
                 existingMemoriesCount: existingMemories.length,
             },
-            observabilityService: this.observabilityService,
         });
 
         return result;

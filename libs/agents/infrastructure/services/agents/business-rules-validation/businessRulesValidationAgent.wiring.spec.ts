@@ -8,8 +8,16 @@
 import { mockTextModel } from '../__test-utils__/mock-model';
 
 const modelRef: { model: any } = { model: null };
-jest.mock('@libs/llm/agent-model', () => ({
-    resolveAgentModel: () => modelRef.model,
+// The runner resolves the model via LLM.run -> resolveModelConfig (and the
+// analyzer reads its callOptions); mock it to return our mock model.
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: () => ({
+        model: modelRef.model,
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    }),
 }));
 
 // Trace-level attributes only exist in OTel context; intercept to assert them.
@@ -21,32 +29,36 @@ jest.mock('@langfuse/tracing', () => ({
     },
 }));
 
+import { setLlmObservability } from '@libs/llm/llm-observability';
+
 import { BusinessRulesValidationAgentProvider } from './businessRulesValidationAgent';
 
 const makeModel = (text: string) =>
     mockTextModel(text, { inputTokens: 12, outputTokens: 6 });
 
+afterEach(() => setLlmObservability(undefined));
+
 function build() {
-    const recordAgentRunUsage = jest.fn().mockResolvedValue(undefined);
+    // Cost is recorded by LLM.run's observability span (the port), not by the
+    // agent. Register a spy port to assert the span carries the analyzer attrs.
+    const runAiSdkLLMInSpan = jest.fn((p: any) => p.exec());
+    setLlmObservability({ runAiSdkLLMInSpan } as any);
     const provider = new BusinessRulesValidationAgentProvider(
         {} as any,
         {} as any,
-        { recordAgentRunUsage } as any,
+        { recordAgentRunUsage: jest.fn() } as any,
         {
             getExecutionPolicy: jest.fn(),
             getAnalyzerInstructions: jest.fn(),
         } as any,
     );
-    // callLLM reads this.observabilityService — set explicitly so the test does
-    // not depend on where the base class stores it.
-    (provider as any).observabilityService = { recordAgentRunUsage };
-    return { provider, recordAgentRunUsage };
+    return { provider, runAiSdkLLMInSpan };
 }
 
 describe('BusinessRulesValidationAgentProvider.callLLM (harness wiring)', () => {
     it('runs the analysis on the harness and returns the model text', async () => {
         modelRef.model = makeModel('## Business Rules Validation\nOK');
-        const { provider, recordAgentRunUsage } = build();
+        const { provider, runAiSdkLLMInSpan } = build();
 
         const res = await (provider as any).callLLM(
             [
@@ -61,10 +73,12 @@ describe('BusinessRulesValidationAgentProvider.callLLM (harness wiring)', () => 
         expect(res.content).toContain('## Business Rules Validation');
         // usage shape is present (exact counts depend on AI SDK mock plumbing).
         expect(res.usage).toHaveProperty('totalTokens');
-        expect(recordAgentRunUsage).toHaveBeenCalledWith(
+        expect(runAiSdkLLMInSpan).toHaveBeenCalledWith(
             expect.objectContaining({
-                agentName: 'BusinessRulesValidation',
-                phase: 'businessRulesAnalyzer',
+                attrs: expect.objectContaining({
+                    agentName: 'BusinessRulesValidation',
+                    phase: 'businessRulesAnalyzer',
+                }),
             }),
         );
     });

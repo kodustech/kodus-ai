@@ -3,6 +3,7 @@ import { CommentManagerService } from '@libs/code-review/infrastructure/adapters
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -418,6 +419,9 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 return { text: 'Full PR summary generated.' };
             }),
         };
+        // LLM.run reads observability through the port, not DI — register the mock
+        // so every summary call is intercepted (no live model call).
+        setLlmObservability(mockObservabilityService as any);
 
         mockCodeManagementService = {
             getPullRequestByNumber: jest.fn().mockResolvedValue({

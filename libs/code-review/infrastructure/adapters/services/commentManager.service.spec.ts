@@ -17,6 +17,9 @@ const NEW_SUMMARY_TEXT = 'NEW_SUMMARY_CONTENT';
 // Claude-on-Vertex works. Mock that path: capture the system/user prompts
 // (Bug E) and return a deterministic summary (Bug A).
 jest.mock('@libs/llm/byok-to-vercel', () => ({
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
     // generateSummaryPR (v5 path) now builds via buildModelFromSlot(slot).
     buildModelFromSlot: jest.fn(() => ({ __mockModel: true })),
     // runStructuredReviewCall (clustering path) reads getModelName for the span.

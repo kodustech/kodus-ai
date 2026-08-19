@@ -1,6 +1,6 @@
 /**
  * resolve-task-invocation.spec.ts — Porta 1 is a pure composition of three
- * already-unit-tested primitives (resolveTaskSlot + resolveModelInvocation +
+ * already-unit-tested primitives (resolveTaskSlot + resolveModelConfig +
  * agentModelIdentity). We stub all three and assert the COMPOSITION contract:
  *  - the router's slot is the one fed to BOTH the invocation build and the
  *    usage-identity derivation (so usage attributes the model that actually ran);
@@ -8,14 +8,14 @@
  *  - the returned shape merges invocation + slot + verdict + usageIdentity.
  */
 const resolveTaskSlotMock = jest.fn();
-const resolveModelInvocationMock = jest.fn();
+const resolveModelConfigMock = jest.fn();
 const agentModelIdentityMock = jest.fn();
 
 jest.mock('./resolve-task-model', () => ({
     resolveTaskSlot: (...a: unknown[]) => resolveTaskSlotMock(...a),
 }));
 jest.mock('./model-invocation', () => ({
-    resolveModelInvocation: (...a: unknown[]) => resolveModelInvocationMock(...a),
+    resolveModelConfig: (...a: unknown[]) => resolveModelConfigMock(...a),
 }));
 jest.mock('./model-identity', () => ({
     agentModelIdentity: (...a: unknown[]) => agentModelIdentityMock(...a),
@@ -37,7 +37,7 @@ describe('resolveTaskInvocation — Porta 1 (router + access + usage, composed o
     beforeEach(() => {
         jest.clearAllMocks();
         resolveTaskSlotMock.mockReturnValue({ slot: SLOT, verdict: VERDICT });
-        resolveModelInvocationMock.mockReturnValue(INVOCATION);
+        resolveModelConfigMock.mockReturnValue(INVOCATION);
         agentModelIdentityMock.mockReturnValue(IDENTITY);
     });
 
@@ -70,7 +70,7 @@ describe('resolveTaskInvocation — Porta 1 (router + access + usage, composed o
             { ctx },
         );
         // ...and the SAME resolved slot feeds the invocation, WITHOUT ctx leaking in.
-        expect(resolveModelInvocationMock).toHaveBeenCalledWith(
+        expect(resolveModelConfigMock).toHaveBeenCalledWith(
             SLOT,
             expect.objectContaining({
                 runName: 'kody',
@@ -78,7 +78,7 @@ describe('resolveTaskInvocation — Porta 1 (router + access + usage, composed o
                 reasoningEffortDefault: 'none',
             }),
         );
-        expect(resolveModelInvocationMock.mock.calls[0][1]).not.toHaveProperty('ctx');
+        expect(resolveModelConfigMock.mock.calls[0][1]).not.toHaveProperty('ctx');
     });
 
     it('derives usageIdentity from the SAME slot that built the model', () => {
@@ -114,7 +114,7 @@ describe('resolveTaskInvocation — Porta 1 (router + access + usage, composed o
 
         const out = resolveTaskInvocation(null, 'codeReview', { runName: 'x' });
 
-        expect(resolveModelInvocationMock).toHaveBeenCalledWith(
+        expect(resolveModelConfigMock).toHaveBeenCalledWith(
             undefined,
             expect.objectContaining({ runName: 'x' }),
         );

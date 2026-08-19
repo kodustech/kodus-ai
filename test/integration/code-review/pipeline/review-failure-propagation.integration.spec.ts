@@ -44,7 +44,6 @@ jest.mock('@libs/llm/llm-call', () => ({
 
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     withStructuredOutputFallback: jest.fn(),
-    NoStructuredFallbackModelError: class extends Error {},
     getModelName: jest.fn().mockReturnValue('test-model'),
     // Split into byok-defaults + re-exported; the agent-review stage calls it
     // before building. Off-trial default → undefined.

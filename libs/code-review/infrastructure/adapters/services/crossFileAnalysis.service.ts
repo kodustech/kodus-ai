@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { LLM } from '@libs/llm/llm';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { TokenUsage } from '@libs/llm/token-usage';
 import { Injectable } from '@nestjs/common';
@@ -19,7 +20,6 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 //#region Interfaces
@@ -478,7 +478,7 @@ export class CrossFileAnalysisService {
             // runStructuredReviewCall. One span per call (Q4) — no outer
             // runLLMInSpan wrapper — and no LangChain parser-repair reach
             // (D-03 / REQ-SEC-01).
-            const analysis = await runStructuredReviewCall({
+            const analysis = await LLM.run({
                 byokConfig,
                 schema: CrossFileAnalysisSchema,
                 system: prompt_codereview_cross_file_analysis(payload),
@@ -486,7 +486,6 @@ export class CrossFileAnalysisService {
                 runName: `${CrossFileAnalysisService.name}::${runName}`,
                 organizationId: organizationAndTeamData?.organizationId,
                 attrs: { prNumber, analysisType, chunkIndex, fallback: false },
-                observabilityService: this.observabilityService,
             });
 
             if (!analysis) {

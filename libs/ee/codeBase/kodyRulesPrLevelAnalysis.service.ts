@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { LLM } from '@libs/llm/llm';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { TokenUsage } from '@libs/llm/token-usage';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -15,7 +16,6 @@ import {
     prompt_kodyrules_prlevel_analyzer,
     prompt_kodyrules_prlevel_group_rules,
 } from '@libs/common/utils/prompts/kodyRulesPrLevel';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     AIAnalysisResult,
     AIAnalysisResultPrLevel,
@@ -982,7 +982,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
             // BYOK-first single-shot structured call on the AI SDK path. The
             // outer runLLMInSpan wrapper is intentionally dropped (Q4): the
             // span is emitted once, inside runStructuredReviewCall.
-            const analysis = await runStructuredReviewCall({
+            const analysis = await LLM.run({
                 byokConfig: byokConfigRef ?? undefined,
                 schema: prLevelAnalyzerSchema,
                 system: prompt_kodyrules_prlevel_analyzer(analyzerPayload),
@@ -996,7 +996,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                     provider: byokConfigRef?.provider ?? provider,
                     fallback: false,
                 },
-                observabilityService: this.observabilityService,
             });
 
             if (!analysis) {
@@ -1296,7 +1295,7 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
         try {
             // BYOK-first single-shot structured call on the AI SDK path; outer
             // runLLMInSpan wrapper intentionally dropped (Q4).
-            const grouping = await runStructuredReviewCall({
+            const grouping = await LLM.run({
                 byokConfig: byokConfig ?? undefined,
                 schema: prLevelGroupSchema,
                 system: prompt_kodyrules_prlevel_group_rules(groupingPayload),
@@ -1308,7 +1307,6 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                     ruleId: rule?.uuid,
                     fallback: false,
                 },
-                observabilityService: this.observabilityService,
             });
 
             if (!grouping) {

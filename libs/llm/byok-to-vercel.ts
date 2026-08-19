@@ -12,12 +12,8 @@ import { decrypt } from '@libs/common/utils/crypto';
 // Provider registry (Phase 1): every BYOK provider resolves through REGISTRY.
 // Importing the barrel registers all provider modules via side effect.
 import { REGISTRY } from '@libs/llm/providers';
-import {
-    resolveManagedSlot,
-    hasManagedModelKey,
-    type ByokModelOptions,
-} from './managed-slot';
-import { DEFAULT_MODEL, KODUS_DEFAULT_MODEL } from './byok-defaults';
+import { resolveManagedSlot, type ByokModelOptions } from './managed-slot';
+import { DEFAULT_MODEL } from './byok-defaults';
 
 // Wave 2: the concurrency / rpm / tpm-reservoir / cooldown limiter moved to
 // ./byok-limiter. Re-exported here so existing import paths keep working.
@@ -89,41 +85,6 @@ export function buildModelFromSlot(
     return REGISTRY.get(slot.provider).build({ ...slot, apiKey }, options);
 }
 
-/**
- * Get a cheap/fast model for internal / secondary-pass operations (dedup,
- * severity, suggestion formatting, structured-output fallback). ONE resolution,
- * shared with the main path — there is no hand-rolled provider tree here:
- *
- * 1. A resolved BYOK slot the caller passes → the client key (client pays).
- * 2. No slot → `resolveManagedSlot` (inside `buildModelFromSlot`): the
- *    self-hosted env model, or — in cloud — the Kodus-funded default. The
- *    Kodus-funded model is ALWAYS the managed `KODUS_DEFAULT_MODEL`
- *    (Fireworks-hosted deepseek-v4-flash); it is NEVER gpt/gemini. Env + cloud
- *    provider selection lives in the single place
- *    (`resolveManagedSlot`), so this stays a thin wrapper over the same builder.
- *
- * Fail-soft: returns null when no key backs the managed model, so a secondary
- * pass skips (keeps agent values) instead of erroring on an empty-key call.
- */
-export function getInternalModel(
-    slot?: NormalizedModel,
-    options: ByokModelOptions = {},
-): LanguageModel | null {
-    // BYOK slot → the client key, built through the same builder as everything.
-    if (slot) {
-        return buildModelFromSlot(slot, options);
-    }
-
-    // No slot → the SAME managed resolution the main no-BYOK path uses
-    // (resolveManagedSlot inside buildModelFromSlot): the self-hosted env model,
-    // or — in cloud — the Kodus-funded Fireworks default. Fail-soft: null when no
-    // key backs that model, so the caller skips the pass instead of erroring.
-    if (!hasManagedModelKey()) {
-        return null;
-    }
-    return buildModelFromSlot(undefined, options, KODUS_DEFAULT_MODEL);
-}
-
 // ─── Structured-output retry-on-error ────────────────────────────────
 // The allowlist in `shouldEnableJsonSchema` is conservative on purpose
 // but can guess wrong: a model we trusted may stop honoring json_schema,
@@ -145,7 +106,24 @@ function structuredFallbackCacheKey(slot?: NormalizedModel): string {
     return `env:${process.env.API_LLM_PROVIDER_MODEL ?? 'auto'}`;
 }
 
-function isJsonSchemaUnsupportedError(err: unknown): boolean {
+/**
+ * True when the slot may still send `response_format: json_schema` — i.e. its
+ * provider has NOT been proven to reject it this process. A structured call
+ * consults this before building so a known-bad provider skips json_schema and
+ * goes straight to json_object. Shared with `withStructuredOutputFallback` (the
+ * same `noJsonSchemaCache`) so the executor and the legacy helper agree.
+ */
+export function mayUseJsonSchema(slot?: NormalizedModel): boolean {
+    return !noJsonSchemaCache.has(structuredFallbackCacheKey(slot));
+}
+
+/** Record that the slot's provider rejected json_schema — future structured
+ *  calls for it skip straight to json_object. */
+export function markJsonSchemaUnsupported(slot?: NormalizedModel): void {
+    noJsonSchemaCache.add(structuredFallbackCacheKey(slot));
+}
+
+export function isJsonSchemaUnsupportedError(err: unknown): boolean {
     if (!(err instanceof Error)) return false;
     // Match common phrasings without depending on a specific provider.
     // OpenRouter, DeepSeek, Grok, Mistral, Novita upstreams all surface
@@ -178,101 +156,3 @@ function isJsonSchemaUnsupportedError(err: unknown): boolean {
     // before the network call). Accept message-only matches too.
     return true;
 }
-
-export interface StructuredFallbackParams {
-    /** The ONE resolved model slot (ciphertext apiKey). The carrier read
-     *  (`.main`) happens at the CONSUMER boundary — this helper never reads
-     *  `.main`/`.fallback`. The withStructuredOutputFallback flow itself is
-     *  revisited in 04b-05 alongside the fallback removal. */
-    slot?: NormalizedModel;
-    /** Optional label for logs when the retry actually fires. */
-    label?: string;
-    /**
-     * Organization the call runs for. Scopes the no-json-schema cache so
-     * one tenant's verdict never demotes another. Omit only for
-     * process-wide self-hosted mode.
-     */
-    organizationId?: string;
-}
-
-/**
- * Run a structured-output LLM call, retrying without the
- * `supportsStructuredOutputs: true` flag if the upstream rejects the
- * `response_format: json_schema` body. Wrap the three review-pipeline
- * sites that use `generateText({ output: Output.object(...) })` or
- * `generateObject(...)`.
- *
- * The `exec` callback receives the resolved `LanguageModel` and is
- * expected to wire it into the SDK call (so the caller keeps control
- * over telemetry, abort signals, prompts, throttling, etc.). When the
- * first attempt fails with a schema-related error, the helper rebuilds
- * the model with the flag off and re-invokes `exec`. Other errors
- * propagate unchanged.
- *
- * Throws `NoStructuredFallbackModelError` when `getInternalModel`
- * returns null, mirroring the existing "no internal model available"
- * branch at each call site.
- */
-export async function withStructuredOutputFallback<T>(
-    params: StructuredFallbackParams,
-    exec: (model: LanguageModel) => Promise<T>,
-): Promise<T> {
-    const cacheKey = structuredFallbackCacheKey(params.slot);
-    const tryStructured = !noJsonSchemaCache.has(cacheKey);
-
-    const firstModel = getInternalModel(params.slot, {
-        structuredOutputs: tryStructured,
-    });
-    if (!firstModel) {
-        throw new NoStructuredFallbackModelError();
-    }
-
-    // The retry only helps when the first attempt actually sent
-    // `response_format: json_schema` — it downgrades that to
-    // `json_object`. `getInternalModel` may have refused the flag
-    // anyway (capability gate, or a non-OpenAI-compatible provider),
-    // in which case there is nothing to downgrade and the retry would
-    // resend a byte-identical request. `@ai-sdk/openai-compatible`
-    // exposes the effective state as `model.supportsStructuredOutputs`;
-    // it is undefined on native SDKs, which never need the retry.
-    const sentJsonSchema =
-        (firstModel as { supportsStructuredOutputs?: boolean })
-            .supportsStructuredOutputs === true;
-
-    try {
-        return await exec(firstModel);
-    } catch (err) {
-        if (!sentJsonSchema || !isJsonSchemaUnsupportedError(err)) {
-            throw err;
-        }
-        noJsonSchemaCache.add(cacheKey);
-        const label = params.label ? ` for ${params.label}` : '';
-
-        console.warn(
-            `[STRUCTURED-OUTPUT-FALLBACK] Upstream rejected json_schema${label} (cacheKey=${cacheKey}). Retrying with response_format=json_object. Reason: ${(err as Error).message}`,
-        );
-        const retryModel = getInternalModel(params.slot, {
-            structuredOutputs: false,
-        });
-        if (!retryModel) {
-            throw new NoStructuredFallbackModelError();
-        }
-        return await exec(retryModel);
-    }
-}
-
-export class NoStructuredFallbackModelError extends Error {
-    constructor() {
-        super(
-            'No internal model available for structured-output fallback (BYOK absent and no cloud/self-hosted key configured).',
-        );
-        this.name = 'NoStructuredFallbackModelError';
-    }
-}
-
-// Internal — exported for tests in evals/structured-outputs/repro.ts.
-export const __structuredFallbackInternals = {
-    cache: noJsonSchemaCache,
-    isJsonSchemaUnsupportedError,
-    cacheKey: structuredFallbackCacheKey,
-};

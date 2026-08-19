@@ -1,9 +1,6 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
-    resolveTaskModel as resolveTaskModelFromConfig,
     resolveTaskSlot as resolveTaskSlotFromConfig,
-    type ResolveTaskModelOptions,
-    type ResolvedTaskModel,
 } from '@libs/llm/resolve-task-model';
 import {
     resolveTaskInvocation as resolveTaskInvocationFromConfig,
@@ -852,23 +849,6 @@ export class PermissionValidationService {
                 metadata,
             });
         }
-    }
-
-    /**
-     * Sibling of `resolveTaskCarrier` for consumers that need the BUILT model
-     * (not just the carrier): reads the org's raw config and returns the
-     * resolved `{ model, modelName, slot, verdict }` for `task`. Same degrade
-     * contract — no BYOK → the managed/env default model.
-     */
-    async resolveTaskModel(
-        organizationAndTeamData: OrganizationAndTeamData,
-        task: LlmTask,
-        options: ResolveTaskModelOptions = {},
-    ): Promise<ResolvedTaskModel> {
-        const rawConfig = await this.getBYOKConfig(organizationAndTeamData);
-        const resolved = resolveTaskModelFromConfig(rawConfig, task, options);
-        this.logRoutingVerdict(organizationAndTeamData, task, resolved.verdict);
-        return resolved;
     }
 
     /**

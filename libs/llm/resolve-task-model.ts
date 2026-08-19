@@ -1,23 +1,20 @@
 /**
- * resolveTaskModel — the SINGLE task→model resolution entry point (slice 04b,
- * plan 04b-01, TRACER).
+ * resolveTaskSlot — the SINGLE task→slot routing primitive (slice 04b).
  *
- * Every native consumer calls this in place of reading `.main`/`.fallback`:
- * "give me the LanguageModel for THIS task, resolved via `StaticTaskStrategy`
- * over the org's config, or the managed/env default if no BYOK." It resolves
- * the routed model id for the task (verdict), materializes that model's slot
- * (ciphertext-bearing), and builds the LanguageModel via `buildModelFromSlot`.
+ * "Decide which model + creds for THIS task": resolve the routed model id via
+ * `StaticTaskStrategy` over the org's config, materialize that model's slot
+ * (ciphertext-bearing), or degrade to `{ slot: undefined }` when there's no BYOK.
+ * NO model is BUILT here — `buildModelFromSlot` and everything that RUNS a model
+ * live behind `LLM.run`; a consumer passes this slot to `LLM.run`.
  *
  * Degradation contract (never throws):
- *  - no BYOK (config null/undefined/non-v2) → undefined slot → env/managed default.
- *  - BLOCKED verdict (modelId null) → undefined slot → env/managed default.
- *  - an unresolvable routed slot (managed/incomplete) → undefined slot → env default.
+ *  - no BYOK (config null/undefined/non-v2) → undefined slot → managed default.
+ *  - BLOCKED verdict (modelId null) → undefined slot → managed default.
+ *  - an unresolvable routed slot (managed/incomplete) → undefined slot.
  *
- * Secret hygiene (T-04b-01-01): the slot carries ENCRYPTED apiKey ciphertext;
- * only `buildModelFromSlot`'s `decrypt()` touches plaintext, in local scope. No
- * returned field (`modelName`, `slot`, `verdict.reason`) carries key material.
+ * Secret hygiene: the slot carries ENCRYPTED apiKey ciphertext; `resolveTaskSlot`
+ * never decrypts (only `buildModelFromSlot`, elsewhere, touches plaintext).
  */
-import type { LanguageModel } from 'ai';
 
 import {
     isByokConfig,
@@ -28,39 +25,17 @@ import {
 import type { RequestContext, RoutingVerdict } from './routing-strategy';
 import { StaticTaskStrategy } from './static-task-strategy';
 import { resolveModelSlot } from './resolve-model-slot';
-import { buildModelFromSlot, getModelName } from './byok-to-vercel';
 
 // Manual routing policy (Phase 4). Stateless + dependency-free — instantiated once.
 const strategy = new StaticTaskStrategy();
-
-export interface ResolveTaskModelOptions {
-    /** Per-request routing inputs (folder/repo override, parent-task inherit). */
-    ctx?: RequestContext;
-    /** Opt the OpenAI-compatible branch into `response_format: json_schema`. */
-    structuredOutputs?: boolean;
-    /** Force a default model id when there is no BYOK (trial/public-demo). */
-    defaultModelOverride?: string;
-}
-
-export interface ResolvedTaskModel {
-    /** The built Vercel AI SDK model for the task. */
-    model: LanguageModel;
-    /** `${provider}:${model}` for the resolved slot, or the env-default name. */
-    modelName: string;
-    /** The resolved slot (ciphertext apiKey), or undefined for the env/managed path. */
-    slot: NormalizedModel | undefined;
-    /** The routing verdict, or undefined when the config is not v2. */
-    verdict: RoutingVerdict | undefined;
-}
 
 /**
  * Resolve `task` over the org's config to a slot (ciphertext-bearing) WITHOUT
  * building a model — the "decide which model + creds" step. BYOK when the org
  * routes one for the task; otherwise `{ slot: null }` → the caller degrades to
- * the managed/env default. This is the single resolution primitive:
- * `resolveTaskModel` is exactly this plus `buildModelFromSlot`, and consumers
- * that need the slot itself (to thread it down, or to rebuild with per-call
- * flags in `withStructuredOutputFallback`) call this directly and read `.slot`.
+ * the managed/env default. Consumers that need to RUN the model pass this slot
+ * to `LLM.run` (which builds + wraps it); consumers that only need the routing
+ * decision read `.slot` / `.verdict` directly.
  *
  * Degrade contract (never throws): non-v2 / BLOCKED verdict / unresolvable slot
  * → `{ slot: undefined }`.
@@ -94,27 +69,3 @@ export function resolveTaskSlot(
     return { slot, verdict };
 }
 
-/**
- * Resolve the LanguageModel for `task` — `resolveTaskSlot` + build.
- */
-export function resolveTaskModel(
-    config: BYOKConfig | null | undefined,
-    task: LlmTask,
-    options: ResolveTaskModelOptions = {},
-): ResolvedTaskModel {
-    const { slot, verdict } = resolveTaskSlot(config, task, {
-        ctx: options.ctx,
-    });
-
-    const model = buildModelFromSlot(
-        slot,
-        { structuredOutputs: options.structuredOutputs },
-        options.defaultModelOverride,
-    );
-
-    const modelName = slot
-        ? `${slot.provider}:${slot.model}`
-        : getModelName(undefined, options.defaultModelOverride);
-
-    return { model, modelName, slot, verdict };
-}

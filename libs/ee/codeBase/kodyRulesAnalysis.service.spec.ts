@@ -157,11 +157,11 @@ describe('KodyRulesAnalysisService — runStructuredReviewCall migration parity'
                 `${KodyRulesAnalysisService.name}::suggestionGenerationKodyRulesAnalyzeCodeWithAI`,
             ]);
 
-            // BYOK config + observabilityService threaded into every call.
+            // BYOK config threaded into every call (observability is owned by
+            // LLM.run internally, so it is no longer a call arg).
             for (const call of mockRun.mock.calls) {
                 expect(call[0].byokConfig).toBe(BYOK);
                 expect(call[0].organizationId).toBe(ORG.organizationId);
-                expect(call[0].observabilityService).toBeDefined();
                 expect(typeof call[0].system).toBe('string');
                 expect(typeof call[0].user).toBe('string');
             }
@@ -219,7 +219,6 @@ describe('KodyRulesAnalysisService — runStructuredReviewCall migration parity'
             );
             expect(call.byokConfig).toBe(BYOK);
             expect(call.organizationId).toBe(ORG.organizationId);
-            expect(call.observabilityService).toBeDefined();
         });
 
         it('returns [] when no ids are extracted', async () => {

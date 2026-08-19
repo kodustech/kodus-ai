@@ -11,9 +11,9 @@
  * fewer T0 rules, never a wrong detector.
  */
 import { Inject, Injectable } from '@nestjs/common';
+import { LLM } from '@libs/llm/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -69,14 +69,13 @@ export class KodyRuleDetectorCompilerService
             // resolved BYOK model or our managed default (kimi-k2.7-code via
             // Moonshot). No LangChain.
             const runCompiler = makeLLMRunCompiler(async ({ system, user }) => {
-                const parsed = await runStructuredReviewCall({
+                const parsed = await LLM.run({
                     byokConfig: taskByok ?? undefined,
                     schema: compilerOutputSchema,
                     system,
                     user,
                     runName: 'kody-rules.detector-compiler',
                     organizationId: organizationAndTeamData.organizationId,
-                    observabilityService: this.observabilityService,
                 });
                 return (parsed as CompilerOutput) ?? null;
             });

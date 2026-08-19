@@ -338,6 +338,11 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/ee/codeBase/kodyIssuesAnalysis.service.ts', // kodyIssuesMergeSchema, kodyIssuesResolveSchema
         'libs/ee/codeBase/kodyRulesAnalysis.service.ts', // kodyRulesExtractIdSchema, kodyRulesUpdateSchema, kodyRulesClassifierSchema, kodyRulesGeneratorSchema
         'libs/ee/codeBase/kodyRulesPrLevelAnalysis.service.ts', // prLevelAnalyzerSchema, prLevelGroupSchema
+        // Phase 3b: withStructuredOutputFallback → LLM.run migrations.
+        'libs/code-review/infrastructure/agents/core/finder.agent.ts', // RECOVERY_SCHEMA (zod)
+        'libs/code-review/pipeline/stages/agent-review.stage.ts', // DEDUP_SCHEMA, DEDUP_TIEBREAK_SCHEMA via jsonSchema() — AI-SDK Schema, passes through untouched (exempt from strict-wire conversion)
+        // Second-doors → LLM.run migration.
+        'libs/cli-review/infrastructure/services/public-pr-grouping.service.ts', // GroupingSchema — all-required zod (no `.optional()`), so strict-wire conversion is a no-op; public-demo path on a fixed Gemini default, never OpenAI-strict.
     ]);
 
     it('every runStructuredReviewCall call site is registered (schema is under test)', () => {
@@ -358,12 +363,21 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
                 } else if (
                     entry.name.endsWith('.ts') &&
                     !entry.name.endsWith('.spec.ts') &&
-                    // the definition itself (`runStructuredReviewCall<S…>(`)
-                    // never matches the call pattern `runStructuredReviewCall(`
-                    entry.name !== 'structured-review-call.ts'
+                    // The forwarders are not schema sites: `structured-review-call.ts`
+                    // defines the executor; `llm.ts` (Llm.call) dispatches to it and
+                    // forwards whatever schema the real caller passed.
+                    entry.name !== 'structured-review-call.ts' &&
+                    entry.name !== 'llm.ts'
                 ) {
                     const src = readFileSync(abs, 'utf8');
-                    if (src.includes('runStructuredReviewCall(')) {
+                    // A structured call site reaches the strict-wire path either
+                    // directly (runStructuredReviewCall) or through the unified
+                    // `LLM.run({ schema })`. A text-only `Llm.call` (no schema)
+                    // never touches strict-wire, so it must NOT be flagged.
+                    const isStructuredCallSite =
+                        src.includes('runStructuredReviewCall(') ||
+                        (src.includes('LLM.run(') && /\bschema\b/.test(src));
+                    if (isStructuredCallSite) {
                         callers.push(abs.slice(root.length + 1));
                     }
                 }

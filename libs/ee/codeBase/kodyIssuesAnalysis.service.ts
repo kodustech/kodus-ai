@@ -1,11 +1,11 @@
 import { createLogger } from '@libs/core/log/logger';
+import { LLM } from '@libs/llm/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { environment } from '../configs/environment';
 import {
     prompt_kodyissues_merge_suggestions_into_issues_system,
@@ -68,7 +68,7 @@ export class KodyIssuesAnalysisService {
         try {
             const runName = 'mergeSuggestionsIntoIssues';
 
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 byokConfig: byokConfig ?? undefined,
                 schema: kodyIssuesMergeSchema,
                 system: prompt_kodyissues_merge_suggestions_into_issues_system(),
@@ -79,7 +79,6 @@ export class KodyIssuesAnalysisService {
                     prNumber: pullRequest?.number,
                     fallback: false,
                 },
-                observabilityService: this.observabilityService,
             });
 
             if (!result) {
@@ -121,7 +120,7 @@ export class KodyIssuesAnalysisService {
         try {
             const runName = 'resolveExistingIssues';
 
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 byokConfig: byokConfig ?? undefined,
                 schema: kodyIssuesResolveSchema,
                 system: prompt_kodyissues_resolve_issues_system(),
@@ -132,7 +131,6 @@ export class KodyIssuesAnalysisService {
                     prNumber: context.pullRequest?.number,
                     fallback: false,
                 },
-                observabilityService: this.observabilityService,
             });
 
             if (!result) {

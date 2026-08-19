@@ -17,14 +17,14 @@ import { Output, type LanguageModel, type Schema } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
 import {
-    buildModelFromSlot,
-    getModelName,
     getLimiterForSlot,
+    mayUseJsonSchema,
+    markJsonSchemaUnsupported,
+    isJsonSchemaUnsupportedError,
     type ByokModelOptions,
 } from '@libs/llm/byok-to-vercel';
-import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
-import { resolveSlotCallOptions } from '@libs/llm/slot-call-options';
-import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { resolveModelConfig } from '@libs/llm/model-invocation';
+import { agentModelIdentity } from '@libs/llm/model-identity';
 import {
     tracedGenerateText,
     timeoutSignal,
@@ -43,7 +43,7 @@ import {
     jitteredBackoffMs,
     sleep,
 } from '@libs/llm/retry-policy';
-import { ObservabilityService } from '@libs/core/log/observability.service';
+import { getLlmObservability } from '@libs/llm/llm-observability';
 
 const logger = createLogger('StructuredReviewCall');
 
@@ -65,17 +65,14 @@ function isAbortOrHardTimeout(err: unknown): boolean {
  *  is the bare resolved slot; `buildModelFromSlot`/`getModelName` take it directly. */
 export interface BaseReviewCallParams {
     byokConfig?: NormalizedModel;
-    system: string;
+    /** System prompt. OPTIONAL — some one-shots (severity classification) put
+     *  everything in `user` and send no system message; the SDK omits it. */
+    system?: string;
     user: string;
     /** Used for the runName and (unless `spanName` is set) the span name. */
     runName: string;
     organizationId?: string;
     attrs?: Record<string, unknown>;
-    /** Observability span wrapper. OPTIONAL: bare callers that never recorded a
-     *  span (e.g. severity classification, reference detection) can omit it and
-     *  still get the shared model policy (limiter, reasoning, timeout, retry) —
-     *  the call just runs without a span, exactly as those consumers did before. */
-    observabilityService?: ObservabilityService;
     /** Per-call hard-timeout budget (ms). Defaults to LLM_CALL_TIMEOUT_MS (10min).
      *  Secondary passes that must not hold a pipeline slot pass a shorter one. */
     timeoutMs?: number;
@@ -88,6 +85,14 @@ export interface BaseReviewCallParams {
     telemetryMetadata?: LangfuseTelemetryMetadata;
     /** Observability span name; defaults to `runName`. */
     spanName?: string;
+    /** Override the slot's sampling temperature — a fixed value the caller wants
+     *  regardless of the slot (public/demo paths). Unset → the slot's callOptions. */
+    temperature?: number;
+    /** Override the slot's max-output cap. Unset → the slot's callOptions. */
+    maxOutputTokens?: number;
+    /** Override the slot-derived provider options (reasoning/thinking config) —
+     *  e.g. a demo path forcing Gemini thinking off. Unset → the slot's own. */
+    providerOptions?: Record<string, unknown>;
 }
 
 export interface StructuredReviewCallParams<
@@ -132,48 +137,74 @@ async function runReviewCall<T>(
         runName,
         organizationId,
         attrs,
-        observabilityService,
         timeoutMs,
         defaultModelOverride,
         telemetryMetadata,
         spanName,
+        temperature: temperatureOverride,
+        maxOutputTokens: maxOutputTokensOverride,
+        providerOptions: providerOptionsOverride,
     } = params;
 
     const mainSlot = byokConfig;
-    const mainModel = wrapByokModel(
-        buildModelFromSlot(mainSlot, mode.modelOptions, defaultModelOverride),
-        { byokConfig, organizationId, role: 'main' },
-    );
-    const mainModelName = getModelName(mainSlot, defaultModelOverride);
 
-    // Honor the slot's OWN reasoning (effort + JSON override) and OpenRouter
-    // pinning through the SHARED provider mapping — the same one every other
-    // consumer uses. Fixes the review path silently dropping a BYOK user's
-    // configured `reasoningEffort`. Policy: the slot's effort wins; UNSET adds NO
-    // reasoning (buildReasoningProviderOptions falls to 'none' → {} for providers
-    // that don't think by default, explicit-off only where one does), so a slot
-    // that never set reasoning behaves as before. Computed once — the same model
-    // (and reasoning) is reused by the D-00c latency re-issue below.
-    const providerOptions = buildProviderOptions(runName, undefined, {
-        reasoningEffort: mainSlot?.reasoningEffort,
-        reasoningConfigOverride: mainSlot?.reasoningConfigOverride,
-        byokProvider: mainSlot?.provider,
-        modelName: mainSlot?.model,
-        openrouterProviderOrder: (mainSlot as any)?.openrouterProviderOrder,
-        openrouterAllowFallbacks: (mainSlot as any)?.openrouterAllowFallbacks,
-    });
+    // ONE montagem — the SAME `resolveModelConfig` every other consumer uses,
+    // not a 2nd hand-rolled copy. It builds the model (BYOK slot or managed
+    // default), wraps it in the BYOK limiter + failure reporter, and derives
+    // callOptions + providerOptions + modelName from the shared primitives. The
+    // executor now only *executes* the assembled invocation.
+    //
+    // `reasoningEffortDefault: 'none'` preserves the review policy: an UNSET slot
+    // adds NO reasoning (resolveModelConfig otherwise defaults to 'low'). The
+    // slot's own effort/override still win. OpenRouter pins ride the slot through.
+    // Telemetry metadata is intentionally NOT forwarded here (providerOptions is
+    // grouping-agnostic; the span's telemetry is built in `call` below). Computed
+    // once — the same model + reasoning is reused by the D-00c re-issue below.
+    // Structured mode may send `response_format: json_schema`. Some providers
+    // advertise support but reject it at runtime (Gemini / some proxies) — build
+    // a helper so the same invocation can be re-issued with json_schema OFF, and
+    // skip json_schema up front for a slot already proven to reject it.
+    const structuredMode = mode.modelOptions.structuredOutputs === true;
+    const buildInvocation = (structuredOutputs: boolean) =>
+        resolveModelConfig(mainSlot, {
+            runName,
+            // Only the structured path toggles the flag; text keeps its own
+            // modelOptions untouched (asserted: text sends no structured arg).
+            modelOptions: structuredMode
+                ? { ...mode.modelOptions, structuredOutputs }
+                : mode.modelOptions,
+            defaultModelOverride,
+            organizationId,
+            reasoningEffortDefault: 'none',
+            openrouterProviderOrder: (mainSlot as any)?.openrouterProviderOrder,
+            openrouterAllowFallbacks: (mainSlot as any)?.openrouterAllowFallbacks,
+        });
+
+    const sentJsonSchema = structuredMode && mayUseJsonSchema(mainSlot);
+    const {
+        model: mainModel,
+        modelName: mainModelName,
+        callOptions,
+        providerOptions,
+    } = buildInvocation(sentJsonSchema);
 
     // No 2nd-model cascade: every attempt is the same resolved model. Tag
     // BYOK-vs-system so deriveTu attributes the spend correctly (resolved main
     // slot = the org's own key; no slot = managed/env default) — derived from
     // slot presence, never key material. `fallback` defaults false but a caller
     // may set attrs.fallback to mark its OWN retry (kody-rules raw-JSON re-issue).
+    // ONE usage identity for the span — derived from the resolved slot, so every
+    // caller's cost span carries the billing keys (byokModelId / credentialId)
+    // that only the dedup pass used to record by hand. Caller context
+    // (organizationId + attrs.prNumber/…) rides the attrs, applied at span start.
+    const identity = agentModelIdentity(mainSlot);
     const spanAttrs = {
         ...(attrs ?? {}),
         fallback: (attrs?.fallback as boolean | undefined) ?? false,
         type:
             (attrs?.type as string | undefined) ??
             (mainSlot ? 'byok' : 'system'),
+        ...(organizationId ? { organizationId } : {}),
     };
 
     const call = (model: LanguageModel, modelName: string): Promise<T> => {
@@ -185,13 +216,21 @@ async function runReviewCall<T>(
                 // Output mode: structured spreads `output: Output.object`, text
                 // spreads nothing (plain generateText → r.text).
                 ...mode.outputArgs,
-                // Honor the slot's per-model tuning (temperature / max-output)
-                // through the SHARED mapping — the review path can't silently
-                // drop it again.
-                ...resolveSlotCallOptions(mainSlot),
+                // Per-model tuning (temperature / max-output) from the ONE
+                // montagem above — the review path can't silently drop it again.
+                ...callOptions,
+                // Caller overrides win over the slot's callOptions (fixed-tuning
+                // demo paths); unset → the slot's own values above stand.
+                ...(temperatureOverride != null
+                    ? { temperature: temperatureOverride }
+                    : {}),
+                ...(maxOutputTokensOverride != null
+                    ? { maxOutputTokens: maxOutputTokensOverride }
+                    : {}),
                 // Provider-specific reasoning/thinking + OpenRouter routing (the
-                // other SDK channel; empty when the slot sets none).
-                providerOptions,
+                // other SDK channel; empty when the slot sets none). A caller
+                // override (e.g. Gemini thinking off) replaces the slot-derived one.
+                providerOptions: providerOptionsOverride ?? providerOptions,
                 // Pin the AI SDK's OWN retry to 0 (ai@7 defaults to 2) so it can't
                 // stack under the app-level D-00c re-issue and the wrapper catch.
                 maxRetries: 0,
@@ -207,15 +246,21 @@ async function runReviewCall<T>(
                 ),
             } as any);
 
-        // With an observability service, wrap the call in its span (reads usage
-        // from result.usage). Without one — a bare caller that never recorded a
-        // span — run it directly; it still gets the limiter, reasoning, timeout
-        // and retry, only the span is skipped.
-        const run = observabilityService
-            ? observabilityService.runAiSdkLLMInSpan<any>({
+        // Wrap the call in the app's observability span (reads usage from
+        // result.usage). Resolved from the LLM observability PORT — the app
+        // registers it once at bootstrap; a bare caller that never registered
+        // one runs directly (still gets the limiter, reasoning, timeout and
+        // retry — only the span is skipped).
+        const observability = getLlmObservability();
+        const run = observability
+            ? observability.runAiSdkLLMInSpan<any>({
                   spanName: spanName ?? runName,
                   runName,
                   model: modelName,
+                  // Billing keys from the ONE identity — parity with the old
+                  // recordAgentRunUsage(agentModelIdentity(slot)) the dedup used.
+                  byokModelId: identity.byokModelId,
+                  credentialId: identity.credentialId,
                   attrs: spanAttrs,
                   exec,
               })
@@ -227,6 +272,20 @@ async function runReviewCall<T>(
     try {
         return await call(mainModel, mainModelName);
     } catch (err) {
+        // json_schema → json_object fallback. A structured provider that
+        // advertised support but rejected the json_schema body at runtime
+        // (Gemini / some proxies): cache the slot so future structured calls skip
+        // json_schema, then re-issue ONCE with response_format=json_object. Fires
+        // only when we actually sent json_schema — the error is definitionally
+        // proof we did — so a json_object attempt never triggers a byte-identical
+        // retry. Folds `withStructuredOutputFallback` into the ONE executor, so
+        // every structured LLM.run caller gets this resilience, not just dedup.
+        if (sentJsonSchema && isJsonSchemaUnsupportedError(err)) {
+            markJsonSchemaUnsupported(mainSlot);
+            const downgraded = buildInvocation(false);
+            return await call(downgraded.model, downgraded.modelName);
+        }
+
         // D-00c latency guard — the SINGLE app-level retry owner (the AI SDK's
         // own retry is pinned to 0 above; the wrapper catch only classifies +
         // arms cooldown, it never retries). Exactly ONE same-model re-issue,

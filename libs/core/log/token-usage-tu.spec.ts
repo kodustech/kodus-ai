@@ -128,9 +128,12 @@ describe('deriveArea', () => {
         ['crossFileAnalyzeCodeWithAI', 'cross_file'],
         ['crossFileContextPlanner', 'cross_file'],
         ['crossFileContextSufficiency', 'cross_file'],
-        // generalist review agents
+        // generalist review agents — every leaf model call the harness review
+        // makes carries a `code-review-*` runName so LLM.run's ONE usage span
+        // lands in `review` (there is no separate aggregate span anymore).
         ['code-review-security', 'review'],
         ['code-review-bug-verify', 'review'],
+        ['code-review-bug-recovery', 'review'],
         ['code-review-dedup', 'review'],
         ['analyzeCodeWithAI', 'review'],
         ['analyzeCodeWithAI_v2', 'review'],

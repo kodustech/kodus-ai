@@ -1,11 +1,11 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { LLM } from '@libs/llm/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { createLogger } from '@libs/core/log/logger';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { fileMatchesRulePath } from '@libs/common/utils/kody-rules/file-patterns';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { BaseCodeReviewAgentProvider } from '@libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
 import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
@@ -199,7 +199,7 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             // (inside the helper) emits the `tu`-stamped LLM-usage span so the
             // sharded path's tokens still reach the user-facing token analytics.
             const runJudge: RunJudge = async ({ system, user, filename }) => {
-                const parsed = await runStructuredReviewCall({
+                const parsed = await LLM.run({
                     byokConfig: byokConfig ?? undefined,
                     // Wire schema, NOT the zod object: zodSchema() would
                     // re-derive `required` from the zod input side and
@@ -216,7 +216,6 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         agentName: this.getIdentity().name,
                         ...(filename ? { file: filename } : {}),
                     },
-                    observabilityService: this.observabilityService,
                 });
                 return ((parsed as any)?.violations ??
                     []) as RawShardViolation[];

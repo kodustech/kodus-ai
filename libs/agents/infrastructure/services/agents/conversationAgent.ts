@@ -1,5 +1,5 @@
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { type Tool, type LanguageModel } from 'ai';
+import { type Tool } from 'ai';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
@@ -20,24 +20,16 @@ import {
     PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 
-import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-    withLangfuseTrace,
-} from '@libs/core/log/langfuse';
+import { withLangfuseTrace } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
-import { ObservabilityService } from '@libs/core/log/observability.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
-import { resolveModelInvocation } from '@libs/llm/model-invocation';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
 import { connectMcpTools } from '../ai-sdk/mcp-tools';
 import { buildNativeTools } from '../ai-sdk/native-tools';
-import { agentRunUsage } from './agent-usage.util';
-import { systemCacheControl } from '@libs/llm/system-cache';
 import {
     CONVERSATION_FALLBACK_MESSAGE,
     CONVERSATION_PROVIDER_ERROR_MESSAGE,
@@ -77,21 +69,18 @@ interface ConversationThread {
 export class ConversationAgentProvider {
     private readonly logger = createLogger(ConversationAgentProvider.name);
 
-    private readonly defaultLLMConfig = {
-        // No fixed temperature on purpose: some BYOK models reject anything but
-        // their default (e.g. kimi-k2.7-code → "invalid temperature: only 1 is
-        // allowed for this model"), which made every call return 0 tokens and
-        // fall back. Omitting it lets each provider use its valid default — and
-        // a non-zero temperature is fine for natural conversation anyway. The
-        // code-review finder omits it for the same reason.
-        maxTokens: 20000,
-    };
+    /**
+     * Task-level max-output fallback: LLM.run applies it only when the BYOK slot
+     * leaves `maxOutputTokens` unset (`slot ?? this`). Temperature is deliberately
+     * NOT set here — the slot owns it, and LLM.run withholds it for providers that
+     * reject a fixed value (e.g. Anthropic 4.7+, kimi-k2.7-code).
+     */
+    private readonly maxOutputTokensFallback = 20000;
 
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         private readonly permissionValidationService: PermissionValidationService,
-        private readonly observabilityService: ObservabilityService,
         private readonly mcpManagerService?: MCPManagerService,
         @Optional() private readonly byokErrorCounter?: ByokErrorCounter,
         // Conversation record (kodus-agent-sessions). Optional so callers that
@@ -136,31 +125,8 @@ export class ConversationAgentProvider {
         // read off it directly (no `{main,fallback}` carrier).
         const slot = await this.resolveBYOKSlot(organizationAndTeamData);
 
-        // ONE resolution for model + tuning + reasoning, via the shared primitive
-        // every agent uses. It builds+wraps the model (limiter + failure
-        // reporter), derives `temperature`/`maxOutputTokens` from the slot, and
-        // maps the slot's reasoning (effort + reasoningConfigOverride) to
-        // providerOptions. Consolidating this here is what stops any single
-        // call-site from silently dropping one of them (the drift that broke the
-        // review path's tuning). `temperature` is passed through only when the
-        // slot configures it — omitting it lets models that reject a fixed value
-        // (e.g. kimi-k2.7-code wants 1) use their own default. `resolveSlotCallOptions`
-        // also withholds it on Anthropic 4.7+ (sampling params 400 the request).
-        const { model, callOptions, providerOptions } = resolveModelInvocation(
-            slot,
-            {
-                runName: 'conversationAgent',
-                organizationId:
-                    organizationAndTeamData.organizationId?.toString(),
-                reporter: this.byokErrorCounter
-                    ? (e) => void this.byokErrorCounter!.record(e)
-                    : undefined,
-            },
-        );
-        const temperature = callOptions.temperature;
-        // Conversation keeps its own max-output default when the slot omits one.
-        const maxOutputTokens =
-            callOptions.maxOutputTokens ?? this.defaultLLMConfig.maxTokens;
+        // The agent resolves ONLY the slot — LLM.run (inside the runner) owns the
+        // model, tuning, reasoning, prompt-cache and the cost span.
 
         // Tools: MCP (memory, integrations) + native sandbox tools (grep,
         // readFile, listDir, exec). Both are plain AI SDK tools, carried into
@@ -176,30 +142,27 @@ export class ConversationAgentProvider {
         const hasMemoryTool = 'KODUS_FIND_MEMORIES' in mcp.tools;
 
         // Single runtime: the conversation runs as an AgentSpec on the harness
-        // AiSdkAgentRunner — the SAME loop/policies/observability seam as the
-        // code-review finder. No `resultToolName` (free-form chat answer); the
-        // final text is the last assistant turn in RunState. maxSteps applies
-        // the ReAct stop bound the legacy `stopWhen: stepCountIs` did.
-        const runner = new AiSdkAgentRunner({ resolve: () => model });
-        // Anthropic prompt caching for the (static) system prompt — the multi-step
-        // loop (up to CONVERSATION_MAX_STEPS) re-sends it every step, so on Claude
-        // it's read from cache after the first write instead of re-billed. No-op on
-        // non-Anthropic models. Same primitive the code-review finder uses.
-        const systemCache = systemCacheControl({
-            provider: slot?.provider,
-            model: slot?.model,
+        // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
+        // reasoning from the slot and records the cost span; the spec carries only
+        // the harness concerns + the cost labels. maxSteps applies the ReAct bound.
+        const runner = new AiSdkAgentRunner(slot, {
+            organizationId: organizationAndTeamData.organizationId?.toString(),
+            reporter: this.byokErrorCounter
+                ? (e) => void this.byokErrorCounter!.record(e)
+                : undefined,
         });
         const spec: AgentSpec = {
             id: 'conversation',
+            agentName: 'ConversationalAgent',
+            runName: 'conversationAgent',
+            phase: 'conversation',
+            spanName: 'ConversationalAgent::conversationAgent',
             systemPrompt: this.buildSystemPrompt(userLanguage),
-            modelId: 'resolved',
             tools: new AiSdkToolRegistry(tools),
             policies: [],
             maxSteps: CONVERSATION_MAX_STEPS,
-            ...(typeof temperature === 'number' ? { temperature } : {}),
-            maxOutputTokens,
-            ...(Object.keys(providerOptions).length ? { providerOptions } : {}),
-            ...(systemCache ? { systemProviderOptions: systemCache } : {}),
+            // Conversation keeps its own max-output default when the slot omits one.
+            maxOutputTokens: this.maxOutputTokensFallback,
         };
 
         // Standard run context: signal + hard timeout, same guarantee as the
@@ -208,7 +171,6 @@ export class ConversationAgentProvider {
             runId: `conversation:${organizationAndTeamData.organizationId}`,
         });
 
-        const startedAt = Date.now();
         try {
             const preparedPrompt = this.buildUserPrompt(
                 prompt,
@@ -219,13 +181,10 @@ export class ConversationAgentProvider {
                 sandbox,
             );
 
-            // Two planes of Langfuse attribution, both needed:
-            //   withLangfuseTrace -> TRACE level (session/user), what the UI
-            //     filters and groups by. A thread is a session, so every turn
-            //     of the same conversation reads as one unit instead of N
-            //     unrelated traces.
-            //   toAiSdkTelemetryArgs -> OBSERVATION level (name + metadata),
-            //     forwarded verbatim by the runner to the model call.
+            // withLangfuseTrace -> TRACE level (session/user): a thread is a
+            // session, so every turn of the same conversation reads as one unit.
+            // The per-call OBSERVATION telemetry is built by LLM.run from the raw
+            // `telemetryMetadata` the runner forwards (no hand-built SDK payload).
             const state = await withLangfuseTrace(
                 {
                     traceName: 'conversationAgent',
@@ -244,43 +203,22 @@ export class ConversationAgentProvider {
                         spec,
                         {
                             prompt: preparedPrompt,
-                            ...toAiSdkTelemetryArgs(
-                                buildLangfuseTelemetry('conversationAgent', {
-                                    organizationId:
-                                        organizationAndTeamData.organizationId?.toString(),
-                                    teamId: organizationAndTeamData.teamId?.toString(),
-                                    repositoryId:
-                                        prepareContext?.repository?.id?.toString(),
-                                    provider: slot?.provider,
-                                }),
-                            ),
+                            telemetryMetadata: {
+                                organizationId:
+                                    organizationAndTeamData.organizationId?.toString(),
+                                teamId: organizationAndTeamData.teamId?.toString(),
+                                repositoryId:
+                                    prepareContext?.repository?.id?.toString(),
+                                provider: slot?.provider,
+                            },
                         },
                         ctx,
                     ),
             );
 
-            // Cost -> Mongo `observability_telemetry` via the canonical emitter,
-            // so the billing schema (agentName/phase/type/gen_ai.usage.*) is
-            // identical to the code-review agents. Replaces the bespoke
-            // runAiSdkLLMInSpan wrapper.
+            // Cost is recorded by LLM.run's span (inside the runner) — ONE place,
+            // same schema (agentName/phase/type/gen_ai.usage.*). No manual record.
             const finishReason = state.stopReason ?? state.status;
-
-            // Cost record via the shared assembler: `model`/`isByok` from the
-            // slot, usage/steps/finishReason from the RunState — one shape, so the
-            // retry pass can't drift from this one (it once recorded the
-            // 'resolved' sentinel as the model). A BYOK org runs on its own key →
-            // isByok true → billed as 'byok', not 'system'.
-            await this.observabilityService.recordAgentRunUsage(
-                agentRunUsage(slot, state, {
-                    agentName: 'ConversationalAgent',
-                    phase: 'conversation',
-                    spanName: 'ConversationalAgent::conversationAgent',
-                    runName: 'conversationAgent',
-                    organizationAndTeamData,
-                    source: 'harness',
-                    durationMs: Date.now() - startedAt,
-                }),
-            );
 
             const answer = finalText(state);
 
@@ -315,14 +253,10 @@ export class ConversationAgentProvider {
                     },
                 });
                 response = await this.forceAnswer(
-                    model,
+                    runner,
                     userLanguage,
                     prompt,
                     ctx,
-                    temperature,
-                    maxOutputTokens,
-                    slot,
-                    organizationAndTeamData,
                 );
             }
 
@@ -373,27 +307,23 @@ export class ConversationAgentProvider {
      * step. Returns the normalized text, or null if it still produced nothing.
      */
     private async forceAnswer(
-        model: LanguageModel,
+        runner: AiSdkAgentRunner,
         userLanguage: string,
         prompt: string,
         ctx: ToolContext,
-        temperature: number | undefined,
-        maxOutputTokens: number,
-        slot: NormalizedModel | undefined,
-        organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<string | null> {
-        const startedAt = Date.now();
         try {
-            const runner = new AiSdkAgentRunner({ resolve: () => model });
             const spec: AgentSpec = {
                 id: 'conversation-retry',
+                agentName: 'ConversationalAgent',
+                runName: 'conversationAgent',
+                phase: 'conversation-retry',
+                spanName: 'ConversationalAgent::conversationAgent',
                 systemPrompt: this.buildSystemPrompt(userLanguage),
-                modelId: 'resolved',
                 tools: new AiSdkToolRegistry({}),
                 policies: [],
                 maxSteps: 1,
-                ...(typeof temperature === 'number' ? { temperature } : {}),
-                maxOutputTokens,
+                maxOutputTokens: this.maxOutputTokensFallback,
             };
 
             const state = await runner.run(
@@ -404,24 +334,8 @@ export class ConversationAgentProvider {
                 ctx,
             );
 
-            // Record the retry's token usage (the main path records at phase
-            // 'conversation'; without this the forceAnswer call was invisible to
-            // billing). Success path only — a thrown retry burned zero tokens.
-            // Same assembler as the main pass, so `model` is the real resolved
-            // model (not the 'resolved' spec sentinel this once recorded) and the
-            // row carries the full billing attributes, not a partial record.
-            await this.observabilityService.recordAgentRunUsage(
-                agentRunUsage(slot, state, {
-                    agentName: 'ConversationalAgent',
-                    phase: 'conversation-retry',
-                    spanName: 'ConversationalAgent::conversationAgent',
-                    runName: 'conversationAgent',
-                    organizationAndTeamData,
-                    source: 'harness',
-                    durationMs: Date.now() - startedAt,
-                }),
-            );
-
+            // Cost recorded by LLM.run's span (phase 'conversation-retry') — the
+            // reused runner carries the same slot, so the retry bills identically.
             return normalizeConversationResponse(finalText(state));
         } catch (error) {
             this.logger.warn({

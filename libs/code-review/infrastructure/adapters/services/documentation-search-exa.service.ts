@@ -3,8 +3,8 @@ export const DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN = Symbol.for(
 );
 
 import { createLogger } from '@libs/core/log/logger';
+import { LLM } from '@libs/llm/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { z } from 'zod';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import {
@@ -437,7 +437,7 @@ export class DocumentationSearchExaService {
             // the managed default instead of the pinned GEMINI_3_FLASH_PREVIEW (accepted,
             // RESEARCH Pattern 1). The outer runLLMInSpan wrapper is dropped — the span
             // is emitted once inside runStructuredReviewCall (Q4).
-            const response = await runStructuredReviewCall({
+            const response = await LLM.run({
                 byokConfig: params.byokConfig,
                 schema: documentationSearchExaFormatSchema,
                 organizationId: params.organizationAndTeamData?.organizationId,
@@ -448,7 +448,6 @@ export class DocumentationSearchExaService {
                     prNumber: params.prNumber,
                     fallback: false,
                 },
-                observabilityService: this.observabilityService,
                 system: prompt_code_review_documentation_formatter_system,
                 user: prompt_code_review_documentation_formatter_user({
                     packageName: params.packageName,

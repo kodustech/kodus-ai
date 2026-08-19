@@ -49,6 +49,9 @@ const MODEL_SUGGESTIONS = {
 
 // Model builders return sentinels — no real model/network is touched.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
     buildModelFromSlot: jest.fn(() => ({ __model: 'byok-main' })),
     getModelName: jest.fn(() => 'byok-main'),
 }));
@@ -66,6 +69,7 @@ jest.mock('@libs/core/log/langfuse', () => ({
 }));
 
 import { LLMAnalysisService } from './llmAnalysis.service';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
@@ -120,6 +124,8 @@ describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK p
     beforeEach(() => {
         mockGenerate.mockReset();
         observability.runAiSdkLLMInSpan.mockClear();
+        // LLM.run records its span through the observability port — register the mock.
+        setLlmObservability(observability);
         observability.runLLMInSpan.mockClear();
         mockGenerate.mockResolvedValue({ experimental_output: MODEL_SUGGESTIONS });
     });

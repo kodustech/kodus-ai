@@ -38,10 +38,14 @@ function slotFromModel(
 ): NormalizedModel | undefined {
     const cred = creds.get(model.credentialId);
     // Missing credential or managed default → no explicit slot (env-default path).
-    if (!cred || cred.managed) return undefined;
+    if (!cred || cred.managed) {
+        return undefined;
+    }
     const provider = STR(cred.provider);
     const apiKey = STR(cred.apiKey);
-    if (!provider || !apiKey || !STR(model.model)) return undefined; // degrade: skip
+    if (!provider || !apiKey || !STR(model.model)) {
+        return undefined;
+    } // degrade: skip
     const s = (cred.settings ?? {}) as Record<string, unknown>;
     return {
         provider: provider as BYOKProvider,
@@ -78,7 +82,9 @@ function slotFromModel(
  * resolves to by default, without the per-task routing context. Never throws.
  */
 export function resolveDefaultSlot(raw: unknown): NormalizedModel | undefined {
-    if (!isByokConfig(raw)) return undefined;
+    if (!isByokConfig(raw)) {
+        return undefined;
+    }
     const models = (raw.models ?? []).filter((m) => m && m.id);
     const defaultId = raw.routing?.defaultModelId;
     const mainId =
@@ -98,12 +104,17 @@ export function resolveModelSlot(
     config: BYOKConfig,
     modelId: string | null | undefined,
 ): NormalizedModel | undefined {
-    if (!modelId) return undefined;
+    if (!modelId) {
+        return undefined;
+    }
     const creds = new Map<string, BYOKCredential>(
-        (config.credentials ?? []).filter((c) => c && c.id).map((c) => [c.id, c]),
+        (config.credentials ?? [])
+            .filter((c) => c && c.id)
+            .map((c) => [c.id, c]),
     );
     const model = (config.models ?? []).find((m) => m && m.id === modelId);
-    if (!model) return undefined;
+    if (!model) {
+        return undefined;
+    }
     return slotFromModel(model, creds);
 }
-

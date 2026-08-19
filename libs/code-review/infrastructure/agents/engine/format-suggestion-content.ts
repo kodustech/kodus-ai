@@ -1,11 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
-import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
-import { resolveSecondaryPassModel } from './secondary-pass-model';
+import { LLM } from '@libs/llm/llm';
 import {
     buildFormatPrompt,
     parseFormatResponse,
@@ -25,9 +20,11 @@ const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
  * Reformat suggestion content from WHAT/WHY/HOW to natural prose,
  * and ensure improvedCode is populated.
  *
- * Runs on the shared secondary-pass model — see resolveSecondaryPassModel
- * (BYOK default when configured; platform gpt-5.4-mini for trial / no BYOK).
- * Respects custom writing guidelines if provided.
+ * Plain BYOK text call through the ONE primitive (LLM.run): the passed slot
+ * when configured, else the managed default — same model resolution, limiter,
+ * reasoning and timeout as every other call. Respects custom writing guidelines
+ * if provided. A missing/failed model degrades through the catch (→ empty map:
+ * comments still ship, minus the prose polish).
  *
  * Prompt + parse live in format-prompt.ts (shared with the format eval).
  */
@@ -43,19 +40,6 @@ export async function formatSuggestionContent(
         return new Map();
     }
 
-    // Secondary pass: BYOK when configured, else platform — see
-    // resolveSecondaryPassModel. Null when nothing is configured → skip
-    // formatting (comments still ship, minus the prose polish).
-    const model = resolveSecondaryPassModel(options?.byokConfig);
-
-    if (!model) {
-        logger.warn({
-            message: 'No model available for suggestion formatting, skipping',
-            context: 'SuggestionFormatter',
-        });
-        return new Map();
-    }
-
     let langLabel: string | null = null;
     if (options?.languageResultPrompt) {
         try {
@@ -67,27 +51,21 @@ export async function formatSuggestionContent(
         }
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FORMAT_TIMEOUT_MS);
-
     try {
-        const result: any = await generateText({
-            model: model as any,
-            abortSignal: controller.signal,
-            ...toAiSdkTelemetryArgs(
-                buildLangfuseTelemetry('suggestion-formatter'),
-            ),
-            prompt: buildFormatPrompt(suggestions, {
+        const text = await LLM.run({
+            byokConfig: options?.byokConfig,
+            user: buildFormatPrompt(suggestions, {
                 customWritingGuidelines: options?.customWritingGuidelines,
                 languageLabel: langLabel,
             }),
+            runName: 'suggestion-formatter',
+            timeoutMs: FORMAT_TIMEOUT_MS,
         });
 
-        const text = result.text || '';
-        const { formatted, parseOk } = parseFormatResponse(text);
+        const { formatted, parseOk } = parseFormatResponse(text || '');
         if (!parseOk) {
             logger.warn({
-                message: `[FORMATTER] No JSON array in response (${text.length} chars)`,
+                message: `[FORMATTER] No JSON array in response (${(text || '').length} chars)`,
                 context: 'SuggestionFormatter',
             });
             return new Map();
@@ -105,7 +83,5 @@ export async function formatSuggestionContent(
             context: 'SuggestionFormatter',
         });
         return new Map();
-    } finally {
-        clearTimeout(timeout);
     }
 }

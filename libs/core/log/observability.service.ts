@@ -11,6 +11,7 @@ import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 
 import { createLogger } from '@libs/core/log/logger';
 import { deriveTu } from './token-usage-tu';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 
 export type TokenUsage = {
     input_tokens?: number;
@@ -171,7 +172,13 @@ export class ObservabilityService implements OnModuleInit {
 
     private readonly logger = createLogger(ObservabilityService.name);
 
-    constructor(private readonly configService: ConfigService) {}
+    constructor(private readonly configService: ConfigService) {
+        // Register as the LLM observability implementation (dependency inversion):
+        // @libs/llm's `LLM.run` records its billing span through this port without
+        // importing the concrete service or being threaded it per call. Singleton
+        // scope → one registration per process.
+        setLlmObservability(this);
+    }
 
     /**
      * NestJS lifecycle hook - Initialize observability automatically when module loads
@@ -410,7 +417,14 @@ export class ObservabilityService implements OnModuleInit {
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
     }): Promise<T> {
-        const [agentName, phase] = params.spanName.split('::');
+        // agentName/phase: prefer explicit attrs (the agent-loop path sets them so
+        // the phase column is exact, e.g. 'conversation' not 'conversationAgent');
+        // fall back to the spanName split for the one-shot callers that don't.
+        const a = params.attrs ?? {};
+        const [spanAgent, spanPhase] = params.spanName.split('::');
+        // Measure the call duration here (parity with the old recordAgentRunUsage
+        // durationMs, which the agent loop used to record by hand).
+        const startedAt = Date.now();
         return this.runInSpan(
             params.spanName,
             async (span) => {
@@ -424,8 +438,14 @@ export class ObservabilityService implements OnModuleInit {
                         credentialId: params.credentialId,
                         route: params.route,
                         usedFallback: params.usedFallback,
-                        agentName,
-                        phase,
+                        agentName: (a.agentName as string) ?? spanAgent,
+                        phase: (a.phase as string) ?? spanPhase,
+                        type: a.type as string | undefined,
+                        organizationId: a.organizationId as string | undefined,
+                        teamId: a.teamId as string | undefined,
+                        prNumber: a.prNumber as number | undefined,
+                        source: a.source as string | undefined,
+                        durationMs: Date.now() - startedAt,
                         usage: {
                             inputTokens: usage?.inputTokens,
                             outputTokens: usage?.outputTokens,

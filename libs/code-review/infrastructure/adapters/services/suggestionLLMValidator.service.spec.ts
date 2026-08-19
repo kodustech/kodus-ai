@@ -15,6 +15,9 @@
  * that structured-output path hangs against an offline model double.
  */
 jest.mock('@libs/llm/byok-to-vercel', () => ({
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
     buildModelFromSlot: jest.fn(() => ({ __model: 'managed-default' })),
     getModelName: jest.fn(() => 'managed-default'),
 }));
@@ -33,6 +36,7 @@ jest.mock('@libs/core/log/langfuse', () => ({
 
 import { SuggestionLLMValidator } from './suggestionLLMValidator.service';
 import { tracedGenerateText } from '@libs/llm/llm-call';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
 
@@ -42,6 +46,9 @@ const observabilityService = {
 } as any;
 
 function buildValidator(): SuggestionLLMValidator {
+    // LLM.run records its span through the observability port; register the
+    // test's mock so the executor's span path hits it.
+    setLlmObservability(observabilityService);
     return new SuggestionLLMValidator(observabilityService);
 }
 

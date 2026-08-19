@@ -373,14 +373,9 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
         );
         const provider = new KodyRulesAgentProvider(
             {
-                // model-factory resolves the run's model through the per-task
-                // entry point; no BYOK → env/managed default (null slot).
-                resolveTaskModel: jest.fn(async () => ({
-                    model: {} as any,
-                    modelName: 'default:model',
-                    slot: null,
-                    verdict: null,
-                })),
+                // model-factory routes the run's model through the per-task slot
+                // entry point; no BYOK → undefined slot → LLM.run's managed default.
+                resolveTaskSlot: jest.fn(async () => undefined),
             } as any, // permission (system model)
             {} as any, // observability (unused — runStructuredReviewCall mocked)
         );

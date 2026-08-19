@@ -11,6 +11,10 @@ jest.mock('@libs/llm/byok-to-vercel', () => ({
     // Default: no limiter cached (slot not in cooldown). Cooldown tests override
     // this to return a stub limiter reporting isInCooldown()=true.
     getLimiterForSlot: jest.fn(() => null),
+    // json_schema fallback helpers (default: json_schema allowed, no error match).
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
 }));
 jest.mock('@libs/llm/byok-model-wrapper', () => ({
     wrapByokModel: jest.fn((model: any) => model),
@@ -36,9 +40,12 @@ import {
 } from '@libs/llm/structured-review-call';
 import { tracedGenerateText, timeoutSignal } from '@libs/llm/llm-call';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import {
     buildModelFromSlot,
     getLimiterForSlot,
+    isJsonSchemaUnsupportedError,
+    markJsonSchemaUnsupported,
 } from '@libs/llm/byok-to-vercel';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
@@ -83,6 +90,9 @@ beforeEach(() => {
     mockGetLimiter.mockReturnValue(null); // default: slot not in cooldown
     observabilityService.runAiSdkLLMInSpan.mockClear();
     (buildProviderOptions as jest.Mock).mockClear();
+    // The executor records its span through the observability PORT — register
+    // the mock so span assertions hit it (a specific test opts out below).
+    setLlmObservability(observabilityService);
 });
 
 describe('runTextReviewCall — plain-text half of the shared executor', () => {
@@ -147,12 +157,13 @@ describe('runTextReviewCall — plain-text half of the shared executor', () => {
     });
 
     it('runs WITHOUT an observability service (bare caller) — no span, still returns text', async () => {
+        setLlmObservability(undefined); // no port registered → no span
         mockGenerate.mockResolvedValueOnce({ text: 'no-span', usage: {} });
         const out = await runTextReviewCall({
             system: 'sys',
             user: 'usr',
             runName: 'bare.run',
-        }); // no observabilityService
+        });
         expect(out).toBe('no-span');
         expect(observabilityService.runAiSdkLLMInSpan).not.toHaveBeenCalled();
         expect(mockGenerate).toHaveBeenCalledTimes(1);
@@ -195,13 +206,18 @@ describe('runStructuredReviewCall — reasoning (honors the slot, no added defau
         });
     });
 
-    it('an unset slot reasoning still calls the mapping with undefined effort (→ none)', async () => {
+    it("an unset slot reasoning maps to 'none' (no added reasoning)", async () => {
         mockGenerate.mockResolvedValueOnce(ok({ ok: true }));
         await runStructuredReviewCall({ ...base }); // no byokConfig
+        // The executor now assembles through resolveModelConfig with
+        // reasoningEffortDefault:'none'. An unset slot therefore reaches the
+        // mapping as the explicit 'none' rather than undefined — behaviorally
+        // identical (buildReasoningProviderOptions folds `undefined ?? 'none'`
+        // to the same {}), just no longer relying on the coalesce.
         expect(buildProviderOptions).toHaveBeenCalledWith(
             'test.run',
             undefined,
-            expect.objectContaining({ reasoningEffort: undefined }),
+            expect.objectContaining({ reasoningEffort: 'none' }),
         );
     });
 });
@@ -266,6 +282,26 @@ describe('runStructuredReviewCall — single-model policy (no runtime fallback)'
 
         expect(mockGenerate).toHaveBeenCalledTimes(1);
         assertNoSecondModelBuilt();
+    });
+});
+
+describe('runStructuredReviewCall — json_schema → json_object fallback', () => {
+    it('retries once with json_object when the provider rejects json_schema, and caches the slot', async () => {
+        // First attempt (json_schema) rejects with the schema-unsupported error;
+        // the executor caches the slot and re-issues once with json_object.
+        (isJsonSchemaUnsupportedError as jest.Mock).mockReturnValueOnce(true);
+        mockGenerate
+            .mockRejectedValueOnce(
+                new Error('response_format json_schema is not supported'),
+            )
+            .mockResolvedValueOnce(ok({ recovered: true }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(markJsonSchemaUnsupported).toHaveBeenCalledTimes(1);
+        // exactly two attempts: the json_schema try + the one json_object retry.
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(out).toEqual({ recovered: true });
     });
 });
 

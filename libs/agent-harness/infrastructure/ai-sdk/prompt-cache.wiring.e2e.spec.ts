@@ -1,16 +1,30 @@
 /**
- * Wiring proof: the runner actually stamps the cache hint onto the tools + the
- * latest user message it hands the model — but ONLY on a multi-step run whose
- * provider supplied an inline-cache hint. Uses a capturing MockLanguageModelV3
- * so we read the exact lowered call options the SDK produced.
+ * Wiring proof: the prompt-cache hint is stamped onto the tools + the latest user
+ * message the model receives — but ONLY on a multi-step run whose provider
+ * supplied an inline-cache hint. The cache now lives in LLM.run's agent-loop path
+ * (a model concern), so this drives the runner → LLM.run with `resolveModelConfig`
+ * + `systemCacheControl` mocked, and reads the exact lowered call options a
+ * capturing MockLanguageModelV3 produced.
  */
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+jest.mock('@libs/llm/system-cache', () => ({
+    systemCacheControl: jest.fn(),
+}));
+
 import { MockLanguageModelV3 } from 'ai/test';
 
+import { resolveModelConfig } from '@libs/llm/model-invocation';
+import { systemCacheControl } from '@libs/llm/system-cache';
+
 import type { AgentSpec } from '../../domain/contracts/agent.contract';
-import type { ModelResolver } from '../../domain/contracts/model.contract';
 import type { ToolContext, AgentTool } from '../../domain/contracts/tool.contract';
 import { InMemoryToolRegistry } from '../tools/in-memory-tool-registry';
 import { AiSdkAgentRunner } from './ai-sdk-agent-runner';
+
+const mockResolve = resolveModelConfig as jest.Mock;
+const mockSystemCache = systemCacheControl as jest.Mock;
 
 const HINT = { anthropic: { cacheControl: { type: 'ephemeral' } } };
 
@@ -55,7 +69,6 @@ function baseSpec(over: Partial<AgentSpec>): AgentSpec {
     return {
         id: 'finder',
         systemPrompt: 'find bugs',
-        modelId: 'mock',
         tools: new InMemoryToolRegistry([echoTool, doneTool]),
         policies: [],
         maxSteps: 4,
@@ -71,18 +84,30 @@ const hasCacheMarker = (node: any): boolean => {
     return Object.values(node).some(hasCacheMarker);
 };
 
-describe('runner cache-policy wiring', () => {
+/** Wire the mocked model resolution to a fresh capturing model. */
+function wireModel(capture: { options?: any }) {
+    mockResolve.mockReturnValue({
+        model: capturingModel(capture),
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    });
+}
+
+describe('prompt-cache wiring (LLM.run agent loop)', () => {
+    beforeEach(() => {
+        mockResolve.mockReset();
+        mockSystemCache.mockReset();
+    });
+
     it('marks tools + latest user message on a multi-step run WITH a hint', async () => {
         const capture: { options?: any } = {};
-        const runner = new AiSdkAgentRunner({
-            resolve: () => capturingModel(capture) as any,
-        } as ModelResolver<any>);
+        wireModel(capture);
+        mockSystemCache.mockReturnValue(HINT); // provider honors inline markers
 
-        await runner.run(
-            baseSpec({ maxSteps: 4, systemProviderOptions: HINT }),
-            { prompt: 'the task' },
-            ctx,
-        );
+        const runner = new AiSdkAgentRunner(undefined);
+        await runner.run(baseSpec({ maxSteps: 4 }), { prompt: 'the task' }, ctx);
 
         // The lowered tools array carries the ephemeral marker (last tool).
         expect(hasCacheMarker(capture.options?.tools)).toBe(true);
@@ -92,30 +117,22 @@ describe('runner cache-policy wiring', () => {
 
     it('does NOT mark on a single-step run (cache write would not pay back)', async () => {
         const capture: { options?: any } = {};
-        const runner = new AiSdkAgentRunner({
-            resolve: () => capturingModel(capture) as any,
-        } as ModelResolver<any>);
+        wireModel(capture);
+        mockSystemCache.mockReturnValue(HINT);
 
-        await runner.run(
-            baseSpec({ maxSteps: 1, systemProviderOptions: HINT }),
-            { prompt: 'the task' },
-            ctx,
-        );
+        const runner = new AiSdkAgentRunner(undefined);
+        await runner.run(baseSpec({ maxSteps: 1 }), { prompt: 'the task' }, ctx);
 
         expect(hasCacheMarker(capture.options?.tools)).toBe(false);
     });
 
     it('does NOT mark when the provider supplied no inline-cache hint', async () => {
         const capture: { options?: any } = {};
-        const runner = new AiSdkAgentRunner({
-            resolve: () => capturingModel(capture) as any,
-        } as ModelResolver<any>);
+        wireModel(capture);
+        mockSystemCache.mockReturnValue(undefined); // implicit-cache provider
 
-        await runner.run(
-            baseSpec({ maxSteps: 4, systemProviderOptions: undefined }),
-            { prompt: 'the task' },
-            ctx,
-        );
+        const runner = new AiSdkAgentRunner(undefined);
+        await runner.run(baseSpec({ maxSteps: 4 }), { prompt: 'the task' }, ctx);
 
         expect(hasCacheMarker(capture.options?.tools)).toBe(false);
     });

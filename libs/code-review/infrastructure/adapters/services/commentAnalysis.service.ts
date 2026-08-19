@@ -6,7 +6,7 @@ import { Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
 
 import { LLM_TASK } from '@libs/llm/byok-config';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { LLM } from '@libs/llm/llm';
 
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import { isKodyAuthoredBody } from '@libs/common/utils/kody-identifiers';
@@ -106,10 +106,11 @@ export class CommentAnalysisService {
             LLM_TASK.codeReview,
         );
 
-        // Cast: runStructuredReviewCall's return is a conditional over
-        // `z.ZodType | Schema`; here `S extends z.ZodType`, so it resolves to
-        // `z.infer<S>` — TS just can't narrow the conditional through the call.
-        return runStructuredReviewCall({
+        // Cast: LLM.run's return is a conditional over `z.ZodType | Schema`;
+        // here `S extends z.ZodType`, so it resolves to `z.infer<S>` — TS just
+        // can't narrow the conditional through the call. observabilityService is
+        // no longer passed: LLM owns the span internally (app singleton).
+        return LLM.run({
             byokConfig: slot,
             schema,
             system,
@@ -123,7 +124,6 @@ export class CommentAnalysisService {
                 teamId: organizationAndTeamData.teamId,
             },
             defaultModelOverride: modelConfig.modelOverride,
-            observabilityService: this.observabilityService,
         }) as Promise<z.infer<S>>;
     }
 

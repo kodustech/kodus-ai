@@ -59,11 +59,12 @@ describe('CommentAnalysisService — structured-call delegation', () => {
         });
 
         expect(resolveTaskSlot).toHaveBeenCalledWith(org, 'codeReview');
+        // observabilityService is NOT threaded by the service anymore — LLM.run
+        // owns the span internally (app singleton), so it never appears here.
         expect(runStructuredReviewCall).toHaveBeenCalledWith(
             expect.objectContaining({
                 byokConfig: CIPHERTEXT_SLOT,
                 defaultModelOverride: undefined,
-                observabilityService,
                 spanName: expect.stringContaining(
                     `${CommentAnalysisService.name}::`,
                 ),

@@ -16,8 +16,14 @@ import type { AgentTool, ToolContext, ToolRegistry } from './tool.contract';
 export interface AgentSpec {
     readonly id: string;
     readonly systemPrompt: string;
-    /** Model identifier (resolved by the infra model provider / BYOK). */
-    readonly modelId: string;
+    /** Cost-attribution label — the observability span's `agentName`. */
+    readonly agentName?: string;
+    /** Names the Langfuse observation + cost row (defaults to agentName / id). */
+    readonly runName?: string;
+    /** Phase label on the cost row (e.g. 'conversation' vs 'conversation-retry'). */
+    readonly phase?: string;
+    /** Observability span name (defaults to runName). */
+    readonly spanName?: string;
     /** Tools this role may use. */
     readonly tools: ToolRegistry;
     /** Composable policies (budget, progress, compression, verify...). */
@@ -30,16 +36,11 @@ export interface AgentSpec {
     readonly temperature?: number;
     /** Hard cap on output tokens PER model call. Omitted -> provider default. */
     readonly maxOutputTokens?: number;
-    /** Opaque provider options forwarded to the model call (e.g. reasoning /
-     *  thinking config). The harness does not interpret these — the domain
-     *  builds them (provider-specific) and the runner passes them through. */
+    /** Opaque providerOptions (reasoning / thinking) that OVERRIDE the slot-
+     *  derived ones. Unset → LLM.run derives them from the slot. The review
+     *  finder sets this (config-derived reasoning that can differ from the slot);
+     *  the chat/business agents leave it unset. The runner forwards it verbatim. */
     readonly providerOptions?: Readonly<Record<string, unknown>>;
-    /** Opaque provider options attached to the SYSTEM message specifically
-     *  (e.g. Anthropic `cacheControl: ephemeral` so a long system prompt is
-     *  cached across the loop's steps). When set, the runner sends the system
-     *  prompt as a system message carrying these options instead of a bare
-     *  string. Domain-built; the harness does not interpret them. */
-    readonly systemProviderOptions?: Readonly<Record<string, unknown>>;
     /** Name of the "final tool" whose call IS the run's structured output.
      *  When set, the runner materializes each call to it into
      *  `RunState.artifacts` (the "result tool" convention) — so the domain
@@ -65,6 +66,11 @@ export interface AgentRunInput {
     readonly prompt: string;
     /** Optional seed messages (prior context). */
     readonly seedMessages?: readonly { role: 'user' | 'assistant'; content: string }[];
+    /** Langfuse observation metadata (org / team / repo / provider ...). Passed
+     *  to LLM.run, which builds the vendor telemetry shape — so the caller hands
+     *  over the RAW metadata, not a pre-built SDK payload. Opaque here to keep the
+     *  domain contract free of the vendor type. */
+    readonly telemetryMetadata?: Readonly<Record<string, unknown>>;
     /** Opaque per-run telemetry, forwarded VERBATIM as the model call's
      *  `telemetry`. The harness does not interpret it: the domain hands it over
      *  already in the shape the SDK takes (e.g. `toAiSdkTelemetryArgs`), so the

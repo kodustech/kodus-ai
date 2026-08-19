@@ -25,7 +25,6 @@ import {
     type PromptAgentMeta,
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
-import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
@@ -45,10 +44,7 @@ import {
     type AgentModelParams,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
-import {
-    recordAgentUsageSpans,
-    runAgentWithTrace,
-} from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
+import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
 
@@ -545,10 +541,14 @@ export abstract class BaseCodeReviewAgentProvider {
                 const PROGRESS_BATCH_SIZE = 5;
 
                 const loopParams = {
-                    model: modelParams.model,
                     systemPrompt,
                     userPrompt,
                     agentName: identity.name,
+                    // Cost-span run name for THIS category's leaf model calls.
+                    // LLM.run records the ONE usage span per call under this name;
+                    // deriveArea buckets `code-review*` to the `review` area. No
+                    // separate aggregate span is emitted (that double-counted).
+                    usageRunName: `code-review-${this.getCategoryLabel()}`,
                     telemetryMetadata: {
                         organizationId:
                             input.organizationAndTeamData?.organizationId,
@@ -670,20 +670,12 @@ export abstract class BaseCodeReviewAgentProvider {
 
             const durationMs = Date.now() - startTime;
 
-            // Per-agent usage spans (main + verify). Best-effort. → ReviewObservability.
-            await recordAgentUsageSpans({
-                agentResult,
-                modelName: effectiveModelName,
-                slot: byokConfig,
-                route: LLM_TASK.codeReview,
-                categoryLabel: this.getCategoryLabel(),
-                identityName: identity.name,
-                organizationId: input.organizationAndTeamData?.organizationId,
-                teamId: input.organizationAndTeamData?.teamId,
-                prNumber: input.prNumber,
-                durationMs,
-                observability: this.observabilityService,
-            });
+            // Usage is recorded by LLM.run — ONE cost span per leaf model call
+            // (finder + verify + resample + prose-recovery), each carrying the
+            // `code-review-*` runName so `deriveArea` buckets it to `review`.
+            // The old aggregate span (recordAgentUsageSpans) is gone: it
+            // re-recorded the same tokens the leaf spans already record, which
+            // double-counted the review's cost on the Token Usage screen.
 
             // Map raw agent findings → CodeSuggestion (path validation,
             // kody-rule UUID recovery, label/severity). Extracted to FindingMapper.

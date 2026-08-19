@@ -15,11 +15,18 @@ import { CodeReviewVersion } from '@/core/domain/enums/code-review.enum';
 
 const mockTracedGenerateText = jest.fn();
 // Default: run the caller's `exec(model)` so dedup still hits mockTracedGenerateText.
-// Both BYOK and non-BYOK paths now go through withStructuredOutputFallback.
 const mockWithStructuredOutputFallback = jest.fn(
     async (_params: any, exec: (model: any) => Promise<any>) =>
         exec({ __mockModel: true }),
 ) as jest.Mock;
+// Dedup + tiebreak now run through the ONE primitive (LLM.run). Mock it to reuse
+// the same `mockTracedGenerateText` resolved value the existing tests set — LLM.run
+// returns the PARSED object (executor extracts experimental_output/output/object),
+// so unwrap it here. A rejection propagates (dedup fail-soft keeps all).
+const mockLlmRun = jest.fn(async (..._args: any[]) => {
+    const r: any = await mockTracedGenerateText();
+    return r?.experimental_output ?? r?.output ?? r?.object;
+});
 
 // tracedGenerateText was relocated from the legacy agent-loop to @libs/llm/llm-call
 // during the llm migration; mock it there so the stage's dedup LLM call is
@@ -34,7 +41,6 @@ jest.mock(
     () => ({
         withStructuredOutputFallback: (...args: any[]) =>
             mockWithStructuredOutputFallback(...args),
-        NoStructuredFallbackModelError: class extends Error {},
         getModelName: jest.fn().mockReturnValue('test-model'),
         // Off-trial default: undefined override (the stage falls through to the
         // resolved slot / managed default). Split out of byok-to-vercel into
@@ -50,6 +56,10 @@ jest.mock(
             .mockReturnValue({ __mockModel: 'platform' }),
     }),
 );
+
+jest.mock('@libs/llm/llm', () => ({
+    LLM: { run: (...args: any[]) => mockLlmRun(...args) },
+}));
 
 jest.mock('ai', () => ({
     generateText: jest.fn().mockResolvedValue({

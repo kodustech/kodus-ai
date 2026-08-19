@@ -3,8 +3,8 @@ export const DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN = Symbol.for(
 );
 
 import { createLogger } from '@libs/core/log/logger';
+import { LLM } from '@libs/llm/llm';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import {
     DocumentationQueryPlanByFile,
@@ -82,7 +82,7 @@ export class DocumentationLLMPlannerService {
 
                     const fileRunName = `${runName}:${file.filename}`;
 
-                    const response = await runStructuredReviewCall({
+                    const response = await LLM.run({
                         byokConfig,
                         schema: DocumentationPlannerSchema,
                         organizationId:
@@ -93,7 +93,6 @@ export class DocumentationLLMPlannerService {
                             packageCandidates: filePackages.length,
                             fallback: false,
                         },
-                        observabilityService: this.observabilityService,
                         system: prompt_code_review_documentation_planner_system(),
                         user: prompt_code_review_documentation_planner_user(
                             payload,

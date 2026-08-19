@@ -1,84 +1,59 @@
 /**
- * Telemetry forwarding — proves the per-run telemetry payload actually reaches
- * the AI SDK 7 telemetry registry, through the REAL SDK, with a mocked model.
+ * Telemetry forwarding contract.
  *
- * Asserted at the OUTCOME, not at the internal shape: what a registered
- * `Telemetry` integration observes is exactly what Langfuse's
- * `LangfuseVercelAiSdkIntegration` observes in production — the `functionId`
- * that names the observation, and the runtime-context keys that become the
- * observation's metadata. That makes this spec a behavior contract any
- * refactor of the forwarding path has to keep green.
+ * The runner no longer hand-forwards a raw AI SDK telemetry payload — LLM.run
+ * builds the Langfuse telemetry from the RAW `telemetryMetadata` the runner
+ * threads (functionId = runName, metadata → runtime context). So the runner's
+ * job here is narrow and testable at its seam: it must forward `telemetryMetadata`
+ * and the cost/observability naming (runName / agentName / phase) into LLM.run.
+ * The metadata→SDK mapping itself is covered by the langfuse spec.
  */
-import { registerTelemetry, type Telemetry } from 'ai';
-import { MockLanguageModelV3 } from 'ai/test';
+jest.mock('@libs/llm/llm', () => ({ LLM: { run: jest.fn() } }));
+
+import { LLM } from '@libs/llm/llm';
 
 import type { AgentSpec } from '../../domain/contracts/agent.contract';
-import type { ModelResolver } from '../../domain/contracts/model.contract';
 import type { ToolContext } from '../../domain/contracts/tool.contract';
 import { InMemoryToolRegistry } from '../tools/in-memory-tool-registry';
 import { AiSdkAgentRunner } from './ai-sdk-agent-runner';
 
-// Captures every telemetry event the SDK emits for this test file's module
-// registry. `registerTelemetry` is process-global, hence the module-level
-// registration + per-test reset.
-const seen: { starts: any[] } = { starts: [] };
-const spy: Telemetry = {
-    onStart: (event: any) => {
-        seen.starts.push(event);
-    },
-};
-registerTelemetry(spy);
+const mockRun = LLM.run as jest.Mock;
 
-const resolver: ModelResolver<any> = {
-    resolve: () =>
-        new MockLanguageModelV3({
-            doGenerate: (async () => ({
-                content: [{ type: 'text', text: 'done' }],
-                finishReason: 'stop',
-                usage: { inputTokens: 10, outputTokens: 5 },
-                warnings: [],
-            })) as any,
-        }) as any,
-};
+beforeEach(() => {
+    mockRun.mockReset();
+    mockRun.mockResolvedValue({
+        usage: { inputTokens: 10, outputTokens: 5 },
+        steps: [],
+    });
+});
 
-function probeSpec(): AgentSpec {
+function probeSpec(over: Partial<AgentSpec> = {}): AgentSpec {
     return {
         id: 'telemetry-probe',
         systemPrompt: 'probe',
-        modelId: 'mock',
         tools: new InMemoryToolRegistry([]),
         policies: [],
         maxSteps: 1,
+        ...over,
     };
 }
 
 const ctx: ToolContext = { runId: 'telemetry-1' };
 
 describe('AiSdkAgentRunner telemetry forwarding', () => {
-    beforeEach(() => {
-        seen.starts = [];
-    });
+    it('forwards telemetryMetadata + observability naming into LLM.run', async () => {
+        const runner = new AiSdkAgentRunner(undefined);
 
-    it('names the observation with functionId and exposes metadata as runtime context', async () => {
-        const runner = new AiSdkAgentRunner(resolver);
-
-        const state = await runner.run(
-            probeSpec(),
+        await runner.run(
+            probeSpec({
+                runName: 'conversationAgent',
+                agentName: 'ConversationalAgent',
+                phase: 'conversation',
+                spanName: 'ConversationalAgent::conversationAgent',
+            }),
             {
                 prompt: 'go',
-                // Exactly what `toAiSdkTelemetryArgs(buildLangfuseTelemetry(
-                // 'conversationAgent', {organizationId, teamId}))` returns —
-                // the domain-side half of this chain is covered by the
-                // langfuse spec; here we prove the harness half.
-                telemetry: {
-                    isEnabled: true,
-                    functionId: 'conversationAgent',
-                    includeRuntimeContext: {
-                        organizationId: true,
-                        teamId: true,
-                    },
-                },
-                runtimeContext: {
+                telemetryMetadata: {
                     organizationId: 'org-1',
                     teamId: 'team-1',
                 },
@@ -86,51 +61,35 @@ describe('AiSdkAgentRunner telemetry forwarding', () => {
             ctx,
         );
 
-        expect(state.status).not.toBe('error');
-        expect(seen.starts).toHaveLength(1);
-
-        const event = seen.starts[0];
-        // functionId reaches the SDK -> Langfuse names the observation with it.
-        expect(event.functionId).toBe('conversationAgent');
-        // metadata keys are opted into the telemetry payload -> Langfuse turns
-        // them into observation metadata. Both the value AND the opt-in matter:
-        // runtime-context keys are EXCLUDED unless explicitly included.
-        expect(event.runtimeContext).toMatchObject({
+        expect(mockRun).toHaveBeenCalledTimes(1);
+        const req = mockRun.mock.calls[0][0];
+        // functionId of the Langfuse observation is driven by runName.
+        expect(req.runName).toBe('conversationAgent');
+        expect(req.spanName).toBe('ConversationalAgent::conversationAgent');
+        // Raw metadata is forwarded verbatim — LLM.run builds the SDK shape.
+        expect(req.telemetryMetadata).toEqual({
             organizationId: 'org-1',
             teamId: 'team-1',
         });
+        // Cost attrs the span records.
+        expect(req.attrs).toMatchObject({
+            agentName: 'ConversationalAgent',
+            phase: 'conversation',
+            source: 'harness',
+        });
+        // It's the agent-loop path (tools + policies seams present).
+        expect(req.loop).toBeDefined();
+        expect(req.loop.maxSteps).toBe(1);
     });
 
-    it('forwards a metadata-less payload without inventing runtime context', async () => {
-        const runner = new AiSdkAgentRunner(resolver);
+    it('omits telemetryMetadata when the run supplies none, and defaults runName to the id', async () => {
+        const runner = new AiSdkAgentRunner(undefined);
 
-        await runner.run(
-            probeSpec(),
-            {
-                prompt: 'go',
-                telemetry: { isEnabled: true, functionId: 'finder' },
-            },
-            ctx,
-        );
+        await runner.run(probeSpec({ id: 'finder' }), { prompt: 'go' }, ctx);
 
-        expect(seen.starts).toHaveLength(1);
-        expect(seen.starts[0].functionId).toBe('finder');
-        expect(seen.starts[0].runtimeContext ?? {}).toEqual({});
-    });
-
-    it('emits no telemetry event when the run opts out (isEnabled=false)', async () => {
-        const runner = new AiSdkAgentRunner(resolver);
-
-        await runner.run(
-            probeSpec(),
-            {
-                prompt: 'go',
-                // What buildLangfuseTelemetry returns when tracing is off.
-                telemetry: { isEnabled: false, functionId: 'conversationAgent' },
-            },
-            ctx,
-        );
-
-        expect(seen.starts).toHaveLength(0);
+        const req = mockRun.mock.calls[0][0];
+        expect(req.telemetryMetadata).toBeUndefined();
+        // runName falls back to agentName ?? id when unset.
+        expect(req.runName).toBe('finder');
     });
 });

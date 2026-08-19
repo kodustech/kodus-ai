@@ -18,6 +18,9 @@
 
 // Model builders return sentinels — no real model/network is touched.
 jest.mock('@libs/llm/byok-to-vercel', () => ({
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
     buildModelFromSlot: jest.fn(() => ({ __model: 'managed-default' })),
     getModelName: jest.fn(() => 'managed-default'),
 }));
@@ -35,6 +38,7 @@ jest.mock('@libs/core/log/langfuse', () => ({
 }));
 
 import { ClassifySessionUseCase } from '../classify-session.use-case';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { SessionEventRepository } from '@libs/cli-review/infrastructure/repositories/session-event.repository';
 import { SessionEventModel } from '@libs/cli-review/infrastructure/repositories/schemas/session-event.model';
 import { tracedGenerateText } from '@libs/llm/llm-call';
@@ -100,6 +104,8 @@ describe('ClassifySessionUseCase', () => {
             experimental_output: { decisions: [] },
         });
         observabilityService.runAiSdkLLMInSpan.mockClear();
+        // LLM.run records its span through the observability port — register the mock.
+        setLlmObservability(observabilityService);
 
         useCase = new ClassifySessionUseCase(repo, observabilityService);
     });

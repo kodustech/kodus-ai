@@ -87,6 +87,11 @@ describe('ReferenceDetectorService.extractMarkers', () => {
 // files. The regex-path fix alone was NOT enough — reproduced live on the
 // manual validation env ('File not found: @kody-sync' on a clean rule).
 jest.mock('@libs/llm/llm-call', () => ({
+    // The shared executor also imports timeoutSignal + the budget constant;
+    // mock them so the real runReviewCall path (now reached via LLM.run) doesn't
+    // blow up on an undefined timeoutSignal.
+    timeoutSignal: jest.fn(() => undefined),
+    LLM_CALL_TIMEOUT_MS: 600000,
     tracedGenerateText: jest.fn().mockResolvedValue({
         text: JSON.stringify([
             { filePath: '@kody-sync', originalText: '@kody-sync' },

@@ -4,7 +4,7 @@
  * BYOK missions in order:
  *
  *   router      → resolveTaskSlot(config, task)     (StaticTaskStrategy → slot + verdict)
- *   acesso      ┐ resolveModelInvocation(slot, …)   (build + limiter + tuning + reasoning)
+ *   acesso      ┐ resolveModelConfig(slot, …)   (build + limiter + tuning + reasoning)
  *   observab.   ┘ + agentModelIdentity(slot)        (usage-attribution quartet)
  *
  * The point: consumers stop wiring these three separately (and dropping one —
@@ -17,13 +17,13 @@
  * `slot: undefined` → env/managed default model, empty tuning, `isByok: false`.
  *
  * Secret hygiene: the slot carries ENCRYPTED apiKey ciphertext; only
- * `buildModelFromSlot` (inside resolveModelInvocation) touches plaintext.
+ * `buildModelFromSlot` (inside resolveModelConfig) touches plaintext.
  */
 import type { BYOKConfig, LlmTask, NormalizedModel } from './byok-config';
 import type { RequestContext, RoutingVerdict } from './routing-strategy';
 import { resolveTaskSlot } from './resolve-task-model';
 import {
-    resolveModelInvocation,
+    resolveModelConfig,
     type ModelInvocation,
     type ResolveModelInvocationOptions,
 } from './model-invocation';
@@ -51,7 +51,7 @@ export interface TaskInvocation extends ModelInvocation {
 
 /**
  * Resolve `task` over the org's config into a ready-to-call invocation. This is
- * `resolveTaskSlot` (router) + `resolveModelInvocation` (access + tuning +
+ * `resolveTaskSlot` (router) + `resolveModelConfig` (access + tuning +
  * reasoning) + `agentModelIdentity` (usage), composed once.
  */
 export function resolveTaskInvocation(
@@ -62,7 +62,7 @@ export function resolveTaskInvocation(
     const { ctx, ...invocationOptions } = options;
 
     const { slot, verdict } = resolveTaskSlot(config, task, { ctx });
-    const invocation = resolveModelInvocation(slot, invocationOptions);
+    const invocation = resolveModelConfig(slot, invocationOptions);
 
     return {
         ...invocation,

@@ -323,7 +323,7 @@ export class GenericSkillRunnerService {
                                             executionPolicy.fetcherMaxIterations,
                                         // Model + tuning + reasoning are derived
                                         // from byokConfig inside runMcpFetcherAgent
-                                        // (the shared resolveModelInvocation), so
+                                        // (the shared resolveModelConfig), so
                                         // the caller no longer hand-builds
                                         // providerOptions here.
                                         runId: ctx.runId,

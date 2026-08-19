@@ -1,11 +1,11 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { LLM } from '@libs/llm/llm';
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 
 import {
     getAugmentationsFromPack,
@@ -139,13 +139,12 @@ export class LLMAnalysisService implements IAIAnalysisService {
             // own model. The structured result is re-serialized and fed through
             // LLMResponseProcessor exactly as the STRING/JSON path did, preserving
             // the downstream codeSuggestions mapping.
-            const analysis = await runStructuredReviewCall({
+            const analysis = await LLM.run({
                 schema: codeReviewAnalysisSchema,
                 system: prompt_codereview_system_gemini(baseContext),
                 user: prompt_codereview_user_gemini(baseContext),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
-                observabilityService: this.observability,
                 byokConfig: byokConfigRef,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,
@@ -222,13 +221,12 @@ export class LLMAnalysisService implements IAIAnalysisService {
             // repair path (D-03/REQ-SEC-01). `setTemperature(0)` /
             // `setMaxReasoningTokens(3000)` are not threaded by
             // runStructuredReviewCall (per the phase's tracer decision).
-            const analysis = await runStructuredReviewCall({
+            const analysis = await LLM.run({
                 schema: codeReviewAnalysisSchema,
                 system: prompt_codereview_system_gemini_v2(baseContext),
                 user: prompt_codereview_user_gemini_v2(baseContext),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
-                observabilityService: this.observability,
                 byokConfig,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,
@@ -345,13 +343,12 @@ export class LLMAnalysisService implements IAIAnalysisService {
             // review default; per-task model routing is deferred to Phase 4. The
             // structured result is re-serialized so the string return contract is
             // preserved for any legacy caller.
-            const structured = await runStructuredReviewCall({
+            const structured = await LLM.run({
                 schema: codeReviewAnalysisSchema,
                 system: prompt_codereview_system_gemini({}),
                 user: `${prompt_codereview_user_gemini({})}\n\n## Question\n${question ?? ''}`,
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
-                observabilityService: this.observability,
                 byokConfig: undefined,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,
@@ -404,13 +401,12 @@ export class LLMAnalysisService implements IAIAnalysisService {
             // The severity prompt returns `{ id, severity }` per suggestion; the
             // structured result is re-serialized and fed through LLMResponseProcessor
             // exactly as the STRING/JSON path did, preserving the downstream mapping.
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 schema: severityAnalysisSchema,
                 system: '',
                 user: prompt_severity_analysis_user(codeSuggestions),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
-                observabilityService: this.observability,
                 byokConfig,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,
@@ -547,13 +543,12 @@ export class LLMAnalysisService implements IAIAnalysisService {
             // `{ id, relevantFile, implementationStatus }` per suggestion; the
             // structured result is re-serialized and fed through LLMResponseProcessor
             // exactly as the STRING/JSON path did, preserving the downstream mapping.
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 schema: validateImplementedSchema,
                 system: '',
                 user: prompt_validateImplementedSuggestions(payload),
                 runName,
                 organizationId: organizationAndTeamData?.organizationId,
-                observabilityService: this.observability,
                 byokConfig: undefined,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,

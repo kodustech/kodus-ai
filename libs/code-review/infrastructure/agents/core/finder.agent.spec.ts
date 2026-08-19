@@ -4,10 +4,14 @@
  * extracted from the RunState — the full "produces a real review" path,
  * deterministic, zero real LLM.
  */
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+
 import { MockLanguageModelV3 } from 'ai/test';
+import { resolveModelConfig } from '@libs/llm/model-invocation';
 
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
-import type { ModelResolver } from '@libs/agent-harness/domain/contracts/model.contract';
 import type { ToolContext } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
@@ -59,9 +63,17 @@ function scriptedModel() {
     return new MockLanguageModelV3({ doGenerate });
 }
 
-const resolver: ModelResolver<any> = {
-    resolve: () => scriptedModel() as any,
-};
+const mockResolve = resolveModelConfig as jest.Mock;
+beforeEach(() => {
+    mockResolve.mockReset();
+    mockResolve.mockImplementation(() => ({
+        model: scriptedModel(),
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    }));
+});
 
 const grepTool = {
     name: 'grep',
@@ -105,7 +117,7 @@ describe('finder.agent (assembled on agent-harness)', () => {
             'force-finalize',
         ]);
 
-        const state = await new AiSdkAgentRunner(resolver).run(
+        const state = await new AiSdkAgentRunner(undefined).run(
             spec,
             { prompt: 'review this PR' },
             ctx,

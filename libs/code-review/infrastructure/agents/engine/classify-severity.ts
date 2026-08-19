@@ -11,12 +11,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { CodeReviewConfig } from '@libs/core/infrastructure/config/types/general/codeReview.type';
-import { resolveSecondaryPassModel } from './secondary-pass-model';
-import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
-import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
+import { LLM } from '@libs/llm/llm';
 import {
     DEFAULT_SEVERITY_FLAGS,
     buildSeverityPrompt,
@@ -35,10 +30,10 @@ const SEVERITY_TIMEOUT_MS = 90_000;
 /**
  * Classify severity for a batch of suggestions.
  *
- * Model resolution (via resolveSecondaryPassModel, same as dedup/format):
- * 1. Org BYOK main/fallback (default when configured)
- * 2. Platform gpt-5.4-mini (trial / no BYOK)
- * 3. No model available → default everything to 'medium'
+ * Model policy lives inside the shared text executor (Porta 2): the passed
+ * BYOK slot when configured, else the managed Kodus default (Fireworks
+ * deepseek) — the SAME resolution every secondary pass uses. A missing/failed
+ * model degrades through the catch below (→ everything 'medium').
  */
 export async function classifySeverity(
     suggestions: SuggestionForClassification[],
@@ -47,40 +42,30 @@ export async function classifySeverity(
 ): Promise<Map<number, string>> {
     if (suggestions.length === 0) return new Map();
 
-    const model = resolveSecondaryPassModel(byokConfig);
-
-    if (!model) {
-        logger.warn({
-            message:
-                'No model available for severity classification, defaulting to medium',
-            context: 'SeverityClassifier',
-        });
-        return new Map(suggestions.map((_, i) => [i, 'medium']));
-    }
-
     const flags = severityFlags?.severity?.flags || DEFAULT_SEVERITY_FLAGS;
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), SEVERITY_TIMEOUT_MS);
+    const allMedium = () =>
+        new Map<number, string>(suggestions.map((_, i) => [i, 'medium']));
 
     try {
-        const result: any = await generateText({
-            model: model as any,
-            abortSignal: controller.signal,
-            ...toAiSdkTelemetryArgs(
-                buildLangfuseTelemetry('severity-classifier'),
-            ),
-            prompt: buildSeverityPrompt(suggestions, flags),
+        // Shared text executor (Porta 2): resolves the ONE secondary model (org
+        // BYOK slot, else the managed default), adds the BYOK limiter and caps the
+        // call at SEVERITY_TIMEOUT_MS so a stuck secondary pass can't hold the
+        // pipeline. No system prompt, no span — matching the prior bare call.
+        // A missing/failed model degrades through the catch below (→ all medium).
+        const text = await LLM.run({
+            byokConfig,
+            user: buildSeverityPrompt(suggestions, flags),
+            runName: 'severity-classifier',
+            timeoutMs: SEVERITY_TIMEOUT_MS,
         });
 
-        const text = result.text || '';
-        const { classifications, parseOk } = parseSeverityResponse(text);
+        const { classifications, parseOk } = parseSeverityResponse(text || '');
         if (!parseOk) {
             logger.warn({
-                message: `[SEVERITY] No JSON in response (${text.length} chars)`,
+                message: `[SEVERITY] No JSON in response (${(text || '').length} chars)`,
                 context: 'SeverityClassifier',
             });
-            return new Map(suggestions.map((_, i) => [i, 'medium']));
+            return allMedium();
         }
 
         // Partial responses: only overwrite indices the model returned.
@@ -99,8 +84,6 @@ export async function classifySeverity(
             context: 'SeverityClassifier',
             error,
         });
-        return new Map(suggestions.map((_, i) => [i, 'medium']));
-    } finally {
-        clearTimeout(timeout);
+        return allMedium();
     }
 }

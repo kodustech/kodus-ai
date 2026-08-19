@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { LLM } from '@libs/llm/llm';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Model } from 'mongoose';
 import { DataSource } from 'typeorm';
 
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PullRequestsModel } from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
 
@@ -213,12 +213,11 @@ export class PullRequestClassifierService {
         // managed default). This is a cost/latency profile change for a high-volume
         // batch job; it is flagged, reversible, and re-optimized by Phase 4 routing.
         // Parity is proven on the parsed classifications[] → Map<string, PRType>.
-        const result = await runStructuredReviewCall({
+        const result = await LLM.run({
             schema: classificationBatchSchema,
             system: prompt_ClassifyPRTypesSystem,
             user: prompt_ClassifyPRTypesUser(payload),
             runName: 'analytics.pr-type-classifier',
-            observabilityService: this.observabilityService,
             byokConfig: undefined,
         });
 

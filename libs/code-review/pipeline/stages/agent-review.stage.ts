@@ -1,9 +1,8 @@
 import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
-import { Output, jsonSchema, embed, type EmbeddingModel } from 'ai';
+import { jsonSchema, embed, type EmbeddingModel } from 'ai';
 import { Inject, Injectable, Optional } from '@nestjs/common';
-import { tracedGenerateText } from '@libs/llm/llm-call';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
@@ -23,17 +22,10 @@ import {
     dedupReviewWarnings,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
-import {
-    withStructuredOutputFallback,
-    NoStructuredFallbackModelError,
-    getModelName,
-} from '@libs/llm/byok-to-vercel';
+import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import { agentModelIdentity } from '@libs/llm/model-identity';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
 import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 
@@ -98,10 +90,8 @@ import {
     classifyLLMError,
     getClassification,
 } from '@libs/llm/error-classifier';
-import {
-    isSecondaryByok,
-    resolveSecondaryPassModel,
-} from '@libs/code-review/infrastructure/agents/engine/secondary-pass-model';
+import { hasManagedModelKey } from '@libs/llm/managed-slot';
+import { LLM } from '@libs/llm/llm';
 
 /**
  * Extract valid line ranges from a unified diff patch.
@@ -1706,32 +1696,19 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         a: Partial<CodeSuggestion>,
         b: Partial<CodeSuggestion>,
     ) => Promise<boolean | null> {
-        const secondaryByok = isSecondaryByok(byokConfig);
         return async (a, b) => {
             try {
-                const call = (model: any) =>
-                    tracedGenerateText({
-                        model: model as any,
-                        ...toAiSdkTelemetryArgs(
-                            buildLangfuseTelemetry(
-                                'dedup-tiebreak',
-                                telemetryMeta,
-                            ),
-                        ),
-                        output: Output.object({
-                            schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA as any),
-                        }) as any,
-                        prompt: buildTiebreakPrompt(a as any, b as any),
-                    });
-                const res = await withStructuredOutputFallback(
-                    {
-                        slot: secondaryByok ? byokConfig : undefined,
-                        organizationId: telemetryMeta?.organizationId,
-                        label: 'dedup-tiebreak',
-                    },
-                    call,
-                );
-                const out = (res as any).object ?? (res as any).output;
+                // ONE primitive: LLM.run resolves the slot (or managed default),
+                // owns the span + json_schema→json_object fallback, and returns the
+                // parsed object. `runName` reproduces the 'dedup-tiebreak' trace.
+                const out = (await LLM.run({
+                    byokConfig,
+                    schema: jsonSchema(DEDUP_TIEBREAK_SCHEMA as any),
+                    user: buildTiebreakPrompt(a as any, b as any),
+                    runName: 'dedup-tiebreak',
+                    organizationId: telemetryMeta?.organizationId,
+                    telemetryMetadata: telemetryMeta,
+                })) as any;
                 return typeof out?.sameBug === 'boolean' ? out.sameBug : null;
             } catch (err) {
                 this.logger.warn({
@@ -1827,9 +1804,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         suggestions: Partial<CodeSuggestion>[];
         trace: DedupTraceSummary;
     }> {
-        // The secondary-pass gate helpers (isSecondaryByok /
-        // resolveSecondaryPassModel) and withStructuredOutputFallback all take
-        // the bare resolved model slot directly.
+        // The dedup pass runs on the bare resolved model slot (or the managed
+        // default, resolved inside LLM.run).
         const dedupSlot = resolvedSlot ?? undefined;
         if (suggestions.length <= 1) {
             return {
@@ -1851,109 +1827,63 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             };
         }
 
-        // Model resolution (same policy as severity/format):
-        //   BYOK main → withStructuredOutputFallback (client key + schema retry)
-        //   else the Kodus-funded DeepSeek default / self-hosted env model
-        //   (getInternalModel — trial / no BYOK)
-        const secondaryByok = isSecondaryByok(dedupSlot);
-
         try {
-            const runDedup = (model: any) =>
-                tracedGenerateText({
-                    model: model as any,
-                    ...toAiSdkTelemetryArgs(
-                        buildLangfuseTelemetry(
-                            'dedup-suggestions',
-                            telemetryMeta,
+            // Graceful no-model (self-hosted, no key): skip dedup and keep all,
+            // the same everywhere — so dev/CI doesn't fail-loud on a missing key
+            // (LLM.run no longer throws the old NoStructuredFallbackModelError the
+            // catch below keyed off). A model resolves when there's a BYOK slot OR
+            // a managed/env default key is configured — the exact condition the
+            // removed `resolveSecondaryPassModel` (→ getInternalModel) checked.
+            if (!dedupSlot && !hasManagedModelKey()) {
+                this.logger.warn({
+                    message: `[DEDUP] PR#${prNumber}: no secondary model available, keeping all suggestions`,
+                    context: this.stageName,
+                });
+                return {
+                    suggestions,
+                    trace: {
+                        status: 'skipped',
+                        totalClassifiedCount: suggestions.length,
+                        kodyRulesSkippedCount: 0,
+                        nonKodyInputCount: suggestions.length,
+                        nonKodyOutputCount: suggestions.length,
+                        finalOutputCount: suggestions.length,
+                        uniqueCount: suggestions.length,
+                        groupsCount: 0,
+                        removedCount: 0,
+                        unique: suggestions.map((suggestion) =>
+                            this.summarizeDedupSuggestion(suggestion),
                         ),
-                    ),
-                    output: Output.object({
-                        schema: jsonSchema(DEDUP_SCHEMA as any),
-                    }) as any,
-                    prompt: buildDedupPrompt(suggestions, (sev) =>
-                        this.normalizeSeverity(sev),
-                    ),
-                });
-
-            let dedupResult: any;
-            if (secondaryByok) {
-                // The resolved codeReview slot is the secondary model, passed
-                // through as the bare slot.
-                dedupResult = await withStructuredOutputFallback(
-                    {
-                        slot: resolvedSlot,
-                        organizationId: telemetryMeta?.organizationId,
-                        label: 'dedup-suggestions',
                     },
-                    runDedup,
-                );
-            } else {
-                // Trial / no-BYOK / self-hosted env path. Still wrap with
-                // withStructuredOutputFallback so models that reject
-                // response_format=json_schema (Gemini, some proxies) retry
-                // with json_object instead of failing open into keep-all
-                // after a thrown error further up — or worse, partial
-                // structured output that leaves true dups on the PR.
-                if (!resolveSecondaryPassModel(dedupSlot)) {
-                    this.logger.warn({
-                        message: `[DEDUP] PR#${prNumber}: no secondary model available, keeping all suggestions`,
-                        context: this.stageName,
-                    });
-                    return {
-                        suggestions,
-                        trace: {
-                            status: 'skipped',
-                            totalClassifiedCount: suggestions.length,
-                            kodyRulesSkippedCount: 0,
-                            nonKodyInputCount: suggestions.length,
-                            nonKodyOutputCount: suggestions.length,
-                            finalOutputCount: suggestions.length,
-                            uniqueCount: suggestions.length,
-                            groupsCount: 0,
-                            removedCount: 0,
-                            unique: suggestions.map((suggestion) =>
-                                this.summarizeDedupSuggestion(suggestion),
-                            ),
-                        },
-                    };
-                }
-                dedupResult = await withStructuredOutputFallback(
-                    {
-                        slot: resolvedSlot,
-                        organizationId: telemetryMeta?.organizationId,
-                        label: 'dedup-suggestions',
-                    },
-                    runDedup,
-                );
+                };
             }
 
-            // Track token usage — via the canonical emitter so the dedup pass'
-            // cost lands in `observability_telemetry` with the SAME schema
-            // (agentName/phase/type/gen_ai.usage.*) as the review agents.
-            const dedupUsage = dedupResult.usage ?? dedupResult.totalUsage;
-            if (dedupUsage) {
-                await this.observabilityService.recordAgentRunUsage({
-                    agentName: 'code-review',
-                    phase: 'dedup',
-                    spanName: 'dedup-suggestions',
-                    runName: 'code-review-dedup',
-                    // Identity from the ONE derivation: BYOK slot when the dedup
-                    // ran on the org's key, else undefined → the env/managed
-                    // default name (getModelName), not a placeholder.
-                    ...agentModelIdentity(
-                        secondaryByok ? resolvedSlot : undefined,
-                    ),
-                    usage: {
-                        inputTokens: dedupUsage.inputTokens,
-                        outputTokens: dedupUsage.outputTokens,
-                        totalTokens: dedupUsage.totalTokens,
-                    },
+            // ONE primitive: LLM.run resolves the slot (or the managed default),
+            // owns the json_schema→json_object fallback, and records the dedup
+            // usage span ITSELF — agent.name/phase derived from the 'code-review::
+            // dedup' spanName — so the manual recordAgentRunUsage is gone. Returns
+            // the parsed dedup object directly.
+            const dedupOutput = (await LLM.run({
+                byokConfig: resolvedSlot,
+                schema: jsonSchema(DEDUP_SCHEMA as any),
+                user: buildDedupPrompt(suggestions, (sev) =>
+                    this.normalizeSeverity(sev),
+                ),
+                runName: 'code-review-dedup',
+                spanName: 'code-review::dedup',
+                organizationId: telemetryMeta?.organizationId,
+                telemetryMetadata: telemetryMeta,
+                // Parity with the old recordAgentRunUsage: the dedup span keeps
+                // its type + per-PR/team attribution (the model/credential keys
+                // are derived from the slot inside LLM.run).
+                attrs: {
+                    type: dedupSlot ? 'byok' : 'system',
                     prNumber,
-                });
-            }
-
-            const dedupOutput =
-                (dedupResult as any).object ?? (dedupResult as any).output;
+                    ...(telemetryMeta?.teamId
+                        ? { teamId: telemetryMeta.teamId }
+                        : {}),
+                },
+            })) as any;
 
             this.logger.log({
                 message: `[DEDUP-DEBUG] PR#${prNumber}: input=${suggestions.length}, groups=${dedupOutput?.groups?.length ?? 0}, unique=${dedupOutput?.unique?.length ?? 0}`,
@@ -2220,31 +2150,24 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 },
             };
         } catch (error) {
-            const noModel = error instanceof NoStructuredFallbackModelError;
             // Fail loud outside production. An unexpected error here (e.g. the
             // `googleKey` ReferenceError that shipped on a feature branch) is a
             // programming bug — left to the graceful 'failed-keep-all' path it
-            // ships silently as duplicate comments. In dev/CI/test we re-throw
-            // so it surfaces at PR time; the operational "no model available"
-            // case (noModel) stays graceful everywhere.
+            // ships silently as duplicate comments. In dev/CI/test we re-throw so
+            // it surfaces at PR time. The operational "no model available" case is
+            // handled BEFORE LLM.run by the `dedupSlot`/managed-key guard above,
+            // so it never reaches this catch.
             const isProduction =
                 (process.env.API_NODE_ENV || process.env.NODE_ENV) ===
                 'production';
-            if (!noModel && !isProduction) {
+            if (!isProduction) {
                 throw error;
             }
-            if (noModel) {
-                this.logger.warn({
-                    message: `[DEDUP] PR#${prNumber}: No model available for dedup (no Google key and no BYOK), keeping all ${suggestions.length} suggestions`,
-                    context: this.stageName,
-                });
-            } else {
-                this.logger.error({
-                    message: `[DEDUP] PR#${prNumber}: Failed, keeping all ${suggestions.length} suggestions`,
-                    context: this.stageName,
-                    error,
-                });
-            }
+            this.logger.error({
+                message: `[DEDUP] PR#${prNumber}: Failed, keeping all ${suggestions.length} suggestions`,
+                context: this.stageName,
+                error,
+            });
             return {
                 suggestions,
                 trace: {
@@ -2257,11 +2180,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     uniqueCount: suggestions.length,
                     groupsCount: 0,
                     removedCount: 0,
-                    errorMessage: noModel
-                        ? 'No model available for dedup (no Google key and no BYOK)'
-                        : error instanceof Error
-                          ? error.message
-                          : String(error),
+                    errorMessage:
+                        error instanceof Error ? error.message : String(error),
                     unique: suggestions.map((suggestion) =>
                         this.summarizeDedupSuggestion(suggestion),
                     ),

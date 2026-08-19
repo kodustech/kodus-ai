@@ -8,12 +8,11 @@
  * Resolves ONE model per run (1 model per task — the runtime error-recovery
  * fallback was dropped in 04b-05). The per-repo override applies to that model.
  */
-import type { LanguageModel } from 'ai';
-
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 import type { LlmTask, NormalizedModel } from '@libs/llm/byok-config';
 import type { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { LLM_TASK } from '@libs/llm/byok-config';
+import { getModelName } from '@libs/llm/byok-to-vercel';
 
 import type { ReviewAgentInput } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 
@@ -31,7 +30,6 @@ type ModelInput = Pick<
  */
 export interface AgentModelParams {
     role: 'main';
-    model: LanguageModel;
     modelName: string;
     maxInputTokens?: number;
     reasoningEffort?: ReasoningEffort;
@@ -69,27 +67,24 @@ export async function resolveReviewAgentModel(
     // `codeReview` when unset — TASK_ROUTING_FALLBACK).
     task: LlmTask = LLM_TASK.codeReview,
 ): Promise<ResolvedAgentModel> {
-    // Resolve the MAIN model for `task` through the single task→model entry point
-    // (slice 04b). byokModelId (id) wins over the legacy byokModel NAME;
-    // resolveTaskModel handles the id-THEN-name match, the capability gate, and
-    // the null-slot → env/managed default degrade (no BYOK too).
+    // Route the `task` to its slot through the single task→slot entry point owned
+    // by the permission service. byokModelId (id) wins over the legacy byokModel
+    // NAME; resolveTaskSlot handles the id-THEN-name match, the capability gate,
+    // and the null-slot → env/managed default degrade (no BYOK too). No model is
+    // BUILT here — LLM.run builds + wraps it from the slot at call time (one door).
     const overrideRef = input.byokModelId?.trim() || input.byokModel?.trim();
-    const resolved = await permissionService.resolveTaskModel(
+    const slot = await permissionService.resolveTaskSlot(
         input.organizationAndTeamData,
         task,
-        {
-            ctx: overrideRef ? { override: { modelId: overrideRef } } : {},
-            defaultModelOverride: input.defaultModelOverride,
-        },
+        { ctx: overrideRef ? { override: { modelId: overrideRef } } : {} },
     );
 
-    // Build the MAIN bundle straight from the resolver's return — sourced from the
-    // routed slot (null on a BLOCKED/managed verdict or no BYOK → env-default model).
-    const slot = resolved.slot;
+    // The MAIN bundle from the routed slot (undefined on a BLOCKED/managed verdict
+    // or no BYOK → the env/managed default, whose NAME `defaultModelOverride`
+    // still sets). `modelName` is the human `provider:model` label for telemetry.
     const main: AgentModelParams = {
         role: 'main',
-        model: resolved.model,
-        modelName: resolved.modelName,
+        modelName: getModelName(slot, input.defaultModelOverride),
         maxInputTokens: slot?.maxInputTokens,
         reasoningEffort: slot?.reasoningEffort,
         reasoningConfigOverride: slot?.reasoningConfigOverride,

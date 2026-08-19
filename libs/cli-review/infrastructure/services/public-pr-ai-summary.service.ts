@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
-import { generateText } from 'ai';
-import { resolveTaskInvocation } from '@libs/llm/resolve-task-invocation';
+import { LLM } from '@libs/llm/llm';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import type { IPublicPrAiSummaryService } from '@libs/cli-review/domain/contracts/public-pr-ai-summary.service.contract';
 import type { PublicPrMetadata } from './github-public-pr.service';
@@ -28,26 +27,19 @@ export class PublicPrAiSummaryService implements IPublicPrAiSummaryService {
         diff: string,
     ): Promise<string | undefined> {
         try {
-            // Public demo: no BYOK → undefined slot → the forced cheaper default
-            // (SUMMARY_MODEL) via the invocation's defaultModelOverride. We only
-            // need the built model here; this call keeps its own fixed tuning.
-            const { model } = resolveTaskInvocation(
-                undefined,
-                LLM_TASK.prSummary,
-                {
-                    runName: 'public-pr-ai-summary',
-                    defaultModelOverride: SUMMARY_MODEL,
-                },
-            );
-
             const truncatedDiff = diff.slice(0, MAX_DIFF_CHARS);
             const truncated = diff.length > MAX_DIFF_CHARS;
 
             const prompt = buildPrompt(pr, truncatedDiff, truncated);
 
-            const { text } = await generateText({
-                model,
-                prompt,
+            // Public demo: no BYOK → undefined slot → LLM.run resolves the forced
+            // cheaper default (SUMMARY_MODEL) via defaultModelOverride and owns the
+            // model + observability span; the fixed tuning rides as overrides.
+            const text = await LLM.run({
+                task: LLM_TASK.prSummary,
+                defaultModelOverride: SUMMARY_MODEL,
+                user: prompt,
+                runName: 'public-pr-ai-summary',
                 temperature: 0.2,
                 maxOutputTokens: MAX_OUTPUT_TOKENS,
             });

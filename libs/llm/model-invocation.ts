@@ -81,7 +81,7 @@ export interface ResolveModelInvocationOptions
  * empty tuning + reasoning (the provider's own defaults apply). Absence is
  * always `undefined` (one convention) — resolvers never hand back `null`.
  */
-export function resolveModelInvocation(
+export function resolveModelConfig(
     slot: NormalizedModel | undefined,
     opts: ResolveModelInvocationOptions,
 ): ModelInvocation {

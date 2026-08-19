@@ -25,7 +25,6 @@ const emptyRegistry: ToolRegistry = {
 const spec: AgentSpec = {
     id: 'verifier',
     systemPrompt: 'verify the claim',
-    modelId: 'gemini',
     tools: emptyRegistry,
     policies: [],
     maxSteps: 4,

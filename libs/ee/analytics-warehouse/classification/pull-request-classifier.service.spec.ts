@@ -14,6 +14,9 @@
  * that structured-output path hangs against an offline model double.
  */
 jest.mock('@libs/llm/byok-to-vercel', () => ({
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
     buildModelFromSlot: jest.fn(() => ({ __model: 'managed-default' })),
     getModelName: jest.fn(() => 'managed-default'),
 }));
@@ -31,6 +34,7 @@ jest.mock('@libs/core/log/langfuse', () => ({
 }));
 
 import { PullRequestClassifierService } from './pull-request-classifier.service';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { tracedGenerateText } from '@libs/llm/llm-call';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
@@ -58,6 +62,8 @@ describe('PullRequestClassifierService.classifyBatch — migration parity (AI SD
     beforeEach(() => {
         mockGenerate.mockReset();
         observabilityService.runAiSdkLLMInSpan.mockClear();
+        // LLM.run records its span through the observability port — register the mock.
+        setLlmObservability(observabilityService);
     });
 
     it('maps classifications[] to the same Map<string, PRType>, trimming ids and dropping unknown types', async () => {
