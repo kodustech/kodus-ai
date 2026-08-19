@@ -1,11 +1,27 @@
 ---
 title: "关联代码库"
-description: "让 Kody 在审查时把兄弟代码库作为上下文读取,从而发现跨代码库的契约不匹配。"
+description: "让 Kody 在审查时把兄弟代码库作为上下文读取 —— 既用于跨代码库的契约,也用于你的代码库所依赖但并不包含的代码。"
 ---
 
-关联代码库让 Kody 在审查一个 pull request 时,把兄弟代码库作为**只读上下文**读取。用它来发现单代码库审查看不到的 bug:后端重命名了一个 API 字段而前端仍在读旧字段、producer 新增了一个没有任何 consumer 处理的枚举值,或者 writer 与 reader 用不同方式推导同一个 key。
+关联代码库让 Kody 在审查一个 pull request 时,把组织内的其他代码库作为**只读上下文**读取。没有它,审查只能看到一样东西:处于 PR head 的被审查代码库本身。凡是位于其他代码库里的东西 —— 你调用的服务、你导入的库、一个 git submodule —— 都是不可见的。
 
 在 **Teams 和 Enterprise** 套餐中可用。按**代码库**配置 —— 没有全局默认值,因为这种关系是有方向的:关联 `frontend → backend-api` 意味着*对 `frontend` 的审查*可以查阅 `backend-api`,反之则不然。如果两个团队都想要这项检查,请显式地关联两个方向。
+
+## 何时需要它
+
+三种情况,都很常见,也都是单代码库审查看不到的:
+
+1. **producer/consumer 契约被破坏。** 后端重命名了一个 API 字段而前端仍在读旧字段;producer 新增了一个没有任何 consumer 处理的枚举值;writer 与 reader 用不同方式推导同一个缓存 key。契约被拆在两个代码库里,而且没有任何东西在保证它。
+
+2. **你的代码库所依赖的代码不在你的代码库里。** Git submodule、vendor 进来的内部包、构建时拉取的共享库。审查在克隆你的代码库时*不会拉取 submodule*、*也不会安装包*,所以通过 submodule 或构建引入的依赖在审查期间就是一个空目录(或者一个代理无法跟进的 import)。如果你的规范类型、规则或 client 就放在这样的代码库里,关联它是让审查读到它们的唯一办法。
+
+3. **同一条业务规则在各个渠道或服务里被重复实现。** 定价、可用性、校验、订单状态流转:在某个规范位置存在一份,然后被近似地复制到别处。关联那个规范代码库,能让代理对照事实来源做比较,而不是猜。
+
+<Note>
+**没有这项功能时审查已经能看到什么:** 被审查代码库在 PR head 提交处的完整内容(不只是 diff),外加 PR 描述。它可以对该 checkout 里的任何文件做 grep 和读取。它看不到其他代码库、submodule 的内容,以及已安装的依赖。
+</Note>
+
+关联代码库**不**覆盖存在于你代码之外的契约 —— 例如第三方 API 的校验规则,在任何关联代码库中都无法被发现。
 
 ## 你会得到什么
 
@@ -18,15 +34,43 @@ const isNotApproved =
 
 关联了后端之后,Kody 会检查该契约的另一侧,并在 PR 上评论:
 
-> **Bug · medium** —— 前端检查 `error.response?.data?.error` 是否为 `INTEGRATION_NOT_APPROVED`,但后端的 `sendError` 是在 `message` 字段中返回该代码的。not-approved 分支永远不会命中,因此用户始终看到通用错误提示。请改为读取 `data.message`。
+> **Bug · medium** —— [cross-repo] 前端检查 `error.response?.data?.error` 是否为 `INTEGRATION_NOT_APPROVED`,但后端的 `sendError`(`src/api/response.ts`)是在 `message` 字段中返回该代码的。not-approved 分支永远不会命中,因此用户始终看到通用错误提示。请改为读取 `data.message`。
 
 审查摘要也会显示查阅了什么:**Additional context used:** `org/backend-api@main`。
 
+### 发现会落在哪里
+
+- 每条评论都落在**你的 PR diff** 的某一行上。关联代码库的代码作为证据被引用在评论内部,带有 `[cross-repo]` 标签,并点名对应文件。Kody 绝不会在关联代码库上评论、提交发现或做修改。
+- 只有在对应文件中获得确凿证据时才会提出发现 —— 没有证据的"这个字面量必须和后端一致"不会被输出。
+- **Additional context used** 这一行只有在审查期间确实读取了某个关联代码库时才会出现。没有这一行,就说明没有查阅(下文说明为什么会这样)。
+
 ## 工作原理
 
-当一个配置了关联代码库的代码库中的 pull request 触及边界面(变更的字符串字面量、载荷字段、状态值、导出符号)时,Kody 的审查代理可以搜索并读取关联代码库 —— 就像在你自己的代码库中做 grep 一样 —— 以验证契约两侧是否仍然一致。只有在对应文件中获得确凿证据时才会提出发现,而且评论始终落在**你的** PR 的某一行上;关联代码库的代码只会作为佐证被引用在评论内,绝不会被直接评论。
+当一个配置了关联代码库的代码库中的 pull request 触及边界面时,Kody 的审查代理可以搜索并读取关联代码库 —— 就像在你自己的代码库中做 grep 一样 —— 以验证契约两侧是否仍然一致。关联代码库是惰性获取的,只在代理第一次读取时才会拉取。
 
-使用了跨代码库上下文的审查会明确说明:审查摘要中会包含一行 **Additional context used**,列出每个代码库以及读取时所用的 ref。
+### 什么会触发这一趟
+
+只配置关联本身是不够的。在审查之前,一个开销很低的确定性检查会扫描 PR diff 中**新增的行**,只有在发现*边界面*时才启用跨代码库工具:
+
+- 字符串字面量(代码、事件名、路径片段、header 名)
+- 导出符号(`export function/const/class/type/interface/enum`)
+- enum、type 或 interface 成员
+- 对象 / 载荷 / DTO 字段 key
+- 形似 status、state、错误码的标识符(`status`、`code`、`errorCode`、`kind`、`event`、`key`……)
+- 形似契约的文件路径(`dto/`、`schema/`、`api/`、`types/`、`clients/`、`openapi`、`proto`……)
+
+纯内部重构 —— 重命名私有 helper、移动代码、格式化 —— 通常一个都碰不到,所以关联代码库不会被拉取,审查完全按单代码库审查的方式运行。这是有意为之:在本来就找不到东西的 diff 上,让这一趟保持关闭。
+
+### 当你什么都没看到时
+
+如果一个配置了关联代码库的代码库里的 PR **没有**显示 `Additional context used` 这一行,那么按大致可能性排序,发生了以下情况之一:
+
+1. diff 中没有边界面(门控保持关闭 —— 对重构来说是预期行为)。
+2. 门控已打开,但代理得出结论时并不需要关联代码库。
+3. 关联代码库无法获取(权限、超时)—— 审查在没有它的情况下继续。
+4. 关联代码库未连接到这个 Kodus 组织,或者组织的套餐不包含该功能 —— 该关联被忽略。
+
+前两种都是功能按设计在工作。要确认某个关联配置正确,请开一个*确实*修改了共享字面量、DTO 字段或导出类型的 PR —— 这既会触发门控,也会给代理一个去另一侧查看的理由。
 
 <Info>
 - 只有**已连接到同一 Kodus 组织**的代码库才能被关联(Kody 复用你已有的 Git 集成 —— 无需额外令牌)。
@@ -37,7 +81,25 @@ const isNotApproved =
 
 ## 添加关联代码库
 
+### 在 Web 应用中
+
 进入 **Code Review Settings → _你的代码库_ → Linked Repositories**,从列表中选择一个代码库(只显示已连接的),然后保存。每个关联有两个可选字段,说明如下。
+
+### 在 `kodus-config.yml` 中
+
+`linkedRepositories` 也是一个配置文件的 key,所以关联可以和其他审查设置一起放进版本控制:
+
+```yaml
+linkedRepositories:
+  - repository: "org/backend-api"
+    instructions: "这个前端消费的 REST API"
+    ref: main   # 可选固定;省略则使用同名分支级联
+```
+
+- `repository`(必填)—— 已连接到组织的代码库的完整名称(`owner/repo`)。
+- `instructions`、`ref` —— 与 Web 应用中的字段含义相同(见下文)。
+
+该文件与 Web 设置的交互遵循常规的[配置文件规则](/how_to_use/zh/code_review/configs/general#配置优先级):只有在该代码库启用了 `kodusConfigFileOverridesWebPreferences`(**Settings → Code Review → 该代码库 → General**)时才会读取文件,文件从代码库的**默认分支**读取,并且文件中的 `linkedRepositories` 列表会**替换**该代码库在 Web 中的列表(两个列表不会合并;文件中的 `linkedRepositories: []` 会关闭该功能)。无论关联在哪里声明,套餐要求都同样适用。
 
 ### Instructions(说明)
 
@@ -55,7 +117,19 @@ src/api/response.ts 构建 —— 请对照它核对错误码。
 src/domain/order-status.ts;我们必须处理它定义的每一个值。
 ```
 
+对于关联的库或 submodule(上文第 2 种情况),请说明代码*不在*这个代码库里,以及代理应该对照什么检查:
+
+```text
+业务规则、类型和 client 的规范库。这里以 git submodule 的方式使用它,
+所以其源码不在本代码库中。校验规则位于 src/rules/,API client 位于
+src/clients/ —— 请对照它们核对字段名和状态值。
+```
+
 差的说明只是重复显而易见的内容("后端代码库"),没有任何增益。
+
+<Note>
+跨代码库这一趟寻找的是**跨边界的不匹配** —— 一侧的字段名、key、编码或状态值与另一侧实际产生或期望的不一致。关联一个规范库消除了盲区(代理现在能读到它),但它本身并不会让审查指出"已经存在规范实现,而这个 PR 重新实现了一个更弱的版本"。如果你想要这种检查,请把它写成一条 [Kody Rule](/how_to_use/zh/code_review/configs/kody_rules),并用说明指出规范实现所在的位置。
+</Note>
 
 ### Ref pin(分支选择)
 
@@ -73,16 +147,8 @@ src/domain/order-status.ts;我们必须处理它定义的每一个值。
 
 当你希望针对某个稳定分支得到确定性的审查结果时,设置 **ref pin**(例如 `main`、`develop`、`release/2.x`) —— 例如分支名在多个代码库间被复用于互不相关的工作,同名匹配会选错目标。对于一次性场景,PR 描述覆盖仍然优先于 pin。
 
+<Tip>
+对于 submodule,如果你的代码库跟踪的版本落后于该库的默认分支,请把 `ref` 固定到你实际跟踪的提交或分支 —— 否则审查可能会拿你尚未拉取的代码来比较。
+</Tip>
+
 审查摘要始终会显示实际使用的 ref。想看带示例的完整流程,参见[如何使用关联代码库](/knowledge_base/zh/how-to-use-linked-repositories-in-code-review)。
-
-## 何时使用
-
-当多个代码库共享一个工具链无法强制保证的契约时,关联代码库最有价值:
-
-- 在两侧各自重复声明载荷结构的 **前端 ↔ 后端** 组合。
-- 传递状态值、事件名或 ID 的 **服务 ↔ 服务** 集成。
-- 重新实现或镜像共享库类型的 **共享库使用方**。
-
-<Note>
-关联代码库**不**覆盖存在于你代码之外的契约 —— 例如第三方 API 的校验规则,在任何关联代码库中都无法被发现。
-</Note>
