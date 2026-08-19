@@ -18,6 +18,7 @@ import './bedrock';
 import './novita';
 import './moonshot';
 import './azure';
+import './zai';
 
 export { REGISTRY, registerProvider } from './kernel/registry';
 export type { ProviderModule } from './kernel/types';

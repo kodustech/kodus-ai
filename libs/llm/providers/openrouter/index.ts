@@ -27,6 +27,11 @@ import {
 export const openRouterModule: ProviderModule = {
     id: 'open_router',
     label: 'OpenRouter',
+    doc: 'https://openrouter.ai/models',
+
+    // No curated catalog: OpenRouter is a marketplace/aggregator, not a curated
+    // brand. It stays connectable (Browse models via its /models listing) and its
+    // superseded picks (old Kimi/GLM) are reachable there — just not curated.
 
     // Provider-pinning lives under settings (order + fallbacks); consumed by the
     // reasoning/routing layer, validated here.

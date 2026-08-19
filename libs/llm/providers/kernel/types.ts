@@ -18,6 +18,7 @@ import type {
     ReasoningConfig,
 } from '@libs/llm/providers/kernel/model-types';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import type { ProviderCatalogModel } from './catalog';
 
 /**
  * Provider capability descriptor. Extends the reasoning-only base
@@ -148,6 +149,10 @@ export interface ProviderModule {
     aliases?: string[];
     /** Human-readable label for the UI. */
     label: string;
+    /** Provider documentation URL — hardcoded here per provider (the module OWNS
+     *  the link, one place, per the descriptor pattern). The UI falls back to this
+     *  when a curated model carries no Kodus-specific docsUrl. */
+    doc?: string;
     /** Zod schema validating this provider's `settings` (baseURL, region, ...). */
     settingsSchema: z.ZodType;
     /** Static capability descriptor for a given model id. Extended in 01-04. */
@@ -192,6 +197,12 @@ export interface ProviderModule {
      *  namespaces. Absent/undefined ⇒ no known namespace (the override passes
      *  through unwrapped). */
     providerOptionsNamespace?(providerId: string): string | undefined;
+    /** The curated models this brand offers — Kodus's editorial picks (score,
+     *  copy, billing variants, defaults). The single source for the web catalog;
+     *  the aggregating use-case stamps each entry with this module's identity
+     *  (`providerKey`/`providerDisplayName`) and default transport. Absent ⇒ the
+     *  provider is connectable but has no curated models (custom/self-hosted). */
+    catalog?: ProviderCatalogModel[];
     /** UI fields for the BYOK settings screen. */
     uiFields: FieldDescriptor[];
     /** How to enumerate this provider's models, per requested id (a module may

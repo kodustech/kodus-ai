@@ -38,6 +38,7 @@ const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
 export const vertexModule: ProviderModule = {
     id: 'google_vertex',
     label: 'Google Vertex AI',
+    doc: 'https://cloud.google.com/vertex-ai/generative-ai/docs/models',
 
     // vertexLocation lives at the top level of the BYOK config today.
     settingsSchema: z.object({ vertexLocation: z.string().optional() }),

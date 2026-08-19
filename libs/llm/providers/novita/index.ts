@@ -23,6 +23,7 @@ import {
 export const novitaModule: ProviderModule = {
     id: 'novita',
     label: 'Novita',
+    doc: 'https://novita.ai/docs/guides/introduction',
 
     settingsSchema: z.object({ baseURL: z.string().optional() }),
 

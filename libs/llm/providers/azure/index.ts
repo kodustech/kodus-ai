@@ -42,6 +42,7 @@ function looksLikeReasoner(deployment: string): boolean {
 export const azureModule: ProviderModule = {
     id: 'azure',
     label: 'Azure OpenAI',
+    doc: 'https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models',
 
     settingsSchema: z.object({
         baseURL: z.string().optional(),

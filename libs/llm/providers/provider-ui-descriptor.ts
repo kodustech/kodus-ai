@@ -17,12 +17,16 @@ export interface ProviderUiDescriptor {
     requiresBaseUrl: boolean;
     /** The provider's models can be enumerated (dropdown) vs. typed by hand. */
     autoListModels: boolean;
+    /** Provider documentation URL (hardcoded on the module). The UI links to this
+     *  when a curated model has no Kodus-specific docsUrl. */
+    doc?: string;
 }
 
 /** `*_compatible` ids are the custom-endpoint variants: the user points them at
  *  their OWN endpoint, so a base URL is mandatory and models can't be listed
  *  until that endpoint is known. */
-const isCustomEndpoint = (id: string): boolean => id.endsWith('_compatible');
+export const isCustomEndpoint = (id: string): boolean =>
+    id.endsWith('_compatible');
 
 const labelForId = (module: ProviderModule, id: string): string => {
     if (id === module.id) return module.label;
@@ -73,6 +77,7 @@ export function describeProviderId(
             requiresField('baseURL'),
         // Custom endpoints can't be pre-listed (endpoint unknown until entered).
         autoListModels: !custom && listingIsAutoListable(listing),
+        doc: module.doc,
     };
 }
 

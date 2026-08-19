@@ -28,6 +28,7 @@ import {
 export const bedrockModule: ProviderModule = {
     id: 'amazon_bedrock',
     label: 'Amazon Bedrock',
+    doc: 'https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html',
 
     settingsSchema: z.object({
         awsRegion: z.string().optional(),

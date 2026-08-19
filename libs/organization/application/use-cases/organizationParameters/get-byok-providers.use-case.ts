@@ -20,6 +20,9 @@ export interface ByokProviderDescriptor {
      *  HTTP listing with a resolvable base URL) vs. typed by hand. Lets the
      *  picker show an honest subtitle instead of a blanket "Manual setup". */
     autoListModels: boolean;
+    /** Provider documentation URL (hardcoded on the module). The web UI falls back
+     *  to it when a curated model has no docsUrl. */
+    doc?: string;
 }
 
 export interface ByokProvidersResult {
@@ -46,6 +49,9 @@ export class GetByokProvidersUseCase implements IUseCase {
                 // Shared derivation (same source the connect form uses), keyed on
                 // the canonical id; aliases are custom endpoints (handled web-side).
                 autoListModels: describeProviderId(m, m.id).autoListModels,
+                // Provider docs URL (hardcoded on the module). The web UI falls
+                // back to it when a curated model has no docsUrl.
+                doc: m.doc,
             })),
         };
     }

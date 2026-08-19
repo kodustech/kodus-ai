@@ -41,6 +41,98 @@ import {
 export const moonshotModule: ProviderModule = {
     id: 'moonshot',
     label: 'Moonshot',
+    // Moonshot/Kimi developer docs — key setup + the Anthropic-compatible
+    // endpoint (api.moonshot.ai/anthropic) our anthropic_compatible transport uses.
+    doc: 'https://platform.moonshot.ai/docs',
+
+    // Curated Kimi models (migrated from the web curated-models.json). Kimi is
+    // served over the ANTHROPIC protocol (api.moonshot.ai/anthropic), so each
+    // entry OVERRIDES the transport to `anthropic_compatible` — the module id
+    // `moonshot` stays the BRAND identity the aggregator stamps.
+    catalog: [
+        {
+            id: 'kimi-k2.7-code',
+            displayName: 'Kimi K2.7 Code',
+            provider: 'anthropic_compatible',
+            tier: 'recommended',
+            benchmarkScore: 86,
+            description:
+                "Moonshot's newest coding model (K2.7) with long thinking / deep reasoning. Developer API. (benchmarkScore is a placeholder pending a real run.)",
+            speed: 'medium',
+            contextWindow: '256K',
+            costTier: '$',
+            apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
+            defaults: {
+                temperature: 1,
+                maxOutputTokens: 16384,
+                baseURL: 'https://api.moonshot.ai/anthropic',
+                reasoningEffort: 'medium',
+            },
+            docsUrl:
+                'https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus',
+            variants: [
+                {
+                    id: 'developer',
+                    label: 'Developer API',
+                    description:
+                        'Pay-per-token, over the native Anthropic protocol (explicit prompt caching + native tool-use).',
+                    baseURL: 'https://api.moonshot.ai/anthropic',
+                    apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
+                },
+                {
+                    id: 'code-plan',
+                    label: 'Kimi Code Plan',
+                    description:
+                        'Flat-rate subscription (Anthropic endpoint). Capped at 30 concurrent requests — for heavy automated usage prefer the Developer API.',
+                    baseURL: 'https://api.kimi.com/coding',
+                    apiKeyUrl: 'https://www.kimi.com/code',
+                    maxConcurrentRequests: 30,
+                },
+            ],
+            defaultVariantId: 'developer',
+        },
+        {
+            id: 'kimi-k2.6',
+            displayName: 'Kimi K2.6 Coding',
+            provider: 'anthropic_compatible',
+            tier: 'other',
+            benchmarkScore: 86,
+            description:
+                'Previous Moonshot coding model. Superseded by Kimi K2.7 Code.',
+            speed: 'medium',
+            contextWindow: '256K',
+            costTier: '$',
+            apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
+            defaults: {
+                temperature: 1,
+                maxOutputTokens: 16384,
+                baseURL: 'https://api.moonshot.ai/anthropic',
+                reasoningEffort: 'medium',
+            },
+            docsUrl:
+                'https://docs.kodus.io/knowledge_base/en/how-to-use-moonshot-with-kodus',
+            variants: [
+                {
+                    id: 'developer',
+                    label: 'Developer API',
+                    description:
+                        'Pay-per-token, over the native Anthropic protocol (explicit prompt caching + native tool-use).',
+                    baseURL: 'https://api.moonshot.ai/anthropic',
+                    apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
+                },
+                {
+                    id: 'code-plan',
+                    label: 'Kimi Code Plan',
+                    description:
+                        'Flat-rate subscription (Anthropic endpoint). Capped at 30 concurrent requests — for heavy automated usage prefer the Developer API.',
+                    baseURL: 'https://api.kimi.com/coding',
+                    apiKeyUrl: 'https://www.kimi.com/code',
+                    maxConcurrentRequests: 30,
+                },
+            ],
+            defaultVariantId: 'developer',
+        },
+    ],
 
     settingsSchema: z.object({ baseURL: z.string().optional() }),
 

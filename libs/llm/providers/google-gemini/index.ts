@@ -42,6 +42,83 @@ const GEMINI_MAX_INPUT_TOKENS: Record<string, number> = {
 export const googleGeminiModule: ProviderModule = {
     id: 'google_gemini',
     label: 'Google Gemini',
+    doc: 'https://ai.google.dev/gemini-api/docs/models',
+
+    // Curated Google models (migrated from the web curated-models.json). Native
+    // transport ⇒ no per-model `provider` override.
+    catalog: [
+        {
+            id: 'gemini-3.1-pro-preview-customtools',
+            displayName: 'Gemini 3.1 Pro (custom tools)',
+            tier: 'recommended',
+            benchmarkScore: 87,
+            description:
+                'Google flagship variant with custom-tools support. Massive 1M context window.',
+            speed: 'medium',
+            contextWindow: '1M',
+            costTier: '$$$',
+            apiKeyUrl: 'https://aistudio.google.com/apikey',
+            defaults: {
+                temperature: 0,
+                maxOutputTokens: 16384,
+                reasoningEffort: 'medium',
+            },
+        },
+        {
+            id: 'gemini-3-flash-preview',
+            displayName: 'Gemini 3 Flash',
+            tier: 'recommended',
+            recommendationLabel: 'Most affordable',
+            benchmarkScore: 83.9,
+            description: 'Largest context window at lowest cost.',
+            speed: 'medium',
+            contextWindow: '1M',
+            costTier: '$',
+            strengths: [
+                'Reliable — rarely errors out',
+                'Clean — few low-value comments',
+            ],
+            weaknesses: ['Catches fewer issues than average'],
+            apiKeyUrl: 'https://aistudio.google.com/apikey',
+            defaults: { temperature: 0, maxOutputTokens: 8192 },
+        },
+        {
+            id: 'gemini-2.5-pro',
+            displayName: 'Gemini 2.5 Pro',
+            tier: 'other',
+            benchmarkScore: 86.8,
+            description:
+                'Previous Gemini Pro generation. Superseded by Gemini 3.1 Pro.',
+            speed: 'medium',
+            contextWindow: '1M',
+            costTier: '$$',
+            strengths: [
+                'Very clean — few low-value comments',
+                'Strong at spotting logic bugs within a file',
+            ],
+            weaknesses: ['Catches fewer issues than average'],
+            apiKeyUrl: 'https://aistudio.google.com/apikey',
+            defaults: { temperature: 0, maxOutputTokens: 16384 },
+        },
+        {
+            id: 'gemini-3.1-pro-preview',
+            displayName: 'Gemini 3.1 Pro',
+            tier: 'other',
+            benchmarkScore: 84.2,
+            description:
+                'Base Gemini 3.1 Pro without custom tools. Prefer the custom-tools variant above.',
+            speed: 'slow',
+            contextWindow: '1M',
+            costTier: '$$$',
+            strengths: [
+                'Strong at spotting logic bugs within a file',
+                'Clean — few low-value comments',
+            ],
+            weaknesses: ['Weaker at cross-file issues than most'],
+            apiKeyUrl: 'https://aistudio.google.com/apikey',
+            defaults: { temperature: 0, maxOutputTokens: 16384 },
+        },
+    ],
 
     settingsSchema: z.object({ baseURL: z.string().optional() }),
 

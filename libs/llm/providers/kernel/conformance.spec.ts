@@ -28,6 +28,7 @@ import { bedrockModule } from '../bedrock/index';
 import { novitaModule } from '../novita/index';
 import { moonshotModule } from '../moonshot/index';
 import { azureModule } from '../azure/index';
+import { zaiModule } from '../zai/index';
 
 import openaiPlain from '../openai/__fixtures__/plain.json';
 import openaiReasoning from '../openai/__fixtures__/reasoning.json';
@@ -105,6 +106,18 @@ const CASES: ProviderCase[] = [
         module: azureModule,
         model: 'gpt-4o',
         fixtures: [{ name: 'plain', fixture: azurePlain as ProviderFixture }],
+    },
+    {
+        // Z.ai speaks the Anthropic protocol → shares its usage extractor, so the
+        // anthropic reasoning fixture proves the same no-double-count invariant.
+        module: zaiModule,
+        model: 'glm-5.2',
+        fixtures: [
+            {
+                name: 'reasoning',
+                fixture: anthropicReasoning as ProviderFixture,
+            },
+        ],
     },
 ];
 

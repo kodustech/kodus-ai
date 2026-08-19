@@ -48,6 +48,7 @@ const ALL_IDS = [
     'novita',
     'moonshot',
     'azure',
+    'zai',
 ];
 
 const EFFORTS: ReasoningEffort[] = ['none', 'low', 'medium', 'high'];
@@ -205,15 +206,15 @@ describe('01-02 ported modules — static conformance', () => {
     });
 });
 
-describe('registry covers all eleven BYOKProvider ids', () => {
+describe('registry covers all twelve BYOKProvider ids', () => {
     it('every id resolves to a registered module', () => {
         for (const id of ALL_IDS) {
             expect(REGISTRY.has(id)).toBe(true);
             expect(REGISTRY.get(id)).toBeDefined();
         }
     });
-    it('registers exactly 9 distinct module objects for the 11 ids', () => {
-        expect(REGISTRY.all().length).toBe(9);
+    it('registers exactly 10 distinct module objects for the 12 ids', () => {
+        expect(REGISTRY.all().length).toBe(10);
         expect(new Set(REGISTRY.ids())).toEqual(new Set(ALL_IDS));
     });
 });
@@ -293,6 +294,12 @@ const CONFORMANCE_SAMPLES: Record<
         ),
         fixture: azurePlainFixture as ProviderFixture,
     },
+    zai: {
+        // GLM over the Z.ai Anthropic endpoint — builds the @ai-sdk/anthropic
+        // client offline; normalizes via the shared anthropic usage extractor.
+        cfg: sampleConfig('zai', 'glm-5.2', 'https://api.z.ai/api/anthropic'),
+        fixture: anthropicReasoningFixture as ProviderFixture,
+    },
 };
 
 describe('registry-wide conformance sweep (D-05): no module regresses to the zero stub', () => {
@@ -304,8 +311,8 @@ describe('registry-wide conformance sweep (D-05): no module regresses to the zer
         }
     });
 
-    it('covers all 9 distinct registered modules', () => {
-        expect(modules.length).toBe(9);
+    it('covers all 10 distinct registered modules', () => {
+        expect(modules.length).toBe(10);
     });
 
     for (const module of modules) {
