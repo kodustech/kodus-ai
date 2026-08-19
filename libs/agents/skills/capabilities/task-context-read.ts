@@ -88,6 +88,8 @@ interface AgentFallbackParams {
     params: TaskContextReadParams;
     providerType: string;
     candidateTools: string[];
+    /** Carries the resolved tenant, which params alone can't reproduce. */
+    hints: TaskContextHints;
     hooks?: TaskContextReadHooks;
     logger: ReturnType<typeof createLogger>;
 }
@@ -176,6 +178,7 @@ export async function fetchTaskContext(
             params,
             providerType,
             candidateTools: discovery.orderedTools,
+            hints,
             hooks,
             logger,
         });
@@ -242,6 +245,7 @@ export async function fetchTaskContext(
         params,
         providerType,
         candidateTools: discovery.orderedTools,
+        hints,
         hooks,
         logger,
     });
@@ -756,7 +760,7 @@ async function fetchTaskContextWithAgentFallback(
         };
     }
 
-    const hints = resolveTaskContextHints(input.params);
+    const hints = input.hints;
     const userLanguage =
         typeof input.params.userLanguage === 'string' &&
         input.params.userLanguage.trim().length > 0
@@ -773,9 +777,11 @@ KNOWN_TOKENS: ${[...hints.issueKeys, ...hints.issueLinks].join(', ') || '(none)'
 KNOWN_ISSUE_NUMBERS: ${hints.issueNumbers.join(', ') || '(none)'}
 KNOWN_REPOSITORY_OWNER: ${input.params.repositoryOwner ?? '(unknown)'}
 KNOWN_REPOSITORY_NAME: ${input.params.repositoryName ?? '(unknown)'}
+KNOWN_SITE_IDS: ${hints.siteIds.join(', ') || '(none)'}
 USER_LANGUAGE: ${userLanguage}
 
 When calling tools that require repository data, prioritize KNOWN_REPOSITORY_OWNER and KNOWN_REPOSITORY_NAME.
+When a tool requires a tenant/site/cloud identifier, use a value from KNOWN_SITE_IDS. Never invent one; if it is (none), prefer a tool that does not require it.
 
 Return ONLY JSON:
 {
@@ -915,6 +921,12 @@ function orderCandidateTools(params: {
         ordered.push(tool);
     };
 
+    // A seed is a curated precision order (getJiraIssue before the generic
+    // search); learning can only observe "returned something", so a broad tool
+    // that always answers would otherwise outrank the precise one forever.
+    if (params.seededTools.length) {
+        params.seededTools.forEach(pushIfCandidate);
+    }
     pushIfCandidate(params.preferredTool);
     params.cachedTools.forEach(pushIfCandidate);
     params.seededTools.forEach(pushIfCandidate);
