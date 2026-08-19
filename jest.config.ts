@@ -245,7 +245,10 @@ export default {
         // The Vercel AI SDK stack (`ai` + every `@ai-sdk/*` provider) is also
         // ESM-only; the code-review/agents/llm specs import it transitively, so
         // it must be transformed too or Jest chokes on its `import` syntax.
-        'node_modules/(?!(@octokit|universal-user-agent|p-limit|uuid|universal-github-app-jwt|before-after-hook|yocto-queue|jose|@ai-sdk|ai|@workflow|archiver|zip-stream|compress-commons|crc32-stream|readdir-glob|is-stream|lazystream|normalize-path)/)',
+        // The `(?:.*/)?` prefix lets these ESM-only packages be transformed even
+        // when NESTED (e.g. typeorm/node_modules/uuid — uuid@14 is ESM-only and
+        // ships inside typeorm after the dep bump), not just at the top level.
+        'node_modules/(?!(?:.*/)?(@octokit|universal-user-agent|p-limit|uuid|universal-github-app-jwt|before-after-hook|yocto-queue|jose|@ai-sdk|ai|@workflow|archiver|zip-stream|compress-commons|crc32-stream|readdir-glob|is-stream|lazystream|normalize-path)/)',
     ],
     modulePathIgnorePatterns: [
         '<rootDir>/dist',
