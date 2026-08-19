@@ -131,9 +131,21 @@ const providerLabelFor = (
     providers.find((p) => p.id === providerId)?.label ??
     providerId;
 
-/** One provider tile in the grid. Curated providers (≥1 curated model) open the
- *  in-place model list; the rest are custom/self-hosted and go straight to the
- *  manual form pre-scoped to the provider. */
+/** "Custom" providers are the ones you must point at an endpoint (`*_compatible`)
+ *  or where you run an arbitrary model on a cloud you configure (Vertex, Bedrock,
+ *  Azure). Everything ELSE is a first-class provider you connect with just a key —
+ *  even when it has no curated models yet (it shows Browse models). */
+const CUSTOM_PROVIDER_IDS = new Set([
+    "google_vertex",
+    "amazon_bedrock",
+    "azure",
+]);
+const isCustomProvider = (id: string): boolean =>
+    id.endsWith("_compatible") || CUSTOM_PROVIDER_IDS.has(id);
+
+/** One provider tile in the grid. A provider with curated models opens the
+ *  in-place model list; the rest go straight to the manual form pre-scoped to the
+ *  provider. */
 function ProviderGridCard({
     provider,
     onPick,
@@ -366,18 +378,18 @@ export function ConnectProviderFlow({
         );
     }
 
-    // Provider-first grid, split into two honest groups: curated brands you pick
-    // a model from in place, and custom/self-hosted endpoints (Bedrock, Vertex,
-    // Azure, Novita, *-compatible) that go to the manual form. Model choice PER
-    // TASK is the Routing tab's job — the connect step only wires up providers.
+    // Provider-first grid, split into Providers (everything you connect with a
+    // key — curated or Browse) and Custom (bring-your-own endpoint / arbitrary
+    // model). A provider with curated models opens its in-place list; the rest go
+    // to the manual form. Model choice PER TASK is the Routing tab's job.
     const onPickProvider = (p: ProviderChoice) =>
         p.modelCount > 0
             ? setPickedProvider(p.id)
             : router.push(
                   `/organization/byok/manual?provider=${encodeURIComponent(p.id)}`,
               );
-    const curatedProviders = providers.filter((p) => p.modelCount > 0);
-    const customProviders = providers.filter((p) => p.modelCount === 0);
+    const mainProviders = providers.filter((p) => !isCustomProvider(p.id));
+    const customProviders = providers.filter((p) => isCustomProvider(p.id));
 
     return (
         <Card
@@ -391,13 +403,13 @@ export function ConnectProviderFlow({
                 {hero}
 
                 <div className="flex w-full flex-col gap-6 text-left">
-                    {curatedProviders.length > 0 && (
+                    {mainProviders.length > 0 && (
                         <div className="flex flex-col gap-2.5">
                             <p className="text-text-tertiary text-xs font-semibold tracking-wide uppercase">
                                 Providers
                             </p>
                             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                                {curatedProviders.map((p) => (
+                                {mainProviders.map((p) => (
                                     <ProviderGridCard
                                         key={p.id}
                                         provider={p}
@@ -411,7 +423,7 @@ export function ConnectProviderFlow({
                     {customProviders.length > 0 && (
                         <div className="flex flex-col gap-2.5">
                             <p className="text-text-tertiary text-xs font-semibold tracking-wide uppercase">
-                                Custom &amp; self-hosted
+                                Custom
                             </p>
                             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                                 {customProviders.map((p) => (
