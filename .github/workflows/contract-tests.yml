@@ -1,0 +1,142 @@
+name: "Contract tests: external APIs"
+
+# The middle tier of the test pyramid: pins the assumptions our code makes
+# about REAL external APIs (GitLab / Bitbucket / Azure DevOps REST shapes,
+# Fireworks model availability + structured-output support) by actually
+# calling them. No Kodus backend, no VM, no LLM agent loop — one cheap
+# request per assumption.
+#
+# Why its own workflow, not a job inside the e2e matrix: different trigger
+# (provider drift happens on the PROVIDER's timeline, not ours — so this is
+# scheduled, not per-PR), different failure meaning ("Fireworks renamed a
+# model" is not "self-hosted release is broken"), and a distinct name in the
+# Actions tab so the alert is never mistaken for a matrix failure. Secrets
+# are repo-level (and `environment: ci`) so nothing is duplicated — every
+# `${{ secrets.* }}` below is the same value the e2e matrix already reads.
+#
+# Why daily: the tests are near-free (one GitLab/Bitbucket/Azure REST call
+# each, two ~80-token Fireworks completions on the cheapest tier) and the
+# whole point is catching drift BEFORE a customer does — the Vertex billing
+# wall and the stale KODUS_TRIAL_MODEL both sat undetected for weeks on a
+# slower cadence. Failure posts to Discord (not just a red check nobody
+# opens — the matrix's own advisory-failure blind spot is exactly how those
+# went unnoticed).
+#
+# Each test skips (not fails) when its credentials are absent, so a run
+# with partial secrets reports partial coverage, never a false red.
+
+permissions:
+    contents: read
+
+on:
+    schedule:
+        # Daily 06:00 UTC (03:00 BRT) — after the nightly crons, before the
+        # workday starts in BRT.
+        - cron: "0 6 * * *"
+    workflow_dispatch:
+
+concurrency:
+    group: contract-tests
+    cancel-in-progress: true
+
+jobs:
+    contract:
+        name: Contract tests (GitLab / Bitbucket / Azure / Fireworks)
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        # `BB_TEST_APP_PASSWORD` exists BOTH repo-level (older) and in the `ci`
+        # environment (newer, rotated) — environment secrets shadow repo ones,
+        # and the e2e matrix reads the `ci` copy. Declare the same environment
+        # so this job sees identical values, not a stale repo-level one.
+        environment: ci
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v6.4.0
+              with:
+                  node-version: "22"
+
+            - name: Install pnpm
+              # Must match package.json's "packageManager" (see tests.yml for
+              # why pnpm 11 specifically — nodeLinker: hoisted is only honored
+              # from pnpm-workspace.yaml by pnpm 11+).
+              run: npm i -g pnpm@11.9.0
+
+            - name: Cache pnpm store
+              uses: actions/cache@v5.0.5
+              with:
+                  path: ~/.local/share/pnpm/store
+                  key: ${{ runner.os }}-node22-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node22-pnpm-
+
+            - name: Install root deps
+              run: pnpm install --frozen-lockfile
+
+            - name: Install e2e deps
+              working-directory: tests/e2e
+              run: npm install --no-audit --no-fund
+
+            # Same shim tests.yml creates — libs/ee's environment.ts is
+            # gitignored, and some @libs imports reach it transitively.
+            - name: Create environment.ts
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+
+            # --- Tier 1: provider REST-shape contracts (tests/e2e/contract/) ---
+            # Open a throwaway PR/MR on the fixture repo, assert the raw API
+            # shape our adapters depend on, clean up. Zero LLM cost.
+            - name: Provider API-shape contracts
+              id: providers
+              working-directory: tests/e2e
+              env:
+                  GL_TEST_TOKEN: ${{ secrets.GL_TEST_TOKEN }}
+                  GL_TEST_REPO: ${{ secrets.GL_TEST_REPO }}
+                  BB_TEST_USER: ${{ secrets.BB_TEST_USER }}
+                  BB_TEST_APP_PASSWORD: ${{ secrets.BB_TEST_APP_PASSWORD }}
+                  BB_TEST_REPO: ${{ secrets.BB_TEST_REPO }}
+                  AZ_TEST_TOKEN: ${{ secrets.AZ_TEST_TOKEN }}
+                  AZ_TEST_ORG: ${{ secrets.AZ_TEST_ORG }}
+                  AZ_TEST_PROJECT: ${{ secrets.AZ_TEST_PROJECT }}
+                  AZ_TEST_REPO: ${{ secrets.AZ_TEST_REPO }}
+              run: npm run test:contract
+
+            # --- Tier 2: LLM provider contracts (libs/llm/*.contract.spec.ts) ---
+            # KODUS_TRIAL_MODEL is still a real, callable Fireworks model, and
+            # Fireworks still honors strict json_schema for it. Two ~80-token
+            # completions on the flash tier — fractions of a cent.
+            # The `.contract.spec.ts` glob also picks up the pre-existing
+            # in-process clone-params-resolver contract (real adapters wired
+            # together, no network) — harmless here, and already covered
+            # per-PR by tests.yml.
+            # E2E_LLM_API_KEY is the e2e matrix's Fireworks-pointed key — both
+            # specs read it (one also accepts API_FIREWORKS_API_KEY, the name
+            # the product itself reads, but this is the secret we actually
+            # have wired).
+            - name: LLM provider contracts
+              id: llm
+              # Run even if the previous step failed — the two tiers are
+              # independent and we want the full picture in one run.
+              if: always()
+              env:
+                  API_NODE_ENV: test
+                  E2E_LLM_API_KEY: ${{ secrets.E2E_LLM_API_KEY }}
+              run: pnpm exec jest --config jest.config.ts --testPathPatterns='\.contract\.spec\.ts$' --no-coverage --forceExit
+
+            - name: Notify Discord on failure
+              if: failure()
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "❌ Contract tests failed — an external API drifted"
+                  description: |
+                      Provider API-shape: ${{ steps.providers.outcome }} · LLM provider: ${{ steps.llm.outcome }}
+                      A real GitLab/Bitbucket/Azure DevOps/Fireworks API no longer matches what our code assumes. This is NOT a release-gate failure — see the per-test assertion message for which assumption broke.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
