@@ -109,6 +109,23 @@ describe('buildTaskContextArgsCandidates (characterization)', () => {
             ]);
         });
 
+        it('keeps every resolved site as a candidate, not just the first two', () => {
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({
+                    issueKeys: ['CLF-1'],
+                    siteIds: ['site-1', 'site-2', 'site-3', 'site-4'],
+                }),
+                jiraSig,
+            );
+            expect(out.map((args) => args.cloudId)).toEqual([
+                'site-1',
+                'site-2',
+                'site-3',
+                'site-4',
+            ]);
+        });
+
         it('prefers the resolved site id over a host mined from PR prose', () => {
             const out = buildTaskContextArgsCandidates(
                 params(),

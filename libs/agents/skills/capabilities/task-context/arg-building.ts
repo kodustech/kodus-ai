@@ -145,8 +145,10 @@ function getCandidateValuesForParam(
         ...hints.issueLinks,
     ]).slice(0, 4);
     const urlHosts = uniqueNonEmpty(hints.urlHosts).slice(0, 2);
-    const siteUrls = uniqueNonEmpty(hints.siteUrls).slice(0, 2);
-    const siteIds = uniqueNonEmpty(hints.siteIds ?? []).slice(0, 2);
+    // Kept above the 2 of other hint groups: an org can expose several tenants
+    // and the ticket may live on any of them, so truncating drops valid targets.
+    const siteUrls = uniqueNonEmpty(hints.siteUrls).slice(0, 4);
+    const siteIds = uniqueNonEmpty(hints.siteIds ?? []).slice(0, 4);
     const resourceIds = uniqueNonEmpty(hints.resourceIds).slice(0, 4);
     const queryTokens = uniqueNonEmpty([
         ...explicitIssueKeys,

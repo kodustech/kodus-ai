@@ -107,6 +107,31 @@ describe('resolveTaskContextSiteHints', () => {
         expect(callTool).toHaveBeenCalledTimes(1);
     });
 
+    it('dedups concurrent callers onto a single in-flight resolution', async () => {
+        let release: (value: unknown) => void = () => {};
+        const callTool = jest
+            .fn()
+            .mockReturnValue(new Promise((resolve) => (release = resolve)));
+        const args = input({
+            toolCaller: toolCaller(
+                ['getAccessibleAtlassianResources'],
+                callTool as never,
+            ),
+            registeredTools: ['getAccessibleAtlassianResources'],
+        }) as never;
+
+        const both = Promise.all([
+            resolveTaskContextSiteHints(args),
+            resolveTaskContextSiteHints(args),
+        ]);
+        release({ result: [{ id: 'cloud-uuid' }] });
+
+        const [first, second] = await both;
+        expect(callTool).toHaveBeenCalledTimes(1);
+        expect(first.siteIds).toEqual(['cloud-uuid']);
+        expect(second).toEqual(first);
+    });
+
     it('does not cache a failure, so a transient error is retried', async () => {
         const callTool = jest
             .fn()

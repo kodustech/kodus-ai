@@ -38,8 +38,13 @@ const siteHintsCache = new BoundedMap<
     { hints: TaskContextSiteHints; expiresAt: number }
 >(256);
 
+/** Concurrent reviews for the same cold org would otherwise each fire the
+ *  resolver; they await the first call instead. */
+const inFlight = new Map<string, Promise<TaskContextSiteHints>>();
+
 export function resetTaskContextSiteHintsCache(): void {
     siteHintsCache.clear();
+    inFlight.clear();
 }
 
 export async function resolveTaskContextSiteHints(input: {
@@ -62,38 +67,53 @@ export async function resolveTaskContextSiteHints(input: {
         return cached.hints;
     }
 
-    const hints = await executeDeterministicTool<TaskContextSiteHints>({
-        toolName: resolverTool,
-        args: {},
-        callTool: (toolName, args) => input.toolCaller.callTool(toolName, args),
-        extract: (payload) => extractSiteHints(payload),
-        fallback: EMPTY_SITE_HINTS,
-        onError: 'fallback',
-        onFallback: (reason, error) => {
-            input.logger.warn({
-                message: `Task context site resolution failed via '${resolverTool}'`,
-                context: 'TaskContextReadCapability',
-                metadata: {
-                    organizationId: input.organizationId,
-                    providerType: input.providerType,
-                    reason,
-                    errorMessage:
-                        error instanceof Error ? error.message : undefined,
-                },
-            });
-        },
-    });
-
-    // Only cache a resolved tenant: caching the empty fallback would pin a
-    // transient MCP failure for the whole TTL.
-    if (hints.siteIds.length || hints.siteUrls.length) {
-        siteHintsCache.set(cacheKey, {
-            hints,
-            expiresAt: Date.now() + CACHE_TTL_MS,
-        });
+    const pending = inFlight.get(cacheKey);
+    if (pending) {
+        return pending;
     }
 
-    return hints;
+    const resolution = (async () => {
+        const hints = await executeDeterministicTool<TaskContextSiteHints>({
+            toolName: resolverTool,
+            args: {},
+            callTool: (toolName, args) =>
+                input.toolCaller.callTool(toolName, args),
+            extract: (payload) => extractSiteHints(payload),
+            fallback: EMPTY_SITE_HINTS,
+            onError: 'fallback',
+            onFallback: (reason, error) => {
+                input.logger.warn({
+                    message: `Task context site resolution failed via '${resolverTool}'`,
+                    context: 'TaskContextReadCapability',
+                    metadata: {
+                        organizationId: input.organizationId,
+                        providerType: input.providerType,
+                        reason,
+                        errorMessage:
+                            error instanceof Error ? error.message : undefined,
+                    },
+                });
+            },
+        });
+
+        // Only cache a resolved tenant: caching the empty fallback would pin a
+        // transient MCP failure for the whole TTL.
+        if (hints.siteIds.length || hints.siteUrls.length) {
+            siteHintsCache.set(cacheKey, {
+                hints,
+                expiresAt: Date.now() + CACHE_TTL_MS,
+            });
+        }
+
+        return hints;
+    })();
+
+    inFlight.set(cacheKey, resolution);
+    try {
+        return await resolution;
+    } finally {
+        inFlight.delete(cacheKey);
+    }
 }
 
 function extractSiteHints(payload: unknown): TaskContextSiteHints {
