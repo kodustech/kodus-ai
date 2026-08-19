@@ -8,15 +8,10 @@ import { deleteBYOK } from "@services/organizationParameters/fetch";
 import { AlertTriangleIcon } from "lucide-react";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 
-import curatedCatalog from "../_data/curated-models.json";
+import { useCatalog } from "../_data/catalog-context";
 import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConfig, BYOKModelConfig } from "../_types";
 import { groupModelsByProvider } from "../_utils";
-
-/** Human display name for a model id (curated catalog), falling back to the id. */
-const displayNameFor = (modelId: string): string =>
-    (curatedCatalog.models as CuratedModel[]).find((m) => m.id === modelId)
-        ?.displayName ?? modelId;
 
 /** Cap the rejection list at the ModelOverridesBanner pattern (first 6). */
 const REASON_CAP = 6;
@@ -185,7 +180,9 @@ export function useDeleteModel({
 }): { confirmAndDelete: () => void; rejectionReasons: string[] } {
     const [rejectionReasons, setRejectionReasons] = useState<string[]>([]);
 
-    const name = displayNameFor(model.model);
+    const catalog = useCatalog();
+    const name =
+        catalog.find((m) => m.id === model.model)?.displayName ?? model.model;
     const copy = deleteConfirmCopy(isLastModel(config, model.id), name);
 
     const confirmAndDelete = () => {

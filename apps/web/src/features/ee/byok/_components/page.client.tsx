@@ -19,6 +19,8 @@ import {
     TabsTrigger,
 } from "src/core/components/ui/tabs";
 
+import { CatalogProvider } from "../_data/catalog-context";
+import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConfig } from "../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../_utils";
 import { ModelOverridesBanner } from "./model-overrides-banner";
@@ -119,6 +121,7 @@ export const ByokPageClient = ({
     costByModelId,
     periodLabel,
     costRangeQuery,
+    catalog,
 }: {
     config: BYOKConfig | null | undefined;
     llmConfigStatus: LLMConfigStatus | null;
@@ -126,6 +129,8 @@ export const ByokPageClient = ({
     costByModelId?: Record<string, ByokModelCost>;
     periodLabel?: string;
     costRangeQuery?: string;
+    /** Curated model catalog, backend-sourced (replaces curated-models.json). */
+    catalog: CuratedModel[];
 }) => {
     // First-run (D-UI-FIRSTRUN): no non-managed credential carries a model yet.
     // Both tabs stay reachable — Routing shows its own "connect a provider
@@ -155,6 +160,7 @@ export const ByokPageClient = ({
     };
 
     return (
+        <CatalogProvider models={catalog}>
         <Page.Root>
             <Page.Header>
                 <Page.TitleContainer>
@@ -241,5 +247,6 @@ export const ByokPageClient = ({
                 </Tabs>
             </Page.Content>
         </Page.Root>
+        </CatalogProvider>
     );
 };

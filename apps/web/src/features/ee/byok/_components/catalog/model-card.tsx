@@ -34,7 +34,10 @@ import type { CuratedModel } from "../../_data/curated-models.types";
  */
 const TIER_BADGE: Record<
     string,
-    { variant?: React.ComponentProps<typeof Button>["variant"]; className?: string }
+    {
+        variant?: React.ComponentProps<typeof Button>["variant"];
+        className?: string;
+    }
 > = {
     "Best balance": {
         className:
@@ -58,6 +61,7 @@ const PROVIDER_LABELS: Record<string, string> = {
     open_router: "OpenRouter",
     novita: "Novita",
     moonshot: "Moonshot",
+    zai: "Z.ai",
     openai_compatible: "OpenAI-compatible",
     // Distinct labels so registry-only providers never collide with their
     // native sibling in the picker (e.g. two "Anthropic" cards).
@@ -104,6 +108,7 @@ export function CuratedModelCard({
     isSelected,
     compact = false,
     showConnect = false,
+    showScore = true,
     onSelect,
 }: {
     model: CuratedModel;
@@ -112,6 +117,10 @@ export function CuratedModelCard({
     /** Render a full-width "Connect" button at the card foot (recommended-card
      *  usage). The button drives the same onSelect connect flow. */
     showConnect?: boolean;
+    /** The quality score is the "which model is best" signal — it belongs to the
+     *  Routing tab, where the per-task model is chosen. The connect surfaces pass
+     *  `false` so wiring up a provider isn't framed as picking the best model. */
+    showScore?: boolean;
     onSelect?: () => void;
 }) {
     const [showDetails, setShowDetails] = useState(false);
@@ -147,11 +156,11 @@ export function CuratedModelCard({
             onKeyDown={
                 cardClickable
                     ? (e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              onSelect?.();
-                          }
-                      }
+                        if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onSelect?.();
+                        }
+                    }
                     : undefined
             }>
             <CardContent className="flex h-full flex-col gap-3 p-4">
@@ -168,7 +177,7 @@ export function CuratedModelCard({
 
                 <div className="flex items-start justify-between gap-2">
                     <div className="flex flex-col gap-1">
-                        <span className="text-sm font-semibold leading-tight">
+                        <span className="text-sm leading-tight font-semibold">
                             {model.displayName}
                         </span>
                         <span className="text-text-tertiary text-xs">
@@ -178,24 +187,26 @@ export function CuratedModelCard({
                         </span>
                     </div>
 
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <span>
-                                <Badge variant="secondary" size="xs">
-                                    <StarIcon size={10} className="mr-1" />
-                                    <span className="tabular-nums">
-                                        {model.benchmarkScore}
-                                    </span>
-                                </Badge>
-                            </span>
-                        </TooltipTrigger>
-                        <TooltipPortal>
-                            <TooltipContent side="bottom">
-                                Quality score out of 100 on our code-review
-                                benchmark
-                            </TooltipContent>
-                        </TooltipPortal>
-                    </Tooltip>
+                    {showScore && (
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <span>
+                                    <Badge variant="secondary" size="xs">
+                                        <StarIcon size={10} className="mr-1" />
+                                        <span className="tabular-nums">
+                                            {model.benchmarkScore}
+                                        </span>
+                                    </Badge>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipPortal>
+                                <TooltipContent side="bottom">
+                                    Quality score out of 100 on our code-review
+                                    benchmark
+                                </TooltipContent>
+                            </TooltipPortal>
+                        </Tooltip>
+                    )}
                 </div>
 
                 {!compact && (
@@ -314,13 +325,15 @@ export function CuratedModelCard({
  * this per-glyph, but a visible legend makes the shorthand ("★ 91", "$$$",
  * "Fast") readable without hovering.
  */
-export function ModelCardLegend() {
+export function ModelCardLegend({ showScore = true }: { showScore?: boolean }) {
     return (
         <div className="text-text-tertiary flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-            <span className="flex items-center gap-1">
-                <StarIcon size={11} />
-                Quality score /100
-            </span>
+            {showScore && (
+                <span className="flex items-center gap-1">
+                    <StarIcon size={11} />
+                    Quality score /100
+                </span>
+            )}
             <span className="flex items-center gap-1">
                 <ClockIcon size={11} />
                 Typical speed

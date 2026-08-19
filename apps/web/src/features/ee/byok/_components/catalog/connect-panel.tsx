@@ -291,7 +291,7 @@ export function CuratedConnectPanel({
                 </CardHeader>
 
                 <CardContent className="flex flex-col gap-5">
-                    <CuratedModelCard model={model} isSelected />
+                    <CuratedModelCard model={model} isSelected showScore={false} />
 
                     {model.variants && model.variants.length > 0 && (
                         <VariantSelector

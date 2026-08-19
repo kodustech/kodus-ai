@@ -44,6 +44,47 @@ export type PoolModel = {
     /** Provider id (from the model's credential) — drives the provider avatar. */
     provider?: string;
     capabilities?: SurfacedCapabilities;
+    /** Curated quality/perf signal (joined by model id in routing-tab). This is
+     *  where the "which model?" decision actually happens, so the score/speed/
+     *  context/cost live HERE — pre-formatted strings so this stays decoupled
+     *  from the curated catalog. Absent for non-curated models. */
+    score?: number;
+    speedLabel?: string;
+    contextLabel?: string;
+    costLabel?: string;
+};
+
+/** The compact quality/perf strip under a model name in the routing picker —
+ *  the signal that used to live in the connect catalog, now where the model is
+ *  actually chosen. Renders nothing when the model carries no curated metadata. */
+const ModelMetrics = ({ model }: { model: PoolModel }) => {
+    const parts: React.ReactNode[] = [];
+    if (model.score != null)
+        parts.push(
+            <span key="s" className="text-warning font-semibold tabular-nums">
+                ★{model.score}
+            </span>,
+        );
+    if (model.speedLabel) parts.push(<span key="sp">{model.speedLabel}</span>);
+    if (model.contextLabel)
+        parts.push(
+            <span key="c" className="tabular-nums">
+                {model.contextLabel}
+            </span>,
+        );
+    if (model.costLabel)
+        parts.push(<span key="co">{model.costLabel}</span>);
+    if (parts.length === 0) return null;
+    return (
+        <span className="text-text-tertiary flex items-center gap-1.5 text-[11px]">
+            {parts.map((p, i) => (
+                <span key={i} className="flex items-center gap-1.5">
+                    {i > 0 && <span className="opacity-40">·</span>}
+                    {p}
+                </span>
+            ))}
+        </span>
+    );
 };
 
 /**
@@ -153,7 +194,7 @@ export const ModelCombobox = ({
                                         onSelect(model.id);
                                         setOpen(false);
                                     }}>
-                                    <span className="flex items-center gap-2">
+                                    <span className="flex min-w-0 items-center gap-2">
                                         {gate.ok ? (
                                             <ProviderAvatar
                                                 provider={model.provider}
@@ -161,15 +202,20 @@ export const ModelCombobox = ({
                                         ) : (
                                             <AlertTriangleIcon className="text-warning size-3.5 shrink-0" />
                                         )}
-                                        <span
-                                            className={
-                                                !gate.ok
-                                                    ? "text-text-tertiary"
-                                                    : selected
-                                                        ? "text-primary font-medium"
-                                                        : undefined
-                                            }>
-                                            {model.label}
+                                        <span className="flex min-w-0 flex-col gap-0.5">
+                                            <span
+                                                className={
+                                                    !gate.ok
+                                                        ? "text-text-tertiary"
+                                                        : selected
+                                                            ? "text-primary font-medium"
+                                                            : undefined
+                                                }>
+                                                {model.label}
+                                            </span>
+                                            {gate.ok && (
+                                                <ModelMetrics model={model} />
+                                            )}
                                         </span>
                                     </span>
                                 </CommandItem>
@@ -325,6 +371,11 @@ const TaskModelControl = ({
                                     ? modelLabelFor(models, overrideId)
                                     : inheritedOptionLabel}
                             </span>
+                            {effectiveModel?.score != null && (
+                                <span className="text-warning shrink-0 text-xs font-semibold tabular-nums">
+                                    ★{effectiveModel.score}
+                                </span>
+                            )}
                         </span>
                     </Button>
                 }

@@ -1,6 +1,7 @@
 import {
     getBYOK,
     getLLMConfigStatus,
+    listByokCatalog,
 } from "@services/organizationParameters/fetch";
 import {
     resolveByokModelCost,
@@ -15,12 +16,14 @@ import { ByokPageClient } from "./_components/page.client";
 import { isBYOKSubscriptionPlan } from "./_utils";
 
 export default async function ByokPage() {
-    const [byokConfig, llmConfigStatus, teamId, dateRange] = await Promise.all([
-        getBYOK().catch(() => null),
-        getLLMConfigStatus().catch(() => null),
-        getGlobalSelectedTeamId().catch(() => undefined),
-        getSelectedDateRange(),
-    ]);
+    const [byokConfig, llmConfigStatus, teamId, dateRange, catalog] =
+        await Promise.all([
+            getBYOK().catch(() => null),
+            getLLMConfigStatus().catch(() => null),
+            getGlobalSelectedTeamId().catch(() => undefined),
+            getSelectedDateRange(),
+            listByokCatalog().catch(() => []),
+        ]);
 
     // Per-model cost for the configured models. Scoped to the SAME date range +
     // BYOK flag the Costs screen uses, so the chip value matches the Costs
@@ -72,6 +75,7 @@ export default async function ByokPage() {
             costByModelId={costByModelId}
             periodLabel={periodLabel}
             costRangeQuery={costRangeQuery}
+            catalog={catalog}
         />
     );
 }

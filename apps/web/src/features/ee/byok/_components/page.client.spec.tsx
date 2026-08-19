@@ -3,8 +3,44 @@ import "@testing-library/jest-dom";
 import { TooltipProvider } from "@components/ui/tooltip";
 import { render, screen } from "@testing-library/react";
 
+import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConfig } from "../_types";
 import { ByokPageClient } from "./page.client";
+
+// The catalog now arrives as a prop (backend-sourced, replacing the static
+// curated-models.json). A minimal two-brand sample drives the first-run grid.
+const SAMPLE_CATALOG: CuratedModel[] = [
+    {
+        id: "claude-sonnet-4-6",
+        displayName: "Claude Sonnet 4.6",
+        provider: "anthropic",
+        tier: "recommended",
+        benchmarkScore: 88,
+        description: "Sample.",
+        speed: "medium",
+        contextWindow: "200K",
+        costTier: "$$$",
+        strengths: [],
+        weaknesses: [],
+        apiKeyUrl: "https://example.test/keys",
+        defaults: { temperature: 0, maxOutputTokens: 16384 },
+    },
+    {
+        id: "gpt-5.4",
+        displayName: "GPT-5.4",
+        provider: "openai",
+        tier: "recommended",
+        benchmarkScore: 85,
+        description: "Sample.",
+        speed: "fast",
+        contextWindow: "400K",
+        costTier: "$$$",
+        strengths: [],
+        weaknesses: [],
+        apiKeyUrl: "https://example.test/keys",
+        defaults: { temperature: 0, maxOutputTokens: 16384 },
+    },
+];
 
 /**
  * Render ByokPageClient under a TooltipProvider — production supplies one at the
@@ -86,7 +122,7 @@ describe("ByokPageClient — v2 read path", () => {
         };
 
         renderPage(
-            <ByokPageClient config={config} llmConfigStatus={llmConfigStatus} />,
+            <ByokPageClient config={config} llmConfigStatus={llmConfigStatus} catalog={SAMPLE_CATALOG} />,
         );
 
         // Both models on the non-managed credential appear, grouped under the
@@ -115,7 +151,7 @@ describe("ByokPageClient — v2 read path", () => {
 
     it("shows the provider-first empty state and keeps Routing reachable", () => {
         renderPage(
-            <ByokPageClient config={null} llmConfigStatus={llmConfigStatus} />,
+            <ByokPageClient config={null} llmConfigStatus={llmConfigStatus} catalog={SAMPLE_CATALOG} />,
         );
 
         // First-run renders the provider-first empty state: pick a provider,

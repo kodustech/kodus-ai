@@ -18,8 +18,7 @@ import Link from "next/link";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { formatUsd } from "@services/usage/format";
 
-import curatedCatalog from "../_data/curated-models.json";
-import type { CuratedModel } from "../_data/curated-models.types";
+import { useCatalogModel } from "../_data/catalog-context";
 import type { BYOKConnectInput } from "../_types";
 import { PROVIDER_LABELS } from "./catalog/model-card";
 
@@ -62,9 +61,7 @@ export function ConfiguredSummary({
     /** `start=..&end=..` so the Costs deep-link opens on the SAME window. */
     costRangeQuery?: string;
 }) {
-    const curated = (curatedCatalog.models as CuratedModel[]).find(
-        (m) => m.id === config.model,
-    );
+    const curated = useCatalogModel(config.model);
     const displayName = curated?.displayName ?? config.model;
     const providerLabel =
         curated?.providerDisplayName ??

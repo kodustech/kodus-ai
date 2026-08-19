@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
@@ -19,8 +19,7 @@ import { PlugIcon, PlusIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
-import curatedCatalog from "../../_data/curated-models.json";
-import type { CuratedModel } from "../../_data/curated-models.types";
+import { useCatalog } from "../../_data/catalog-context";
 import type {
     BYOKConnectInput,
     BYOKConfig,
@@ -53,17 +52,6 @@ type ModelsTabProps = {
     onOpenRouting?: (anchor: string) => void;
 };
 
-/** Providers with curated catalog entries — decides inline edit vs. the manual
- *  escape hatch (mirrors the legacy isEditableInCatalog split, now keyed by the
- *  model's underlying credential provider). */
-const CURATED_PROVIDERS = new Set(
-    (curatedCatalog.models as CuratedModel[]).map((m) => m.provider),
-);
-
-const displayNameFor = (modelId: string): string =>
-    (curatedCatalog.models as CuratedModel[]).find((m) => m.id === modelId)
-        ?.displayName ?? modelId;
-
 type View =
     | { mode: "list" }
     // `provider` set ⇒ scoped "Add a model to {provider}" (key reused);
@@ -88,6 +76,16 @@ export const ModelsTab = ({
 }: ModelsTabProps) => {
     const router = useRouter();
     const [view, setView] = useState<View>({ mode: "list" });
+
+    const catalog = useCatalog();
+    // Providers with curated catalog entries — decides inline edit vs. the manual
+    // escape hatch (keyed by the model's underlying credential provider).
+    const curatedProviders = useMemo(
+        () => new Set(catalog.map((m) => m.provider)),
+        [catalog],
+    );
+    const displayNameFor = (modelId: string): string =>
+        catalog.find((m) => m.id === modelId)?.displayName ?? modelId;
 
     const groups = groupModelsByProvider(config).filter(
         (g) => g.models.length > 0,
@@ -145,10 +143,10 @@ export const ModelsTab = ({
 
     // ── per-model edit (uiFields form) ────────────────────────────────────────
     const openEdit = (model: BYOKModelConfig, credential: BYOKCredential) => {
-        const curated = (curatedCatalog.models as CuratedModel[]).find(
+        const curated = catalog.find(
             (m) => m.id === model.model,
         );
-        if (!curated || !CURATED_PROVIDERS.has(credential.provider)) {
+        if (!curated || !curatedProviders.has(credential.provider)) {
             // Non-curated model: the manual form edits it in place (pre-filled
             // via ?model=<id>), not a blank "add" form.
             router.push(
@@ -215,7 +213,7 @@ export const ModelsTab = ({
 
     // ── view: per-model edit ──────────────────────────────────────────────────
     if (view.mode === "edit") {
-        const curated = (curatedCatalog.models as CuratedModel[]).find(
+        const curated = catalog.find(
             (m) => m.id === view.model.model,
         )!;
         const settings = (view.credential.settings ?? {}) as Record<
@@ -312,7 +310,7 @@ export const ModelsTab = ({
                                     // cards; a non-curated one goes straight to the
                                     // manual form pre-scoped to it (key reused),
                                     // skipping the empty "pick a model" middle step.
-                                    CURATED_PROVIDERS.has(credential.provider)
+                                    curatedProviders.has(credential.provider)
                                         ? setView({
                                               mode: "add",
                                               provider: credential.provider,

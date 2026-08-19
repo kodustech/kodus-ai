@@ -1,24 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@components/ui/button";
 import { Image } from "@components/ui/image";
 import { toast } from "@components/ui/toaster/use-toast";
 import { createOrUpdateOrganizationParameter } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
-import { ExternalLinkIcon, PlusIcon } from "lucide-react";
+import { ExternalLinkIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
-import curatedCatalog from "../_data/curated-models.json";
-import type { CuratedModel } from "../_data/curated-models.types";
+import { useCatalog } from "../_data/catalog-context";
 import type { BYOKConnectInput, BYOKConfig } from "../_types";
 import {
     buildByokBlob,
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
 } from "./byok-write";
-import { CuratedCatalog } from "./catalog/catalog";
 import { ConnectProviderFlow } from "./connect-provider-flow";
 
 const BYOK_DOCS_URL = "https://docs.kodus.io/how_to_use/en/byok";
@@ -26,7 +22,8 @@ const BYOK_DOCS_URL = "https://docs.kodus.io/how_to_use/en/byok";
 /**
  * D-UI-FIRSTRUN empty state. A no-model org sees the 🐶 hero + copy above the
  * shared PROVIDER-FIRST flow (pick a provider → one of its models → paste the
- * key). "Browse all models" still opens the full CuratedCatalog escape hatch.
+ * key). Which model runs each task is chosen later in the Routing tab, so the
+ * connect step stays provider-first — no cross-provider "best model" catalog.
  * Every write goes through buildByokBlob (blank-key keep rule) → the
  * create-or-update endpoint, with routing.defaultModelId → the new model.
  */
@@ -36,7 +33,7 @@ export function FirstRunCard({
     existing: BYOKConfig | null | undefined;
 }) {
     const router = useRouter();
-    const [showCatalog, setShowCatalog] = useState(false);
+    const catalog = useCatalog();
 
     const persist = async (blob: BYOKConfig, modelName: string) => {
         await createOrUpdateOrganizationParameter(
@@ -63,25 +60,11 @@ export function FirstRunCard({
             model: modelFieldsFromConfig(cfg),
         });
         const name =
-            (curatedCatalog.models as CuratedModel[]).find(
-                (m) => m.id === cfg.model,
-            )?.displayName ?? cfg.model;
+            catalog.find((m) => m.id === cfg.model)?.displayName ?? cfg.model;
         await persist(blob, name);
     };
 
-    // Browse-all-models: the full curated catalog (recommended grid + manual).
-    if (showCatalog) {
-        return (
-            <CuratedCatalog
-                slot="main"
-                existingKeyByProvider={{}}
-                onSave={saveFromCatalog}
-                onCancel={() => setShowCatalog(false)}
-            />
-        );
-    }
-
-    // The provider-first picker, wrapped with the first-run hero + escape hatches.
+    // The provider-first picker, wrapped with the first-run hero + docs link.
     return (
         <ConnectProviderFlow
             existingKeyByProvider={{}}
@@ -108,24 +91,14 @@ export function FirstRunCard({
                 </>
             }
             footer={
-                <>
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="helper"
-                        leftIcon={<PlusIcon />}
-                        onClick={() => setShowCatalog(true)}>
-                        Browse all models
-                    </Button>
-                    <a
-                        href={BYOK_DOCS_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-text-secondary hover:text-text-primary inline-flex items-center gap-1 text-xs hover:underline">
-                        How BYOK works
-                        <ExternalLinkIcon size={12} />
-                    </a>
-                </>
+                <a
+                    href={BYOK_DOCS_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-text-secondary hover:text-text-primary inline-flex items-center gap-1 text-xs hover:underline">
+                    How BYOK works
+                    <ExternalLinkIcon size={12} />
+                </a>
             }
         />
     );

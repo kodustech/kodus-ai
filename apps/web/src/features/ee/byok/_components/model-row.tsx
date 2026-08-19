@@ -17,8 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import curatedCatalog from "../_data/curated-models.json";
-import type { CuratedModel } from "../_data/curated-models.types";
+import { useCatalogModel } from "../_data/catalog-context";
 import type {
     BYOKConfig,
     BYOKModelConfig,
@@ -110,9 +109,7 @@ export function ModelRow({
     /** Deep-link a "Used in" chip to its row on the Routing tab. */
     onOpenRouting?: (anchor: string) => void;
 }) {
-    const curated = (curatedCatalog.models as CuratedModel[]).find(
-        (m) => m.id === model.model,
-    );
+    const curated = useCatalogModel(model.model);
     const displayName = curated?.displayName ?? model.model;
     const thinking = formatThinking(model.reasoningEffort);
 

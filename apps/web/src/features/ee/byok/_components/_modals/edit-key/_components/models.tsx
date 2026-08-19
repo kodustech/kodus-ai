@@ -27,13 +27,14 @@ import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
-import catalog from "../../../../_data/curated-models.json";
 import {
     getAnnotationForModel,
     type CuratedModelsCatalog,
 } from "../../../../_data/curated-models.types";
 
-const annotations = (catalog as CuratedModelsCatalog).annotations;
+// Annotations (per-model badges) are not part of the backend catalog and are
+// currently empty — default to none. Re-add via the catalog endpoint if needed.
+const annotations: CuratedModelsCatalog["annotations"] = {};
 
 export const ByokModelSelect = () => {
     const form = useFormContext<EditKeyForm>();

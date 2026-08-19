@@ -25,8 +25,7 @@ import {
 import { useRouter } from "next/navigation";
 import { TASK_ROUTING_FALLBACK } from "@libs/llm/byok-config";
 
-import curatedCatalog from "../../_data/curated-models.json";
-import type { CuratedModel } from "../../_data/curated-models.types";
+import { useCatalog } from "../../_data/catalog-context";
 import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
 import { groupModelsByProvider } from "../../_utils";
 import { buildByokBlob } from "../byok-write";
@@ -37,6 +36,12 @@ import {
     TaskOverrideGrid,
     type PoolModel,
 } from "../routing/task-override-grid";
+
+const SPEED_LABEL: Record<string, string> = {
+    fast: "Fast",
+    medium: "Medium",
+    slow: "Slow",
+};
 
 type RoutingTabProps = {
     config: BYOKConfig | null | undefined;
@@ -56,10 +61,6 @@ type RoutingTabProps = {
 const AUTO_TOOLTIP =
     "The auto-optimizing router is on the roadmap — your pool of models is ready for it.";
 
-/** Curated display name for a model id, falling back to the raw id. */
-const modelDisplayName = (modelId: string): string =>
-    (curatedCatalog.models as CuratedModel[]).find((m) => m.id === modelId)
-        ?.displayName ?? modelId;
 
 /**
  * Strip task-override entries that shouldn't persist: empty ids AND overrides
@@ -106,6 +107,7 @@ export const RoutingTab = ({
     onScrolled,
 }: RoutingTabProps) => {
     const router = useRouter();
+    const catalog = useCatalog();
 
     // Scroll to (and briefly flash) the row a "Used in" chip deep-linked to.
     // Runs on mount because the tab switch remounts this panel with the anchor
@@ -139,15 +141,27 @@ export const RoutingTab = ({
         const capsById = new Map(
             (llmConfigStatus?.models ?? []).map((m) => [m.modelId, m.capabilities]),
         );
+        // Curated quality/perf, keyed by the model string a BYOKModelConfig stores
+        // (BYOKModelConfig.model === curated `id`) — backend-sourced catalog.
+        const curatedById = new Map(catalog.map((m) => [m.id, m]));
         return groupModelsByProvider(config).flatMap((group) =>
-            group.models.map((m) => ({
-                id: m.id,
-                label: modelDisplayName(m.model),
-                provider: group.credential.provider,
-                capabilities: capsById.get(m.id),
-            })),
+            group.models.map((m) => {
+                const curated = curatedById.get(m.model);
+                return {
+                    id: m.id,
+                    label: curated?.displayName ?? m.model,
+                    provider: group.credential.provider,
+                    capabilities: capsById.get(m.id),
+                    score: curated?.benchmarkScore,
+                    speedLabel: curated
+                        ? SPEED_LABEL[curated.speed]
+                        : undefined,
+                    contextLabel: curated?.contextWindow,
+                    costLabel: curated?.costTier,
+                };
+            }),
         );
-    }, [config, llmConfigStatus]);
+    }, [config, llmConfigStatus, catalog]);
 
     const routing = config?.routing ?? {};
     const [defaultModelId, setDefaultModelId] = useState<string | undefined>(

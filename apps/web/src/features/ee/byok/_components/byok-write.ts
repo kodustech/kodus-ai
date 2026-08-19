@@ -72,8 +72,8 @@ export type BuildV2Edit =
     | { kind: "routing"; routing: BYOKRouting };
 
 /**
- * Split the legacy {@link BYOKConnectInput} that `CuratedConnectPanel`/`CuratedCatalog`
- * still emit into the v2 halves: the CREDENTIAL settings (provider-scoped:
+ * Split the legacy {@link BYOKConnectInput} that `CuratedConnectPanel` emits
+ * into the v2 halves: the CREDENTIAL settings (provider-scoped:
  * baseURL, vertexLocation, aws*, openrouter*) and the per-MODEL fields. The key
  * itself stays on the form's `apiKey` and is passed to the builder separately.
  */

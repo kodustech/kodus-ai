@@ -11,7 +11,7 @@ import {
 import { ArrowLeftIcon, LinkIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import curatedCatalog from "../_data/curated-models.json";
+import { useCatalog } from "../_data/catalog-context";
 import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConnectInput } from "../_types";
 import { CuratedConnectPanel } from "./catalog/connect-panel";
@@ -40,20 +40,30 @@ type ProviderChoice = {
  * Still exported: it is the GRACEFUL FALLBACK the registry-driven grid uses
  * while the backend list loads or if that fetch fails (never an empty picker).
  */
-export const catalogProviders = (): ProviderChoice[] => {
+/**
+ * The provider IDENTITY a curated model groups under: its BRAND (`providerKey`,
+ * e.g. `moonshot` / `zai`) when set, else the TRANSPORT `provider` (e.g.
+ * `openai_compatible`). The picker groups AND filters by this, so a brand served
+ * over a shared transport still gets its own card (Moonshot, Z.ai) instead of
+ * being lumped under the generic "OpenAI-compatible" bucket. The stored config
+ * still uses the transport `provider` + baseURL — this only affects the UI.
+ */
+const providerKeyOf = (m: CuratedModel): string => m.providerKey ?? m.provider;
+
+export const catalogProviders = (
+    catalog: CuratedModel[],
+): ProviderChoice[] => {
     const byId = new Map<string, ProviderChoice>();
-    for (const m of curatedCatalog.models as CuratedModel[]) {
-        const existing = byId.get(m.provider);
+    for (const m of catalog) {
+        const key = providerKeyOf(m);
+        const existing = byId.get(key);
         if (existing) {
             existing.modelCount += 1;
             continue;
         }
-        byId.set(m.provider, {
-            id: m.provider,
-            label:
-                PROVIDER_LABELS[m.provider] ??
-                m.providerDisplayName ??
-                m.provider,
+        byId.set(key, {
+            id: key,
+            label: PROVIDER_LABELS[key] ?? m.providerDisplayName ?? key,
             modelCount: 1,
             // Curated providers always show a count, so this only matters as the
             // registry-fetch fallback — a curated provider is listable.
@@ -63,11 +73,13 @@ export const catalogProviders = (): ProviderChoice[] => {
     return Array.from(byId.values());
 };
 
-/** How many curated models list a given provider id (0 for registry-only ones). */
-const curatedModelCount = (providerId: string): number =>
-    (curatedCatalog.models as CuratedModel[]).filter(
-        (m) => m.provider === providerId,
-    ).length;
+/** How many curated models group under a given provider identity (0 for
+ *  registry-only ones). Keyed by brand, matching the picker's grouping. */
+const curatedModelCount = (
+    catalog: CuratedModel[],
+    providerId: string,
+): number =>
+    catalog.filter((m) => providerKeyOf(m) === providerId).length;
 
 /** Fold to an alphanumeric key so `open_router` and `openrouter` collapse to one
  *  entry (the registry id and the curated id name the same provider). */
@@ -84,10 +96,11 @@ const normalizeId = (id: string): string =>
  * via normalizeId so a curated provider never shows twice.
  */
 export const registryProviders = (
+    catalog: CuratedModel[],
     registry: ByokProviderDescriptor[],
 ): ProviderChoice[] => {
     // Curated-first: keep the exact existing ordering + counts up front.
-    const curated = catalogProviders();
+    const curated = catalogProviders(catalog);
     const seen = new Set(curated.map((p) => normalizeId(p.id)));
     const out: ProviderChoice[] = [...curated];
 
@@ -99,7 +112,7 @@ export const registryProviders = (
             out.push({
                 id,
                 label: PROVIDER_LABELS[id] ?? module.label ?? id,
-                modelCount: curatedModelCount(id),
+                modelCount: curatedModelCount(catalog, id),
                 // The descriptor's flag is for the canonical id; the `*_compatible`
                 // aliases are custom endpoints (not auto-listable).
                 autoListModels:
@@ -117,6 +130,50 @@ const providerLabelFor = (
     PROVIDER_LABELS[providerId] ??
     providers.find((p) => p.id === providerId)?.label ??
     providerId;
+
+/** One provider tile in the grid. Curated providers (≥1 curated model) open the
+ *  in-place model list; the rest are custom/self-hosted and go straight to the
+ *  manual form pre-scoped to the provider. */
+function ProviderGridCard({
+    provider,
+    onPick,
+}: {
+    provider: ProviderChoice;
+    onPick: (p: ProviderChoice) => void;
+}) {
+    // No curated models AND not auto-listable ⇒ a custom endpoint the user must
+    // point at their own deployment (base URL first), vs. a listable catalog.
+    const needsEndpoint = !provider.autoListModels && provider.modelCount === 0;
+    return (
+        <button
+            type="button"
+            onClick={() => onPick(provider)}
+            className="border-card-lv2 bg-card-lv2 hover:border-primary-light/60 hover:bg-card-lv3 flex min-h-[4.25rem] items-center gap-3 rounded-lg border p-3 text-left transition-colors">
+            <ProviderLogo
+                provider={provider.id}
+                label={provider.label}
+                className="size-8 shrink-0"
+            />
+            <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="text-text-primary line-clamp-2 text-sm leading-tight font-semibold">
+                    {provider.label}
+                </span>
+                <span className="text-text-tertiary flex items-center gap-1 text-xs tabular-nums">
+                    {provider.modelCount > 0 ? (
+                        `${provider.modelCount} ${provider.modelCount === 1 ? "model" : "models"}`
+                    ) : needsEndpoint ? (
+                        <>
+                            <LinkIcon size={10} className="shrink-0" />
+                            Custom endpoint
+                        </>
+                    ) : (
+                        "Browse models"
+                    )}
+                </span>
+            </span>
+        </button>
+    );
+}
 
 /**
  * The shared PROVIDER-FIRST connect flow: pick a provider → see ALL of that
@@ -170,10 +227,11 @@ export function ConnectProviderFlow({
         };
     }, []);
 
+    const catalog = useCatalog();
     const providers =
         registry && registry.length > 0
-            ? registryProviders(registry)
-            : catalogProviders();
+            ? registryProviders(catalog, registry)
+            : catalogProviders(catalog);
     const [pickedProvider, setPickedProvider] = useState<string | null>(
         lockedProvider ?? null,
     );
@@ -199,8 +257,8 @@ export function ConnectProviderFlow({
     if (pickedProvider) {
         const locked = !!lockedProvider;
         const label = providerLabelFor(pickedProvider, providers);
-        const providerModels = (curatedCatalog.models as CuratedModel[])
-            .filter((m) => m.provider === pickedProvider)
+        const providerModels = catalog
+            .filter((m) => providerKeyOf(m) === pickedProvider)
             .sort((a, b) => b.benchmarkScore - a.benchmarkScore);
 
         return (
@@ -241,13 +299,17 @@ export function ConnectProviderFlow({
 
                 {providerModels.length > 0 ? (
                     <div className="flex flex-col gap-3">
-                        <ModelCardLegend />
+                        {/* Score/legend omitted here — picking the best model per
+                            task is the Routing tab's job; connect just enables a
+                            provider's models. */}
+                        <ModelCardLegend showScore={false} />
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             {providerModels.map((model) => (
                                 <CuratedModelCard
                                     key={model.id}
                                     model={model}
                                     showConnect
+                                    showScore={false}
                                     onSelect={() => setSelected(model)}
                                 />
                             ))}
@@ -304,7 +366,19 @@ export function ConnectProviderFlow({
         );
     }
 
-    // The provider grid — the provider-first entry point.
+    // Provider-first grid, split into two honest groups: curated brands you pick
+    // a model from in place, and custom/self-hosted endpoints (Bedrock, Vertex,
+    // Azure, Novita, *-compatible) that go to the manual form. Model choice PER
+    // TASK is the Routing tab's job — the connect step only wires up providers.
+    const onPickProvider = (p: ProviderChoice) =>
+        p.modelCount > 0
+            ? setPickedProvider(p.id)
+            : router.push(
+                  `/organization/byok/manual?provider=${encodeURIComponent(p.id)}`,
+              );
+    const curatedProviders = providers.filter((p) => p.modelCount > 0);
+    const customProviders = providers.filter((p) => p.modelCount === 0);
+
     return (
         <Card
             color="lv1"
@@ -316,57 +390,40 @@ export function ConnectProviderFlow({
                 )}>
                 {hero}
 
-                <div className="grid w-full grid-cols-2 gap-2.5 sm:grid-cols-3">
-                    {providers.map((p) => {
-                        // These providers can't auto-list models — they point at
-                        // your own deployment, so the connect form asks for a base
-                        // URL first. Surface that as a one-line subtitle rather
-                        // than a separate wrapping tag that broke row alignment.
-                        const needsEndpoint =
-                            !p.autoListModels && p.modelCount === 0;
-                        return (
-                            <button
-                                key={p.id}
-                                type="button"
-                                onClick={() =>
-                                    // Curated providers open the in-place model
-                                    // cards; everything else goes straight to the
-                                    // manual form pre-scoped to the provider.
-                                    p.modelCount > 0
-                                        ? setPickedProvider(p.id)
-                                        : router.push(
-                                              `/organization/byok/manual?provider=${encodeURIComponent(p.id)}`,
-                                          )
-                                }
-                                className="border-card-lv2 bg-card-lv2 hover:border-primary-light/60 hover:bg-card-lv3 flex min-h-[4.25rem] items-center gap-3 rounded-lg border p-3 text-left transition-colors">
-                                <ProviderLogo
-                                    provider={p.id}
-                                    label={p.label}
-                                    className="size-8 shrink-0"
-                                />
-                                <span className="flex min-w-0 flex-col gap-0.5">
-                                    <span className="text-text-primary line-clamp-2 text-sm leading-tight font-semibold">
-                                        {p.label}
-                                    </span>
-                                    <span className="text-text-tertiary flex items-center gap-1 text-xs tabular-nums">
-                                        {p.modelCount > 0 ? (
-                                            `${p.modelCount} ${p.modelCount === 1 ? "model" : "models"}`
-                                        ) : needsEndpoint ? (
-                                            <>
-                                                <LinkIcon
-                                                    size={10}
-                                                    className="shrink-0"
-                                                />
-                                                Custom endpoint
-                                            </>
-                                        ) : (
-                                            "Browse models"
-                                        )}
-                                    </span>
-                                </span>
-                            </button>
-                        );
-                    })}
+                <div className="flex w-full flex-col gap-6 text-left">
+                    {curatedProviders.length > 0 && (
+                        <div className="flex flex-col gap-2.5">
+                            <p className="text-text-tertiary text-xs font-semibold tracking-wide uppercase">
+                                Providers
+                            </p>
+                            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                                {curatedProviders.map((p) => (
+                                    <ProviderGridCard
+                                        key={p.id}
+                                        provider={p}
+                                        onPick={onPickProvider}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {customProviders.length > 0 && (
+                        <div className="flex flex-col gap-2.5">
+                            <p className="text-text-tertiary text-xs font-semibold tracking-wide uppercase">
+                                Custom &amp; self-hosted
+                            </p>
+                            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                                {customProviders.map((p) => (
+                                    <ProviderGridCard
+                                        key={p.id}
+                                        provider={p}
+                                        onPick={onPickProvider}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {(footer || onCancel) && (

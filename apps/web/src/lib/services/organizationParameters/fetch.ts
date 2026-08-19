@@ -6,6 +6,7 @@ import {
 } from "@services/parameters/types";
 import { axiosAuthorized } from "src/core/utils/axios";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
+import type { CuratedModel } from "src/features/ee/byok/_data/curated-models.types";
 
 import { ORGANIZATION_PARAMETERS_PATHS } from ".";
 
@@ -218,6 +219,9 @@ export type ByokProviderDescriptor = {
     /** Whether the provider's models can be enumerated (vs. custom-endpoint /
      *  manual). Drives the picker subtitle. */
     autoListModels: boolean;
+    /** Provider docs URL (hardcoded on the module). UI fallback when a curated
+     *  model has no docsUrl. */
+    doc?: string;
 };
 
 /**
@@ -232,6 +236,19 @@ export const listByokProviders = async (): Promise<ByokProviderDescriptor[]> => 
         cache: "no-store",
     });
     return response?.providers ?? [];
+};
+
+/**
+ * The curated model catalog, served from the backend (aggregated from every
+ * provider module's `catalog` — the single source of truth that replaced the
+ * frontend `curated-models.json`). Shape is 1:1 with the web `CuratedModel`.
+ */
+export const listByokCatalog = async (): Promise<CuratedModel[]> => {
+    const response = await authorizedFetch<{ models: CuratedModel[] }>(
+        ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_CATALOG,
+        { cache: "no-store" },
+    );
+    return response?.models ?? [];
 };
 
 export type LLMProviderModel = { id: string; name: string };
