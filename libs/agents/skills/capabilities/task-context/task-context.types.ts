@@ -47,6 +47,9 @@ export interface TaskContextHints {
     queryText: string;
     urlHosts: string[];
     siteUrls: string[];
+    /** Tenant ids resolved out-of-band (e.g. Atlassian cloudId), preferred over
+     *  URLs mined from PR text because those are absent for bare ticket keys. */
+    siteIds: string[];
     resourceIds: string[];
 }
 

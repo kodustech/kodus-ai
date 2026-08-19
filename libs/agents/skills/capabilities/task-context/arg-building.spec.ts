@@ -17,6 +17,7 @@ const hints = (o: Partial<TaskContextHints> = {}): TaskContextHints => ({
     queryText: '',
     urlHosts: [],
     siteUrls: [],
+    siteIds: [],
     resourceIds: [],
     ...o,
 });
@@ -73,5 +74,86 @@ describe('buildTaskContextArgsCandidates (characterization)', () => {
             sig,
         );
         expect(out).toEqual([{ issueKey: 'AB-9' }]);
+    });
+
+    describe('tenant-scoped tools (e.g. Atlassian getJiraIssue)', () => {
+        const jiraSig: TaskContextToolSignature = {
+            requiredParams: ['cloudId', 'issueIdOrKey'],
+            properties: {
+                cloudId: { type: 'string' },
+                issueIdOrKey: { type: 'string' },
+            },
+            normalizedProperties: {
+                cloudid: { type: 'string' },
+                issueidorkey: { type: 'string' },
+            },
+        };
+
+        it('drops the tool when only a bare ticket key is available', () => {
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({ issueKeys: ['CLF-1'] }),
+                jiraSig,
+            );
+            expect(out).toEqual([]);
+        });
+
+        it('builds the call once the site id is resolved out-of-band', () => {
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({ issueKeys: ['CLF-1'], siteIds: ['cloud-uuid'] }),
+                jiraSig,
+            );
+            expect(out).toEqual([
+                { cloudId: 'cloud-uuid', issueIdOrKey: 'CLF-1' },
+            ]);
+        });
+
+        it('keeps every resolved site as a candidate, not just the first two', () => {
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({
+                    issueKeys: ['CLF-1'],
+                    siteIds: ['site-1', 'site-2', 'site-3', 'site-4'],
+                }),
+                jiraSig,
+            );
+            expect(out.map((args) => args.cloudId)).toEqual([
+                'site-1',
+                'site-2',
+                'site-3',
+                'site-4',
+            ]);
+        });
+
+        it('bounds the tenant candidates, since each one costs a remote call', () => {
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({
+                    issueKeys: ['CLF-1'],
+                    siteIds: ['s1', 's2', 's3', 's4'],
+                    siteUrls: ['https://a.example', 'https://b.example'],
+                    urlHosts: ['c.example', 'd.example'],
+                }),
+                jiraSig,
+            );
+            expect(out).toHaveLength(6);
+        });
+
+        it('prefers the resolved site id over a host mined from PR prose', () => {
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({
+                    issueKeys: ['CLF-1'],
+                    siteIds: ['cloud-uuid'],
+                    urlHosts: ['unrelated.example.com'],
+                }),
+                jiraSig,
+            );
+            expect(out[0]).toEqual({
+                cloudId: 'cloud-uuid',
+                issueIdOrKey: 'CLF-1',
+            });
+        });
     });
 });

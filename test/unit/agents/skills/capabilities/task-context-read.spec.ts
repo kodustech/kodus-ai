@@ -110,6 +110,66 @@ describe('fetchTaskContext capability', () => {
         ).toBe(false);
     });
 
+    it('tries the seeded precise tool before a previously learned broad one', async () => {
+        const callTool: CallToolMock = jest.fn().mockResolvedValue({
+            result: {
+                data: {
+                    key: 'TASK-1',
+                    fields: {
+                        summary: 'Task title',
+                        description: 'Task description',
+                    },
+                },
+            },
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            getRegisteredTools: () => [
+                { name: 'getIssue' },
+                { name: 'searchTasks' },
+            ],
+            getToolsForLLM: () => [
+                {
+                    name: 'getIssue',
+                    parameters: {
+                        required: ['issueKey'],
+                        properties: { issueKey: { type: 'string' } },
+                    },
+                },
+                {
+                    name: 'searchTasks',
+                    parameters: {
+                        required: ['query'],
+                        properties: { query: { type: 'string' } },
+                    },
+                },
+            ],
+        };
+
+        // A broad tool that always answers gets learned; it must not outrank the
+        // seed's precise tool forever.
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => [
+                'getIssue',
+                'searchTasks',
+            ]),
+            getCachedTaskContextTools: jest.fn(async () => ['searchTasks']),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => 'searchTasks'),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('jira'),
+            createBaseParams(),
+            hooks,
+        );
+
+        expect(callTool.mock.calls[0][0]).toBe('getIssue');
+    });
+
     it('falls back to agent when deterministic candidates are empty', async () => {
         const callAgent: CallAgentMock = jest.fn().mockResolvedValue({
             result: JSON.stringify({
