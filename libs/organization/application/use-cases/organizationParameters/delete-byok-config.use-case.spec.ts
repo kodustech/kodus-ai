@@ -12,7 +12,7 @@ const ORG = 'org-1';
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
 /** Two credentials, two models, routing pointing default→m1, override→m2. */
-function v2Config(overrides: Partial<BYOKConfig> = {}): BYOKConfig {
+function makeByokConfig(overrides: Partial<BYOKConfig> = {}): BYOKConfig {
     return {
         version: 2,
         credentials: [
@@ -60,9 +60,9 @@ function buildUseCase(opts: {
 }
 
 describe('DeleteByokConfigUseCase — legacy slot delete dropped (04b-06)', () => {
-    it('rejects a legacy main/fallback string target (v2-only: delete by modelId)', async () => {
+    it('rejects a legacy main/fallback string target (delete by modelId)', async () => {
         const { useCase, deleteByokConfig, deleteByokModel } = buildUseCase({
-            byokConfig: v2Config(),
+            byokConfig: makeByokConfig(),
         });
 
         await expect(useCase.execute(ORG, 'main')).rejects.toThrow(
@@ -77,10 +77,10 @@ describe('DeleteByokConfigUseCase — legacy slot delete dropped (04b-06)', () =
     });
 });
 
-describe('DeleteByokConfigUseCase — v2 referential-integrity guard (REQ-DELETE-01)', () => {
+describe('DeleteByokConfigUseCase — referential-integrity guard (REQ-DELETE-01)', () => {
     it('(a) rejects a model referenced by routing, naming the routing keys', async () => {
         const { useCase, deleteByokModel } = buildUseCase({
-            byokConfig: v2Config({
+            byokConfig: makeByokConfig({
                 routing: {
                     mode: 'manual',
                     defaultModelId: 'm1',
@@ -106,6 +106,51 @@ describe('DeleteByokConfigUseCase — v2 referential-integrity guard (REQ-DELETE
         expect(deleteByokModel).not.toHaveBeenCalled();
     });
 
+    it('(a2) ALLOWS deleting the last model even when routing + a repo override point at it (full disconnect)', async () => {
+        // A single model that IS the org default / fallback AND is targeted by a
+        // repo override. In a multi-model config every one of these refs would
+        // reject the delete — but this is the ONLY model, so deleting it is a full
+        // BYOK disconnect: deleteByokModel tears down the whole config (routing
+        // included) and the repo override degrades to the managed default. The
+        // guard must not dead-end this (there is nothing to reassign to).
+        const { useCase, deleteByokModel } = buildUseCase({
+            byokConfig: {
+                version: 2,
+                credentials: [
+                    {
+                        id: 'cred-openai',
+                        provider: 'openai',
+                        apiKey: 'CIPHERTEXT_A',
+                    },
+                ],
+                models: [
+                    { id: 'only', credentialId: 'cred-openai', model: 'gpt-5' },
+                ],
+                routing: {
+                    mode: 'manual',
+                    defaultModelId: 'only',
+                    fallbackModelId: 'only',
+                    taskOverrides: { codeReview: 'only' },
+                },
+            },
+            codeReviewConfig: {
+                configs: {},
+                repositories: [
+                    {
+                        id: 'r1',
+                        name: 'acme/api',
+                        configs: { byokModelId: 'only' },
+                    },
+                ],
+            },
+        });
+
+        await expect(
+            useCase.execute(ORG, { modelId: 'only' }),
+        ).resolves.toBe(true);
+        expect(deleteByokModel).toHaveBeenCalledWith(ORG, 'only');
+    });
+
     it('(b) rejects a model referenced by a repo/folder byokModelId override, naming the scope', async () => {
         const codeReviewConfig = {
             configs: {},
@@ -125,7 +170,7 @@ describe('DeleteByokConfigUseCase — v2 referential-integrity guard (REQ-DELETE
             ],
         };
         const { useCase, deleteByokModel } = buildUseCase({
-            byokConfig: v2Config(),
+            byokConfig: makeByokConfig(),
             codeReviewConfig,
         });
 
@@ -154,7 +199,7 @@ describe('DeleteByokConfigUseCase — v2 referential-integrity guard (REQ-DELETE
             ],
         };
         const { useCase, deleteByokModel } = buildUseCase({
-            byokConfig: v2Config(),
+            byokConfig: makeByokConfig(),
             codeReviewConfig,
         });
 
@@ -167,7 +212,7 @@ describe('DeleteByokConfigUseCase — v2 referential-integrity guard (REQ-DELETE
     it('(c) delegates to deleteByokModel for an unreferenced model (guard clear)', async () => {
         // m2 is not referenced by routing (default→m1) and there are no overrides.
         const { useCase, deleteByokModel } = buildUseCase({
-            byokConfig: v2Config(),
+            byokConfig: makeByokConfig(),
             codeReviewConfig: { configs: {}, repositories: [] },
         });
 
@@ -177,7 +222,7 @@ describe('DeleteByokConfigUseCase — v2 referential-integrity guard (REQ-DELETE
         expect(deleteByokModel).toHaveBeenCalledWith(ORG, 'm2');
     });
 
-    it('rejects a model-level delete against a legacy (non-v2) config', async () => {
+    it('rejects a model-level delete against a legacy config', async () => {
         const { useCase, deleteByokModel } = buildUseCase({
             byokConfig: { main: { provider: 'openai', apiKey: 'x' } },
         });
@@ -231,9 +276,9 @@ function buildService(configValue: unknown) {
     return { service, del, update };
 }
 
-describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
+describe('OrganizationParametersService.deleteByokModel — model removal', () => {
     it('removes an unused model and its now-orphan non-managed credential, preserving ciphertext', async () => {
-        const { service, update, del } = buildService(v2Config());
+        const { service, update, del } = buildService(makeByokConfig());
 
         await expect(service.deleteByokModel(ORG, 'm2')).resolves.toBe(true);
         expect(del).not.toHaveBeenCalled();
@@ -247,7 +292,7 @@ describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
     });
 
     it('keeps a credential that a remaining model still references', async () => {
-        const shared = v2Config({
+        const shared = makeByokConfig({
             models: [
                 { id: 'm1', credentialId: 'cred-openai', model: 'gpt-5' },
                 { id: 'm2', credentialId: 'cred-openai', model: 'gpt-5-mini' },
@@ -262,7 +307,7 @@ describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
     });
 
     it('always keeps a managed credential even when no model references it', async () => {
-        const withManaged = v2Config({
+        const withManaged = makeByokConfig({
             credentials: [
                 { id: 'cred-openai', provider: 'openai', apiKey: 'CIPHERTEXT_A' },
                 { id: 'cred-anthropic', provider: 'anthropic', apiKey: 'CIPHERTEXT_B' },
@@ -280,7 +325,7 @@ describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
     });
 
     it('performs the last-model disconnect (removes the whole config) rather than leaving an empty pool', async () => {
-        const single = v2Config({
+        const single = makeByokConfig({
             credentials: [
                 { id: 'cred-openai', provider: 'openai', apiKey: 'CIPHERTEXT_A' },
             ],
@@ -295,13 +340,13 @@ describe('OrganizationParametersService.deleteByokModel — v2 removal', () => {
     });
 
     it('throws when the model id does not exist', async () => {
-        const { service } = buildService(v2Config());
+        const { service } = buildService(makeByokConfig());
         await expect(
             service.deleteByokModel(ORG, 'does-not-exist'),
         ).rejects.toThrow(BadRequestException);
     });
 
-    it('throws on a non-v2 (legacy) config', async () => {
+    it('throws on a legacy config', async () => {
         const { service } = buildService({ main: { provider: 'openai' } });
         await expect(service.deleteByokModel(ORG, 'm1')).rejects.toThrow(
             /BYOK configuration/,

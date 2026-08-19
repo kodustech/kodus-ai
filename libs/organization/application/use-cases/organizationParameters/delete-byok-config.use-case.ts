@@ -126,7 +126,7 @@ export class DeleteByokConfigUseCase {
         organizationId: string,
         target: DeleteByokTarget,
     ): Promise<boolean> {
-        // ── v2 delete-by-model-id path (REQ-DELETE-01) — the SOLE path. ─────
+        // ── delete-by-model-id path (REQ-DELETE-01) — the SOLE path. ─────
         // 04b-06: the legacy 'main'/'fallback' slot delete is GONE. A legacy
         // string target is rejected (a config has no top-level slots to drop).
         const modelId =
@@ -153,33 +153,47 @@ export class DeleteByokConfigUseCase {
             );
         }
 
-        // Referential-integrity guard: reject if any routing ref
-        // (defaultModelId / fallbackModelId / taskOverrides[*]) OR any
-        // repo/folder override points at this model — deleting it would orphan
-        // that reference (RESEARCH Security "Orphaned routing ref via delete").
-        const routingRefs = findModelReferences(config, modelId);
-
         const model = (config.models ?? []).find((m) => m?.id === modelId);
 
-        const codeReviewConfig = await this.parametersService
-            .findByKey(
-                ParametersKey.CODE_REVIEW_CONFIG,
-                organizationAndTeamData,
-            )
-            .then((p) => p?.configValue ?? null)
-            .catch(() => null);
-        const overrideRefs = findRepoFolderModelReferences(
-            codeReviewConfig,
-            modelId,
-            model?.model,
-        );
+        // Last-model delete == full BYOK disconnect: `deleteByokModel` tears down
+        // the ENTIRE config (routing included), so no routing ref can be orphaned,
+        // and repo/folder overrides degrade to the managed/env default per the
+        // resolveTaskSlot contract (no BYOK → managed default, never throws). This
+        // is the "Disconnect BYOK entirely" path the UI already offers; the in-use
+        // guard must NOT dead-end it — with a single model there is nothing to
+        // reassign the org-default / overrides to, so the guard would be unclearable.
+        const isLastModel =
+            (config.models ?? []).filter((m) => m?.id && m.id !== modelId)
+                .length === 0;
 
-        const usages = [...routingRefs, ...overrideRefs];
-        if (usages.length > 0) {
-            throw new BadRequestException(
-                `Model "${modelId}" is in use and cannot be deleted. ` +
-                    `Remove these references first: ${usages.join('; ')}.`,
+        // Referential-integrity guard (multi-model only): reject if any routing ref
+        // (defaultModelId / fallbackModelId / taskOverrides[*]) OR any repo/folder
+        // override points at this model — deleting it would orphan that reference
+        // (RESEARCH Security "Orphaned routing ref via delete"). Skipped on the
+        // last-model disconnect above, where orphaning is impossible.
+        if (!isLastModel) {
+            const routingRefs = findModelReferences(config, modelId);
+
+            const codeReviewConfig = await this.parametersService
+                .findByKey(
+                    ParametersKey.CODE_REVIEW_CONFIG,
+                    organizationAndTeamData,
+                )
+                .then((p) => p?.configValue ?? null)
+                .catch(() => null);
+            const overrideRefs = findRepoFolderModelReferences(
+                codeReviewConfig,
+                modelId,
+                model?.model,
             );
+
+            const usages = [...routingRefs, ...overrideRefs];
+            if (usages.length > 0) {
+                throw new BadRequestException(
+                    `Model "${modelId}" is in use and cannot be deleted. ` +
+                        `Remove these references first: ${usages.join('; ')}.`,
+                );
+            }
         }
 
         // Clear: hand the validated model id to the service, which performs the
