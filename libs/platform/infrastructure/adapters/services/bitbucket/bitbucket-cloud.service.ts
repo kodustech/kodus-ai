@@ -1385,7 +1385,10 @@ export class BitbucketCloudService implements Omit<
                 return [];
             }
 
-            const allMembers = await Promise.all(
+            // One unreachable workspace must not blank the whole list — an
+            // empty result reads as "nobody belongs here" downstream and
+            // leaves every seat unassignable.
+            const settledMembers = await Promise.allSettled(
                 workspaceIdentifiers.map((workspace) =>
                     bitbucketAPI.workspaces
                         .getMembersForWorkspace({
@@ -1400,6 +1403,30 @@ export class BitbucketCloudService implements Omit<
                         ),
                 ),
             );
+
+            settledMembers.forEach((result, index) => {
+                if (result.status === 'rejected') {
+                    this.logger.warn({
+                        message: 'Failed to fetch members for workspace',
+                        context: BitbucketCloudService.name,
+                        error: result.reason,
+                        metadata: {
+                            workspace: workspaceIdentifiers[index],
+                            organizationAndTeamData,
+                        },
+                    });
+                }
+            });
+
+            const allMembers = settledMembers
+                .filter(
+                    (
+                        result,
+                    ): result is PromiseFulfilledResult<
+                        Schema.WorkspaceMembership[]
+                    > => result.status === 'fulfilled',
+                )
+                .map((result) => result.value);
 
             const uniqueMembers = new Map<
                 string,

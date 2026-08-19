@@ -20,6 +20,7 @@ export type LicenseTableRow = {
     name: string;
     licenseStatus: "active" | "inactive";
     removedFromGit?: boolean;
+    isBot?: boolean;
 };
 
 const LicenseAssignmentCell = ({ row }: { row: Row<LicenseTableRow> }) => {
@@ -108,6 +109,11 @@ export const columns: ColumnDef<LicenseTableRow>[] = [
         cell: ({ row }) => (
             <div className="flex items-center gap-2">
                 <span>{row.original.name}</span>
+                {row.original.isBot && (
+                    <Badge variant="helper" className="shrink-0">
+                        Bot
+                    </Badge>
+                )}
                 {row.original.removedFromGit && (
                     <Badge variant="helper" className="shrink-0">
                         Removed from organization

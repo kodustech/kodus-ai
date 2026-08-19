@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { CacheService } from '@libs/core/cache/cache.service';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -15,7 +16,15 @@ jest.mock('@libs/core/log/logger', () => ({
 
 describe('OrganizationMemberListService', () => {
     let service: OrganizationMemberListService;
-    let mockCodeManagementService: { getListMembers: jest.Mock };
+    let mockCodeManagementService: {
+        getListMembers: jest.Mock;
+        getPullRequestAuthors: jest.Mock;
+    };
+    let mockCacheService: {
+        getFromCache: jest.Mock;
+        addToCache: jest.Mock;
+        removeFromCache: jest.Mock;
+    };
 
     const organizationAndTeamData = {
         organizationId: 'org-uuid-123',
@@ -23,7 +32,16 @@ describe('OrganizationMemberListService', () => {
     };
 
     beforeEach(async () => {
-        mockCodeManagementService = { getListMembers: jest.fn() };
+        mockCodeManagementService = {
+            getListMembers: jest.fn(),
+            getPullRequestAuthors: jest.fn().mockResolvedValue([]),
+        };
+
+        mockCacheService = {
+            getFromCache: jest.fn().mockResolvedValue(null),
+            addToCache: jest.fn().mockResolvedValue(undefined),
+            removeFromCache: jest.fn().mockResolvedValue(undefined),
+        };
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -31,6 +49,10 @@ describe('OrganizationMemberListService', () => {
                 {
                     provide: CodeManagementService,
                     useValue: mockCodeManagementService,
+                },
+                {
+                    provide: CacheService,
+                    useValue: mockCacheService,
                 },
             ],
         }).compile();
@@ -50,8 +72,8 @@ describe('OrganizationMemberListService', () => {
             expect(result).toEqual({
                 status: 'ok',
                 members: [
-                    { id: 1, name: 'Alice' },
-                    { id: 2, name: 'Bob' },
+                    { id: 1, name: 'Alice', type: 'user' },
+                    { id: 2, name: 'Bob', type: 'user' },
                 ],
             });
         });
@@ -78,14 +100,124 @@ describe('OrganizationMemberListService', () => {
             const result = await service.fetch(organizationAndTeamData);
 
             expect(result.members).toEqual([
-                { id: 'aad.abc', name: 'Azure Person' },
-                { id: 'bb-1', name: 'bitbucket-person' },
+                { id: 'aad.abc', name: 'Azure Person', type: 'user' },
+                { id: 'bb-1', name: 'bitbucket-person', type: 'user' },
+            ]);
+        });
+    });
+
+    // Every provider models membership differently and each of them misses
+    // somebody who can still open a pull request — the owner of a personal
+    // account with no organization, an outside collaborator, an app that
+    // authors PRs. Unioning recent PR authors gives all providers the same
+    // floor, so a seat can always be assigned to whoever triggers a review.
+    describe('pull request author union', () => {
+        it('includes an app author the member list never reports, so it can be granted a seat', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '99', name: 'ci-agent', type: 'bot' },
+            ]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result).toEqual({
+                status: 'ok',
+                members: [
+                    { id: 1, name: 'Alice', type: 'user' },
+                    { id: '99', name: 'ci-agent', type: 'bot' },
+                ],
+            });
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalledWith({
+                organizationAndTeamData,
+                determineBots: true,
+            });
+        });
+
+        // GitLab only resolves whether a member is a bot when asked; without
+        // the flag every GitLab bot comes back typed as a user, so it would
+        // never get a badge nor be shielded from seat pruning.
+        it('asks the provider to identify bots in the member list too', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+
+            await service.fetch(organizationAndTeamData);
+
+            expect(
+                mockCodeManagementService.getListMembers,
+            ).toHaveBeenCalledWith({
+                organizationAndTeamData,
+                determineBots: true,
+            });
+        });
+
+        it('carries the list when only the authors resolve — a personal account with no organization', async () => {
+            mockCodeManagementService.getListMembers.mockRejectedValue(
+                new Error('account belongs to no organization'),
+            );
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '4242', name: 'personal-owner' },
+            ]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result).toEqual({
+                status: 'ok',
+                members: [{ id: '4242', name: 'personal-owner', type: 'user' }],
+            });
+        });
+
+        it('stays ok when the author lookup fails but the members resolve', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockRejectedValue(
+                new Error('rate limited'),
+            );
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result).toEqual({
+                status: 'ok',
+                members: [{ id: 1, name: 'Alice', type: 'user' }],
+            });
+        });
+
+        it('keeps the member-list entry when both sources report the same person', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice Doe' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '1', name: 'alice' },
+            ]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result.members).toEqual([
+                { id: 1, name: 'Alice Doe', type: 'user' },
             ]);
         });
     });
 
     describe('when the member list cannot be trusted', () => {
-        it('reports unavailable when the provider throws', async () => {
+        it('reports unavailable when every source throws', async () => {
+            mockCodeManagementService.getListMembers.mockRejectedValue(
+                new Error('token expired'),
+            );
+            mockCodeManagementService.getPullRequestAuthors.mockRejectedValue(
+                new Error('token expired'),
+            );
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result).toEqual({ status: 'unavailable', members: [] });
+        });
+
+        it('reports unavailable when the members throw and no author is left to fall back on', async () => {
             mockCodeManagementService.getListMembers.mockRejectedValue(
                 new Error('token expired'),
             );
@@ -121,6 +253,110 @@ describe('OrganizationMemberListService', () => {
             const result = await service.fetch(organizationAndTeamData);
 
             expect(result).toEqual({ status: 'unavailable', members: [] });
+        });
+    });
+
+    // Listing pull request authors fans out one API request per configured
+    // repository, and the prune cron sweeps every opted-in team on a schedule.
+    // Uncached, that re-scans every repo's history on every run.
+    describe('pull request author caching', () => {
+        it('serves the authors from cache without calling the provider', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCacheService.getFromCache.mockResolvedValue([
+                { id: '99', name: 'ci-agent', type: 'bot' },
+            ]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).not.toHaveBeenCalled();
+            expect(result.members.map((m) => m.id)).toContain('99');
+        });
+
+        it('caches the authors it fetched on a miss', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '99', name: 'ci-agent', type: 'bot' },
+            ]);
+
+            await service.fetch(organizationAndTeamData);
+
+            expect(mockCacheService.addToCache).toHaveBeenCalledWith(
+                'org_member_pr_authors_org-uuid-123_team-uuid-456',
+                [{ id: '99', name: 'ci-agent', type: 'bot' }],
+                10 * 60 * 1000,
+            );
+        });
+
+        // "Refresh members" exists precisely to pick up somebody who just
+        // appeared, so it must not be answered from a stale cache.
+        it('bypasses and clears the cache when the caller forces a refresh', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+
+            await service.fetch(organizationAndTeamData, { skipCache: true });
+
+            expect(mockCacheService.getFromCache).not.toHaveBeenCalled();
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalled();
+        });
+
+        // An empty author scan is indistinguishable from a transient one: the
+        // GitHub adapter swallows per-repo failures and returns whatever it
+        // collected. Serving that for the full TTL would drop PR-author-only
+        // identities — outside collaborators above all — out of the member
+        // union, and the prune cron reads their absence as "left the org".
+        it('treats an empty cached author list as a miss and re-scans', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCacheService.getFromCache.mockResolvedValue([]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([
+                { id: '77', name: 'outside-collaborator' },
+            ]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalled();
+            expect(result.members.map((m) => m.id)).toContain('77');
+        });
+
+        it('does not cache an empty author scan', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+
+            await service.fetch(organizationAndTeamData);
+
+            expect(mockCacheService.addToCache).not.toHaveBeenCalled();
+        });
+
+        it('still fetches when the cache read throws', async () => {
+            mockCodeManagementService.getListMembers.mockResolvedValue([
+                { id: 1, name: 'Alice' },
+            ]);
+            mockCacheService.getFromCache.mockRejectedValue(
+                new Error('redis down'),
+            );
+            mockCodeManagementService.getPullRequestAuthors.mockResolvedValue([]);
+
+            const result = await service.fetch(organizationAndTeamData);
+
+            expect(result.status).toBe('ok');
+            expect(
+                mockCodeManagementService.getPullRequestAuthors,
+            ).toHaveBeenCalled();
         });
     });
 });

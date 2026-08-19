@@ -673,7 +673,10 @@ export class AzureReposService implements Omit<
                     return {
                         name,
                         id,
-                        type: 'user',
+                        // Azure keys principal kind on the descriptor prefix:
+                        // `svc.` is a service identity (pipeline Build Service
+                        // and friends), `aad.`/`msa.` are people.
+                        type: String(id).startsWith('svc.') ? 'bot' : 'user',
                     };
                 })
                 .filter(
