@@ -487,7 +487,7 @@ function parseArtifactInput(input: unknown): unknown {
  * Keep the ai@6 field names as fallbacks so mixed-version / vendor shims still
  * report cache hits.
  */
-function readAiSdkUsage(usage: any): TokenUsage {
+export function readAiSdkUsage(usage: any): TokenUsage {
     return {
         inputTokens: usage?.inputTokens,
         outputTokens: usage?.outputTokens,
