@@ -34,6 +34,19 @@ on:
         # workday starts in BRT.
         - cron: "0 6 * * *"
     workflow_dispatch:
+    # Deliberately NOT every PR (an external API flaking must not block an
+    # unrelated merge) — only PRs that touch the contract tests themselves
+    # or this workflow. "You changed a contract, prove it still runs live."
+    # Fork PRs get no secrets, so every test skips and the check is green,
+    # never a false red. (Same-repo PRs see the `ci` environment's secrets;
+    # tests.yml already runs on pull_request with `environment: ci`, and
+    # the environment has no protection rules that would stall it.)
+    pull_request:
+        paths:
+            - ".github/workflows/contract-tests.yml"
+            - "tests/e2e/contract/**"
+            - "**/*.contract.spec.ts"
+            - "**/*.contract.test.ts"
 
 concurrency:
     group: contract-tests
