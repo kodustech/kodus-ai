@@ -69,6 +69,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         'gitissues',
         'atlassianrovo',
         'azuredevops',
+        'azureboards',
     ] as const;
 
     private static readonly TASK_MANAGEMENT_HINTS = [

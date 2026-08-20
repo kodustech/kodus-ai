@@ -259,7 +259,7 @@ describe('BusinessLogicValidationStage', () => {
     });
 
     describe('computePrBodyHash', () => {
-        it('only depends on the PR body ? title-only edits should not re-trigger reviews', () => {
+        it('only depends on the PR body — title-only edits should not re-trigger reviews', () => {
             const hash1 = (stage as any).computePrBodyHash('same body');
             const hash2 = (stage as any).computePrBodyHash('same body');
             expect(hash1).toBe(hash2);
@@ -349,6 +349,14 @@ describe('BusinessLogicValidationStage', () => {
         it('matches Azure Boards AB# refs when only an Azure Boards MCP is connected', () => {
             const result = (stage as any).hasRelevantBusinessSignals(
                 'feat(AB#5625): per-company overrides',
+                ['azureboards'],
+            );
+            expect(result).toBe(true);
+        });
+
+        it('matches PROJ-123-style keys when only an Azure Boards MCP is connected', () => {
+            const result = (stage as any).hasRelevantBusinessSignals(
+                'ORG-5625 per-company overrides',
                 ['azureboards'],
             );
             expect(result).toBe(true);
