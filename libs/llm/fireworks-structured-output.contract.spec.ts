@@ -62,7 +62,11 @@ describeIfKey('Fireworks structured-output support (contract)', () => {
                             'Say the word "hello" and rate your confidence from 0 to 1.',
                     },
                 ],
-                max_tokens: 64,
+                // deepseek-v4-flash is a reasoning model: reasoning tokens
+                // count against max_tokens, so a small budget truncates the
+                // JSON content mid-object (finish_reason: length) and reads
+                // as a false "Fireworks dropped json_schema" drift.
+                max_tokens: 2048,
                 response_format: {
                     type: 'json_schema',
                     json_schema: {
@@ -97,6 +101,14 @@ describeIfKey('Fireworks structured-output support (contract)', () => {
         }
 
         const body = JSON.parse(raw);
+        const finishReason = body?.choices?.[0]?.finish_reason;
+        if (finishReason === 'length') {
+            throw new Error(
+                `Response hit the max_tokens cap before the JSON closed (finish_reason: length) — ` +
+                    'this is token-budget truncation, NOT Fireworks dropping json_schema support. ' +
+                    'Raise max_tokens in this test.',
+            );
+        }
         const content = body?.choices?.[0]?.message?.content;
         if (typeof content !== 'string') {
             throw new Error(
