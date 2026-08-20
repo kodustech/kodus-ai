@@ -85,6 +85,7 @@ export class IgnoreBotsUseCase implements IUseCase {
                     enabled: false,
                     ignoredUsers: botIds,
                     allowedUsers: [],
+                    seededBotIds: botIds,
                 },
                 organizationAndTeamData,
             );
@@ -104,12 +105,18 @@ export class IgnoreBotsUseCase implements IUseCase {
             autoLicenseConfig.allowedUsers =
                 autoLicenseConfig.allowedUsers || [];
 
-            const allIgnored = new Set([
-                ...autoLicenseConfig.ignoredUsers,
-                ...botIds,
-            ]);
+            // Only bots never seeded before are added. Re-adding every bot
+            // found would undo an admin's decision to review one — the case
+            // that matters is an app authoring PRs on a paid seat.
+            const seededBotIds = new Set(autoLicenseConfig.seededBotIds ?? []);
+            const newBotIds = botIds.filter((id) => !seededBotIds.has(id));
 
-            autoLicenseConfig.ignoredUsers = Array.from(allIgnored);
+            autoLicenseConfig.ignoredUsers = Array.from(
+                new Set([...autoLicenseConfig.ignoredUsers, ...newBotIds]),
+            );
+            autoLicenseConfig.seededBotIds = Array.from(
+                new Set([...seededBotIds, ...botIds]),
+            );
 
             await this.organizationParametersService.createOrUpdateConfig(
                 OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,

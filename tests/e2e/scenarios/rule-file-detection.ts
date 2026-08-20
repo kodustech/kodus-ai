@@ -93,7 +93,7 @@ export const ruleFileDetection: Scenario = {
     priority: 'P1',
     appliesTo: {
         target: ['cloud', 'self-hosted'],
-        provider: ['github'],
+        provider: ['github', 'github-app'],
         license: ['paid', 'license-paid'],
     },
     timeoutSec: 1200,

@@ -8,6 +8,7 @@ import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
     OrganizationLicenseValidationResult,
+    UserWithLicense,
 } from '@libs/ee/license/interfaces/license.interface';
 import {
     IOrganizationParametersService,
@@ -55,6 +56,11 @@ export interface ValidationResult {
 export type ExecutionPermissionValidationOptions = {
     consumeTrialReviewCredit?: boolean;
     trialReviewCreditUsageKey?: string;
+    /**
+     * Seat list the caller already fetched. Reused instead of re-fetching so a
+     * single review costs one round trip to billing, not two.
+     */
+    usersWithLicense?: UserWithLicense[];
 };
 
 @Injectable()
@@ -412,9 +418,11 @@ export class PermissionValidationService {
 
             // 6. Validate specific user (ALWAYS validates if userGitId provided, except trial and free)
             if (this.requiresUserLicense(identifiedPlanType) && userGitId) {
-                const users = await this.licenseService.getAllUsersWithLicense(
-                    organizationAndTeamData,
-                );
+                const users =
+                    options.usersWithLicense ??
+                    (await this.licenseService.getAllUsersWithLicense(
+                        organizationAndTeamData,
+                    ));
 
                 const user = users?.find((user) => user?.git_id === userGitId);
 

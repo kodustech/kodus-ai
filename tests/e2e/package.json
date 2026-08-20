@@ -13,7 +13,11 @@
     "benchmark:recollect": "tsx benchmark/recollect.ts",
     "benchmark:provision": "tsx benchmark/provision-repos.ts",
     "test": "node --import tsx --test lib/__tests__/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "test:contract": "node --import tsx --test contract/*.contract.test.ts",
+    "typecheck": "tsc --noEmit",
+    "report": "tsx cli/report.ts",
+    "history:append": "tsx cli/history-append.ts",
+    "history:backfill": "bash provisioning/history-backfill.sh"
   },
   "dependencies": {
     "playwright": "^1.48.0",

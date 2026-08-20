@@ -96,10 +96,26 @@ describe('GetCodeManagementMemberListUseCase', () => {
             const result = await useCase.execute();
 
             expect(result).toEqual({ status: 'ok', members: mockMembers });
-            expect(mockMemberListService.fetch).toHaveBeenCalledWith({
-                organizationId: 'org-uuid-123',
-                teamId: undefined,
-            });
+            expect(mockMemberListService.fetch).toHaveBeenCalledWith(
+                {
+                    organizationId: 'org-uuid-123',
+                    teamId: undefined,
+                },
+                {},
+            );
+        });
+
+        // "Refresh members" must reach past both caches — the summary cached
+        // here and the pull request author list cached inside the service.
+        it('tells the service to bypass its own cache when refreshing', async () => {
+            mockCacheService.getFromCache.mockResolvedValue(null);
+
+            await useCase.refreshMembers();
+
+            expect(mockMemberListService.fetch).toHaveBeenCalledWith(
+                expect.anything(),
+                { skipCache: true },
+            );
         });
 
         it('should populate cache after fetching from code integration', async () => {

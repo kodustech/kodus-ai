@@ -358,6 +358,77 @@ export class GitLabProvider extends BaseProvider {
         return { id: String(resp.body.id) };
     }
 
+    // Posts a note as a (possibly different) GitLab identity — `token`
+    // overrides the auth header. The conversation scenario calls this with
+    // GL_TEST_TOKEN by default: unlike GitHub's dedicated e2e bot
+    // (kodus-e2e-bot-N, filtered by isKodyComment), GL_TEST_TOKEN is already
+    // a plain human account, so no separate non-Kody identity is needed
+    // here. Kept as a token override (not a hardcoded call to postComment)
+    // so a dedicated GitLab bot account can be introduced later without
+    // touching this signature.
+    async postCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const projectId = await this.resolveProjectId();
+        const resp = await http<{ id: number }>(
+            `${this.apiBase}/projects/${projectId}/merge_requests/${prNumber}/notes`,
+            {
+                method: "POST",
+                headers: { "PRIVATE-TOKEN": token },
+                body: { body },
+            },
+        );
+        ensureOk(resp, "gitlab:postCommentAs");
+        return { id: String(resp.body.id) };
+    }
+
+    // Kody's getPullRequestReviewComment reads MergeRequestDiscussions.all()
+    // — GitLab wraps every plain note into a one-note discussion, so a plain
+    // top-level note (unlike GitHub) is already visible there. No diff
+    // position needed.
+    async postReviewCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        return this.postCommentAs(prNumber, body, token);
+    }
+
+    // Polls for Kody's conversational reply to an `@kody <question>` note.
+    // Returns the first NEW note that is neither ours (`@kody …`) nor a
+    // code-review finding (those carry the `<!-- kody-codereview` marker).
+    // null at timeout.
+    async pollForKodyReply(
+        pr: { number: number },
+        opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
+    ): Promise<{ id: string; body: string } | null> {
+        const projectId = await this.resolveProjectId();
+        return pollUntil(
+            async () => {
+                const resp = await http<GitLabNote[]>(
+                    `${this.apiBase}/projects/${projectId}/merge_requests/${pr.number}/notes?per_page=100&sort=desc&order_by=updated_at`,
+                    { headers: this.headers() },
+                );
+                ensureOk(resp, "gitlab:pollForKodyReply");
+                for (const n of resp.body ?? []) {
+                    if (n.system) continue;
+                    if (n.created_at <= opts.sinceIso) continue;
+                    if (opts.triggerId && String(n.id) === opts.triggerId)
+                        continue;
+                    const body = n.body ?? "";
+                    if (body.toLowerCase().startsWith("@kody")) continue;
+                    if (body.includes("<!-- kody-codereview")) continue;
+                    if (!body.trim()) continue;
+                    return { id: String(n.id), body: body.slice(0, 600) };
+                }
+                return null;
+            },
+            { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
+        );
+    }
+
     authMode(): "token" {
         return "token";
     }

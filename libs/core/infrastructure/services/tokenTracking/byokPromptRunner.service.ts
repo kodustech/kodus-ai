@@ -6,6 +6,7 @@ import {
 } from '@kodus/kodus-common/llm';
 import { decrypt } from '@libs/common/utils/crypto';
 import { Injectable } from '@nestjs/common';
+import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
 
 @Injectable()
 export class BYOKPromptRunnerService {
@@ -54,7 +55,9 @@ export class BYOKPromptRunnerService {
                     apiKey: apiKey,
                     model: this.byokConfig.main.model,
                     baseURL: this.byokConfig.main.baseURL,
-                    temperature: this.byokConfig.main.temperature,
+                    // Withheld on Anthropic 4.7+, which removed sampling params
+                    // and 400s the request when one is present.
+                    temperature: resolveByokTemperature(this.byokConfig.main),
                     maxOutputTokens: this.byokConfig.main.maxOutputTokens,
                 })
                 .setBYOKFallbackConfig(
@@ -64,7 +67,9 @@ export class BYOKPromptRunnerService {
                               apiKey: fallbackApiKey,
                               model: this.byokConfig.fallback.model,
                               baseURL: this.byokConfig.fallback.baseURL,
-                              temperature: this.byokConfig.fallback.temperature,
+                              temperature: resolveByokTemperature(
+                                  this.byokConfig.fallback,
+                              ),
                               maxOutputTokens:
                                   this.byokConfig.fallback.maxOutputTokens,
                           }

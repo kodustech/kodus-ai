@@ -113,7 +113,15 @@ export class KodyRulesValidationService {
         const globalRules: Partial<IKodyRule>[] = [];
 
         for (const rule of rules) {
-            if (rule.status !== KodyRulesStatus.ACTIVE) {
+            // A rule is enforced if it's ACTIVE, OR if the org is on a paid plan (!limited)
+            // and the rule was only auto-paused due to free plan quota (lockedByPlan).
+            const isEnforced =
+                rule.status === KodyRulesStatus.ACTIVE ||
+                (!limited &&
+                    rule.status === KodyRulesStatus.PAUSED &&
+                    rule.lockedByPlan === true);
+
+            if (!isEnforced) {
                 continue;
             }
 

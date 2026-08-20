@@ -315,6 +315,11 @@ jobs:
         needs: build_push_and_open_pr
         if: needs.build_push_and_open_pr.result == 'success'
         runs-on: ubuntu-latest
+        # Same environment as the build job. Without it the qa-scoped secrets
+        # and vars resolve to empty strings, so configure-aws-credentials gets
+        # no role to assume and every run dies with "Credentials could not be
+        # loaded" — which then skips the e2e matrix and the tier-0 benchmark.
+        environment: qa
         permissions:
             contents: read
             id-token: write # OIDC for configure-aws-credentials
@@ -381,8 +386,14 @@ jobs:
         if: >-
             needs.build_push_and_open_pr.result == 'success' &&
             needs.wait_for_qa_rollout.result == 'success'
+        # The called workflow's `history` job appends the run to the e2e
+        # history and needs `contents: write`. A caller cannot grant a nested
+        # job less than it asks for — GitHub rejects the whole file at parse
+        # time, so the entire deploy never starts. This ceiling was written
+        # before that job existed; the nested jobs still declare their own
+        # narrower permissions.
         permissions:
-            contents: read
+            contents: write
         uses: ./.github/workflows/e2e-cloud.yml
         with:
             image_tag: ${{ github.event.inputs.image_tag || github.sha }}

@@ -14,13 +14,21 @@ import {
 } from "@services/parameters/types";
 import { usePermission } from "@services/permissions/hooks";
 import { Action, ResourceType } from "@services/permissions/types";
-import { AlertTriangleIcon, RefreshCwIcon, UserMinusIcon } from "lucide-react";
+import {
+    AlertTriangleIcon,
+    RefreshCwIcon,
+    UserMinusIcon,
+    UserPlusIcon,
+} from "lucide-react";
+import { Skeleton } from "@components/ui/skeleton";
+import { AsyncBoundary } from "src/core/components/async-boundary";
 import { Switch } from "src/core/components/ui/switch";
 import { useSelectedTeamId } from "src/core/providers/selected-team-context";
 import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 import { TableFilterContext } from "../../_providers/table-filter-context";
 import { refreshOrganizationMembers } from "../../_services/billing/fetch";
+import { AssignByGitIdButton } from "./assign-by-git-id-modal";
 import { columns, type LicenseTableRow } from "./columns";
 import { PruneSeatsModal } from "./prune-seats-modal";
 
@@ -143,6 +151,10 @@ export const LicensesPageClient = ({
         (row) => row.removedFromGit && row.licenseStatus === "active",
     );
 
+    const canAssignSeats =
+        subscription.status === "active" ||
+        subscription.status === "licensed-self-hosted";
+
     const openPruneModal = () =>
         magicModal.show(() => (
             <PruneSeatsModal
@@ -218,14 +230,28 @@ export const LicensesPageClient = ({
             {membersUnavailable && (
                 <div className="text-warning border-warning/40 bg-warning/10 flex items-start gap-2 rounded-lg border p-3 text-sm">
                     <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
-                    <span>
+                    <span className="text-pretty">
                         We couldn&apos;t reach your code platform, so we
                         can&apos;t tell who left the organization. Members shown
-                        here may be incomplete and seat cleanup is paused.
+                        here may be incomplete and seat cleanup is paused. If
+                        someone you need to license is missing, use{" "}
+                        <b>Assign by git ID</b> to give them a seat anyway.
                     </span>
                 </div>
             )}
             <div className="flex justify-end gap-2">
+                {canEdit && canAssignSeats && (
+                    <AsyncBoundary
+                        errorVariant="silent"
+                        skeleton={<Skeleton className="h-8 w-36" />}>
+                        <AssignByGitIdButton
+                            onAssigned={() => router.refresh()}
+                            autoLicenseAssignmentConfig={
+                                autoLicenseAssignmentConfig
+                            }
+                        />
+                    </AsyncBoundary>
+                )}
                 {canEdit && reclaimableSeats.length > 0 && (
                     <Button
                         size="sm"

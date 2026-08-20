@@ -66,6 +66,21 @@ scenarios:
 
 cells:
     # ---------- self-hosted ----------
+    # NOTE: self-hosted github stays on a PAT, and that is a constraint, not a
+    # preference.
+    #
+    # A GitHub App's webhook URL is configured ONCE at App-registration level
+    # and GitHub delivers to it for every installation. Self-hosted cells boot
+    # an ephemeral droplet behind a fresh cloudflared tunnel each run, so an
+    # App would deliver events to whatever URL the App happens to point at —
+    # not to this run's stack. Making it work needs either PATCH /app/hook/config
+    # per run (which serialises every self-hosted cell onto one App) or a
+    # repo-level hook created by the installation. Until one of those exists,
+    # the PAT is the only auth mode that can receive events here.
+    #
+    # The quota pain is already halved regardless: the HARNESS drives on an App
+    # installation token (see runner.ts), so only the product's integration
+    # credential and PR authorship still spend PAT budget.
     - target: self-hosted
       provider: github
       license: license-paid
@@ -78,13 +93,18 @@ cells:
     - target: self-hosted
       provider: azure-devops
       license: license-paid
-    - target: self-hosted
-      provider: github
-      license: license-free
-
     # ---------- cloud ----------
+    # App on the PAID cell ONLY, and the limit is structural: GitHubAppProvider
+    # pins its whole surface to GH_APP_TEST_REPO and ignores the per-tenant
+    # repoFullName, so every github-app cell would drive the SAME repo. Four
+    # cloud tenants sharing one repo is precisely the 2026-06-03..05 incident
+    # documented in .github/workflows/e2e-cloud.yml — webhook fan-out
+    # collisions and phantom "review never started" flakes.
+    #
+    # Widening this needs one App-installed repo PER TENANT and a provider that
+    # honours it; until then the other tiers stay on PATs.
     - target: cloud
-      provider: github
+      provider: github-app
       license: paid
     - target: cloud
       provider: gitlab
@@ -101,21 +121,17 @@ cells:
     - target: cloud
       provider: github
       license: trial
-    # Community plan: post-trial tenant that configured its own LLM API
-    # key (BYOK). Free in Stripe terms but reviews still work (with the
-    # 10-rule limit). Distinct from `free` (= trial expired, no BYOK,
-    # gate blocks).
+    # Community plan: post-trial tenant that configured its own LLM API key
+    # (BYOK). Free in Stripe terms but reviews still work (with the 10-rule
+    # limit). Distinct from `free` (= trial expired, no BYOK, gate blocks).
     - target: cloud
       provider: github
       license: community-byok
-    # GitHub App (OAuth installation) variant. Covers the
-    # authenticateWithCodeOauth code path in github.service.ts which
-    # `github` (PAT) doesn't touch. Cloud-only because each self-hosted
-    # droplet would need its own App registered + installed (webhook
-    # URL is per-app, not per-install). Uses kodus-ai-qa App installed
-    # scope-limited to kodus-e2e/tiny-url-app — set
-    # GH_APP_TEST_REPO and GH_APP_INSTALLATION_ID in the env to enable;
-    # the cell is SKIPPED otherwise via --skip-missing-tokens.
+    # PAT canary, cloud side. Same rationale as the self-hosted one: the
+    # cloud auth path (authenticateWithToken) differs from the App path
+    # (authenticateWithCodeOauth), so both need a live check.
     - target: cloud
-      provider: github-app
+      provider: github
       license: paid
+      only:
+          - code-review-basic

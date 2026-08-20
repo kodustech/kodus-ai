@@ -16,6 +16,6 @@ describe('Test files type imports', () => {
         const filePath = path.resolve(process.cwd(), file);
         const contents = fs.readFileSync(filePath, 'utf-8');
 
-        expect(contents).not.toContain("types/index.js");
+        expect(contents).not.toContain('types/index.js');
     });
 });

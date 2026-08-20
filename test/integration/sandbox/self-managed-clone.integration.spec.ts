@@ -22,6 +22,29 @@ jest.mock('@libs/mcp-server/services/mcp-manager.service', () => ({
 }));
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Ambient git state has to be scrubbed, not merged into.
+ *
+ * `git` exports GIT_DIR, GIT_INDEX_FILE and friends to any hook it runs, so
+ * when the suite runs from the repo's own pre-push hook every `git` this spec
+ * spawns silently operates on kodus-ai instead of on its temp repositories, and
+ * both tests fail with no hint as to why. GIT_EXEC_PATH is the one that has to
+ * survive: the CGI bridge below needs it to find git-http-backend.
+ */
+function scrubbedGitEnv(
+    overrides: Record<string, string> = {},
+): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(process.env)) {
+        if (key.startsWith('GIT_') && key !== 'GIT_EXEC_PATH') {
+            continue;
+        }
+        env[key] = value;
+    }
+    return { ...env, ...overrides };
+}
+
 const GIT_ENV = {
     GIT_AUTHOR_NAME: 'kodus-test',
     GIT_AUTHOR_EMAIL: 'test@kodus.io',
@@ -72,15 +95,14 @@ describe('CLI sandbox clone against a self-managed git host', () => {
                     ),
                     [],
                     {
-                        env: {
-                            ...process.env,
+                        env: scrubbedGitEnv({
                             GIT_PROJECT_ROOT: root,
                             GIT_HTTP_EXPORT_ALL: '1',
                             PATH_INFO: path,
                             QUERY_STRING: query,
                             REQUEST_METHOD: req.method || 'GET',
                             CONTENT_TYPE: req.headers['content-type'] || '',
-                        },
+                        }),
                     },
                 );
 
@@ -123,38 +145,47 @@ describe('CLI sandbox clone against a self-managed git host', () => {
         workDir = await mkdtemp(join(tmpdir(), 'kodus-git-work-'));
 
         // A real repository with a real commit.
-        await execFileAsync('git', ['init', '-b', 'main', workDir]);
+        await execFileAsync('git', ['init', '-b', 'main', workDir], {
+            env: scrubbedGitEnv(),
+        });
         await writeFile(
             join(workDir, 'app.ts'),
             'export const answer = 42;\n',
             'utf8',
         );
-        await execFileAsync('git', ['-C', workDir, 'add', '.']);
+        await execFileAsync('git', ['-C', workDir, 'add', '.'], {
+            env: scrubbedGitEnv(),
+        });
         await execFileAsync(
             'git',
             ['-C', workDir, 'commit', '-m', 'initial'],
-            { env: { ...process.env, ...GIT_ENV } },
+            { env: scrubbedGitEnv(GIT_ENV) },
         );
 
-        const { stdout: sha } = await execFileAsync('git', [
-            '-C',
-            workDir,
-            'rev-parse',
-            'HEAD',
-        ]);
+        const { stdout: sha } = await execFileAsync(
+            'git',
+            ['-C', workDir, 'rev-parse', 'HEAD'],
+            { env: scrubbedGitEnv() },
+        );
         headSha = sha.trim();
 
         // Publish it as group/repo.git under the server root.
         const barePath = join(serverRoot, 'group', 'repo.git');
-        await execFileAsync('git', ['clone', '--bare', workDir, barePath]);
+        await execFileAsync('git', ['clone', '--bare', workDir, barePath], {
+            env: scrubbedGitEnv(),
+        });
         // The CLI path fetches a bare SHA, which upload-pack refuses by default.
-        await execFileAsync('git', [
-            '-C',
-            barePath,
-            'config',
-            'uploadpack.allowAnySHA1InWant',
-            'true',
-        ]);
+        await execFileAsync(
+            'git',
+            [
+                '-C',
+                barePath,
+                'config',
+                'uploadpack.allowAnySHA1InWant',
+                'true',
+            ],
+            { env: scrubbedGitEnv() },
+        );
 
         ({ server, port } = await startGitServer(serverRoot));
 

@@ -351,11 +351,14 @@ export class BitbucketProvider extends BaseProvider {
                     { method: "DELETE", headers: this.headers() },
                 );
                 if (del.status === 403) {
-                    log.warn(
-                        `bitbucket:cleanupStale: cannot delete stale webhook ${h.url} — app password lacks the delete:webhook:bitbucket scope. ` +
-                            `${stale.length} dead tunnel webhook(s) remain; at Bitbucket's 50-hook cap NEW webhook registration fails silently and reviews never trigger.`,
+                    throw new Error(
+                        `bitbucket:cleanupStale: cannot delete stale webhook ${h.url} — ` +
+                            `BB_TEST_APP_PASSWORD lacks delete:webhook:bitbucket. ` +
+                            `${stale.length} dead tunnel webhook(s) remain; refusing to spend ` +
+                            `the matrix timeout on PRs whose webhook cannot be trusted. ` +
+                            `Rotate the app password with webhook read/write/delete permission, ` +
+                            `then rerun this cell to clean them automatically.`,
                     );
-                    break;
                 }
                 if (del.status >= 200 && del.status < 300) hooksDeleted += 1;
             }
@@ -364,9 +367,20 @@ export class BitbucketProvider extends BaseProvider {
                     `bitbucket:cleanupStale: deleted ${hooksDeleted} stale tunnel webhook(s)`,
                 );
             }
-        } catch {
-            // Best-effort — webhook cleanup failing must not block the run;
-            // the loud 403 warn above is the actionable signal.
+        } catch (error) {
+            // A known permission/cap problem is deterministic and must fail
+            // before a review opens. Unknown cleanup errors remain best-effort
+            // because a temporary listing failure does not prove the current
+            // webhook is unusable.
+            if (
+                error instanceof Error &&
+                error.message.includes("delete:webhook:bitbucket")
+            ) {
+                throw error;
+            }
+            log.warn(
+                `bitbucket:cleanupStale: webhook cleanup unavailable: ${error instanceof Error ? error.message : String(error)}`,
+            );
         }
         return { closed };
     }
@@ -552,6 +566,83 @@ export class BitbucketProvider extends BaseProvider {
         );
         ensureOk(resp, "bitbucket:postComment");
         return { id: String(resp.body.id) };
+    }
+
+    // Posts a comment as a (possibly different) Bitbucket identity —
+    // `token` overrides the app password while the username stays
+    // `this.user` (BB_TEST_USER). The conversation scenario calls this with
+    // BB_TEST_APP_PASSWORD by default: unlike GitHub's dedicated e2e bot
+    // (kody-e2e-bot-N, filtered by isKodyComment), BB_TEST_USER is already a
+    // plain human account, so no separate non-Kody identity is needed here.
+    // Kept as a token override (not a hardcoded call to postComment) so a
+    // dedicated Bitbucket bot account can be introduced later without
+    // touching this signature.
+    async postCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const auth = `Basic ${Buffer.from(`${this.user}:${token}`).toString("base64")}`;
+        const resp = await http<BitbucketComment>(
+            `${this.apiBase}/repositories/${this.workspaceSlug}/pullrequests/${prNumber}/comments`,
+            {
+                method: "POST",
+                headers: { Authorization: auth, Accept: "application/json" },
+                body: { content: { raw: body } },
+            },
+        );
+        ensureOk(resp, "bitbucket:postCommentAs");
+        return { id: String(resp.body.id) };
+    }
+
+    // Kody's getPullRequestReviewComment lists ALL PR comments
+    // (pullrequests.listComments), not diff-scoped — a plain top-level
+    // comment (unlike GitHub) is already visible there. No inline
+    // positioning needed.
+    async postReviewCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        return this.postCommentAs(prNumber, body, token);
+    }
+
+    // Polls for Kody's conversational reply to an `@kody <question>`
+    // comment. Returns the first NEW comment that is neither ours
+    // (`@kody …`), empty, nor the "Analyzing your request..." acknowledgment
+    // BitbucketResponsePolicy posts immediately after the trigger
+    // (requiresAcknowledgment()=true) — that ack has no
+    // `<!-- kody-codereview -->` marker either, so without this check a poll
+    // landing between the ack and the real answer would return the ack as
+    // if it were Kody's terminal reply (a false green: caught live —
+    // replySample came back as literally "Analyzing your request..." on a
+    // passing run). null at timeout.
+    async pollForKodyReply(
+        pr: { number: number },
+        opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
+    ): Promise<{ id: string; body: string } | null> {
+        return pollUntil(
+            async () => {
+                const resp = await http<{ values: BitbucketComment[] }>(
+                    `${this.apiBase}/repositories/${this.workspaceSlug}/pullrequests/${pr.number}/comments?pagelen=50&sort=-created_on`,
+                    { headers: this.headers() },
+                );
+                ensureOk(resp, "bitbucket:pollForKodyReply");
+                for (const c of resp.body.values ?? []) {
+                    if (c.created_on <= opts.sinceIso) continue;
+                    if (opts.triggerId && String(c.id) === opts.triggerId)
+                        continue;
+                    const raw = c.content?.raw ?? "";
+                    if (raw.toLowerCase().startsWith("@kody")) continue;
+                    if (raw.toLowerCase().trim().startsWith("analyzing your request"))
+                        continue;
+                    if (!raw.trim()) continue;
+                    return { id: String(c.id), body: raw.slice(0, 600) };
+                }
+                return null;
+            },
+            { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
+        );
     }
 
     authMode(): "token" {

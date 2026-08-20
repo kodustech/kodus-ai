@@ -41,15 +41,15 @@ describe('skills sync path helpers', () => {
         expect(resolveManagedSkillPath(skillTarget, 'kodus-review')).toBe(
             '/tmp/.codex/skills/kodus-review/SKILL.md',
         );
-        expect(resolveManagedSkillEntryPath(commandTarget, 'kodus-review')).toBe(
-            '/tmp/.claude/commands/kodus-review.md',
-        );
+        expect(
+            resolveManagedSkillEntryPath(commandTarget, 'kodus-review'),
+        ).toBe('/tmp/.claude/commands/kodus-review.md');
     });
 
     it('rejects skill names that escape the base dir', () => {
-        expect(() =>
-            resolveManagedSkillPath(skillTarget, '../evil'),
-        ).toThrow('Invalid skill name');
+        expect(() => resolveManagedSkillPath(skillTarget, '../evil')).toThrow(
+            'Invalid skill name',
+        );
         expect(() =>
             resolveManagedSkillEntryPath(commandTarget, '../evil'),
         ).toThrow('Invalid skill name');
@@ -64,7 +64,9 @@ describe('skills sync path helpers', () => {
 
         await expect(removePathIfExists(targetPath, false)).resolves.toBe(true);
         await expect(fs.access(targetPath)).rejects.toThrow();
-        await expect(removePathIfExists(targetPath, false)).resolves.toBe(false);
+        await expect(removePathIfExists(targetPath, false)).resolves.toBe(
+            false,
+        );
     });
 
     it('does not remove files during dry run', async () => {

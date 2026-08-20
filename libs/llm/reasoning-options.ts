@@ -9,6 +9,7 @@
 import { BYOKProvider } from '@kodus/kodus-common/llm';
 import { createLogger } from '@libs/core/log/logger';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
+import { resolveAnthropicModelTraits } from '@libs/llm/anthropic-model-traits';
 
 const logger = createLogger('ReasoningOptions');
 
@@ -181,15 +182,20 @@ function mergeOpenRouterOptions(
  * Build provider-specific reasoning/thinking options for generateText.
  *
  * Maps a normalized effort level to each provider's native format:
- *   - Anthropic (new): adaptive thinking + output_config.effort
- *   - Anthropic (old): enabled + budget_tokens
+ *   - Anthropic: per model generation — see `anthropic-model-traits.ts`
  *   - Google Gemini 3+: thinkingConfig.thinkingLevel (minimal/low/medium/high)
  *   - Google Gemini 2.5: thinkingConfig.thinkingBudget
  *   - OpenAI o-series: reasoningEffort (low/medium/high)
  *   - OpenRouter: reasoning.effort (normalized across providers)
  *   - Kimi/GLM/others via OPENAI_COMPATIBLE: thinking.type enabled/disabled
  *
- * Defaults when nothing configured: thinking stays OFF for all providers.
+ * `modelName` is not optional in practice for Anthropic: the provider alone
+ * cannot tell an Opus 5 from a Sonnet 4.5, and the two accept mutually
+ * exclusive thinking shapes.
+ *
+ * Defaults when nothing configured: thinking stays OFF for all providers —
+ * which for Anthropic means saying `disabled` out loud, since its newest
+ * models think unless told not to.
  *
  * Sources:
  *   Claude: https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
@@ -201,38 +207,20 @@ export function buildReasoningProviderOptions(
     effort?: ReasoningEffort,
     modelName?: string,
 ): Record<string, any> {
-    if (!effort || effort === 'none' || !provider) return {};
+    if (!provider) return {};
+
+    // Anthropic is the only provider where "off" needs to be said out loud:
+    // Opus 5, Sonnet 5 and Fable 5 think by default, so omitting the config
+    // leaves thinking ON for a user who explicitly picked Off.
+    if (provider === BYOKProvider.ANTHROPIC && (!effort || effort === 'none')) {
+        return buildAnthropicThinkingOff(modelName);
+    }
+
+    if (!effort || effort === 'none') return {};
 
     switch (provider) {
-        case BYOKProvider.ANTHROPIC: {
-            // Models that support adaptive thinking (type: "adaptive" + effort):
-            //   - Opus 4.6+, Opus 4.7+, Sonnet 4.6+, Sonnet 4.7+, mythos
-            // Models that use enabled thinking (type: "enabled" + budget_tokens):
-            //   - Sonnet 4.5, Sonnet 4.0, Opus 4.0, Sonnet 3.7
-            const isAdaptiveCapable =
-                modelName &&
-                (/claude-(opus|sonnet)-4-[6-9]/i.test(modelName) ||
-                    /claude-(opus|sonnet)-4-\d{2,}/i.test(modelName) ||
-                    modelName.includes('mythos'));
-
-            if (isAdaptiveCapable) {
-                return {
-                    anthropic: {
-                        thinking: { type: 'adaptive' },
-                        effort,
-                    },
-                };
-            }
-
-            return {
-                anthropic: {
-                    thinking: {
-                        type: 'enabled',
-                        budgetTokens: EFFORT_TO_BUDGET[effort],
-                    },
-                },
-            };
-        }
+        case BYOKProvider.ANTHROPIC:
+            return buildAnthropicReasoning(effort, modelName);
 
         case BYOKProvider.GOOGLE_GEMINI:
         case BYOKProvider.GOOGLE_VERTEX: {
@@ -302,4 +290,69 @@ export function buildReasoningProviderOptions(
         default:
             return {};
     }
+}
+
+/**
+ * Map an effort tier onto the thinking shape the given Claude accepts.
+ *
+ * The three generations are mutually exclusive on the wire: sending
+ * `budgetTokens` to a 4.7+ model is a 400, and sending `type: 'adaptive'` to a
+ * pre-4.6 model is a 400 too. When the model can't be identified we send
+ * nothing — a review that runs without thinking beats a review that dies on a
+ * request the provider rejects outright.
+ */
+function buildAnthropicReasoning(
+    effort: Exclude<ReasoningEffort, 'none'>,
+    modelName?: string,
+): Record<string, any> {
+    const traits = resolveAnthropicModelTraits(modelName);
+
+    switch (traits.thinkingShape) {
+        case 'adaptive':
+            // `effort` is the SDK-level key; @ai-sdk/anthropic renders it as
+            // `output_config.effort` on the wire. Passing `output_config`
+            // ourselves would be silently stripped by the provider's schema.
+            return {
+                anthropic: { thinking: { type: 'adaptive' }, effort },
+            };
+
+        case 'budget':
+            return {
+                anthropic: {
+                    thinking: {
+                        type: 'enabled',
+                        budgetTokens: EFFORT_TO_BUDGET[effort],
+                    },
+                },
+            };
+
+        default:
+            logger.warn({
+                message:
+                    '[thinking] unrecognized Anthropic model — thinking config omitted',
+                context: 'buildAnthropicReasoning',
+                metadata: { modelName, effort },
+            });
+            return {};
+    }
+}
+
+/**
+ * Express "thinking off" for Anthropic. On Opus 5, Sonnet 5 and Fable 5
+ * thinking is on by default, so omitting the config is not the same as
+ * disabling it — the user picks Off and still pays for thinking.
+ *
+ * Fable/Mythos reject `disabled` outright (400), so there the only honest
+ * answer is to leave thinking on.
+ */
+function buildAnthropicThinkingOff(modelName?: string): Record<string, any> {
+    const traits = resolveAnthropicModelTraits(modelName);
+
+    if (traits.thinkingShape === 'adaptive' && traits.canDisableThinking) {
+        return { anthropic: { thinking: { type: 'disabled' } } };
+    }
+
+    // Legacy models don't think unless asked, and unidentified models get no
+    // config at all — omitting is already "off" for both.
+    return {};
 }

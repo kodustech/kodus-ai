@@ -8,10 +8,6 @@ import type {
     ConfigRepository,
     ConfigTeam,
 } from '../../types/config.js';
-import type {
-    MemoryCaptureApiRequest,
-    MemoryCaptureApiResponse,
-} from '../../types/memory.js';
 import type { RepositorySettings } from '../../types/repo-config.js';
 import type {
     BusinessValidationResponse,
@@ -99,13 +95,6 @@ export interface ITrialApi {
     getStatus(fingerprint: string): Promise<TrialStatus>;
 }
 
-export interface IMemoryApi {
-    submitCapture(
-        payload: MemoryCaptureApiRequest,
-        accessToken: string,
-    ): Promise<MemoryCaptureApiResponse>;
-}
-
 export interface IConfigApi {
     getAvailableRepositories(accessToken: string): Promise<ConfigRepository[]>;
     getSelectedRepositories(accessToken: string): Promise<ConfigRepository[]>;
@@ -139,7 +128,8 @@ export interface IConfigApi {
         repositoryId: string,
         settings: RepositorySettings,
     ): Promise<
-        RepositorySettings | (CentralizedPrMetadata & { mode: 'centralized-pr' })
+        | RepositorySettings
+        | (CentralizedPrMetadata & { mode: 'centralized-pr' })
     >;
     getCentralizedConfigStatus(
         accessToken: string,
@@ -185,7 +175,6 @@ export interface IKodusApi {
     config: IConfigApi;
     review: IReviewApi;
     trial: ITrialApi;
-    memory: IMemoryApi;
     sessions: ISessionsApi;
     rules: IRulesApi;
 }

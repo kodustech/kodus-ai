@@ -51,10 +51,9 @@ class RepoConfigService {
             };
         }
 
-        const response = await api.config.addRepositories(
-            config.teamKey,
-            [matchedRepository.id],
-        );
+        const response = await api.config.addRepositories(config.teamKey, [
+            matchedRepository.id,
+        ]);
 
         if (
             response.message === 'Repositories already added' ||
@@ -135,7 +134,8 @@ class RepoConfigService {
     ): ConfigRepository | undefined {
         const normalizedTarget = repositoryRef.toLowerCase();
         return repositories.find((repository) => {
-            const fullName = this.toRepositoryFullName(repository).toLowerCase();
+            const fullName =
+                this.toRepositoryFullName(repository).toLowerCase();
             return fullName === normalizedTarget;
         });
     }

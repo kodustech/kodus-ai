@@ -204,6 +204,15 @@ export function extractFindings(state: RunState): {
     const artifact = [...state.artifacts]
         .reverse()
         .find((a) => a.type === FINDER_DONE_TOOL);
+    // OBSERVABILIDADE: "zero findings" tem TRES causas distintas aqui e nenhuma
+    // era registrada — artefato valido com lista vazia, artefato inutilizavel
+    // (submitResult({}) vazio ou prosa), e artefato ausente. Sem isto, o numero
+    // publicado nao distingue "revisou e nao achou" de "quebrou o formato".
+    (state as any).__findingsOutcome = !artifact
+        ? 'no-artifact'
+        : sanitizeFindingsResult(artifact.payload as any)
+          ? 'structured'
+          : 'artifact-unusable';
     if (artifact) {
         const clean = sanitizeFindingsResult(artifact.payload as any);
         if (clean) {

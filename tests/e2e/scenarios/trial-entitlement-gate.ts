@@ -33,7 +33,7 @@ export const trialEntitlementGate: Scenario = {
         // trial state — see license-attribution.ts). github is enough; the
         // gate is provider-agnostic (no integration/repo is touched here).
         target: ["cloud"],
-        provider: ["github"],
+        provider: ["github", "github-app"],
         license: ["trial"],
     },
     timeoutSec: 120,

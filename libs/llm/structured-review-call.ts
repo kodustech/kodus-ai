@@ -4,7 +4,8 @@
  *
  * Model policy (mirrors the code-review agents):
  *   - main:      the org's BYOK model, or our managed default when no BYOK
- *                (`deepseek-v4-flash` via DeepSeek — resolved by byokToVercelModel).
+ *                (`accounts/fireworks/models/deepseek-v4-flash` on Fireworks —
+ *                resolved by byokToVercelModel).
  *   - fallback:  the org's OWN configured fallback (BYOK) if present; otherwise,
  *                ONLY for a trial/no-BYOK org, our managed `openai/gpt-oss-120b`
  *                on Groq. A BYOK org whose main fails does NOT cascade onto our

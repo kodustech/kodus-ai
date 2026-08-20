@@ -44,7 +44,10 @@ import {
 } from './messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import {
+    byokToVercelModel,
+    KODUS_TRIAL_MODEL,
+} from '@libs/llm/byok-to-vercel';
 import {
     attachClassification,
     classifyLLMError,
@@ -63,6 +66,7 @@ import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
+import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
 
 interface ClusteredSuggestion {
     id: string;
@@ -126,23 +130,26 @@ export class CommentManagerService implements ICommentManagerService {
         const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
             spanName,
             runName,
-            model: byokConfig?.main?.model ?? 'deepseek-v4-flash',
+            model: byokConfig?.main?.model ?? KODUS_TRIAL_MODEL,
             attrs,
             exec: async () => {
                 const model = byokToVercelModel(
                     byokConfig ?? undefined,
                     'main',
                     {},
-                    'deepseek-v4-flash',
+                    KODUS_TRIAL_MODEL,
                 );
                 // Only pin temperature when the BYOK config sets one. Forcing 0
-                // broke models that reject a non-default temperature (e.g.
-                // Moonshot's kimi-k2.7-code rejected anything but 1 with HTTP
-                // 400), so the summary silently failed for those users while
-                // reviews kept working. The finder omits temperature for the
-                // same reason (finder.agent.ts), letting the provider default
-                // apply.
-                const configuredTemperature = byokConfig?.main?.temperature;
+                // broke models that reject a non-default temperature — Moonshot's
+                // kimi-k2.7-code rejects anything but 1 (HTTP 400), so the summary
+                // silently failed for kimi users while reviews kept working. The
+                // finder omits temperature for the same reason (finder.agent.ts),
+                // letting the provider default apply.
+                // Also withheld on Anthropic 4.7+, which removed sampling
+                // params and 400s the request when one is present.
+                const configuredTemperature = resolveByokTemperature(
+                    byokConfig?.main,
+                );
                 return await tracedGenerateText({
                     model: model as any,
                     system: systemPrompt,

@@ -1,5 +1,9 @@
 import { ensureLicenseSeat } from '../lib/onboarding.js';
 import {
+    describeViolations,
+    findPlacementViolations,
+} from '../lib/diff-position.js';
+import {
     assertHealthyExecution,
     assertPersistedSuggestions,
 } from '../lib/execution-health.js';
@@ -222,6 +226,33 @@ export const codeReviewBasic: Scenario = {
                 pr.number,
             );
 
+            // PLACEMENT, not just presence: until now every review scenario
+            // stopped at "a review arrived and persisted suggestions", so a
+            // comment anchored to a line the PR never touched passed green.
+            // That is the shape of the GitLab "comments only on added lines"
+            // bug — it reached customers because no assertion looked at where
+            // the comment landed. Self-skips on providers that don't report
+            // anchors or diffs yet.
+            let placement: Record<string, unknown> = { checked: false };
+            if (ctx.provider.listChangedFiles && review.inlineComments?.length) {
+                const files = await ctx.provider.listChangedFiles({
+                    number: pr.number,
+                });
+                const violations = findPlacementViolations(
+                    files,
+                    review.inlineComments,
+                );
+                ctx.assert(
+                    violations.length === 0,
+                    `Review posted ${review.inlineComments.length} inline comment(s), but ${violations.length} are anchored outside the PR's added lines:\n${describeViolations(violations)}`,
+                );
+                placement = {
+                    checked: true,
+                    inlineComments: review.inlineComments.length,
+                    changedFiles: files.length,
+                };
+            }
+
             return {
                 prNumber: pr.number,
                 prUrl: pr.url,
@@ -232,6 +263,7 @@ export const codeReviewBasic: Scenario = {
                 review,
                 executionStatus,
                 persistedSuggestions,
+                placement,
             };
         } finally {
             try {

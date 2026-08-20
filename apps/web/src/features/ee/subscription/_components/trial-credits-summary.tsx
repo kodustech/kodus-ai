@@ -148,7 +148,7 @@ export const TrialCreditsSummary = ({
     // Highlighted, non-BYOK-only disclosure: trial reviews run on our managed
     // models, and BYOK unlocks larger ones. Kept short so it reads as a callout.
     const trialModelsCopy =
-        "Trial reviews run on efficient models we provide (DeepSeek V4 Flash, GPT Luna, Kimi K2.7). Connect your AI key for larger, frontier models.";
+        "Trial reviews run on efficient models we provide (DeepSeek V4 Flash on Fireworks, GPT Luna, Kimi K2.7). Connect your AI key for larger, frontier models.";
 
     return (
         <section className="flex flex-col gap-5">

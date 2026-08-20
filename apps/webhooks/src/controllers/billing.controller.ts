@@ -8,6 +8,11 @@ import { Request, Response } from 'express';
 import { Public } from '@libs/identity/infrastructure/adapters/services/auth/public.decorator';
 import { NotificationService } from '@libs/notifications/application/notification.service';
 import { NotificationEvent } from '@libs/notifications/domain/catalog/events';
+import {
+    IKodyRulesService,
+    KODY_RULES_SERVICE_TOKEN,
+} from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
+import { Inject } from '@nestjs/common';
 
 /**
  * Express request shape with the raw-body capture from
@@ -36,6 +41,13 @@ interface TrialExpiringBody {
     upgradeUrl?: string;
 }
 
+interface PlanChangedBody {
+    organizationId?: string;
+    teamId?: string;
+    planType?: string;
+    subscriptionStatus?: string;
+}
+
 /**
  * Receives outbound notifications from kodus-service-billing.
  *
@@ -58,6 +70,8 @@ export class BillingController {
     constructor(
         private readonly notificationService: NotificationService,
         private readonly configService: ConfigService,
+        @Inject(KODY_RULES_SERVICE_TOKEN)
+        private readonly kodyRulesService: IKodyRulesService,
     ) {}
 
     @Post('/payment-failed')
@@ -123,6 +137,45 @@ export class BillingController {
                 organizationId: body.organizationId,
             }),
         );
+
+        return res.status(HttpStatus.OK).send('ok');
+    }
+
+    @Post('/plan-changed')
+    async planChanged(
+        @Req() req: WebhookRequest,
+        @Res() res: Response,
+    ): Promise<Response> {
+        const verification = this.verifySignature(req);
+        if (verification.status !== 'ok') {
+            return res.status(verification.status).send(verification.reason);
+        }
+
+        const body = req.body as PlanChangedBody;
+        if (!body?.organizationId) {
+            return res
+                .status(HttpStatus.BAD_REQUEST)
+                .send('Missing organizationId');
+        }
+
+        try {
+            await this.kodyRulesService.syncRulesWithPlanLimit({
+                organizationId: body.organizationId,
+                teamId: body.teamId,
+            });
+            this.logger.log({
+                message: 'Kody Rules synced after billing plan-changed webhook',
+                context: BillingController.name,
+                metadata: { organizationId: body.organizationId },
+            });
+        } catch (error) {
+            this.logger.error({
+                message: 'Failed to sync Kody Rules after billing plan-changed webhook',
+                context: BillingController.name,
+                error,
+                metadata: { organizationId: body.organizationId },
+            });
+        }
 
         return res.status(HttpStatus.OK).send('ok');
     }

@@ -92,7 +92,7 @@ export const rbacAuthorization: Scenario = {
     priority: "P0",
     appliesTo: {
         target: ["cloud", "self-hosted"],
-        provider: ["github"], // RBAC is provider-agnostic; one provider suffices
+        provider: ["github", "github-app"], // RBAC is provider-agnostic; one provider suffices
         license: ["trial", "paid", "license-paid"],
     },
     timeoutSec: 900,

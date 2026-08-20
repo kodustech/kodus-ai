@@ -1,4 +1,7 @@
-import { KodyLearningCronProvider } from './kodyLearning.cron';
+import {
+    BACKFILL_LOCK_CHUNK_SIZE,
+    KodyLearningCronProvider,
+} from './kodyLearning.cron';
 
 /**
  * Covers the per-repo window partition added for issue #1506: a repo that has
@@ -249,5 +252,92 @@ describe('KodyLearningCronProvider — per-repo backfill window', () => {
             { teamId: 'team-1', weeks: 1, repositoriesIds: ['r1'] },
             'org-1',
         );
+    });
+});
+
+/**
+ * Regression test for the incident fixed by
+ * "fix(api): stop the Kody Learning cron from draining the DB pool"
+ * (2026-08-14): every held advisory lock pins one pooled connection for its
+ * entire lifetime, and the cron used to hold one per repo for the WHOLE
+ * org's backfill at once. An org with more repos than the API's DB pool had
+ * slots drained the same pool that serves HTTP traffic — sign-in hung 60s
+ * and returned 401, nightly, for ~6h, for weeks before diagnosis.
+ *
+ * The fix (chunking) shipped with no test pinning the actual bound, so a
+ * future refactor could silently widen or remove the chunk and reintroduce
+ * the exact same production incident with nothing catching it.
+ */
+describe('KodyLearningCronProvider — backfill lock concurrency bound (pool exhaustion regression)', () => {
+    it(`never holds more than BACKFILL_LOCK_CHUNK_SIZE (${BACKFILL_LOCK_CHUNK_SIZE}) backfill locks at once, across a repo count that spans multiple chunks`, async () => {
+        const repoIds = Array.from({ length: 2 * BACKFILL_LOCK_CHUNK_SIZE + 1 }, (_, i) => `repo-${i}`);
+
+        const parametersService = {
+            findByKey: jest.fn().mockResolvedValue({
+                configValue: {
+                    configs: {},
+                    repositories: repoIds.map((id) => ({
+                        id,
+                        isSelected: true,
+                        configs: {},
+                    })),
+                },
+            }),
+        } as any;
+
+        const generateKodyRulesUseCase = {
+            execute: jest.fn().mockResolvedValue(undefined),
+        } as any;
+
+        // Nothing is seeded — every repo needs the 3-month backfill, so the
+        // full repo count goes through the chunked-locking path.
+        const generateInitialKodyRulesUseCase = {
+            hasPastReviewRulesForRepos: jest
+                .fn()
+                .mockResolvedValue(new Set<string>()),
+        } as any;
+
+        let held = 0;
+        let peakHeld = 0;
+        const distributedLockService = {
+            acquire: jest.fn(() => {
+                held++;
+                peakHeld = Math.max(peakHeld, held);
+                return Promise.resolve({
+                    release: jest.fn(() => {
+                        held--;
+                        return Promise.resolve(undefined);
+                    }),
+                });
+            }),
+        } as any;
+
+        const cron = new KodyLearningCronProvider(
+            {} as any,
+            parametersService,
+            generateKodyRulesUseCase,
+            generateInitialKodyRulesUseCase,
+            distributedLockService,
+        );
+
+        await (cron as any).generateKodyRules({
+            organizationId: 'org-1',
+            teamId: 'team-1',
+        });
+
+        expect(peakHeld).toBeLessThanOrEqual(BACKFILL_LOCK_CHUNK_SIZE);
+        // Not just "under the cap" — actually reaches it, proving chunking
+        // is real and not accidentally locking one-at-a-time (which would
+        // also pass a bare <= assertion but defeat the batched-generate
+        // call's purpose) or all-at-once (which the incident was).
+        expect(peakHeld).toBe(BACKFILL_LOCK_CHUNK_SIZE);
+        // 21 repos / chunk size 5 = 5 full chunks + 1 remainder = 6 batched
+        // generate calls total.
+        expect(generateKodyRulesUseCase.execute).toHaveBeenCalledTimes(
+            Math.ceil(repoIds.length / BACKFILL_LOCK_CHUNK_SIZE),
+        );
+        // Every lock taken must eventually be released — the finally-block
+        // guarantee the incident's fix also depends on.
+        expect(held).toBe(0);
     });
 });

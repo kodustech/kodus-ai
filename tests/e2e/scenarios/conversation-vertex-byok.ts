@@ -1,10 +1,20 @@
 import { ensureLicenseSeat } from '../lib/onboarding.js';
 import { readVertexByokEnv, setVertexByok } from '../lib/vertex-byok.js';
+import { resolveConversationUserToken } from '../lib/conversation-user-token.js';
 import type { RunContext, Scenario } from '../lib/types.js';
 
 // Standing-branch fixture (same repo as code-review-vertex-byok). The PR
 // content is irrelevant here — we only need an open PR to talk to Kody on.
-const FIXTURE = { head: 'bug/missing-null-check', base: 'main' };
+// `bug/missing-null-check` is only confirmed mirrored on GitHub (see
+// code-review-basic.ts's own placeholder comment for the other providers);
+// `refactor/use-map-storage` is the shared branch already confirmed working
+// across all 5 providers via command-review.ts.
+const FIXTURE_BRANCHES: Record<string, { head: string; base: string }> = {
+    github: { head: 'bug/missing-null-check', base: 'main' },
+    gitlab: { head: 'refactor/use-map-storage', base: 'main' },
+    bitbucket: { head: 'refactor/use-map-storage', base: 'main' },
+    'azure-devops': { head: 'refactor/use-map-storage', base: 'main' },
+};
 
 // `@kody <question>` (NOT `@kody review`) is what the webhook handlers match
 // with KODY_MENTION_NON_REVIEW_PATTERN to route the comment to the
@@ -25,7 +35,7 @@ export const conversationVertexByok: Scenario = {
     priority: 'P2',
     appliesTo: {
         target: ['self-hosted'],
-        provider: ['github'],
+        provider: ['github', 'gitlab', 'bitbucket', 'azure-devops'],
         license: ['paid', 'license-paid'],
     },
     timeoutSec: 1200,
@@ -44,14 +54,15 @@ export const conversationVertexByok: Scenario = {
             );
         }
 
-        // Kody ignores any comment whose author login contains "kody"/"kodus"
-        // (isKodyComment, LOGIN_KEYWORDS=['kody','kodus']) — and the e2e bots
-        // are all `kodus-e2e-bot-N`. So the `@kody` mention MUST be posted by a
-        // separate, non-Kody GitHub account.
-        const userToken = process.env.CONVERSATION_USER_TOKEN;
+        // Kody ignores any comment whose author login/name contains
+        // "kody"/"kodus" (isKodyComment, LOGIN_KEYWORDS=['kody','kodus']) —
+        // and every provider's own e2e bot account is named like that. So
+        // the `@kody` mention MUST be posted by a separate, non-Kody account.
+        const { token: userToken, missingEnvHint } =
+            resolveConversationUserToken(ctx.provider.name);
         if (!userToken) {
             ctx.skip(
-                "CONVERSATION_USER_TOKEN not set — needs a GitHub token for an account whose login does NOT contain 'kody'/'kodus' (the integration bot's own comments are ignored by Kody) with Pull requests R/W on the fixture repo",
+                `${missingEnvHint} not set — needs a token for an account whose login/name does NOT contain 'kody'/'kodus' (the integration bot's own comments are ignored by Kody) with PR write access on the fixture repo`,
             );
         }
 
@@ -73,9 +84,15 @@ export const conversationVertexByok: Scenario = {
 
         await setVertexByok(ctx.target.apiBaseUrl, session, vertex!);
 
+        const fixture = FIXTURE_BRANCHES[ctx.provider.name];
+        ctx.assert(
+            fixture,
+            `No FIXTURE_BRANCHES entry for provider ${ctx.provider.name}`,
+        );
+
         const pr = await ctx.provider.openPRFromBranches({
-            head: FIXTURE.head,
-            base: FIXTURE.base,
+            head: fixture!.head,
+            base: fixture!.base,
             title: `[e2e] conversation-vertex-byok ${ctx.runId.slice(0, 8)}`,
             body: `Automated PR opened by Kodus E2E run ${ctx.runId} (Claude-on-Vertex conversation: ${vertex!.model} @ ${vertex!.region}). Auto-closed by the scenario.`,
         });

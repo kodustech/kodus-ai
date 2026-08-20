@@ -138,11 +138,19 @@ test("fast.yml license matrix has at least free/trial/paid for cloud", () => {
     assert.ok(cloudLicenses.has("paid"), "cloud missing paid");
 });
 
-test("fast.yml license matrix has paid and free for self-hosted", () => {
+// `license-free` used to be here. It was removed because NO scenario in
+// fast.yml applies to it — the cell provisioned a droplet, skipped all 13
+// scenarios and reported a run that verified nothing. Re-adding it means
+// adding coverage for the self-hosted free tier first; `run-matrix --validate`
+// (and lib/__tests__/matrix-validate.test.ts) will reject it otherwise.
+test("fast.yml still covers the self-hosted paid tier", () => {
     const m = loadMatrix("fast.yml");
     const shLicenses = new Set(
         m.cells.filter((c) => c.target === "self-hosted").map((c) => c.license),
     );
     assert.ok(shLicenses.has("license-paid"), "self-hosted missing license-paid");
-    assert.ok(shLicenses.has("license-free"), "self-hosted missing license-free");
+    assert.ok(
+        !shLicenses.has("license-free"),
+        "license-free is back without coverage — see matrix-validate.test.ts",
+    );
 });

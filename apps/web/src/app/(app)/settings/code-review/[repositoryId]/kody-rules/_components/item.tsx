@@ -39,6 +39,7 @@ import { KodyRulesStatus } from "@services/kodyRules/types";
 import { toast } from "@components/ui/toaster/use-toast";
 import { useAsyncAction } from "@hooks/use-async-action";
 import { resolveKodyRuleBadgeState } from "src/core/utils/kody-rules/resolve-badge-state";
+import { useSubscriptionStatus } from "src/features/ee/subscription/_hooks/use-subscription-status";
 
 function showLastPaths(path: string, max = 3): string {
     const items = path.split(",").map((g) => g.trim()).filter((g) => g.length > 0);
@@ -80,6 +81,8 @@ export const KodyRuleItem = ({
         ResourceType.KodyRules,
         repositoryId,
     );
+    const subscription = useSubscriptionStatus();
+    const isFreePlan = subscription.status === "free";
 
     const isInherited = !!rule.inherited;
     const isExcluded = isInherited && !!rule.excluded;
@@ -97,7 +100,7 @@ export const KodyRuleItem = ({
                 : null;
     const entityLabel = isMemory ? "memory" : "rule";
     const isPaused = rule.status === KodyRulesStatus.PAUSED;
-    const badgeState = resolveKodyRuleBadgeState(rule);
+    const badgeState = resolveKodyRuleBadgeState(rule, isFreePlan);
     const isLockedByPlan = badgeState === "locked";
 
     // Opens the edit/view modal in place — same pattern Delete and "New
