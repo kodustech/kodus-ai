@@ -227,7 +227,7 @@ describe('ValidateConfigStage — v2 routing', () => {
         expect(result.codeReviewConfig.byokConfig?.apiKey).toBe('enc-oa');
     });
 
-    it('resolves the main slot and ignores routing.fallbackModelId (single-slot carrier)', async () => {
+    it('resolves the main slot and carries routing.fallbackModelId as the runtime failover', async () => {
         mockOrganizationParametersService.findByKey.mockResolvedValue({
             configValue: v2({
                 defaultModelId: 'm-A',
@@ -237,12 +237,17 @@ describe('ValidateConfigStage — v2 routing', () => {
 
         const result = await stage.execute(buildContext(undefined));
 
-        // byokConfig is now the bare resolved slot — no `.fallback` carrier.
+        // Primary = the routed default; the org's fallback rides on `.fallback`
+        // (stamped by resolveTaskSlot) so LLM.run can cascade primary→fallback at
+        // runtime. The fallback slot is flagged usedFallback for the span.
         expect(result.codeReviewConfig.byokConfig?.model).toBe('gpt-4o');
-        expect(
-            (result.codeReviewConfig.byokConfig as { fallback?: unknown })
-                ?.fallback,
-        ).toBeUndefined();
+        const fallback = (
+            result.codeReviewConfig.byokConfig as {
+                fallback?: { model?: string; usedFallback?: boolean };
+            }
+        )?.fallback;
+        expect(fallback?.model).toBe('gpt-5-mini');
+        expect(fallback?.usedFallback).toBe(true);
     });
 
     it('degrades to the env/managed default (byokConfig undefined) on a BLOCKED verdict', async () => {

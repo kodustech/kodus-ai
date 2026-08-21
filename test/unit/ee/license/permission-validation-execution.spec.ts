@@ -379,7 +379,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
         const result = await service.validateExecutionPermissions(orgData);
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(expectedByokSlot);
+        // toMatchObject (not toEqual): the resolved slot now also carries the
+        // runtime-failover `.fallback` + routing provenance — assert the identity
+        // fields, tolerate the extra carrier.
+        expect(result.byokConfig).toMatchObject(expectedByokSlot);
     });
 
     it('blocks a *_byok trial with billing byok:true but no local config, and warns on the divergence', async () => {
@@ -424,7 +427,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         const result = await service.validateExecutionPermissions(orgData);
 
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(expectedByokSlot);
+        // toMatchObject (not toEqual): the resolved slot now also carries the
+        // runtime-failover `.fallback` + routing provenance — assert the identity
+        // fields, tolerate the extra carrier.
+        expect(result.byokConfig).toMatchObject(expectedByokSlot);
         expect(divergenceWarned()).toBe(false);
     });
 
@@ -449,7 +455,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         );
 
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(expectedByokSlot);
+        // toMatchObject (not toEqual): the resolved slot now also carries the
+        // runtime-failover `.fallback` + routing provenance — assert the identity
+        // fields, tolerate the extra carrier.
+        expect(result.byokConfig).toMatchObject(expectedByokSlot);
         expect(
             licenseService.consumeTrialReviewCredit,
         ).not.toHaveBeenCalled();
