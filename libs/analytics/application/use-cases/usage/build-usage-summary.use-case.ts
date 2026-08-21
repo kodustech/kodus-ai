@@ -93,7 +93,12 @@ export class BuildUsageSummaryUseCase {
             await this.cacheService.getFromCache<UsageOverviewReportContract>(
                 cacheKey,
             );
-        if (cached) return cached;
+        // Shape guard instead of a hand-bumped key version: an entry cached
+        // before a facet was added/renamed lacks the current field, so treat it
+        // as a miss and recompute. Self-invalidating — no `:v3` to remember on
+        // the next payload change. (Check the newest required facet; an empty
+        // array is still a valid, present shape.)
+        if (cached && Array.isArray(cached.byTaskModelSpan)) return cached;
 
         const report = await this.buildOverview(query, overrides);
 
@@ -110,8 +115,10 @@ export class BuildUsageSummaryUseCase {
         overrides?: ManualPricingOverrides,
     ): string {
         return [
-            // v2: payload gained the byArea facet (issue #1453).
-            'usage:overview:v2',
+            // Stable key — payload-shape changes are handled by the shape guard
+            // in executeOverview (a cached entry missing the current facet is
+            // recomputed), so this no longer needs a hand-bumped version.
+            'usage:overview',
             query.organizationId,
             query.byok ? 'byok' : 'sys',
             query.start.getTime(),
@@ -149,6 +156,8 @@ export class BuildUsageSummaryUseCase {
             daily: overview.daily,
             byPr: overview.byPr,
             byArea: overview.byArea,
+            byTaskArea: overview.byTaskArea,
+            byTaskModelSpan: overview.byTaskModelSpan,
         };
     }
 

@@ -1,16 +1,18 @@
-import { LLMModelProvider, PromptRunnerService } from '@kodus/kodus-common/llm';
 import { Injectable, Inject, Optional } from '@nestjs/common';
 
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { finalText } from '@libs/agent-harness/domain/run-state.util';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import {
+    buildLangfuseTelemetry,
+    pullRequestSessionId,
+    toAiSdkTelemetryArgs,
+    type LangfuseTraceAttributes,
+} from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
-import { resolveAgentModel } from '@libs/llm/agent-model';
+import { LLM_TASK, type LlmTask } from '@libs/llm/byok-config';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
-import { buildProviderOptions } from '@libs/llm/reasoning-options';
-import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
@@ -52,6 +54,7 @@ import {
     AbstractSkillProvider,
     SkillFeedbackContext,
     SkillErrorContext,
+    type SkillExecutionContext,
 } from '../../../../skills/abstract-skill-provider';
 import { buildBusinessRulesAnalysisPrompt } from './analysis-prompt.builder';
 import { buildBusinessRulesContractViolationFeedback } from './contract-feedback.builder';
@@ -104,16 +107,16 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
 
     protected readonly skillName = SKILL_NAME;
 
-    protected readonly defaultLLMConfig = {
-        llmProvider: LLMModelProvider.GEMINI_2_5_PRO,
-        temperature: 0,
-        maxTokens: 20000,
-        maxReasoningTokens: 1024,
-        stop: undefined as string[] | undefined,
-    };
+    /**
+     * Task-level max-output fallback: LLM.run applies it only when the BYOK slot
+     * leaves `maxOutputTokens` unset (`slot ?? this`). It is NOT a BYOK/screen
+     * field — the model, temperature and reasoning all come from the slot via
+     * LLM.run. (The old `defaultLLMConfig` object hardcoded provider/temperature/
+     * reasoning too; those are the slot's now, so only this constant survives.)
+     */
+    protected readonly maxOutputTokensFallback = 20000;
 
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
@@ -126,7 +129,6 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         @Optional() private readonly byokErrorCounter?: ByokErrorCounter,
     ) {
         super(
-            promptRunnerService,
             permissionValidationService,
             observabilityService,
             genericSkillRunner,
@@ -151,6 +153,39 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         return this.runAnalyzer(step, ctx);
     }
 
+    /**
+     * This skill is PR-scoped, so its run joins the pull request's Langfuse
+     * session — the same one the code-review agents open. Without a sessionId
+     * the trace lands outside it and reads as "missing" in the sessions view,
+     * which is what the per-call metadata alone could never fix (metadata
+     * annotates an observation; only a session groups traces).
+     */
+    protected traceAttributes(
+        context: SkillExecutionContext<BusinessRulesPrepareContext>,
+    ): LangfuseTraceAttributes {
+        const base = super.traceAttributes(context);
+        const pc = context.prepareContext;
+        const repoId = pc?.repository?.id;
+        const repositoryId = repoId != null ? String(repoId) : undefined;
+        const pullRequestId =
+            pc?.pullRequestNumber ?? pc?.pullRequest?.pullRequestNumber;
+
+        return {
+            ...base,
+            sessionId: pullRequestSessionId({
+                organizationId: base.userId,
+                repositoryId,
+                pullRequestId,
+            }),
+            metadata: {
+                ...base.metadata,
+                repositoryId,
+                pullRequestId:
+                    pullRequestId != null ? String(pullRequestId) : undefined,
+            },
+        };
+    }
+
     protected createInitialContext(params: {
         organizationAndTeamData: OrganizationAndTeamData;
         prepareContext?: BusinessRulesPrepareContext;
@@ -169,6 +204,14 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
         ctx: BusinessRulesContext,
     ): 'cache_first' | 'agent_first' {
         return ctx.prepareContext?.taskContextResolutionMode ?? 'cache_first';
+    }
+
+    // Route this agent to its own model. `businessValidation` inherits the org's
+    // `conversation` (chat) model when it has no explicit override — the same
+    // model this agent resolved before the task existed, so behavior is unchanged
+    // until an org picks a dedicated model.
+    protected getLlmTask(): LlmTask {
+        return LLM_TASK.businessValidation;
     }
 
     protected resolveUserLanguage(
@@ -359,23 +402,26 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             ctx.organizationAndTeamData?.organizationId?.toString();
         const teamId = ctx.organizationAndTeamData?.teamId?.toString();
         try {
-            const model = resolveAgentModel(this.byokConfig, {
+            const runner = new AiSdkAgentRunner(this.byokConfig, {
                 organizationId: orgId,
-                provider: this.byokConfig?.main?.provider,
+                provider: this.byokConfig?.provider,
                 reporter: this.byokErrorCounter
                     ? (e) => void this.byokErrorCounter!.record(e)
                     : undefined,
             });
-            const runner = new AiSdkAgentRunner({ resolve: () => model });
             const verifier = new BusinessRulesVerifier(runner, {
                 modelId: 'resolved',
+                agentName: 'BusinessRulesValidation',
+                phase: 'businessRulesVerify',
+                runName: 'businessRulesVerify',
+                spanName: 'BusinessRulesValidation::businessRulesVerify',
                 diff: ctx.prDiff ?? '',
                 taskContext: ctx.taskContext ?? '',
                 userLanguage: ctx.userLanguage,
                 telemetryMetadata: {
                     organizationId: orgId,
                     teamId,
-                    provider: this.byokConfig?.main?.provider,
+                    provider: this.byokConfig?.provider,
                 },
             });
             const { ctx: runCtx, cleanup } = createAgentRunContext({
@@ -384,27 +430,8 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             });
             try {
                 const verdict = await verifier.verify(result, runCtx);
-                // Verify cost → Mongo observability_telemetry, same canonical
-                // emitter/schema as the analyzer (just a distinct phase) so the
-                // verify pass's tokens are billed, not invisible.
-                const u = verifier.usage;
-                await this.observabilityService.recordAgentRunUsage({
-                    agentName: 'BusinessRulesValidation',
-                    phase: 'businessRulesVerify',
-                    runName: 'businessRulesVerify',
-                    model: this.byokConfig?.main?.model,
-                    isByok: !!this.byokConfig,
-                    usage: {
-                        inputTokens: u.inputTokens,
-                        outputTokens: u.outputTokens,
-                        totalTokens:
-                            (u.inputTokens ?? 0) + (u.outputTokens ?? 0),
-                        reasoningTokens: u.reasoningTokens,
-                        cacheReadTokens: u.cacheReadTokens,
-                    },
-                    organizationId: orgId,
-                    teamId,
-                });
+                // Verify cost is recorded by LLM.run's span (phase
+                // 'businessRulesVerify', set on the verifier spec) — no manual record.
                 return applyBusinessRulesVerdict(result, verdict);
             } finally {
                 cleanup();
@@ -536,8 +563,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                     params.prompt,
                 ),
                 {
-                    temperature: this.defaultLLMConfig.temperature,
-                    maxTokens: this.defaultLLMConfig.maxTokens,
+                    maxTokens: this.maxOutputTokensFallback,
                 },
                 'businessRulesAnalyzer',
                 this.telemetryMetadataFromCtx(params.ctx),
@@ -554,7 +580,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     /**
      * Run a single LLM completion on the Vercel AI SDK. Replaces the legacy
      * `super.createLLMAdapter(...).call(...)` (the legacy flow-engine LLM bridge):
-     * `byokToVercelModel` resolves the BYOK model and `generateText` runs a
+     * `buildModelFromSlot` resolves the BYOK model and `generateText` runs a
      * plain (no-tools) completion. Langfuse parity via `buildLangfuseTelemetry`.
      */
     /**
@@ -582,7 +608,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
 
     private async callLLM(
         messages: AnalyzerMessage[],
-        options: { temperature?: number; maxTokens?: number },
+        options: { maxTokens?: number },
         functionId: string,
         metadata?: {
             organizationId?: string;
@@ -595,55 +621,41 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
             repositoryId?: string;
         },
     ): Promise<AnalyzerCallResult> {
-        // Standard model setup (same as every agent): BYOK resolve + concurrency
-        // limiter + failure reporter.
-        const model = resolveAgentModel(this.byokConfig, {
-            organizationId: metadata?.organizationId,
-            provider: this.byokConfig?.main?.provider,
-            reporter: this.byokErrorCounter
-                ? (e) => void this.byokErrorCounter!.record(e)
-                : undefined,
-        });
         const system = messages.find((m) => m.role === 'system')?.content;
         const userTurns = messages.filter((m) => m.role !== 'system');
 
-        // Per-call model params come from the org's saved BYOK config — NOT
-        // hardcoded. A fixed `temperature: 0` overrode the config and broke
-        // models that only accept their configured value (e.g. kimi-k2.7-code
-        // wants 1). For a BYOK model we honor the config (omit when unset →
-        // provider default); for a system model we keep the call's option.
-        // Withheld entirely on Anthropic 4.7+, which removed sampling params
-        // and 400s the whole request when one is present.
-        const temperature = this.byokConfig?.main
-            ? resolveByokTemperature(this.byokConfig.main)
-            : options.temperature;
-        const maxOutputTokens =
-            this.byokConfig?.main?.maxOutputTokens ?? options.maxTokens;
-
-        // Thinking/reasoning budget — the effort tier also comes from the BYOK
-        // config (the org configured it); fall back to 'low' when unset.
-        const providerOptions = buildProviderOptions(functionId, undefined, {
-            reasoningEffort: this.byokConfig?.main?.reasoningEffort ?? 'low',
-            byokProvider: this.byokConfig?.main?.provider,
-            modelName: this.byokConfig?.main?.model,
-        });
+        // Per-call model params. LLM.run (inside the runner) OWNS tuning: for a
+        // BYOK slot it derives the slot's saved temperature + reasoning (with the
+        // ≤0 → provider-default guard and the Anthropic 4.7+ sampling-param
+        // withholding); for the managed model it uses the provider default. The
+        // analyzer no longer hand-rolls temperature or branches on byokConfig —
+        // only `maxOutputTokens` rides as a fallback LLM.run treats as `slot ?? this`.
+        const maxOutputTokens = options.maxTokens;
 
         // Single runtime: the analysis runs on the harness AiSdkAgentRunner, same
         // engine as code-review/conversation (and as the skill fetcher that
         // gathered the context). No tools, single-shot (maxSteps 1) — a plain
         // completion, but observable as RunState and on one engine. The free-form
         // answer is the last assistant turn (`finalText`).
-        const runner = new AiSdkAgentRunner({ resolve: () => model });
+        const runner = new AiSdkAgentRunner(this.byokConfig, {
+            organizationId: metadata?.organizationId,
+            provider: this.byokConfig?.provider,
+            reporter: this.byokErrorCounter
+                ? (e) => void this.byokErrorCounter!.record(e)
+                : undefined,
+        });
         const spec: AgentSpec = {
             id: 'business-rules-analyzer',
+            agentName: 'BusinessRulesValidation',
+            phase: functionId,
+            runName: functionId,
+            spanName: `BusinessRulesValidation::${functionId}`,
             systemPrompt: system ?? '',
-            modelId: 'resolved',
             tools: new InMemoryToolRegistry([]),
             policies: [],
             maxSteps: 1,
-            ...(typeof temperature === 'number' ? { temperature } : {}),
+            // maxOutputTokens fallback only; LLM.run owns temperature + reasoning.
             ...(maxOutputTokens ? { maxOutputTokens } : {}),
-            ...(Object.keys(providerOptions).length ? { providerOptions } : {}),
         };
         const last = userTurns[userTurns.length - 1];
         // userTurns are non-system, i.e. all 'user' (AnalyzerMessage is system|user).
@@ -663,14 +675,14 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                 {
                     prompt: last?.content ?? '',
                     ...(seedMessages.length ? { seedMessages } : {}),
-                    // experimental_telemetry feeds Langfuse (forwarded by the runner).
-                    telemetry: buildLangfuseTelemetry(functionId, {
+                    // Raw metadata → LLM.run builds the Langfuse telemetry shape.
+                    telemetryMetadata: {
                         organizationId: metadata?.organizationId,
                         teamId: metadata?.teamId,
                         pullRequestId: metadata?.pullRequestId,
                         repositoryId: metadata?.repositoryId,
-                        provider: this.byokConfig?.main?.provider,
-                    }),
+                        provider: this.byokConfig?.provider,
+                    },
                 },
                 ctx,
             );
@@ -685,22 +697,8 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                 (state.usage.inputTokens ?? 0) + (state.usage.outputTokens ?? 0),
         };
 
-        // Cost -> Mongo `observability_telemetry` via the canonical emitter, so
-        // the billing schema (agentName/phase/type/gen_ai.usage.*) is identical
-        // to the conversation + code-review agents. Span name parity:
-        // `${agentName}::${phase}` == the former `BusinessRulesValidation::${functionId}`.
-        await this.observabilityService.recordAgentRunUsage({
-            agentName: 'BusinessRulesValidation',
-            phase: functionId,
-            runName: functionId,
-            model: this.byokConfig?.main?.model,
-            // Real billing source: a BYOK org runs on its own key -> 'byok'.
-            // (The legacy code hardcoded 'system', misattributing BYOK cost.)
-            isByok: !!this.byokConfig,
-            usage: { ...usage, reasoningTokens: state.usage.reasoningTokens, cacheReadTokens: state.usage.cacheReadTokens },
-            organizationId: metadata?.organizationId,
-            teamId: metadata?.teamId,
-        });
+        // Cost is recorded by LLM.run's span (agentName/phase/spanName set on the
+        // spec above) — ONE place, same schema. No manual record here.
 
         return { content: finalText(state), usage };
     }
@@ -883,7 +881,7 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
                         content: `USER LANGUAGE: ${userLanguage}\nMODE: ${mode}\n\nMESSAGE:\n${message}`,
                     },
                 ],
-                { temperature: 0, maxTokens: 1200 },
+                { maxTokens: 1200 },
                 'businessRulesUserFacingFormatter',
                 metadata,
             );

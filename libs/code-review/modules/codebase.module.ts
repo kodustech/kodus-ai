@@ -34,21 +34,9 @@ import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '../domain/contracts/CodeBaseConf
 import { COMMENT_MANAGER_SERVICE_TOKEN } from '../domain/contracts/CommentManagerService.contract';
 import { PULL_REQUEST_MANAGER_SERVICE_TOKEN } from '../domain/contracts/PullRequestManagerService.contract';
 import { SUGGESTION_SERVICE_TOKEN } from '../domain/contracts/SuggestionService.contract';
-import {
-    CODEBASE_SEARCH_SERVICE_TOKEN,
-    CodebaseSearchService,
-} from '../infrastructure/adapters/services/codebaseSearch.service';
 import { CodeReviewHandlerService } from '../infrastructure/adapters/services/codeReviewHandlerService.service';
-import {
-    COLLECT_CROSS_FILE_CONTEXTS_SERVICE_TOKEN,
-    CollectCrossFileContextsService,
-} from '../infrastructure/adapters/services/collectCrossFileContexts.service';
 import { CommentAnalysisService } from '../infrastructure/adapters/services/commentAnalysis.service';
 import { CommentManagerService } from '../infrastructure/adapters/services/commentManager.service';
-import {
-    CROSS_FILE_ANALYSIS_SERVICE_TOKEN,
-    CrossFileAnalysisService,
-} from '../infrastructure/adapters/services/crossFileAnalysis.service';
 import {
     LLM_ANALYSIS_SERVICE_TOKEN,
     LLMAnalysisService,
@@ -123,18 +111,6 @@ import { DocumentationContextModule } from './documentation-context.module';
             useClass: KodyRulesPrLevelAnalysisService,
         },
         {
-            provide: COLLECT_CROSS_FILE_CONTEXTS_SERVICE_TOKEN,
-            useClass: CollectCrossFileContextsService,
-        },
-        {
-            provide: CODEBASE_SEARCH_SERVICE_TOKEN,
-            useClass: CodebaseSearchService,
-        },
-        {
-            provide: CROSS_FILE_ANALYSIS_SERVICE_TOKEN,
-            useClass: CrossFileAnalysisService,
-        },
-        {
             provide: SUGGESTION_SERVICE_TOKEN,
             useClass: SuggestionService,
         },
@@ -154,8 +130,6 @@ import { DocumentationContextModule } from './documentation-context.module';
         CODE_BASE_CONFIG_SERVICE_TOKEN,
         KODY_RULES_ANALYSIS_SERVICE_TOKEN,
         KODY_RULES_PR_LEVEL_ANALYSIS_SERVICE_TOKEN,
-        COLLECT_CROSS_FILE_CONTEXTS_SERVICE_TOKEN,
-        CROSS_FILE_ANALYSIS_SERVICE_TOKEN,
         SUGGESTION_SERVICE_TOKEN,
         SandboxModule,
         CodeAnalysisOrchestrator,

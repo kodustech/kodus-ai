@@ -17,13 +17,11 @@ import {
     DocumentationSearchExaService,
 } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { CodebaseModule } from './codebase.module';
-import { LLMModule } from '@kodus/kodus-common/llm';
 
 @Module({
     imports: [
         MongooseModule.forFeature([DocumentationSearchCacheModelInstance]),
         forwardRef(() => CodebaseModule),
-        LLMModule,
     ],
     providers: [
         DocumentationPackageDiscoveryService,

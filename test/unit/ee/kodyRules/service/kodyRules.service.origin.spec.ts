@@ -42,7 +42,6 @@ describe('KodyRulesService.createOrUpdate stamps origin', () => {
             {} as any,
             {} as any,
             {} as any,
-            {} as any,
         );
 
         return { service, addRule };

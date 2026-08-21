@@ -7,7 +7,7 @@ import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 
 // The sharded judge now runs on the LOCAL (Vercel) stack via
 // runStructuredReviewCall; mock it at that boundary (one canned response per
-// shard call) instead of the old kodus-common builder.
+// shard call) instead of the old LangChain builder.
 jest.mock('@libs/llm/structured-review-call', () => ({
     runStructuredReviewCall: jest.fn(),
 }));
@@ -24,7 +24,6 @@ describe('KodyRulesAgentProvider — rule formatting and applicability', () => {
 
     beforeEach(() => {
         provider = new KodyRulesAgentProvider(
-            {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
         );
@@ -373,8 +372,11 @@ describe('KodyRulesAgentProvider.execute — sharded end-to-end (#1449)', () => 
             async () => responses[i++] ?? { violations: [] },
         );
         const provider = new KodyRulesAgentProvider(
-            {} as any, // promptRunnerService (unused — local stack)
-            { getBYOKConfig: jest.fn(async () => null) } as any, // permission (system model)
+            {
+                // model-factory routes the run's model through the per-task slot
+                // entry point; no BYOK → undefined slot → LLM.run's managed default.
+                resolveTaskSlot: jest.fn(async () => undefined),
+            } as any, // permission (system model)
             {} as any, // observability (unused — runStructuredReviewCall mocked)
         );
         return { provider, judge: mockRunStructuredReviewCall };
@@ -719,13 +721,15 @@ describe('KodyRulesAgentProvider — Context OS reference loading', () => {
     });
 
     const makeProvider = (loader?: any) => {
+        // 5-arg constructor (promptRunnerService was removed with the LangChain
+        // exit): permission, observability, documentationSearch, byokErrorCounter,
+        // externalReferenceLoaderService.
         const p = new KodyRulesAgentProvider(
-            {} as any,
-            {} as any,
-            {} as any,
-            undefined,
-            undefined,
-            loader,
+            {} as any, // permissionValidationService
+            {} as any, // observabilityService
+            undefined, // documentationSearchService
+            undefined, // byokErrorCounter
+            loader, // externalReferenceLoaderService
         );
         // Swap the real structured logger for spies.
         (p as any).shardLogger = { warn: jest.fn(), log: jest.fn() };

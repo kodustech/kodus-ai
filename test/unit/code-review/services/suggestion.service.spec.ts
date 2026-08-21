@@ -1086,8 +1086,7 @@ __new hunk__
     describe('prioritizeSuggestionsLegacy - Kody Rules deterministic grouping', () => {
         it('should group same Kody Rule suggestions in FULL mode before LLM clustering', async () => {
             mockCommentManagerService.repeatedCodeReviewSuggestionClustering.mockImplementation(
-                async (_org, _pr, _provider, inputSuggestions) =>
-                    inputSuggestions,
+                async (_org, _pr, inputSuggestions) => inputSuggestions,
             );
 
             const suggestionControl = {
@@ -1175,11 +1174,11 @@ __new hunk__
             ).toHaveBeenCalledTimes(1);
             expect(
                 mockCommentManagerService.repeatedCodeReviewSuggestionClustering
-                    .mock.calls[0][3],
+                    .mock.calls[0][2],
             ).toHaveLength(1);
             expect(
                 mockCommentManagerService.repeatedCodeReviewSuggestionClustering
-                    .mock.calls[0][3][0].id,
+                    .mock.calls[0][2][0].id,
             ).toBe('b1');
         });
 
@@ -1236,8 +1235,7 @@ __new hunk__
 
         it('should choose a parent with valid id when an id-less suggestion exists in the group', async () => {
             mockCommentManagerService.repeatedCodeReviewSuggestionClustering.mockImplementation(
-                async (_org, _pr, _provider, inputSuggestions) =>
-                    inputSuggestions,
+                async (_org, _pr, inputSuggestions) => inputSuggestions,
             );
 
             const suggestionControl = {
@@ -1295,8 +1293,7 @@ __new hunk__
 
         it('should not cluster a group when no suggestion has a valid id', async () => {
             mockCommentManagerService.repeatedCodeReviewSuggestionClustering.mockImplementation(
-                async (_org, _pr, _provider, inputSuggestions) =>
-                    inputSuggestions,
+                async (_org, _pr, inputSuggestions) => inputSuggestions,
             );
 
             const suggestionControl = {

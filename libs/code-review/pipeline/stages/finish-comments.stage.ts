@@ -16,6 +16,7 @@ import {
 import {
     classifyLLMError,
     getClassification,
+    llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -201,7 +202,8 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                         organizationAndTeamData,
                         codeReviewConfig.languageResultPrompt,
                         codeReviewConfig.summary,
-                        codeReviewConfig?.byokConfig ?? null,
+                        // No byokConfig arg: generateSummaryPR owns its model
+                        // resolution and routes by the `prSummary` task itself.
                         isCommitRun,
                         false,
                         context.externalPromptContext,
@@ -215,7 +217,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     summaryPR,
                 );
             } catch (error) {
-                this.logger.error({
+                // Terminal BYOK (suspended key / no credit) → warn: user's
+                // provider config, not a Kodus fault. Real fault stays error.
+                this.logger[llmErrorLogLevel(error)]({
                     message: `Failed to generate summary for PR#${pullRequest.number}`,
                     context: this.stageName,
                     error,
@@ -247,9 +251,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     getClassification(summaryError) ??
                     classifyLLMError(
                         summaryError,
-                        typeof codeReviewConfig?.byokConfig?.main?.provider ===
+                        typeof codeReviewConfig?.resolvedModelSlot?.provider ===
                             'string'
-                            ? codeReviewConfig.byokConfig.main.provider
+                            ? codeReviewConfig.resolvedModelSlot.provider
                             : undefined,
                     );
 

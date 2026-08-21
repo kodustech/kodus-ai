@@ -1,0 +1,220 @@
+/** @jest-environment jsdom */
+import "@testing-library/jest-dom";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { TooltipProvider } from "@components/ui/tooltip";
+import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
+import { FormProvider, useForm, useWatch } from "react-hook-form";
+import {
+    CodeReviewModelDataProvider,
+    ScopedCodeReviewConfigProvider,
+} from "src/app/(app)/settings/_components/context";
+import type { ScopedCodeReviewConfig } from "src/app/(app)/settings/_components/code-review-config-scope";
+
+import { FormattedConfigLevel, type CodeReviewFormType } from "../../../_types";
+import { BYOKModelSelectorSection } from "./byok-model-selector";
+
+// The selector reads the route (repository scope, no directory) to pick its
+// config level. Pin it to a plain repository scope.
+jest.mock("next/navigation", () => ({
+    useParams: () => ({ repositoryId: "repo-1" }),
+    usePathname: () => "/settings/code-review/repo-1/general",
+    useSearchParams: () => new URLSearchParams(),
+}));
+
+// testBYOKModel transitively imports the authorized-fetch stack (next-auth,
+// ESM-only). Stub the fetch module so the spec stays hermetic.
+jest.mock("@services/organizationParameters/fetch", () => ({
+    testBYOKModel: jest.fn().mockResolvedValue({ ok: true }),
+}));
+
+// The selector routes to the BYOK page from its "Manage models" item; child
+// components also read the pathname/params, so stub the whole surface.
+jest.mock("next/navigation", () => ({
+    useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+    usePathname: () => "/settings/code-review/repo-1/general",
+    useSearchParams: () => new URLSearchParams(),
+    useParams: () => ({ repositoryId: "repo-1" }),
+}));
+
+const modelData = {
+    llmConfigStatus: {
+        source: "byok",
+        // The selector now offers the org's CONFIGURED models (not the provider
+        // catalog), so the selectable list lives here.
+        models: [
+            { modelId: "gpt-4o", model: "GPT-4o", resolvable: true },
+            { modelId: "gpt-legacy", model: "GPT Legacy", resolvable: true },
+        ],
+        byok: { configured: true, providerId: "openai", model: "gpt-4o-mini" },
+        env: { configured: false },
+    } as LLMConfigStatus,
+    // Provider catalog — no longer consumed by the selector; kept only to
+    // satisfy the context shape.
+    byokModels: [],
+};
+
+// Only byokModel / byokModelId are consulted by the selector; the rest of the
+// FormattedConfig shape is irrelevant here, so cast a minimal partial.
+const scopedConfig = (
+    partial: Partial<Record<"byokModel" | "byokModelId", unknown>>,
+): ScopedCodeReviewConfig =>
+    ({
+        id: "repo-1",
+        name: "repo-1",
+        displayName: "repo-1",
+        isSelected: true,
+        ...partial,
+    }) as unknown as ScopedCodeReviewConfig;
+
+const FormValuesProbe = () => {
+    const values = useWatch();
+    return <pre data-testid="form-values">{JSON.stringify(values)}</pre>;
+};
+
+const Harness = ({
+    config,
+}: {
+    config: ScopedCodeReviewConfig;
+}) => {
+    const methods = useForm<CodeReviewFormType>({
+        defaultValues: {} as CodeReviewFormType,
+    });
+    return (
+        <TooltipProvider>
+            <FormProvider {...methods}>
+                <ScopedCodeReviewConfigProvider config={config}>
+                    <CodeReviewModelDataProvider value={modelData}>
+                        <BYOKModelSelectorSection />
+                        <FormValuesProbe />
+                    </CodeReviewModelDataProvider>
+                </ScopedCodeReviewConfigProvider>
+            </FormProvider>
+        </TooltipProvider>
+    );
+};
+
+const formValues = () =>
+    JSON.parse(screen.getByTestId("form-values").textContent || "{}");
+
+beforeAll(() => {
+    // cmdk / radix reach for these DOM APIs that jsdom doesn't implement.
+    Element.prototype.scrollIntoView = jest.fn();
+    if (!("ResizeObserver" in globalThis)) {
+        (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
+            observe() {}
+            unobserve() {}
+            disconnect() {}
+        };
+    }
+    if (!Element.prototype.hasPointerCapture) {
+        Element.prototype.hasPointerCapture = jest.fn();
+    }
+    if (!Element.prototype.setPointerCapture) {
+        Element.prototype.setPointerCapture = jest.fn();
+    }
+    if (!Element.prototype.releasePointerCapture) {
+        Element.prototype.releasePointerCapture = jest.fn();
+    }
+});
+
+describe("BYOKModelSelectorSection — byokModelId re-key", () => {
+    it("writes the id override to byokModelId.value (not the legacy byokModel)", async () => {
+        render(<Harness config={scopedConfig({})} />);
+
+        // The write target is the Controller field name, surfaced as the
+        // trigger's id. It must be the id override, not the legacy name.
+        const trigger = screen.getByRole("combobox");
+        expect(trigger).toHaveAttribute("id", "byokModelId.value");
+
+        // Selecting a catalog model routes through field.onChange, which is
+        // bound to byokModelId.value.
+        fireEvent.click(trigger);
+        fireEvent.click(await screen.findByText("GPT-4o"));
+
+        const values = formValues();
+        expect(values.byokModelId?.value).toBe("gpt-4o");
+        expect(values.byokModel).toBeUndefined();
+    });
+
+    it("prefers byokModelId over the legacy byokModel when both are present", () => {
+        render(
+            <Harness
+                config={scopedConfig({
+                    byokModelId: {
+                        value: "gpt-4o",
+                        level: FormattedConfigLevel.GLOBAL,
+                    },
+                    byokModel: {
+                        value: "gpt-legacy",
+                        level: FormattedConfigLevel.GLOBAL,
+                    },
+                })}
+            />,
+        );
+
+        expect(screen.getByText("GPT-4o")).toBeInTheDocument();
+        expect(screen.queryByText("GPT Legacy")).not.toBeInTheDocument();
+    });
+
+    it("falls back to the legacy byokModel name when byokModelId is absent", () => {
+        render(
+            <Harness
+                config={scopedConfig({
+                    byokModel: {
+                        value: "gpt-legacy",
+                        level: FormattedConfigLevel.GLOBAL,
+                    },
+                })}
+            />,
+        );
+
+        // The legacy name still resolves to its catalog label during the
+        // compat read window.
+        expect(screen.getByText("GPT Legacy")).toBeInTheDocument();
+    });
+});
+
+describe("BYOKModelSelectorSection — badge/text parity", () => {
+    // Regression: the "Overridden" badge read ONLY config.byokModelId while the
+    // description text read `config.byokModelId ?? config.byokModel`. A repo
+    // override stored under the legacy `byokModel` leaf (any override created
+    // before the id migration, and the transient post-save window before the
+    // background refetch replaces the config) made the badge vanish while the
+    // text still announced the override — the two indicators disagreed.
+    it("shows the Overridden badge for a repository-level legacy byokModel override", () => {
+        render(
+            <Harness
+                config={scopedConfig({
+                    byokModel: {
+                        value: "gpt-legacy",
+                        level: FormattedConfigLevel.REPOSITORY,
+                    },
+                })}
+            />,
+        );
+
+        // The description treats it as an override (it is not the inherited
+        // model), so the badge MUST agree.
+        expect(
+            screen.getByText(/run(s)? (with|for)/i),
+        ).toBeInTheDocument();
+        expect(screen.getByText("Overridden")).toBeInTheDocument();
+    });
+
+    it("does NOT show the Overridden badge when the value is inherited", () => {
+        render(
+            <Harness
+                config={scopedConfig({
+                    byokModelId: {
+                        value: "gpt-4o",
+                        level: FormattedConfigLevel.GLOBAL,
+                    },
+                })}
+            />,
+        );
+
+        // Inherited (level is the parent GLOBAL, not the current REPOSITORY
+        // scope) — no override, so no badge.
+        expect(screen.queryByText("Overridden")).not.toBeInTheDocument();
+    });
+});

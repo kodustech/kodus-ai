@@ -8,6 +8,7 @@ jest.mock('@libs/llm/structured-review-call', () => ({
     runStructuredReviewCall: jest.fn(),
 }));
 import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { KodyRulesStatus } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { KodyRulesSyncService } from './kodyRulesSync.service';
 
 const mockRun = runStructuredReviewCall as jest.Mock;
@@ -27,6 +28,15 @@ describe('KodyRulesSyncService.convertFileToKodyRules — post-trial BYOK gate',
         teamId: 'team-1',
     };
 
+    // A config carrying one non-managed credential → the org "has BYOK"
+    // (hasNonManagedCredential true). `null` → no BYOK.
+    const v2WithByok = {
+        version: 2,
+        credentials: [{ id: 'c1', provider: 'openai', apiKey: 'enc' }],
+        models: [{ id: 'm1', credentialId: 'c1', model: 'x' }],
+        routing: { defaultModelId: 'm1' },
+    };
+
     const makeService = (opts: {
         byok: boolean;
         status: SubscriptionStatus | undefined;
@@ -35,15 +45,15 @@ describe('KodyRulesSyncService.convertFileToKodyRules — post-trial BYOK gate',
             validateBasicLicense: jest.fn().mockResolvedValue({ allowed: true }),
             getBYOKConfig: jest
                 .fn()
-                .mockResolvedValue(opts.byok ? { main: { model: 'x' } } : null),
+                .mockResolvedValue(opts.byok ? v2WithByok : null),
             getSubscriptionStatus: jest.fn().mockResolvedValue(opts.status),
         };
 
-        // 12 positional constructor deps; only permissionValidationService (9th)
+        // 11 positional constructor deps; only permissionValidationService (8th)
         // is exercised on the gated path — the rest are never touched before the
         // gate returns.
-        const deps: any[] = new Array(12).fill({});
-        deps[8] = permissionValidationService;
+        const deps: any[] = new Array(11).fill({});
+        deps[7] = permissionValidationService;
         const service = new (KodyRulesSyncService as any)(...deps);
         return { service, permissionValidationService };
     };
@@ -112,5 +122,115 @@ describe('KodyRulesSyncService.convertFileToKodyRules — post-trial BYOK gate',
             .catch(() => undefined);
 
         expect(mockRun).toHaveBeenCalled();
+    });
+});
+
+/**
+ * Parity gate for the FastBatch conversions migrated OFF the LangChain
+ * (BYOKPromptRunner.builder().execute()) path ONTO the AI SDK
+ * runStructuredReviewCall path. The prior implementation returned each parsed
+ * rule spread with `{ repositoryId, status: PENDING }` and capped at 3; the
+ * migrated call must produce the SAME normalized DTOs from the same parsed
+ * `{ rules: [...] }` shape. runStructuredReviewCall is mocked (the parse seam),
+ * exactly as structured-review-call.spec.ts mocks tracedGenerateText — driving
+ * the real structured Output.object path over a MockLanguageModel HANGS.
+ */
+describe('KodyRulesSyncService FastBatch conversions — AI SDK migration parity', () => {
+    const ORG = { organizationId: 'org-1', teamId: 'team-1' };
+
+    const makeService = () => {
+        const permissionValidationService = {
+            // FastBatch parity test only exercises DTO mapping — the resolved
+            // carrier is irrelevant, so null (env default) is fine.
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
+        };
+        const observabilityService = {
+            runAiSdkLLMInSpan: jest.fn(),
+        };
+        const deps: any[] = new Array(11).fill({});
+        deps[7] = permissionValidationService; // permissionValidationService
+        deps[8] = observabilityService; // observabilityService
+        const service = new (KodyRulesSyncService as any)(...deps);
+        return { service, observabilityService };
+    };
+
+    beforeEach(() => mockRun.mockReset());
+
+    it('convertFilesToKodyRulesFastBatch maps rules to normalized DTOs (repositoryId + PENDING), never wraps in runLLMInSpan', async () => {
+        const rule = {
+            title: 'No any',
+            rule: 'Avoid using any in TypeScript',
+            path: '**/*.ts',
+            sourcePath: 'docs/guide.md',
+            severity: 'high',
+            scope: 'file',
+            examples: [{ snippet: 'const x: any = 1', isCorrect: false }],
+        };
+        mockRun.mockResolvedValue({ rules: [rule] });
+        const { service, observabilityService } = makeService();
+
+        const result = await (service as any).convertFilesToKodyRulesFastBatch({
+            files: [{ path: 'docs/guide.md', content: '# Guide' }],
+            repositoryId: 'repo-1',
+            organizationAndTeamData: ORG,
+        });
+
+        // Exactly ONE span path: runStructuredReviewCall fires its own internal
+        // span; the outer runLLMInSpan wrapper is gone (Q4 — no double-count).
+        // On the happy path the raw-JSON catch's runAiSdkLLMInSpan is untouched.
+        expect(mockRun).toHaveBeenCalledTimes(1);
+        expect(observabilityService.runAiSdkLLMInSpan).not.toHaveBeenCalled();
+
+        // Migration shape: byokConfig/schema/system/user/runName routed through
+        // runStructuredReviewCall; no parser correction-model override survives.
+        const callArg = mockRun.mock.calls[0][0];
+        expect(callArg).toEqual(
+            expect.objectContaining({
+                schema: expect.anything(),
+                system: expect.any(String),
+                user: expect.stringContaining('docs/guide.md'),
+                runName: expect.stringContaining(
+                    'kodyRulesFilesToRulesFastBatch',
+                ),
+            }),
+        );
+
+        // Parity: same normalized DTO the pre-migration path produced.
+        expect(result).toEqual([
+            { ...rule, repositoryId: 'repo-1', status: KodyRulesStatus.PENDING },
+        ]);
+    });
+
+    it('convertManifestsToKodyRulesFastBatch maps rules to normalized DTOs (repositoryId + PENDING)', async () => {
+        const rule = {
+            title: 'Pin deps',
+            rule: 'Avoid floating dependency ranges',
+            path: 'package.json',
+            severity: 'medium',
+            examples: [{ snippet: '"lib": "^1"', isCorrect: false }],
+        };
+        mockRun.mockResolvedValue({ rules: [rule] });
+        const { service, observabilityService } = makeService();
+
+        const result = await (
+            service as any
+        ).convertManifestsToKodyRulesFastBatch({
+            files: [{ path: 'package.json', content: '{}' }],
+            repositoryId: 'repo-2',
+            organizationAndTeamData: ORG,
+        });
+
+        expect(mockRun).toHaveBeenCalledTimes(1);
+        expect(observabilityService.runAiSdkLLMInSpan).not.toHaveBeenCalled();
+        expect(mockRun.mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                runName: expect.stringContaining(
+                    'kodyRulesManifestsToRulesFastBatch',
+                ),
+            }),
+        );
+        expect(result).toEqual([
+            { ...rule, repositoryId: 'repo-2', status: KodyRulesStatus.PENDING },
+        ]);
     });
 });

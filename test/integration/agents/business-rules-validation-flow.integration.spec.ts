@@ -120,6 +120,7 @@ describe('BusinessRulesValidation flow integration', () => {
     };
     let permissionValidationService: {
         getBYOKConfig: jest.Mock;
+        resolveTaskSlot: jest.Mock;
     };
     let parametersService: {
         findByKey: jest.Mock;
@@ -148,6 +149,7 @@ describe('BusinessRulesValidation flow integration', () => {
         };
         permissionValidationService = {
             getBYOKConfig: jest.fn().mockResolvedValue(undefined),
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
         };
         parametersService = {
             findByKey: jest.fn().mockResolvedValue({ configValue: 'pt-BR' }),
@@ -158,10 +160,9 @@ describe('BusinessRulesValidation flow integration', () => {
         };
 
         provider = new BusinessRulesValidationAgentProvider(
-            {} as any,
             permissionValidationService as any,
             parametersService as any,
-            {} as any,
+            {} as any, // observabilityService
             genericSkillRunner as any,
             metricsCollector as any,
         );

@@ -124,6 +124,22 @@ export function classifyLLMError(
 }
 
 /**
+ * True for an aborted / hard-timed-out call. `classifyLLMError` folds AbortError
+ * AND `[HARD-TIMEOUT]`/timeout/aborted text into TRANSIENT, but those must NOT be
+ * treated as retry-worthy the way a genuine 5xx/network blip is: re-issuing a
+ * slow / already-cancelled call just burns the whole timeout budget again (the
+ * failure mode is latency, not fidelity). Both the one-shot D-00c re-issue and
+ * the runtime model-failover carve these back out of "transient" with this gate.
+ * Pure — safe in any catch block.
+ */
+export function isAbortOrHardTimeout(err: unknown): boolean {
+    if (!err) return false;
+    if ((err as { name?: string }).name === 'AbortError') return true;
+    const text = err instanceof Error ? err.message : String(err ?? '');
+    return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
+}
+
+/**
  * Returns true for categories where retrying without user intervention is
  * pointless: the user must fix billing/auth/config first.
  */
@@ -134,6 +150,19 @@ export function isTerminalCategory(category: LlmErrorCategory): boolean {
         category === LlmErrorCategory.MODEL_NOT_FOUND ||
         category === LlmErrorCategory.MODEL_ACCESS_DENIED
     );
+}
+
+/**
+ * Log level for an LLM/provider failure. A TERMINAL category (suspended key,
+ * out of credit, bad model name, access denied) is a USER config/billing
+ * problem, not a Kodus server fault — one root cause fans out to many sub-calls
+ * (issue-analysis, suggestion-validation, summary…), each of which used to
+ * re-log it at `error`, inflating the error rate for something the user must
+ * fix on the provider. Those log at `warn`; a genuine/unknown failure stays
+ * `error`. Pure — safe to call in any catch block.
+ */
+export function llmErrorLogLevel(err: unknown): 'warn' | 'error' {
+    return isTerminalCategory(classifyLLMError(err).category) ? 'warn' : 'error';
 }
 
 /**
@@ -246,10 +275,18 @@ function matchByMessage(lower: string): LlmErrorCategory {
         lower.includes('insufficient_quota') ||
         lower.includes('insufficient quota') ||
         lower.includes('credit_balance_too_low') ||
-        lower.includes('insufficient credits') ||
+        lower.includes('insufficient credit') || // singular OR plural
         lower.includes('quota exceeded') ||
         lower.includes('billing') ||
-        lower.includes('payment required')
+        lower.includes('payment required') ||
+        // Account-level billing suspension (Moonshot/Kimi & OpenAI-compatible
+        // return this as prose, often without a 402/403 status). Without these
+        // it classified as UNKNOWN and got re-logged as `error` at every stage.
+        lower.includes('suspended') ||
+        lower.includes('spending limit') ||
+        lower.includes('failure to pay') ||
+        lower.includes('past invoices') ||
+        lower.includes('past due')
     ) {
         return LlmErrorCategory.QUOTA_EXCEEDED;
     }
@@ -370,7 +407,7 @@ function buildContextOverflowMessage(err: unknown, provider?: string): string {
             '**To resolve, choose one:**',
             `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,
             `- **Split the PR into smaller ones**: file count drives prompt overhead.`,
-            `- **Raise \`byokConfig.main.maxInputTokens\`**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
+            `- **Raise the model's Max input tokens**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
         ].join('\n');
     }
 
@@ -382,7 +419,7 @@ function buildContextOverflowMessage(err: unknown, provider?: string): string {
             '**To resolve, choose one:**',
             `- **Switch to a recommended model**: pick one of Kodus's recommended models in your BYOK settings (${RECOMMENDED_MODELS_FOR_ERROR}).`,
             `- **Split the PR into smaller ones**: file count drives prompt overhead.`,
-            `- **Raise \`byokConfig.main.maxInputTokens\`**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
+            `- **Raise the model's Max input tokens**: only if your deployed model genuinely supports more than the ${window} tokens our lookup reports (e.g. self-hosted vLLM or Ollama with a custom limit).`,
         ].join('\n');
     }
 

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { createLogger } from '@libs/core/log/logger';
-import { generateObject } from 'ai';
 import { z } from 'zod';
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { LLM } from '@libs/llm/llm';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import type { IPublicPrGroupingService } from '@libs/cli-review/domain/contracts/public-pr-grouping.service.contract';
 import type { PublicPrMetadata } from './github-public-pr.service';
 
@@ -74,29 +74,26 @@ export class PublicPrGroupingService implements IPublicPrGroupingService {
         if (changedFiles.length < 2) return undefined;
 
         try {
-            const model = byokToVercelModel(
-                undefined,
-                'main',
-                {},
-                GROUPING_MODEL,
-            );
             const truncated = diff.length > MAX_DIFF_CHARS;
 
-            const { object } = await generateObject({
-                model,
+            // Public demo: no BYOK → undefined slot → LLM.run resolves the forced
+            // cheaper default (GROUPING_MODEL) via defaultModelOverride, and owns
+            // the model + observability span. Fixed tuning (temperature /
+            // max-output / Gemini thinking OFF) rides as overrides.
+            const object = await LLM.run({
+                task: LLM_TASK.prSummary,
+                defaultModelOverride: GROUPING_MODEL,
                 schema: GroupingSchema,
+                runName: 'public-pr-grouping',
                 temperature: 0.15,
                 maxOutputTokens: MAX_OUTPUT_TOKENS,
-                // Cluster-by-intent is a shape-matching task, not a
-                // reasoning task — turning thinking off gives all of
-                // the output budget to the actual JSON and shaves
-                // ~4–8s off the call.
+                // Cluster-by-intent is a shape-matching task, not a reasoning task
+                // — turning thinking off gives all of the output budget to the
+                // actual JSON and shaves ~4–8s off the call.
                 providerOptions: {
-                    google: {
-                        thinkingConfig: { thinkingBudget: 0 },
-                    },
+                    google: { thinkingConfig: { thinkingBudget: 0 } },
                 },
-                prompt: buildPrompt(
+                user: buildPrompt(
                     pr,
                     diff.slice(0, MAX_DIFF_CHARS),
                     changedFiles,

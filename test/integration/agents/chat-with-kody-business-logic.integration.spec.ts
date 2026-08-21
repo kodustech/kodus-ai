@@ -146,14 +146,16 @@ describe('ChatWithKodyFromGitUseCase business-logic integration', () => {
         };
 
         provider = new BusinessRulesValidationAgentProvider(
-            {} as any,
-            { getBYOKConfig: jest.fn().mockResolvedValue(undefined) } as any,
+            {
+                getBYOKConfig: jest.fn().mockResolvedValue(undefined),
+                resolveTaskSlot: jest.fn().mockResolvedValue(null),
+            } as any,
             {
                 findByKey: jest
                     .fn()
                     .mockResolvedValue({ configValue: 'pt-BR' }),
             } as any,
-            {} as any,
+            {} as any, // observabilityService
             genericSkillRunner as any,
             {
                 recordCounter: jest.fn(),

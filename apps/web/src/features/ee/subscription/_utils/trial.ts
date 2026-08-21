@@ -160,7 +160,7 @@ const fallbackUnlocks = (params: {
         rewardLabel: TRIAL_UNLOCK_BYOK_REWARD_LABEL,
         status: params.byok ? "completed" : "available",
         kind: "action",
-        href: "/organization/byok",
+        href: "/byok",
         actionLabel: "Configure BYOK",
     },
     {

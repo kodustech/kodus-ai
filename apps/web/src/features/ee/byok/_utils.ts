@@ -8,6 +8,99 @@ import {
 import { hasPermission } from "src/core/utils/permission-map";
 
 import type { OrganizationLicense } from "../subscription/_services/billing/types";
+import type {
+    BYOKConfig,
+    BYOKCredential,
+    BYOKModelConfig,
+    LlmTask,
+} from "./_types";
+
+/**
+ * The single source of truth for how the routing tasks are labeled in the UI.
+ * Both the model row's "USED IN" chips and the routing tab's per-task override
+ * grid render these, so the labels must never drift apart.
+ */
+export const TASK_LABELS: Record<LlmTask, string> = {
+    codeReview: "Code Review",
+    kodyRulesReview: "Kody Rules (review)",
+    ruleGeneration: "Kody Rules (generation)",
+    businessValidation: "Business Rules",
+    prSummary: "PR Summary",
+    conversation: "Chat",
+};
+
+/**
+ * Plain-language, one-line purpose + trigger for each task, so an admin can
+ * decide which model a task deserves WITHOUT already knowing Kodus's internal
+ * task ontology. Shown under each task name in the routing UI. Keep them concrete
+ * (what it does + when it runs + a volume hint where useful).
+ */
+export const TASK_DESCRIPTIONS: Record<LlmTask, string> = {
+    codeReview:
+        "Reviews every pull request and posts inline comments. Runs on each PR — highest volume.",
+    kodyRulesReview:
+        "Checks your custom rules against the changes during a review.",
+    ruleGeneration: "Drafts new custom rules from your codebase, on demand.",
+    businessValidation:
+        "Validates a diff against your task's acceptance criteria.",
+    prSummary: "Writes the summary at the top of each pull request.",
+    conversation: "Powers the Kody chat assistant in the dashboard and IDE.",
+};
+
+/** Resolve a model id to its human label within a pool, falling back to the raw
+ *  id then an em-dash. Shared by the routing tab and the per-task grid so the
+ *  same lookup isn't written twice. */
+export const modelLabelFor = (
+    models: { id: string; label: string }[],
+    id?: string,
+): string => models.find((m) => m.id === id)?.label ?? id ?? "—";
+
+/** Narrow an unknown blob to the v2 shape by its `version` discriminant. */
+const isByokConfig = (
+    config: BYOKConfig | null | undefined,
+): config is BYOKConfig =>
+    !!config &&
+    typeof config === "object" &&
+    (config as { version?: unknown }).version === 2;
+
+/**
+ * Group the v2 config's models by NON-managed credential. Returns one group per
+ * real (BYOK) credential — `{ credential, models }` where `models` are the
+ * config.models[] whose `credentialId` matches. Managed credentials (env
+ * defaults) produce NO group and their models are excluded (RFC §4.5 /
+ * UI-SPEC "Managed credential: never rendered"). A null/undefined/non-v2 blob
+ * yields []. An absent routing block is tolerated.
+ */
+export const groupModelsByProvider = (
+    config: BYOKConfig | null | undefined,
+): { credential: BYOKCredential; models: BYOKModelConfig[] }[] => {
+    if (!isByokConfig(config)) return [];
+    // Bucket models by credentialId ONCE (O(n)) so the per-credential lookup
+    // below is O(1) instead of a nested filter (O(credentials × models)).
+    const modelsByCredential = new Map<string, BYOKModelConfig[]>();
+    for (const model of config.models ?? []) {
+        const bucket = modelsByCredential.get(model.credentialId);
+        if (bucket) bucket.push(model);
+        else modelsByCredential.set(model.credentialId, [model]);
+    }
+    return config.credentials
+        .filter((c) => !c.managed)
+        .map((credential) => ({
+            credential,
+            models: modelsByCredential.get(credential.id) ?? [],
+        }));
+};
+
+/**
+ * First-run check: true when the org has ≥1 NON-managed credential carrying at
+ * least one model. The v2-native replacement for the legacy
+ * `Boolean(byokConfig?.main)` presence check. False for null/undefined, a
+ * non-v2 blob, a managed-only config, or a non-managed credential with no model.
+ */
+export const hasVisibleModels = (
+    config: BYOKConfig | null | undefined,
+): boolean =>
+    groupModelsByProvider(config).some((group) => group.models.length > 0);
 
 export const isBYOKSubscriptionPlan = (license: OrganizationLicense) => {
     if (
@@ -160,4 +253,63 @@ export const maskKey = (key?: string): string => {
     if (!key) return "";
     if (key.length <= 8) return "•••• ••••";
     return `${key.slice(0, 4)}•••••${key.slice(-4)}`;
+};
+
+/**
+ * Provider-tinted avatar classes (a subtle bg tint + a readable foreground),
+ * keyed by BYOKProvider. Shared by the model row and the provider group header
+ * so the same provider reads with the same colour everywhere on the screen.
+ */
+export const PROVIDER_AVATAR: Record<string, string> = {
+    anthropic: "bg-pink-500/15 text-pink-300",
+    anthropic_compatible: "bg-pink-500/15 text-pink-300",
+    openai: "bg-emerald-500/15 text-emerald-300",
+    openai_compatible: "bg-amber-500/15 text-amber-300",
+    moonshot: "bg-purple-500/15 text-purple-300",
+    google_gemini: "bg-violet-500/15 text-violet-300",
+    google_vertex: "bg-violet-500/15 text-violet-300",
+    azure: "bg-sky-500/15 text-sky-300",
+    zai: "bg-blue-500/15 text-blue-300",
+    open_router: "bg-slate-500/20 text-slate-300",
+    openrouter: "bg-slate-500/20 text-slate-300",
+    novita: "bg-teal-500/15 text-teal-300",
+    amazon_bedrock: "bg-orange-500/15 text-orange-300",
+};
+
+/** Avatar tint for a provider, falling back to a neutral card tint. */
+export const providerAvatarTint = (provider?: string): string =>
+    (provider && PROVIDER_AVATAR[provider]) ?? "bg-card-lv2 text-text-secondary";
+
+/** Single-letter glyph per provider for the avatar badge. */
+const PROVIDER_LETTER: Record<string, string> = {
+    anthropic: "A",
+    anthropic_compatible: "A",
+    openai: "O",
+    openai_compatible: "O",
+    moonshot: "K",
+    google_gemini: "G",
+    google_vertex: "G",
+    azure: "Z",
+};
+
+export const providerLetter = (provider?: string): string =>
+    (provider && PROVIDER_LETTER[provider]) ??
+    provider?.[0]?.toUpperCase() ??
+    "•";
+
+/**
+ * Best-effort provider inference from a bare model NAME — used only where the
+ * provider isn't carried alongside the model (e.g. the read-only per-repository
+ * mirror, whose entries store a model string but not its provider). Falls back
+ * to undefined (neutral avatar) when nothing matches.
+ */
+export const providerFromModel = (model?: string): string | undefined => {
+    if (!model) return undefined;
+    const m = model.toLowerCase();
+    if (m.includes("claude")) return "anthropic";
+    if (m.includes("gemini")) return "google_gemini";
+    if (m.includes("kimi") || m.includes("moonshot")) return "moonshot";
+    if (m.startsWith("gpt") || m.startsWith("o1") || m.startsWith("o3"))
+        return "openai";
+    return undefined;
 };

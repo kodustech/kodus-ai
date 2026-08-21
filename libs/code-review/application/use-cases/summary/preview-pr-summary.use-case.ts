@@ -104,7 +104,6 @@ export class PreviewPrSummaryUseCase {
                 organizationAndTeamData,
                 languageResultPrompt?.configValue ?? 'en-US',
                 summaryConfig,
-                null,
                 false,
                 true,
                 undefined,

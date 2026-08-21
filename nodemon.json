@@ -1,8 +1,7 @@
 {
     "watch": [
         "libs",
-        "apps",
-        ".yalc/@kodus/kodus-common"
+        "apps"
     ],
     "ext": "ts,js,json",
     "ignore": [

@@ -269,6 +269,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: 100000 },
                     },
+                    resolvedModelSlot: { maxInputTokens: 100000 },
                 } as any,
             });
 
@@ -315,6 +316,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: MAX_INPUT_TOKENS },
                     },
+                    resolvedModelSlot: { maxInputTokens: MAX_INPUT_TOKENS },
                 } as any,
             });
         }
@@ -539,6 +541,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: 10000 },
                     },
+                    resolvedModelSlot: { maxInputTokens: 10000 },
                 } as any,
             });
 
@@ -595,6 +598,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: 1000 },
                     },
+                    resolvedModelSlot: { maxInputTokens: 1000 },
                 } as any,
             });
 
@@ -713,6 +717,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                         byokConfig: {
                             main: { maxInputTokens: MAX_INPUT_TOKENS },
                         },
+                    resolvedModelSlot: { maxInputTokens: MAX_INPUT_TOKENS },
                     } as any,
                 });
 
@@ -837,6 +842,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: 6000 },
                     },
+                    resolvedModelSlot: { maxInputTokens: 6000 },
                 } as any,
             });
 
@@ -881,6 +887,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: 10000 },
                     },
+                    resolvedModelSlot: { maxInputTokens: 10000 },
                 } as any,
             });
 
@@ -940,6 +947,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: 10000 },
                     },
+                    resolvedModelSlot: { maxInputTokens: 10000 },
                 } as any,
             });
 
@@ -983,6 +991,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: 10000 },
                     },
+                    resolvedModelSlot: { maxInputTokens: 10000 },
                 } as any,
             });
 
@@ -1029,6 +1038,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: 10000 },
                     },
+                    resolvedModelSlot: { maxInputTokens: 10000 },
                 } as any,
             });
 
@@ -1127,6 +1137,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: MAX_INPUT_TOKENS },
                     },
+                    resolvedModelSlot: { maxInputTokens: MAX_INPUT_TOKENS },
                 } as any,
             });
             const contextB = makeAnalysisContext(fileB, {
@@ -1137,6 +1148,7 @@ describe('ProcessFilesReview – file content chunking', () => {
                     byokConfig: {
                         main: { maxInputTokens: MAX_INPUT_TOKENS },
                     },
+                    resolvedModelSlot: { maxInputTokens: MAX_INPUT_TOKENS },
                 } as any,
             });
 

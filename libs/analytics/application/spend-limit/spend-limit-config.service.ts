@@ -14,6 +14,7 @@ import {
     SpendLimitEvaluation,
 } from '@libs/analytics/domain/spend-limit/spend-limit.types';
 import { ManualPricingOverrides } from '@libs/analytics/domain/token-usage/types/pricing.types';
+import { BYOKConfig } from '@libs/llm/byok-config';
 
 import { MonthlySpendUseCase } from '../use-cases/usage/monthly-spend.use-case';
 import { PricingResolver } from '../use-cases/usage/pricing-resolver';
@@ -80,14 +81,39 @@ export class SpendLimitConfigService {
             return null;
         }
 
+        // Best-effort read of the org's v2 BYOK config so the evaluation can
+        // carry the per-credential scope readout (model-name → credentialId is
+        // derived in-app from it). A failed/absent lookup just yields an
+        // `unattributed` rollup rather than failing the evaluation.
+        const byokConfig = await this.getByokConfig(organizationAndTeamData);
+
         const evaluation = await this.monthlySpend.getStatus(
             organizationAndTeamData.organizationId,
             config.monthlyLimitUsd,
             now,
             config.modelPricing,
+            byokConfig,
         );
 
         return { config, evaluation };
+    }
+
+    /**
+     * Best-effort read of the org's v2 BYOK config, used only to attribute
+     * spend to credentials for the readout. Never throws — a missing/failed
+     * lookup returns null (spend then rolls up to `unattributed`). Reads config
+     * metadata only (credentialId/model names) — never key material.
+     */
+    private async getByokConfig(
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<BYOKConfig | null> {
+        return this.organizationParametersService
+            .findByKey(
+                OrganizationParametersKey.BYOK_CONFIG,
+                organizationAndTeamData,
+            )
+            .then((p) => (p?.configValue as BYOKConfig) ?? null)
+            .catch(() => null);
     }
 
     /**

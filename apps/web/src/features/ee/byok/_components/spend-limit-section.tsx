@@ -11,15 +11,21 @@ import { Switch } from "@components/ui/switch";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
     getSpendLimitConfig,
+    getSpendLimitStatus,
     updateSpendLimit,
 } from "@services/spend-limit/fetch";
-import type {
-    ManualPricingOverrides,
-    ModelTokenRates,
-    ResolvedModelPricing,
+import {
+    UNATTRIBUTED_CREDENTIAL,
+    type ManualPricingOverrides,
+    type ModelTokenRates,
+    type ResolvedModelPricing,
+    type SpendLimitScope,
 } from "@services/spend-limit/types";
+import { formatUsd } from "@services/usage/format";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangleIcon, WalletIcon } from "lucide-react";
+import { AlertTriangleIcon, ArrowUpRightIcon, WalletIcon } from "lucide-react";
+import Link from "next/link";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { cn } from "src/core/utils/components";
 
 const TOKENS_PER_MILLION = 1_000_000;
@@ -33,6 +39,12 @@ const PRICE_FIELDS = [
 
 type PriceField = (typeof PRICE_FIELDS)[number]["key"];
 type ModelPrices = Record<PriceField, string>;
+
+const SCOPE_OPTIONS: { value: SpendLimitScope; label: string }[] = [
+    { value: "total", label: "Total" },
+    { value: "per-model", label: "Per-model" },
+    { value: "per-credential", label: "Per-credential" },
+];
 
 /** per-token rate -> "$ / 1M tokens" string for display/editing. */
 const toPerMillion = (perToken: number): string => {
@@ -111,8 +123,20 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
         retry: false,
     });
 
+    // Month-to-date spend + run-rate + per-scope breakdowns. The backend's global
+    // interceptor turns the "no limit configured" null into a 404, so we only ask
+    // for status once a limit is actually enabled — otherwise the readout has
+    // nothing to show anyway, and we avoid a noisy (handled) 404 on every load.
+    const { data: status } = useQuery({
+        queryKey: ["spend-limit-status", teamId],
+        queryFn: () => getSpendLimitStatus(),
+        enabled: !!data?.enabled,
+        retry: false,
+    });
+
     const [enabled, setEnabled] = useState(false);
     const [monthlyLimit, setMonthlyLimit] = useState("");
+    const [scope, setScope] = useState<SpendLimitScope>("total");
     const [prices, setPrices] = useState<Record<string, ModelPrices>>({});
     const [isSaving, setIsSaving] = useState(false);
 
@@ -124,6 +148,7 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
         setMonthlyLimit(
             data.monthlyLimitUsd > 0 ? String(data.monthlyLimitUsd) : "",
         );
+        setScope(data.scope ?? "total");
         setPrices(
             Object.fromEntries(
                 data.models.map((m) => [m.model, seedPrices(m)]),
@@ -132,6 +157,15 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
     }, [data]);
 
     const models = data?.models ?? [];
+
+    // Month-to-date spend keyed by model — annotates the per-model breakdown.
+    const spendByModel = useMemo(
+        () =>
+            new Map(
+                (status?.byModel ?? []).map((s) => [s.model, s.spentUsd]),
+            ),
+        [status],
+    );
 
     // A model is unpriceable only when its current values aren't a valid price
     // AND the catalog can't price it either (so it can't fall back).
@@ -157,6 +191,7 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
             data && data.monthlyLimitUsd > 0
                 ? String(data.monthlyLimitUsd)
                 : "";
+        const seededScope = data?.scope ?? "total";
         const seededPrices = data
             ? Object.fromEntries(
                   data.models.map((m) => [m.model, seedPrices(m)]),
@@ -165,9 +200,10 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
         return (
             enabled !== seededEnabled ||
             monthlyLimit !== seededLimit ||
+            scope !== seededScope ||
             !priceMapsEqual(prices, seededPrices)
         );
-    }, [data, enabled, monthlyLimit, prices]);
+    }, [data, enabled, monthlyLimit, scope, prices]);
 
     const updatePrice = (model: string, field: PriceField, value: string) => {
         setPrices((prev) => ({
@@ -238,9 +274,10 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                 enabled,
                 monthlyLimitUsd: limitIsValid ? limitValue : 0,
                 modelPricing: buildOverrides(),
+                scope,
                 teamId,
             });
-            toast({ variant: "success", title: "Spend limit saved" });
+            toast({ variant: "success", title: "Budget & alerts saved" });
             await refetch();
         } catch (error) {
             const unpriceable = (
@@ -250,7 +287,7 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
             )?.response?.data?.unpriceableModels;
             toast({
                 variant: "danger",
-                title: "Couldn't save spend limit",
+                title: "Couldn't save budget & alerts",
                 description: unpriceable?.length
                     ? `No price found for: ${unpriceable.join(", ")}.`
                     : undefined,
@@ -260,6 +297,11 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
         }
     };
 
+    // Run-rate readout — rendered even at $0 (falls back cleanly when no status
+    // exists yet). It's a projection only; nothing here ever blocks a review.
+    const projectedMonthly = status?.runRate.projectedMonthlyUsd ?? 0;
+    const elapsedPct = Math.round((status?.runRate.elapsedFraction ?? 0) * 100);
+
     return (
         <section className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
@@ -268,12 +310,12 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                 </span>
                 <div className="flex flex-col">
                     <h3 className="text-text-primary text-sm font-semibold text-balance">
-                        Monthly spend limit
+                        Budget & alerts
                     </h3>
                     <p className="text-text-tertiary text-xs text-pretty">
-                        Get alerted as your BYOK spend approaches a monthly cap.
-                        Alerts only — reviews keep running. Set a hard cap with
-                        your provider to actually stop spend.
+                        Get alerted as your BYOK spend approaches a cap. Alerts
+                        only — reviews keep running. Set a hard cap with your
+                        provider to actually stop spend.
                     </p>
                 </div>
             </div>
@@ -291,6 +333,7 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                 </Card>
             ) : (
                 <>
+                    {/* ── The one action: turn on alerts + set the monthly limit ── */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between gap-6">
                             <div className="flex flex-col gap-1">
@@ -310,30 +353,76 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                                 onCheckedChange={setEnabled}
                             />
                         </CardHeader>
-                        <CardContent>
-                            <Label
-                                htmlFor="spend-limit-amount"
-                                className="text-sm font-medium">
-                                Monthly limit (US$)
-                            </Label>
-                            <Input
-                                id="spend-limit-amount"
-                                inputMode="decimal"
-                                placeholder="1000"
-                                value={monthlyLimit}
-                                onChange={(ev) =>
-                                    setMonthlyLimit(ev.target.value)
-                                }
-                                className={cn(
-                                    "mt-1.5 max-w-48 tabular-nums",
-                                    enabled && !limitIsValid && "border-danger",
+                        <CardContent className="flex flex-col gap-4">
+                            <div>
+                                <Label
+                                    htmlFor="spend-limit-amount"
+                                    className="text-sm font-medium">
+                                    Monthly limit (US$)
+                                </Label>
+                                <Input
+                                    id="spend-limit-amount"
+                                    inputMode="decimal"
+                                    placeholder="1000"
+                                    value={monthlyLimit}
+                                    onChange={(ev) =>
+                                        setMonthlyLimit(ev.target.value)
+                                    }
+                                    className={cn(
+                                        "mt-1.5 max-w-48 tabular-nums",
+                                        enabled &&
+                                            !limitIsValid &&
+                                            "border-danger",
+                                    )}
+                                />
+                                {enabled && !limitIsValid && (
+                                    <p className="text-danger mt-1.5 text-xs">
+                                        Enter an amount greater than 0.
+                                    </p>
                                 )}
-                            />
-                            {enabled && !limitIsValid && (
-                                <p className="text-danger mt-1.5 text-xs">
-                                    Enter an amount greater than 0.
-                                </p>
-                            )}
+                            </div>
+
+                            {/* Readout: spent + projected, with an optional
+                                breakdown view (grouping only — never changes
+                                what alerts fire on). */}
+                            <div className="border-card-lv2 flex flex-col gap-2 border-t pt-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="text-text-secondary text-sm tabular-nums">
+                                        Projected this month:{" "}
+                                        <span className="text-text-primary font-medium">
+                                            {formatUsd(projectedMonthly)}
+                                        </span>{" "}
+                                        <span className="text-text-tertiary text-xs">
+                                            (~{elapsedPct}% elapsed)
+                                        </span>
+                                    </p>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-text-tertiary text-xs">
+                                            Break down by
+                                        </span>
+                                        <ToggleGroup.Root
+                                            type="single"
+                                            value={scope}
+                                            onValueChange={(value) => {
+                                                if (!value) return;
+                                                setScope(
+                                                    value as SpendLimitScope,
+                                                );
+                                            }}
+                                            className="bg-card-lv2 flex gap-px overflow-hidden rounded-md p-0.5">
+                                            {SCOPE_OPTIONS.map((opt) => (
+                                                <ToggleGroup.Item
+                                                    key={opt.value}
+                                                    value={opt.value}
+                                                    className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary rounded px-2 py-1 text-xs font-medium transition-colors">
+                                                    {opt.label}
+                                                </ToggleGroup.Item>
+                                            ))}
+                                        </ToggleGroup.Root>
+                                    </div>
+                                </div>
+                                <ScopeBreakdown scope={scope} status={status ?? null} />
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -348,55 +437,187 @@ export const SpendLimitSection = ({ teamId }: { teamId?: string }) => {
                                 <strong className="text-text-primary">
                                     {unpriceableModels.join(", ")}
                                 </strong>
-                                . Enter the per-token prices below to enable the
-                                limit — spend can't be tracked for a model we
-                                can't price.
+                                . Open “Adjust model prices” below to enter the
+                                per-token prices — spend can't be tracked for a
+                                model we can't price.
                             </AlertDescription>
                         </Alert>
                     )}
 
-                    <div className="flex flex-col gap-2">
-                        <p className="text-text-secondary text-sm text-pretty">
-                            Prices we found per model. Check them against your
-                            provider and adjust if needed.
-                        </p>
-                        {models.map((model) => (
-                            <ModelPricingCard
-                                key={model.model}
-                                model={model}
-                                prices={
-                                    prices[model.model] ?? seedPrices(model)
-                                }
-                                onChange={(field, value) =>
-                                    updatePrice(model.model, field, value)
-                                }
-                                onRevert={() => revertToCatalog(model)}
-                            />
-                        ))}
-                    </div>
+                    {/* ── Advanced: per-model price calibration (collapsed) ── */}
+                    <details
+                        className="group border-card-lv2 rounded-lg border"
+                        open={!allPriceable}>
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                            <span className="text-text-primary text-sm font-medium">
+                                Adjust model prices
+                            </span>
+                            <span className="text-text-tertiary text-xs">
+                                {models.length}{" "}
+                                {models.length === 1 ? "model" : "models"} ·{" "}
+                                {allPriceable
+                                    ? "from catalog"
+                                    : "action needed"}
+                            </span>
+                        </summary>
+                        <div className="flex flex-col gap-2 px-4 pb-4">
+                            <p className="text-text-tertiary text-xs text-pretty">
+                                Prices we found per model — used only to estimate
+                                spend. Check them against your provider and adjust
+                                if needed.
+                            </p>
+                            {models.map((model) => (
+                                <ModelPricingCard
+                                    key={model.model}
+                                    model={model}
+                                    prices={
+                                        prices[model.model] ?? seedPrices(model)
+                                    }
+                                    monthlySpend={
+                                        scope === "per-model"
+                                            ? spendByModel.get(model.model)
+                                            : undefined
+                                    }
+                                    onChange={(field, value) =>
+                                        updatePrice(model.model, field, value)
+                                    }
+                                    onRevert={() => revertToCatalog(model)}
+                                />
+                            ))}
+                        </div>
+                    </details>
 
-                    <Button
-                        type="button"
-                        size="md"
-                        variant="primary"
-                        className="self-start"
-                        loading={isSaving}
-                        disabled={
-                            isSaving ||
-                            // Nothing changed since the last save → keep it off.
-                            !isDirty ||
-                            // Alerts ON needs a valid limit + every model priced.
-                            // (Prices alone still save with alerts OFF — decoupled.)
-                            (enabled && (!limitIsValid || !allPriceable))
-                        }
-                        onClick={handleSave}>
-                        Save spend limit
-                    </Button>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <Link
+                            href="/token-usage"
+                            title="See the full cost breakdown on the Costs page"
+                            className="text-primary-light inline-flex items-center gap-1 rounded-sm text-sm hover:underline focus-visible:ring-2">
+                            View full breakdown
+                            <ArrowUpRightIcon size={13} />
+                        </Link>
+                        <Button
+                            type="button"
+                            size="md"
+                            variant="primary"
+                            loading={isSaving}
+                            disabled={
+                                isSaving ||
+                                // Nothing changed since the last save → keep it off.
+                                !isDirty ||
+                                // Alerts ON needs a valid limit + every model priced.
+                                // (Prices/scope alone still save with alerts OFF.)
+                                (enabled && (!limitIsValid || !allPriceable))
+                            }
+                            onClick={handleSave}>
+                            Save budget & alerts
+                        </Button>
+                    </div>
                 </>
             )}
         </section>
     );
 };
+
+/**
+ * The scope-driven spend readout below the toggle. READOUT ONLY — surfaces the
+ * chosen breakdown emphasis; it never changes what alerts fire on.
+ * - total: the single month-to-date number.
+ * - per-model: handled by the pricing-card annotations (nothing extra here).
+ * - per-credential: the byCredential list + the unattributed-spend caveat.
+ */
+function ScopeBreakdown({
+    scope,
+    status,
+}: {
+    scope: SpendLimitScope;
+    status: {
+        spentUsd: number;
+        byModel: { model: string; spentUsd: number }[];
+        byCredential: { credentialId: string; spentUsd: number }[];
+    } | null;
+}) {
+    if (scope === "per-model") {
+        // The per-model spend readout. The pricing-card annotations also carry
+        // it, but they live in a (usually collapsed) accordion, so this is the
+        // always-visible breakdown — mirrors the per-credential card below.
+        const byModel = status?.byModel ?? [];
+        return byModel.length === 0 ? (
+            <p className="text-text-tertiary text-sm">
+                No model spend recorded this month yet.
+            </p>
+        ) : (
+            <Card color="lv1">
+                <CardContent className="flex flex-col gap-1.5 py-3">
+                    {byModel.map((m) => (
+                        <div
+                            key={m.model}
+                            className="flex items-center justify-between gap-3 text-sm tabular-nums">
+                            <span className="text-text-secondary truncate">
+                                {m.model}
+                            </span>
+                            <span className="text-text-primary font-medium">
+                                {formatUsd(m.spentUsd)}
+                            </span>
+                        </div>
+                    ))}
+                </CardContent>
+            </Card>
+        );
+    }
+
+    if (scope === "total") {
+        return (
+            <p className="text-text-secondary text-sm tabular-nums">
+                Spent this month:{" "}
+                <span className="text-text-primary font-medium">
+                    {formatUsd(status?.spentUsd ?? 0)}
+                </span>
+            </p>
+        );
+    }
+
+    // per-credential
+    const byCredential = status?.byCredential ?? [];
+    const unattributed = byCredential.find(
+        (c) => c.credentialId === UNATTRIBUTED_CREDENTIAL && c.spentUsd > 0,
+    );
+
+    return (
+        <div className="flex flex-col gap-2">
+            {byCredential.length === 0 ? (
+                <p className="text-text-tertiary text-sm">
+                    No credential spend recorded this month yet.
+                </p>
+            ) : (
+                <Card color="lv1">
+                    <CardContent className="flex flex-col gap-1.5 py-3">
+                        {byCredential.map((c) => (
+                            <div
+                                key={c.credentialId}
+                                className="flex items-center justify-between gap-3 text-sm tabular-nums">
+                                <span className="text-text-secondary truncate">
+                                    {c.credentialId === UNATTRIBUTED_CREDENTIAL
+                                        ? "Unattributed"
+                                        : c.credentialId}
+                                </span>
+                                <span className="text-text-primary font-medium">
+                                    {formatUsd(c.spentUsd)}
+                                </span>
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
+            {unattributed && (
+                <p className="text-text-tertiary text-xs text-pretty">
+                    Some spend couldn't be matched to a specific credential (a
+                    model was likely removed or renamed) — see Total for the
+                    full picture.
+                </p>
+            )}
+        </div>
+    );
+}
 
 const SOURCE_BADGE: Record<
     ResolvedModelPricing["source"],
@@ -410,11 +631,13 @@ const SOURCE_BADGE: Record<
 function ModelPricingCard({
     model,
     prices,
+    monthlySpend,
     onChange,
     onRevert,
 }: {
     model: ResolvedModelPricing;
     prices: ModelPrices;
+    monthlySpend?: number;
     onChange: (field: PriceField, value: string) => void;
     onRevert: () => void;
 }) {
@@ -437,9 +660,14 @@ function ModelPricingCard({
                 <span className="text-text-primary truncate text-sm font-medium">
                     {model.model}
                 </span>
-                <Badge variant={badge.variant} className="shrink-0">
-                    {badge.label}
-                </Badge>
+                <div className="flex shrink-0 items-center gap-2">
+                    {monthlySpend !== undefined && (
+                        <span className="text-text-tertiary text-xs tabular-nums">
+                            {formatUsd(monthlySpend)} this month
+                        </span>
+                    )}
+                    <Badge variant={badge.variant}>{badge.label}</Badge>
+                </div>
             </CardHeader>
             <CardContent>
                 <div className="flex flex-col gap-3">
@@ -469,6 +697,11 @@ function ModelPricingCard({
                             );
                         })}
                     </div>
+                    <p className="text-text-tertiary text-xs text-pretty">
+                        Enter $0 for any token type your provider doesn't bill —
+                        cache writes are often free. To restore the catalog
+                        price for every field, use “Revert to catalog price”.
+                    </p>
                     {catalog && !matchesCatalog && (
                         <Button
                             type="button"

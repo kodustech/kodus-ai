@@ -14,6 +14,8 @@ export function useSuspenseGetLLMProviders() {
             name: string;
             requiresApiKey: boolean;
             requiresBaseUrl: boolean;
+            autoListModels: boolean;
+            doc?: string;
         }>;
     }>(ORGANIZATION_PARAMETERS_PATHS.GET_PROVIDERS_LIST);
 }
@@ -46,7 +48,7 @@ export function useGetTimezone() {
 
 export function useSuspenseGetBYOK() {
     return useSuspenseFetch<{
-        configValue: { main: BYOKConfig; fallback: BYOKConfig };
+        configValue: BYOKConfig;
     } | null>(
         ORGANIZATION_PARAMETERS_PATHS.GET_BY_KEY,
         {

@@ -34,7 +34,6 @@ export type {
     AgentRunInput,
     SubAgentFactory,
 } from './agent.contract';
-export type { ModelResolver } from './model.contract';
 export type {
     ProgressLedger,
     ProgressSummary,

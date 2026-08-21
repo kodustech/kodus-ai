@@ -15,11 +15,18 @@ import { CodeReviewVersion } from '@/core/domain/enums/code-review.enum';
 
 const mockTracedGenerateText = jest.fn();
 // Default: run the caller's `exec(model)` so dedup still hits mockTracedGenerateText.
-// Both BYOK and non-BYOK paths now go through withStructuredOutputFallback.
 const mockWithStructuredOutputFallback = jest.fn(
     async (_params: any, exec: (model: any) => Promise<any>) =>
         exec({ __mockModel: true }),
 ) as jest.Mock;
+// Dedup + tiebreak now run through the ONE primitive (LLM.run). Mock it to reuse
+// the same `mockTracedGenerateText` resolved value the existing tests set — LLM.run
+// returns the PARSED object (executor extracts experimental_output/output/object),
+// so unwrap it here. A rejection propagates (dedup fail-soft keeps all).
+const mockLlmRun = jest.fn(async (..._args: any[]) => {
+    const r: any = await mockTracedGenerateText();
+    return r?.experimental_output ?? r?.output ?? r?.object;
+});
 
 // tracedGenerateText was relocated from the legacy agent-loop to @libs/llm/llm-call
 // during the llm migration; mock it there so the stage's dedup LLM call is
@@ -34,13 +41,37 @@ jest.mock(
     () => ({
         withStructuredOutputFallback: (...args: any[]) =>
             mockWithStructuredOutputFallback(...args),
-        NoStructuredFallbackModelError: class extends Error {},
         getModelName: jest.fn().mockReturnValue('test-model'),
+        // Off-trial default: undefined override (the stage falls through to the
+        // resolved slot / managed default). Split out of byok-to-vercel into
+        // byok-defaults and re-exported; the stage calls it before building.
+        trialDefaultModel: jest.fn().mockReturnValue(undefined),
         // Used by resolveSecondaryPassModel when platform OpenAI key is absent.
         getInternalModel: jest.fn().mockReturnValue({ __mockModel: 'internal' }),
         byokToVercelModel: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
+        buildModelFromSlot: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
+        // Platform (non-BYOK) model seam used by the summary/secondary paths.
+        buildPlatformModel: jest
+            .fn()
+            .mockReturnValue({ __mockModel: 'platform' }),
     }),
 );
+
+jest.mock('@libs/llm/llm', () => ({
+    LLM: { run: (...args: any[]) => mockLlmRun(...args) },
+}));
+
+// The dedup gate is `!slot && !hasManagedModelKey()` — skip (keep all) only when
+// there is neither a BYOK slot NOR a managed key. These tests exercise the dedup
+// MERGE logic (LLM.run is mocked), not the gate, so force a managed model to be
+// "available". Without this the gate reads real env: hasManagedModelKey()'s cloud
+// path checks API_FIREWORKS_API_KEY (NOT the API_OPEN_AI_API_KEY the tests set),
+// so it passed only via ambient .env and flaked to keep-all when another suite
+// left that env unset — surfacing as "expected 3, received 4".
+jest.mock('@libs/llm/managed-slot', () => ({
+    ...jest.requireActual('@libs/llm/managed-slot'),
+    hasManagedModelKey: jest.fn(() => true),
+}));
 
 jest.mock('ai', () => ({
     generateText: jest.fn().mockResolvedValue({

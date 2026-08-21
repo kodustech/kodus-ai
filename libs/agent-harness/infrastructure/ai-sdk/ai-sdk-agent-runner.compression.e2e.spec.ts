@@ -16,10 +16,14 @@
  *   - "completes normally when compression does NOT fire" → GUARD: green today
  *     AND after the fix, so the fix can't silently break the happy path.
  */
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+
 import { MockLanguageModelV3 } from 'ai/test';
+import { resolveModelConfig } from '@libs/llm/model-invocation';
 
 import type { AgentSpec } from '../../domain/contracts/agent.contract';
-import type { ModelResolver } from '../../domain/contracts/model.contract';
 import type { ProgressLedger } from '../../domain/contracts/progress.contract';
 import type { AgentTool, ToolContext } from '../../domain/contracts/tool.contract';
 import { ContextWindowCompressor } from '../compression/context-window-compressor';
@@ -64,9 +68,18 @@ function scriptedModel() {
     return new MockLanguageModelV3({ doGenerate });
 }
 
-const resolver: ModelResolver<any> = {
-    resolve: () => scriptedModel() as any,
-};
+const mockResolve = resolveModelConfig as jest.Mock;
+const wireVal = (model: any) => ({
+    model,
+    callOptions: {},
+    providerOptions: {},
+    modelName: 'mock',
+    usageIdentity: {},
+});
+beforeEach(() => {
+    mockResolve.mockReset();
+    mockResolve.mockImplementation(() => wireVal(scriptedModel()));
+});
 
 // Scripted model that runs `readSteps` readFile calls (each returns a big
 // result that piles into the window) before finalizing. Drives the tool-loop
@@ -136,7 +149,6 @@ function specWithContextWindow(
     return {
         id: 'generalist',
         systemPrompt: 'review the diff',
-        modelId: 'mock',
         tools: new InMemoryToolRegistry([readFileTool, doneTool]),
         policies: [
             new CompressionPolicy(
@@ -159,7 +171,7 @@ describe('AiSdkAgentRunner + CompressionPolicy (context compression e2e)', () =>
     // string and the SDK crashes on content.filter. The runner captures the
     // throw into RunState{status:'error'} with the original message in trace.
     it('completes (does not crash on tool content.filter) when compression fires on a long run', async () => {
-        const runner = new AiSdkAgentRunner(resolver);
+        const runner = new AiSdkAgentRunner(undefined);
         // window=1 token -> shouldCompress is always true; the big tool result
         // guarantees real savings so maybeCompress returns a compressed window.
         const state = await runner.run(
@@ -192,7 +204,7 @@ describe('AiSdkAgentRunner + CompressionPolicy (context compression e2e)', () =>
     // compression never triggers, so structured messages flow through
     // untouched and the loop finalizes normally. Protects the happy path.
     it('completes normally when compression does NOT fire (no context overflow)', async () => {
-        const runner = new AiSdkAgentRunner(resolver);
+        const runner = new AiSdkAgentRunner(undefined);
         const state = await runner.run(
             specWithContextWindow(1_000_000),
             { prompt: 'go' },
@@ -223,10 +235,8 @@ describe('AiSdkAgentRunner + CompressionPolicy (context compression e2e)', () =>
     // shipping an oversized request. Realistic window + overhead so the real
     // budget (window − overhead − margin) is what the clamp must respect.
     it('clamps an accumulating tool loop that would otherwise overflow the window', async () => {
-        const accResolver: ModelResolver<any> = {
-            resolve: () => accumulatingModel(12) as any,
-        };
-        const runner = new AiSdkAgentRunner(accResolver);
+        mockResolve.mockReturnValue(wireVal(accumulatingModel(12)));
+        const runner = new AiSdkAgentRunner(undefined);
 
         // 12 readFile steps × 8_000-char results ≈ well over a 40K-token window.
         const state = await runner.run(

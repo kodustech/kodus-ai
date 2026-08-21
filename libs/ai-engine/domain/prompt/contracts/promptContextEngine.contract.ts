@@ -1,5 +1,5 @@
 import type { ContextRequirement } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -22,7 +22,7 @@ export interface IPromptContextEngineService {
         organizationAndTeamData: OrganizationAndTeamData;
         context?: 'rule' | 'instruction' | 'prompt';
         detectionMode?: 'rule' | 'prompt';
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedModel;
         subscriptionStatus?: string;
     }): Promise<{
         references: IFileReference[];

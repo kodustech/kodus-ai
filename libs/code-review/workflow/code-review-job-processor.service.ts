@@ -51,7 +51,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
 
         const correlationId = job.correlationId;
 
-        this.logger.log({
+        this.logger.debug({
             message: `Processing Code Review Job ${jobId}`,
             context: CodeReviewJobProcessorService.name,
             metadata: { jobId, correlationId },
@@ -260,9 +260,10 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         correlationId: string,
     ): Promise<void> {
         try {
-            const jobPayload = (job?.payload ?? {}) as Partial<
-                EnqueueCodeReviewJobInput
-            > & { codeManagementPayload?: any };
+            const jobPayload = (job?.payload ??
+                {}) as Partial<EnqueueCodeReviewJobInput> & {
+                codeManagementPayload?: any;
+            };
             const organizationId =
                 jobPayload.organizationAndTeamData?.organizationId;
             if (!organizationId) return;
@@ -281,12 +282,10 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 {};
             const repo = cm.repository ?? pr.repository ?? {};
 
-            const prUrl: string =
-                pr.html_url ?? pr.web_url ?? pr.url ?? '';
+            const prUrl: string = pr.html_url ?? pr.web_url ?? pr.url ?? '';
             const repoName: string =
                 repo.full_name ?? repo.name ?? cm.repository?.full_name ?? '';
-            const author =
-                pr.user ?? pr.author ?? cm.actor ?? cm.sender ?? {};
+            const author = pr.user ?? pr.author ?? cm.actor ?? cm.sender ?? {};
             const authorEmail: string | undefined =
                 author?.email ?? author?.emailAddress;
             const authorLogin: string | undefined =
@@ -296,11 +295,10 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // catalog); only the PR author is passed as a directed recipient.
             const recipients: NotificationRecipient[] = [];
             if (authorEmail) {
-                const prAuthor =
-                    await this.prAuthorRecipientResolver.resolve(
-                        { email: authorEmail, login: authorLogin },
-                        organizationId,
-                    );
+                const prAuthor = await this.prAuthorRecipientResolver.resolve(
+                    { email: authorEmail, login: authorLogin },
+                    organizationId,
+                );
                 if (prAuthor) recipients.push(prAuthor);
             }
 
@@ -309,7 +307,7 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
 
             const reason = isAIEmptyBodyError
                 ? `The configured AI provider returned empty responses for several requests in a row. This is usually a transient provider issue. You can re-run the review or switch to a different model in Settings → AI Provider. (${error?.message || ''})`
-                : error?.message ?? 'unknown error';
+                : (error?.message ?? 'unknown error');
 
             await this.notificationService.emit({
                 event: NotificationEvent.REVIEW_FAILED,

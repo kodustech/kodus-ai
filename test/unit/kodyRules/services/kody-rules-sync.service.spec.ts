@@ -78,7 +78,6 @@ describe('KodyRulesSyncService.syncRepositoryMain', () => {
         const updateOrCreateCodeReviewParameterUseCase = {
             execute: jest.fn().mockResolvedValue(undefined),
         };
-        const promptRunnerService = {};
         const permissionValidationService = {
             validateBasicLicense: jest
                 .fn()
@@ -96,7 +95,6 @@ describe('KodyRulesSyncService.syncRepositoryMain', () => {
             updateOrCreateCodeReviewParameterUseCase as any,
             {} as any, // createOrUpdateKodyRulesUseCase
             {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
-            promptRunnerService as any,
             permissionValidationService as any,
             observabilityService as any,
             contextReferenceDetectionService as any,
@@ -245,7 +243,6 @@ describe('KodyRulesSyncService — Bug: path scoping from sourcePath (Bug 1)', (
             { execute: jest.fn().mockResolvedValue(undefined) } as any, // updateOrCreateCodeReviewParameterUseCase
             {} as any, // createOrUpdateKodyRulesUseCase (unused for this path)
             {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
-            {} as any, // promptRunnerService
             {
                 validateBasicLicense: jest
                     .fn()
@@ -375,7 +372,6 @@ describe('KodyRulesSyncService — Bug: orphaned rules after IDE sync toggle-off
             {} as any, // updateOrCreateCodeReviewParameterUseCase
             createOrUpdateKodyRulesUseCase as any,
             deleteRuleInOrganizationByIdKodyRulesUseCase as any,
-            {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
             {} as any, // contextReferenceDetectionService
@@ -851,7 +847,6 @@ describe('KodyRulesSyncService — Bug: stale pinnedSync after marker removal (d
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
             {} as any, // createOrUpdateKodyRulesUseCase
             {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
-            {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
             {} as any, // contextReferenceDetectionService
@@ -1046,7 +1041,6 @@ describe('KodyRulesSyncService — depin pass: syncRepositoryMain full-scan + sy
             { execute: jest.fn().mockResolvedValue(undefined) } as any,
             {} as any, // createOrUpdateKodyRulesUseCase
             {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
-            {} as any, // promptRunnerService
             {
                 validateBasicLicense: jest
                     .fn()
@@ -1373,7 +1367,6 @@ describe('KodyRulesSyncService.getConfiguredDirectories', () => {
             {} as any, // updateOrCreateCodeReviewParameterUseCase
             {} as any, // createOrUpdateKodyRulesUseCase
             {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
-            {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
             {} as any, // contextReferenceDetectionService
@@ -1469,7 +1462,6 @@ describe('KodyRulesSyncService.resolveSyncDefaultStatus (IDE-sync knowledge-appr
             {} as any, // updateOrCreateCodeReviewParameterUseCase
             {} as any, // createOrUpdateKodyRulesUseCase
             {} as any, // deleteRuleInOrganizationByIdKodyRulesUseCase
-            {} as any, // promptRunnerService
             {} as any, // permissionValidationService
             {} as any, // observabilityService
             {} as any, // contextReferenceDetectionService

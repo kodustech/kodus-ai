@@ -56,7 +56,6 @@ export interface BuildVerifierAgentSpecParams {
      *  resultToolName regardless. */
     policies?: readonly AgentPolicy[];
     providerOptions?: Readonly<Record<string, unknown>>;
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
 }
 
 /** Build a verifier AgentSpec: the domain's prompt + tools + the verdict result
@@ -71,7 +70,6 @@ export function buildVerifierAgentSpec(
     return {
         id: params.id ?? 'verifier',
         systemPrompt: params.systemPrompt,
-        modelId: params.modelId,
         tools,
         policies: params.policies ?? [],
         maxSteps: params.maxSteps ?? 6,
@@ -80,9 +78,6 @@ export function buildVerifierAgentSpec(
         resultToolName: VERIFY_DONE_TOOL,
         ...(params.providerOptions
             ? { providerOptions: params.providerOptions }
-            : {}),
-        ...(params.systemProviderOptions
-            ? { systemProviderOptions: params.systemProviderOptions }
             : {}),
     };
 }

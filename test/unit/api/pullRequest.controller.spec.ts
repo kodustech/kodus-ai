@@ -20,6 +20,7 @@ import { AUTOMATION_EXECUTION_SERVICE_TOKEN } from '@libs/automation/domain/auto
 import { AUTH_SERVICE_TOKEN } from '@libs/identity/domain/auth/contracts/auth.service.contracts';
 import { CLI_DEVICE_SERVICE_TOKEN } from '@libs/organization/domain/cli-device/contracts/cli-device.service.contract';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PR_EXECUTION_UPDATED_EVENT } from '@libs/automation/infrastructure/adapters/services/automationExecution.service';
 import { PolicyGuard } from '@libs/identity/infrastructure/adapters/services/permissions/policy.guard';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
@@ -137,77 +138,72 @@ const mockRequest = { user: { organization: { uuid: ORG_ID } } };
 // SUITE
 // ============================================================================
 
+/**
+ * Provider list for the controller under test. Takes the EventEmitter2 to
+ * bind so the SSE suite can hand in a real emitter (it needs events to
+ * actually flow through `fromEvent`) while the rest of the suite keeps the
+ * cheap `{ emit: jest.fn() }` stub.
+ */
+function buildProviders(eventEmitter: any) {
+    return [
+        PullRequestController,
+        {
+            provide: GetEnrichedPullRequestsUseCase,
+            useValue: mockGetEnrichedPRs,
+        },
+        {
+            provide: GetPullRequestsDailyDigestUseCase,
+            useValue: mockGetPullRequestsDailyDigest,
+        },
+        {
+            provide: GetPullRequestsFacetsUseCase,
+            useValue: mockGetPullRequestsFacets,
+        },
+        {
+            provide: GetAwaitingPullRequestsUseCase,
+            useValue: mockGetAwaitingPullRequests,
+        },
+        {
+            provide: GetPullRequestAuthorsUseCase,
+            useValue: mockGetPullRequestAuthors,
+        },
+        { provide: CodeManagementService, useValue: mockCodeManagement },
+        {
+            provide: GetPullRequestSuggestionsUseCase,
+            useValue: mockGetPullRequestSuggestionsUseCase,
+        },
+        {
+            provide: GetPullRequestFilesUseCase,
+            useValue: mockGetPullRequestFilesUseCase,
+        },
+        { provide: BackfillHistoricalPRsUseCase, useValue: mockBackfillPRs },
+        { provide: REQUEST, useValue: mockRequest },
+        {
+            provide: PULL_REQUESTS_SERVICE_TOKEN,
+            useValue: mockPullRequestsService,
+        },
+        {
+            provide: TEAM_CLI_KEY_SERVICE_TOKEN,
+            useValue: mockTeamCliKeyService,
+        },
+        {
+            provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+            useValue: mockAutomationExecutionService,
+        },
+        { provide: AUTH_SERVICE_TOKEN, useValue: mockAuthService },
+        { provide: CLI_DEVICE_SERVICE_TOKEN, useValue: mockCliDeviceService },
+        { provide: JwtService, useValue: mockJwtService },
+        { provide: ConfigService, useValue: mockConfigService },
+        { provide: EventEmitter2, useValue: eventEmitter },
+    ];
+}
+
 describe('PullRequestController', () => {
     let controller: PullRequestController;
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
-            providers: [
-                PullRequestController,
-                {
-                    provide: GetEnrichedPullRequestsUseCase,
-                    useValue: mockGetEnrichedPRs,
-                },
-                {
-                    provide: GetPullRequestsDailyDigestUseCase,
-                    useValue: mockGetPullRequestsDailyDigest,
-                },
-                {
-                    provide: GetPullRequestsFacetsUseCase,
-                    useValue: mockGetPullRequestsFacets,
-                },
-                {
-                    provide: GetAwaitingPullRequestsUseCase,
-                    useValue: mockGetAwaitingPullRequests,
-                },
-                {
-                    provide: GetPullRequestAuthorsUseCase,
-                    useValue: mockGetPullRequestAuthors,
-                },
-                {
-                    provide: CodeManagementService,
-                    useValue: mockCodeManagement,
-                },
-                {
-                    provide: GetPullRequestSuggestionsUseCase,
-                    useValue: mockGetPullRequestSuggestionsUseCase,
-                },
-                {
-                    provide: GetPullRequestFilesUseCase,
-                    useValue: mockGetPullRequestFilesUseCase,
-                },
-                {
-                    provide: BackfillHistoricalPRsUseCase,
-                    useValue: mockBackfillPRs,
-                },
-                { provide: REQUEST, useValue: mockRequest },
-                {
-                    provide: PULL_REQUESTS_SERVICE_TOKEN,
-                    useValue: mockPullRequestsService,
-                },
-                {
-                    provide: TEAM_CLI_KEY_SERVICE_TOKEN,
-                    useValue: mockTeamCliKeyService,
-                },
-                {
-                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
-                    useValue: mockAutomationExecutionService,
-                },
-                {
-                    provide: AUTH_SERVICE_TOKEN,
-                    useValue: mockAuthService,
-                },
-                {
-                    provide: CLI_DEVICE_SERVICE_TOKEN,
-                    useValue: mockCliDeviceService,
-                },
-                { provide: JwtService, useValue: mockJwtService },
-                { provide: ConfigService, useValue: mockConfigService },
-                {
-                    provide: EventEmitter2,
-                    useValue: { emit: jest.fn() },
-                },
-            ],
+            providers: buildProviders({ emit: jest.fn() }),
         })
             .overrideGuard(PolicyGuard)
             .useValue({ canActivate: () => true })
@@ -1153,5 +1149,142 @@ describe('PullRequestController', () => {
             // Request still succeeds
             expect(result).toHaveProperty('suggestions');
         });
+    });
+});
+
+// ============================================================================
+// SSE /pull-requests/executions/events – cross-process delivery (#1500)
+// ============================================================================
+
+/**
+ * `pr-execution.updated` is emitted in the WORKER (review pipeline) but its
+ * SSE consumer is this controller, in the API. CrossProcessEventsBridge
+ * carries it over Postgres LISTEN/NOTIFY and re-emits it on the API's local
+ * bus with a `__kodusBridged` marker.
+ *
+ * These tests stand in for the e2e asked for in #1500: they assert a
+ * non-ping frame actually reaches the stream, which is what the UI needs and
+ * what silently regressed before the bridge existed. They pin the seam the
+ * bridge cannot check by itself — the event name, the payload field names,
+ * and the org filter. The bridge's own delivery mechanics are covered in
+ * test/unit/core/cross-process-events.bridge.spec.ts.
+ */
+describe('SSE /pull-requests/executions/events (#1500)', () => {
+    /** Mirrors BRIDGED_FLAG in cross-process-events.bridge.ts (not exported). */
+    const BRIDGED_FLAG = '__kodusBridged';
+
+    let sseController: PullRequestController;
+    let emitter: EventEmitter2;
+
+    /** Collect frames off the SSE stream until `stop()` is called. */
+    function collectFrames() {
+        const frames: any[] = [];
+        const subscription = sseController
+            .executionEvents()
+            .subscribe((frame: any) => frames.push(frame));
+        return { frames, stop: () => subscription.unsubscribe() };
+    }
+
+    function bridgedExecutionUpdate(overrides: Record<string, any> = {}) {
+        return {
+            organizationId: ORG_ID,
+            executionUuid: 'exec-uuid-9999',
+            status: 'success',
+            timestamp: '2026-08-07T12:00:00.000Z',
+            [BRIDGED_FLAG]: true,
+            ...overrides,
+        };
+    }
+
+    beforeEach(async () => {
+        // A real emitter: `fromEvent` in the controller needs events to
+        // actually flow, which a jest.fn() stub cannot do.
+        emitter = new EventEmitter2();
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: buildProviders(emitter),
+        })
+            .overrideGuard(PolicyGuard)
+            .useValue({ canActivate: () => true })
+            .compile();
+
+        sseController = module.get(PullRequestController);
+    });
+
+    afterEach(() => {
+        sseController.onApplicationShutdown();
+        emitter.removeAllListeners();
+    });
+
+    it('delivers a non-ping frame when a bridged execution update arrives', () => {
+        const { frames, stop } = collectFrames();
+
+        emitter.emit(PR_EXECUTION_UPDATED_EVENT, bridgedExecutionUpdate());
+        stop();
+
+        expect(frames).toHaveLength(1);
+        expect(frames[0].data.type).not.toBe('ping');
+        expect(frames[0]).toEqual({
+            data: {
+                type: 'execution_updated',
+                executionUuid: 'exec-uuid-9999',
+                status: 'success',
+                timestamp: '2026-08-07T12:00:00.000Z',
+            },
+        });
+    });
+
+    it('delivers updates emitted in-process too (single-process topology)', () => {
+        const { frames, stop } = collectFrames();
+
+        // Same payload without the bridge marker: what an API-local emit
+        // looks like when API and worker run in one process.
+        const { [BRIDGED_FLAG]: _flag, ...local } = bridgedExecutionUpdate();
+        emitter.emit(PR_EXECUTION_UPDATED_EVENT, local);
+        stop();
+
+        expect(frames).toHaveLength(1);
+        expect(frames[0].data.type).toBe('execution_updated');
+    });
+
+    it('does not leak executions from other organizations', () => {
+        const { frames, stop } = collectFrames();
+
+        emitter.emit(
+            PR_EXECUTION_UPDATED_EVENT,
+            bridgedExecutionUpdate({ organizationId: 'other-org-uuid' }),
+        );
+        stop();
+
+        expect(frames).toHaveLength(0);
+    });
+
+    it('forwards every status transition, not just the first', () => {
+        const { frames, stop } = collectFrames();
+
+        emitter.emit(
+            PR_EXECUTION_UPDATED_EVENT,
+            bridgedExecutionUpdate({ status: 'in_progress' }),
+        );
+        emitter.emit(
+            PR_EXECUTION_UPDATED_EVENT,
+            bridgedExecutionUpdate({ status: 'success' }),
+        );
+        stop();
+
+        expect(frames.map((f) => f.data.status)).toEqual([
+            'in_progress',
+            'success',
+        ]);
+    });
+
+    it('stops streaming after application shutdown', () => {
+        const { frames, stop } = collectFrames();
+
+        sseController.onApplicationShutdown();
+        emitter.emit(PR_EXECUTION_UPDATED_EVENT, bridgedExecutionUpdate());
+        stop();
+
+        expect(frames).toHaveLength(0);
     });
 });

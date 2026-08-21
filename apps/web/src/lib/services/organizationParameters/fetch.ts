@@ -6,6 +6,7 @@ import {
 } from "@services/parameters/types";
 import { axiosAuthorized } from "src/core/utils/axios";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
+import type { CuratedModel } from "src/features/ee/byok/_data/curated-models.types";
 
 import { ORGANIZATION_PARAMETERS_PATHS } from ".";
 
@@ -22,9 +23,11 @@ export const createOrUpdateOrganizationParameter = async (
     );
 };
 
-export const getBYOK = async () => {
+export const getBYOK = async (): Promise<BYOKConfig | undefined> => {
+    // find-by-key returns the RAW v2 blob run through maskV2ConfigSecrets, so
+    // every secret is already `••••` — no new endpoint is needed (open item #5).
     const byokConfig = await getOrganizationParameterByKey<{
-        configValue: { main: BYOKConfig; fallback: BYOKConfig };
+        configValue: BYOKConfig;
     }>(
         {
             key: OrganizationParametersConfigKey.BYOK_CONFIG,
@@ -47,9 +50,9 @@ export const getAutoLicenseAssignmentConfig = async () => {
     return config?.configValue;
 };
 
-export const deleteBYOK = async (params: {
-    configType: "main" | "fallback";
-}) => {
+export const deleteBYOK = async (params: { modelId: string }) => {
+    // v2 delete targets a single model slot by id (DELETE
+    // /delete-byok-config?modelId=), replacing the legacy { configType }.
     return await axiosAuthorized.deleted<any>(
         ORGANIZATION_PARAMETERS_PATHS.DELETE_BYOK,
         { params },
@@ -158,8 +161,25 @@ export const clearModelOverrides = async (
 
 export type LLMConfigSource = "byok" | "env" | "none";
 
+/**
+ * One enumerated v2 model in the per-org status. Web mirror of the backend
+ * LLMModelStatus (get-llm-config-status.use-case.ts) — METADATA ONLY, every
+ * secret masked. `capabilities` is a static descriptor (04-10) used by the
+ * Routing tab's LIVE capability gate; absent for an unknown provider.
+ */
+export type LLMModelStatus = {
+    modelId: string;
+    model?: string;
+    providerId?: string;
+    baseUrl?: string;
+    resolvable: boolean;
+    capabilities?: { structuredOutput?: string; toolCalling?: string };
+};
+
 export type LLMConfigStatus = {
     source: LLMConfigSource;
+    /** Per-org enumeration of the configured v2 models[] (empty for non-v2). */
+    models: LLMModelStatus[];
     byok: {
         configured: boolean;
         model?: string;
@@ -185,6 +205,50 @@ export const getLLMConfigStatus = async (): Promise<LLMConfigStatus> => {
         ORGANIZATION_PARAMETERS_PATHS.GET_LLM_CONFIG_STATUS,
         { cache: "no-store" },
     );
+};
+
+/**
+ * One connectable BYOK provider from the backend registry (single source of
+ * truth for the provider LIST). Web mirror of the backend ByokProviderDescriptor
+ * (get-byok-providers.use-case.ts). STATIC + non-sensitive — never a secret.
+ */
+export type ByokProviderDescriptor = {
+    id: string;
+    label: string;
+    aliases: string[];
+    /** Whether the provider's models can be enumerated (vs. custom-endpoint /
+     *  manual). Drives the picker subtitle. */
+    autoListModels: boolean;
+    /** Provider docs URL (hardcoded on the module). UI fallback when a curated
+     *  model has no docsUrl. */
+    doc?: string;
+};
+
+/**
+ * List the registry-driven connectable BYOK providers. Mirrors
+ * getLLMConfigStatus's proxy fetch. Returns [] on absence so callers can fall
+ * back to the curated-derived list (never an empty picker).
+ */
+export const listByokProviders = async (): Promise<ByokProviderDescriptor[]> => {
+    const response = await authorizedFetch<{
+        providers: ByokProviderDescriptor[];
+    }>(ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_PROVIDERS, {
+        cache: "no-store",
+    });
+    return response?.providers ?? [];
+};
+
+/**
+ * The curated model catalog, served from the backend (aggregated from every
+ * provider module's `catalog` — the single source of truth that replaced the
+ * frontend `curated-models.json`). Shape is 1:1 with the web `CuratedModel`.
+ */
+export const listByokCatalog = async (): Promise<CuratedModel[]> => {
+    const response = await authorizedFetch<{ models: CuratedModel[] }>(
+        ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_CATALOG,
+        { cache: "no-store" },
+    );
+    return response?.models ?? [];
 };
 
 export type LLMProviderModel = { id: string; name: string };

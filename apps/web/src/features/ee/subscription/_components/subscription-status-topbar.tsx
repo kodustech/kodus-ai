@@ -25,7 +25,7 @@ const TrialExhausted = () => {
     return (
         <div className="bg-danger/30 py-2 text-center text-sm">
             You've used all the free PR reviews included in your trial.{" "}
-            <Link href="/organization/byok" className="font-bold">
+            <Link href="/byok" className="font-bold">
                 Connect your own AI key
             </Link>{" "}
             to keep Kody reviewing — unlimited, on any plan.

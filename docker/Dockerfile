@@ -41,8 +41,8 @@ FROM base AS deps
 # migration moved them out of package.json/.npmrc. Without it here, the frozen
 # install sees empty overrides and aborts (ERR_PNPM_LOCKFILE_CONFIG_MISMATCH).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY packages/kodus-common ./packages/kodus-common
 
+# Install dependencies.
 # `--store-dir` points pnpm at a BuildKit cache mount so the
 # content-addressable store survives across builds. pnpm's store is safe
 # under concurrent access (atomic writes), so `sharing=shared` lets the
@@ -54,13 +54,7 @@ COPY packages/kodus-common ./packages/kodus-common
 # When the secret is absent (required=false), the repo-local .npmrc
 # copied above stays in effect — today that file only holds registry
 # URLs, no tokens, so builds still work unauthenticated.
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/pnpm-store,sharing=shared \
-    cd packages/kodus-common \
-  && pnpm install --store-dir /pnpm-store \
-  && pnpm run prepack
-
-# Install dependencies and link local packages.
+#
 # github_token (optional) authenticates @vscode/ripgrep's postinstall
 # download against the GitHub releases API — anonymous calls from shared
 # CI runner IPs are rate-limited (403) and abort the whole install. Empty
@@ -70,7 +64,6 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     --mount=type=cache,target=/pnpm-store,sharing=shared \
     if [ -s /run/secrets/github_token ]; then export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; fi \
  && pnpm install --frozen-lockfile --store-dir /pnpm-store
-RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 
 FROM deps AS build
 ARG API_CLOUD_MODE=false
@@ -103,13 +96,6 @@ FROM base AS prod-deps
 # See deps stage: pnpm-workspace.yaml must be present for overrides/catalog to
 # resolve under --frozen-lockfile.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY packages/kodus-common ./packages/kodus-common
-
-RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
-    --mount=type=cache,target=/pnpm-store,sharing=shared \
-    cd packages/kodus-common \
-  && pnpm install --store-dir /pnpm-store \
-  && pnpm run prepack
 
 # --prod skips devDependencies (TypeScript, Nest CLI, Jest, ESLint, etc.)
 # since the `build` stage already produced the compiled output in
@@ -122,15 +108,6 @@ RUN --mount=type=secret,id=npmrc,target=/root/.npmrc,required=false \
     --mount=type=cache,target=/pnpm-store,sharing=shared \
     if [ -s /run/secrets/github_token ]; then export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; fi \
  && pnpm install --frozen-lockfile --prod --store-dir /pnpm-store
-
-# Link local packages. Drop the nested node_modules/src/test that were
-# needed for `pnpm run prepack` but not at runtime — keeping them would
-# duplicate ~450MB inside the final image for no benefit. `dist/` and
-# `package.json` are what Node actually resolves.
-RUN rm -rf packages/kodus-common/node_modules \
-           packages/kodus-common/src \
-           packages/kodus-common/test
-RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 
 # Dedicated stage for the bun binary. Using the official oven/bun image
 # instead of `curl bun.sh/install | bash` because:

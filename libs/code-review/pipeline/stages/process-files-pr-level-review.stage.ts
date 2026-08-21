@@ -11,11 +11,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
-import {
-    CROSS_FILE_ANALYSIS_SERVICE_TOKEN,
-    CrossFileAnalysisService,
-} from '@libs/code-review/infrastructure/adapters/services/crossFileAnalysis.service';
-import { CodeSuggestion } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import {
     KODY_RULES_PR_LEVEL_ANALYSIS_SERVICE_TOKEN,
@@ -42,9 +37,6 @@ export class ProcessFilesPrLevelReviewStage extends BasePipelineStage<CodeReview
     constructor(
         @Inject(KODY_RULES_PR_LEVEL_ANALYSIS_SERVICE_TOKEN)
         private readonly kodyRulesPrLevelAnalysisService: KodyRulesPrLevelAnalysisService,
-
-        @Inject(CROSS_FILE_ANALYSIS_SERVICE_TOKEN)
-        private readonly crossFileAnalysisService: CrossFileAnalysisService,
 
         private readonly businessRulesValidationAgentProvider: BusinessRulesValidationAgentProvider,
     ) {
@@ -137,10 +129,9 @@ export class ProcessFilesPrLevelReviewStage extends BasePipelineStage<CodeReview
             );
         }
 
-        const [kodyRulesSettled, crossFileSettled, businessLogicSettled] =
+        const [kodyRulesSettled, businessLogicSettled] =
             await Promise.allSettled([
                 this.runKodyRulesAnalysis(context),
-                this.runCrossFileAnalysis(context),
                 businessLogicPromise,
             ]);
 
@@ -152,18 +143,6 @@ export class ProcessFilesPrLevelReviewStage extends BasePipelineStage<CodeReview
                       error: this.settledError(
                           kodyRulesSettled,
                           'KodyRulesAnalysis',
-                          context,
-                      ),
-                  };
-
-        const crossFileResult =
-            crossFileSettled.status === 'fulfilled'
-                ? crossFileSettled.value
-                : {
-                      suggestions: [],
-                      error: this.settledError(
-                          crossFileSettled,
-                          'CrossFileAnalysis',
                           context,
                       ),
                   };
@@ -198,26 +177,9 @@ export class ProcessFilesPrLevelReviewStage extends BasePipelineStage<CodeReview
                 draft.validSuggestionsByPR.push(...kodyRulesResult.suggestions);
             }
 
-            // Cross File Results
-            if (crossFileResult?.suggestions?.length > 0) {
-                if (!draft.prAnalysisResults) {
-                    draft.prAnalysisResults = {};
-                }
-                if (!draft.prAnalysisResults.validCrossFileSuggestions) {
-                    draft.prAnalysisResults.validCrossFileSuggestions = [];
-                }
-                draft.prAnalysisResults.validCrossFileSuggestions.push(
-                    ...crossFileResult.suggestions,
-                );
-            }
-
             // Aggregate Errors
             if (kodyRulesResult?.error) {
                 draft.errors.push(kodyRulesResult.error);
-            }
-
-            if (crossFileResult?.error) {
-                draft.errors.push(crossFileResult.error);
             }
 
             if (businessLogicError) {
@@ -232,87 +194,6 @@ export class ProcessFilesPrLevelReviewStage extends BasePipelineStage<CodeReview
         // Kody Rules (file + PR level) are handled by the KodyRulesAgent
         // in the AgentReviewStage. No longer needed here.
         return { suggestions: [] };
-    }
-
-    private async runCrossFileAnalysis(
-        context: CodeReviewPipelineContext,
-    ): Promise<{ suggestions: CodeSuggestion[]; error?: PipelineError }> {
-        // Agents handle cross-file investigation via tools (grep, readFile)
-        this.logger.log({
-            message: `Skipping cross-file analysis for PR#${context.pullRequest.number}: agents investigate cross-file via tools`,
-            context: this.stageName,
-        });
-        return { suggestions: [] };
-
-        try {
-            const preparedFilesData = context.changedFiles.map((file) => ({
-                filename: file.filename,
-                patchWithLinesStr: file.patchWithLinesStr,
-            }));
-
-            const crossFileAnalysis =
-                await this.crossFileAnalysisService.analyzeCrossFileCode(
-                    context.organizationAndTeamData,
-                    context.pullRequest.number,
-                    context,
-                    preparedFilesData,
-                    undefined,
-                );
-
-            const crossFileAnalysisSuggestions =
-                crossFileAnalysis?.codeSuggestions || [];
-
-            if (crossFileAnalysisSuggestions.length > 0) {
-                this.logger.log({
-                    message: `Cross-file analysis completed for PR#${context.pullRequest.number}`,
-                    context: this.stageName,
-                    metadata: {
-                        suggestionsCount: crossFileAnalysisSuggestions.length,
-                        organizationAndTeamData:
-                            context.organizationAndTeamData,
-                        prNumber: context.pullRequest.number,
-                    },
-                });
-
-                return { suggestions: crossFileAnalysisSuggestions };
-            } else {
-                this.logger.log({
-                    message: `No cross-file analysis suggestions found for PR#${context.pullRequest.number}`,
-                    context: this.stageName,
-                    metadata: {
-                        organizationAndTeamData:
-                            context.organizationAndTeamData,
-                    },
-                });
-
-                return { suggestions: [] };
-            }
-        } catch (error) {
-            this.logger.error({
-                message: `Error during Cross-file analysis for PR#${context.pullRequest.number}`,
-                context: this.stageName,
-                error,
-                metadata: {
-                    organizationAndTeamData: context.organizationAndTeamData,
-                    prNumber: context.pullRequest.number,
-                },
-            });
-
-            return {
-                suggestions: [],
-                error: {
-                    stage: this.stageName,
-                    substage: 'CrossFileAnalysis',
-                    error:
-                        error instanceof Error
-                            ? error
-                            : new Error(String(error)),
-                    metadata: {
-                        prNumber: context.pullRequest.number,
-                    },
-                },
-            };
-        }
     }
 
     private async runBusinessLogicValidation(

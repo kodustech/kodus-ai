@@ -1,62 +1,59 @@
 "use client";
 
 import { useState } from "react";
+import {
+    getSeverityColorVar,
+    normalizeSeverity,
+} from "@components/system/issue-severity-level-badge";
+import type { SeverityLevel } from "src/core/types";
 import type { PrInfo, ReviewIssue } from "./types";
 
-const SEVERITY_DOT: Record<string, string> = {
-    critical: "bg-[var(--red)]",
-    high: "bg-[var(--red)]",
-    medium: "bg-[var(--yellow)]",
-    low: "bg-[var(--accent)]",
-    info: "bg-[var(--text-dim)]",
-};
+// Explicit tier groups so the implicit "bugs vs flags" sort becomes visible,
+// scannable headers. Ordered most-severe first; empty tiers don't render.
+const TIERS: { key: SeverityLevel; label: string }[] = [
+    { key: "critical" as SeverityLevel, label: "Critical" },
+    { key: "high" as SeverityLevel, label: "High" },
+    { key: "medium" as SeverityLevel, label: "Medium" },
+    { key: "low" as SeverityLevel, label: "Low" },
+];
 
 export function RightSidebar({
     pr,
     issues,
     isCompleted,
     onJumpToIssue,
+    activeIssueId,
 }: {
     pr?: PrInfo;
     issues: ReviewIssue[];
     isCompleted: boolean;
     onJumpToIssue: (issue: ReviewIssue) => void;
+    /** Id of the finding whose inline card is open/active — the matching rail
+     *  row shows a persistent selected state. */
+    activeIssueId?: string | null;
 }) {
-    // Signal hierarchy: most severe first within each group so the finding
-    // most likely to matter sits at the top, not buried mid-list.
-    const SEV_RANK: Record<string, number> = {
-        critical: 0,
-        high: 1,
-        medium: 2,
-        low: 3,
-        info: 4,
-    };
-    const bySeverity = (a: ReviewIssue, b: ReviewIssue) =>
-        (SEV_RANK[(a.severity || "info").toLowerCase()] ?? 5) -
-        (SEV_RANK[(b.severity || "info").toLowerCase()] ?? 5);
-    const bugs = issues
-        .filter((i) =>
-            ["critical", "high"].includes((i.severity || "").toLowerCase()),
-        )
-        .sort(bySeverity);
-    const flags = issues
-        .filter(
-            (i) =>
-                !["critical", "high"].includes(
-                    (i.severity || "").toLowerCase(),
-                ),
-        )
-        .sort(bySeverity);
+    const groups = TIERS.map((tier) => ({
+        ...tier,
+        items: issues.filter(
+            (i) => normalizeSeverity(i.severity) === tier.key,
+        ),
+    })).filter((g) => g.items.length > 0);
+
+    const hasFindings = groups.length > 0;
 
     return (
         <aside className="space-y-3">
-            {isCompleted && bugs.length > 0 && (
-                <BugsCard bugs={bugs} onJumpToIssue={onJumpToIssue} />
-            )}
-
-            {isCompleted && flags.length > 0 && (
-                <FlagsCard flags={flags} onJumpToIssue={onJumpToIssue} />
-            )}
+            {isCompleted &&
+                groups.map((group) => (
+                    <SeverityGroup
+                        key={group.key}
+                        label={group.label}
+                        color={getSeverityColorVar(group.key)}
+                        items={group.items}
+                        activeIssueId={activeIssueId}
+                        onJumpToIssue={onJumpToIssue}
+                    />
+                ))}
 
             {pr?.checks && <ChecksCard checks={pr.checks} />}
 
@@ -72,7 +69,7 @@ export function RightSidebar({
                 <LabelsCard labels={pr.labels} />
             )}
 
-            {isCompleted && bugs.length === 0 && flags.length === 0 && (
+            {isCompleted && !hasFindings && (
                 <section
                     className="rounded-xl border border-[var(--green)]/25 bg-[var(--green)]/[0.05] px-3.5 py-4 text-center"
                     style={{ boxShadow: "var(--shadow-card)" }}>
@@ -82,6 +79,60 @@ export function RightSidebar({
                 </section>
             )}
         </aside>
+    );
+}
+
+function SeverityGroup({
+    label,
+    color,
+    items,
+    activeIssueId,
+    onJumpToIssue,
+}: {
+    label: string;
+    color: string;
+    items: ReviewIssue[];
+    activeIssueId?: string | null;
+    onJumpToIssue: (issue: ReviewIssue) => void;
+}) {
+    // Expanded by default (fix 7) — collapsing is a nicety.
+    const [open, setOpen] = useState(true);
+    return (
+        <section
+            className="rounded-xl border border-[var(--border)] bg-[var(--bg-2)]/70 backdrop-blur-sm overflow-hidden"
+            style={{ boxShadow: "var(--shadow-card)" }}>
+            <button
+                onClick={() => setOpen((v) => !v)}
+                className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-[var(--bg-3)]/40 transition-colors">
+                <span className="flex items-center gap-2">
+                    <span
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ backgroundColor: color }}
+                    />
+                    <span className="text-[10px] uppercase tracking-[0.14em] font-semibold text-[var(--text-dim)]">
+                        {label}
+                    </span>
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-3)] text-[var(--text-muted)]">
+                        {items.length}
+                    </span>
+                </span>
+                <Chevron open={open} />
+            </button>
+            {open && (
+                <ul className="divide-y divide-[var(--border)]/50">
+                    {items.map((issue, i) => (
+                        <IssueRow
+                            key={issue.id ?? i}
+                            issue={issue}
+                            active={
+                                !!activeIssueId && issue.id === activeIssueId
+                            }
+                            onClick={() => onJumpToIssue(issue)}
+                        />
+                    ))}
+                </ul>
+            )}
+        </section>
     );
 }
 
@@ -147,74 +198,6 @@ function LabelsCard({
                     </span>
                 ))}
             </div>
-        </SidebarCard>
-    );
-}
-
-function BugsCard({
-    bugs,
-    onJumpToIssue,
-}: {
-    bugs: ReviewIssue[];
-    onJumpToIssue: (issue: ReviewIssue) => void;
-}) {
-    const [open, setOpen] = useState(true);
-    return (
-        <section
-            className="rounded-xl border border-[var(--accent)]/25 bg-gradient-to-b from-[var(--accent)]/[0.05] to-transparent overflow-hidden"
-            style={{ boxShadow: "var(--shadow-card)" }}
-        >
-            <button
-                onClick={() => setOpen((v) => !v)}
-                className="w-full px-3.5 py-3 flex items-center justify-between text-left hover:bg-[var(--accent)]/5 transition-colors"
-            >
-                <span className="flex items-center gap-2 text-[13px] font-medium text-[var(--text)]">
-                    <BugIcon />
-                    {bugs.length} Potential bug{bugs.length === 1 ? "" : "s"}
-                </span>
-                <Chevron open={open} />
-            </button>
-            {open && (
-                <ul className="divide-y divide-[var(--border)]/50">
-                    {bugs.map((bug, i) => (
-                        <IssueRow
-                            key={i}
-                            issue={bug}
-                            onClick={() => onJumpToIssue(bug)}
-                        />
-                    ))}
-                </ul>
-            )}
-        </section>
-    );
-}
-
-function FlagsCard({
-    flags,
-    onJumpToIssue,
-}: {
-    flags: ReviewIssue[];
-    onJumpToIssue: (issue: ReviewIssue) => void;
-}) {
-    const [open, setOpen] = useState(false);
-    return (
-        <SidebarCard
-            title={`${flags.length} Flag${flags.length === 1 ? "" : "s"}`}
-            collapsible
-            open={open}
-            onToggle={() => setOpen((v) => !v)}
-        >
-            {open && (
-                <ul className="divide-y divide-[var(--border)]/50">
-                    {flags.map((flag, i) => (
-                        <IssueRow
-                            key={i}
-                            issue={flag}
-                            onClick={() => onJumpToIssue(flag)}
-                        />
-                    ))}
-                </ul>
-            )}
         </SidebarCard>
     );
 }
@@ -333,21 +316,35 @@ function ReviewerStateIcon({
 
 function IssueRow({
     issue,
+    active = false,
     onClick,
 }: {
     issue: ReviewIssue;
+    /** The row whose inline card is currently open — held selected. */
+    active?: boolean;
     onClick: () => void;
 }) {
-    const sev = (issue.severity || "info").toLowerCase();
+    const color = getSeverityColorVar(issue.severity);
     return (
         <li>
             <button
                 onClick={onClick}
-                className="w-full text-left px-3.5 py-2.5 hover:bg-[var(--bg-input)]/40 transition-colors group"
-            >
+                aria-current={active ? "true" : undefined}
+                // Real nav affordance: pointer + hover lift, plus a persistent
+                // selected state (left accent bar in the tier colour + raised
+                // bg) kept in sync with the open inline card.
+                style={
+                    active ? { boxShadow: `inset 2px 0 0 0 ${color}` } : undefined
+                }
+                className={`w-full text-left px-3.5 py-2.5 cursor-pointer transition-colors group ${
+                    active
+                        ? "bg-[var(--bg-input)]/60"
+                        : "hover:bg-[var(--bg-input)]/40"
+                }`}>
                 <div className="flex items-center gap-2 mb-1">
                     <span
-                        className={`w-1.5 h-1.5 rounded-full ${SEVERITY_DOT[sev] ?? SEVERITY_DOT.info}`}
+                        className="w-1.5 h-1.5 rounded-full"
+                        style={{ backgroundColor: color }}
                     />
                     <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-muted)]">
                         {issue.severity || "info"}
@@ -358,7 +355,12 @@ function IssueRow({
                         </span>
                     )}
                 </div>
-                <p className="text-sm text-[var(--text)] leading-snug line-clamp-2 group-hover:text-[var(--accent)] transition-colors">
+                <p
+                    className={`text-sm leading-snug line-clamp-2 transition-colors ${
+                        active
+                            ? "text-[var(--accent)]"
+                            : "text-[var(--text)] group-hover:text-[var(--accent)]"
+                    }`}>
                     {issue.message}
                 </p>
                 <p className="text-[11px] font-mono text-[var(--text-dim)] mt-1 truncate">
@@ -440,21 +442,6 @@ function Chevron({ open }: { open: boolean }) {
             }`}
         >
             <polyline points="6 9 12 15 18 9" />
-        </svg>
-    );
-}
-
-function BugIcon() {
-    return (
-        <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className="text-[var(--accent)]"
-            aria-hidden
-        >
-            <circle cx="12" cy="12" r="3.5" />
         </svg>
     );
 }

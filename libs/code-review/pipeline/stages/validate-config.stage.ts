@@ -36,6 +36,9 @@ import {
     processExpression,
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
+import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 
 @Injectable()
 export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -84,20 +87,51 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
                     context.organizationAndTeamData,
                 );
 
-            context = this.updateContext(context, (draft) => {
-                const resolved = byokConfig?.configValue;
-                draft.codeReviewConfig.byokConfig = resolved;
+            const resolved = byokConfig?.configValue;
+            // Override precedence: byokModelId (id) wins over the byokModel NAME.
+            const overrideRef =
+                context.codeReviewConfig.byokModelId?.trim() ||
+                context.codeReviewConfig.byokModel?.trim();
 
-                // The merged code review config can override which BYOK *main*
-                // model runs the review (directory -> repository -> BYOK
-                // settings). An empty/absent value means "inherit", so the
-                // BYOK-settings main model is left in place.
-                const overrideModel = draft.codeReviewConfig.byokModel?.trim();
-                if (resolved?.main && overrideModel) {
-                    draft.codeReviewConfig.byokConfig = {
-                        ...resolved,
-                        main: { ...resolved.main, model: overrideModel },
-                    };
+            // Resolve the codeReview task's slot + verdict through the single
+            // resolution primitive (compute + log OUTSIDE the Immer producer so
+            // the producer stays side-effect free). A null/absent config yields a
+            // null slot → the env/managed default downstream.
+            const { slot: routedMain, verdict } = isByokConfig(resolved)
+                ? resolveTaskSlot(resolved, LLM_TASK.codeReview, {
+                      // The strategy handles the id-THEN-name match (REQ-COMPAT-01).
+                      ctx: overrideRef
+                          ? { override: { modelId: overrideRef } }
+                          : {},
+                  })
+                : { slot: null, verdict: null };
+            if (isByokConfig(resolved) && !verdict?.modelId) {
+                this.logger.warn({
+                    message: `BYOK routing BLOCKED for codeReview — falling back to env/managed default: ${verdict?.reason}`,
+                    context: this.stageName,
+                    metadata: {
+                        prNumber: context?.pullRequest?.number,
+                        repositoryName: context?.repository?.name,
+                        organizationAndTeamData:
+                            context?.organizationAndTeamData,
+                    },
+                });
+            }
+
+            context = this.updateContext(context, (draft) => {
+                // Materialize the routed model into the resolved slot the pipeline
+                // threads downstream (the handle stages read their limit/telemetry
+                // metadata off). `routedMain` already has the id/NAME override
+                // applied and carries the ciphertext verbatim (resolveTaskSlot
+                // never decrypts — T-04-01-01). No routed slot (no BYOK / BLOCKED /
+                // absent config) → the env/managed default resolves downstream,
+                // matching a missing config.
+                if (routedMain && isByokConfig(resolved)) {
+                    draft.codeReviewConfig.resolvedModelSlot = routedMain;
+                    draft.codeReviewConfig.byokConfig = routedMain;
+                } else {
+                    draft.codeReviewConfig.resolvedModelSlot = undefined;
+                    draft.codeReviewConfig.byokConfig = undefined;
                 }
             });
 

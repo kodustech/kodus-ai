@@ -1,7 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { IdGenerator } from '@libs/core/utils/id-generator';
 import { createLogger } from '@libs/core/log/logger';
-import { LLMModelProvider } from '@kodus/kodus-common/llm';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { normalizeReviewDirective } from '@libs/common/utils/codeManagement/codeCommentMarkers';
 import {
@@ -179,7 +178,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
                 repositoryName: resolvedRepoName,
             } = isTrialMode
                 ? {
-                      config: this.getDefaultConfig(true),
+                      config: this.getDefaultConfig(),
                       repositoryId: 'global',
                       repositoryName: null,
                   }
@@ -653,7 +652,7 @@ export class ExecuteCliReviewUseCase implements IUseCase {
      * Get default code review configuration
      * For trial mode, force Gemini 2.5 Flash (cheaper and faster)
      */
-    private getDefaultConfig(isTrialMode: boolean = false): CodeReviewConfig {
+    private getDefaultConfig(): CodeReviewConfig {
         const defaults = getDefaultKodusConfigFile();
 
         const config = {
@@ -663,11 +662,10 @@ export class ExecuteCliReviewUseCase implements IUseCase {
             languageResultPrompt: 'en-US',
         } as any as CodeReviewConfig;
 
-        // Force Gemini Flash for trial users (cost optimization)
-        if (isTrialMode) {
-            config.llmProvider = LLMModelProvider.GEMINI_2_5_FLASH;
-        }
-
+        // NOTE: config.llmProvider is never read by the review pipeline (the
+        // model is resolved from the org's BYOK slot, or the managed DeepSeek
+        // default for trial via trialDefaultModel). The old "force Gemini Flash
+        // for trial" assignment here did nothing and was removed.
         return config;
     }
 

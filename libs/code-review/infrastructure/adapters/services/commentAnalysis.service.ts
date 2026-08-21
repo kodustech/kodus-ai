@@ -1,22 +1,12 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
-import { Output } from 'ai';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import z from 'zod';
 import filteredLibraryKodyRules from '@libs/code-review/infrastructure/data/filtered-rules.json';
 import { Injectable } from '@nestjs/common';
 import { v4 } from 'uuid';
 
-import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
-import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
-import {
-    LLM_CALL_TIMEOUT_MS,
-    timeoutSignal,
-    tracedGenerateText,
-} from '@libs/llm/llm-call';
-import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
+import { LLM_TASK } from '@libs/llm/byok-config';
+import { LLM } from '@libs/llm/llm';
 
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import { isKodyAuthoredBody } from '@libs/common/utils/kody-identifiers';
@@ -31,7 +21,7 @@ import {
     prompt_CommentCategorizerUser,
     prompt_CommentIrrelevanceFilterSystem,
     prompt_CommentIrrelevanceFilterUser,
-} from '@libs/common/utils/langchainCommon/prompts/commentAnalysis';
+} from '@libs/common/utils/prompts/commentAnalysis';
 import {
     kodyRulesGeneratorDuplicateFilterSchema,
     kodyRulesGeneratorQualityFilterSchema,
@@ -42,7 +32,7 @@ import {
     prompt_KodyRulesGeneratorQualityFilterUser,
     prompt_KodyRulesGeneratorSystem,
     prompt_KodyRulesGeneratorUser,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRulesGenerator';
+} from '@libs/common/utils/prompts/kodyRulesGenerator';
 import { DocumentationContextItem } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { LibraryKodyRule } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -61,7 +51,7 @@ import {
  * `resolveKodyRulesModelPolicy`.
  */
 export interface KodyRulesModelSelection {
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedModel;
     modelOverride?: string;
 }
 
@@ -75,15 +65,15 @@ export class CommentAnalysisService {
 
     /**
      * Runs a structured-output LLM call, resolving the model the SAME way the
-     * code-review agents do (see `resolveAgentModel` / model-factory):
-     * `byokToVercelModel(byokConfig, 'main', {}, override)` — BYOK wins;
-     * self-hosted resolves the env model; cloud trial forces the managed model
-     * (DeepSeek V4 Flash on Fireworks) via the override; cloud without BYOK is
-     * already skipped upstream by the model policy. `wrapByokModel` adds the
-     * shared concurrency limiter + error classification. Non-strict structured
-     * output (options `{}`) so schemas with optional fields work across
-     * providers. LLM failures propagate — callers must not treat them as
-     * "no result".
+     * code-review agents do (see `resolveReviewAgentModel` / model-factory):
+     * `resolveTaskModel(v2Config, LLM_TASK.codeReview, …)` over the org's raw config
+     * — BYOK wins; self-hosted resolves the env model; cloud trial forces the
+     * managed model (DeepSeek V4 Flash on Fireworks) via `modelOverride` (the
+     * default-model override); cloud without BYOK is already skipped upstream by
+     * the model policy. `wrapByokModel` adds the shared concurrency limiter +
+     * error classification. Non-strict structured output so schemas with optional
+     * fields work across providers. LLM failures propagate — callers must not
+     * treat them as "no result".
      */
     private async runStructuredLLM<S extends z.ZodType>(args: {
         organizationAndTeamData: OrganizationAndTeamData;
@@ -104,48 +94,37 @@ export class CommentAnalysisService {
             attrs,
         } = args;
 
-        const baseModel = byokToVercelModel(
-            modelConfig.byokConfig ?? undefined,
-            'main',
-            {},
-            modelConfig.modelOverride,
+        // Resolve the routed codeReview slot (org-aware), then run it through the
+        // shared STRUCTURED executor — the same path every other structured review
+        // call uses: BYOK limiter, the slot's tuning + reasoning, the span, the
+        // central strict-wire-schema conversion and the D-00c latency re-issue.
+        // Replaces the hand-rolled resolveTaskModel + wrapByokModel +
+        // tracedGenerateText copy. `modelOverride` (trial default) only applies
+        // when there is no BYOK; off-BYOK yields the env/managed default.
+        const slot = await this.permissionValidationService.resolveTaskSlot(
+            organizationAndTeamData,
+            LLM_TASK.codeReview,
         );
-        const model = wrapByokModel(baseModel, {
-            byokConfig: modelConfig.byokConfig ?? undefined,
-            organizationId: organizationAndTeamData.organizationId,
-            role: 'main',
-        });
 
-        const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
-            spanName: `${CommentAnalysisService.name}::${runName}`,
+        // Cast: LLM.run's return is a conditional over `z.ZodType | Schema`;
+        // here `S extends z.ZodType`, so it resolves to `z.infer<S>` — TS just
+        // can't narrow the conditional through the call. observabilityService is
+        // no longer passed: LLM owns the span internally (app singleton).
+        return LLM.run({
+            byokConfig: slot,
+            schema,
+            system,
+            user,
             runName,
-            model: getModelName(
-                modelConfig.byokConfig ?? undefined,
-                modelConfig.modelOverride,
-            ),
+            spanName: `${CommentAnalysisService.name}::${runName}`,
             attrs,
-            // Structured output via generateText + Output.object (generateObject
-            // is deprecated in ai@6). The casts bridge the generic
-            // `S extends z.ZodType` to the SDK's schema type while the public
-            // return stays typed as `z.infer<S>`.
-            exec: () =>
-                tracedGenerateText({
-                    model: model as any,
-                    system,
-                    prompt: user,
-                    output: Output.object({ schema: schema as any }),
-                    abortSignal: timeoutSignal(LLM_CALL_TIMEOUT_MS),
-                    ...toAiSdkTelemetryArgs(
-                        buildLangfuseTelemetry(runName, {
-                            organizationId:
-                                organizationAndTeamData.organizationId,
-                            teamId: organizationAndTeamData.teamId,
-                        }),
-                    ),
-                } as any),
-        });
-
-        return (result.experimental_output ?? result.output) as z.infer<S>;
+            organizationId: organizationAndTeamData.organizationId,
+            telemetryMetadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            },
+            defaultModelOverride: modelConfig.modelOverride,
+        }) as Promise<z.infer<S>>;
     }
 
     async categorizeComments(params: {
@@ -168,14 +147,11 @@ export class CommentAnalysisService {
                 return [];
             }
 
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig(
-                    organizationAndTeamData,
-                );
-
+            // The codeReview slot is resolved inside runStructuredLLM from the
+            // raw config (native); no legacy byokConfig needed here.
             const categorizedCommentsRes = await this.runStructuredLLM({
                 organizationAndTeamData,
-                modelConfig: { byokConfig: byokConfig ?? undefined },
+                modelConfig: {},
                 schema: commentCategorizerSchema,
                 system: prompt_CommentCategorizerSystem(),
                 user: prompt_CommentCategorizerUser({
@@ -256,16 +232,10 @@ export class CommentAnalysisService {
             documentationContext,
         } = params;
 
-        // Resolve the model once for every call in this generation run. The
-        // use-case/cron pass the policy-resolved selection; fall back to the
-        // org's BYOK when called without one (keeps existing callers working).
-        const modelConfig: KodyRulesModelSelection =
-            params.modelConfig ?? {
-                byokConfig:
-                    (await this.permissionValidationService.getBYOKConfig(
-                        organizationAndTeamData,
-                    )) ?? undefined,
-            };
+        // The use-case/cron pass the policy-resolved selection (its
+        // `modelOverride` still honored). When called without one, the codeReview
+        // slot is resolved inside runStructuredLLM from the raw config.
+        const modelConfig: KodyRulesModelSelection = params.modelConfig ?? {};
 
         // NOTE: no swallowing try/catch here — an LLM failure must propagate so
         // the use-case marks the run as errored instead of "0 rules, success".
@@ -440,13 +410,9 @@ export class CommentAnalysisService {
     }): Promise<UncategorizedComment[]> {
         const { comments, organizationAndTeamData } = params;
 
-        const modelConfig: KodyRulesModelSelection =
-            params.modelConfig ?? {
-                byokConfig:
-                    (await this.permissionValidationService.getBYOKConfig(
-                        organizationAndTeamData,
-                    )) ?? undefined,
-            };
+        // Resolved inside runStructuredLLM from the raw config when no
+        // policy-resolved selection is passed (native).
+        const modelConfig: KodyRulesModelSelection = params.modelConfig ?? {};
 
         // No swallowing catch — a provider failure must propagate so the run
         // is marked errored. An empty result (no relevant comments) is a

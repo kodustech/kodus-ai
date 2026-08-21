@@ -428,7 +428,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
         );
 
         const maxConcurrent =
-            context?.codeReviewConfig?.byokConfig?.main?.maxConcurrentRequests;
+            context?.codeReviewConfig?.resolvedModelSlot?.maxConcurrentRequests;
         const concurrencyLimit =
             maxConcurrent != null && maxConcurrent > 0
                 ? Math.min(maxConcurrent, this.MAX_BATCH_SIZE)
@@ -701,7 +701,7 @@ export class ProcessFilesReview extends BasePipelineStage<CodeReviewPipelineCont
             };
 
             const maxInputTokens =
-                context?.codeReviewConfig?.byokConfig?.main?.maxInputTokens;
+                context?.codeReviewConfig?.resolvedModelSlot?.maxInputTokens;
             const contentToSplit = relevantContent || file?.fileContent || '';
 
             // Check if we need to split the file content into chunks

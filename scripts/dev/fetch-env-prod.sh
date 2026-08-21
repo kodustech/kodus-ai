@@ -156,8 +156,6 @@ KEYS=(
     "/prod/kodus-orchestrator/API_ECS_AGENT_URI"
     "/prod/kodus-orchestrator/API_WORKER_DRAIN_TIMEOUT_MS"
 
-    "/prod/kodus-orchestrator/API_CEREBRAS_BASE_URL"
-    "/prod/kodus-orchestrator/API_CEREBRAS_API_KEY"
 
     "/prod/kodus-orchestrator/API_DEEPSEEK_BASE_URL"
     "/prod/kodus-orchestrator/API_DEEPSEEK_API_KEY"

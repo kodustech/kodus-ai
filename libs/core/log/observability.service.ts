@@ -10,63 +10,8 @@ import { ConnectionString } from 'connection-string';
 import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 
 import { createLogger } from '@libs/core/log/logger';
-import { TokenTrackingHandler, BYOKConfig } from '@kodus/kodus-common/llm';
-import { CallbackHandler as LangfuseCallbackHandler } from '@langfuse/langchain';
-import { shouldTrace } from './langfuse';
 import { deriveTu } from './token-usage-tu';
-
-/**
- * Narrow projection of BYOKConfig that carries only the fields the
- * observability layer actually needs (provider + model). Everything else —
- * including `apiKey` — is intentionally excluded so that even if a future
- * code change logs the value (span attributes, debug logs, error dumps),
- * customer API keys cannot leak.
- */
-type BYOKConfigSafeView = {
-    main?: { provider: string; model: string };
-    fallback?: { provider: string; model: string };
-};
-
-/**
- * Strip everything from a BYOKConfig except provider + model on main/fallback.
- * Returns `undefined` when the input is nullish so downstream code can short-
- * circuit exactly as before.
- */
-function toSafeByokView(
-    byokConfig?: BYOKConfig,
-): BYOKConfigSafeView | undefined {
-    if (!byokConfig) return undefined;
-    const view: BYOKConfigSafeView = {};
-    if (byokConfig.main?.model && byokConfig.main?.provider) {
-        view.main = {
-            provider: byokConfig.main.provider,
-            model: byokConfig.main.model,
-        };
-    }
-    if (byokConfig.fallback?.model && byokConfig.fallback?.provider) {
-        view.fallback = {
-            provider: byokConfig.fallback.provider,
-            model: byokConfig.fallback.model,
-        };
-    }
-    return view.main || view.fallback ? view : undefined;
-}
-
-/**
- * Resolves a raw model name (from LangChain) to include the BYOK provider prefix.
- * Matches against main and fallback configs to pick the correct provider.
- */
-function resolveModelName(
-    rawModel: string,
-    byokView?: BYOKConfigSafeView,
-): string {
-    if (!byokView) return rawModel;
-    if (byokView.main?.model === rawModel)
-        return `${byokView.main.provider}:${rawModel}`;
-    if (byokView.fallback?.model === rawModel)
-        return `${byokView.fallback.provider}:${rawModel}`;
-    return rawModel;
-}
+import { setLlmObservability } from '@libs/llm/llm-observability';
 
 export type TokenUsage = {
     input_tokens?: number;
@@ -102,6 +47,15 @@ export interface ObservabilityConfig {
 interface UsageSpanInput {
     runName?: string;
     model?: string;
+    /** BYOK v2 model id that resolved this call (stable id, not the versioned
+     *  response model-name). Per #1388 the LLM metadata must carry it. */
+    byokModelId?: string;
+    /** Credential the resolved model used — the per-key spend attribution key. */
+    credentialId?: string;
+    /** Routing task/route this call served (e.g. `codeReview`, `prSummary`). */
+    route?: string;
+    /** True when the org's fallback model served the call instead of the primary. */
+    usedFallback?: boolean;
     /** -> `agent.name` column. */
     agentName?: string;
     /** -> `agent.phase` column. */
@@ -157,6 +111,10 @@ function buildUsageSpanAttributes(p: UsageSpanInput): Record<string, any> {
             'gen_ai.usage.reasoning_tokens': u.reasoningTokens,
         }),
         ...(p.model && { 'gen_ai.response.model': p.model }),
+        ...(p.byokModelId && { byokModelId: p.byokModelId }),
+        ...(p.credentialId && { credentialId: p.credentialId }),
+        ...(p.route && { route: p.route }),
+        ...(p.usedFallback != null && { usedFallback: p.usedFallback }),
         ...(p.runName && { 'gen_ai.run.name': p.runName }),
         ...(p.agentName && { 'agent.name': p.agentName }),
         ...(p.phase && { 'agent.phase': p.phase }),
@@ -214,7 +172,13 @@ export class ObservabilityService implements OnModuleInit {
 
     private readonly logger = createLogger(ObservabilityService.name);
 
-    constructor(private readonly configService: ConfigService) {}
+    constructor(private readonly configService: ConfigService) {
+        // Register as the LLM observability implementation (dependency inversion):
+        // @libs/llm's `LLM.run` records its billing span through this port without
+        // importing the concrete service or being threaded it per call. Singleton
+        // scope → one registration per process.
+        setLlmObservability(this);
+    }
 
     /**
      * NestJS lifecycle hook - Initialize observability automatically when module loads
@@ -446,10 +410,21 @@ export class ObservabilityService implements OnModuleInit {
         spanName: string;
         runName?: string;
         model?: string;
+        byokModelId?: string;
+        credentialId?: string;
+        route?: string;
+        usedFallback?: boolean;
         attrs?: Record<string, any>;
         exec: () => Promise<T>;
     }): Promise<T> {
-        const [agentName, phase] = params.spanName.split('::');
+        // agentName/phase: prefer explicit attrs (the agent-loop path sets them so
+        // the phase column is exact, e.g. 'conversation' not 'conversationAgent');
+        // fall back to the spanName split for the one-shot callers that don't.
+        const a = params.attrs ?? {};
+        const [spanAgent, spanPhase] = params.spanName.split('::');
+        // Measure the call duration here (parity with the old recordAgentRunUsage
+        // durationMs, which the agent loop used to record by hand).
+        const startedAt = Date.now();
         return this.runInSpan(
             params.spanName,
             async (span) => {
@@ -459,8 +434,18 @@ export class ObservabilityService implements OnModuleInit {
                     buildUsageSpanAttributes({
                         runName: params.runName,
                         model: params.model,
-                        agentName,
-                        phase,
+                        byokModelId: params.byokModelId,
+                        credentialId: params.credentialId,
+                        route: params.route,
+                        usedFallback: params.usedFallback,
+                        agentName: (a.agentName as string) ?? spanAgent,
+                        phase: (a.phase as string) ?? spanPhase,
+                        type: a.type as string | undefined,
+                        organizationId: a.organizationId as string | undefined,
+                        teamId: a.teamId as string | undefined,
+                        prNumber: a.prNumber as number | undefined,
+                        source: a.source as string | undefined,
+                        durationMs: Date.now() - startedAt,
                         usage: {
                             inputTokens: usage?.inputTokens,
                             outputTokens: usage?.outputTokens,
@@ -533,6 +518,13 @@ export class ObservabilityService implements OnModuleInit {
         runName?: string;
         /** Resolved model -> `gen_ai.response.model`. */
         model?: string;
+        /** BYOK v2 model id (stable) + its credential — the spend attribution
+         *  keys, and part of the #1388 LLM-metadata contract. */
+        byokModelId?: string;
+        credentialId?: string;
+        /** Routing task/route + whether the fallback served this call. */
+        route?: string;
+        usedFallback?: boolean;
         /** byok config present -> `type: 'byok'`, else `'system'`. */
         isByok: boolean;
         usage: {
@@ -562,6 +554,10 @@ export class ObservabilityService implements OnModuleInit {
                     runName:
                         params.runName ?? `${params.agentName}-${params.phase}`,
                     model: params.model,
+                    byokModelId: params.byokModelId,
+                    credentialId: params.credentialId,
+                    route: params.route,
+                    usedFallback: params.usedFallback,
                     agentName: params.agentName,
                     phase: params.phase,
                     type: params.isByok ? 'byok' : 'system',
@@ -579,143 +575,6 @@ export class ObservabilityService implements OnModuleInit {
             );
         } catch {
             // Observability is best-effort — never break an agent run.
-        }
-    }
-
-    // ---------- Integrated LLM tracking ----------
-
-    createLLMTracking(runName?: string) {
-        const tracker = new TokenTrackingHandler();
-        const callbacks: any[] = [tracker];
-        if (shouldTrace()) {
-            callbacks.push(
-                new LangfuseCallbackHandler({
-                    tags: runName ? [runName] : undefined,
-                }),
-            );
-        }
-
-        const finalize = async ({
-            metadata,
-            runName: explicitName,
-            reset,
-            byokConfig: finalizeByokConfig,
-        }: {
-            metadata?: Record<string, any>;
-            runName?: string;
-            reset?: boolean;
-            byokConfig?: BYOKConfigSafeView;
-        } = {}) => {
-            const obs = this.getObsInstance();
-            const span = obs.getCurrentSpan();
-
-            const {
-                runKey,
-                runName: resolvedName,
-                usages,
-            } = tracker.consumeCompletedRunUsages(explicitName ?? runName);
-
-            const s = this.summarize(usages);
-
-            // Resolve model names with BYOK provider prefix when available.
-            const resolvedModels = s.modelsArr.map((m) =>
-                resolveModelName(m, finalizeByokConfig),
-            );
-            const resolvedModel = resolvedModels.length
-                ? resolvedModels.join(',')
-                : undefined;
-
-            if (span) {
-                // Same schema as the AI SDK / harness paths — project through the
-                // single source of truth (buildUsageSpanAttributes) so the Mongo
-                // cost columns are identical regardless of capture method (it
-                // also mirrors the indexable `attributes.tu` sub-doc). Only the
-                // LangChain-specific extras (run.id / runIds / names) and the
-                // caller metadata go through extraAttributes.
-                span.setAttributes(
-                    buildUsageSpanAttributes({
-                        runName: explicitName ?? runName ?? resolvedName,
-                        model: resolvedModel,
-                        usage: {
-                            inputTokens: s.inputTokens,
-                            outputTokens: s.outputTokens,
-                            totalTokens: s.totalTokens,
-                            reasoningTokens: s.reasoningTokens,
-                        },
-                        extraAttributes: {
-                            ...(runKey && { 'gen_ai.run.id': runKey }),
-                            ...(s.runIdsArr.length && {
-                                runIds: s.runIdsArr.join(','),
-                            }),
-                            ...(s.parentRunIdsArr.length && {
-                                parentRunIds: s.parentRunIdsArr.join(','),
-                            }),
-                            ...(s.runNamesArr.length && {
-                                runNames: s.runNamesArr.join(','),
-                            }),
-                            ...(metadata ?? {}),
-                        },
-                    }),
-                );
-            }
-
-            if (reset) {
-                tracker.reset(runKey ?? undefined);
-            }
-
-            return {
-                runKey,
-                runName: resolvedName ?? runName,
-                usages,
-                summary: s,
-            };
-        };
-
-        return { callbacks, tracker, finalize };
-    }
-
-    async runLLMInSpan<T>(params: {
-        spanName: string;
-        runName?: string;
-        attrs?: Record<string, any>;
-        byokConfig?: BYOKConfig;
-        exec: (callbacks: any[]) => Promise<T>;
-    }): Promise<{ result: T; usage: any }> {
-        const {
-            spanName,
-            runName,
-            attrs,
-            byokConfig: spanByokConfig,
-            exec,
-        } = params;
-        const safeByokView = toSafeByokView(spanByokConfig);
-        const obs = this.getObsInstance();
-        const span = obs.startSpan(spanName);
-
-        try {
-            span?.setAttributes?.({
-                ...(attrs ?? {}),
-                correlationId: obs.getContext()?.correlationId || '',
-            });
-
-            const { callbacks, finalize } = this.createLLMTracking(runName);
-
-            const { result, usage } = await obs.withSpan(span, async () => {
-                const result = await exec(callbacks);
-                const usage = await finalize({
-                    metadata: attrs,
-                    reset: true,
-                    byokConfig: safeByokView,
-                });
-                return { result, usage };
-            });
-
-            return { result, usage };
-        } catch (error) {
-            if (span?.isRecording?.()) {
-                span.end();
-            }
-            throw error;
         }
     }
 

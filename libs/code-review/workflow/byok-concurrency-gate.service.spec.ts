@@ -1,3 +1,18 @@
+// The gate resolves the codeReview slot through StaticTaskStrategy, whose
+// capability gate consults the provider REGISTRY. Mock it capable so any v2
+// model routes (the gate's own logic — not routing — is under test here).
+jest.mock('@libs/llm/providers', () => ({
+    REGISTRY: {
+        has: (_p: string) => true,
+        get: (_p: string) => ({
+            capabilities: (_model: string) => ({
+                structuredOutput: 'json_schema',
+                toolCalling: 'native',
+            }),
+        }),
+    },
+}));
+
 import { ByokConcurrencyGateService } from './byok-concurrency-gate.service';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 
@@ -20,12 +35,21 @@ const makeJob = (overrides: Partial<any> = {}): any => ({
     ...overrides,
 });
 
-const makeMainConfig = (overrides: Partial<any> = {}): any => ({
-    provider: 'anthropic',
-    apiKey: 'sk-test',
-    model: 'claude-sonnet-4-5',
-    maxConcurrentRequests: 3,
-    ...overrides,
+// A v2 BYOK blob that routes `codeReview` to a single anthropic model carrying
+// the given maxConcurrentRequests. This is the stored shape the gate now reads
+// (native — no legacy {main,fallback}).
+const makeV2Config = (overrides: { maxConcurrentRequests?: number } = {}): any => ({
+    version: 2,
+    credentials: [{ id: 'c1', provider: 'anthropic', apiKey: 'sk-test' }],
+    models: [
+        {
+            id: 'm1',
+            credentialId: 'c1',
+            model: 'claude-sonnet-4-5',
+            maxConcurrentRequests: overrides.maxConcurrentRequests ?? 3,
+        },
+    ],
+    routing: { defaultModelId: 'm1' },
 });
 
 describe('ByokConcurrencyGateService', () => {
@@ -73,7 +97,7 @@ describe('ByokConcurrencyGateService', () => {
 
         it('returns unlimited when maxConcurrentRequests is 0 or unset', async () => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 0 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 0 }),
             });
 
             const result = await service.tryEnter(makeJob());
@@ -90,7 +114,7 @@ describe('ByokConcurrencyGateService', () => {
     describe('tryEnter — slot acquisition', () => {
         beforeEach(() => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 3 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 3 }),
             });
         });
 
@@ -139,7 +163,7 @@ describe('ByokConcurrencyGateService', () => {
     describe('tryEnter — backoff schedule', () => {
         beforeEach(() => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 1 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 1 }),
             });
             distributedLockService.acquire.mockResolvedValue(null);
         });
@@ -216,7 +240,7 @@ describe('ByokConcurrencyGateService', () => {
     describe('tryEnter — scope key isolation', () => {
         it('uses a different lock key per organization', async () => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 1 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 1 }),
             });
             distributedLockService.acquire.mockResolvedValue({
                 release: jest.fn(),
@@ -242,7 +266,7 @@ describe('ByokConcurrencyGateService', () => {
 
         it('uses the same lock key for the same provider+apiKey+model+org', async () => {
             orgParamsService.findByKey.mockResolvedValue({
-                configValue: { main: makeMainConfig({ maxConcurrentRequests: 1 }) },
+                configValue: makeV2Config({ maxConcurrentRequests: 1 }),
             });
             distributedLockService.acquire.mockResolvedValue({
                 release: jest.fn(),

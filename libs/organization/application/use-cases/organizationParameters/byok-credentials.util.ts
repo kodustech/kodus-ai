@@ -1,9 +1,8 @@
 import { decrypt } from '@libs/common/utils/crypto';
+import { isByokConfig } from '@libs/llm/byok-config';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { IOrganizationParametersService } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
-
-import { type BYOKSlot } from './byok-config.util';
 
 /**
  * A BYOK credential slot with its sensitive fields decrypted, ready to hand to
@@ -36,14 +35,18 @@ function safeDecrypt(value?: string): string | undefined {
 }
 
 /**
- * Resolve the org's OWN stored credentials for `provider` (matching either the
- * main or fallback BYOK slot), decrypting the sensitive fields. Returns null
- * when there's no org context or no slot uses that provider — callers then fall
- * back to Kodus env keys (the setup wizard, before anything is saved).
+ * Resolve the org's OWN stored credentials for `provider`, decrypting the
+ * sensitive fields. v2-only (04b-06 — the legacy `{main,fallback}` slot lookup
+ * was dropped): reads the matching NON-managed `credentials[]` entry (apiKey
+ * top-level, aws* under `settings`). Returns null when there's no org context,
+ * no credential uses that provider, only a managed credential matches, or the
+ * blob is non-v2 — callers then fall back to Kodus env keys (the setup wizard,
+ * before anything is saved).
  *
  * Only `apiKey` and the Bedrock auth fields (bearer token, access key id,
- * secret access key, session token) are stored encrypted (see `encryptSlot` in
- * create-or-update.use-case.ts); the rest are plaintext.
+ * secret access key, session token) are stored encrypted (see `encryptSlot` /
+ * `encryptCredentialSecrets` in create-or-update.use-case.ts); the rest are
+ * plaintext. Never log a decrypted value — this is a server-only path.
  */
 export async function resolveByokSlot(
     organizationParametersService: IOrganizationParametersService,
@@ -61,27 +64,42 @@ export async function resolveByokSlot(
         )
         .catch(() => null);
 
-    const config = parameter?.configValue as
-        | { main?: BYOKSlot; fallback?: BYOKSlot }
-        | undefined;
+    const config = parameter?.configValue;
 
-    const slot = [config?.main, config?.fallback].find(
-        (s) => s?.provider === provider,
-    );
-    if (!slot) {
-        return null;
+    // v2 shape: the credential lives in credentials[], with the apiKey at the
+    // top level and the aws* secrets under settings. Unlike resolveModelSlot
+    // (which carries ciphertext by design and NEVER decrypts), the probe needs
+    // plaintext — so this v2 branch reads credentials[] and safeDecrypt's the
+    // secret fields (server-only path; DecryptedByokSlot never reaches a
+    // client). A managed credential is never probed. RESEARCH §13.2 / Pattern 3.
+    if (isByokConfig(config)) {
+        const cred = (config.credentials ?? []).find(
+            (c) => c && c.provider === provider && !c.managed,
+        );
+        if (!cred) {
+            return null;
+        }
+
+        const settings = (cred.settings ?? {}) as Record<string, unknown>;
+        const str = (v: unknown): string | undefined =>
+            typeof v === 'string' && v ? v : undefined;
+
+        return {
+            provider: cred.provider,
+            apiKey: safeDecrypt(cred.apiKey),
+            baseURL: str(settings.baseURL),
+            // model is not part of a credential — the caller supplies it.
+            model: undefined,
+            vertexLocation: str(settings.vertexLocation),
+            awsBearerToken: safeDecrypt(str(settings.awsBearerToken)),
+            awsAccessKeyId: safeDecrypt(str(settings.awsAccessKeyId)),
+            awsSecretAccessKey: safeDecrypt(str(settings.awsSecretAccessKey)),
+            awsRegion: str(settings.awsRegion),
+            awsSessionToken: safeDecrypt(str(settings.awsSessionToken)),
+        };
     }
 
-    return {
-        provider: slot.provider,
-        apiKey: safeDecrypt(slot.apiKey),
-        baseURL: slot.baseURL,
-        model: slot.model,
-        vertexLocation: slot.vertexLocation,
-        awsBearerToken: safeDecrypt(slot.awsBearerToken),
-        awsAccessKeyId: safeDecrypt(slot.awsAccessKeyId),
-        awsSecretAccessKey: safeDecrypt(slot.awsSecretAccessKey),
-        awsRegion: slot.awsRegion,
-        awsSessionToken: safeDecrypt(slot.awsSessionToken),
-    };
+    // Non-v2 / absent blob: no stored credential to probe (04b-06 — the legacy
+    // {main,fallback} slot lookup was dropped). Callers fall back to Kodus env keys.
+    return null;
 }

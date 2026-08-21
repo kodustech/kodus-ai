@@ -36,6 +36,9 @@ export class OrganizationProviderDto {
 
     @ApiProperty()
     requiresBaseUrl: boolean;
+
+    @ApiProperty()
+    autoListModels: boolean;
 }
 
 export class OrganizationProvidersDataDto {

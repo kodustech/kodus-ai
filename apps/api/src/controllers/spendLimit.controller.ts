@@ -111,6 +111,7 @@ export class SpendLimitController {
                 organizationAndTeamData,
                 enabled: dto.enabled,
                 monthlyLimitUsd: dto.monthlyLimitUsd,
+                scope: dto.scope,
                 modelPricing: dto.modelPricing,
                 models,
             });

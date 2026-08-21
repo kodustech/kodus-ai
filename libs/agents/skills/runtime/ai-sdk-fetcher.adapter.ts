@@ -8,9 +8,8 @@
  * MCP runs on the local MCP adapter (`createMCPAdapter`) — this only wraps the
  * adapter's tools as harness `AgentTool`s and runs the loop on the AI SDK.
  */
-import { type BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { type MCPAdapter } from '@libs/mcp-server/mcp-adapter';
-import { type LanguageModel } from 'ai';
 
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import type {
@@ -23,8 +22,7 @@ import type {
 } from '@libs/agent-harness/domain/contracts';
 import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
-import { resolveAgentModel } from '@libs/llm/agent-model';
+import { isContextOverflowResult } from '@libs/llm/context-overflow';
 
 /**
  * Wrap a connected flow `MCPAdapter`'s tools as a harness `ToolRegistry`.
@@ -106,13 +104,12 @@ export interface FetcherRunResult {
  * billing is emitted by the caller from `state.usage`.
  */
 export async function runMcpFetcherAgent(params: {
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedModel;
     agentId: string;
     systemPrompt: string;
     prompt: string;
     tools: ToolRegistry;
     maxSteps: number;
-    providerOptions?: Record<string, unknown>;
     runId: string;
     signal?: AbortSignal;
     /** Model context window (tokens). When set, a CompressionPolicy compacts the
@@ -133,51 +130,64 @@ export async function runMcpFetcherAgent(params: {
         provider?: string;
     };
 }): Promise<FetcherRunResult> {
-    // Standard model setup (same helper as every agent): BYOK resolve +
-    // concurrency limiter + failure reporter.
-    const model: LanguageModel = resolveAgentModel(params.byokConfig, {
+    // The fetcher resolves ONLY the slot — LLM.run (inside the runner) resolves
+    // the model + tuning + reasoning + prompt-cache from it and records the cost
+    // span. Same derivation as before (resolveModelConfig with the 'low' default),
+    // now owned by LLM.run instead of hand-rolled here.
+    const runner = new AiSdkAgentRunner(params.byokConfig, {
         organizationId: params.telemetry?.organizationId,
-        provider: params.byokConfig?.main?.provider ?? params.telemetry?.provider,
         reporter: params.reporter,
     });
-    const runner = new AiSdkAgentRunner({ resolve: () => model });
 
-    // Cross-cutting as composable policies on the AgentSpec (the loop is thin;
-    // behavior lives here). Compression is the first: a no-op until the window
+    // Build + run the loop for a given compression window. Extracted so the
+    // reactive overflow net can re-run with a tighter window. Compression is a
+    // composable policy (the loop stays thin); it's a no-op until the window
     // approaches its threshold, so adding it can't regress a small fetch.
-    const policies: AgentPolicy[] = params.contextWindowTokens
-        ? [
-              new CompressionPolicy(
-                  new ContextWindowCompressor(params.contextWindowTokens),
-              ),
-          ]
-        : [];
-
-    const spec: AgentSpec = {
-        id: params.agentId,
-        systemPrompt: params.systemPrompt,
-        modelId: 'resolved',
-        tools: params.tools,
-        policies,
-        maxSteps: params.maxSteps,
-        ...(params.providerOptions
-            ? { providerOptions: params.providerOptions }
-            : {}),
+    const runOnce = (windowTokens?: number) => {
+        const policies: AgentPolicy[] = windowTokens
+            ? [
+                  new CompressionPolicy(
+                      new ContextWindowCompressor(windowTokens),
+                  ),
+              ]
+            : [];
+        const spec: AgentSpec = {
+            id: params.agentId,
+            agentName: params.agentId,
+            runName: params.telemetry?.functionId ?? params.agentId,
+            systemPrompt: params.systemPrompt,
+            tools: params.tools,
+            policies,
+            maxSteps: params.maxSteps,
+        };
+        return runner.run(
+            spec,
+            {
+                prompt: params.prompt,
+                ...(params.telemetry
+                    ? {
+                          telemetryMetadata: {
+                              organizationId: params.telemetry.organizationId,
+                              teamId: params.telemetry.teamId,
+                              provider: params.telemetry.provider,
+                          },
+                      }
+                    : {}),
+            },
+            { runId: params.runId, signal: params.signal },
+        );
     };
 
-    const telemetry = params.telemetry
-        ? buildLangfuseTelemetry(params.telemetry.functionId, {
-              organizationId: params.telemetry.organizationId,
-              teamId: params.telemetry.teamId,
-              provider: params.telemetry.provider,
-          })
-        : undefined;
+    let state = await runOnce(params.contextWindowTokens);
 
-    const state = await runner.run(
-        spec,
-        { prompt: params.prompt, ...(telemetry ? { telemetry } : {}) },
-        { runId: params.runId, signal: params.signal },
-    );
+    // Reactive overflow net: a mis-sized window (#1574) can let the loop overflow
+    // mid-run despite the proactive compressor. When the failure IS an overflow
+    // AND we had a window to tighten, re-run ONCE at 60% (the compressor trims
+    // harder) instead of failing the whole fetch. Any other failure is left as-is
+    // — re-running wouldn't help.
+    if (params.contextWindowTokens && isContextOverflowResult(state)) {
+        state = await runOnce(Math.floor(params.contextWindowTokens * 0.6));
+    }
 
     // `state.usage` is harness TokenUsage (AiSdkAgentRunner already maps
     // ai@7 `outputTokenDetails.reasoningTokens` / `inputTokenDetails.cacheReadTokens`

@@ -27,7 +27,6 @@ describe('ProcessFilesPrLevelReviewStage', () => {
         };
         stage = new ProcessFilesPrLevelReviewStage(
             {} as any,
-            {} as any,
             businessRulesValidationAgentProvider as any,
         );
         jest.clearAllMocks();

@@ -53,7 +53,6 @@ describe('KodyRulesService create gate (free-plan limit counts ACTIVE only)', ()
             {} as any,
             {} as any,
             {} as any,
-            {} as any,
         );
 
         return { service, validateRulesLimit, repositoryMock };
@@ -178,7 +177,6 @@ describe('KodyRulesService create gate enforces the 10-rule ceiling', () => {
             {} as any,
             {} as any,
             {} as any,
-            {} as any,
         );
 
         return { service, repositoryMock };
@@ -272,7 +270,6 @@ describe('KodyRulesService create gate enforces the 10-rule ceiling', () => {
             {} as any,
             {} as any,
             {} as any,
-            {} as any,
         );
 
         // Must not reject the request — same fail-closed outcome as hitting
@@ -311,7 +308,6 @@ describe('KodyRulesService create gate enforces the 10-rule ceiling', () => {
             {} as any,
             {} as any,
             { validateRulesLimit } as any,
-            {} as any,
             {} as any,
             {} as any,
             {} as any,
@@ -367,7 +363,6 @@ describe('KodyRulesService.createOrUpdate severity normalization on update (P3)'
         const service = new KodyRulesService(
             repositoryMock as any,
             { emit: jest.fn() } as any,
-            {} as any,
             {} as any,
             {} as any,
             {} as any,
@@ -444,7 +439,6 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
             { validateRulesLimit: jest.fn() } as any,
             {} as any,
             {} as any,
-            {} as any,
             permissionValidationServiceMock as any,
             {} as any,
             {} as any,
@@ -511,7 +505,6 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
             {} as any,
             {} as any,
             validationServiceMock as any,
-            {} as any,
             {} as any,
             {} as any,
             permissionValidationServiceMock as any,
@@ -582,7 +575,6 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
             { MAX_KODY_RULES: 10 } as any,
             {} as any,
             {} as any,
-            {} as any,
             permissionValidationServiceMock as any,
             {} as any,
             {} as any,
@@ -635,7 +627,6 @@ describe('KodyRulesService.syncRulesWithPlanLimit & self-healing read path', () 
             {} as any,
             {} as any,
             { MAX_KODY_RULES: 10 } as any,
-            {} as any,
             {} as any,
             {} as any,
             permissionValidationServiceMock as any,

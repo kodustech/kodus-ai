@@ -43,14 +43,10 @@ import 'dotenv/config';
 
 import { generateText, Output, jsonSchema, type LanguageModel } from 'ai';
 
-import {
-    byokToVercelModel,
-    getInternalModel,
-    withStructuredOutputFallback,
-    __structuredFallbackInternals,
-} from '@libs/llm/byok-to-vercel';
+import { byokToVercelModel, buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import { encrypt } from '@/common/utils/crypto';
-import { BYOKConfig, BYOKProvider } from '@kodus/kodus-common/llm';
+import type { BYOKConfig } from '@libs/llm/byok-config';
+import { BYOKProvider } from '@libs/llm/model-providers';
 
 type Expectation = 'json_schema' | 'json_object' | 'gemini-native';
 
@@ -395,7 +391,12 @@ async function runScenario(scenario: Scenario): Promise<ScenarioResult> {
     }
 
     const byok = buildByokConfig(scenario, apiKey as string);
-    const internalModel = getInternalModel(byok, { structuredOutputs: true });
+    // The structured-output capability gate now lives in `buildModelFromSlot`
+    // (the json_schema→json_object fallback folded into the review executor,
+    // structured-review-call.ts). Build the slot model directly.
+    const internalModel = buildModelFromSlot(byok.main as any, {
+        structuredOutputs: true,
+    });
     if (!internalModel) {
         return {
             scenario,
@@ -444,335 +445,25 @@ function printResult(r: ScenarioResult): void {
 }
 
 /**
- * Probe the retry-on-error path of `withStructuredOutputFallback`.
+ * Helper-level structured-output fallback probes.
  *
- * Builds an allowlisted scenario (so the first call goes out with
- * json_schema), but the fake fetch returns 400 with a schema-related
- * error body — exactly what DeepSeek/Grok would respond if they were
- * mistakenly allowlisted. The helper should mark the combo
- * unsupported in its cache and retry with the flag off. We assert
- * two outbound requests and the response_format shape of each.
+ * REMOVED: these drove the deleted `withStructuredOutputFallback` helper +
+ * `__structuredFallbackInternals`. The json_schema->json_object fallback is now
+ * folded into the review executor (libs/llm/structured-review-call.ts, via
+ * mayUseJsonSchema / markJsonSchemaUnsupported) and unit-covered by
+ * structured-review-call.spec.ts. Stubbed to keep this manual matrix runnable;
+ * the SCENARIOS matrix above still probes each provider’s response_format.
  */
-async function probeRetryFallback(): Promise<{
-    ok: boolean;
-    summary: string;
-}> {
-    // Clear cache so this test runs from a clean slate.
-    __structuredFallbackInternals.cache.clear();
-
-    const apiKey = 'sk-test-not-a-real-key';
-    const byok: BYOKConfig = {
-        main: {
-            provider: BYOKProvider.OPEN_ROUTER,
-            apiKey: encrypt(apiKey),
-            model: 'openai/gpt-4o-mini', // allowlisted by prefix
-        },
-    };
-
-    const captured: CapturedRequest[] = [];
-    const original = globalThis.fetch;
-    let call = 0;
-    globalThis.fetch = (async (input: any, init?: any) => {
-        const url =
-            typeof input === 'string'
-                ? input
-                : input instanceof URL
-                  ? input.toString()
-                  : (input?.url ?? '');
-        let body: any = null;
-        try {
-            body = init?.body ? JSON.parse(init.body as string) : null;
-        } catch {
-            body = init?.body ?? null;
-        }
-        captured.push({ url, body });
-
-        call++;
-        if (call === 1) {
-            // First call: simulate DeepSeek-like 400 on json_schema.
-            return new Response(
-                JSON.stringify({
-                    error: {
-                        message:
-                            "Invalid value for 'response_format': supported values are 'text', 'json_object'",
-                        type: 'invalid_request_error',
-                        code: 'invalid_response_format',
-                    },
-                }),
-                {
-                    status: 400,
-                    headers: { 'content-type': 'application/json' },
-                },
-            );
-        }
-        // Second call: succeed.
-        return new Response(
-            JSON.stringify({
-                id: 'chatcmpl-fake',
-                object: 'chat.completion',
-                created: Math.floor(Date.now() / 1000),
-                model: 'openai/gpt-4o-mini',
-                choices: [
-                    {
-                        index: 0,
-                        message: {
-                            role: 'assistant',
-                            content: '{"answer":"ok"}',
-                        },
-                        finish_reason: 'stop',
-                    },
-                ],
-                usage: {
-                    prompt_tokens: 8,
-                    completion_tokens: 4,
-                    total_tokens: 12,
-                },
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
-        );
-    }) as typeof fetch;
-
-    try {
-        await withStructuredOutputFallback(
-            { byokConfig: byok, label: 'retry-probe' },
-            (model) =>
-                // Bubble the SDK error up to the helper — `.catch(() => null)`
-                // here would consume the rejection and starve the retry.
-                generateText({
-                    model: model as any,
-                    prompt: 'Return any JSON value matching the schema.',
-                    output: Output.object({ schema: minimalSchema }) as any,
-                }),
-        ).catch((err) => {
-            // After retry the second response may not be parseable JSON
-            // against the schema (we send `{"answer":"ok"}` which it is,
-            // but the SDK can still throw on minor shape mismatches).
-            // The captured request body is what we actually assert on.
-            console.warn(
-                `[repro] retry probe outer threw: ${String(
-                    (err as any)?.message ?? err,
-                )}`,
-            );
-        });
-    } finally {
-        globalThis.fetch = original;
-    }
-
-    const first = captured[0]?.body?.response_format;
-    const second = captured[1]?.body?.response_format;
-    const cached = __structuredFallbackInternals.cache.size > 0;
-
-    const ok =
-        first?.type === 'json_schema' &&
-        second?.type === 'json_object' &&
-        cached;
-    return {
-        ok,
-        summary: `calls=${captured.length} first=${JSON.stringify(
-            first ?? null,
-        )} second=${JSON.stringify(second ?? null)} cacheSize=${
-            __structuredFallbackInternals.cache.size
-        }`,
-    };
+async function probeRetryFallback(): Promise<{ ok: boolean; summary: string }> {
+    return { ok: true, summary: "(moved into the executor — see structured-review-call.spec.ts)" };
 }
 
-/**
- * Probe that `withStructuredOutputFallback` does NOT fire a futile retry
- * when the gate already kept json_schema OFF.
- *
- * Reproduces the observed Novita `kimi-k2-instruct` failure: the provider
- * is not allowlisted, so the first call already goes out as
- * `response_format: json_object`. The fake fetch 400s with Novita's exact
- * "does not support feature: structured-outputs" body. Downgrading
- * json_schema→json_object is impossible (we are already at json_object),
- * so the helper must throw after exactly ONE call — retrying would just
- * resend a byte-identical request.
- */
 async function probeNoFutileRetry(): Promise<{ ok: boolean; summary: string }> {
-    __structuredFallbackInternals.cache.clear();
-
-    const byok: BYOKConfig = {
-        main: {
-            provider: BYOKProvider.NOVITA, // never allowlisted → gate OFF
-            apiKey: encrypt('sk-test-not-a-real-key'),
-            model: 'moonshotai/kimi-k2-instruct',
-            baseURL: 'https://api.novita.ai/v3/openai',
-        },
-    };
-
-    const captured: CapturedRequest[] = [];
-    const original = globalThis.fetch;
-    globalThis.fetch = (async (input: any, init?: any) => {
-        let body: any = null;
-        try {
-            body = init?.body ? JSON.parse(init.body as string) : null;
-        } catch {
-            body = init?.body ?? null;
-        }
-        captured.push({ url: '', body });
-        // Novita's verbatim rejection body.
-        return new Response(
-            JSON.stringify({
-                code: 400,
-                reason: 'INVALID_REQUEST_BODY',
-                message:
-                    'model: moonshotai/kimi-k2-instruct does not support feature: structured-outputs',
-                metadata: {},
-            }),
-            { status: 400, headers: { 'content-type': 'application/json' } },
-        );
-    }) as typeof fetch;
-
-    let threw = false;
-    try {
-        await withStructuredOutputFallback(
-            { byokConfig: byok, label: 'no-futile-retry-probe' },
-            (model) =>
-                generateText({
-                    model: model as any,
-                    prompt: 'Return any JSON value matching the schema.',
-                    output: Output.object({ schema: minimalSchema }) as any,
-                }),
-        );
-    } catch {
-        threw = true;
-    } finally {
-        globalThis.fetch = original;
-    }
-
-    const first = captured[0]?.body?.response_format;
-    // Exactly one call, it was json_object (gate OFF), and the error
-    // propagated instead of triggering a doomed retry.
-    const ok = captured.length === 1 && first?.type === 'json_object' && threw;
-    return {
-        ok,
-        summary: `calls=${captured.length} (expect 1) first=${JSON.stringify(
-            first ?? null,
-        )} threw=${threw}`,
-    };
+    return { ok: true, summary: "(moved into the executor — see structured-review-call.spec.ts)" };
 }
 
-/**
- * Probe that the no-json-schema cache is per-tenant and TTL-bounded.
- *
- * Two orgs share the same provider/model/key. Org A's upstream rejects
- * json_schema (so A's verdict gets cached); org B must NOT inherit it —
- * B's first call should still attempt json_schema. Then we expire org
- * A's entry and confirm A retries json_schema again instead of being
- * permanently denylisted.
- */
-async function probeCacheIsolation(): Promise<{
-    ok: boolean;
-    summary: string;
-}> {
-    __structuredFallbackInternals.cache.clear();
-
-    const byok: BYOKConfig = {
-        main: {
-            provider: BYOKProvider.OPEN_ROUTER,
-            apiKey: encrypt('sk-test-not-a-real-key'),
-            model: 'openai/gpt-4o-mini', // allowlisted → json_schema ON
-        },
-    };
-
-    const captured: CapturedRequest[] = [];
-    const original = globalThis.fetch;
-    // Stateless fake: json_schema → 400 unsupported, json_object → 200.
-    globalThis.fetch = (async (input: any, init?: any) => {
-        let body: any = null;
-        try {
-            body = init?.body ? JSON.parse(init.body as string) : null;
-        } catch {
-            body = init?.body ?? null;
-        }
-        captured.push({ url: '', body });
-        if (body?.response_format?.type === 'json_schema') {
-            return new Response(
-                JSON.stringify({
-                    error: {
-                        message: 'response_format json_schema is not supported',
-                        type: 'invalid_request_error',
-                    },
-                }),
-                {
-                    status: 400,
-                    headers: { 'content-type': 'application/json' },
-                },
-            );
-        }
-        return new Response(
-            JSON.stringify({
-                id: 'x',
-                object: 'chat.completion',
-                created: 0,
-                model: 'openai/gpt-4o-mini',
-                choices: [
-                    {
-                        index: 0,
-                        message: {
-                            role: 'assistant',
-                            content: '{"answer":"ok"}',
-                        },
-                        finish_reason: 'stop',
-                    },
-                ],
-                usage: {
-                    prompt_tokens: 8,
-                    completion_tokens: 4,
-                    total_tokens: 12,
-                },
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } },
-        );
-    }) as typeof fetch;
-
-    const runOnce = (orgId: string) =>
-        withStructuredOutputFallback(
-            {
-                byokConfig: byok,
-                organizationId: orgId,
-                label: `cache-probe-${orgId}`,
-            },
-            (model) =>
-                generateText({
-                    model: model as any,
-                    prompt: 'Return any JSON value matching the schema.',
-                    output: Output.object({ schema: minimalSchema }) as any,
-                }),
-        ).catch(() => null);
-
-    try {
-        // Org A: json_schema 400 → retry json_object 200 → verdict cached.
-        await runOnce('org-A');
-        const afterA = captured.length;
-
-        // Org B: same provider/model/key, different org — must not inherit
-        // A's verdict, so its first call attempts json_schema again.
-        await runOnce('org-B');
-        const orgBFirst = captured[afterA]?.body?.response_format?.type;
-        const isolated = orgBFirst === 'json_schema';
-
-        // TTL: expire org A's entry, then A must retry json_schema.
-        const keyA = __structuredFallbackInternals.cacheKey(byok, 'org-A');
-        __structuredFallbackInternals.cache.set(
-            keyA,
-            Date.now() - __structuredFallbackInternals.ttlMs - 1000,
-        );
-        const expiredSeen =
-            !__structuredFallbackInternals.isNoJsonSchemaCached(keyA);
-        const beforeTtl = captured.length;
-        await runOnce('org-A');
-        const ttlRetried =
-            captured[beforeTtl]?.body?.response_format?.type === 'json_schema';
-
-        const ok = isolated && expiredSeen && ttlRetried;
-        return {
-            ok,
-            summary: `orgB-isolated=${isolated} (orgB-first=${orgBFirst}) ttl-expired=${expiredSeen} ttl-retried=${ttlRetried}`,
-        };
-    } finally {
-        globalThis.fetch = original;
-    }
+async function probeCacheIsolation(): Promise<{ ok: boolean; summary: string }> {
+    return { ok: true, summary: "(moved into the executor — see structured-review-call.spec.ts)" };
 }
 
 async function main(): Promise<void> {

@@ -32,19 +32,12 @@ FROM base AS deps
 # pnpm-workspace.yaml carries the overrides (moved out of package.json/.npmrc by the pnpm 11 migration).
 # Without it here, the frozen install sees empty overrides and aborts with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY packages/kodus-common ./packages/kodus-common
 
 # Railway's Metal builder rejects BuildKit secret mounts and requires a
 # service-id-prefixed cache key on cache mounts (which can't share across
 # our 3 services), so this Dockerfile drops both. The repo-local .npmrc
-# copied above only holds registry URLs (no tokens), and the @kodus/*
-# packages are replaced by the local copies in packages/ via `cp -r`.
-RUN cd packages/kodus-common \
-  && pnpm install \
-  && pnpm run prepack
-
+# copied above only holds registry URLs (no tokens).
 RUN pnpm install --frozen-lockfile
-RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 
 FROM deps AS build
 ARG API_CLOUD_MODE=false
@@ -67,21 +60,8 @@ RUN pnpm run build:apps && pnpm run build:migrations
 # Install production dependencies only
 FROM base AS prod-deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-COPY packages/kodus-common ./packages/kodus-common
-
-RUN cd packages/kodus-common \
-  && pnpm install \
-  && pnpm run prepack
 
 RUN pnpm install --frozen-lockfile --prod
-
-# Drop nested node_modules/src/test that were needed for `pnpm run prepack`
-# but not at runtime — keeping them would duplicate hundreds of MB inside
-# the final image. `dist/` and `package.json` are what Node resolves.
-RUN rm -rf packages/kodus-common/node_modules \
-           packages/kodus-common/src \
-           packages/kodus-common/test
-RUN rm -rf node_modules/@kodus/kodus-common && cp -r packages/kodus-common node_modules/@kodus/kodus-common
 
 # Runtime stage — single stage, service selected via SERVICE_TYPE
 FROM docker.io/library/node:22.22.2-slim
