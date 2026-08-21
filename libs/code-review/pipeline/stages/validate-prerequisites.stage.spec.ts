@@ -565,7 +565,7 @@ describe('ValidatePrerequisitesStage', () => {
                 mockCodeManagementService.createIssueComment.mock.calls[0][0]
                     .body;
             expect(body).toContain('Kodus-paid PR reviews');
-            expect(body).toContain('/organization/byok');
+            expect(body).toContain('/byok');
             expect(body).not.toContain('trial has ended');
         });
 

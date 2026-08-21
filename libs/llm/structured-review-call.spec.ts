@@ -156,6 +156,27 @@ describe('runTextReviewCall — plain-text half of the shared executor', () => {
         );
     });
 
+    it('forwards the slot\'s fallback provenance (route + usedFallback) to the span', async () => {
+        // The failover cascade re-runs on a slot stamped usedFallback=true; the
+        // executor must surface that on the span so a primary→fallback swap is
+        // visible in observability (not a silent model change).
+        mockGenerate.mockResolvedValueOnce({ text: 'x', usage: {} });
+        await runTextReviewCall({
+            ...textBase,
+            byokConfig: {
+                provider: 'openai',
+                apiKey: 'enc',
+                model: 'gpt-4o',
+                route: 'codeReview',
+                usedFallback: true,
+            } as any,
+        });
+        const spanArgs =
+            observabilityService.runAiSdkLLMInSpan.mock.calls[0][0];
+        expect(spanArgs.usedFallback).toBe(true);
+        expect(spanArgs.route).toBe('codeReview');
+    });
+
     it('runs WITHOUT an observability service (bare caller) — no span, still returns text', async () => {
         setLlmObservability(undefined); // no port registered → no span
         mockGenerate.mockResolvedValueOnce({ text: 'no-span', usage: {} });

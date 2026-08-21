@@ -127,15 +127,46 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         expect(mockedAxios.get).not.toHaveBeenCalled();
     });
 
-    it('lists Moonshot against its fixed default endpoint (registry enables what the old switch could not)', async () => {
-        const useCase = buildUseCase(null);
+    it('lists Moonshot against its FIXED models endpoint, ignoring the stored chat baseURL', async () => {
+        // A saved key drives the LIVE listing (a keyless connect now degrades to
+        // the curated catalog instead). The stored chat baseURL must be IGNORED —
+        // the models call hits Moonshot's fixed OpenAI-protocol endpoint.
+        const useCase = buildUseCase({
+            version: 2,
+            credentials: [
+                {
+                    id: 'c1',
+                    provider: 'moonshot',
+                    apiKey: 'enc-moon',
+                    settings: { baseURL: 'https://api.moonshot.ai/anthropic' },
+                },
+            ],
+            models: [{ id: 'm1', credentialId: 'c1', model: 'kimi-k2.7-code' }],
+        });
 
         const res = await useCase.execute(BYOKProvider.MOONSHOT, {
             organizationId: 'org-1',
         });
 
         expect(res.models.map((m) => m.id)).toContain('kimi-k2.7-code');
+        // Fixed OpenAI-protocol models endpoint — NOT derived from the Anthropic
+        // chat baseURL the brand builds over.
         const [url] = mockedAxios.get.mock.calls[0];
         expect(url).toBe('https://api.moonshot.ai/v1/models');
+    });
+
+    it('serves a curated BRAND with a manual listing from its catalog (Z.ai/GLM)', async () => {
+        // Z.ai speaks the Anthropic protocol → no `/models` call (manual listing).
+        // As a first-class brand it still enumerates its curated models so the
+        // picker (and the form's plan/endpoint surface) works without hand-entry.
+        const useCase = buildUseCase(null);
+
+        const res = await useCase.execute('zai' as any, {
+            organizationId: 'org-1',
+        });
+
+        expect(res.models.length).toBeGreaterThan(0);
+        expect(res.models.some((m) => m.id.startsWith('glm'))).toBe(true);
+        expect(mockedAxios.get).not.toHaveBeenCalled();
     });
 });

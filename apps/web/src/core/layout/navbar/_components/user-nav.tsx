@@ -7,6 +7,7 @@ import { Action, ResourceType } from "@services/permissions/types";
 import {
     ActivityIcon,
     ChartColumn,
+    KeyRoundIcon,
     LogOutIcon,
     SettingsIcon,
     UserIcon,
@@ -112,6 +113,14 @@ export function UserNav() {
                     <Link href="/organization/general">
                         <DropdownMenuItem leftIcon={<SettingsIcon />}>
                             Settings
+                        </DropdownMenuItem>
+                    </Link>
+                )}
+
+                {canEditOrg && (
+                    <Link href="/byok">
+                        <DropdownMenuItem leftIcon={<KeyRoundIcon />}>
+                            BYOK
                         </DropdownMenuItem>
                     </Link>
                 )}

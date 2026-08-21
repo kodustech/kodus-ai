@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLM } from '@libs/llm/llm';
+import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 import { z } from 'zod';
@@ -96,7 +97,9 @@ export class KodyIssuesAnalysisService {
 
             return result;
         } catch (error) {
-            this.logger.error({
+            // Terminal BYOK billing/auth → warn (user's provider config), real
+            // fault → error. Still re-thrown; only the log level changes.
+            this.logger[llmErrorLogLevel(error)]({
                 message: 'Error in mergeSuggestionsIntoIssues',
                 context: KodyIssuesAnalysisService.name,
                 error,
@@ -149,7 +152,8 @@ export class KodyIssuesAnalysisService {
 
             return result;
         } catch (error) {
-            this.logger.error({
+            // See mergeSuggestionsIntoIssues: terminal BYOK → warn, else error.
+            this.logger[llmErrorLogLevel(error)]({
                 message: 'Error in resolveExistingIssues',
                 context: KodyIssuesAnalysisService.name,
                 error,

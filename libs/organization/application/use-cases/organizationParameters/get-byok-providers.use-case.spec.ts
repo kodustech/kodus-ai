@@ -46,7 +46,8 @@ describe('GetByokProvidersUseCase', () => {
         const { providers } = await useCase.execute();
         const by = (id: string) => providers.find((p) => p.id === id);
 
-        // http listing with a resolvable base URL (default) → listable.
+        // http listing at a fixed models endpoint → listable (curated brand that
+        // still exposes a live model list — powers "Browse all models").
         expect(by('moonshot')?.autoListModels).toBe(true);
         // static catalog → listable without a live call.
         expect(by('amazon_bedrock')?.autoListModels).toBe(true);

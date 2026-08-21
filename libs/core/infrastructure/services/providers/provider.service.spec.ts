@@ -44,12 +44,13 @@ describe('ProviderService — registry-driven', () => {
             return p!;
         };
 
-        it('Moonshot: needs a key, NOT a base URL (has a default), and lists models', () => {
+        it('Moonshot: needs a key, NOT a base URL, and lists models from a fixed endpoint', () => {
             const m = byId('moonshot');
             expect(m.name).toBe('Moonshot');
             expect(m.requiresApiKey).toBe(true);
-            // Has a defaultBaseURL (api.moonshot.ai/v1) → the user must NOT be
-            // forced to type one, and the model list can be auto-fetched.
+            // Anthropic-protocol brand: baseURL is optional (curated default per
+            // variant). Its model list is still enumerable at a fixed OpenAI-protocol
+            // endpoint, so the picker can offer a live "Browse all models".
             expect(m.requiresBaseUrl).toBe(false);
             expect(m.autoListModels).toBe(true);
         });

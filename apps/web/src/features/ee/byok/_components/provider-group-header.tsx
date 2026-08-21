@@ -8,7 +8,7 @@ import {
     CollapsibleIndicator,
     CollapsibleTrigger,
 } from "@components/ui/collapsible";
-import { KeyRoundIcon, RotateCwIcon } from "lucide-react";
+import { KeyRoundIcon, PencilIcon } from "lucide-react";
 
 import type { BYOKCredential } from "../_types";
 import { maskKey } from "../_utils";
@@ -79,9 +79,9 @@ export function ProviderGroupHeader({
                         <Button
                             size="xs"
                             variant="helper"
-                            leftIcon={<RotateCwIcon />}
+                            leftIcon={<PencilIcon />}
                             onClick={onRotate}>
-                            Edit key
+                            Edit provider
                         </Button>
                     )}
                 </div>

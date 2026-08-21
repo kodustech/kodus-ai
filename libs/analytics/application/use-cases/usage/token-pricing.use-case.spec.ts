@@ -23,6 +23,18 @@ const modelsDevFixture = {
             },
         },
     },
+    // A deep-pathed model is served by Kodus as `accounts/fireworks/models/<id>`
+    // but the catalog only lists the bare `<id>` — the price path must reduce to
+    // the bare last segment to avoid a $0.00 under-report.
+    'fireworks-ai': {
+        id: 'fireworks-ai',
+        models: {
+            'deepseek-v4-flash-0731': {
+                id: 'deepseek-v4-flash-0731',
+                cost: { input: 0.13, output: 0.28, cache_read: 0.03 },
+            },
+        },
+    },
     google: {
         id: 'google',
         models: {
@@ -195,6 +207,25 @@ describe('TokenPricingUseCase', () => {
         const info = await useCase.execute('moonshotai/kimi-k2.6');
 
         expect(info.pricing.input.default).toBeCloseTo(0.929e-6, 12);
+    });
+
+    it('prices a DEEP-PATHED Fireworks id via its bare last segment (was $0.00)', async () => {
+        mockCatalogs();
+
+        // The exact form deriveTu stores: `gen_ai.response.model.split(':').pop()`
+        // of `anthropic_compatible:accounts/fireworks/models/deepseek-v4-flash-0731`.
+        // `withoutPrefix` only strips `accounts/`, so this used to miss every
+        // catalog key and resolve to all-zero; the bare-segment candidate fixes it.
+        const info = await useCase.execute(
+            'accounts/fireworks/models/deepseek-v4-flash-0731',
+        );
+
+        expect(info.pricing.input.default).toBeCloseTo(0.13e-6, 12);
+        expect(info.pricing.output.default).toBeCloseTo(0.28e-6, 12);
+        expect(info.pricing.cacheRead.default).toBeCloseTo(0.03e-6, 12);
+        expect(
+            info.pricing.input.default > 0 || info.pricing.output.default > 0,
+        ).toBe(true);
     });
 
     it('maps models.dev tiers[].tier.size to a tiered per-token rate', async () => {

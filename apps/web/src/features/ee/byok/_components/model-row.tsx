@@ -239,7 +239,7 @@ export function ModelRow({
                                 variant="helper"
                                 leftIcon={<PencilIcon />}
                                 onClick={onEdit}>
-                                Edit
+                                Edit model
                             </Button>
                         )}
                         {onDeleted && (

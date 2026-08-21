@@ -961,7 +961,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             "## You've used all your free Kodus-paid PR reviews 🎁\n\n" +
             'Your trial is still active — this just means the PR reviews we ' +
             'cover during the trial are used up.\n\n' +
-            '**[Connect your own AI key](https://app.kodus.io/organization/byok)** ' +
+            '**[Connect your own AI key](https://app.kodus.io/byok)** ' +
             'to keep Kody reviewing — unlimited reviews, on any plan (Free included).\n\n' +
             'Want more trial reviews to finish evaluating before adding a key? ' +
             '[Talk to our founders](https://cal.com/gabrielmalinosqui/30min). 😎\n\n' +
@@ -992,7 +992,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         return (
             '## BYOK Configuration Required! 🔑\n\n' +
             'Your plan requires a Bring Your Own Key (BYOK) configuration to perform code reviews.\n\n' +
-            'Please configure your API keys in [Settings > BYOK Configuration](https://app.kodus.io/organization/byok).\n\n' +
+            'Please configure your API keys in [AI Providers](https://app.kodus.io/byok).\n\n' +
             '<!-- kody-codereview -->'
         );
     }

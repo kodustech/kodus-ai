@@ -38,7 +38,6 @@ import { ConnectProviderFlow } from "../connect-provider-flow";
 import { FirstRunCard } from "../first-run-card";
 import { ModelRow } from "../model-row";
 import { ProviderGroupHeader } from "../provider-group-header";
-import { SpendLimitSection } from "../spend-limit-section";
 
 type ModelsTabProps = {
     config: BYOKConfig | null | undefined;
@@ -99,7 +98,7 @@ export const ModelsTab = ({
                 blob,
             );
             toast({ variant: "success", title: successTitle });
-            await revalidateServerSidePath("/organization/byok");
+            await revalidateServerSidePath("/byok");
             setView({ mode: "list" });
             router.refresh();
         } catch {
@@ -150,7 +149,7 @@ export const ModelsTab = ({
             // Non-curated model: the manual form edits it in place (pre-filled
             // via ?model=<id>), not a blank "add" form.
             router.push(
-                `/organization/byok/manual?model=${encodeURIComponent(model.id)}`,
+                `/byok/manual?model=${encodeURIComponent(model.id)}`,
             );
             return;
         }
@@ -170,7 +169,7 @@ export const ModelsTab = ({
     //    disconnect) lives in delete-model-flow via ModelRow. The tab only needs
     //    to refresh the pool once a model is actually removed.
     const handleDeleted = async () => {
-        await revalidateServerSidePath("/organization/byok");
+        await revalidateServerSidePath("/byok");
         router.refresh();
     };
 
@@ -306,18 +305,18 @@ export const ModelsTab = ({
                                 variant="helper"
                                 leftIcon={<PlusIcon />}
                                 onClick={() =>
-                                    // Curated providers get the in-place model
-                                    // cards; a non-curated one goes straight to the
-                                    // manual form pre-scoped to it (key reused),
-                                    // skipping the empty "pick a model" middle step.
-                                    curatedProviders.has(credential.provider)
-                                        ? setView({
-                                              mode: "add",
-                                              provider: credential.provider,
-                                          })
-                                        : router.push(
-                                              `/organization/byok/manual?provider=${encodeURIComponent(credential.provider)}`,
-                                          )
+                                    // Adding a model to a CONNECTED provider is a
+                                    // SELECTION task, not discovery: the provider is
+                                    // already chosen + keyed, so go straight to the
+                                    // model picker scoped to it — a live dropdown of
+                                    // the provider's REAL models (key reused, provider
+                                    // locked), not our curated marketing cards. The
+                                    // curated cards stay for FIRST connect ("Add
+                                    // another provider"), where discovery guidance
+                                    // earns its place.
+                                    router.push(
+                                        `/byok/manual?provider=${encodeURIComponent(credential.provider)}`,
+                                    )
                                 }>
                                 Add model
                             </Button>
@@ -325,14 +324,6 @@ export const ModelsTab = ({
                     </div>
                 </ProviderGroupHeader>
             ))}
-
-            {/* Spend limit lives at the foot of the Providers tab (the Budget tab
-                was folded in): alert-only, you pay providers directly. A divider
-                separates it from the provider pool now that the add-provider
-                action moved up into the section header. */}
-            <div className="border-card-lv2 border-t pt-4">
-                <SpendLimitSection teamId={teamId} />
-            </div>
         </div>
     );
 };

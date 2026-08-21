@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { Injectable, Optional } from '@nestjs/common';
 
 import {
@@ -203,7 +204,10 @@ export class ReviewOrchestratorService {
                     ),
                 });
             } catch (error) {
-                this.logger.error({
+                // Terminal BYOK (suspended key / no credit) → warn, not error:
+                // the user's provider config, not a Kodus fault. A real fault
+                // stays error. (Consistent with the sub-services.)
+                this.logger[llmErrorLogLevel(error)]({
                     message: `[AGENT] ${task.name} agent failed for PR#${agentInput.prNumber}`,
                     context: ReviewOrchestratorService.name,
                     error,
@@ -274,7 +278,7 @@ export class ReviewOrchestratorService {
                     durationMs: 0,
                 });
 
-                this.logger.error({
+                this.logger[llmErrorLogLevel(err)]({
                     message: `[AGENT] ${agentName} failed: ${err.message || 'Unknown error'}`,
                     context: ReviewOrchestratorService.name,
                     error: err,

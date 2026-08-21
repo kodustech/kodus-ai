@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LLM } from '@libs/llm/llm';
+import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { createLogger } from '@libs/core/log/logger';
 import {
     prompt_validateCodeSemantics,
@@ -60,7 +61,10 @@ export class SuggestionLLMValidator {
 
             return result;
         } catch (error) {
-            this.logger.error({
+            // Terminal BYOK failure (suspended key / out of credit) → warn, not
+            // error: it's the user's provider config, and it fans out to every
+            // suggestion. A real fault stays error.
+            this.logger[llmErrorLogLevel(error)]({
                 message: 'Error executing LLM validation',
                 context: SuggestionLLMValidator.name,
                 metadata: {
@@ -123,7 +127,8 @@ export class SuggestionLLMValidator {
 
             return result;
         } catch (error) {
-            this.logger.error({
+            // See above: terminal BYOK billing/auth → warn, real fault → error.
+            this.logger[llmErrorLogLevel(error)]({
                 message: 'Error checking suggestion simplicity',
                 error,
                 context: SuggestionLLMValidator.name,

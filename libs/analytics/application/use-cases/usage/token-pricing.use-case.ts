@@ -534,9 +534,19 @@ export class TokenPricingUseCase {
     /**
      * Catalog keys are either the bare model id (`kimi-k2.6`) or
      * provider-prefixed (`moonshotai/kimi-k2.6`, `vertex_ai/gemini-...`). We
-     * try exact match, then the unprefixed variant, then provider-prefixed
-     * variants, then a best-effort prefix search (on the full key AND its last
-     * segment) so versioned or provider-nested ids still resolve.
+     * try exact match, then the unprefixed variant, then the BARE last segment,
+     * then provider-prefixed variants, then a best-effort prefix search (on the
+     * full key AND its last segment) so versioned or provider-nested ids still
+     * resolve.
+     *
+     * The bare-last-segment candidate is what prices DEEP-PATHED ids like
+     * Fireworks' `accounts/fireworks/models/deepseek-v4-flash-0731`:
+     * `withoutPrefix` only strips the FIRST segment (`accounts/`), leaving a
+     * 3-segment path that matches no catalog key, so before this the model
+     * resolved to $0.00 even though the catalog prices it under the bare id
+     * `deepseek-v4-flash-0731`. This mirrors the write-side `canonicalNames`,
+     * which already emits the bare form — the price path just wasn't. Kept LAST
+     * so a provider-prefixed exact match still wins over the bare alias.
      */
     private lookupModel(
         catalog: PricingCatalog,
@@ -557,8 +567,17 @@ export class TokenPricingUseCase {
         const withoutPrefix = colonNormalized.includes('/')
             ? colonNormalized.split('/').slice(1).join('/')
             : colonNormalized;
+        // The bare last segment (`accounts/fireworks/models/X` → `X`) — the form
+        // a deep-pathed provider id shares with the catalog's bare alias.
+        const bareLastSegment = colonNormalized.split('/').pop()!;
 
-        const direct = [normalized, lowered, colonNormalized, withoutPrefix];
+        const direct = [
+            normalized,
+            lowered,
+            colonNormalized,
+            withoutPrefix,
+            bareLastSegment,
+        ];
         for (const key of direct) {
             if (catalog[key]) return { id: key, data: catalog[key] };
         }

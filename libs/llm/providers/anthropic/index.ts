@@ -15,6 +15,7 @@ import {
 } from './traits';
 import { registerProvider } from '../kernel/registry';
 import { anthropicEphemeralCacheHint } from '../kernel/anthropic-cache';
+import { withThinkingSignatureRepair } from './thinking-repair';
 import { anthropicModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -153,9 +154,14 @@ export const anthropicModule: ProviderModule = {
         if ((cfg.provider as string) === 'anthropic_compatible') {
             // @ai-sdk/anthropic appends /messages to the base, so the base must
             // carry the /v1 suffix — normalize whatever the user pasted.
+            //
+            // Compatible upstreams (Kimi/Z.ai/DeepSeek) emit `thinking` blocks with
+            // no `signature`, which @ai-sdk/anthropic@4's schema rejects → repair the
+            // response before it parses. No-op for native Anthropic (always signed).
             return createAnthropic({
                 apiKey: cfg.apiKey,
                 baseURL: `${anthropicCompatibleRootURL(cfg.baseURL || '')}/v1`,
+                fetch: withThinkingSignatureRepair(fetch),
             })(cfg.model);
         }
         return createAnthropic({

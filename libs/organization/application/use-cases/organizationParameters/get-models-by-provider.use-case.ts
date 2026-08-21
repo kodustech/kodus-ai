@@ -11,6 +11,8 @@ import {
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import axios from 'axios';
 
+import { isCustomEndpoint } from '@libs/llm/providers/provider-ui-descriptor';
+
 import { resolveByokSlot } from './byok-credentials.util';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 
@@ -51,7 +53,29 @@ export class GetModelsByProviderUseCase {
             : null;
         const listing = providerModule?.modelListing?.(provider) ?? null;
 
+        // The provider module's curated catalog (the well-known models a brand
+        // ships), mapped to the response shape. It's the fallback whenever a live
+        // `/models` call can't run — no listing / a `manual` listing, no key yet,
+        // or the fetch failed — so the picker lists a curated brand's models
+        // instead of forcing hand-entry. The live list takes over once possible.
+        const curatedFallback = (): ModelResponse | null => {
+            // A `*_compatible` custom endpoint points at the USER's own proxy —
+            // it is NOT the brand, so the brand's curated catalog (reached via the
+            // module alias) must not stand in for the user's real model list.
+            if (isCustomEndpoint(provider)) return null;
+            const curated = providerModule?.catalog;
+            if (!curated?.length) return null;
+            return {
+                provider: byokProvider,
+                models: curated.map((m) => ({ id: m.id, name: m.displayName })),
+            };
+        };
+
         if (!listing || listing.kind === 'manual') {
+            // A curated brand with a manual listing (e.g. Z.ai/GLM over the
+            // Anthropic protocol) still enumerates its curated models.
+            const curated = curatedFallback();
+            if (curated) return curated;
             throw new BadRequestException(
                 `Model listing is not available for ${provider} — enter the model ID manually.`,
             );
@@ -81,6 +105,16 @@ export class GetModelsByProviderUseCase {
                 : undefined) ??
             listing.defaultBaseURL;
 
+        // No key yet — e.g. a NEW connect where the user typed the key in the form
+        // but hasn't saved it, so `resolveByokSlot` finds nothing. The live
+        // `/models` call would 401, so fall back to the curated catalog: the big
+        // providers (OpenAI, …) still list their known models keyless, and the
+        // live list takes over automatically once a key is stored.
+        if (!apiKey) {
+            const curated = curatedFallback();
+            if (curated) return curated;
+        }
+
         if (listing.requiresBaseURL) {
             if (!baseURL) {
                 throw new BadRequestException(
@@ -107,6 +141,12 @@ export class GetModelsByProviderUseCase {
                 models: listing.parse(response.data),
             };
         } catch (error) {
+            // Live fetch failed (bad/expired key, provider down, parse error). If
+            // the provider ships a curated catalog, degrade to it instead of
+            // breaking the picker; only a provider with NO curated list surfaces
+            // the error (→ the UI's "type the model id" fallback).
+            const curated = curatedFallback();
+            if (curated) return curated;
             throw new BadRequestException(
                 `Error fetching ${provider} models: ${(error as Error).message}`,
             );

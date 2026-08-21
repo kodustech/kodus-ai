@@ -197,7 +197,7 @@ describe('01-02 ported modules — static conformance', () => {
     runStaticConformance(moonshotModule, {
         provider: 'moonshot',
         model: 'kimi-k2.7-code',
-        baseURL: 'https://api.moonshot.ai/v1',
+        baseURL: 'https://api.moonshot.ai/anthropic',
     });
     // bedrock authenticates via aws* fields, not apiKey — give it a bearer token.
     runStaticConformance(bedrockModule, {
@@ -281,7 +281,13 @@ const CONFORMANCE_SAMPLES: Record<
         fixture: novitaPlainFixture as ProviderFixture,
     },
     moonshot: {
-        cfg: sampleConfig('moonshot', 'kimi-k2.7-code'),
+        // Kimi over the Moonshot Anthropic endpoint — builds the @ai-sdk/anthropic
+        // client offline; normalizes via the shared anthropic usage extractor.
+        cfg: sampleConfig(
+            'moonshot',
+            'kimi-k2.7-code',
+            'https://api.moonshot.ai/anthropic',
+        ),
         fixture: moonshotPlainFixture as ProviderFixture,
     },
     azure: {

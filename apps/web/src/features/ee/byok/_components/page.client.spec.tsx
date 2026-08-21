@@ -91,7 +91,7 @@ jest.mock("next/navigation", () => ({
         back: jest.fn(),
         prefetch: jest.fn(),
     }),
-    usePathname: () => "/organization/byok",
+    usePathname: () => "/byok",
     useSearchParams: () => new URLSearchParams(),
     useParams: () => ({}),
 }));

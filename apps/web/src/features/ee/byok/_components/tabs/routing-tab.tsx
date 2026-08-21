@@ -391,9 +391,10 @@ export const RoutingTab = ({
                                 Fallback (optional)
                             </span>
                             <span className="text-text-tertiary text-xs">
-                                Used for any task whose model can&apos;t run it —
-                                e.g. it&apos;s missing a capability the task needs
-                                (or its key).
+                                Runs when a task&apos;s model fails — a bad or
+                                expired key, no credit, or the provider being down
+                                (after its own retries). Kody re-runs that call once
+                                on this model instead.
                             </span>
                         </div>
                         {showFallback ? (

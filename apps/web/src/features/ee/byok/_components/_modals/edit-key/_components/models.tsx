@@ -36,7 +36,13 @@ import {
 // currently empty — default to none. Re-add via the catalog endpoint if needed.
 const annotations: CuratedModelsCatalog["annotations"] = {};
 
-export const ByokModelSelect = () => {
+export const ByokModelSelect = ({
+    excludeIds = [],
+}: {
+    /** Model ids to hide from the dropdown — e.g. models already enabled on this
+     *  provider, so "Add model" never offers a duplicate. */
+    excludeIds?: string[];
+} = {}) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
     const { providers } = useSuspenseGetLLMProviders();
@@ -66,7 +72,12 @@ export const ByokModelSelect = () => {
         );
     }
 
-    return <ModelSelect onUseManual={() => setManual(true)} />;
+    return (
+        <ModelSelect
+            excludeIds={excludeIds}
+            onUseManual={() => setManual(true)}
+        />
+    );
 };
 
 // Exported lightweight manual input for external fallbacks
@@ -115,12 +126,25 @@ const ModelInput = ({ onBackToSelect }: { onBackToSelect?: () => void }) => {
     );
 };
 
-const ModelSelect = ({ onUseManual }: { onUseManual?: () => void }) => {
+const ModelSelect = ({
+    onUseManual,
+    excludeIds = [],
+}: {
+    onUseManual?: () => void;
+    excludeIds?: string[];
+}) => {
     const form = useFormContext<EditKeyForm>();
     const [open, setOpen] = useState(false);
     const provider = form.watch("provider");
-    const { models } = useSuspenseGetLLMProviderModels({ provider });
+    const { models: allModels } = useSuspenseGetLLMProviderModels({ provider });
     const { reset: resetErrorBoundary } = useQueryErrorResetBoundary();
+
+    // Hide already-enabled models (add-model never offers a duplicate). Never
+    // filter out the currently-selected value, so an edit that lands on an
+    // "enabled" id still renders its own label.
+    const selected = form.watch("model");
+    const excludeSet = new Set(excludeIds.filter((id) => id !== selected));
+    const models = allModels.filter((m) => !excludeSet.has(m.id));
 
     const { providers } = useSuspenseGetLLMProviders();
     const foundProvider = providers.find((p) => p.id === provider);

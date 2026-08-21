@@ -1,5 +1,6 @@
 import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
 import { BYOKProvider } from '@libs/llm/model-providers';
+import { REGISTRY } from '@libs/llm/providers';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Injectable } from '@nestjs/common';
@@ -196,15 +197,16 @@ export class TestByokConnectionUseCase {
             );
         }
 
-        // Anthropic-compatible: probe the real /v1/messages endpoint with a
-        // 1-token request instead of /v1/models. Some vendors gate the two
-        // differently — Kimi Code's models list is open while chat is
-        // restricted — so a models-list probe can report "connection OK"
-        // for a key whose actual reviews would fail.
-        if (byokProvider === BYOKProvider.ANTHROPIC_COMPATIBLE) {
+        // Anthropic-protocol brands + the generic compatible endpoint: probe the
+        // real /v1/messages endpoint with a 1-token request instead of /v1/models.
+        // Some vendors gate the two differently — Kimi Code's models list is open
+        // while chat is restricted — so a models-list probe can report "connection
+        // OK" for a key whose actual reviews would fail. (Native `anthropic`, with
+        // its hardcoded api.anthropic.com endpoint, is handled in buildProbeRequest.)
+        if (this.isAnthropicProtocolWithBaseURL(byokProvider)) {
             if (!baseURL?.trim()) {
                 throw new BadRequestException(
-                    'baseURL is required for anthropic_compatible',
+                    `baseURL is required for ${byokProvider}`,
                 );
             }
             return await this.testAnthropicCompatible(
@@ -627,6 +629,24 @@ export class TestByokConnectionUseCase {
             const match = body.match(/<Message>([^<]+)<\/Message>/);
             return match ? { message: match[1] } : null;
         }
+    }
+
+    /**
+     * True for an Anthropic-protocol provider that carries a user/curated baseURL:
+     * the generic `anthropic_compatible` custom endpoint and every first-class
+     * brand built from the anthropicBrandModule factory (Moonshot/Kimi, Z.ai/GLM).
+     * Derived from the registry (namespace === 'anthropic') so a new Anthropic brand
+     * routes here automatically — no per-brand edit. Native `anthropic` is excluded
+     * (hardcoded endpoint + x-api-key, handled in buildProbeRequest); Vertex/Bedrock
+     * are intercepted earlier in execute() before this ever runs.
+     */
+    private isAnthropicProtocolWithBaseURL(provider: BYOKProvider): boolean {
+        if (provider === BYOKProvider.ANTHROPIC) return false;
+        return (
+            REGISTRY.has(provider) &&
+            REGISTRY.get(provider).providerOptionsNamespace?.(provider) ===
+                'anthropic'
+        );
     }
 
     private buildProbeRequest(

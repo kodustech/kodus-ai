@@ -44,11 +44,21 @@ export interface ModelRuntimeStats {}
  *    effective model name to apply onto the chosen slot's `.model`. The chosen
  *    slot supplies the credential; this overrides just the model string,
  *    mirroring the legacy `byokModel`-onto-`.main` behavior (REQ-COMPAT-01).
+ *  - `usedFallback`: true when the winning tier was `fallbackModelId` (the
+ *    primary tiers all failed the capability/credential gate). Rides onto the
+ *    usage span so a silent primary→fallback swap is visible, not invisible.
+ *
+ * NOTE the span's `route` dimension is the routing TASK (codeReview/prSummary/…),
+ * NOT the tier — it is stamped from `resolveTaskSlot`'s task argument, not from
+ * this verdict. The precedence tier that won lives only in `reason` (debug
+ * trace), deliberately not a billing dimension, to keep the span's routing axis
+ * a single clear signal: which task, and did it fall back.
  */
 export interface RoutingVerdict {
     modelId: string | null;
     reason: string;
     modelName?: string;
+    usedFallback?: boolean;
 }
 
 /**

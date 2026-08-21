@@ -8,18 +8,13 @@ import {
     listByokProviders,
     type ByokProviderDescriptor,
 } from "@services/organizationParameters/fetch";
-import { ArrowLeftIcon, LinkIcon } from "lucide-react";
+import { CheckCircle2Icon, LinkIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { useCatalog } from "../_data/catalog-context";
 import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConnectInput } from "../_types";
-import { CuratedConnectPanel } from "./catalog/connect-panel";
-import {
-    CuratedModelCard,
-    ModelCardLegend,
-    PROVIDER_LABELS,
-} from "./catalog/model-card";
+import { PROVIDER_LABELS } from "./catalog/model-card";
 import { ProviderLogo } from "./provider-logo";
 
 type ProviderChoice = {
@@ -42,11 +37,11 @@ type ProviderChoice = {
  */
 /**
  * The provider IDENTITY a curated model groups under: its BRAND (`providerKey`,
- * e.g. `moonshot` / `zai`) when set, else the TRANSPORT `provider` (e.g.
- * `openai_compatible`). The picker groups AND filters by this, so a brand served
- * over a shared transport still gets its own card (Moonshot, Z.ai) instead of
- * being lumped under the generic "OpenAI-compatible" bucket. The stored config
- * still uses the transport `provider` + baseURL — this only affects the UI.
+ * e.g. `moonshot` / `zai`), which now equals the stored `provider` too — a brand
+ * is a first-class provider whose module resolves its own wire protocol, so the
+ * picker groups/filters, the connect payload, and the connected view all key on
+ * the same id (no transport-to-brand recovery). `?? m.provider` stays as a
+ * defensive fallback for any entry without an explicit brand key.
  */
 const providerKeyOf = (m: CuratedModel): string => m.providerKey ?? m.provider;
 
@@ -123,14 +118,6 @@ export const registryProviders = (
     return out;
 };
 
-const providerLabelFor = (
-    providerId: string,
-    providers: ProviderChoice[],
-): string =>
-    PROVIDER_LABELS[providerId] ??
-    providers.find((p) => p.id === providerId)?.label ??
-    providerId;
-
 /** "Custom" providers are the ones you must point at an endpoint (`*_compatible`)
  *  or where you run an arbitrary model on a cloud you configure (Vertex, Bedrock,
  *  Azure). Everything ELSE is a first-class provider you connect with just a key —
@@ -148,9 +135,12 @@ const isCustomProvider = (id: string): boolean =>
  *  provider. */
 function ProviderGridCard({
     provider,
+    connected,
     onPick,
 }: {
     provider: ProviderChoice;
+    /** The org already has a stored (non-managed) key for this provider. */
+    connected?: boolean;
     onPick: (p: ProviderChoice) => void;
 }) {
     // No curated models AND not auto-listable ⇒ a custom endpoint the user must
@@ -170,18 +160,24 @@ function ProviderGridCard({
                 <span className="text-text-primary line-clamp-2 text-sm leading-tight font-semibold">
                     {provider.label}
                 </span>
-                <span className="text-text-tertiary flex items-center gap-1 text-xs tabular-nums">
-                    {provider.modelCount > 0 ? (
-                        `${provider.modelCount} ${provider.modelCount === 1 ? "model" : "models"}`
-                    ) : needsEndpoint ? (
-                        <>
+                {/* Model COUNT dropped — there's no per-provider model list to
+                    preview anymore (you go straight to the Add-a-model form), so a
+                    count reads as a promise the flow no longer makes. When a key is
+                    already stored we say so (you're adding another model, reusing
+                    it); otherwise only the "custom endpoint" hint stays. */}
+                {connected ? (
+                    <span className="text-success flex items-center gap-1 text-xs">
+                        <CheckCircle2Icon size={11} className="shrink-0" />
+                        Connected
+                    </span>
+                ) : (
+                    needsEndpoint && (
+                        <span className="text-text-tertiary flex items-center gap-1 text-xs">
                             <LinkIcon size={10} className="shrink-0" />
                             Custom endpoint
-                        </>
-                    ) : (
-                        "Browse models"
-                    )}
-                </span>
+                        </span>
+                    )
+                )}
             </span>
         </button>
     );
@@ -244,116 +240,20 @@ export function ConnectProviderFlow({
         registry && registry.length > 0
             ? registryProviders(catalog, registry)
             : catalogProviders(catalog);
-    const [pickedProvider, setPickedProvider] = useState<string | null>(
-        lockedProvider ?? null,
-    );
-    const [selected, setSelected] = useState<CuratedModel | null>(null);
-
-    // A specific model pick — its dedicated connect panel (key + test). When the
-    // provider already has a stored key it is passed through so the panel offers
-    // "leave blank to keep" instead of demanding the key again.
-    if (selected) {
-        return (
-            <CuratedConnectPanel
-                model={selected}
-                existingKey={existingKeyByProvider[selected.provider]}
-                onBack={() => setSelected(null)}
-                onSave={onSave}
-            />
-        );
-    }
-
-    // A provider was chosen (via the grid) or locked in by the caller — pick
-    // which of ITS models to enable next. All of the provider's catalog models,
-    // sorted by benchmark; never the tier-recommended subset.
-    if (pickedProvider) {
-        const locked = !!lockedProvider;
-        const label = providerLabelFor(pickedProvider, providers);
-        const providerModels = catalog
-            .filter((m) => providerKeyOf(m) === pickedProvider)
-            .sort((a, b) => b.benchmarkScore - a.benchmarkScore);
-
-        return (
-            <div className="flex flex-col gap-5">
-                <div className="flex flex-col gap-1">
-                    {locked
-                        ? onCancel && (
-                              <Button
-                                  type="button"
-                                  size="xs"
-                                  variant="cancel"
-                                  leftIcon={<ArrowLeftIcon />}
-                                  className="-ml-2 self-start"
-                                  onClick={onCancel}>
-                                  Back
-                              </Button>
-                          )
-                        : (
-                              <Button
-                                  type="button"
-                                  size="xs"
-                                  variant="cancel"
-                                  leftIcon={<ArrowLeftIcon />}
-                                  className="-ml-2 self-start"
-                                  onClick={() => setPickedProvider(null)}>
-                                  All providers
-                              </Button>
-                          )}
-                    <h3 className="text-text-primary text-lg font-semibold text-balance">
-                        {locked ? `Add a model to ${label}` : `Connect ${label}`}
-                    </h3>
-                    <p className="text-text-secondary text-sm text-pretty">
-                        {locked
-                            ? `Pick a model to enable — your ${label} key is already stored.`
-                            : `Pick a model to enable — you’ll paste your ${label} key next.`}
-                    </p>
-                </div>
-
-                {providerModels.length > 0 ? (
-                    <div className="flex flex-col gap-3">
-                        {/* Score/legend omitted here — picking the best model per
-                            task is the Routing tab's job; connect just enables a
-                            provider's models. */}
-                        <ModelCardLegend showScore={false} />
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {providerModels.map((model) => (
-                                <CuratedModelCard
-                                    key={model.id}
-                                    model={model}
-                                    showConnect
-                                    showScore={false}
-                                    onSelect={() => setSelected(model)}
-                                />
-                            ))}
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-start gap-3">
-                        <p className="text-text-tertiary text-sm text-pretty">
-                            {locked
-                                ? `Pick or type a ${label} model on the next screen — your key is already stored.`
-                                : `Set up ${label} on the next screen — add your key, then pick from its model list (or type a model ID).`}
-                        </p>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="primary"
-                            onClick={() =>
-                                // Pre-scope the manual form to THIS provider (and
-                                // reuse a stored key). The manual screen lists the
-                                // provider's models when it can, or takes a typed
-                                // model id — driven by the registry per provider.
-                                router.push(
-                                    `/organization/byok/manual?provider=${encodeURIComponent(pickedProvider)}`,
-                                )
-                            }>
-                            Continue
-                        </Button>
-                    </div>
-                )}
-            </div>
-        );
-    }
+    // Every provider now opens the SAME single Add-a-model form (the /manual
+    // form) — there is no separate model-cards screen. A locked provider (the
+    // "Add a model to {Provider}" entry) skips the grid and goes straight to
+    // that provider's form too.
+    useEffect(() => {
+        if (lockedProvider) {
+            router.replace(
+                `/byok/manual?provider=${encodeURIComponent(
+                    lockedProvider,
+                )}`,
+            );
+        }
+    }, [lockedProvider, router]);
+    if (lockedProvider) return null;
 
     // Defensive: an empty catalog can't drive a provider-first pick.
     if (providers.length === 0) {
@@ -382,14 +282,22 @@ export function ConnectProviderFlow({
     // key — curated or Browse) and Custom (bring-your-own endpoint / arbitrary
     // model). A provider with curated models opens its in-place list; the rest go
     // to the manual form. Model choice PER TASK is the Routing tab's job.
+    // Every provider opens the SAME single Add-a-model form — no separate
+    // model-cards screen. The form lists the provider's models when it can, or
+    // takes a typed model id (driven by the registry per provider).
     const onPickProvider = (p: ProviderChoice) =>
-        p.modelCount > 0
-            ? setPickedProvider(p.id)
-            : router.push(
-                  `/organization/byok/manual?provider=${encodeURIComponent(p.id)}`,
-              );
+        router.push(
+            `/byok/manual?provider=${encodeURIComponent(p.id)}`,
+        );
     const mainProviders = providers.filter((p) => !isCustomProvider(p.id));
     const customProviders = providers.filter((p) => isCustomProvider(p.id));
+    // Providers the org already connected (a stored non-managed key), normalized
+    // so `open_router`/`openrouter`-style id variants match the grid's ids.
+    const connectedIds = new Set(
+        Object.keys(existingKeyByProvider).map(normalizeId),
+    );
+    const isConnected = (p: ProviderChoice) =>
+        connectedIds.has(normalizeId(p.id));
 
     return (
         <Card
@@ -413,6 +321,7 @@ export function ConnectProviderFlow({
                                     <ProviderGridCard
                                         key={p.id}
                                         provider={p}
+                                        connected={isConnected(p)}
                                         onPick={onPickProvider}
                                     />
                                 ))}
@@ -430,6 +339,7 @@ export function ConnectProviderFlow({
                                     <ProviderGridCard
                                         key={p.id}
                                         provider={p}
+                                        connected={isConnected(p)}
                                         onPick={onPickProvider}
                                     />
                                 ))}

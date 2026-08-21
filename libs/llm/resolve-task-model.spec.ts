@@ -58,6 +58,10 @@ describe('resolveTaskSlot', () => {
             expect(res.slot?.provider).toBe('openai');
             // The slot carries the CIPHERTEXT key — never decrypted here.
             expect(res.slot?.apiKey).toBe('enc-oa');
+            // Routing provenance rides on the slot: `route` is the TASK (not the
+            // tier), giving the usage span its per-task dimension.
+            expect(res.slot?.route).toBe('codeReview');
+            expect(res.slot?.usedFallback).toBe(false);
         });
 
         it('routes to an id override (verdict.modelId parity)', () => {
@@ -133,6 +137,84 @@ describe('resolveTaskSlot', () => {
             expect(logged).not.toContain('PLAINTEXT');
 
             spies.forEach((s) => s.mockRestore());
+        });
+    });
+
+    describe('runtime fallback (slot.fallback)', () => {
+        it('stamps a distinct, eligible fallback onto slot.fallback', () => {
+            const res = resolveTaskSlot(
+                v2({ defaultModelId: 'm-A', fallbackModelId: 'm-B' }),
+                'codeReview',
+                {},
+            );
+
+            // primary
+            expect(res.slot?.model).toBe('gpt-4o');
+            expect(res.slot?.usedFallback).toBe(false);
+            // fallback rides inside the slot: distinct model, task-tagged, flagged
+            // usedFallback, ciphertext preserved. The one-hop invariant (no nested
+            // fallback) is enforced by the TYPE now — `Omit<NormalizedModel,
+            // 'fallback'>` makes `.fallback.fallback` a compile error, so there is
+            // nothing to assert at runtime.
+            expect(res.slot?.fallback?.model).toBe('gpt-5-mini');
+            expect(res.slot?.fallback?.route).toBe('codeReview');
+            expect(res.slot?.fallback?.usedFallback).toBe(true);
+            expect(res.slot?.fallback?.apiKey).toBe('enc-oa');
+        });
+
+        it('omits fallback when none is configured', () => {
+            const res = resolveTaskSlot(
+                v2({ defaultModelId: 'm-A' }),
+                'codeReview',
+                {},
+            );
+            expect(res.slot?.fallback).toBeUndefined();
+        });
+
+        it('omits fallback when it resolves to the same model as the primary', () => {
+            const res = resolveTaskSlot(
+                v2({ defaultModelId: 'm-A', fallbackModelId: 'm-A' }),
+                'codeReview',
+                {},
+            );
+            expect(res.slot?.model).toBe('gpt-4o');
+            expect(res.slot?.fallback).toBeUndefined();
+        });
+
+        it('omits fallback when the configured fallback fails the gate', () => {
+            // m-A (openai) is a valid primary; the configured fallback m-M has a
+            // MANAGED credential, so resolveFallback gates it out — a fallback that
+            // can't run is never offered.
+            const res = resolveTaskSlot(
+                v2(
+                    { defaultModelId: 'm-A', fallbackModelId: 'm-M' },
+                    [
+                        { id: 'm-A', credentialId: 'c-oa', model: 'gpt-4o' },
+                        { id: 'm-M', credentialId: 'c-m', model: 'gpt-4o' },
+                    ],
+                    [
+                        { id: 'c-oa', provider: 'openai', apiKey: 'enc-oa' },
+                        { id: 'c-m', provider: 'openai', managed: true },
+                    ],
+                ),
+                'codeReview',
+                {},
+            );
+            expect(res.slot?.model).toBe('gpt-4o');
+            expect(res.slot?.fallback).toBeUndefined();
+        });
+
+        it('omits fallback when the model that WON is already the fallback', () => {
+            // No default/override → the primary tier is empty, so the fallback wins
+            // at gate-time (usedFallback). There is nothing further to cascade to.
+            const res = resolveTaskSlot(
+                v2({ fallbackModelId: 'm-B' }),
+                'codeReview',
+                {},
+            );
+            expect(res.slot?.model).toBe('gpt-5-mini');
+            expect(res.slot?.usedFallback).toBe(true);
+            expect(res.slot?.fallback).toBeUndefined();
         });
     });
 });

@@ -4,6 +4,7 @@ import {
     classifyLLMError,
     getClassification,
     isTerminalCategory,
+    llmErrorLogLevel,
 } from './error-classifier';
 import {
     AgentContextWindowTooSmallError,
@@ -135,6 +136,24 @@ describe('classifyLLMError', () => {
         it('Anthropic credit_balance_too_low → QUOTA_EXCEEDED', () => {
             const err = new Error(
                 'Your credit balance is too low (code: credit_balance_too_low)',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
+        it('Moonshot account-suspended prose (no status) → QUOTA_EXCEEDED', () => {
+            const err = new Error(
+                'Account gabriel-xxx is suspended, possibly due to reaching the monthly spending limit or failure to pay past invoices.',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
+        it('"account is suspended due to insufficient credit" → QUOTA_EXCEEDED', () => {
+            const err = new Error(
+                'Your account org-abc is suspended due to insufficient credit balance.',
             );
             expect(classifyLLMError(err).category).toBe(
                 LlmErrorCategory.QUOTA_EXCEEDED,
@@ -310,6 +329,21 @@ describe('isTerminalCategory', () => {
         LlmErrorCategory.UNKNOWN,
     ])('%s is not terminal', (cat) => {
         expect(isTerminalCategory(cat)).toBe(false);
+    });
+});
+
+describe('llmErrorLogLevel', () => {
+    it('terminal BYOK billing (suspended account) → warn', () => {
+        const err = new Error('Account xxx is suspended, spending limit reached');
+        expect(llmErrorLogLevel(err)).toBe('warn');
+    });
+    it('auth-invalid → warn', () => {
+        expect(llmErrorLogLevel(errorWithStatus('nope', 401))).toBe('warn');
+    });
+    it('unknown / genuine fault → error', () => {
+        expect(llmErrorLogLevel(new Error('TypeError: x is not a function'))).toBe(
+            'error',
+        );
     });
 });
 

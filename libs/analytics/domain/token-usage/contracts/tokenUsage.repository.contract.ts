@@ -6,6 +6,8 @@ import {
     DailyUsageByPrResultContract,
     UsageByPrResultContract,
     UsageByAreaResultContract,
+    UsageByTaskAreaResultContract,
+    UsageByTaskModelSpanContract,
     UsageByReviewResultContract,
 } from '../types/tokenUsage.types';
 
@@ -59,5 +61,7 @@ export interface ITokenUsageRepository {
         daily: DailyUsageResultContract[];
         byPr: UsageByPrResultContract[];
         byArea: UsageByAreaResultContract[];
+        byTaskArea: UsageByTaskAreaResultContract[];
+        byTaskModelSpan: UsageByTaskModelSpanContract[];
     }>;
 }

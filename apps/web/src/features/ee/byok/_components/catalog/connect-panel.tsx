@@ -303,66 +303,75 @@ export function CuratedConnectPanel({
                         />
                     )}
 
-                    {existingKey && (
-                        <Alert variant="info">
-                            <AlertDescription className="text-pretty">
-                                A key for <strong>{providerLabel}</strong> is
-                                already stored. Paste a new one to replace it
-                                — or leave blank to keep the current key while
-                                you switch models or tweak advanced settings.
-                            </AlertDescription>
-                        </Alert>
+                    {/* Provider already connected (add-model / switch-model): the
+                        key lives at the credential level, so this panel never
+                        re-asks for it — just a muted confirmation + where to change
+                        it. Changing the key is the dedicated "Edit key" flow. */}
+                    {existingKey ? (
+                        <p className="text-text-tertiary text-xs text-pretty">
+                            Using your stored <strong>{providerLabel}</strong> key.
+                            {activeBaseURL && (
+                                <>
+                                    {" "}
+                                    Endpoint:{" "}
+                                    <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
+                                        {activeBaseURL}
+                                    </code>
+                                </>
+                            )}{" "}
+                            Change it in <strong>Edit key</strong>.
+                        </p>
+                    ) : (
+                        <Controller
+                            name="apiKey"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <FormControl.Root>
+                                    <FormControl.Label htmlFor={field.name}>
+                                        {providerLabel} API key
+                                    </FormControl.Label>
+                                    <FormControl.Input>
+                                        <SecretInput
+                                            id={field.name}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                                field.onChange(e);
+                                                resetTestOnChange();
+                                            }}
+                                            placeholder={`Paste your ${providerLabel} API key`}
+                                            error={fieldState.error}
+                                        />
+                                    </FormControl.Input>
+                                    <FormControl.Helper>
+                                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                            <a
+                                                href={activeApiKeyUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-primary-light inline-flex items-center gap-1 hover:underline">
+                                                Get a key from {providerLabel}
+                                                {variant
+                                                    ? ` (${variant.label})`
+                                                    : ""}
+                                                <ExternalLinkIcon size={12} />
+                                            </a>
+                                            {activeBaseURL && (
+                                                <span className="text-text-tertiary text-xs">
+                                                    Endpoint:{" "}
+                                                    <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
+                                                        {activeBaseURL}
+                                                    </code>
+                                                </span>
+                                            )}
+                                        </span>
+                                    </FormControl.Helper>
+                                    <FormControl.Error>
+                                        {fieldState.error?.message}
+                                    </FormControl.Error>
+                                </FormControl.Root>
+                            )}
+                        />
                     )}
-
-                    <Controller
-                        name="apiKey"
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                            <FormControl.Root>
-                                <FormControl.Label htmlFor={field.name}>
-                                    {providerLabel} API key
-                                </FormControl.Label>
-                                <FormControl.Input>
-                                    <SecretInput
-                                        id={field.name}
-                                        value={field.value ?? ""}
-                                        onChange={(e) => {
-                                            field.onChange(e);
-                                            resetTestOnChange();
-                                        }}
-                                        placeholder={`Paste your ${providerLabel} API key`}
-                                        error={fieldState.error}
-                                    />
-                                </FormControl.Input>
-                                <FormControl.Helper>
-                                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                        <a
-                                            href={activeApiKeyUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-primary-light inline-flex items-center gap-1 hover:underline">
-                                            Get a key from {providerLabel}
-                                            {variant
-                                                ? ` (${variant.label})`
-                                                : ""}
-                                            <ExternalLinkIcon size={12} />
-                                        </a>
-                                        {activeBaseURL && (
-                                            <span className="text-text-tertiary text-xs">
-                                                Endpoint:{" "}
-                                                <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
-                                                    {activeBaseURL}
-                                                </code>
-                                            </span>
-                                        )}
-                                    </span>
-                                </FormControl.Helper>
-                                <FormControl.Error>
-                                    {fieldState.error?.message}
-                                </FormControl.Error>
-                            </FormControl.Root>
-                        )}
-                    />
 
                     <TestResultBanner state={testState} />
 
@@ -425,7 +434,7 @@ export function CuratedConnectPanel({
     );
 }
 
-function VariantSelector({
+export function VariantSelector({
     variants,
     selectedId,
     docsUrl,

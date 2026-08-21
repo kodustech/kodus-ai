@@ -15,6 +15,7 @@ export function useSuspenseGetLLMProviders() {
             requiresApiKey: boolean;
             requiresBaseUrl: boolean;
             autoListModels: boolean;
+            doc?: string;
         }>;
     }>(ORGANIZATION_PARAMETERS_PATHS.GET_PROVIDERS_LIST);
 }

@@ -275,6 +275,12 @@ function findingsFromText(state: RunState): {
             // not valid JSON in this step — try an earlier one
         }
     }
+    // KNOWN LIMITATION (E) — total parse failure under-reports SILENTLY: no step
+    // held extractable JSON. The caller falls to prose recovery
+    // (recoverFindingsFromProse), which also returns [] when the prose doesn't read
+    // like findings. If BOTH miss, the finder's findings are dropped with no
+    // counter/log — a review can silently under-report. Accepted for now; a
+    // parse-failure metric would make the drop observable.
     return null;
 }
 

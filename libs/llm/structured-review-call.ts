@@ -37,7 +37,10 @@ import {
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
 import { zodToStrictWireSchema } from '@libs/llm/strict-wire-schema';
-import { classifyLLMError } from '@libs/llm/error-classifier';
+import {
+    classifyLLMError,
+    isAbortOrHardTimeout,
+} from '@libs/llm/error-classifier';
 import {
     RETRYABLE_CATEGORY,
     jitteredBackoffMs,
@@ -46,20 +49,6 @@ import {
 import { getLlmObservability } from '@libs/llm/llm-observability';
 
 const logger = createLogger('StructuredReviewCall');
-
-/**
- * classifyLLMError folds AbortError AND `[HARD-TIMEOUT]`/timeout/aborted text
- * into LlmErrorCategory.TRANSIENT. The latency guard (D-00c) must NOT re-issue
- * those: re-issuing a genuinely slow / already-timed-out call just burns the
- * whole timeout budget again (Phase 0 Pitfall 3 — the failure mode is latency,
- * not fidelity). This explicit gate carves them back out of "transient".
- */
-function isAbortOrHardTimeout(err: unknown): boolean {
-    if (!err) return false;
-    if ((err as { name?: string }).name === 'AbortError') return true;
-    const text = err instanceof Error ? err.message : String(err ?? '');
-    return /\[HARD-TIMEOUT\]|aborted|timed?\s*out|timeout/i.test(text);
-}
 
 /** Fields shared by every review call (structured or plain-text). `byokConfig`
  *  is the bare resolved slot; `buildModelFromSlot`/`getModelName` take it directly. */
@@ -261,6 +250,10 @@ async function runReviewCall<T>(
                   // recordAgentRunUsage(agentModelIdentity(slot)) the dedup used.
                   byokModelId: identity.byokModelId,
                   credentialId: identity.credentialId,
+                  // Routing task + fallback flag the slot carried down from
+                  // resolveTaskSlot (route = the LlmTask, not the tier).
+                  route: mainSlot?.route,
+                  usedFallback: mainSlot?.usedFallback,
                   attrs: spanAttrs,
                   exec,
               })

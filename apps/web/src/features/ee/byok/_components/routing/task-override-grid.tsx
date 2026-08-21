@@ -31,6 +31,8 @@ import {
     type LucideIcon,
 } from "lucide-react";
 
+import { cn } from "src/core/utils/components";
+
 import type { LlmTask } from "../../_types";
 import { modelLabelFor, TASK_DESCRIPTIONS, TASK_LABELS } from "../../_utils";
 import { ProviderAvatar } from "../provider-avatar";
@@ -54,17 +56,13 @@ export type PoolModel = {
     costLabel?: string;
 };
 
-/** The compact quality/perf strip under a model name in the routing picker —
- *  the signal that used to live in the connect catalog, now where the model is
- *  actually chosen. Renders nothing when the model carries no curated metadata. */
+/** The compact perf strip under a model name in the routing picker (speed +
+ *  context). The quality score (★) and relative cost ($) were intentionally
+ *  removed from the UI — Kodus's proprietary "model intelligence" signal, held
+ *  back for a future paid feature (data still joined in routing-tab, so re-adding
+ *  is just restoring the two rows). Renders nothing without curated metadata. */
 const ModelMetrics = ({ model }: { model: PoolModel }) => {
     const parts: React.ReactNode[] = [];
-    if (model.score != null)
-        parts.push(
-            <span key="s" className="text-warning font-semibold tabular-nums">
-                ★{model.score}
-            </span>,
-        );
     if (model.speedLabel) parts.push(<span key="sp">{model.speedLabel}</span>);
     if (model.contextLabel)
         parts.push(
@@ -72,8 +70,6 @@ const ModelMetrics = ({ model }: { model: PoolModel }) => {
                 {model.contextLabel}
             </span>,
         );
-    if (model.costLabel)
-        parts.push(<span key="co">{model.costLabel}</span>);
     if (parts.length === 0) return null;
     return (
         <span className="text-text-tertiary flex items-center gap-1.5 text-[11px]">
@@ -204,13 +200,17 @@ export const ModelCombobox = ({
                                         )}
                                         <span className="flex min-w-0 flex-col gap-0.5">
                                             <span
-                                                className={
+                                                dir="rtl"
+                                                title={model.label}
+                                                style={{ textAlign: "left" }}
+                                                className={cn(
+                                                    "truncate",
                                                     !gate.ok
                                                         ? "text-text-tertiary"
                                                         : selected
                                                             ? "text-primary font-medium"
-                                                            : undefined
-                                                }>
+                                                            : undefined,
+                                                )}>
                                                 {model.label}
                                             </span>
                                             {gate.ok && (
@@ -362,6 +362,13 @@ const TaskModelControl = ({
                                 provider={effectiveModel?.provider}
                             />
                             <span
+                                dir="rtl"
+                                title={
+                                    isCustom
+                                        ? modelLabelFor(models, overrideId)
+                                        : inheritedOptionLabel
+                                }
+                                style={{ textAlign: "left" }}
                                 className={
                                     isCustom
                                         ? "text-text-primary truncate"
@@ -371,11 +378,6 @@ const TaskModelControl = ({
                                     ? modelLabelFor(models, overrideId)
                                     : inheritedOptionLabel}
                             </span>
-                            {effectiveModel?.score != null && (
-                                <span className="text-warning shrink-0 text-xs font-semibold tabular-nums">
-                                    ★{effectiveModel.score}
-                                </span>
-                            )}
                         </span>
                     </Button>
                 }
@@ -387,51 +389,42 @@ const TaskModelControl = ({
 /** The 5 agent cards. Maps the 6 backend tasks onto the reference's agent
  *  framing: Kody Rules is ONE card holding its Review + Generation tasks; every
  *  other task is its own card. Nothing is hidden. */
-type AgentCard =
-    | { kind: "single"; task: LlmTask; Icon: LucideIcon; title: string }
-    | {
-        kind: "group";
-        key: string;
-        Icon: LucideIcon;
-        title: string;
-        desc: string;
-        subtasks: { task: LlmTask; label: string }[];
-    };
+type AgentCard = {
+    task: LlmTask;
+    Icon: LucideIcon;
+    title: string;
+    /** Overrides the task's default description — used where the card title isn't
+     *  the raw task name (e.g. "Kody Rules" fronting the kodyRulesReview task). */
+    desc?: string;
+};
 
 const AGENT_CARDS: AgentCard[] = [
     {
-        kind: "single",
         task: "codeReview",
         Icon: GitPullRequestIcon,
         title: "Code Review",
     },
     {
-        kind: "group",
-        key: "kodyRules",
+        // Kody Rules routes ONE user-configurable task (kodyRulesReview) — rule
+        // generation always inherits the default (TASK_ROUTING_FALLBACK →
+        // codeReview). So it's a plain card, not a group with a lone "Review"
+        // sub-row that read as redundant.
+        task: "kodyRulesReview",
         Icon: ListChecksIcon,
         title: "Kody Rules",
         desc: "Applies your curated code-style rule packs.",
-        subtasks: [
-            { task: "kodyRulesReview", label: "Review" },
-            // Rule generation ("learning") is not independently routable for now:
-            // it always inherits the default (via TASK_ROUTING_FALLBACK →
-            // codeReview). Only the Review sub-task is user-configurable here.
-        ],
     },
     {
-        kind: "single",
         task: "prSummary",
         Icon: FileTextIcon,
         title: "PR Summary",
     },
     {
-        kind: "single",
         task: "conversation",
         Icon: MessageSquareIcon,
         title: "Conversation",
     },
     {
-        kind: "single",
         task: "businessValidation",
         Icon: ShieldCheckIcon,
         title: "Business Rules",
@@ -460,9 +453,8 @@ export const TaskOverrideGrid = (props: {
         <div className="flex flex-col gap-3">
             {AGENT_CARDS.map((card) => (
                 <div
-                    key={card.kind === "single" ? card.task : card.key}
-                    data-routing-anchor={`task:${card.kind === "single" ? card.task : card.key
-                        }`}
+                    key={card.task}
+                    data-routing-anchor={`task:${card.task}`}
                     className="border-card-lv3/50 bg-card-lv1 flex scroll-mt-4 flex-col gap-3 rounded-xl border p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-3">
@@ -472,35 +464,12 @@ export const TaskOverrideGrid = (props: {
                                     {card.title}
                                 </span>
                                 <span className="text-text-tertiary text-xs">
-                                    {card.kind === "single"
-                                        ? TASK_DESCRIPTIONS[card.task]
-                                        : card.desc}
+                                    {card.desc ?? TASK_DESCRIPTIONS[card.task]}
                                 </span>
                             </div>
                         </div>
-                        {card.kind === "single" && (
-                            <TaskModelControl task={card.task} {...props} />
-                        )}
+                        <TaskModelControl task={card.task} {...props} />
                     </div>
-
-                    {card.kind === "group" && (
-                        <div className="border-card-lv3/40 ml-12 flex flex-col gap-2 border-l pl-4">
-                            {card.subtasks.map((st) => (
-                                <div
-                                    key={st.task}
-                                    data-routing-anchor={`task:${st.task}`}
-                                    className="flex scroll-mt-4 flex-wrap items-center justify-between gap-3">
-                                    <span className="text-text-secondary text-xs">
-                                        {st.label}
-                                    </span>
-                                    <TaskModelControl
-                                        task={st.task}
-                                        {...props}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
             ))}
         </div>

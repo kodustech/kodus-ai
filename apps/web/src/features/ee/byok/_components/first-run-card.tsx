@@ -44,7 +44,7 @@ export function FirstRunCard({
             variant: "success",
             title: `Connected — ${modelName} is now your default for every task.`,
         });
-        await revalidateServerSidePath("/organization/byok");
+        await revalidateServerSidePath("/byok");
         router.refresh();
     };
 

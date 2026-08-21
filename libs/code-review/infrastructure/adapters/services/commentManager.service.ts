@@ -45,6 +45,7 @@ import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     attachClassification,
     classifyLLMError,
+    llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
 import {
     getTranslationsForLanguageByCategory,
@@ -590,7 +591,10 @@ You must always respond in ${languageResultPrompt}.`;
 
                 return finalDescription.toString();
             } catch (error) {
-                this.logger.error({
+                // Terminal BYOK billing/auth (suspended key, no credit) → warn:
+                // it's the user's provider, retrying won't help, and each retry
+                // re-logged it. A real fault stays error.
+                this.logger[llmErrorLogLevel(error)]({
                     message: `Error generateOverallComment pull request: PR#${pullRequest?.number}`,
                     context: CommentManagerService.name,
                     error,
@@ -598,7 +602,7 @@ You must always respond in ${languageResultPrompt}.`;
                 });
                 retryCount++;
                 if (retryCount === maxRetries) {
-                    this.logger.error({
+                    this.logger[llmErrorLogLevel(error)]({
                         message: `Error generateOverallComment pull request. Max retries exceeded: PR#${pullRequest?.number}`,
                         context: CommentManagerService.name,
                         error,

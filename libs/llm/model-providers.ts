@@ -24,6 +24,7 @@ export enum BYOKProvider {
     OPEN_ROUTER = 'open_router',
     NOVITA = 'novita',
     MOONSHOT = 'moonshot',
+    ZAI = 'zai',
     AZURE = 'azure',
 }
 

@@ -412,13 +412,26 @@ describe('buildProviderOptions', () => {
     });
 
     it('passes a flat override through unwrapped for a provider with no namespace', () => {
-        // moonshot/azure/bedrock declare no namespace → unwrapped (preserved).
+        // azure/bedrock declare no namespace → unwrapped (preserved).
         const result = buildProviderOptions('main-loop', undefined, {
-            byokProvider: 'moonshot',
-            modelName: 'kimi-k2.7-code',
+            byokProvider: 'azure',
+            modelName: 'gpt-4o',
             reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
         });
         expect(result).toEqual({ foo: 'bar' });
+    });
+
+    it('wraps a flat override under anthropic for the Anthropic-protocol brands', () => {
+        // Moonshot/Kimi and Z.ai/GLM are first-class brands that speak the
+        // Anthropic protocol → their override lands under the `anthropic` namespace.
+        for (const brand of ['moonshot', 'zai']) {
+            const result = buildProviderOptions('main-loop', undefined, {
+                byokProvider: brand,
+                modelName: brand === 'moonshot' ? 'kimi-k2.7-code' : 'glm-5.2',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            });
+            expect(result.anthropic).toEqual({ foo: 'bar' });
+        }
     });
 });
 

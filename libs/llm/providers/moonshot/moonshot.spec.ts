@@ -1,15 +1,16 @@
 /**
- * moonshot module — normalize / normalizeUsage unit proof, never-downgrade
- * build behavior, and offline conformance.
+ * moonshot module — Kimi as a first-class Anthropic-protocol BRAND.
  *
- * Covers: the module owns normalize/normalizeUsage (Q4: reasoning is a detail-OF
- * output, never subtracted); the shared never-downgrade policy keeps json_schema
- * ON for Kimi/Moonshot when opted in; and the managed trial-default factory call
- * shape (no supportsStructuredOutputs field when NOT opted in) — the byte-for-byte
- * reproduction of the old inline exception that keeps byok-to-vercel.env-default
- * case 7/9 green.
+ * Kimi's stored transport is the brand id `moonshot`; the module is built from the
+ * shared `anthropicBrandModule` factory, so every protocol behavior routes through
+ * the anthropic module over `anthropic_compatible`. This proves the brand exposes
+ * the Anthropic-protocol contract (structured output via tool-use, ephemeral system
+ * cache, budget thinking) and the shared no-double-count usage extractor — NOT the
+ * old OpenAI-compatible `/v1` path (that path now lives only on the openai module,
+ * for a manually-typed `api.moonshot.ai/v1` custom endpoint).
  */
 import { moonshotModule } from './index';
+import { anthropicModule } from '../anthropic/index';
 import { runConformance, type ProviderFixture } from '../kernel/conformance';
 import plainFixture from './__fixtures__/plain.json';
 
@@ -19,6 +20,7 @@ const moonshotCfg = {
     provider: 'moonshot',
     model: 'kimi-k2.7-code',
     apiKey: 'test-key',
+    baseURL: 'https://api.moonshot.ai/anthropic',
 } as any;
 
 describe('moonshotModule.normalizeUsage — real extraction (Q4: detail-OF output)', () => {
@@ -71,31 +73,37 @@ describe('moonshotModule.normalize — { usage, raw }', () => {
     });
 });
 
-describe('moonshotModule never-downgrade (D-00b) + managed-default call shape', () => {
-    it('opt-in → Kimi/Moonshot keeps json_schema ON (supportsStructuredOutputs:true)', () => {
-        const model = moonshotModule.build(moonshotCfg, {
-            structuredOutputs: true,
-        }) as any;
-        expect(model.supportsStructuredOutputs).toBe(true);
+describe('moonshotModule — Anthropic-protocol brand contract', () => {
+    it('exposes the Anthropic capability shape (structured output via tool-use, not json_schema)', () => {
+        const caps = moonshotModule.capabilities('kimi-k2.7-code');
+        // Over the Anthropic protocol, structured output is tool-use → 'none' at
+        // this tier (NOT the OpenAI-compatible json_schema the old /v1 path used).
+        expect(caps.structuredOutput).toBe('none');
+        expect(caps.toolCalling).toBe('native');
+        expect(caps.usageGranularity).toBe('output_only');
+        // The Anthropic system prompt is cacheable — the brand inherits it.
+        expect(caps.promptCaching).toBe(true);
+        // Identical to the anthropic module for the same id (one source of truth).
+        expect(caps).toEqual(anthropicModule.capabilities('kimi-k2.7-code'));
     });
 
-    it('NO opt-in (managed default path) → json_schema stays OFF', () => {
-        // The old inline exception called createOpenAICompatible with NO
-        // supportsStructuredOutputs field on the un-opted-in trial default; the
-        // exact no-field factory call is pinned by byok-to-vercel.env-default
-        // case 7/9. Here (real SDK) the effective state must not be ON.
-        const model = moonshotModule.build(moonshotCfg, {}) as any;
-        expect(model.supportsStructuredOutputs).not.toBe(true);
+    it('emits NO inline cache marker — Kimi caches automatically (marker ignored)', () => {
+        // Unlike native Anthropic, Moonshot/Kimi auto-caches and ignores the
+        // explicit cache_control breakpoint (verified live: cache_read = full input
+        // on the 2nd identical call with no marker). So the brand drops the marker.
+        expect(moonshotModule.systemCacheControl!(moonshotCfg)).toBeUndefined();
     });
 
-    it("capabilities(kimiId).structuredOutput === 'json_schema' (never-downgrade signal)", () => {
+    it("reasoning 'none' → off; a set effort → Anthropic budget thinking", () => {
+        expect(moonshotModule.reasoning!(moonshotCfg, 'none')).toEqual({});
+        // Compatible endpoints never implement adaptive thinking → always budget.
         expect(
-            moonshotModule.capabilities('kimi-k2.7-code').structuredOutput,
-        ).toBe('json_schema');
-        expect(
-            moonshotModule.capabilities('moonshotai/kimi-k2-instruct')
-                .structuredOutput,
-        ).toBe('json_schema');
+            JSON.stringify(moonshotModule.reasoning!(moonshotCfg, 'medium')),
+        ).toMatch(/"type":"enabled".*budgetTokens/);
+    });
+
+    it('accepts sampling params (Kimi over the compatible endpoint is not gated)', () => {
+        expect(moonshotModule.supportsSamplingParams!(moonshotCfg)).toBe(true);
     });
 });
 
@@ -111,9 +119,7 @@ describe('moonshotModule offline conformance (real boundary: build → SDK → n
         expect(run.result.raw).toBe(run.raw);
     });
 
-    it("declares usageGranularity 'output_only'", () => {
-        expect(
-            moonshotModule.capabilities(moonshotCfg.model).usageGranularity,
-        ).toBe('output_only');
+    it('build() returns a model object over the Anthropic protocol', () => {
+        expect(moonshotModule.build(moonshotCfg)).toBeDefined();
     });
 });

@@ -11,6 +11,7 @@ import {
     GitBranchIcon,
     InfoIcon,
     PackageIcon,
+    WalletIcon,
 } from "lucide-react";
 import {
     Tabs,
@@ -24,6 +25,7 @@ import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConfig } from "../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../_utils";
 import { ModelOverridesBanner } from "./model-overrides-banner";
+import { SpendLimitSection } from "./spend-limit-section";
 import { ModelsTab } from "./tabs/models-tab";
 import { RoutingTab } from "./tabs/routing-tab";
 
@@ -162,7 +164,7 @@ export const ByokPageClient = ({
     return (
         <CatalogProvider models={catalog}>
         <Page.Root>
-            <Page.Header>
+            <Page.Header className="max-w-full px-6">
                 <Page.TitleContainer>
                     <Page.Title className="text-balance">
                         Bring your own key
@@ -193,7 +195,7 @@ export const ByokPageClient = ({
                 </Page.TitleContainer>
             </Page.Header>
 
-            <Page.Content>
+            <Page.Content className="max-w-full px-6">
                 {showEnvNotice && llmConfigStatus && (
                     <EnvConfigNotice env={llmConfigStatus.env} />
                 )}
@@ -220,6 +222,12 @@ export const ByokPageClient = ({
                                 Routing
                             </span>
                         </TabsTrigger>
+                        <TabsTrigger value="budget">
+                            <span className="flex items-center gap-2">
+                                <WalletIcon size={15} />
+                                Budget
+                            </span>
+                        </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="providers">
@@ -243,6 +251,10 @@ export const ByokPageClient = ({
                             scrollAnchor={routingAnchor}
                             onScrolled={() => setRoutingAnchor(null)}
                         />
+                    </TabsContent>
+
+                    <TabsContent value="budget">
+                        <SpendLimitSection teamId={teamId} />
                     </TabsContent>
                 </Tabs>
             </Page.Content>

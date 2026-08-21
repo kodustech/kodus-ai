@@ -269,6 +269,11 @@ export const PROVIDER_AVATAR: Record<string, string> = {
     google_gemini: "bg-violet-500/15 text-violet-300",
     google_vertex: "bg-violet-500/15 text-violet-300",
     azure: "bg-sky-500/15 text-sky-300",
+    zai: "bg-blue-500/15 text-blue-300",
+    open_router: "bg-slate-500/20 text-slate-300",
+    openrouter: "bg-slate-500/20 text-slate-300",
+    novita: "bg-teal-500/15 text-teal-300",
+    amazon_bedrock: "bg-orange-500/15 text-orange-300",
 };
 
 /** Avatar tint for a provider, falling back to a neutral card tint. */

@@ -28,16 +28,28 @@ export const BACKFILL_SYSTEM_RUN_NAMES = [
     'selectReviewMode',
     'validateImplementedSuggestions',
     'generateCodeSuggestions',
-    'analyzeASTWithAI',
 ];
 
 // Kept in sync with SUGGESTION_RUN_NAMES in libs/core/log/token-usage-tu.ts
 // (asserted equal by token-usage-tu.spec.ts).
 export const BACKFILL_SUGGESTION_RUN_NAMES = [
+    'severity-classifier',
+    'suggestion-formatter',
     'severityAnalysis',
     'validateWithLLM',
     'checkSuggestionSimplicity',
     'repeatedCodeReviewSuggestionClustering',
+];
+
+// Valid routing tasks — mirror of ROUTING_TASKS in token-usage-tu.ts (LlmTask).
+// Guards `tu.route`: a value outside this set is not trusted (→ area de-para).
+export const BACKFILL_ROUTING_TASKS = [
+    'codeReview',
+    'kodyRulesReview',
+    'ruleGeneration',
+    'businessValidation',
+    'prSummary',
+    'conversation',
 ];
 
 const gf = (f: string) => ({ $getField: { field: f, input: '$attributes' } });
@@ -51,7 +63,7 @@ const modelExpr = {
 };
 
 // Aggregation mirror of deriveArea() in libs/core/log/token-usage-tu.ts —
-// keep the rule order identical (system → kody_rules → cross_file → review →
+// keep the rule order identical (system → kody_rules → review →
 // suggestions → summary → conversation → other).
 const rn = { $ifNull: [gf('gen_ai.run.name'), ''] };
 const areaExpr = {
@@ -64,7 +76,7 @@ const areaExpr = {
                         {
                             $regexMatch: {
                                 input: rn,
-                                regex: 'kody.?rules?',
+                                regex: 'kod(?:y|us).?rules?',
                                 options: 'i',
                             },
                         },
@@ -77,12 +89,6 @@ const areaExpr = {
                     ],
                 },
                 then: 'kody_rules',
-            },
-            {
-                case: {
-                    $regexMatch: { input: rn, regex: '^crossFile' },
-                },
-                then: 'cross_file',
             },
             {
                 case: {
@@ -150,6 +156,52 @@ const SET_TU = {
                 $ifNull: [gf('gen_ai.usage.cache_creation_input_tokens'), 0],
             },
             area: areaExpr,
+            // Routing TASK the call served (mirror of deriveTu.route). A VALID
+            // stamped `route` (post-launch) wins; otherwise (absent, or a stale
+            // tier string from a pre-realignment span) the SAME area→task de-para
+            // as deriveTu.routeFromArea, so old rows attribute to a task and a
+            // non-task value never leaks in. Keep in sync with token-usage-tu.ts.
+            route: {
+                $cond: [
+                    { $in: [gf('route'), BACKFILL_ROUTING_TASKS] },
+                    gf('route'),
+                    {
+                        $let: {
+                            vars: { a: areaExpr },
+                            in: {
+                                $switch: {
+                                    branches: [
+                                        {
+                                            case: {
+                                                $in: [
+                                                    '$$a',
+                                                    ['review', 'suggestions'],
+                                                ],
+                                            },
+                                            then: 'codeReview',
+                                        },
+                                        {
+                                            case: { $eq: ['$$a', 'kody_rules'] },
+                                            then: 'kodyRulesReview',
+                                        },
+                                        {
+                                            case: { $eq: ['$$a', 'summary'] },
+                                            then: 'prSummary',
+                                        },
+                                        {
+                                            case: {
+                                                $eq: ['$$a', 'conversation'],
+                                            },
+                                            then: 'conversation',
+                                        },
+                                    ],
+                                    default: '',
+                                },
+                            },
+                        },
+                    },
+                ],
+            },
         },
     },
 };
@@ -178,16 +230,21 @@ const sleep = (ms: number) =>
     new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * Only stamp docs that (a) have token usage, (b) lack `tu` OR lack `tu.area`
- * (rows stamped before the area dimension existed), (c) are in window.
- * Re-stamping recomputes the whole `tu` — it's a pure function of the raw
- * attributes, so this stays idempotent.
+ * Only stamp docs that (a) have token usage, (b) lack `tu` OR lack a `tu`
+ * dimension added by a later launch (`tu.area`, then `tu.route`), (c) are in
+ * window. Re-stamping recomputes the WHOLE `tu` — a pure function of the raw
+ * attributes — so this stays idempotent and each new dimension backfills
+ * without a bespoke migration: adding the dimension's `$exists:false` here is
+ * the de-para that adapts every pre-launch row to the new format.
  */
 function stampPredicate(since: Date | null): Record<string, unknown> {
     const p: Record<string, unknown> = {
         $or: [
             { 'attributes.tu': { $exists: false } },
             { 'attributes.tu.area': { $exists: false } },
+            // The per-task dimension: rows stamped before `route` existed →
+            // re-stamp so they get it (stamped attr, else the area→task de-para).
+            { 'attributes.tu.route': { $exists: false } },
         ],
         $expr: { $gt: [{ $ifNull: [gf('gen_ai.usage.total_tokens'), 0] }, 0] },
     };

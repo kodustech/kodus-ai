@@ -109,16 +109,7 @@ export class StaticTaskStrategy implements RoutingStrategy {
         config: BYOKConfig,
         _stats?: ModelRuntimeStats, // reserved for the Auto router — unused in v1
     ): RoutingVerdict {
-        const models = config.models ?? [];
-        const byId = new Map<string, BYOKModelConfig>(
-            models.filter((m) => m && m.id).map((m) => [m.id, m]),
-        );
-        const creds = new Map<string, BYOKCredential>(
-            (config.credentials ?? [])
-                .filter((c) => c && c.id)
-                .map((c) => [c.id, c]),
-        );
-        const routing = config.routing ?? {};
+        const { byId, creds, routing } = this.buildMaps(config);
 
         const primary = this.buildPrimaryCandidates(task, ctx, routing, byId);
         const fallback = this.buildFallbackCandidate(routing, byId);
@@ -161,6 +152,54 @@ export class StaticTaskStrategy implements RoutingStrategy {
                     ? `BLOCKED for "${task}": ${skips.join('; ')}`
                     : `BLOCKED for "${task}": no routing target configured`,
         };
+    }
+
+    /** The lookup maps every resolution reads: models by id, credentials by id,
+     *  and the routing block. Shared by `resolve` (gate-time) and `resolveFallback`
+     *  (runtime failover) so the two never drift on how a config is projected. */
+    private buildMaps(config: BYOKConfig): {
+        byId: Map<string, BYOKModelConfig>;
+        creds: Map<string, BYOKCredential>;
+        routing: NonNullable<BYOKConfig['routing']>;
+    } {
+        const byId = new Map<string, BYOKModelConfig>(
+            (config.models ?? [])
+                .filter((m) => m && m.id)
+                .map((m) => [m.id, m]),
+        );
+        const creds = new Map<string, BYOKCredential>(
+            (config.credentials ?? [])
+                .filter((c) => c && c.id)
+                .map((c) => [c.id, c]),
+        );
+        return { byId, creds, routing: config.routing ?? {} };
+    }
+
+    /**
+     * Resolve ONLY the runtime failover candidate — the org's configured
+     * `routing.fallbackModelId` — through the SAME capability/credential gate as
+     * `resolve`. Returns its verdict when eligible, else `undefined` (no fallback
+     * configured, or it fails the gate: a fallback that can't run is not offered).
+     *
+     * Distinct from `resolve`, which folds the fallback in as the LAST gate-time
+     * tier (used when the primaries can't even be attempted). This one answers a
+     * different question — "if the primary that WON runs but fails at call time,
+     * what's the one model to try instead?" — and `resolveTaskSlot` stamps it onto
+     * `slot.fallback` so `LLM.run` can cascade at runtime. Pure; never throws.
+     */
+    resolveFallback(
+        task: LlmTask,
+        config: BYOKConfig,
+    ): RoutingVerdict | undefined {
+        const { byId, creds, routing } = this.buildMaps(config);
+        const requirement = TASK_CAPABILITY_REQUIREMENTS[task];
+        for (const candidate of this.buildFallbackCandidate(routing, byId)) {
+            const outcome = this.evaluate(task, candidate, creds, requirement);
+            if (outcome.eligible && outcome.verdict) {
+                return outcome.verdict;
+            }
+        }
+        return undefined;
     }
 
     /** override (id-THEN-name) > taskOverride > default. */
@@ -227,6 +266,12 @@ export class StaticTaskStrategy implements RoutingStrategy {
         return candidates;
     }
 
+    // `fallbackModelId` serves in TWO places, both fed by this one candidate:
+    //   - GATE-TIME (here, folded in as the last tier of `resolve`): when the
+    //     primary tiers all fail the capability/credential gate BEFORE the call.
+    //   - RUNTIME (via `resolveFallback` → `slot.fallback`): when the primary that
+    //     WON runs but fails at call time in a way a different model can fix — then
+    //     `LLM.run`'s model-failover re-issues once on it (model-failover.ts).
     private buildFallbackCandidate(
         routing: NonNullable<BYOKConfig['routing']>,
         byId: Map<string, BYOKModelConfig>,
@@ -298,6 +343,10 @@ export class StaticTaskStrategy implements RoutingStrategy {
                 modelId: model.id,
                 reason,
                 ...(nameOverride ? { modelName: nameOverride } : {}),
+                // Only the fallback flag is a span dimension; the specific tier
+                // stays in `reason` (debug trace). The span's `route` is the
+                // TASK, stamped by resolveTaskSlot — not the tier.
+                usedFallback: !!isFallback,
             },
         };
     }

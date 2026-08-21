@@ -16,6 +16,7 @@ import {
 import {
     classifyLLMError,
     getClassification,
+    llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -216,7 +217,9 @@ export class UpdateCommentsAndGenerateSummaryStage extends BasePipelineStage<Cod
                     summaryPR,
                 );
             } catch (error) {
-                this.logger.error({
+                // Terminal BYOK (suspended key / no credit) → warn: user's
+                // provider config, not a Kodus fault. Real fault stays error.
+                this.logger[llmErrorLogLevel(error)]({
                     message: `Failed to generate summary for PR#${pullRequest.number}`,
                     context: this.stageName,
                     error,

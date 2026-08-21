@@ -240,6 +240,10 @@ export async function runAgentLoopCall(
               model: inv.modelName,
               byokModelId: identity.byokModelId,
               credentialId: identity.credentialId,
+              // Routing task + fallback flag the slot carried down from
+              // resolveTaskSlot (route = the LlmTask, not the tier).
+              route: slot?.route,
+              usedFallback: slot?.usedFallback,
               attrs: spanAttrs,
               exec,
           })

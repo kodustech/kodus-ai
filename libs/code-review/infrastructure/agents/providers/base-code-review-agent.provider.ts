@@ -3,6 +3,7 @@ import {
     attachClassification,
     classifyLLMError,
     getClassification,
+    isTerminalCategory,
 } from '@libs/llm/error-classifier';
 import { Injectable, Optional } from '@nestjs/common';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
@@ -820,7 +821,12 @@ export abstract class BaseCodeReviewAgentProvider {
                 errorName: errName,
                 errorFriendlyMessage: classification.friendlyMessage,
             });
-            this.agentLogger.error({
+            // Terminal BYOK (suspended key / no credit) → warn: user's provider
+            // config, not a Kodus fault. Reuses the classification computed
+            // above; a real fault stays error.
+            this.agentLogger[
+                isTerminalCategory(classification.category) ? 'warn' : 'error'
+            ]({
                 message: `[AGENT] ${identity.name} failed for PR#${input.prNumber} after ${durationMs}ms: ${errMsg}`,
                 context: identity.name,
                 error,

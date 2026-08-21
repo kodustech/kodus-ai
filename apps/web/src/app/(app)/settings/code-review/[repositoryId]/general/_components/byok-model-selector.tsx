@@ -315,7 +315,7 @@ export const BYOKModelSelectorSection = () => {
                                                         // letting them type an
                                                         // id that isn't wired up.
                                                         router.push(
-                                                            "/organization/byok",
+                                                            "/byok",
                                                         );
                                                     }}>
                                                     <span className="text-primary-light flex items-center gap-1.5">

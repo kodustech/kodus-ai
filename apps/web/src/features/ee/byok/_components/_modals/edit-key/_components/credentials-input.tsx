@@ -60,6 +60,16 @@ export const ByokCredentialsInput = () => {
                     <FormControl.Error>
                         {fieldState.error?.message}
                     </FormControl.Error>
+                    {foundProvider.doc && (
+                        <a
+                            href={foundProvider.doc}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-text-tertiary hover:text-text-secondary mt-1.5 inline-flex w-fit items-center gap-1 text-xs">
+                            Get a key & docs for {foundProvider.name}
+                            <ExternalLinkIcon size={11} />
+                        </a>
+                    )}
                 </FormControl.Root>
             )}
         />

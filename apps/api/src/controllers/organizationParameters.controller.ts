@@ -212,6 +212,7 @@ export class OrganizationParametersController {
                 requiresApiKey: provider.requiresApiKey,
                 requiresBaseUrl: provider.requiresBaseUrl,
                 autoListModels: provider.autoListModels,
+                doc: provider.doc,
             })),
         };
     }

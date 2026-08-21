@@ -178,6 +178,29 @@ export interface NormalizedModel {
     awsSecretAccessKey?: string;
     awsRegion?: string;
     awsSessionToken?: string;
+    /** Routing PROVENANCE (not a credential/tuning field), stamped by
+     *  `resolveTaskSlot` so it rides ALONG the slot to whichever span records the
+     *  call — no per-agent threading. Absent on the env/managed-default path (no
+     *  routing) and on a directly-constructed slot.
+     *  - `route`: the routing TASK this slot serves (`codeReview`/`prSummary`/
+     *    `kodyRulesReview`/`businessValidation`) — the usage span's per-task
+     *    dimension. (The precedence tier that won is NOT here; it stays in the
+     *    verdict's `reason`.)
+     *  - `usedFallback`: true when the fallback model served instead of a primary
+     *    tier — makes a silent primary→fallback swap visible on the span. */
+    route?: string;
+    usedFallback?: boolean;
+    /** The RUNTIME failover target for this slot: the org's configured
+     *  `routing.fallbackModelId`, resolved + capability-gated, stamped here by
+     *  `resolveTaskSlot` so it rides ALONG the primary slot to `LLM.run` with no
+     *  per-consumer threading. Present only when a distinct, eligible fallback
+     *  exists (absent when none is configured, it fails the gate, or the primary
+     *  IS already the fallback). Itself a plain slot — never carries a nested
+     *  `.fallback` (the cascade is at most primary → fallback, one hop). `LLM.run`
+     *  tries the primary, then this on a cascade-worthy failure. Typed as a slot
+     *  WITHOUT its own `.fallback` so the compiler — not a prose invariant —
+     *  enforces the single hop. */
+    fallback?: Omit<NormalizedModel, 'fallback'>;
 }
 
 /** Narrow an unknown blob to a valid BYOK config by its schema discriminant. */

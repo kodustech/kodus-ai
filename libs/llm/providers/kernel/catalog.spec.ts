@@ -51,18 +51,20 @@ describe('resolveCatalogFrom', () => {
         }
     });
 
-    it('every Anthropic-protocol brand uses the SAME shared transport (one form)', () => {
-        // Z.ai and Moonshot/Kimi keep their own BRAND identity but build over the
-        // one shared `anthropic_compatible` transport — no per-brand transport id.
+    it('an Anthropic-protocol brand stores its OWN brand id as the transport', () => {
+        // Z.ai and Moonshot/Kimi speak the Anthropic protocol, but each is a
+        // first-class BRAND: the stored transport is the brand id itself (no
+        // `anthropic_compatible` override), and the brand module resolves the
+        // Anthropic protocol internally. So provider === providerKey === brand.
         expect(byId('glm-5.2')).toMatchObject({
-            provider: 'anthropic_compatible',
+            provider: 'zai',
             providerKey: 'zai',
             providerDisplayName: 'Z.ai',
             benchmarkScore: 84,
             defaultVariantId: 'developer',
         });
         expect(byId('kimi-k2.7-code')).toMatchObject({
-            provider: 'anthropic_compatible',
+            provider: 'moonshot',
             providerKey: 'moonshot',
             providerDisplayName: 'Moonshot',
         });

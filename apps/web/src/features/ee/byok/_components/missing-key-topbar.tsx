@@ -18,7 +18,7 @@ export const BYOKMissingKeyTopbar = () => {
             ) : (
                 "."
             )}
-            <Link href="/organization/byok" className="mx-2 font-bold">
+            <Link href="/byok" className="mx-2 font-bold">
                 Set LLM keys
                 <ArrowRightIcon className="ml-1 inline size-5" />
             </Link>

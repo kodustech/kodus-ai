@@ -41,6 +41,10 @@ import {
     runAgentLoopCall,
     type AgentLoopSeams,
 } from '@libs/llm/agent-loop-call';
+import {
+    runWithModelFailover,
+    type FailoverAttemptControl,
+} from '@libs/llm/model-failover';
 
 /** The raw AI SDK result an agent-loop call returns (steps / usage / text). */
 export type AgentLoopResult = Awaited<ReturnType<typeof generateText>>;
@@ -105,11 +109,15 @@ function resolveSlot(req: LlmRequest): NormalizedModel | undefined {
 }
 
 /**
- * Strip the routing-only fields and resolve the slot — what reaches the executor
- * is a clean slot call. Observability is NOT threaded here: the executor reads it
- * from the LLM observability port, so no caller (nor this) ever passes it.
+ * Strip the routing-only fields — what reaches the one-shot executor is a clean
+ * slot call. The slot is NOT set here: `run` injects the per-attempt slot (primary
+ * or fallback) so the failover cascade can re-issue on a different model.
+ * Observability is NOT threaded here either: the executor reads it from the LLM
+ * observability port, so no caller (nor this) ever passes it.
  */
-function toExecutorParams(req: LlmRequest): BaseReviewCallParams {
+function toExecutorParams(
+    req: LlmRequest,
+): Omit<BaseReviewCallParams, 'byokConfig'> {
     const {
         config: _config,
         task: _task,
@@ -119,14 +127,34 @@ function toExecutorParams(req: LlmRequest): BaseReviewCallParams {
         messages: _messages,
         signal: _signal,
         reporter: _reporter,
+        // a pre-resolved slot is re-injected per attempt by `run`, not here
+        byokConfig: _byokConfig,
         // temperature / maxOutputTokens / providerOptions DO pass through — the
         // one-shot executor honors them as fixed-tuning overrides (demo paths).
         ...rest
     } = req;
+    return rest as Omit<BaseReviewCallParams, 'byokConfig'>;
+}
+
+/**
+ * Wrap the runner's loop seams so the FIRST emitted step vetoes failover for the
+ * current attempt: a step's tool calls mutate shared runner state (its step array
+ * + policy progress), so restarting on the fallback would double-count them. The
+ * high-value cascade (a bad/expired key, an unknown model) fails BEFORE the first
+ * step, so it still fires — this only holds back a rare mid-loop transient.
+ */
+function loopWithFailoverGuard(
+    loop: AgentLoopSeams,
+    control: FailoverAttemptControl,
+): AgentLoopSeams {
+    const inner = loop.onStepFinish;
     return {
-        ...rest,
-        byokConfig: resolveSlot(req),
-    } as BaseReviewCallParams;
+        ...loop,
+        onStepFinish: (event: unknown) => {
+            control.markUnsafeToRetry();
+            return inner?.(event);
+        },
+    };
 }
 
 export class LLM {
@@ -146,36 +174,64 @@ export class LLM {
     static run(
         req: LlmRequest & { schema?: z.ZodType | Schema },
     ): Promise<unknown> {
+        // Resolve the routing decision ONCE. The primary slot carries its runtime
+        // fallback in `.fallback` (stamped by resolveTaskSlot), so the cascade is
+        // primary → fallback; a slot without a fallback (or the managed default,
+        // undefined) makes `runWithModelFailover` a single-attempt pass-through.
+        const slot = resolveSlot(req);
+        const attempts = [slot, slot?.fallback];
+        const failoverOpts = {
+            runName: req.runName,
+            organizationId: req.organizationId,
+        };
+
         // Agent-loop mode: a tool-driven, multi-step call. LLM.run resolves the
         // model + tuning + reasoning + cache + span; the runner passed only the
         // loop seams. Returns the raw result for the runner to map onto RunState.
         if (req.loop) {
-            return runAgentLoopCall({
-                byokConfig: resolveSlot(req),
-                system: req.system,
-                messages: req.messages ?? [],
-                loop: req.loop,
-                runName: req.runName,
-                spanName: req.spanName,
-                attrs: req.attrs,
-                organizationId: req.organizationId,
-                reporter: req.reporter,
-                queueTimeoutMs: req.queueTimeoutMs,
-                provider: req.provider,
-                providerOptions: req.providerOptions,
-                telemetryMetadata: req.telemetryMetadata,
-                signal: req.signal,
-                maxOutputTokens: req.maxOutputTokens,
-                temperature: req.temperature,
-            });
+            const loop = req.loop;
+            return runWithModelFailover(
+                attempts,
+                (attemptSlot, control) =>
+                    runAgentLoopCall({
+                        byokConfig: attemptSlot,
+                        system: req.system,
+                        messages: req.messages ?? [],
+                        loop: loopWithFailoverGuard(loop, control),
+                        runName: req.runName,
+                        spanName: req.spanName,
+                        attrs: req.attrs,
+                        organizationId: req.organizationId,
+                        reporter: req.reporter,
+                        queueTimeoutMs: req.queueTimeoutMs,
+                        provider: req.provider,
+                        providerOptions: req.providerOptions,
+                        telemetryMetadata: req.telemetryMetadata,
+                        signal: req.signal,
+                        maxOutputTokens: req.maxOutputTokens,
+                        temperature: req.temperature,
+                    }),
+                failoverOpts,
+            );
         }
 
         // Pull the schema out first so a text call can never carry a stray
-        // `schema` prop into the text executor.
+        // `schema` prop into the text executor. One-shot calls are atomic, so they
+        // never veto failover — a primary failure re-issues cleanly on the fallback.
         const { schema, ...rest } = req;
-        const params = toExecutorParams(rest);
-        return schema
-            ? runStructuredReviewCall({ ...params, schema })
-            : runTextReviewCall(params);
+        const baseParams = toExecutorParams(rest);
+        return runWithModelFailover(
+            attempts,
+            (attemptSlot) => {
+                const params: BaseReviewCallParams = {
+                    ...baseParams,
+                    byokConfig: attemptSlot,
+                };
+                return schema
+                    ? runStructuredReviewCall({ ...params, schema })
+                    : runTextReviewCall(params);
+            },
+            failoverOpts,
+        );
     }
 }

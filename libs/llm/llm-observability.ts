@@ -31,7 +31,8 @@ export interface LlmObservability {
         byokModelId?: string;
         /** Credential the resolved model used — per-key spend attribution. */
         credentialId?: string;
-        /** Routing task/route this call served. */
+        /** The routing TASK this call served (codeReview/prSummary/…) — the
+         *  usage span's per-task dimension. NOT the precedence tier. */
         route?: string;
         /** True when a fallback model served instead of the primary. */
         usedFallback?: boolean;

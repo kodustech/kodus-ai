@@ -89,6 +89,7 @@ import {
     LlmErrorCategory,
     classifyLLMError,
     getClassification,
+    llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 import { LLM } from '@libs/llm/llm';
@@ -1416,7 +1417,9 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             });
         } catch (error) {
             const durationMs = Date.now() - startTime;
-            this.logger.error({
+            // Terminal BYOK (suspended key / no credit) → warn: user's provider
+            // config, not a Kodus fault. Real fault stays error.
+            this.logger[llmErrorLogLevel(error)]({
                 message: `[AGENT] Agent review failed for PR#${prNumber} after ${durationMs}ms, continuing with empty results`,
                 context: this.stageName,
                 error,

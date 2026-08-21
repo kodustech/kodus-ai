@@ -23,6 +23,9 @@ export interface ProviderInfo {
      * whose URL is only known once the user types it, and for `manual` listings.
      */
     autoListModels: boolean;
+    /** Provider documentation URL (hardcoded on the module) — the UI links to it
+     *  from the key field so the user can grab a key / find model ids. */
+    doc?: string;
 }
 
 @Injectable()
@@ -42,6 +45,7 @@ export class ProviderService {
                 requiresApiKey: d.requiresApiKey,
                 requiresBaseUrl: d.requiresBaseUrl,
                 autoListModels: d.autoListModels,
+                doc: d.doc,
             };
         }
         return out;
