@@ -1,5 +1,3 @@
-export type ReasoningEffort = "none" | "low" | "medium" | "high";
-
 // ─── web mirror ──────────────────────────────────────────────────────────────
 //
 // Web-side mirror of the persisted shape in libs/llm/byok-config.ts, kept
@@ -13,7 +11,10 @@ export type ReasoningEffort = "none" | "low" | "medium" | "high";
  *  so the union has ONE source of truth across front and back (type-only import
  *  → erased at build, no runtime coupling). Imported for local use in this file
  *  AND re-exported so existing `import { LlmTask } from "../../_types"` keep working. */
-import type { LlmTask } from "@libs/llm/byok-config";
+import type { LlmTask } from '@libs/llm/llm-tasks';
+
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
+
 export type { LlmTask };
 
 /**
@@ -54,7 +55,7 @@ export type BYOKModelConfig = {
 
 /** Routing policy (Manual = static task→model; Auto = the future router). */
 export type BYOKRouting = {
-    mode?: "manual" | "auto";
+    mode?: 'manual' | 'auto';
     /** Model id per task (Manual policy). */
     taskOverrides?: Partial<Record<LlmTask, string>>;
     /** Default model id when a task has no explicit override. */

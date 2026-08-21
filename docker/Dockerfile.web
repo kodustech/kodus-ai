@@ -39,12 +39,19 @@ RUN --mount=type=cache,target=/pnpm-store,sharing=private \
 #     this subtree is reachable from the web (the enum imports nothing;
 #     role-policies imports only the enum), so we copy just it — the rest of
 #     libs/identity pulls @nestjs/@casl and would break the isolated build.
+#   - libs/llm/llm-tasks.ts — the BYOK routing UI imports the task taxonomy
+#     (LLM_TASK / LlmTask) and the inheritance map (TASK_ROUTING_FALLBACK) from
+#     this zero-dependency leaf, the single source of truth shared with the
+#     backend resolver. It's the ONLY llm file the web reaches (it imports
+#     nothing), so we copy just the file — never the rest of libs/llm, which
+#     pulls the AI SDK / providers / kernel and would break the isolated build.
 #   - release/features-snapshot.json — read at runtime by the lib loader
 # Anything else in the repo (apps/api, libs/code-review, etc.) would just
 # bloat the build context without being touched by Next.
 COPY apps/web ./apps/web
 COPY libs/feature-gate ./libs/feature-gate
 COPY libs/identity/domain/permissions ./libs/identity/domain/permissions
+COPY libs/llm/llm-tasks.ts ./libs/llm/llm-tasks.ts
 COPY release/features-snapshot.json ./release/features-snapshot.json
 
 WORKDIR /usr/src/app/apps/web
