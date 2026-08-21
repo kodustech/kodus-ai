@@ -59,6 +59,21 @@ on:
                 required: false
                 default: false
                 type: boolean
+        # The gate stays binary (advisory failures don't fail the job), so the
+        # caller's notification needs these to say what "green" actually hid.
+        outputs:
+            digest:
+                description: "One-line scoreboard: passed/executed, advisories, setup skips"
+                value: ${{ jobs.aggregate.outputs.digest }}
+            gating_count:
+                description: "Gating failure count across cells"
+                value: ${{ jobs.aggregate.outputs.gating_count }}
+            advisory_count:
+                description: "Advisory (non-gating) failure count across cells"
+                value: ${{ jobs.aggregate.outputs.advisory_count }}
+            setup_skipped:
+                description: "Planned scenarios that did not run (setup skips)"
+                value: ${{ jobs.aggregate.outputs.setup_skipped }}
     # Own cadence — Tue/Thu 04:00 UTC (01:00 BRT).
     #
     # Until now the ONLY automatic caller was the release train, where this
@@ -494,13 +509,38 @@ jobs:
         runs-on: ubuntu-latest
         needs: [plan, matrix]
         if: always()
+        outputs:
+            digest: ${{ steps.scoreboard.outputs.digest }}
+            gating_count: ${{ steps.scoreboard.outputs.gating_count }}
+            advisory_count: ${{ steps.scoreboard.outputs.advisory_count }}
+            setup_skipped: ${{ steps.scoreboard.outputs.setup_skipped }}
         steps:
+            # Before the artifact download — checkout cleans the workspace.
+            - name: Checkout monorepo (scoreboard script + composite action)
+              uses: actions/checkout@v6.0.2
+              with:
+                  sparse-checkout: |
+                      tests/e2e/cli/render-scoreboard.py
+                      .github/actions/discord-notify
+                  sparse-checkout-cone-mode: false
+
             - name: Download all evidence
               uses: actions/download-artifact@v4
               with:
                   pattern: e2e-self-hosted-*
                   merge-multiple: true
                   path: evidence
+
+            # Every cell job is green by design (advisory failures don't gate),
+            # so the run page reads "all passed" even when scenarios failed or
+            # coverage silently shrank. Render the evidence the runner already
+            # writes (notify.json / result.json / summary.md) into the run's
+            # Summary tab + ::warning:: annotations, and expose a digest for
+            # the caller's Discord notification. Never fails the job.
+            - name: Render scoreboard (step summary + annotations)
+              id: scoreboard
+              if: always()
+              run: python3 tests/e2e/cli/render-scoreboard.py evidence
 
             - name: Upload combined evidence
               uses: actions/upload-artifact@v4
@@ -556,10 +596,6 @@ jobs:
                       sys.exit(1)
                   print('All {} planned cells reported evidence.'.format(len(planned)))
                   PYCHECK
-
-            - name: Checkout monorepo (for composite action)
-              if: needs.matrix.result == 'failure'
-              uses: actions/checkout@v6.0.2
 
             - name: Notify Discord on failure
               if: needs.matrix.result == 'failure'
