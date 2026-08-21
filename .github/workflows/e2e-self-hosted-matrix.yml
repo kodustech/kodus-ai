@@ -561,14 +561,17 @@ jobs:
             # with the scoreboard; this is analysis, labeled as such. Skips
             # silently when E2E_LLM_API_KEY isn't configured and never
             # fails the job.
+            # Same secret/vars/defaults as the cell jobs' product LLM
+            # (DeepSeek V4 Flash on Fireworks) — one vendor, one key, one
+            # variable to debug. No extra secret to provision.
             - name: LLM read of the evidence (advisory)
               id: llm-note
               if: always()
               continue-on-error: true
               env:
                   E2E_LLM_API_KEY: ${{ secrets.E2E_LLM_API_KEY }}
-                  E2E_LLM_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.deepseek.com' }}
-                  E2E_LLM_MODEL: ${{ vars.E2E_LLM_MODEL || 'deepseek-chat' }}
+                  E2E_LLM_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
+                  E2E_LLM_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
               run: python3 tests/e2e/cli/llm-release-note.py evidence
 
             - name: Upload combined evidence

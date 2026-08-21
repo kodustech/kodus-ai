@@ -12,10 +12,13 @@ truth for counts.
 Advisory by design: no API key configured, request failure, or garbage
 response → prints a notice and exits 0. Visibility must not gate.
 
-Env:
+Env (same trio the matrix cells use for the product LLM — one vendor,
+one key, one variable to debug):
   E2E_LLM_API_KEY   required to do anything (skips silently when absent)
-  E2E_LLM_BASE_URL  OpenAI-compatible base (default https://api.deepseek.com)
-  E2E_LLM_MODEL     model id (default deepseek-chat)
+  E2E_LLM_BASE_URL  OpenAI-compatible base
+                    (default https://api.fireworks.ai/inference/v1)
+  E2E_LLM_MODEL     model id
+                    (default accounts/fireworks/models/deepseek-v4-flash-0731)
 
 Usage: llm-release-note.py [evidence-dir]
 """
@@ -93,7 +96,10 @@ def call_llm(base_url, api_key, model, facts):
     body = json.dumps({
         "model": model,
         "temperature": 0.2,
-        "max_tokens": 500,
+        # Thinking-by-default models (DeepSeek V4 Flash on Fireworks) burn
+        # tokens on reasoning_content BEFORE the visible answer; a tight cap
+        # returns finish_reason=length with empty content. Leave headroom.
+        "max_tokens": 2500,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": json.dumps(facts, ensure_ascii=False)},
@@ -118,8 +124,12 @@ def main():
     if not api_key:
         print("E2E_LLM_API_KEY not configured — skipping LLM release note.")
         return
-    base_url = os.environ.get("E2E_LLM_BASE_URL", "https://api.deepseek.com").strip()
-    model = os.environ.get("E2E_LLM_MODEL", "deepseek-chat").strip()
+    base_url = os.environ.get(
+        "E2E_LLM_BASE_URL", "https://api.fireworks.ai/inference/v1"
+    ).strip()
+    model = os.environ.get(
+        "E2E_LLM_MODEL", "accounts/fireworks/models/deepseek-v4-flash-0731"
+    ).strip()
 
     facts = collect_facts(evidence_dir)
     if not facts["cells"]:
@@ -144,7 +154,8 @@ def main():
         print("::warning title=LLM release note failed (advisory)::empty response")
         return
 
-    header = "### 🤖 Automated read ({}) — analysis, not source of truth\n".format(model)
+    header = "### 🤖 Automated read ({}) — analysis, not source of truth\n".format(
+        model.rsplit("/", 1)[-1])
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if step_summary:
         with open(step_summary, "a") as fh:
