@@ -20,7 +20,7 @@ jest.mock('@libs/llm/model-invocation', () => ({
     resolveModelConfig: jest.fn(),
 }));
 
-import { MockLanguageModelV3 } from 'ai/test';
+import { scriptedToolModel } from './__test-utils__/scripted-tool-model';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 
 import type { AgentSpec } from '../../domain/contracts/agent.contract';
@@ -44,28 +44,11 @@ const BIG_RESULT = Array.from(
 // Scripted model: step 0 -> call readFile (produces a large `tool` message),
 // step 1 -> call submitResult (finalize). Deterministic, no real LLM.
 function scriptedModel() {
-    let call = 0;
-    const doGenerate = (async () => {
-        call += 1;
-        const tc =
-            call === 1
-                ? { id: 'c1', name: 'readFile', input: { path: 'big.txt' } }
-                : { id: 'c2', name: 'submitResult', input: { findings: [] } };
-        return {
-            content: [
-                {
-                    type: 'tool-call',
-                    toolCallId: tc.id,
-                    toolName: tc.name,
-                    input: JSON.stringify(tc.input),
-                },
-            ],
-            finishReason: 'tool-calls',
-            usage: { inputTokens: 10, outputTokens: 5 },
-            warnings: [],
-        };
-    }) as any;
-    return new MockLanguageModelV3({ doGenerate });
+    return scriptedToolModel((turn) =>
+        turn === 1
+            ? { id: 'c1', name: 'readFile', input: { path: 'big.txt' } }
+            : { id: 'c2', name: 'submitResult', input: { findings: [] } },
+    );
 }
 
 const mockResolve = resolveModelConfig as jest.Mock;
@@ -85,28 +68,11 @@ beforeEach(() => {
 // result that piles into the window) before finalizing. Drives the tool-loop
 // accumulation that overflows the window in issue #1574.
 function accumulatingModel(readSteps: number) {
-    let call = 0;
-    const doGenerate = (async () => {
-        call += 1;
-        const tc =
-            call <= readSteps
-                ? { id: `c${call}`, name: 'readFile', input: { path: `f${call}.ts` } }
-                : { id: 'done', name: 'submitResult', input: { findings: [] } };
-        return {
-            content: [
-                {
-                    type: 'tool-call',
-                    toolCallId: tc.id,
-                    toolName: tc.name,
-                    input: JSON.stringify(tc.input),
-                },
-            ],
-            finishReason: 'tool-calls',
-            usage: { inputTokens: 10, outputTokens: 5 },
-            warnings: [],
-        };
-    }) as any;
-    return new MockLanguageModelV3({ doGenerate });
+    return scriptedToolModel((turn) =>
+        turn <= readSteps
+            ? { id: `c${turn}`, name: 'readFile', input: { path: `f${turn}.ts` } }
+            : { id: 'done', name: 'submitResult', input: { findings: [] } },
+    );
 }
 
 const readFileTool: AgentTool = {
