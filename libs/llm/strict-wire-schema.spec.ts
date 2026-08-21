@@ -328,7 +328,6 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
         'libs/cli-review/application/use-cases/classify-session.use-case.ts', // LLMDecisionExtractionSchema
         'libs/code-review/infrastructure/adapters/services/commentManager.service.ts', // repeatedClusteringSchema
         'libs/code-review/infrastructure/adapters/services/commentAnalysis.service.ts', // commentCategorizerSchema, commentIrrelevanceFilterSchema, kodyRulesGenerator{,DuplicateFilter,QualityFilter}Schema
-        'libs/code-review/infrastructure/adapters/services/crossFileAnalysis.service.ts', // CrossFileAnalysisSchema
         'libs/code-review/infrastructure/adapters/services/documentation-llm-planner.service.ts', // DocumentationPlannerSchema
         'libs/code-review/infrastructure/adapters/services/documentation-search-exa.service.ts', // documentationSearchExaFormatSchema
         'libs/code-review/infrastructure/adapters/services/llmAnalysis.service.ts', // codeReviewAnalysisSchema, severityAnalysisSchema, validateImplementedSchema

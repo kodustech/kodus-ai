@@ -174,7 +174,10 @@ describe('GenerateKodyRulesUseCase', () => {
                         // the codeReview carrier directly.
                         resolveTaskSlot: jest
                             .fn()
-                            .mockResolvedValue({ main: { model: 'test-model' } }),
+                            .mockResolvedValue({
+                                provider: 'anthropic',
+                                model: 'test-model',
+                            }),
                         getSubscriptionStatus: jest
                             .fn()
                             .mockResolvedValue('trial'),

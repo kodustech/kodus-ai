@@ -7,6 +7,7 @@ import {
 } from '@libs/llm/byok-config';
 import { validateByokConfigRefs } from '@libs/llm/validate-byok-config-refs';
 import { BYOKProvider } from '@libs/llm/model-providers';
+import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -147,6 +148,15 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                     errors: refCheck.errors,
                 });
             }
+
+            // SSRF guard: a credential's baseURL is user-controlled and the
+            // server makes outbound LLM calls to it at review time. The
+            // test-connection probe validates it, but a save can set/change it
+            // WITHOUT probing (or via a direct API call), so the runtime target
+            // would otherwise never be checked. Reject non-https or
+            // private/reserved targets here too, with the same rule the probe
+            // enforces — closing the tenant→infra SSRF the probe alone left open.
+            await this.assertSafeByokBaseURLs(configValue);
         }
 
         const getConfigValue =
@@ -200,6 +210,24 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         }
 
         return !!result;
+    }
+
+    /**
+     * SSRF guard for the SAVE path: validate every credential's user-provided
+     * `settings.baseURL` the same way the test-connection probe does (https +
+     * publicly-resolvable host, no private/reserved IP). Only openai/anthropic-
+     * compatible credentials carry a baseURL; providers that hardcode their
+     * endpoint (vertex, bedrock) have none and are skipped. An empty baseURL
+     * (a key-only connect that resolves the brand's curated default at runtime)
+     * has nothing to check.
+     */
+    private async assertSafeByokBaseURLs(config: BYOKConfig): Promise<void> {
+        for (const cred of config.credentials ?? []) {
+            const baseURL = cred?.settings?.baseURL;
+            if (typeof baseURL === 'string' && baseURL.trim()) {
+                await assertSafeOpenAICompatibleUrl(baseURL.trim());
+            }
+        }
     }
 
     private encryptByokConfigApiKey(

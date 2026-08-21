@@ -312,6 +312,65 @@ describe('CreateOrUpdateOrganizationParametersUseCase — BYOK write path', () =
         });
     });
 
+    // SSRF: a credential's baseURL is a user-controlled outbound target the
+    // server calls at review time. The save path must reject unsafe URLs, not
+    // rely on the (client-triggered, skippable) test-connection probe.
+    describe('SSRF guard on credential baseURL (save path)', () => {
+        const withBaseURL = (baseURL: string): BYOKConfig =>
+            v2({
+                credentials: [
+                    {
+                        id: 'cred-oc',
+                        provider: 'openai_compatible',
+                        apiKey: 'sk-x',
+                        settings: { baseURL },
+                    },
+                ],
+                models: [
+                    {
+                        id: 'model-a',
+                        credentialId: 'cred-oc',
+                        model: 'gpt-5',
+                    },
+                ],
+                routing: { defaultModelId: 'model-a' },
+            });
+
+        it('rejects a baseURL resolving to a private/reserved IP BEFORE persist (400)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(useCase, withBaseURL('https://169.254.169.254/v1')),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('rejects a non-https baseURL BEFORE persist (400)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+
+            await expect(
+                saveByok(useCase, withBaseURL('http://api.example.com/v1')),
+            ).rejects.toBeInstanceOf(BadRequestException);
+            expect(createOrUpdateConfig).not.toHaveBeenCalled();
+        });
+
+        it('allows a credential with no baseURL (key-only connect resolves the brand default)', async () => {
+            const { useCase, createOrUpdateConfig } = buildUseCase(undefined);
+            const noBaseURL = v2({
+                credentials: [
+                    { id: 'cred-oc', provider: 'openai_compatible', apiKey: 'sk-x' },
+                ],
+                models: [
+                    { id: 'model-a', credentialId: 'cred-oc', model: 'gpt-5' },
+                ],
+                routing: { defaultModelId: 'model-a' },
+            });
+
+            await expect(saveByok(useCase, noBaseURL)).resolves.toBe(true);
+            expect(createOrUpdateConfig).toHaveBeenCalled();
+        });
+    });
+
     // ─────────────────────────────────────────────────────────────────────
     // S4 (LOW, defense-in-depth): the SERVER display mask is `xx...yyy` (dots),
     // not the client `••••` bullet. isMaskedSecret only recognized the bullet,

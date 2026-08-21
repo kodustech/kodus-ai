@@ -38,10 +38,6 @@ import { CodeReviewHandlerService } from '../infrastructure/adapters/services/co
 import { CommentAnalysisService } from '../infrastructure/adapters/services/commentAnalysis.service';
 import { CommentManagerService } from '../infrastructure/adapters/services/commentManager.service';
 import {
-    CROSS_FILE_ANALYSIS_SERVICE_TOKEN,
-    CrossFileAnalysisService,
-} from '../infrastructure/adapters/services/crossFileAnalysis.service';
-import {
     LLM_ANALYSIS_SERVICE_TOKEN,
     LLMAnalysisService,
 } from '../infrastructure/adapters/services/llmAnalysis.service';
@@ -115,10 +111,6 @@ import { DocumentationContextModule } from './documentation-context.module';
             useClass: KodyRulesPrLevelAnalysisService,
         },
         {
-            provide: CROSS_FILE_ANALYSIS_SERVICE_TOKEN,
-            useClass: CrossFileAnalysisService,
-        },
-        {
             provide: SUGGESTION_SERVICE_TOKEN,
             useClass: SuggestionService,
         },
@@ -138,7 +130,6 @@ import { DocumentationContextModule } from './documentation-context.module';
         CODE_BASE_CONFIG_SERVICE_TOKEN,
         KODY_RULES_ANALYSIS_SERVICE_TOKEN,
         KODY_RULES_PR_LEVEL_ANALYSIS_SERVICE_TOKEN,
-        CROSS_FILE_ANALYSIS_SERVICE_TOKEN,
         SUGGESTION_SERVICE_TOKEN,
         SandboxModule,
         CodeAnalysisOrchestrator,

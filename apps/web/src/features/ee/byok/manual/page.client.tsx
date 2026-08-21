@@ -649,7 +649,11 @@ export function ByokManualPageClient({
                                         picked model is one, surface the same plan
                                         toggle + endpoint the curated panel shows;
                                         the toggle drives baseURL / concurrency. */}
-                                    {provider && <ModelPlanAndEndpoint />}
+                                    {provider && (
+                                        <ModelPlanAndEndpoint
+                                            isEditing={isEditing}
+                                        />
+                                    )}
                                 </CardContent>
                             </Card>
                         )}
@@ -723,7 +727,7 @@ export function ByokManualPageClient({
  * + a transport override if the variant declares one) straight into the form.
  * Renders nothing for a plain model with no curated endpoint.
  */
-function ModelPlanAndEndpoint() {
+function ModelPlanAndEndpoint({ isEditing }: { isEditing: boolean }) {
     const form = useFormContext<EditKeyForm>();
     const model = form.watch("model");
     const baseURL = form.watch("baseURL");
@@ -747,11 +751,14 @@ function ModelPlanAndEndpoint() {
         return byDefault ?? variants[0];
     }, [hasVariants, variants, baseURL, curated?.defaultVariantId]);
 
-    // Seed the default plan's endpoint the first time a plan model is picked — the
-    // model dropdown selects the id but knows nothing about plans, so without this
-    // the form would save with no baseURL and hit the wrong endpoint.
+    // Seed the default plan's endpoint the first time a plan model is picked on a
+    // FRESH add — the model dropdown selects the id but knows nothing about plans,
+    // so without this the form would save with no baseURL and hit the wrong
+    // endpoint. Never seed while EDITING: a legacy plan model saved with no
+    // baseURL would otherwise be silently re-pointed to the default variant's
+    // endpoint (and its real stored setting dropped) on the next save.
     useEffect(() => {
-        if (hasVariants && activeVariant && !baseURL) {
+        if (!isEditing && hasVariants && activeVariant && !baseURL) {
             form.setValue("baseURL", activeVariant.baseURL, {
                 shouldDirty: true,
             });
@@ -763,7 +770,7 @@ function ModelPlanAndEndpoint() {
                 );
             }
         }
-    }, [hasVariants, activeVariant, baseURL, form]);
+    }, [isEditing, hasVariants, activeVariant, baseURL, form]);
 
     const applyVariant = (nextId: string) => {
         const next = variants.find((v) => v.id === nextId);

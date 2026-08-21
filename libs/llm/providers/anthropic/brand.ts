@@ -35,11 +35,6 @@ import type { ProviderCatalogModel } from '../kernel/catalog';
 /** Present a brand's config to the anthropic module as its compatible transport,
  *  so the anthropic-compatible branches (budget thinking, sampling params on, `/v1`
  *  base normalization) fire for a Kimi/GLM slot dispatched under its brand id. */
-const asCompatible = (cfg: ProviderBuildConfig): ProviderBuildConfig => ({
-    ...cfg,
-    provider: 'anthropic_compatible' as ProviderBuildConfig['provider'],
-});
-
 export interface AnthropicBrandSpec {
     id: string;
     label: string;
@@ -49,6 +44,25 @@ export interface AnthropicBrandSpec {
 }
 
 export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
+    // Map a brand slot onto the shared anthropic_compatible protocol, filling in
+    // the brand's canonical endpoint when the user left baseURL empty. The
+    // baseURL field is `required: false` (a key-only connect is allowed), but the
+    // downstream build does `anthropicCompatibleRootURL(baseURL || '') + '/v1'`,
+    // so an empty baseURL would yield the invalid relative URL '/v1' and break
+    // every call. Fall back to the curated `defaults.baseURL` for the chosen model
+    // (or the brand's first catalog entry) so a key-only connect still resolves.
+    const asCompatible = (cfg: ProviderBuildConfig): ProviderBuildConfig => {
+        const baseURL = cfg.baseURL?.trim()
+            ? cfg.baseURL
+            : ((spec.catalog.find((m) => m.id === cfg.model) ?? spec.catalog[0])
+                  ?.defaults?.baseURL ?? cfg.baseURL);
+        return {
+            ...cfg,
+            provider: 'anthropic_compatible' as ProviderBuildConfig['provider'],
+            baseURL,
+        };
+    };
+
     return {
         id: spec.id,
         label: spec.label,

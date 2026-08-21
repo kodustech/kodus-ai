@@ -414,15 +414,23 @@ export function hasManagedModelKey(): boolean {
     const selfHosted =
         (process.env.API_LLM_PROVIDER_MODEL ?? 'auto') !== 'auto';
     if (selfHosted) {
+        const envModel = process.env.API_LLM_PROVIDER_MODEL ?? '';
+        // Keyless Vertex (ADC): no literal key, but the ambient project makes a
+        // Vertex model resolvable. Only Gemini/Claude models resolve through ADC,
+        // so the ambient project counts as a backing key ONLY for those — on
+        // GCE/Cloud Run the project is present for EVERY deployment, and counting
+        // it for a non-Google self-hosted model with no real key would run
+        // secondary passes against an unresolvable model.
+        const adcBacksModel =
+            (GEMINI_MODEL_PATTERN.test(envModel) ||
+                CLAUDE_MODEL_PATTERN.test(envModel)) &&
+            !!vertexProjectFromEnv();
         return !!(
             process.env.API_OPEN_AI_API_KEY ||
             process.env.API_GOOGLE_AI_API_KEY ||
             process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
             process.env.API_VERTEX_AI_API_KEY ||
-            // Keyless Vertex (ADC): no literal key, but the ambient project makes
-            // the managed model resolvable — the coarse "has a backing key" check
-            // must count it so secondary passes aren't skipped.
-            vertexProjectFromEnv()
+            adcBacksModel
         );
     }
     // Cloud managed default is Fireworks (KODUS_DEFAULT_MODEL) — match the key

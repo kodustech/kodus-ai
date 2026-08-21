@@ -122,6 +122,61 @@ describe('migrateLegacyToV2', () => {
             expect(v2.models[1].credentialId).not.toBe(v2.credentials[0].id);
         });
 
+        it('same key but DIFFERENT provider → TWO credentials (settings not lost)', () => {
+            const shared = encrypt('sk-shared-key');
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({ provider: 'openai', apiKey: shared }),
+                // Same underlying key, reached through a compatible proxy — a
+                // DISTINCT credential; folding it onto main would run the fallback
+                // against api.openai.com instead of the proxy.
+                fallback: legacySlot({
+                    provider: 'openai_compatible',
+                    apiKey: shared,
+                    model: 'gpt-4o-mini',
+                }),
+            });
+
+            expect(v2.credentials).toHaveLength(2);
+            expect(v2.models).toHaveLength(2);
+            expect(v2.credentials[1].provider).toBe('openai_compatible');
+            expect(v2.models[1].credentialId).toBe(v2.credentials[1].id);
+        });
+
+        it('same key but DIFFERENT baseURL → TWO credentials (endpoint preserved)', () => {
+            const shared = encrypt('sk-shared-key');
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({ apiKey: shared }),
+                fallback: legacySlot({
+                    apiKey: shared,
+                    model: 'gpt-4o-mini',
+                    baseURL: 'https://proxy.example',
+                }),
+            });
+
+            expect(v2.credentials).toHaveLength(2);
+            expect(
+                (v2.credentials[1].settings as Record<string, unknown>).baseURL,
+            ).toBe('https://proxy.example');
+        });
+
+        it('same key AND same provider/settings → ONE credential (dedup still folds)', () => {
+            const shared = encrypt('sk-shared-key');
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({
+                    apiKey: shared,
+                    baseURL: 'https://proxy.example',
+                }),
+                fallback: legacySlot({
+                    apiKey: shared,
+                    model: 'gpt-4o-mini',
+                    baseURL: 'https://proxy.example',
+                }),
+            });
+
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models).toHaveLength(2);
+        });
+
         it('degrades on decrypt() throw → treats slots as DISTINCT, never crashes (D-08)', () => {
             const garbage = 'not-a-valid-ciphertext';
             // sanity: this genuinely throws under the real crypto.

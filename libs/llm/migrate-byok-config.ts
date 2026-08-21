@@ -93,6 +93,49 @@ function plaintextEquals(a?: string, b?: string): boolean {
     }
 }
 
+// Non-secret connection settings and encrypted Bedrock auth secrets — the two
+// halves of what a credential carries BESIDES its apiKey. Two slots are only the
+// SAME credential when these match too (see sameCredential).
+const NONSECRET_SETTING_FIELDS = [
+    'baseURL',
+    'vertexLocation',
+    'awsRegion',
+] as const;
+const SECRET_SETTING_FIELDS = [
+    'awsBearerToken',
+    'awsAccessKeyId',
+    'awsSecretAccessKey',
+    'awsSessionToken',
+] as const;
+
+/**
+ * Whether two legacy slots resolve to the SAME credential — the guard for the
+ * main↔fallback dedup. A credential is `{provider, apiKey, settings}`, so key
+ * equality alone is not enough: same key + different `provider` or `baseURL`
+ * (e.g. the same OpenAI key used directly vs. through an openai_compatible proxy)
+ * are DISTINCT credentials, and folding them onto main would silently run the
+ * fallback against main's endpoint. We require provider + plaintext key + every
+ * setting to match. Erring toward "distinct" is safe (an extra credential
+ * carrying the same verbatim ciphertext resolves identically); erring toward
+ * "same" loses the fallback's connection settings, so we never do that.
+ */
+function sameCredential(a: LegacySlot, b: LegacySlot): boolean {
+    if (STR(a.provider) !== STR(b.provider)) return false;
+    if (!plaintextEquals(a.apiKey, b.apiKey)) return false;
+    for (const f of NONSECRET_SETTING_FIELDS) {
+        if (STR(a[f]) !== STR(b[f])) return false;
+    }
+    for (const f of SECRET_SETTING_FIELDS) {
+        const av = STR(a[f]);
+        const bv = STR(b[f]);
+        if (!av && !bv) continue;
+        // One present, one absent → distinct. Both present → plaintext-compare
+        // (ciphertext bytes differ per-encryption even for the same secret).
+        if (!av || !bv || !plaintextEquals(av, bv)) return false;
+    }
+    return true;
+}
+
 /** Build a credential from a legacy slot, carrying all ciphertext VERBATIM. */
 function credentialFromSlot(id: string, slot: LegacySlot): BYOKCredential {
     const settings: Record<string, unknown> = {};
@@ -187,10 +230,14 @@ export function migrateLegacyToV2(blob: unknown): BYOKConfig {
 
     const fallback = legacy.fallback;
     if (isUsableSlot(fallback)) {
-        // Dedup: same underlying key as main → reuse the one credential.
-        const sameKey = plaintextEquals(main!.apiKey, fallback!.apiKey);
-        const fallbackCredId = sameKey ? mainCredId : 'cred-fallback';
-        if (!sameKey) {
+        // Dedup: fold the fallback onto main's credential ONLY when it resolves
+        // to the same credential (provider + key + settings), not merely the same
+        // key — otherwise a distinct provider/baseURL on the fallback would be
+        // lost (see sameCredential). The fallback MODEL is always emitted; only
+        // the credential is shared.
+        const same = sameCredential(main as LegacySlot, fallback as LegacySlot);
+        const fallbackCredId = same ? mainCredId : 'cred-fallback';
+        if (!same) {
             credentials.push(
                 credentialFromSlot(fallbackCredId, fallback as LegacySlot),
             );

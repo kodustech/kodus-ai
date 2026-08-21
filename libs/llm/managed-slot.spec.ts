@@ -325,6 +325,22 @@ describe('hasManagedModelKey — fail-soft skip-vs-run guard', () => {
         process.env.API_GOOGLE_AI_API_KEY = 'g';
         expect(hasManagedModelKey()).toBe(true);
     });
+
+    it('self-hosted Gemini + ambient project (ADC), no keys → true', () => {
+        process.env.API_LLM_PROVIDER_MODEL = 'gemini-2.5-pro';
+        process.env.GOOGLE_CLOUD_PROJECT = 'adc-proj';
+        expect(hasManagedModelKey()).toBe(true);
+    });
+
+    it('self-hosted NON-Google model + ambient project, no keys → false', () => {
+        // GCE / Cloud Run set GOOGLE_CLOUD_PROJECT for every deployment; it must
+        // NOT count as a backing key for a model that does not resolve via ADC —
+        // otherwise a keyless self-hosted OpenAI-compatible deployment would run
+        // secondary passes against an unresolvable managed model.
+        process.env.API_LLM_PROVIDER_MODEL = 'some-openai-model';
+        process.env.GOOGLE_CLOUD_PROJECT = 'ambient-proj';
+        expect(hasManagedModelKey()).toBe(false);
+    });
 });
 
 // Keyless Vertex (Application Default Credentials) — ported from main's
