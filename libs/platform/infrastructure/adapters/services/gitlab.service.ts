@@ -2924,6 +2924,15 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+
+            // Listing discussions is one call per PR, so a rate limit here is
+            // just as much a "back off" signal as one on the award emojis.
+            // Rethrowing it raw would leave the caller's breaker blind to it
+            // and it would count as an ordinary per-PR failure.
+            if (isGitlabRateLimitError(error)) {
+                throw toGitlabRateLimitError(error, organizationAndTeamData);
+            }
+
             throw error;
         }
     }

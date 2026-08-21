@@ -168,6 +168,27 @@ describe('GitlabService – countReactions', () => {
         });
     });
 
+    it('translates a rate limit on the discussion listing too, so the breaker sees it', async () => {
+        mockedGitlab.mockReturnValue({
+            MergeRequestDiscussions: {
+                all: jest.fn().mockRejectedValue(gitbeakerRetryError()),
+            },
+        });
+
+        const error = await service
+            .getPullRequestReviewComment({
+                organizationAndTeamData,
+                filters: {
+                    repository: { id: 'repo-1', name: 'group/repo' },
+                    pullRequestNumber: 42,
+                },
+            })
+            .catch((e) => e);
+
+        // Rethrowing raw would make this count as an ordinary per-PR failure
+        expect(isRateLimitError(error)).toBe(true);
+    });
+
     it('stops issuing award requests for comments still queued when a rate limit lands', async () => {
         const all = jest.fn().mockRejectedValue(gitbeakerRetryError());
         mockAwards(all);

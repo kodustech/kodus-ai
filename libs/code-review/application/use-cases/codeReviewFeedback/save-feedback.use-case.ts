@@ -75,7 +75,7 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
                 ),
             );
 
-            this.logger.log({
+            this.logger.debug({
                 message: 'Reaction sync diff',
                 context: SaveCodeReviewFeedbackUseCase.name,
                 metadata: {
@@ -91,24 +91,49 @@ export class SaveCodeReviewFeedbackUseCase implements IUseCase {
             });
 
             if (changedReactions.length > 0) {
-                const written =
-                    await this.codeReviewFeedbackService.bulkUpsertReactions(
-                        changedReactions,
-                    );
+                try {
+                    const written =
+                        await this.codeReviewFeedbackService.bulkUpsertReactions(
+                            changedReactions,
+                        );
 
-                this.logger.log({
-                    message: 'Reactions written',
-                    context: SaveCodeReviewFeedbackUseCase.name,
-                    metadata: {
-                        organizationId: payload.organizationId,
-                        teamId: payload.teamId,
-                        attempted: changedReactions.length,
-                        // Diverges from `attempted` when a document was already
-                        // identical in Mongo despite differing from what we
-                        // read — i.e. another run wrote it in between.
-                        written,
-                    },
-                });
+                    this.logger.log({
+                        message: 'Reactions written',
+                        context: SaveCodeReviewFeedbackUseCase.name,
+                        metadata: {
+                            organizationId: payload.organizationId,
+                            teamId: payload.teamId,
+                            attempted: changedReactions.length,
+                            // Diverges from `attempted` when a document was
+                            // already identical in Mongo despite differing from
+                            // what we read — i.e. another run wrote it between
+                            // our read and this write.
+                            written,
+                        },
+                    });
+                } catch (writeError) {
+                    // A failed partial-persist must not cost us the abort
+                    // classification: without it the message is rescheduled on
+                    // the generic backoff curve and retries straight back into
+                    // a bucket that is still exhausted. The write failure is
+                    // already logged in detail by the repository.
+                    if (abortedError) {
+                        this.logger.error({
+                            message:
+                                'Failed to persist partial reactions after a rate-limit abort',
+                            context: SaveCodeReviewFeedbackUseCase.name,
+                            error: writeError,
+                            metadata: {
+                                organizationId: payload.organizationId,
+                                teamId: payload.teamId,
+                                attempted: changedReactions.length,
+                            },
+                        });
+                        throw abortedError;
+                    }
+
+                    throw writeError;
+                }
             }
 
             if (abortedError) {

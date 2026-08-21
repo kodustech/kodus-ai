@@ -8,6 +8,7 @@ jest.mock('@libs/core/log/logger', () => ({
         log: jest.fn(),
         error: jest.fn(),
         warn: jest.fn(),
+        debug: jest.fn(),
     }),
 }));
 
@@ -220,6 +221,22 @@ describe('SaveCodeReviewFeedbackUseCase', () => {
             expect(
                 codeReviewFeedbackService.bulkUpsertReactions,
             ).not.toHaveBeenCalled();
+        });
+
+        it('should keep the abort classification when persisting the partials fails', async () => {
+            getReactionsUseCase.execute.mockRejectedValue(
+                abortedError([collectedReaction()]),
+            );
+            codeReviewFeedbackService.bulkUpsertReactions.mockRejectedValue(
+                new Error('Database write failed'),
+            );
+
+            const error = await useCase.execute(payload).catch((e) => e);
+
+            // The DB failure must not downgrade the reschedule to the generic
+            // backoff curve — that would retry into an exhausted bucket
+            expect(error).toBeInstanceOf(ReactionSyncAbortedError);
+            expect(isRateLimitError(error)).toBe(true);
         });
 
         it('should keep the rate-limit classification so the consumer reschedules', async () => {
