@@ -10,12 +10,25 @@ import { SaveCodeReviewFeedbackUseCase } from '@libs/code-review/application/use
 import { createRabbitMQErrorHandlerWithFallback } from '@libs/core/infrastructure/queue/rabbitmq-error.handler';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
+/**
+ * This handler gets its own budget instead of the shared
+ * WORKFLOW_QUEUE_HANDLER_TIMEOUT_MS, which ships at 60s. A reaction sync walks
+ * every merged PR of the last 7 days for the tenant, and on GitLab each Kody
+ * comment costs its own request — a large tenant does not fit in a minute now
+ * that the fan-out is throttled. Raising the shared value would hand the same
+ * budget to every other consumer, which is not the intent.
+ *
+ * Timing out is not free: the run is dropped and only its already-persisted
+ * reactions survive, so this wants to be generous.
+ */
+const FEEDBACK_HANDLER_TIMEOUT_MS_DEFAULT = 5 * 60 * 1000;
+
 @Injectable()
 export class CodeReviewFeedbackConsumer {
     private readonly logger = createLogger(CodeReviewFeedbackConsumer.name);
     private readonly handlerTimeoutMs = this.parseTimeoutMs(
-        process.env.WORKFLOW_QUEUE_HANDLER_TIMEOUT_MS,
-        60000,
+        process.env.WORKFLOW_QUEUE_FEEDBACK_HANDLER_TIMEOUT_MS,
+        FEEDBACK_HANDLER_TIMEOUT_MS_DEFAULT,
     );
     constructor(
         private readonly saveCodeReviewFeedbackUseCase: SaveCodeReviewFeedbackUseCase,

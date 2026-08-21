@@ -9,6 +9,7 @@ describe('CodeReviewFeedbackService', () => {
     beforeEach(() => {
         repository = {
             bulkCreate: jest.fn(),
+            bulkUpsertReactions: jest.fn(),
             findById: jest.fn(),
             findOne: jest.fn(),
             find: jest.fn(),

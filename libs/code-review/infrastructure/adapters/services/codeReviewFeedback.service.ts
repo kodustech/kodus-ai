@@ -6,7 +6,10 @@ import { CODE_REVIEW_FEEDBACK_REPOSITORY_TOKEN } from '@libs/code-review/domain/
 import { ICodeReviewFeedbackRepository } from '@libs/code-review/domain/codeReviewFeedback/contracts/codeReviewFeedback.repository';
 import { ICodeReviewFeedbackService } from '@libs/code-review/domain/codeReviewFeedback/contracts/codeReviewFeedback.service.contract';
 import { CodeReviewFeedbackEntity } from '@libs/code-review/domain/codeReviewFeedback/entities/codeReviewFeedback.entity';
-import { ICodeReviewFeedback } from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
+import {
+    ICodeReviewFeedback,
+    ICollectedReaction,
+} from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
 import {
     IPullRequests,
     IRepository,
@@ -24,6 +27,10 @@ export class CodeReviewFeedbackService implements ICodeReviewFeedbackService {
         feedbacks: Omit<ICodeReviewFeedback, 'uuid'>[],
     ): Promise<CodeReviewFeedbackEntity[]> {
         return this.codeReviewFeedbackRepository.bulkCreate(feedbacks);
+    }
+
+    bulkUpsertReactions(reactions: ICollectedReaction[]): Promise<number> {
+        return this.codeReviewFeedbackRepository.bulkUpsertReactions(reactions);
     }
 
     findById(uuid: string): Promise<CodeReviewFeedbackEntity | null> {

@@ -1,5 +1,10 @@
 import { GetReactionsUseCase } from '../get-reactions.use-case';
+import { ReactionSyncAbortedError } from '@libs/code-review/domain/codeReviewFeedback/errors/reaction-sync-aborted.error';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
+import {
+    isRateLimitError,
+    RateLimitError,
+} from '@libs/core/workflow/domain/errors/rate-limit.error';
 import {
     createSampleOrganizationAndTeamData,
     createSamplePullRequestWithSuggestions,
@@ -280,5 +285,202 @@ describe('GetReactionsUseCase', () => {
         // PR 10 error is isolated — PR 20 reactions still returned
         expect(result).toHaveLength(1);
         expect(result[0].suggestionId).toBe('suggestion-001');
+    });
+
+    it('should re-read suggestions that were already synced, so moving counts are seen', async () => {
+        const pr = createSamplePullRequestWithSuggestions();
+        pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+            [pr],
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            createSampleComment({ id: 100 }),
+        ]);
+        codeManagementService.countReactions.mockResolvedValue([
+            createSampleReactionResult({
+                reactions: { thumbsUp: 4, thumbsDown: 0 },
+            }),
+        ]);
+
+        const result = await useCase.execute(orgAndTeam, [42]);
+
+        // Nothing here filters on prior state — the current count always wins
+        expect(codeManagementService.countReactions).toHaveBeenCalled();
+        expect(result[0].reactions).toEqual({ thumbsUp: 4, thumbsDown: 0 });
+    });
+
+    describe('concurrency', () => {
+        it('should never have more than PR_CONCURRENCY PRs in flight', async () => {
+            const prs = Array.from({ length: 20 }, (_, i) =>
+                createSamplePullRequestWithSuggestions({
+                    _id: `pr-${i}`,
+                    number: i + 1,
+                }),
+            );
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                prs,
+            );
+
+            let inFlight = 0;
+            let peakInFlight = 0;
+            codeManagementService.getPullRequestReviewComment.mockImplementation(
+                async () => {
+                    inFlight += 1;
+                    peakInFlight = Math.max(peakInFlight, inFlight);
+                    await new Promise((resolve) => setImmediate(resolve));
+                    inFlight -= 1;
+                    return [createSampleComment({ id: 100 })];
+                },
+            );
+            codeManagementService.countReactions.mockResolvedValue([]);
+
+            await useCase.execute(
+                orgAndTeam,
+                prs.map((pr) => pr.number),
+            );
+
+            expect(
+                codeManagementService.getPullRequestReviewComment,
+            ).toHaveBeenCalledTimes(20);
+            expect(peakInFlight).toBeLessThanOrEqual(10);
+        });
+    });
+
+    describe('rate-limit breaker', () => {
+        const rateLimitError = () =>
+            new RateLimitError({
+                resetAt: new Date('2026-08-20T00:01:00.000Z'),
+                message: 'GitLab refused the request rate',
+            });
+
+        const manyPrs = (count: number) =>
+            Array.from({ length: count }, (_, i) =>
+                createSamplePullRequestWithSuggestions({
+                    _id: `pr-${i}`,
+                    number: i + 1,
+                }),
+            );
+
+        it('should tolerate rate limits below the abort threshold', async () => {
+            const prs = manyPrs(3);
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                prs,
+            );
+
+            codeManagementService.getPullRequestReviewComment
+                .mockRejectedValueOnce(rateLimitError())
+                .mockRejectedValueOnce(rateLimitError())
+                .mockResolvedValue([createSampleComment({ id: 100 })]);
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult(),
+            ]);
+
+            const result = await useCase.execute(orgAndTeam, [1, 2, 3]);
+
+            expect(result).toHaveLength(1);
+        });
+
+        it('should abort the run once the threshold is reached', async () => {
+            const prs = manyPrs(3);
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                prs,
+            );
+
+            codeManagementService.getPullRequestReviewComment.mockRejectedValue(
+                rateLimitError(),
+            );
+
+            await expect(
+                useCase.execute(orgAndTeam, [1, 2, 3]),
+            ).rejects.toBeInstanceOf(ReactionSyncAbortedError);
+        });
+
+        it('should stop issuing provider calls for PRs still queued after aborting', async () => {
+            const prs = manyPrs(40);
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                prs,
+            );
+
+            codeManagementService.getPullRequestReviewComment.mockImplementation(
+                async () => {
+                    throw rateLimitError();
+                },
+            );
+
+            await expect(
+                useCase.execute(
+                    orgAndTeam,
+                    prs.map((pr) => pr.number),
+                ),
+            ).rejects.toBeInstanceOf(ReactionSyncAbortedError);
+
+            // Only the first concurrency window runs; the queue drains without
+            // touching the provider once the breaker opens.
+            expect(
+                codeManagementService.getPullRequestReviewComment.mock.calls
+                    .length,
+            ).toBeLessThanOrEqual(10);
+        });
+
+        it('should carry reactions already collected on the abort error', async () => {
+            const prs = manyPrs(4);
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                prs,
+            );
+
+            // First PR succeeds, the rest are rate limited
+            codeManagementService.getPullRequestReviewComment
+                .mockResolvedValueOnce([createSampleComment({ id: 100 })])
+                .mockRejectedValue(rateLimitError());
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult(),
+            ]);
+
+            const error = await useCase
+                .execute(orgAndTeam, [1, 2, 3, 4])
+                .catch((e) => e);
+
+            expect(error).toBeInstanceOf(ReactionSyncAbortedError);
+            expect(error.partialReactions).toHaveLength(1);
+            expect(error.partialReactions[0].suggestionId).toBe(
+                'suggestion-001',
+            );
+        });
+
+        it('should expose the provider reset window so the consumer can reschedule', async () => {
+            const prs = manyPrs(3);
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                prs,
+            );
+            codeManagementService.getPullRequestReviewComment.mockRejectedValue(
+                rateLimitError(),
+            );
+
+            const error = await useCase
+                .execute(orgAndTeam, [1, 2, 3])
+                .catch((e) => e);
+
+            expect(isRateLimitError(error)).toBe(true);
+            expect(error.resetAt).toEqual(new Date('2026-08-20T00:01:00.000Z'));
+        });
+
+        it('should not abort on ordinary errors, however many', async () => {
+            const prs = manyPrs(6);
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                prs,
+            );
+            codeManagementService.getPullRequestReviewComment.mockRejectedValue(
+                new Error('boom'),
+            );
+
+            const result = await useCase.execute(
+                orgAndTeam,
+                prs.map((pr) => pr.number),
+            );
+
+            expect(result).toEqual([]);
+            expect(
+                codeManagementService.getPullRequestReviewComment,
+            ).toHaveBeenCalledTimes(6);
+        });
     });
 });

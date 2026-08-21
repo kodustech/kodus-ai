@@ -43,4 +43,17 @@ const CodeReviewFeedbackSchema = SchemaFactory.createForClass(
     CodeReviewFeedbackModel,
 );
 
+// Serves the reaction sync on both sides: the read that loads an org's
+// feedbacks, and the per-suggestion upsert filter that refreshes counts.
+//
+// Deliberately NOT unique. It should be — the tuple identifies one feedback,
+// and uniqueness is what would close the race where two teams of the same org
+// sync the same PR at once. But `autoIndex` builds this on startup, and a
+// unique build fails if the collection already carries duplicates from that
+// very race. Promoting it needs a dedup check against real data first.
+CodeReviewFeedbackSchema.index(
+    { organizationId: 1, suggestionId: 1 },
+    { name: 'idx_org_suggestion', background: true },
+);
+
 export { CodeReviewFeedbackSchema };

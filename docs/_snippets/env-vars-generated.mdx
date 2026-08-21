@@ -361,6 +361,7 @@
 | `WORKFLOW_QUEUE_CHECK_IMPLEMENTATION_TIMEOUT_MS` | – | number | ⚙️ Both (opt-in) | Hard timeout (ms) for a check-implementation handler invocation. |
 | `WORKFLOW_QUEUE_FEEDBACK_PREFETCH` | – | number | ⚙️ Both (opt-in) | Per-handler prefetch for the feedback workflow handler. |
 | `WORKFLOW_QUEUE_HANDLER_TIMEOUT_MS` | – | number | ⚙️ Both (opt-in) | Hard timeout (ms) for any workflow handler invocation (fallback). |
+| `WORKFLOW_QUEUE_FEEDBACK_HANDLER_TIMEOUT_MS` | – | number | ⚙️ Both (opt-in) | Hard timeout (ms) for the code review reaction sync handler. Needs more room than the shared timeout above: one run walks every merged PR of the last 7 days, and on GitLab each Kody comment costs its own API request. |
 | `WORKFLOW_QUEUE_WORKER_MAX_RETRIES` | – | number | ⚙️ Both (opt-in) | Max retries before a workflow message is sent to the DLQ. |
 | `WORKFLOW_QUEUE_WORKER_RETRY_DELAY_MS` | – | number | ⚙️ Both (opt-in) | Backoff between worker retries, in milliseconds. |
 | `WORKFLOW_QUEUE_AUTO_SCALE_ENABLED` | – | boolean | ⚙️ Both (opt-in) | Auto-scale: enable adaptive worker pool based on queue depth. |
