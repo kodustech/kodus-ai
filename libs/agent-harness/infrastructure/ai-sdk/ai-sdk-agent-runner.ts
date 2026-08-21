@@ -182,6 +182,34 @@ export class AiSdkAgentRunner implements AgentRunner {
 
         // onStepFinish: collect the step + run policy hooks.
         const stepCollector = async (event: any) => {
+            // ai@7.0.70+ refuses to auto-execute tools when a model turn ends on
+            // an UNSAFE finish reason (length/content-filter/error/other — the
+            // SDK's allowlist is stop|tool-calls): the tool calls are requested
+            // but never run, and the loop stalls, SILENTLY. Surface exactly that
+            // case as a trace event so a BYOK provider that truncates or gets
+            // filtered shows up here instead of a mysteriously short run with an
+            // empty review. (A deferred/unexecuted tool on a SAFE finish reason
+            // is intentional — not flagged.)
+            const toolCalls = event?.toolCalls ?? [];
+            const toolResults = event?.toolResults ?? [];
+            if (toolCalls.length > toolResults.length) {
+                const fr = event?.finishReason;
+                const finishReason =
+                    typeof fr === 'string' ? fr : (fr?.unified ?? 'unknown');
+                if (finishReason !== 'stop' && finishReason !== 'tool-calls') {
+                    emit('runner', {
+                        kind: 'tool.skipped',
+                        detail: {
+                            finishReason,
+                            requested: toolCalls.length,
+                            executed: toolResults.length,
+                            tools: toolCalls.map(
+                                (tc: any) => tc?.toolName ?? tc?.name,
+                            ),
+                        },
+                    });
+                }
+            }
             steps.push({
                 index: steps.length,
                 message: eventToMessage(event),
