@@ -112,28 +112,45 @@ def verdict_icon(verdict):
     return {"green": "🟢", "red": "🔴", "inconclusive": "🟡"}.get(verdict, "⚪")
 
 
+def overall_state(cells):
+    """One glanceable roll-up. red = something gated (the run is failing
+    loudly anyway); yellow = the gate is green but scenarios failed as
+    advisory or planned coverage did not run — fine to proceed, not fine
+    to ignore; green = everything applicable ran and passed."""
+    gating = sum(len(c["gating"]) for c in cells)
+    unverified = sum(len(c["unverified"]) for c in cells)
+    advisory = sum(len(c["advisory"]) + len(c["unclassified_failed"]) for c in cells)
+    setup = sum(len(c["setup_skips"]) for c in cells)
+    if gating or unverified:
+        return "red", "🔴", "RED — gating failures"
+    if advisory or setup:
+        caveats = []
+        if advisory:
+            caveats.append("{} advisory failure(s)".format(advisory))
+        if setup:
+            caveats.append("{} coverage gap(s)".format(setup))
+        return "yellow", "🟡", "GREEN WITH CAVEATS — " + ", ".join(caveats)
+    return "green", "🟢", "ALL CLEAR"
+
+
 def render_markdown(cells):
-    out = []
-    out.append("## E2E self-hosted matrix — scoreboard\n")
-    out.append("| Cell | Verdict | Passed | Executed / applicable | Gating | Advisory | Setup skips |")
-    out.append("|---|---|---|---|---|---|---|")
-    for c in cells:
-        out.append(
-            "| `{}` | {} {} | {}/{} | {}/{} | {} | {} | {} |".format(
-                c["label"], verdict_icon(c["verdict"]), c["verdict"],
-                c["passed"], c["executed"], c["executed"], c["applicable"],
-                len(c["gating"]) or "—",
-                len(c["advisory"]) + len(c["unclassified_failed"]) or "—",
-                len(c["setup_skips"]) or "—",
-            )
-        )
-    out.append("")
+    _, icon, label = overall_state(cells)
+    passed = sum(c["passed"] for c in cells)
+    executed = sum(c["executed"] for c in cells)
+    applicable = sum(c["applicable"] for c in cells)
 
     gating = [(c, f) for c in cells for f in c["gating"]]
     advisory = [(c, f) for c in cells for f in c["advisory"] + c["unclassified_failed"]]
     unverified = [(c, u) for c in cells for u in c["unverified"]]
     setup = [(c, s) for c in cells for s in c["setup_skips"]]
     flaky = [(c, f) for c in cells for f in c["flaky"]]
+
+    # Verdict first — the whole point is answering "can I stop reading?"
+    # in one line. Detail follows in descending order of urgency.
+    out = []
+    out.append("# {} E2E matrix: {}\n".format(icon, label))
+    out.append("**{}/{} passed · executed {}/{} applicable · {} cell(s)**\n".format(
+        passed, executed, executed, applicable, len(cells)))
 
     if gating:
         out.append("### 🔴 Gating failures\n")
@@ -162,6 +179,21 @@ def render_markdown(cells):
         for c, f in flaky:
             out.append("- `{}` × `{}`".format(f, c["label"]))
         out.append("")
+
+    out.append("### Per-cell scoreboard\n")
+    out.append("| Cell | Verdict | Passed | Executed / applicable | Gating | Advisory | Setup skips |")
+    out.append("|---|---|---|---|---|---|---|")
+    for c in cells:
+        out.append(
+            "| `{}` | {} {} | {}/{} | {}/{} | {} | {} | {} |".format(
+                c["label"], verdict_icon(c["verdict"]), c["verdict"],
+                c["passed"], c["executed"], c["executed"], c["applicable"],
+                len(c["gating"]) or "—",
+                len(c["advisory"]) + len(c["unclassified_failed"]) or "—",
+                len(c["setup_skips"]) or "—",
+            )
+        )
+    out.append("")
 
     for c in cells:
         try:
@@ -214,9 +246,18 @@ def emit_outputs(cells):
         parts.append("{} setup-skips".format(setup))
     digest = " · ".join(parts)
 
+    state, _, _ = overall_state(cells)
+    # Discord embed colors: red / amber / green. Amber is the point —
+    # "validated with caveats" must not wear the same green as a clean run.
+    discord_color = {
+        "red": "0xdd3333", "yellow": "0xffaa00", "green": "0x00cc66",
+    }[state]
+
     gh_output = os.environ.get("GITHUB_OUTPUT")
     lines = [
         "digest={}".format(digest),
+        "status={}".format(state),
+        "discord_color={}".format(discord_color),
         "gating_count={}".format(gating),
         "advisory_count={}".format(advisory),
         "setup_skipped={}".format(setup),

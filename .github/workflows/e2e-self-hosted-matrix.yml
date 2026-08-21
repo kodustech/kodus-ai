@@ -65,6 +65,12 @@ on:
             digest:
                 description: "One-line scoreboard: passed/executed, advisories, setup skips"
                 value: ${{ jobs.aggregate.outputs.digest }}
+            status:
+                description: "Roll-up: green (all clear), yellow (advisories/coverage gaps behind a green gate), red (gating)"
+                value: ${{ jobs.aggregate.outputs.status }}
+            discord_color:
+                description: "Embed color matching status (green/amber/red)"
+                value: ${{ jobs.aggregate.outputs.discord_color }}
             gating_count:
                 description: "Gating failure count across cells"
                 value: ${{ jobs.aggregate.outputs.gating_count }}
@@ -74,6 +80,9 @@ on:
             setup_skipped:
                 description: "Planned scenarios that did not run (setup skips)"
                 value: ${{ jobs.aggregate.outputs.setup_skipped }}
+            llm_note:
+                description: "Optional LLM interpretation of the evidence (empty when no key configured)"
+                value: ${{ jobs.aggregate.outputs.llm_note }}
     # Own cadence — Tue/Thu 04:00 UTC (01:00 BRT).
     #
     # Until now the ONLY automatic caller was the release train, where this
@@ -511,9 +520,12 @@ jobs:
         if: always()
         outputs:
             digest: ${{ steps.scoreboard.outputs.digest }}
+            status: ${{ steps.scoreboard.outputs.status }}
+            discord_color: ${{ steps.scoreboard.outputs.discord_color }}
             gating_count: ${{ steps.scoreboard.outputs.gating_count }}
             advisory_count: ${{ steps.scoreboard.outputs.advisory_count }}
             setup_skipped: ${{ steps.scoreboard.outputs.setup_skipped }}
+            llm_note: ${{ steps.llm-note.outputs.llm_note }}
         steps:
             # Before the artifact download — checkout cleans the workspace.
             - name: Checkout monorepo (scoreboard script + composite action)
@@ -521,6 +533,7 @@ jobs:
               with:
                   sparse-checkout: |
                       tests/e2e/cli/render-scoreboard.py
+                      tests/e2e/cli/llm-release-note.py
                       .github/actions/discord-notify
                   sparse-checkout-cone-mode: false
 
@@ -541,6 +554,22 @@ jobs:
               id: scoreboard
               if: always()
               run: python3 tests/e2e/cli/render-scoreboard.py evidence
+
+            # Interpretation on top of the deterministic facts: a cheap LLM
+            # classifies each failure (infra/quota vs test-side vs product)
+            # and says what should block a promote approval. Numbers stay
+            # with the scoreboard; this is analysis, labeled as such. Skips
+            # silently when E2E_LLM_API_KEY isn't configured and never
+            # fails the job.
+            - name: LLM read of the evidence (advisory)
+              id: llm-note
+              if: always()
+              continue-on-error: true
+              env:
+                  E2E_LLM_API_KEY: ${{ secrets.E2E_LLM_API_KEY }}
+                  E2E_LLM_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.deepseek.com' }}
+                  E2E_LLM_MODEL: ${{ vars.E2E_LLM_MODEL || 'deepseek-chat' }}
+              run: python3 tests/e2e/cli/llm-release-note.py evidence
 
             - name: Upload combined evidence
               uses: actions/upload-artifact@v4
