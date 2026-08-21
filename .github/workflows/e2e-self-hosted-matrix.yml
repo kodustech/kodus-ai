@@ -644,6 +644,89 @@ jobs:
                       `${{ inputs.matrix_file || 'matrix/fast.yml' }}` failed against image `${{ needs.plan.outputs.image_tag }}`.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
+    # Root-cause investigation — only when the run carries failures. A
+    # read-only Claude Code agent follows each advisory/gating failure
+    # through the evidence (droplet logs + result.json) into the repo,
+    # classifies it (product / test-side / infra) and proposes a fix; a
+    # deterministic step then upserts one issue per stable failure
+    # signature so a recurring failure updates a single issue instead of
+    # being rediscovered every run.
+    #
+    # Auth is the Claude SUBSCRIPTION token (`claude setup-token` →
+    # secret CLAUDE_CODE_OAUTH_TOKEN) — no per-token API billing. The
+    # job skips silently without the secret and can never gate: it is
+    # continue-on-error and every step degrades to a notice.
+    investigate:
+        name: Investigate failures (agent, advisory)
+        runs-on: ubuntu-latest
+        needs: [aggregate]
+        if: >-
+            always() &&
+            ((needs.aggregate.outputs.gating_count != '' && needs.aggregate.outputs.gating_count != '0') ||
+             (needs.aggregate.outputs.advisory_count != '' && needs.aggregate.outputs.advisory_count != '0'))
+        continue-on-error: true
+        timeout-minutes: 25
+        permissions:
+            contents: read
+            issues: write
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Download evidence
+              uses: actions/download-artifact@v4
+              with:
+                  name: e2e-self-hosted-matrix
+                  path: evidence
+
+            - name: Investigate with Claude Code (subscription auth)
+              env:
+                  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+              run: |
+                  set -uo pipefail
+                  if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+                      echo "CLAUDE_CODE_OAUTH_TOKEN not configured — skipping investigation."
+                      echo "Generate one with 'claude setup-token' and add it as a repo secret."
+                      exit 0
+                  fi
+                  npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
+                  # Read-only investigation; Write is allowed solely so the
+                  # agent can produce the two contract files (the prompt pins
+                  # that, and the runner is ephemeral either way).
+                  claude -p "$(cat tests/e2e/cli/investigate-prompt.md)" \
+                      --allowedTools "Read,Grep,Glob,Write" \
+                      --max-turns 60 \
+                      --output-format text > investigation-agent.log 2>&1 || {
+                      echo "::warning title=E2E investigation failed (advisory)::agent run failed — see investigation-agent.log artifact"
+                  }
+                  if [ -f investigation.md ]; then
+                      {
+                          echo "## 🔎 Failure investigation (agent — verify before acting)"
+                          echo ""
+                          cat investigation.md
+                      } >> "$GITHUB_STEP_SUMMARY" || true
+                  else
+                      echo "::warning title=E2E investigation (advisory)::agent produced no investigation.md"
+                  fi
+
+            - name: Upsert one issue per failure signature
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              run: python3 tests/e2e/cli/upsert-investigation-issues.py investigation.json
+
+            - name: Upload investigation artifact
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-investigation
+                  path: |
+                      investigation.md
+                      investigation.json
+                      investigation-agent.log
+                  if-no-files-found: ignore
+                  retention-days: 30
+
     # Durable history — same rationale as the cloud workflow: a separate job
     # so `contents: write` never touches the job that holds provider tokens.
     # Without this the self-hosted matrix leaves no trace after 30 days, which

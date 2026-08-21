@@ -473,9 +473,12 @@ jobs:
         # e2e-history branch and requests `contents: write`. GitHub validates
         # that permission against this caller before creating any jobs. The
         # matrix job inside the reusable workflow remains pinned to read-only.
+        # `issues: write` is for the investigate job's one-issue-per-failure
+        # upsert; without it that step degrades to a warning.
         permissions:
             contents: write
             packages: read
+            issues: write
         uses: ./.github/workflows/e2e-self-hosted-matrix.yml
         with:
             # rc_version (the DOCKER tag, e.g. 2.1.16-rc.68) — NOT rc_tag
