@@ -1,6 +1,7 @@
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import { LLM } from '@libs/llm/llm';
 import { ConfigService } from '@nestjs/config';
 
 const exaSearchMock = jest.fn();
@@ -10,6 +11,18 @@ jest.mock('exa-js', () => {
         search: exaSearchMock,
     }));
 });
+
+// The doc formatter was migrated onto the AI SDK `LLM.run` seam, which resolves
+// observability via the app singleton — NOT the injected ObservabilityService the
+// buildObservabilityMock below stubs. Mock `LLM.run` directly so these tests stay
+// deterministic and never make a real per-query network call (otherwise a valid
+// LLM key in the env turns each query task into a live call and the suite times
+// out). The service unwraps `response.markdown`.
+jest.mock('@libs/llm/llm', () => ({
+    LLM: { run: jest.fn() },
+}));
+const mockLLMRun = LLM.run as jest.Mock;
+const DEFAULT_FORMATTED = '## Summary\n- formatted doc snippet';
 
 function buildObservabilityMock(params?: {
     formattedResult?: string;
@@ -35,6 +48,9 @@ describe('DocumentationSearchExaService', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
+        // Default doc-formatter output for every test; a test that asserts on the
+        // snippet content overrides this per-case.
+        mockLLMRun.mockResolvedValue({ markdown: DEFAULT_FORMATTED });
     });
 
     it('should skip search when API key is missing', async () => {
@@ -82,14 +98,20 @@ describe('DocumentationSearchExaService', () => {
             citations: [{ url: 'https://docs.nestjs.com/controllers' }],
         });
 
+        // A sentinel that appears ONLY in the LLM-formatted markdown, never in the
+        // raw Exa title/text — so the assertion below distinguishes "the formatted
+        // snippet flowed through" from "fell back to the raw Exa content" (the
+        // earlier `Controller` assertion passed either way, since the Exa title is
+        // "NestJS Controllers").
+        mockLLMRun.mockResolvedValue({
+            markdown: '## Summary\n- LLM_FORMATTED_SENTINEL: use @Controller decorators.',
+        });
+
         const cacheService = buildCacheServiceMock();
         const service = new DocumentationSearchExaService(
             configService,
             cacheService as unknown as DocumentationSearchCacheService,
-            buildObservabilityMock({
-                formattedResult:
-                    '## Summary\n- Use @Controller decorators correctly.',
-            }),
+            buildObservabilityMock(),
         );
 
         const result = await service.searchByFilePlan({
@@ -113,7 +135,8 @@ describe('DocumentationSearchExaService', () => {
             expect.objectContaining({
                 source: 'exa-search',
                 url: 'https://docs.nestjs.com/controllers',
-                snippet: expect.stringContaining('Controller'),
+                // Must be the LLM-FORMATTED snippet, not the raw Exa fallback.
+                snippet: expect.stringContaining('LLM_FORMATTED_SENTINEL'),
             }),
         );
         expect(cacheService.set).toHaveBeenCalledTimes(1);

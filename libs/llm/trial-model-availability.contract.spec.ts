@@ -36,7 +36,14 @@ const BASE_URL = (
     process.env.API_OPENAI_FORCE_BASE_URL || 'https://api.fireworks.ai/inference/v1'
 ).replace(/\/$/, '');
 
-const describeIfKey = API_KEY ? describe : describe.skip;
+// Opt-in only. This test makes a REAL call to Fireworks, so it must NOT gate the
+// fast unit pass / pre-push: it was keyed off the presence of a generic LLM key,
+// but most devs have `API_OPEN_AI_API_KEY` in their env for unrelated reasons —
+// and an OpenAI key sent to the Fireworks endpoint 401s, blocking every push on a
+// false negative. Runs only when RUN_LIVE_CONTRACT_TESTS is set (the e2e matrix
+// job sets it alongside a real Fireworks-compatible key).
+const runLive = !!process.env.RUN_LIVE_CONTRACT_TESTS && !!API_KEY;
+const describeIfKey = runLive ? describe : describe.skip;
 
 describeIfKey('KODUS_TRIAL_MODEL availability (contract)', () => {
     it(`${KODUS_TRIAL_MODEL} answers a real completion request`, async () => {
