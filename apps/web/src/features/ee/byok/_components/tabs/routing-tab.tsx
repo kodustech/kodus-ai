@@ -23,7 +23,7 @@ import {
     SlidersHorizontalIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { TASK_ROUTING_FALLBACK } from "@libs/llm/byok-config";
+import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
 
 import { useCatalog } from "../../_data/catalog-context";
 import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";

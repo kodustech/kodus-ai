@@ -19,7 +19,7 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { TASK_ROUTING_FALLBACK } from "@libs/llm/byok-config";
+import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
 import {
     AlertTriangleIcon,
     ChevronsUpDownIcon,
