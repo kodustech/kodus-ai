@@ -40,7 +40,7 @@ const CRON_KODY_LEARNING = process.env.API_CRON_KODY_LEARNING;
 // occupy. The same pool serves HTTP requests, and starving it stalls every
 // request for connectionTimeoutMillis — so this stays well under the pool
 // size rather than being tunable to a value that could exhaust it.
-const BACKFILL_LOCK_CHUNK_SIZE = 5;
+export const BACKFILL_LOCK_CHUNK_SIZE = 5;
 
 @Injectable()
 export class KodyLearningCronProvider {

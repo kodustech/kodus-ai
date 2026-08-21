@@ -1,5 +1,6 @@
 import { ensureLicenseSeat } from "../lib/onboarding.js";
 import { http } from "../lib/http.js";
+import { resolveConversationUserToken } from "../lib/conversation-user-token.js";
 import type { RunContext, Scenario, KodusSession } from "../lib/types.js";
 
 // Anthropic-BYOK variant of conversation-vertex-byok: drives the REAL @kody
@@ -7,9 +8,29 @@ import type { RunContext, Scenario, KodusSession } from "../lib/types.js";
 // Sonnet → kodus-flow parser) on a real self-hosted env. Used to reproduce the
 // "Missing or invalid reasoning field" failure (old flow) and verify the fix
 // (new flow) end-to-end. Hardened: rejects the generic error fallback.
-const FIXTURE = { head: "bug/missing-null-check", base: "main" };
-const QUESTION =
-    "@kody this cron deactivates licenses daily, right? explain it to me naturally, like a colleague would, briefly.";
+//
+// FIXTURE_BRANCHES: `bug/missing-null-check` is only confirmed mirrored on
+// GitHub (see code-review-basic.ts's own placeholder comment for the other
+// providers). `refactor/use-map-storage` is the shared branch already
+// confirmed working across all 5 providers via command-review.ts — PR
+// content is irrelevant here (we only need an open PR to talk to Kody on),
+// so gitlab/bitbucket/azure-devops use that one instead.
+const FIXTURE_BRANCHES: Record<string, { head: string; base: string }> = {
+    github: { head: "bug/missing-null-check", base: "main" },
+    gitlab: { head: "refactor/use-map-storage", base: "main" },
+    bitbucket: { head: "refactor/use-map-storage", base: "main" },
+    "azure-devops": { head: "refactor/use-map-storage", base: "main" },
+};
+
+// The GitHub-specific question references the cron job that only exists on
+// `bug/missing-null-check`; the other providers point at the content-neutral
+// `refactor/use-map-storage` branch, so they get a generic question instead.
+function questionFor(providerName: string): string {
+    if (providerName === "github") {
+        return "@kody this cron deactivates licenses daily, right? explain it to me naturally, like a colleague would, briefly.";
+    }
+    return "@kody in one short sentence, what does this pull request change?";
+}
 
 async function setAnthropicByok(
     apiBaseUrl: string,
@@ -49,7 +70,7 @@ export const conversationAnthropicByok: Scenario = {
     priority: "P2",
     appliesTo: {
         target: ["self-hosted"],
-        provider: ["github"],
+        provider: ["github", "gitlab", "bitbucket", "azure-devops"],
         license: ["paid", "license-paid"],
     },
     timeoutSec: 1200,
@@ -66,9 +87,10 @@ export const conversationAnthropicByok: Scenario = {
             process.env.CONVERSATION_ANTHROPIC_MODEL ||
             "claude-sonnet-4-5-20250929";
 
-        const userToken = process.env.CONVERSATION_USER_TOKEN;
+        const { token: userToken, missingEnvHint } =
+            resolveConversationUserToken(ctx.provider.name);
         if (!userToken) {
-            ctx.skip("CONVERSATION_USER_TOKEN not set");
+            ctx.skip(`${missingEnvHint} not set`);
         }
 
         if (
@@ -89,9 +111,15 @@ export const conversationAnthropicByok: Scenario = {
 
         await setAnthropicByok(ctx.target.apiBaseUrl, session, apiKey!, model);
 
+        const fixture = FIXTURE_BRANCHES[ctx.provider.name];
+        ctx.assert(
+            fixture,
+            `No FIXTURE_BRANCHES entry for provider ${ctx.provider.name}`,
+        );
+
         const pr = await ctx.provider.openPRFromBranches({
-            head: FIXTURE.head,
-            base: FIXTURE.base,
+            head: fixture!.head,
+            base: fixture!.base,
             title: `[e2e] conversation-anthropic-byok ${ctx.runId.slice(0, 8)}`,
             body: `Automated PR (Anthropic conversation: ${model}). Auto-closed by the scenario.`,
         });
@@ -100,7 +128,7 @@ export const conversationAnthropicByok: Scenario = {
             const sinceIso = new Date().toISOString();
             const trigger = await ctx.provider.postReviewCommentAs(
                 pr.number,
-                QUESTION,
+                questionFor(ctx.provider.name),
                 userToken!,
             );
 

@@ -1,11 +1,27 @@
 ---
 title: "Repositorios Vinculados"
-description: "Deja que Kody lea repositorios hermanos como contexto para detectar incompatibilidades de contrato entre repositorios durante la revisión."
+description: "Deja que Kody lea repositorios hermanos como contexto durante la revisión — para contratos entre repositorios y para código del que tu repositorio depende pero no contiene."
 ---
 
-Los Repositorios Vinculados permiten que Kody lea repositorios hermanos como **contexto de solo lectura** mientras revisa un pull request. Úsalo para detectar los bugs que una revisión de un solo repositorio no puede ver: el backend renombra un campo de la API y el frontend sigue leyendo el anterior, un producer añade un valor de enum que ningún consumer maneja, o writer y reader derivan la misma clave de forma distinta.
+Los Repositorios Vinculados permiten que Kody lea otros repositorios de tu organización como **contexto de solo lectura** mientras revisa un pull request. Sin esto, la revisión ve exactamente una cosa: el repositorio en revisión, en el head del PR. Todo lo que vive en otro repositorio — un servicio que llamas, una librería que importas, un git submodule — es invisible.
 
 Disponible en los planes **Teams y Enterprise**. Se configura **por repositorio** — no hay valor global por defecto, porque las relaciones son direccionales: vincular `frontend → backend-api` significa que *las revisiones de `frontend`* pueden consultar `backend-api`, no al revés. Vincula ambas direcciones explícitamente si los dos equipos quieren la comprobación.
+
+## Cuándo lo necesitas
+
+Tres situaciones, todas comunes, todas invisibles para una revisión de un solo repositorio:
+
+1. **Rotura de contrato producer/consumer.** El backend renombra un campo de la API y el frontend sigue leyendo el anterior; un producer añade un valor de enum que ningún consumer maneja; writer y reader derivan la misma clave de caché de forma distinta. El contrato está repartido entre dos repositorios y nada lo garantiza.
+
+2. **El código del que depende tu repositorio no está en tu repositorio.** Git submodules, paquetes internos vendorizados, librerías compartidas descargadas en el build. La revisión clona tu repositorio *sin submodules* y *sin instalar paquetes*, así que una dependencia por submodule o de build es un directorio vacío (o un import que el agente no puede seguir) durante la revisión. Si tus tipos, reglas o clients canónicos viven en un repositorio así, vincularlo es la única forma de que la revisión los lea.
+
+3. **La misma regla de negocio reimplementada por canal o servicio.** Precios, disponibilidad, validación, transiciones de estado de pedido que existen una vez en un lugar canónico y se copian, aproximadamente, en otros. Vincular el repositorio canónico permite que el agente compare contra la fuente de verdad en lugar de adivinar.
+
+<Note>
+**Lo que la revisión ya ve sin esta función:** el repositorio completo en revisión (no solo el diff) en el commit head del PR, más la descripción del PR. Puede hacer grep y leer cualquier archivo de ese checkout. No puede ver otros repositorios, el contenido de submodules ni dependencias instaladas.
+</Note>
+
+Los repositorios vinculados **no** cubren contratos que viven fuera de tu código — las reglas de validación de una API de terceros, por ejemplo, no son descubribles en ningún repositorio vinculado.
 
 ## Qué obtienes
 
@@ -18,15 +34,43 @@ const isNotApproved =
 
 Con el backend vinculado, Kody comprueba el otro lado de ese contrato y comenta en el PR:
 
-> **Bug · medium** — El frontend comprueba `error.response?.data?.error` buscando `INTEGRATION_NOT_APPROVED`, pero el `sendError` del backend devuelve el código en un campo `message`. La rama de not-approved nunca coincide, así que los usuarios siempre ven el toast de error genérico. Lee `data.message` en su lugar.
+> **Bug · medium** — [cross-repo] El frontend comprueba `error.response?.data?.error` buscando `INTEGRATION_NOT_APPROVED`, pero el `sendError` del backend (`src/api/response.ts`) devuelve el código en un campo `message`. La rama de not-approved nunca coincide, así que los usuarios siempre ven el toast de error genérico. Lee `data.message` en su lugar.
 
 El resumen de la revisión también muestra qué se consultó: **Additional context used:** `org/backend-api@main`.
 
+### Dónde aterrizan los hallazgos
+
+- Cada comentario aterriza en una línea del **diff de tu PR**. El código del repositorio vinculado se cita dentro del comentario como evidencia, etiquetado `[cross-repo]`, con el archivo de la contraparte nombrado. Kody nunca comenta, registra hallazgos ni modifica el repositorio vinculado.
+- Los hallazgos solo se plantean con evidencia confirmada en el archivo de la contraparte — "este literal debe coincidir con el backend" sin prueba no se emite.
+- La línea **Additional context used** aparece solo cuando un repositorio vinculado se leyó realmente durante la revisión. Si no hay línea, no se consultó (más abajo explicamos por qué ocurre).
+
 ## Cómo funciona
 
-Cuando un pull request en un repositorio con repositorios vinculados toca superficie de frontera (literales de cadena modificados, campos de payload, valores de estado, símbolos exportados), el agente de revisión de Kody puede buscar y leer los repositorios vinculados — igual que hace grep en tu propio repositorio — para verificar que ambos lados del contrato siguen de acuerdo. Los hallazgos solo se plantean con evidencia confirmada en el archivo de la contraparte, y el comentario siempre aterriza en una línea de **tu** PR; el código del repositorio vinculado se cita dentro como evidencia de apoyo, nunca se comenta directamente.
+Cuando un pull request en un repositorio con repositorios vinculados toca superficie de frontera, el agente de revisión de Kody puede buscar y leer los repositorios vinculados — igual que hace grep en tu propio repositorio — para verificar que ambos lados del contrato siguen de acuerdo. Los repositorios vinculados se obtienen de forma perezosa, solo cuando el agente los lee por primera vez.
 
-Las revisiones que usaron contexto entre repositorios lo indican: el resumen incluye una línea **Additional context used** que lista cada repositorio y el ref con el que se leyó.
+### Qué activa la pasada
+
+Configurar un vínculo no basta por sí solo. Antes de la revisión, una comprobación determinista y barata recorre las **líneas añadidas** del diff del PR y habilita las herramientas cross-repo solo cuando encuentra *superficie de frontera*:
+
+- literales de cadena (códigos, nombres de evento, segmentos de ruta, nombres de header)
+- símbolos exportados (`export function/const/class/type/interface/enum`)
+- miembros de enum, type o interface
+- claves de objeto / payload / DTO
+- identificadores con pinta de estado, status o código de error (`status`, `code`, `errorCode`, `kind`, `event`, `key`, …)
+- rutas de archivo con pinta de contrato (`dto/`, `schema/`, `api/`, `types/`, `clients/`, `openapi`, `proto`, …)
+
+Las refactorizaciones puramente internas — renombrar un helper privado, mover código, formatear — normalmente no tocan nada de esto, así que los repositorios vinculados nunca se obtienen y la revisión corre exactamente como una revisión de un solo repositorio. Es intencional: mantiene la pasada apagada en diffs donde no encontraría nada.
+
+### Cuando no ves nada
+
+Si un PR en un repositorio con repositorios vinculados **no** muestra la línea `Additional context used`, ocurrió una de estas cosas, en orden aproximado de probabilidad:
+
+1. El diff no tenía superficie de frontera (el gate se quedó apagado — esperable en refactorizaciones).
+2. El gate estaba encendido, pero el agente no necesitó el repositorio vinculado para llegar a sus conclusiones.
+3. El repositorio vinculado no se pudo obtener (permisos, timeout) — la revisión continúa sin él.
+4. El repositorio vinculado no está conectado a esta organización de Kodus, o el plan de la organización no incluye la función — el vínculo se ignora.
+
+Los dos primeros son la función funcionando como está diseñada. Para confirmar que un vínculo está bien configurado, abre un PR que *sí* cambie un literal compartido, un campo de DTO o un tipo exportado — eso activa el gate y le da al agente una razón para mirar al otro lado.
 
 <Info>
 - Solo se pueden vincular repositorios **ya conectados a la misma organización de Kodus** (Kody reutiliza tu integración de Git existente — sin tokens adicionales).
@@ -37,7 +81,25 @@ Las revisiones que usaron contexto entre repositorios lo indican: el resumen inc
 
 ## Añadir un repositorio vinculado
 
+### En la app web
+
 Ve a **Code Review Settings → _tu repositorio_ → Linked Repositories**, elige un repositorio de la lista (solo aparecen los conectados) y guarda. Cada vínculo tiene dos campos opcionales, descritos abajo.
+
+### En `kodus-config.yml`
+
+`linkedRepositories` también es una clave del archivo de configuración, así que los vínculos pueden vivir versionados junto al resto de tu configuración de revisión:
+
+```yaml
+linkedRepositories:
+  - repository: "org/backend-api"
+    instructions: "API REST que consume este frontend"
+    ref: main   # pin opcional; omítelo para la cascada de misma rama
+```
+
+- `repository` (obligatorio) — nombre completo de un repositorio conectado a la organización (`owner/repo`).
+- `instructions`, `ref` — mismo significado que los campos de la app web (abajo).
+
+La interacción del archivo con la configuración web sigue las [reglas normales del archivo de configuración](/how_to_use/es/code_review/configs/general#prioridad-de-configuración): el archivo solo se lee cuando `kodusConfigFileOverridesWebPreferences` está habilitado para el repositorio (**Settings → Code Review → el repositorio → General**), se lee desde la **rama por defecto** del repositorio, y la lista `linkedRepositories` del archivo **reemplaza** la lista web de ese repositorio (las listas no se fusionan; `linkedRepositories: []` en el archivo apaga la función). El requisito de plan aplica sin importar dónde se declaren los vínculos.
 
 ### Instrucciones
 
@@ -55,7 +117,20 @@ Máquina de estados de pedido compartida. Los enums de estado viven en
 src/domain/order-status.ts; debemos manejar todos los valores que define.
 ```
 
+Para una librería o submodule vinculado (caso 2 de arriba), di que el código *no* está en este repositorio y contra qué debe comprobar el agente:
+
+```text
+Librería canónica de reglas de negocio, tipos y clients. Se consume aquí como
+git submodule, así que su código fuente no está en este repositorio. Las reglas
+de validación viven en src/rules/, los clients de API en src/clients/ —
+contrasta nombres de campo y valores de estado contra ellos.
+```
+
 Las instrucciones débiles repiten lo obvio ("repositorio del backend") y no aportan nada.
+
+<Note>
+La pasada cross-repo busca **desajustes en la frontera** — un nombre de campo, clave, codificación o valor de estado de un lado que no coincide con lo que el otro lado produce o espera. Vincular una librería canónica elimina el punto ciego (el agente ya puede leerla), pero no hace, por sí solo, que la revisión señale "ya existe una implementación canónica y este PR reimplementó una versión más débil". Si quieres esa comprobación, codifícala como una [Kody Rule](/how_to_use/es/code_review/configs/kody_rules) y usa la instrucción para indicar dónde viven las implementaciones canónicas.
+</Note>
 
 ### Ref pin (selección de rama)
 
@@ -73,16 +148,8 @@ Los pasos 3–4 son lo que mantiene alineado el trabajo de features multi-repo: 
 
 Define un **ref pin** (p. ej. `main`, `develop`, `release/2.x`) cuando quieras revisiones deterministas contra una rama estable — por ejemplo, cuando los nombres de rama se reutilizan entre repositorios para trabajos no relacionados y la coincidencia por mismo nombre elegiría lo incorrecto. El override en la descripción del PR sigue ganando al pin en casos puntuales.
 
+<Tip>
+Para un submodule, fija el `ref` al commit o rama que tu repositorio realmente sigue si va por detrás de la rama por defecto de la librería — de lo contrario la revisión puede comparar contra código que todavía no has traído.
+</Tip>
+
 El resumen de la revisión siempre muestra qué ref se usó realmente. Para un recorrido con ejemplos, consulta [Cómo usar repositorios vinculados](/knowledge_base/es/how-to-use-linked-repositories-in-code-review).
-
-## Cuándo usarlo
-
-Los repositorios vinculados compensan cuando los repositorios comparten un contrato que no está garantizado por herramientas:
-
-- Pares **frontend ↔ backend** que redeclaran formas de payload en cada lado.
-- Integraciones **servicio ↔ servicio** que pasan valores de estado, nombres de evento o IDs.
-- **Consumidores de una librería compartida** que reimplementan o replican sus tipos.
-
-<Note>
-Los repositorios vinculados **no** cubren contratos que viven fuera de tu código — las reglas de validación de una API de terceros, por ejemplo, no son descubribles en ningún repositorio vinculado.
-</Note>

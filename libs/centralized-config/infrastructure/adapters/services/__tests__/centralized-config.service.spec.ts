@@ -1623,6 +1623,173 @@ describe('CentralizedConfigService', () => {
             );
         });
 
+        it('should resurrect a DELETED rule when the YAML file is present again', async () => {
+            // Stale cleanup can soft-delete a rule whose file is only on an
+            // open PR. After that PR merges, git is source of truth: the
+            // file is on the default branch, so sync must restore ACTIVE
+            // instead of preserving DELETED (which hid the rule in the UI).
+            const ruleFiles: any[] = [
+                {
+                    centralizedDirectoryPath: '.kody-rules/review',
+                    repositoryId: undefined,
+                    directoryPath: undefined,
+                    ruleType: 'standard' as any,
+                    ruleFilePath: '.kody-rules/review/docs.yml',
+                    path: '.kody-rules/review/docs.yml',
+                },
+            ];
+
+            const mockRuleContent = {
+                title: 'Docs must not contradict the change',
+                rule: 'Flag contradictions, not missing docs',
+                examples: [],
+                inheritance: { inheritable: true, exclude: [], include: [] },
+            };
+
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([]);
+            mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                'main',
+            );
+            mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                {
+                    data: {
+                        content: Buffer.from(
+                            yaml.dump(mockRuleContent),
+                        ).toString('base64'),
+                        encoding: 'base64',
+                    },
+                },
+            );
+
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    repository: { name: 'central-repo', id: 'central-repo-id' },
+                },
+            });
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [],
+            );
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'deleted-rule-uuid',
+                        status: 'deleted',
+                        origin: 'user',
+                        centralizedConfig: {
+                            path: '.kody-rules/review/docs.yml',
+                            status: 'synced',
+                        },
+                    },
+                ],
+            });
+            mockCreateOrUpdateKodyRulesUseCase.execute.mockResolvedValue({
+                uuid: 'deleted-rule-uuid',
+            });
+
+            await service.synchronizeKodyRules({
+                organizationAndTeamData,
+                ruleFiles,
+                actor,
+            });
+
+            expect(
+                mockCreateOrUpdateKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    uuid: 'deleted-rule-uuid',
+                    status: 'active',
+                    origin: 'user',
+                    centralizedConfig: {
+                        path: '.kody-rules/review/docs.yml',
+                        status: 'synced',
+                    },
+                }),
+                'org-1',
+                expect.any(Object),
+                true,
+            );
+        });
+
+        it('should resurrect a DELETED rule as PAUSED when YAML enabled is false', async () => {
+            const ruleFiles: any[] = [
+                {
+                    centralizedDirectoryPath: '.kody-rules/review',
+                    repositoryId: undefined,
+                    directoryPath: undefined,
+                    ruleType: 'standard' as any,
+                    ruleFilePath: '.kody-rules/review/paused.yml',
+                    path: '.kody-rules/review/paused.yml',
+                },
+            ];
+
+            const mockRuleContent = {
+                title: 'Paused after restore',
+                rule: 'Stay paused',
+                enabled: false,
+                examples: [],
+                inheritance: { inheritable: true, exclude: [], include: [] },
+            };
+
+            mockCodeManagementService.getRepositoryTree.mockResolvedValue([]);
+            mockCodeManagementService.getDefaultBranch.mockResolvedValue(
+                'main',
+            );
+            mockCodeManagementService.getRepositoryContentFile.mockResolvedValue(
+                {
+                    data: {
+                        content: Buffer.from(
+                            yaml.dump(mockRuleContent),
+                        ).toString('base64'),
+                        encoding: 'base64',
+                    },
+                },
+            );
+
+            mockParametersService.findByKey.mockResolvedValue({
+                configValue: {
+                    repository: { name: 'central-repo', id: 'central-repo-id' },
+                },
+            });
+
+            mockIntegrationConfigService.findIntegrationConfigFormatted.mockResolvedValue(
+                [],
+            );
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                rules: [
+                    {
+                        uuid: 'deleted-paused-uuid',
+                        status: 'deleted',
+                        centralizedConfig: {
+                            path: '.kody-rules/review/paused.yml',
+                            status: 'synced',
+                        },
+                    },
+                ],
+            });
+            mockCreateOrUpdateKodyRulesUseCase.execute.mockResolvedValue({
+                uuid: 'deleted-paused-uuid',
+            });
+
+            await service.synchronizeKodyRules({
+                organizationAndTeamData,
+                ruleFiles,
+                actor,
+            });
+
+            expect(
+                mockCreateOrUpdateKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    uuid: 'deleted-paused-uuid',
+                    status: 'paused',
+                }),
+                'org-1',
+                expect.any(Object),
+                true,
+            );
+        });
+
         it('should handle YAML parsing errors gracefully', async () => {
             const ruleFiles: any[] = [
                 {
@@ -1748,6 +1915,161 @@ describe('CentralizedConfigService', () => {
             expect(result.success).toBe(true);
             // The synced rule is still present in the files → not deleted.
             // None of the path-less rules are deleted either.
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('should NOT delete PENDING_ADD rules whose file is only on an open PR', async () => {
+            // Sync reads the default branch. A newly created rule is exported
+            // to a mutation PR first, so its YAML is not in discovery yet.
+            // Treating that as "stale" is what made existing rules vanish
+            // from the UI when adding another rule with centralized config.
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'pending-add-rule',
+                            title: 'Docs must not contradict the change',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/docs.yml',
+                                status: 'pending_add',
+                            },
+                        },
+                        {
+                            uuid: 'synced-rule',
+                            title: 'Keep me',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/kept.yml',
+                                status: 'synced',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [
+                    { path: '.kody-rules/review/kept.yml' } as any,
+                ],
+            });
+
+            expect(result.success).toBe(true);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('should NOT delete PENDING_EDIT rules whose file is only on an open PR', async () => {
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'pending-edit-rule',
+                            title: 'Renamed on the PR',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/renamed.yml',
+                                status: 'pending_edit',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [
+                    { path: '.kody-rules/review/other.yml' } as any,
+                ],
+            });
+
+            expect(result.success).toBe(true);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).not.toHaveBeenCalled();
+        });
+
+        it('should still delete a truly removed synced rule while keeping PENDING_ADD', async () => {
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'pending-add-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/new.yml',
+                                status: 'pending_add',
+                            },
+                        },
+                        {
+                            uuid: 'removed-synced-rule',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/gone.yml',
+                                status: 'synced',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute.mockResolvedValue(
+                true,
+            );
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [
+                    { path: '.kody-rules/review/other.yml' } as any,
+                ],
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.removedRuleCount).toBe(1);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).toHaveBeenCalledTimes(1);
+            expect(
+                mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
+            ).toHaveBeenCalledWith('removed-synced-rule', actor);
+        });
+
+        it('should NOT delete PENDING_ADD when discovery is empty but the tree read is proven', async () => {
+            // First production incident: only the new rule existed (pending_add),
+            // default-branch discovery found kodus-config.yml and zero rule
+            // files, and #1518 treated that as "user deleted the last rule".
+            mockKodyRulesService.findByOrganizationId.mockResolvedValue({
+                toJson: () => ({
+                    rules: [
+                        {
+                            uuid: 'pending-add-only',
+                            title: 'Docs must not contradict the change',
+                            status: 'active',
+                            centralizedConfig: {
+                                path: '.kody-rules/review/docs.yml',
+                                status: 'pending_add',
+                            },
+                        },
+                    ],
+                }),
+            });
+
+            const result = await service.removeStaleKodyRules({
+                organizationAndTeamData,
+                actor,
+                ruleFiles: [],
+                configFiles: [{ path: 'kodus-config.yml' } as any],
+            });
+
+            expect(result.success).toBe(true);
+            expect(result.removedRuleCount).toBe(0);
             expect(
                 mockDeleteRuleInOrganizationByIdKodyRulesUseCase.execute,
             ).not.toHaveBeenCalled();

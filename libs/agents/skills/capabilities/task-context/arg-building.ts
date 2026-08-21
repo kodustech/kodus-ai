@@ -145,7 +145,10 @@ function getCandidateValuesForParam(
         ...hints.issueLinks,
     ]).slice(0, 4);
     const urlHosts = uniqueNonEmpty(hints.urlHosts).slice(0, 2);
-    const siteUrls = uniqueNonEmpty(hints.siteUrls).slice(0, 2);
+    // Kept above the 2 of other hint groups: an org can expose several tenants
+    // and the ticket may live on any of them, so truncating drops valid targets.
+    const siteUrls = uniqueNonEmpty(hints.siteUrls).slice(0, 4);
+    const siteIds = uniqueNonEmpty(hints.siteIds ?? []).slice(0, 4);
     const resourceIds = uniqueNonEmpty(hints.resourceIds).slice(0, 4);
     const queryTokens = uniqueNonEmpty([
         ...explicitIssueKeys,
@@ -171,7 +174,13 @@ function getCandidateValuesForParam(
     }
 
     if (intent === 'context') {
-        return siteUrls.length ? siteUrls : urlHosts.length ? urlHosts : [];
+        // Resolved tenant ids first: a host mined from PR prose is often from an
+        // unrelated link, which the provider rejects outright. Bounded because
+        // every candidate costs one sequential remote call downstream.
+        return uniqueNonEmpty([...siteIds, ...siteUrls, ...urlHosts]).slice(
+            0,
+            6,
+        );
     }
 
     if (intent === 'url') {

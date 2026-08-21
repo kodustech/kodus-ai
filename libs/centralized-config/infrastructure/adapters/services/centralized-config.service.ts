@@ -2282,15 +2282,25 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                     // `enabled` flag. A rule in any other lifecycle state
                     // (PENDING approval, REJECTED, ...) keeps its status, so
                     // merging the centralized-config PR can't silently approve
-                    // a pending rule or resurrect a rejected one. Likewise,
-                    // keep an existing rule's origin instead of reclassifying
-                    // it as a repo-file sync.
+                    // a pending rule or resurrect a rejected one.
+                    //
+                    // DELETED is not an approval state — stale cleanup
+                    // soft-deletes rules whose files are missing from the
+                    // default branch. If git has the file again, restore
+                    // ACTIVE/PAUSED from `enabled` instead of leaving the
+                    // rule hidden in the UI.
+                    // Likewise, keep an existing rule's origin instead of
+                    // reclassifying it as a repo-file sync.
                     const existingStatus = existingMatch?.status;
                     const isExistingApproved =
                         existingStatus === KodyRulesStatus.ACTIVE ||
                         existingStatus === KodyRulesStatus.PAUSED;
+                    const isStaleDeleted =
+                        existingStatus === KodyRulesStatus.DELETED;
                     const resolvedStatus =
-                        existingStatus && !isExistingApproved
+                        existingStatus &&
+                        !isExistingApproved &&
+                        !isStaleDeleted
                             ? existingStatus
                             : enabled === false
                               ? KodyRulesStatus.PAUSED
@@ -2531,6 +2541,22 @@ export class CentralizedConfigService implements ICentralizedConfigService {
                 }
 
                 if (!currentSourcePaths.has(sourcePath)) {
+                    const centralizedStatus = rule.centralizedConfig?.status;
+                    // The file for an in-flight mutation lives on the open
+                    // PR, not the default branch that sync reads. Deleting
+                    // it here is what made rules disappear from the UI when
+                    // another rule was added. PENDING_DELETE is the opposite:
+                    // after the delete PR merges the file is gone and this
+                    // cleanup must still run.
+                    if (
+                        centralizedStatus ===
+                            KodyRuleCentralizedStatus.PENDING_ADD ||
+                        centralizedStatus ===
+                            KodyRuleCentralizedStatus.PENDING_EDIT
+                    ) {
+                        continue;
+                    }
+
                     try {
                         await this.deleteRuleInOrganizationByIdKodyRulesUseCase.execute(
                             rule.uuid,

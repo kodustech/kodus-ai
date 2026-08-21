@@ -1497,6 +1497,20 @@ export class ChatWithKodyFromGitUseCase {
                         (t) => t.threadId === threadId,
                     );
                     if (thread) {
+                        // getPullRequestReviewComment groups Azure comments
+                        // by thread and only puts comments AFTER the first
+                        // one into `.replies` — the thread's root comment is
+                        // kept on `thread` itself. A brand-new `@kody
+                        // <question>` (not a reply to an existing thread) IS
+                        // that root comment, so it must be matched here too;
+                        // searching only `.replies` silently drops it.
+                        if (thread.id === commentId) {
+                            return {
+                                ...thread,
+                                thread,
+                            };
+                        }
+
                         const targetComment = thread.replies?.find(
                             (c: any) => c.id === commentId,
                         );

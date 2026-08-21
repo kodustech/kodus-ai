@@ -70,11 +70,7 @@ export default function SelectReviewersPage() {
     const goNext = () => router.push(NEXT_STEP);
 
     const handleContinue = async () => {
-        // Nothing to exclude, or no repos to apply it to → just move on. The
-        // generator config lives per-repo (the toggle is repo-scoped), so we
-        // write the exclusions to each onboarded repo rather than to a global
-        // list that no per-repo screen would surface for editing.
-        if (!teamId || excluded.length === 0 || selectedRepoIds.length === 0) {
+        if (!teamId || selectedRepoIds.length === 0) {
             goNext();
             return;
         }
@@ -173,10 +169,14 @@ export default function SelectReviewersPage() {
                             <Command className="flex max-h-[400px] flex-col">
                                 <CommandInput placeholder="Search developers..." />
                                 <CommandList className="max-h-[250px] overflow-y-auto">
+                                    {isLoading && (
+                                        <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+                                            <Spinner className="h-4 w-4" />
+                                            Loading developers…
+                                        </div>
+                                    )}
                                     <CommandEmpty>
-                                        {isLoading
-                                            ? "Loading developers…"
-                                            : "No developers found."}
+                                        No developers found.
                                     </CommandEmpty>
                                     <CommandGroup>
                                         {reviewers.map((reviewer) => (
@@ -220,12 +220,8 @@ export default function SelectReviewersPage() {
                             className="flex-1"
                             onClick={handleContinue}
                             loading={isSaving}
-                            disabled={isSaving}>
-                            {isLoading ? (
-                                <Spinner className="h-4 w-4" />
-                            ) : (
-                                "Continue"
-                            )}
+                            disabled={isLoading || isSaving || excluded.length === 0}>
+                            Continue
                         </Button>
                     </div>
                 </div>

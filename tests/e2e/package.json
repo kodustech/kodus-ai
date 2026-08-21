@@ -13,6 +13,7 @@
     "benchmark:recollect": "tsx benchmark/recollect.ts",
     "benchmark:provision": "tsx benchmark/provision-repos.ts",
     "test": "node --import tsx --test lib/__tests__/*.test.ts",
+    "test:contract": "node --import tsx --test contract/*.contract.test.ts",
     "typecheck": "tsc --noEmit",
     "report": "tsx cli/report.ts",
     "history:append": "tsx cli/history-append.ts",

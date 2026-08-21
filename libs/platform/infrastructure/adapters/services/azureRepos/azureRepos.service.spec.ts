@@ -161,6 +161,82 @@ describe('AzureReposService.getPullRequestByNumber — body/description normaliz
 });
 
 /**
+ * Regression test for "fix(platform): rethrow transient fetch failures
+ * from getCommits swallow" (2026-07-29): getCommitsForPullRequestForCodeReview
+ * used to swallow EVERY error into `null`, which upstream collapses to "PR
+ * has no commits" — createLineComments then anchors zero inline comments
+ * and the review ships with suggestionsCount.sent=0, reporting SUCCESS,
+ * with the real cause never surfaced. A 429 or a transient network failure
+ * must now rethrow so callers can tell a failed fetch apart from a
+ * genuinely empty commit list; a non-transient error (e.g. a real 404)
+ * keeps the historical null contract.
+ */
+describe('AzureReposService.getCommitsForPullRequestForCodeReview — transient-failure rethrow', () => {
+    let service: AzureReposService;
+    let azureReposRequestHelper: { getCommitsForPullRequest: jest.Mock };
+
+    const params = {
+        organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+        repository: { name: 'repo', id: 'repo-1', project: { id: 'proj-1' } },
+        prNumber: 42,
+    };
+
+    beforeEach(() => {
+        azureReposRequestHelper = {
+            getCommitsForPullRequest: jest.fn(),
+        };
+
+        service = new AzureReposService(
+            {} as any,
+            {} as any,
+            {} as any,
+            azureReposRequestHelper as any,
+            {} as any,
+            undefined,
+        );
+
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+            orgName: 'fake-org',
+            token: 'fake-token',
+        });
+        jest.spyOn(service as any, 'getProjectIdFromRepository').mockResolvedValue(
+            'proj-1',
+        );
+    });
+
+    it('rethrows on a transient (undici) fetch failure instead of returning null', async () => {
+        azureReposRequestHelper.getCommitsForPullRequest.mockRejectedValue(
+            new TypeError('fetch failed'),
+        );
+
+        await expect(
+            service.getCommitsForPullRequestForCodeReview(params as any),
+        ).rejects.toThrow('fetch failed');
+    });
+
+    it('rethrows on a 429', async () => {
+        azureReposRequestHelper.getCommitsForPullRequest.mockRejectedValue({
+            status: 429,
+            message: 'Too Many Requests',
+        });
+
+        await expect(
+            service.getCommitsForPullRequestForCodeReview(params as any),
+        ).rejects.toMatchObject({ status: 429 });
+    });
+
+    it('still returns null (historical contract) for a non-transient error', async () => {
+        azureReposRequestHelper.getCommitsForPullRequest.mockRejectedValue(
+            new Error('Repository not found'),
+        );
+
+        await expect(
+            service.getCommitsForPullRequestForCodeReview(params as any),
+        ).resolves.toBeNull();
+    });
+});
+
+/**
  * Characterization tests for `AzureReposService.getFilesByPullRequestId`.
  *
  * These pin down the CURRENT behavior of the method before the refactor that
