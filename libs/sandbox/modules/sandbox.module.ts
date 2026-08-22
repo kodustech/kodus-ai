@@ -11,10 +11,7 @@ import {
     SandboxLeaseModel,
     SandboxLeaseSchema,
 } from '@libs/sandbox/infrastructure/repositories/schemas/sandbox-lease.model';
-import {
-    SandboxLeaseRepository,
-    SANDBOX_LEASE_REPOSITORY_TOKEN,
-} from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
+import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
 import { SandboxLeaseManager } from '@libs/sandbox/infrastructure/services/sandbox-lease-manager.service';
 import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services/sandbox-lease-reaper.service';
 
@@ -54,10 +51,7 @@ import { SandboxLeaseReaperService } from '@libs/sandbox/infrastructure/services
             },
             inject: [ConfigService],
         },
-        {
-            provide: SANDBOX_LEASE_REPOSITORY_TOKEN,
-            useClass: SandboxLeaseRepository,
-        },
+        SandboxLeaseRepository,
         {
             provide: SANDBOX_LEASE_MANAGER_TOKEN,
             useClass: SandboxLeaseManager,

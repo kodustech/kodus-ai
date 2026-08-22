@@ -17,7 +17,6 @@ import type { FileHandle } from 'fs/promises';
 import { constants as fsConstants } from 'fs';
 import { tmpdir } from 'os';
 import { basename, isAbsolute, join, relative, sep } from 'path';
-import { existsSync } from 'fs';
 import { promisify } from 'util';
 
 import {
@@ -141,19 +140,95 @@ export class LocalSandboxService implements ISandboxProvider {
                 await this.applyLocalDiff(tempDir, unifiedDiff);
             }
 
-            const instance = this.buildSandboxInstance(tempDir);
-            instance.cleanup = async () => {
+            const remoteCommands = this.buildRemoteCommands(tempDir);
+
+            const capturedTempDir = tempDir;
+            const cleanup = async () => {
                 try {
-                    await rm(tempDir, { recursive: true, force: true });
+                    await rm(capturedTempDir, { recursive: true, force: true });
                 } catch (error) {
                     this.logger.warn({
-                        message: `Failed to remove temp dir ${tempDir}`,
+                        message: `Failed to remove temp dir ${capturedTempDir}`,
                         context: LocalSandboxService.name,
                         error,
                     });
                 }
             };
-            return instance;
+
+            const capturedRepoDir = tempDir;
+
+            // Privileged shell exec for infrastructure callers (graph build,
+            // AST extraction, sandbox bootstrap). Unlike `remoteCommands.exec`
+            // this does NOT whitelist programs — it runs the command through
+            // /bin/sh so mkdir, pipes, redirections, etc. work. That power
+            // comes with a safety contract: **callers MUST shell-quote any
+            // value that could come (directly or transitively) from user
+            // input** (PR filenames, branch names, commit messages, etc.).
+            //
+            // As a runtime tripwire we reject command substitution (`$(...)`
+            // and backticks) on the raw string. Internal infrastructure
+            // commands have no legitimate need to spawn subshells, and a
+            // leaked `$()` is the most common path from "string concatenation
+            // bug" to RCE. The block is conservative by design — if a real
+            // use case ever needs command substitution, it should opt in
+            // explicitly instead of piggybacking on this entry point.
+            const run = async (
+                command: string,
+                opts?: { timeoutMs?: number; envs?: Record<string, string> },
+            ): Promise<SandboxRunResult> => {
+                if (/`|\$\(/.test(command)) {
+                    this.logger.warn({
+                        message:
+                            'Rejected sandbox.run command containing shell substitution',
+                        context: LocalSandboxService.name,
+                        metadata: {
+                            preview: command.slice(0, 200),
+                        },
+                    });
+                    return {
+                        stdout: '',
+                        stderr: 'Command substitution ($(...) / backticks) is not allowed in sandbox.run',
+                        exitCode: 1,
+                    };
+                }
+
+                const execAsync = promisify(exec);
+                try {
+                    const { stdout, stderr } = await execAsync(command, {
+                        cwd: capturedRepoDir,
+                        timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
+                        maxBuffer: MAX_BUFFER,
+                        env: opts?.envs
+                            ? { ...process.env, ...opts.envs }
+                            : process.env,
+                    });
+                    return {
+                        stdout: stdout || '',
+                        stderr: stderr || '',
+                        exitCode: 0,
+                    };
+                } catch (error: any) {
+                    return {
+                        stdout: error.stdout || '',
+                        stderr: error.stderr || '',
+                        exitCode: error.code ?? 1,
+                    };
+                }
+            };
+
+            const { readFile: sandboxReadFile, writeFile: sandboxWriteFile } =
+                this.buildSandboxFileAccess(capturedRepoDir);
+
+            return {
+                remoteCommands,
+                cleanup,
+                type: 'local' as const,
+                sandboxId: capturedRepoDir,
+                repoDir: capturedRepoDir,
+                run,
+                readFile: sandboxReadFile,
+                writeFile: sandboxWriteFile,
+            };
         } catch (error) {
             try {
                 await rm(tempDir, { recursive: true, force: true });
@@ -920,92 +995,5 @@ export class LocalSandboxService implements ISandboxProvider {
             default:
                 return `refs/pull/${prNumber}/head`;
         }
-    }
-
-    buildSandboxInstance(tempDir: string): SandboxInstance {
-        const capturedRepoDir = tempDir.replace(/\\/g, '/');
-        const remoteCommands = this.buildRemoteCommands(capturedRepoDir);
-
-        const execAsync = promisify(exec);
-        const gitBashPath = 'C:\\Program Files\\Git\\bin\\bash.exe';
-        const bashShell =
-            process.platform === 'win32'
-                ? existsSync(gitBashPath)
-                    ? gitBashPath
-                    : 'bash'
-                : undefined;
-
-        // Privileged shell exec for infrastructure callers (graph build,
-        // AST extraction, sandbox bootstrap). Unlike `remoteCommands.exec`
-        // this does NOT whitelist programs — it runs the command through
-        // /bin/sh so mkdir, pipes, redirections, etc. work. That power
-        // comes with a safety contract: **callers MUST shell-quote any
-        // value that could come (directly or transitively) from user
-        // input** (PR filenames, branch names, commit messages, etc.).
-        //
-        // As a runtime tripwire we reject command substitution (`$(...)`
-        // and backticks) on the raw string. Internal infrastructure
-        // commands have no legitimate need to spawn subshells, and a
-        // leaked `$()` is the most common path from "string concatenation
-        // bug" to RCE. The block is conservative by design — if a real
-        // use case ever needs command substitution, it should opt in
-        // explicitly instead of piggybacking on this entry point.
-        const run = async (
-            command: string,
-            opts?: { timeoutMs?: number; envs?: Record<string, string> },
-        ): Promise<SandboxRunResult> => {
-            if (/`|\$\(/.test(command)) {
-                this.logger.warn({
-                    message:
-                        'Rejected sandbox.run command containing shell substitution',
-                    context: LocalSandboxService.name,
-                    metadata: {
-                        preview: command.slice(0, 200),
-                    },
-                });
-                return {
-                    stdout: '',
-                    stderr: 'Command substitution ($(...) / backticks) is not allowed in sandbox.run',
-                    exitCode: 1,
-                };
-            }
-
-            try {
-                const { stdout, stderr } = await execAsync(command, {
-                    cwd: capturedRepoDir,
-                    timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
-                    maxBuffer: MAX_BUFFER,
-                    env: opts?.envs
-                        ? { ...process.env, ...opts.envs }
-                        : process.env,
-                    shell: bashShell,
-                });
-                return {
-                    stdout: stdout || '',
-                    stderr: stderr || '',
-                    exitCode: 0,
-                };
-            } catch (error: any) {
-                return {
-                    stdout: error.stdout || '',
-                    stderr: error.stderr || error.message || '',
-                    exitCode: error.code ?? 1,
-                };
-            }
-        };
-
-        const { readFile: sandboxReadFile, writeFile: sandboxWriteFile } =
-            this.buildSandboxFileAccess(capturedRepoDir);
-
-        return {
-            remoteCommands,
-            cleanup: async () => {},
-            type: 'local' as const,
-            sandboxId: capturedRepoDir,
-            repoDir: capturedRepoDir,
-            run,
-            readFile: sandboxReadFile,
-            writeFile: sandboxWriteFile,
-        };
     }
 }

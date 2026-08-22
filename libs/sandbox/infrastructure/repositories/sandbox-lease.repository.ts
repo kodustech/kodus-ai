@@ -49,8 +49,6 @@ function decomposePrKey(prKey: string): {
     };
 }
 
-export const SANDBOX_LEASE_REPOSITORY_TOKEN = 'SANDBOX_LEASE_REPOSITORY_TOKEN';
-
 @Injectable()
 export class SandboxLeaseRepository {
     constructor(
