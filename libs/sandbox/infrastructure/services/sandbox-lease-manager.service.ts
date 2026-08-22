@@ -781,6 +781,9 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 this.leaseIdToPrKey.set(leaseId, prKey);
                 return { sandbox, leaseId, sandboxId, wasCreated: false };
             }
+            // Local provider but dir is gone/host-remote: force cold-create instead of
+            // silently degrading to NULL sandbox when no E2B key is configured.
+            throw new SandboxStaleConnectionError(prKey, sandboxId);
         }
 
         const apiKey = this.configService.get<string>('API_E2B_KEY');

@@ -929,10 +929,13 @@ export class LocalSandboxService implements ISandboxProvider {
 
         const execAsync = promisify(exec);
         const gitBashPath = 'C:\\Program Files\\Git\\bin\\bash.exe';
+        const gitBashPath64 = 'C:\\Program Files (x86)\\Git\\bin\\bash.exe';
         const bashShell =
             process.platform === 'win32'
-                ? existsSync(gitBashPath)
-                    ? gitBashPath
+                ? existsSync(gitBashPath) || existsSync(gitBashPath64)
+                    ? existsSync(gitBashPath)
+                        ? gitBashPath
+                        : gitBashPath64
                     : 'bash'
                 : undefined;
 
