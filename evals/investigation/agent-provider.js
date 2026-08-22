@@ -544,7 +544,7 @@ function buildCurrentPrompts(caseData) {
         maxSteps: caseData.maxSteps || 12,
         requestedCategories:
             normalizeRequestedCategories(caseData.requestedCategories),
-        callGraph: parseMaybeJson(caseData.callGraph),
+        callGraph: callGraphData,
         baseBranch: caseData.baseBranch || 'main',
     };
 

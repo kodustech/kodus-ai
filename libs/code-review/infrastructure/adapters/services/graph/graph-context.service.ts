@@ -576,6 +576,12 @@ export class GraphContextService {
                     message: '[KODUS-GRAPH] Failed twin pairing in GraphContextService',
                     context: GraphContextService.name,
                     error: e,
+                    metadata: {
+                        repoId,
+                        ...(options?.organizationId && { organizationId: options.organizationId }),
+                        ...(options?.repository && { repository: options.repository }),
+                        ...(options?.prNumber && { prNumber: options.prNumber }),
+                    },
                 });
             }
         }
