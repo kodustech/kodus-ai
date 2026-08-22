@@ -150,6 +150,7 @@ export class LocalSandboxService implements ISandboxProvider {
                         message: `Failed to remove temp dir ${tempDir}`,
                         context: LocalSandboxService.name,
                         error,
+                        metadata: { tempDir },
                     });
                 }
             };
