@@ -1,11 +1,27 @@
 ---
 title: "Linked Repositories"
-description: "Let Kody read sibling repositories as context to catch cross-repo contract mismatches during review."
+description: "Let Kody read sibling repositories as context during review — for cross-repo contracts, and for code your repository depends on but doesn't contain."
 ---
 
-Linked Repositories let Kody read sibling repositories as **read-only context** while reviewing a pull request. Use it to catch the bugs a single-repo review can't see: the backend renames an API field and the frontend still reads the old one, a producer adds an enum value no consumer handles, or writer and reader derive the same key differently.
+Linked Repositories let Kody read other repositories of your organization as **read-only context** while reviewing a pull request. Without it, the review sees exactly one thing: the repository under review, checked out at the PR's head. Anything that lives in another repository — a service you call, a library you import, a git submodule — is invisible.
 
 Available on **Teams and Enterprise** plans. Configured **per repository** — there is no global default, because relationships are directional: linking `frontend → backend-api` means *reviews of `frontend`* may consult `backend-api`, not the other way around. Link both directions explicitly if both teams want the check.
+
+## When you need it
+
+Three situations, all common, all invisible to a single-repo review:
+
+1. **Producer/consumer contract breakage.** The backend renames an API field and the frontend still reads the old one; a producer adds an enum value no consumer handles; writer and reader derive the same cache key differently. The contract is split across two repos and enforced by nothing.
+
+2. **The code your repo depends on is not in your repo.** Git submodules, vendored internal packages, shared libraries pulled at build time. The review clones your repository *without submodules* and *without fetching packages*, so a submoduled or build-time dependency is an empty directory (or an import the agent can't follow) during review. If your canonical types, rules, or clients live in such a repo, linking it is the only way the review can read them.
+
+3. **The same business rule reimplemented per channel or service.** Pricing, availability, validation, order-state transitions that exist once in a canonical place and get copied, approximately, elsewhere. Linking the canonical repo lets the agent compare against the source of truth instead of guessing.
+
+<Note>
+**What the review already sees without this feature:** the full repository under review (not just the diff) at the PR's head commit, plus the PR description. It can grep and read any file in that checkout. It cannot see other repositories, submodule contents, or installed dependencies.
+</Note>
+
+Linked repositories do **not** cover contracts that live outside your code — a third-party API's validation rules, for example, are not discoverable in any linked repository.
 
 ## What you get
 
@@ -18,17 +34,43 @@ const isNotApproved =
 
 With the backend linked, Kody checks the other side of that contract and comments on the PR:
 
-> **Bug · medium** — The frontend checks `error.response?.data?.error` for `INTEGRATION_NOT_APPROVED`, but the backend's `sendError` returns the code in a `message` field. The not-approved branch never matches, so users always see the generic error toast. Read `data.message` instead.
+> **Bug · medium** — [cross-repo] The frontend checks `error.response?.data?.error` for `INTEGRATION_NOT_APPROVED`, but the backend's `sendError` (`src/api/response.ts`) returns the code in a `message` field. The not-approved branch never matches, so users always see the generic error toast. Read `data.message` instead.
 
 The review summary also shows what was consulted: **Additional context used:** `org/backend-api@main`.
 
+### Where findings land
+
+- Every comment lands on a line of **your PR's diff**. Linked-repo code is quoted inside the comment as evidence, tagged `[cross-repo]`, with the counterpart file named. Kody never comments on, files findings against, or modifies the linked repository.
+- Findings are only raised with confirmed evidence from the counterpart file — "this literal must match the backend" without proof is not emitted.
+- The **Additional context used** line appears only when a linked repository was actually read during the review. No line means it wasn't consulted (see below for why that happens).
+
 ## How it works
 
-When a pull request in a repository with linked repositories touches boundary surface (changed string literals, payload fields, status values, exported symbols), Kody's review agent can search and read the linked repositories — the same way it greps your own repo — to verify that both sides of a contract still agree. Findings are only raised with confirmed evidence from the counterpart file, and the comment always lands on a line of **your** PR; linked-repo code is quoted inside it as supporting evidence, never commented on directly.
+When a pull request in a repository with linked repositories touches boundary surface, Kody's review agent can search and read the linked repositories — the same way it greps your own repo — to verify that both sides of a contract still agree. Linked repos are fetched lazily, only when the agent first reads them.
 
-Reviews that used cross-repo context say so: the review summary includes an
-**Additional context used** line listing each repository and the ref it was
-read at.
+### What arms the pass
+
+Configuring a link is not enough on its own. Before the review, a cheap deterministic check scans the **added lines** of the PR diff and enables cross-repo tools only when it finds *boundary surface*:
+
+- string literals (codes, event names, path segments, header names)
+- exported symbols (`export function/const/class/type/interface/enum`)
+- enum, type or interface members
+- object / payload / DTO field keys
+- status-, state-, error-code-like identifiers (`status`, `code`, `errorCode`, `kind`, `event`, `key`, …)
+- contract-ish file paths (`dto/`, `schema/`, `api/`, `types/`, `clients/`, `openapi`, `proto`, …)
+
+Internal-only refactors — renaming a private helper, moving code around, formatting — typically hit none of these, so the linked repositories are never fetched and the review runs exactly as a single-repo review. This is intentional: it keeps the pass off for diffs where it can't find anything.
+
+### When you see nothing
+
+If a PR in a repository with linked repositories shows **no** `Additional context used` line, one of these happened, in rough order of likelihood:
+
+1. The diff had no boundary surface (gate stayed off — expected for refactors).
+2. The gate was on, but the agent didn't need the linked repo to reach its conclusions.
+3. The linked repository couldn't be fetched (permissions, timeout) — the review continues without it.
+4. The linked repository isn't connected to this Kodus organization, or the organization's plan doesn't include the feature — the link is ignored.
+
+The first two are the feature working as designed. To confirm a link is wired correctly, open a PR that *does* change a shared literal, DTO field or exported type — that both arms the gate and gives the agent a reason to look across.
 
 <Info>
 - Only repositories **already connected to the same Kodus organization** can be linked (Kody reuses your existing Git integration — no extra tokens).
@@ -39,7 +81,25 @@ read at.
 
 ## Adding a linked repository
 
+### In the web app
+
 Go to **Code Review Settings → _your repository_ → Linked Repositories**, pick a repository from the list (only connected repos appear), and save. Each link has two optional fields, described below.
+
+### In `kodus-config.yml`
+
+`linkedRepositories` is also a config-file key, so links can live in version control next to the rest of your review settings:
+
+```yaml
+linkedRepositories:
+  - repository: "org/backend-api"
+    instructions: "REST API this frontend consumes"
+    ref: main   # optional pin; omit for the same-branch cascade
+```
+
+- `repository` (required) — full name of a repository connected to the organization (`owner/repo`).
+- `instructions`, `ref` — same meaning as the fields in the web app (below).
+
+How the file interacts with the web settings follows the normal [config-file rules](/how_to_use/en/code_review/configs/general#config-priority): the file is only read when `kodusConfigFileOverridesWebPreferences` is enabled for the repository (**Settings → Code Review → the repository → General**), it is read from the repository's **default branch**, and the file's `linkedRepositories` list **replaces** the web list for that repository (the lists are not merged; `linkedRepositories: []` in the file turns the feature off). The plan requirement applies regardless of where the links are declared.
 
 ### Instructions
 
@@ -57,7 +117,20 @@ Shared order state machine. Status enums live in
 src/domain/order-status.ts; we must handle every value it defines.
 ```
 
+For a linked library or submodule (use case 2 above), say that the code is *not* in this repo and what the agent should check against:
+
+```text
+Canonical library of business rules, types and clients. Consumed here as a
+git submodule, so its source is not in this repo. Validation rules live in
+src/rules/, API clients in src/clients/ — check field names and status
+values against them.
+```
+
 Weak instructions restate the obvious ("backend repo") and add nothing.
+
+<Note>
+The cross-repo pass looks for **mismatches across the boundary** — a field name, key, encoding, or status value on one side that doesn't match what the other side produces or expects. Linking a canonical library removes the blind spot (the agent can now read it), but it does not, by itself, make the review flag "a canonical implementation already exists and this PR re-implemented a weaker one". If you want that check, encode it as a [Kody Rule](/how_to_use/en/code_review/configs/kody_rules) and use the instruction to point at where the canonical implementations live.
+</Note>
 
 ### Ref pin (branch selection)
 
@@ -75,16 +148,8 @@ Steps 3–4 are what keep multi-repo feature work aligned: the review sees the c
 
 Set a **ref pin** (e.g. `main`, `develop`, `release/2.x`) when you want deterministic reviews against a stable branch — for example, when branch names are reused across repos for unrelated work and the same-branch match would pick up the wrong thing. The PR description override still wins over the pin for one-off cases.
 
+<Tip>
+For a submodule, pin `ref` to the commit or branch your repo actually tracks if it lags behind the library's default branch — otherwise the review may compare against code you haven't pulled yet.
+</Tip>
+
 The review summary always shows which ref was actually used. For a walkthrough with examples, see [How to use linked repositories](/knowledge_base/en/how-to-use-linked-repositories-in-code-review).
-
-## When to use it
-
-Linked repositories pay off when repositories share a contract that isn't enforced by tooling:
-
-- **Frontend ↔ backend** pairs that re-declare payload shapes on each side.
-- **Service ↔ service** integrations passing status values, event names, or IDs.
-- **Consumers of a shared library** that re-implement or mirror its types.
-
-<Note>
-Linked repositories do **not** cover contracts that live outside your code — a third-party API's validation rules, for example, are not discoverable in any linked repository.
-</Note>

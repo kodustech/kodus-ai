@@ -47,6 +47,7 @@ export function buildTaskContextArgsCandidates(
             params,
             hints,
             getParamSchema(signature, paramName),
+            requiredParams.includes(paramName),
         );
 
         if (candidates.length) {
@@ -96,6 +97,7 @@ function getCandidateValuesForParam(
     params: TaskContextReadParams,
     hints: TaskContextHints,
     paramSchema?: Record<string, unknown>,
+    isRequired?: boolean,
 ): unknown[] {
     const normalizedName = normalizeParamName(paramName);
     const staticCandidates = resolveStaticParamCandidates(
@@ -106,6 +108,20 @@ function getCandidateValuesForParam(
     );
     if (staticCandidates.length) {
         return staticCandidates;
+    }
+
+    // If the parameter has a closed enum, don't blindly stuff issue keys or
+    // query tokens into it (e.g. responseContentFormat: 'markdown'|'adf' or
+    // searchResultMode: 'issues'|'count'|'all'). Pick enum values that overlap
+    // with our hints, or fall back to the first value when the param is
+    // required so the call at least validates.
+    const enumCandidates = resolveEnumParamCandidates(
+        paramSchema,
+        hints,
+        isRequired,
+    );
+    if (enumCandidates) {
+        return enumCandidates;
     }
 
     if (!supportsStringParam(paramSchema)) {
@@ -129,7 +145,10 @@ function getCandidateValuesForParam(
         ...hints.issueLinks,
     ]).slice(0, 4);
     const urlHosts = uniqueNonEmpty(hints.urlHosts).slice(0, 2);
-    const siteUrls = uniqueNonEmpty(hints.siteUrls).slice(0, 2);
+    // Kept above the 2 of other hint groups: an org can expose several tenants
+    // and the ticket may live on any of them, so truncating drops valid targets.
+    const siteUrls = uniqueNonEmpty(hints.siteUrls).slice(0, 4);
+    const siteIds = uniqueNonEmpty(hints.siteIds ?? []).slice(0, 4);
     const resourceIds = uniqueNonEmpty(hints.resourceIds).slice(0, 4);
     const queryTokens = uniqueNonEmpty([
         ...explicitIssueKeys,
@@ -155,7 +174,13 @@ function getCandidateValuesForParam(
     }
 
     if (intent === 'context') {
-        return siteUrls.length ? siteUrls : urlHosts.length ? urlHosts : [];
+        // Resolved tenant ids first: a host mined from PR prose is often from an
+        // unrelated link, which the provider rejects outright. Bounded because
+        // every candidate costs one sequential remote call downstream.
+        return uniqueNonEmpty([...siteIds, ...siteUrls, ...urlHosts]).slice(
+            0,
+            6,
+        );
     }
 
     if (intent === 'url') {
@@ -183,6 +208,71 @@ function getParamSchema(
     }
 
     return signature.normalizedProperties[normalizeParamName(paramName)];
+}
+
+/**
+ * When a parameter declares a closed enum (e.g. responseContentFormat:
+ * 'markdown'|'adf'), never push arbitrary issue keys or query tokens into it.
+ * Return enum values that intersect with our hints, or a sensible default when
+ * the parameter is required. Returns undefined when the schema has no enum so
+ * the caller can apply normal intent-based resolution.
+ */
+function resolveEnumParamCandidates(
+    paramSchema: Record<string, unknown> | undefined,
+    hints: TaskContextHints,
+    isRequired?: boolean,
+): unknown[] | undefined {
+    const enumValues = extractEnumValues(paramSchema);
+    if (!enumValues.length) {
+        return undefined;
+    }
+
+    const allTokens = uniqueNonEmpty([
+        ...hints.explicitIssueKeys,
+        ...hints.issueKeys,
+        ...hints.explicitIssueLinks,
+        ...hints.issueLinks,
+        ...(hints.queryText ? [hints.queryText] : []),
+    ]);
+
+    const matching = enumValues.filter((value) =>
+        allTokens.some(
+            (token) =>
+                typeof token === 'string' &&
+                token.toLowerCase() === String(value).toLowerCase(),
+        ),
+    );
+
+    if (matching.length) {
+        return matching;
+    }
+
+    // Required enum parameter: pick the first declared value so the call can
+    // still validate. The tool's default is the safest guess.
+    if (isRequired && enumValues.length) {
+        return [enumValues[0]];
+    }
+
+    // Optional enum parameter with no relevant hint: omit it and let the tool
+    // use its default.
+    return [];
+}
+
+function extractEnumValues(
+    paramSchema: Record<string, unknown> | undefined,
+): string[] {
+    if (!paramSchema) {
+        return [];
+    }
+
+    const raw = paramSchema.enum;
+    if (Array.isArray(raw)) {
+        return raw
+            .filter((value): value is string => typeof value === 'string')
+            .map((value) => value);
+    }
+
+    return [];
 }
 
 type ParamIntent = 'issue' | 'query' | 'context' | 'url' | 'ari' | 'generic';

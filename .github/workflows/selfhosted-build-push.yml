@@ -78,6 +78,14 @@ jobs:
     cloud-gate:
         name: Cloud gate (full matrix vs QA)
         if: ${{ github.event_name == 'schedule' }}
+        # The reusable workflow's `history` job appends results to the
+        # e2e-history branch and therefore requests `contents: write`.
+        # GitHub validates reusable-workflow permissions even when this job is
+        # skipped on a manual dispatch; without this ceiling the entire release
+        # workflow fails at startup before creating any jobs. The called
+        # `cloud-matrix` job remains explicitly pinned to `contents: read`.
+        permissions:
+            contents: write
         uses: ./.github/workflows/e2e-cloud.yml
         with:
             matrix_file: matrix/fast.yml
@@ -461,8 +469,12 @@ jobs:
         # See create-rc-tag: without this the matrix is skipped on every
         # manual dispatch — the exact symptom that surfaced this bug.
         if: ${{ !cancelled() && needs.build-and-push.result == 'success' }}
+        # The reusable workflow's `history` job appends results to the
+        # e2e-history branch and requests `contents: write`. GitHub validates
+        # that permission against this caller before creating any jobs. The
+        # matrix job inside the reusable workflow remains pinned to read-only.
         permissions:
-            contents: read
+            contents: write
             packages: read
         uses: ./.github/workflows/e2e-self-hosted-matrix.yml
         with:

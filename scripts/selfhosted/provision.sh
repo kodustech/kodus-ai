@@ -7,12 +7,12 @@
 #   pnpm run selfhosted:provision --name wellington   # named instance (multi-tenant)
 #
 # Required env (or scripts/selfhosted/.env):
-#   DIGITALOCEAN_TOKEN     DO API token        (default provider)
+#   Provider credentials   standard AWS CLI credentials, or a DO/Hetzner token
 #   KODUS_INSTALLER_PATH   path to kodus-installer checkout
 #                           default: ../kodus-installer
 #
 # Optional env:
-#   TEST_VM_PROVIDER       digitalocean (default) | hetzner
+#   TEST_VM_PROVIDER       digitalocean (default) | aws | hetzner
 #   HCLOUD_TOKEN           Hetzner token (if TEST_VM_PROVIDER=hetzner)
 #   SH_LICENSE_KEY         License key to inject (paid features); if absent
 #                           the stack runs without API_KODUS_LICENSE_KEY set,
@@ -62,6 +62,10 @@ if state_exists "$NAME"; then
     exit 1
 fi
 
+# Resolve this before first-time setup: AWS uses the standard CLI credential
+# chain and does not need the DigitalOcean-oriented interactive config.
+TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-digitalocean}"
+
 # First-time UX: if the global config doesn't exist yet, run setup
 # interactively before doing anything else. This way the dev only thinks
 # about secrets ONCE — every subsequent command (destroy, deploy, ssh,
@@ -69,7 +73,7 @@ fi
 #
 # Any env vars already exported in the caller's shell are used as defaults
 # in the prompts — they just press Enter to save them. No retyping.
-if [ ! -f "$GLOBAL_CONFIG" ]; then
+if [ ! -f "$GLOBAL_CONFIG" ] && [ "$TEST_VM_PROVIDER" != "aws" ]; then
     log "First-time setup: no config at $GLOBAL_CONFIG yet."
     log "Running 'pnpm run selfhosted:setup' so you only type secrets once."
     echo ""
@@ -85,7 +89,6 @@ if [ ! -f "$GLOBAL_CONFIG" ]; then
     fi
 fi
 
-TEST_VM_PROVIDER="${TEST_VM_PROVIDER:-digitalocean}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
 KODUS_INSTALLER_PATH="${KODUS_INSTALLER_PATH:-$REPO_ROOT/../kodus-installer}"
 
@@ -115,6 +118,7 @@ save_state() {
         --arg dashboard_url "http://$SERVER_IP:3000" \
         --arg api_url "http://$SERVER_IP:3001" \
         --arg image_tag "$IMAGE_TAG" \
+        --arg aws_region "${AWS_REGION_E2E:-}" \
         --arg user_email "${DEV_USER_EMAIL:-}" \
         --arg user_password "${DEV_USER_PASSWORD:-}" \
         --argjson gh_configured "${GH_CONFIGURED:-false}" \
@@ -131,6 +135,7 @@ save_state() {
             dashboard_url: $dashboard_url,
             api_url: $api_url,
             image_tag: $image_tag,
+            aws_region: $aws_region,
             tenant: { email: $user_email, password: $user_password },
             gh_integration_configured: $gh_configured,
             created_at: $created_at
@@ -147,6 +152,12 @@ HCLOUD_API="https://api.hetzner.cloud/v1"
 HCLOUD_LOCATION="${HCLOUD_LOCATION:-nbg1}"
 HCLOUD_SERVER_TYPE="${HCLOUD_SERVER_TYPE:-cx22}"
 HCLOUD_IMAGE="${HCLOUD_IMAGE:-ubuntu-24.04}"
+
+AWS_REGION_E2E="${AWS_REGION_E2E:-us-east-2}"
+AWS_INSTANCE_TYPE="${AWS_INSTANCE_TYPE:-t3.large}"
+AWS_AMI_ID="${AWS_AMI_ID:-}"
+AWS_SECURITY_GROUP="${AWS_SECURITY_GROUP_E2E:-kodus-e2e-ssh}"
+AWS_SG_ID=""
 
 # ---------- provider abstractions ----------
 provision_ssh_key() {
@@ -172,7 +183,55 @@ provision_ssh_key() {
             SSH_KEY_ID=$(echo "$resp" | jq -r '.ssh_key.id // empty')
             [ -n "$SSH_KEY_ID" ] || { err "Hetzner key upload failed: $resp"; exit 1; }
             ;;
+        aws)
+            aws ec2 import-key-pair \
+                --region "$AWS_REGION_E2E" \
+                --key-name "$label" \
+                --public-key-material "fileb:///dev/stdin" <<< "$pubkey" \
+                >/dev/null || { err "AWS key import failed for $label"; exit 1; }
+            SSH_KEY_ID="$label"
+            ;;
     esac
+}
+
+aws_ensure_security_group() {
+    AWS_SG_ID=$(aws ec2 describe-security-groups \
+        --region "$AWS_REGION_E2E" \
+        --filters "Name=group-name,Values=$AWS_SECURITY_GROUP" \
+        --query 'SecurityGroups[0].GroupId' --output text 2>/dev/null || echo "None")
+    if [ -z "${AWS_SG_ID:-}" ] || [ "$AWS_SG_ID" = "None" ]; then
+        log "Creating security group $AWS_SECURITY_GROUP..."
+        AWS_SG_ID=$(aws ec2 create-security-group \
+            --region "$AWS_REGION_E2E" \
+            --group-name "$AWS_SECURITY_GROUP" \
+            --description "Kodus e2e ephemeral VMs" \
+            --query 'GroupId' --output text) \
+            || { err "Could not create security group $AWS_SECURITY_GROUP"; exit 1; }
+    fi
+    # 80/443 are required by the SSO Caddy overlay. The other ports serve
+    # the base stack and its readiness probes.
+    for port in 22 80 443 3000 3001 3332; do
+        aws ec2 authorize-security-group-ingress \
+            --region "$AWS_REGION_E2E" \
+            --group-id "$AWS_SG_ID" \
+            --protocol tcp --port "$port" --cidr 0.0.0.0/0 >/dev/null 2>&1 || true
+    done
+}
+
+aws_resolve_ami() {
+    [ -n "$AWS_AMI_ID" ] && return 0
+    local arch="amd64"
+    case "$AWS_INSTANCE_TYPE" in t4g.*) arch="arm64" ;; esac
+    AWS_AMI_ID=$(aws ec2 describe-images \
+        --region "$AWS_REGION_E2E" \
+        --owners 099720109477 \
+        --filters "Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-${arch}-server-*" \
+                  "Name=state,Values=available" \
+        --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text) \
+        || { err "Could not resolve an Ubuntu 24.04 $arch AMI in $AWS_REGION_E2E"; exit 1; }
+    [ -n "$AWS_AMI_ID" ] && [ "$AWS_AMI_ID" != "None" ] \
+        || { err "No Ubuntu 24.04 $arch AMI found in $AWS_REGION_E2E"; exit 1; }
+    log "AMI $AWS_AMI_ID (ubuntu 24.04 $arch)"
 }
 
 provision_server() {
@@ -241,6 +300,36 @@ provision_server() {
             [ -n "$SERVER_ID" ] && [ -n "$SERVER_IP" ] \
                 || { err "Hetzner server create failed: $resp"; exit 1; }
             ;;
+        aws)
+            aws_resolve_ami
+            aws_ensure_security_group
+            local tagspec
+            tagspec="ResourceType=instance,Tags=[{Key=Name,Value=$label},{Key=Project,Value=kodus-e2e},{Key=CreatedAt,Value=$(date -u +%Y-%m-%dT%H:%M:%SZ)}]"
+            SERVER_ID=$(aws ec2 run-instances \
+                --region "$AWS_REGION_E2E" \
+                --image-id "$AWS_AMI_ID" \
+                --instance-type "$AWS_INSTANCE_TYPE" \
+                --key-name "$SSH_KEY_ID" \
+                --security-group-ids "$AWS_SG_ID" \
+                --associate-public-ip-address \
+                --user-data "$user_data" \
+                --tag-specifications "$tagspec" \
+                --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}' \
+                --instance-initiated-shutdown-behavior terminate \
+                --query 'Instances[0].InstanceId' --output text) \
+                || { err "AWS run-instances failed"; exit 1; }
+            [ -n "$SERVER_ID" ] && [ "$SERVER_ID" != "None" ] \
+                || { err "AWS run-instances returned no instance id"; exit 1; }
+            log "Instance $SERVER_ID starting..."
+            aws ec2 wait instance-running \
+                --region "$AWS_REGION_E2E" --instance-ids "$SERVER_ID" \
+                || { err "Instance $SERVER_ID never reached running"; exit 1; }
+            SERVER_IP=$(aws ec2 describe-instances \
+                --region "$AWS_REGION_E2E" --instance-ids "$SERVER_ID" \
+                --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+            [ -n "$SERVER_IP" ] && [ "$SERVER_IP" != "None" ] \
+                || { err "Instance $SERVER_ID has no public IP"; exit 1; }
+            ;;
     esac
 }
 
@@ -270,7 +359,7 @@ rollback_on_failure() {
         warn "  Status:  pnpm run selfhosted:status${NAME:+ --name $NAME}"
         warn "  Destroy: pnpm run selfhosted:destroy${NAME:+ --name $NAME}"
         warn ""
-        warn "  Remember: this droplet costs ~\$1/day. Destroy it when you're done."
+        warn "  Remember: this cloud VM incurs charges. Destroy it when you're done."
         exit "$exit_code"
     fi
 
@@ -296,6 +385,12 @@ rollback_on_failure() {
                     && ok "Destroyed orphan Hetzner server $SERVER_ID" \
                     || warn "Could not destroy server $SERVER_ID"
                 ;;
+            aws)
+                aws ec2 terminate-instances \
+                    --region "$AWS_REGION_E2E" --instance-ids "$SERVER_ID" >/dev/null 2>&1 \
+                    && ok "Terminated EC2 instance $SERVER_ID" \
+                    || warn "Could not terminate $SERVER_ID in $AWS_REGION_E2E"
+                ;;
         esac
     fi
     if [ -n "$SSH_KEY_ID" ]; then
@@ -309,6 +404,10 @@ rollback_on_failure() {
                 curl -sS -X DELETE \
                     -H "Authorization: Bearer ${HCLOUD_TOKEN}" \
                     "$HCLOUD_API/ssh_keys/$SSH_KEY_ID" >/dev/null 2>&1 || true
+                ;;
+            aws)
+                aws ec2 delete-key-pair \
+                    --region "$AWS_REGION_E2E" --key-name "$SSH_KEY_ID" >/dev/null 2>&1 || true
                 ;;
         esac
     fi
@@ -332,6 +431,7 @@ for c in curl jq ssh ssh-keygen rsync openssl; do require_cmd "$c"; done
 case "$TEST_VM_PROVIDER" in
     digitalocean) require_env DIGITALOCEAN_TOKEN ;;
     hetzner)      require_env HCLOUD_TOKEN ;;
+    aws)          require_cmd aws ;;
     *) err "Unknown TEST_VM_PROVIDER=$TEST_VM_PROVIDER"; exit 1 ;;
 esac
 
@@ -361,6 +461,10 @@ provision_ssh_key "kodus-selfhosted-$NAME" "$PUBKEY"
 log "Creating server kodus-selfhosted-$NAME..."
 USER_DATA=$(cat <<'CLOUDINIT'
 #cloud-config
+# Canonical EC2 images otherwise install the imported key for root with a
+# forced "Please login as ubuntu" command. All existing selfhosted automation
+# intentionally operates as root, matching the DO/Hetzner paths.
+disable_root: false
 package_update: true
 packages:
   - git
@@ -561,7 +665,7 @@ env_set NEXTAUTH_URL "http://$SERVER_IP:3000"
 # the Kodus API code actually reads — github/gitlab use API_*,
 # bitbucket/azure use GLOBAL_*. Setting the wrong prefix silently
 # breaks webhook auto-registration (the env var resolves to undefined
-# and Kodus tries to POST to `?token=...` with no host/path).
+# and Kodus tries to POST to ?token=... with no host/path).
 env_set API_GITHUB_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/github/webhook"
 env_set API_GITLAB_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/gitlab/webhook"
 env_set GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK "$SERVER_TUNNEL_URL/bitbucket/webhook"
@@ -786,6 +890,6 @@ $(echo -e "${YELLOW}⚠️  This is a PUBLISHED image, NOT your local code.${NC}
 $(echo -e "${YELLOW}    To test your current branch instead:${NC}")
 $(echo -e "${YELLOW}    →  pnpm run selfhosted:deploy${NAME:+ --name $NAME}${NC}")
 
-$(echo -e "${YELLOW}This VM is ALIVE. Cost: ~\$1/day on DO. Destroy when done.${NC}")
+$(echo -e "${YELLOW}This VM is ALIVE and incurs provider charges. Destroy when done.${NC}")
 
 EOF

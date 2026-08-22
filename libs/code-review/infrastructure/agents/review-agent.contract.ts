@@ -21,6 +21,7 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { RemoteCommands } from '@libs/code-review/infrastructure/adapters/services/collectCrossFileContexts.service';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
+import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 
 import type { LanguageModel } from 'ai';
 import { BYOKProvider, BYOKConfig } from '@kodus/kodus-common/llm';
@@ -146,6 +147,12 @@ export interface ToolingContext {
 export interface ReviewRuleConfig {
     languageResultPrompt: string;
     memoryRules?: Partial<IKodyRule>[];
+    /**
+     * Historical implementation decisions selected from Kodus Trace for the
+     * paths in this review. They explain intent, but are not evidence that the
+     * current implementation is correct.
+     */
+    traceDecisions?: TraceContextDecision[];
     /** Kody rules passed through so findings tagged with ruleUuid can be cross-referenced. */
     kodyRules?: Partial<IKodyRule>[];
     v2PromptOverrides?: CodeReviewConfig['v2PromptOverrides'];
@@ -352,6 +359,10 @@ export interface AgentLoopInput {
     /** BYOK provider type — needed to map reasoning effort to the correct
      *  provider-specific format in providerOptions. */
     byokProvider?: BYOKProvider | string;
+    /** Model id for this attempt, as `provider:model`. The provider alone is
+     *  not enough to shape the reasoning payload: Anthropic changed its
+     *  thinking API twice, and each generation rejects the others' shape. */
+    modelName?: string;
     /** Which BYOK role this attempt is running as. Selects the concurrency
      *  limiter bucket in the model wrapper ('main' vs 'fallback'). Defaults to
      *  'main' when omitted. */

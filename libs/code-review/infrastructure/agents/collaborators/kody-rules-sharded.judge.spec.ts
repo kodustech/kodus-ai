@@ -455,6 +455,116 @@ describe('judgeKodyRulesSharded — deterministic file×rule sweep (#1449)', () 
         expect(warn.mock.calls[0][0].context).toBe('kody-rules-sharded');
     });
 
+    // ── language templating (Starian GitLab MR !16111) ───────────────────────
+    // Neither shard prompt had any language templating: a PR-scope kody-rules
+    // finding's suggestionContent shipped in raw English regardless of the
+    // org's configured Kody Language. `languageLabel` (resolved upstream via
+    // prompt-builder.ts's resolveLanguageLabel — the same helper every other
+    // review agent uses) must reach BOTH the file-shard and PR-shard user
+    // prompts, and must be a no-op (byte-identical prompt) when absent.
+    describe('languageLabel — respond-in-language instruction (Starian MR !16111)', () => {
+        it('includes a respond-in-language instruction in the FILE-shard user prompt when languageLabel is set', async () => {
+            let fileUser = '';
+            const run: RunJudge = async ({ filename, user }) => {
+                if (filename === 'src/a.ts') fileUser = user;
+                return [];
+            };
+            await judgeKodyRulesSharded({
+                changedFiles: [file('src/a.ts', '1 +const x: any = 1;')],
+                rules: [
+                    { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' },
+                ],
+                runJudge: run,
+                languageLabel: 'Portuguese (Brazil)',
+            });
+            expect(fileUser).toContain('Respond in Portuguese (Brazil)');
+            expect(fileUser).toContain('suggestionContent');
+        });
+
+        it('includes a respond-in-language instruction in the PR-shard user prompt when languageLabel is set', async () => {
+            let prUser = '';
+            const run: RunJudge = async ({ filename, user }) => {
+                if (filename === null) prUser = user;
+                return [];
+            };
+            await judgeKodyRulesSharded({
+                changedFiles: [file('src/a.ts', '1 +x')],
+                rules: [
+                    {
+                        uuid: 'pr1',
+                        title: 'must have tests',
+                        rule: 'every PR needs a test',
+                        scope: KodyRulesScope.PULL_REQUEST,
+                    },
+                ],
+                runJudge: run,
+                languageLabel: 'Portuguese (Brazil)',
+            });
+            expect(prUser).toContain('Respond in Portuguese (Brazil)');
+        });
+
+        it('FILE-shard prompt is byte-identical to no-languageLabel behavior when languageLabel is omitted', async () => {
+            let withLabelOmitted = '';
+            let withLabelUndefined = '';
+            const runA: RunJudge = async ({ user }) => {
+                withLabelOmitted = user;
+                return [];
+            };
+            const runB: RunJudge = async ({ user }) => {
+                withLabelUndefined = user;
+                return [];
+            };
+            const changedFiles = [file('src/a.ts', '1 +const x: any = 1;')];
+            const rules = [
+                { uuid: 'r1', title: 'no any', rule: 'no any', path: '**/*.ts' },
+            ];
+            await judgeKodyRulesSharded({
+                changedFiles,
+                rules,
+                runJudge: runA,
+            });
+            await judgeKodyRulesSharded({
+                changedFiles,
+                rules,
+                runJudge: runB,
+                languageLabel: undefined,
+            });
+            expect(withLabelOmitted).not.toContain('Respond in');
+            expect(withLabelOmitted).toBe(withLabelUndefined);
+        });
+
+        it('PR-shard prompt is byte-identical to no-languageLabel behavior when languageLabel is omitted', async () => {
+            let withLabelOmitted = '';
+            let withLabelUndefined = '';
+            const runA: RunJudge = async ({ filename, user }) => {
+                if (filename === null) withLabelOmitted = user;
+                return [];
+            };
+            const runB: RunJudge = async ({ filename, user }) => {
+                if (filename === null) withLabelUndefined = user;
+                return [];
+            };
+            const changedFiles = [file('src/a.ts', '1 +x')];
+            const rules = [
+                {
+                    uuid: 'pr1',
+                    title: 'must have tests',
+                    rule: 'every PR needs a test',
+                    scope: KodyRulesScope.PULL_REQUEST,
+                },
+            ];
+            await judgeKodyRulesSharded({ changedFiles, rules, runJudge: runA });
+            await judgeKodyRulesSharded({
+                changedFiles,
+                rules,
+                runJudge: runB,
+                languageLabel: null,
+            });
+            expect(withLabelOmitted).not.toContain('Respond in');
+            expect(withLabelOmitted).toBe(withLabelUndefined);
+        });
+    });
+
     it('normalizes null violation fields to absent keys (strict-provider output)', async () => {
         const run: RunJudge = async () => [
             {

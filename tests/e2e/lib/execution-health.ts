@@ -1,6 +1,6 @@
 import type { KodusSession, RunContext } from './types.js';
 import { http, ensureOk } from './http.js';
-import { pollUntil } from '../providers/base.js';
+import { pollUntil, settle } from '../providers/base.js';
 
 /**
  * Execution HEALTH assertion: the review's automation execution must end
@@ -12,6 +12,51 @@ import { pollUntil } from '../providers/base.js';
  * hits/hour on a customer instance, every scenario still green). Output
  * asserts don't see that; only the execution status does.
  */
+/**
+ * Wait until the PR's in-flight automation has SETTLED, so a follow-up
+ * trigger is not refused as a duplicate.
+ *
+ * Opening a PR starts an automation that takes a per-PR distributed lock
+ * (`CODE_REVIEW:<org>:<repo>:<pr>`, 60s TTL) before the pipeline decides
+ * anything -- including before it decides to skip. Anything arriving while
+ * that lock is held is answered with "Code review already being processed"
+ * and dropped, with no retry.
+ *
+ * Best effort by design: if no automation row ever appears, there is nothing
+ * holding the lock and the caller should proceed. This waits for a fact
+ * instead of sleeping a fixed interval, which is what made the same scenario
+ * pass on fast providers and fail on bitbucket (#1699).
+ */
+export async function waitForAutomationToSettle(
+    ctx: RunContext,
+    session: KodusSession,
+    prNumber: number,
+    opts: { timeoutSec?: number } = {},
+): Promise<string | null> {
+    const settled = await pollUntil<string>(
+        async () => {
+            const resp = await http<any>(
+                `${ctx.target.apiBaseUrl}/pull-requests/executions?pullRequestNumber=${prNumber}&teamId=${encodeURIComponent(session.teamId)}&limit=5`,
+                {
+                    headers: { Authorization: `Bearer ${session.accessToken}` },
+                    timeoutMs: 30_000,
+                },
+            );
+            if (resp.status < 200 || resp.status >= 300) return null;
+            // null here means "nothing terminal yet" -- either no row at all
+            // or one still running. Both mean: keep waiting.
+            return findExecutionStatus(resp.body, prNumber);
+        },
+        { intervalSec: 5, timeoutSec: opts.timeoutSec ?? 120 },
+    );
+
+    // The execution row is written just BEFORE the lock is released (the
+    // release lives in the finally that runs after completion), so settling
+    // is not quite the same instant as the lock being free.
+    if (settled) await settle(3_000);
+    return settled;
+}
+
 export async function assertHealthyExecution(
     ctx: RunContext,
     session: KodusSession,
@@ -71,13 +116,27 @@ export async function assertHealthyExecution(
         finalStatus !== null,
         `No settled automation execution found for PR #${prNumber} within 90s — cannot verify review health`,
     );
+    // The explanation has to match the status we actually saw. It used to
+    // describe partial_error unconditionally, so a run that observed
+    // "skipped" was handed a paragraph about crashed agents and sent whoever
+    // read it looking for a stage failure that never happened.
+    const STATUS_MEANING: Record<string, string> = {
+        partial_error:
+            'an agent or auxiliary stage crashed and its work was silently dropped — ' +
+            'the review may still have posted findings from the surviving agents',
+        skipped:
+            'the product declined to review this PR — most often a review was ' +
+            'ALREADY in flight for it (duplicate trigger), or no active ' +
+            'code-review automation matched',
+        error: 'the pipeline failed outright',
+    };
+    const meaning = STATUS_MEANING[finalStatus as string];
     ctx.assert(
         finalStatus === 'success',
         `Review of PR #${prNumber} completed UNHEALTHY: execution status stayed "${finalStatus}" ` +
-            `through the full 90s window with no success row ` +
-            `(partial_error = an agent or auxiliary stage crashed and its work was silently dropped — ` +
-            `the review may still have posted findings from the surviving agents). ` +
-            `Check the worker logs for the failing stage/agent.`,
+            `through the full 90s window with no success row` +
+            (meaning ? ` (${finalStatus} = ${meaning})` : '') +
+            `. Check the worker logs for the failing stage/agent.`,
     );
     return finalStatus!;
 }
@@ -182,7 +241,10 @@ const EXECUTION_STATUSES = new Set([
 ]);
 
 /** Defensive walk: find the newest execution status for the PR number. */
-function findExecutionStatus(node: unknown, prNumber: number): string | null {
+export function findExecutionStatus(
+    node: unknown,
+    prNumber: number,
+): string | null {
     const hits: string[] = [];
     const walk = (n: unknown): void => {
         if (Array.isArray(n)) {
@@ -213,16 +275,28 @@ function findExecutionStatus(node: unknown, prNumber: number): string | null {
     };
     walk(node);
     if (!hits.length) return null;
-    // A single PR can carry MULTIPLE execution rows (verified live on the
-    // QA gitlab tenant: a duplicate/synchronize event adds a newer `skipped`
-    // row next to the real review's `success`). Health is about the review
-    // execution, so prefer a success anywhere over incidental skips, then
-    // real failures, then skips; still-running rows keep the poll alive
-    // only when nothing terminal exists.
-    for (const preferred of ['success', 'partial_error', 'error', 'skipped']) {
+
+    // A single PR can carry MULTIPLE execution rows: a duplicate delivery adds
+    // a `skipped` row next to the real review (seen on the QA gitlab tenant,
+    // and on every bitbucket run — bitbucket delivers the @kody comment
+    // webhook twice and the product correctly dedupes the second).
+    //
+    // Success anywhere wins: the review happened, and an incidental skip
+    // alongside it is not a health problem.
+    if (hits.includes('success')) return 'success';
+
+    // Nothing succeeded YET, but something is still running -- so the answer
+    // is "not yet", not "skipped". This ordering is the bug that failed
+    // command-review on bitbucket twice (#1699): the preference list below
+    // used to be consulted first, so a duplicate's `skipped` row outranked
+    // the real review still in flight, and the poll verdicted `skipped` at
+    // 90s while the review it was waiting for was still running.
+    if (hits.some((h) => h === 'pending' || h === 'in_progress')) return null;
+
+    // Nothing running and nothing succeeded: report the worst terminal row,
+    // preferring real failures over incidental skips.
+    for (const preferred of ['partial_error', 'error', 'skipped']) {
         if (hits.includes(preferred)) return preferred;
     }
-    return hits.every((h) => h === 'pending' || h === 'in_progress')
-        ? null
-        : hits[0];
+    return hits[0];
 }

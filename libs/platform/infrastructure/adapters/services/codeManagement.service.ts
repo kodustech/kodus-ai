@@ -806,6 +806,32 @@ export class CodeManagementService implements ICodeManagementService {
         return codeManagementService.getPullRequestReviewComment(params);
     }
 
+    /**
+     * Repository-level comment sample. Returns null when the active platform
+     * has no such endpoint, which is the caller's signal to fall back to the
+     * per-PR walk rather than treat it as "no comments".
+     */
+    async getRecentRepositoryComments(params: any, type?: PlatformType) {
+        if (!type) {
+            type = await this.getTypeIntegration(
+                extractOrganizationAndTeamData(params),
+            );
+        }
+
+        if (!type) {
+            return null;
+        }
+
+        const codeManagementService =
+            this.platformIntegrationFactory.getCodeManagementService(type);
+
+        if (!codeManagementService.getRecentRepositoryComments) {
+            return null;
+        }
+
+        return codeManagementService.getRecentRepositoryComments(params);
+    }
+
     async createResponseToComment(params: any, type?: PlatformType) {
         if (!type) {
             type = await this.getTypeIntegration(

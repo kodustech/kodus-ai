@@ -12,27 +12,16 @@ test("collapses to a single token when only GH_TEST_TOKEN is set", () => {
     assert.deepEqual(githubTokenPool(env({ GH_TEST_TOKEN: "a" })), ["a"]);
 });
 
-test("collects numbered siblings GH_TEST_TOKEN_2..N in order", () => {
+test("ignores obsolete token-pool variables", () => {
     assert.deepEqual(
         githubTokenPool(
-            env({ GH_TEST_TOKEN: "a", GH_TEST_TOKEN_2: "b", GH_TEST_TOKEN_3: "c" }),
+            env({
+                GH_TEST_TOKEN: "a",
+                GH_TEST_TOKEN_2: "b",
+                GH_TEST_TOKEN_3: "c",
+                GH_TEST_TOKENS: "x,y,z",
+            }),
         ),
-        ["a", "b", "c"],
-    );
-});
-
-test("GH_TEST_TOKENS list takes precedence and splits on comma/space/newline", () => {
-    assert.deepEqual(
-        githubTokenPool(
-            env({ GH_TEST_TOKENS: "x, y\nz", GH_TEST_TOKEN: "ignored" }),
-        ),
-        ["x", "y", "z"],
-    );
-});
-
-test("dedupes repeated tokens (same secret pasted twice)", () => {
-    assert.deepEqual(
-        githubTokenPool(env({ GH_TEST_TOKEN: "a", GH_TEST_TOKEN_2: "a" })),
         ["a"],
     );
 });
@@ -46,12 +35,12 @@ test("empty env yields an empty pool (picker returns no token)", () => {
     });
 });
 
-test("picker round-robins tokens and reports a 1-based slot", () => {
+test("picker always returns the single human author token", () => {
     const pick = makeGithubTokenPicker(
         env({ GH_TEST_TOKEN: "a", GH_TEST_TOKEN_2: "b", GH_TEST_TOKEN_3: "c" }),
     );
     assert.deepEqual(
         [pick(), pick(), pick(), pick()].map((a) => `${a.token}:${a.slot}/${a.size}`),
-        ["a:1/3", "b:2/3", "c:3/3", "a:1/3"],
+        ["a:1/1", "a:1/1", "a:1/1", "a:1/1"],
     );
 });

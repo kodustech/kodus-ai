@@ -144,6 +144,17 @@ export type OrganizationParametersAutoAssignConfig = {
     revokeGraceDays?: number;
     /** Git id -> ISO timestamp of when the user was first seen missing. */
     pendingRevocations?: Record<string, string>;
+    /**
+     * Bot ids ever added to `ignoredUsers` automatically. Round-tripped by the
+     * UI so removing a bot from the list is not undone by the next discovery
+     * run on the API side.
+     */
+    seededBotIds?: string[];
+    /**
+     * Seats granted through "assign by git id", excluded from automatic seat
+     * revocation because the member list cannot confirm they are still present.
+     */
+    manuallyAssignedIds?: string[];
 };
 
 export interface CockpitMetricsVisibility {

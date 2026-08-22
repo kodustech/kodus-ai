@@ -119,7 +119,11 @@ pnpm run e2e:matrix matrix/full.yml
 | `TARGET_BASE_URL` | URL of the API to test against | Always |
 | `TARGET_WEB_URL` | URL of the dashboard | Always |
 | `TARGET_TUNNEL_URL` | Public tunnel URL for webhooks (self-hosted only) | `target=self-hosted` |
-| `GH_TEST_TOKEN` | GitHub PAT, `repo` + `admin:repo_hook`. Must be a token whose FIRST org is `kodus-e2e` (a fine-grained PAT with resource owner `kodus-e2e`, Repository access = All repositories) — the Kodus integration binds to `orgs[0]` (github.service.ts), so a personal token whose first org is `kodustech` binds the wrong org. | `provider=github` |
+| `GH_TEST_TOKEN` | Single human GitHub PAT used by the harness only for PR/comment authorship; high-volume reads and polling use the GitHub App. | `provider=github`, `provider=github-app` |
+| `GH_INTEGRATION_TOKEN` | Durable PAT stored by Kodus only in the explicit legacy token-auth cells. There is no fallback to `GH_TEST_TOKEN`. | `provider=github` |
+| `GH_APP_ID`, `GH_APP_PRIVATE_KEY`, `GH_APP_INSTALLATION_ID` | Harness GitHub App credentials used only to mint short-lived driver tokens. | GitHub cells |
+| `GH_PRODUCT_APP_INSTALLATION_ID` | Installation id for the GitHub App configured in the target Kodus backend. Do not reuse the harness installation id unless both Apps are intentionally the same. | `provider=github-app` |
+| `GH_APP_TEST_REPO` | Public fixture name where the App is installed (currently `kodus-e2e/tiny-url-app`); configure as a repository variable, not a secret. | `provider=github-app` |
 | `GH_REPO_ADMIN_TOKEN` | Token with org Administration on `kodus-e2e` (create + delete repos). Used ONLY by `trial-managed-review` to mint/delete its throwaway repo per run; everything else stays on `GH_TEST_TOKEN`. Falls back to `GH_TEST_TOKEN` if unset (a single fully-privileged token also works). | `scenario=trial-managed-review` |
 | `GH_TEST_REPO` | GitHub test repo `owner/repo` | `provider=github` |
 | `CENTRALIZED_CONFIG_TEST_REPO` (+ `_CLOUD`) | Writable centralized-config source repo `owner/repo`, per target (self-hosted: `kodus-e2e/kodus-config-e2e`, cloud: `kodus-e2e/kodus-config-e2e-cloud`) — the scenario seeds it via the GitHub API each run | scenario `centralized-config-sync` (else it skips) |
@@ -129,6 +133,8 @@ pnpm run e2e:matrix matrix/full.yml
 | `BB_TEST_REPO` | Bitbucket repo `workspace/slug` | `provider=bitbucket` |
 | `AZ_TEST_TOKEN` | Azure DevOps PAT | `provider=azure-devops` |
 | `AZ_TEST_ORG`, `AZ_TEST_PROJECT`, `AZ_TEST_REPO` | Azure DevOps coords | `provider=azure-devops` |
+| `CONVERSATION_USER_TOKEN` | GitHub PAT for a non-`kody`/`kodus`-named account with PR R/W on `GH_TEST_REPO`. Kody's `isKodyComment` filter ignores any comment whose author login contains those substrings — and `GH_TEST_TOKEN` IS such an account (`kodus-e2e-bot-N`) — so the `@kody` mention in `conversation-*` scenarios needs this separate identity. GitLab/Bitbucket/Azure DevOps don't need an equivalent var: their `GL_TEST_TOKEN`/`BB_TEST_USER`+`BB_TEST_APP_PASSWORD`/`AZ_TEST_TOKEN` are already plain human accounts (no dedicated bot was ever set up there), so `conversation-*` reuses them directly. | `scenario=conversation-*`, `provider=github` |
+| `CONVERSATION_ANTHROPIC_KEY` (or `API_ANTHROPIC_API_KEY`) | Anthropic API key used as the BYOK key under test. | `scenario=conversation-anthropic-byok` |
 | `CLOUD_TENANT_FREE_EMAIL`, `CLOUD_TENANT_FREE_PASSWORD` | Free tenant creds | `target=cloud, license=free` |
 | `CLOUD_TENANT_TRIAL_*` | Trial tenant creds | `target=cloud, license=trial` |
 | `CLOUD_TENANT_PAID_*` | Paid tenant creds | `target=cloud, license=paid` |

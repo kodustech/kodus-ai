@@ -57,7 +57,153 @@ rss: true
                     <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-billing-licenses" />
                     <span>Billing &amp; Licenses</span>
                 </label>
+                <label className="kodus-changelog-filter-button">
+                    <input className="kodus-changelog-filter-control" type="checkbox" id="kodus-filter-cli" />
+                    <span>CLI</span>
+                </label>
             </div>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">August 17, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-kody-rules filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Support for Agent Rules in <code className="kodus-changelog-code">.agents/rules</code></div>
+                    <p className="kodus-changelog-copy">Some AI development tools let teams keep engineering instructions in the <code className="kodus-changelog-code">.agents/rules/</code> directory, including architecture standards, coding conventions, and constraints for changes to specific parts of a repository.</p>
+                    <p className="kodus-changelog-copy">We fixed how Kodus discovers these files. Previously, rules stored in this format could be missed during import and would not appear as a source for Kody Rules. Kody now recognizes files under <code className="kodus-changelog-code">.agents/rules/**</code>, allowing these instructions to be discovered and used in the rules and review workflow.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Reasoning configuration for Anthropic BYOK models:</strong> we fixed compatibility between reasoning effort options and different generations of Anthropic models. The interface and runtime now apply only the settings supported by the selected model.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More reliable Centralized Configuration:</strong> we fixed four scenarios related to syncing and exporting centralized configurations:</p>
+                        <ul className="kodus-changelog-list">
+                            <li>A missing configuration in a repository is no longer treated as if it had been deleted.</li>
+                            <li>Repositories whose configuration is organized entirely in directories now get the correct baseline, and configuration package downloads have been fixed.</li>
+                            <li>Rules are converted into plain objects before YAML generation, preventing incorrectly serialized content.</li>
+                            <li>Legacy scopes are now reconciled using ownership records already known by the system.</li>
+                        </ul>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-billing-licenses">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Plan-restricted rules update after an upgrade:</strong> when an organization changes plans, Kody Rules that were previously unavailable are recalculated and synced again. This ensures the status shown for each rule reflects the organization’s current eligibility.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Protection against database connection pool exhaustion:</strong> we made several related fixes to reduce pressure on the database connection pool:</p>
+                        <ul className="kodus-changelog-list">
+                            <li>Concurrent queries and workflows now handle connections and locks more safely.</li>
+                            <li>Cron jobs that could trigger large numbers of simultaneous queries are now limited.</li>
+                            <li>Supporting indexes were added to the most critical paths.</li>
+                            <li>The Kody Learning cron no longer continuously consumes connections while it runs.</li>
+                        </ul>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Automatic retries when GitHub rate limits are reached:</strong> when a review hits the GitHub API rate limit, the job now fails as a transient error and is requeued for another attempt instead of waiting silently, making recovery more predictable.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Pull request cards refresh after suggestion validation:</strong> the “Needs attention” and “Awaiting” counters now update when suggestion implementation checks finish, so the interface no longer shows stale numbers until the next manual refresh.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-billing-licenses">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Seats from former members are removed correctly:</strong> we added cleanup for seats assigned to people who are no longer part of the organization. This keeps the license list and available seat count consistent.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-cli filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More actionable CLI errors:</strong> the CLI no longer shows only generic messages such as <code className="kodus-changelog-code">Request failed with status 403</code>. For permission errors, oversized payloads, or large reviews, it now explains the likely cause and suggests next steps, such as narrowing the scope or using <code className="kodus-changelog-code">--branch</code>, <code className="kodus-changelog-code">--commit</code>, or <code className="kodus-changelog-code">--fast</code>.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">August 10, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">What's new</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Linked Repository Context in Reviews</div>
+                    <p className="kodus-changelog-copy">Kody can now reference linked repositories while reviewing a pull request. This gives it better context for changes that depend on contracts, shared libraries, internal APIs, or standards maintained outside the current repository.</p>
+                    <p className="kodus-changelog-copy">In practice, suggestions can now more accurately account for how the code connects to the rest of your organization’s ecosystem.</p>
+                </div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-cli filter-ux-interface">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Findings Sidebar and a New CLI Review Experience</div>
+                    <p className="kodus-changelog-copy">The Kodus CLI now offers a more complete review experience. In addition to inline comments, you can now view a sidebar with findings grouped by severity and jump directly between them.</p>
+                    <p className="kodus-changelog-copy">The update also improves navigation through large diffs and expands support for reviewing branches, commits, and specific files from the same interface.</p>
+                    <video autoPlay loop muted playsInline preload="auto" className="kodus-changelog-video">
+                        <source src="https://kodus.io/wp-content/uploads/2026/08/kodus-cli.mp4" type="video/mp4" />
+                    </video>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-ai-engine filter-kody-rules">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Fewer Duplicate Comments in Reviews</div>
+                    <p className="kodus-changelog-copy">Deduplication now considers suggestions generated by both Kody and Kody Rules together, with an additional semantic layer. In practice, when both flows identify the same issue, the PR is more likely to receive a single useful comment instead of repeated feedback.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Fragmented <code className="kodus-changelog-code">@file</code> references in Kody Rules:</strong> we fixed how <code className="kodus-changelog-code">@file</code> references are loaded during fragmented reviews. External files are now properly considered even when a rule is processed in multiple parts.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Slow reviews no longer appear as “no review”:</strong> we improved how long-running reviews and LLM rate-limiting scenarios are handled. PR status now more accurately reflects a review that is still running or temporarily constrained, rather than suggesting that no review took place.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Recovery after hitting GitHub rate limits:</strong> when the integration hits a GitHub API rate limit, the job now fails fast and is requeued instead of silently getting stuck. This makes review execution and recovery more predictable.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-byok filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">BYOK status now accurately reflects your configuration:</strong> the subscription screen now correctly detects whether an organization has a valid BYOK key connected, including locally managed configurations. This prevents conflicting messages about the key’s status.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Large tool outputs no longer break agent execution:</strong> we improved compression for large JSON responses returned by agent tools. The data structure is preserved, and execution remains stable even with large outputs.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More stable event processing:</strong> we fixed a pool exhaustion and event amplification scenario that could affect asynchronous processing. The pipeline now uses resources more safely under load.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine filter-byok">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Deduplication remains stable with BYOK:</strong> the embeddings used to prevent duplicate suggestions are now pinned to the correct provider, even when an organization uses BYOK or a custom endpoint.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
         </div>
     </div>
 
@@ -868,6 +1014,52 @@ rss: true
 </div>
 
 <div className="kodus-changelog-rss-source" aria-hidden="true">
+    <Update label="August 10, 2026 - Linked Repository Context in Reviews" tags={["AI Engine"]}>
+        Kody can now reference linked repositories while reviewing a pull request. This gives it better context for changes that depend on contracts, shared libraries, internal APIs, or standards maintained outside the current repository.
+
+        In practice, suggestions can now more accurately account for how the code connects to the rest of your organization’s ecosystem.
+    </Update>
+
+    <Update label="August 10, 2026 - Findings Sidebar and a New CLI Review Experience" tags={["CLI", "UX & Interface"]}>
+        The Kodus CLI now offers a more complete review experience. In addition to inline comments, you can now view a sidebar with findings grouped by severity and jump directly between them.
+
+        The update also improves navigation through large diffs and expands support for reviewing branches, commits, and specific files from the same interface.
+
+        Video: https://kodus.io/wp-content/uploads/2026/08/kodus-cli.mp4
+    </Update>
+
+    <Update label="August 10, 2026 - Fewer Duplicate Comments in Reviews" tags={["AI Engine", "Kody Rules"]}>
+        Deduplication now considers suggestions generated by both Kody and Kody Rules together, with an additional semantic layer. In practice, when both flows identify the same issue, the PR is more likely to receive a single useful comment instead of repeated feedback.
+    </Update>
+
+    <Update label="August 10, 2026 - Fragmented @file References in Kody Rules" tags={["Kody Rules"]}>
+        We fixed how @file references are loaded during fragmented reviews. External files are now properly considered even when a rule is processed in multiple parts.
+    </Update>
+
+    <Update label="August 10, 2026 - Slow Reviews No Longer Appear as No Review" tags={["AI Engine", "UX & Interface"]}>
+        We improved how long-running reviews and LLM rate-limiting scenarios are handled. PR status now more accurately reflects a review that is still running or temporarily constrained, rather than suggesting that no review took place.
+    </Update>
+
+    <Update label="August 10, 2026 - Recovery After Hitting GitHub Rate Limits" tags={["GIT Provider", "Performance"]}>
+        When the integration hits a GitHub API rate limit, the job now fails fast and is requeued instead of silently getting stuck. This makes review execution and recovery more predictable.
+    </Update>
+
+    <Update label="August 10, 2026 - BYOK Status Now Accurately Reflects Your Configuration" tags={["BYOK", "UX & Interface"]}>
+        The subscription screen now correctly detects whether an organization has a valid BYOK key connected, including locally managed configurations. This prevents conflicting messages about the key’s status.
+    </Update>
+
+    <Update label="August 10, 2026 - Large Tool Outputs No Longer Break Agent Execution" tags={["AI Engine", "Performance"]}>
+        We improved compression for large JSON responses returned by agent tools. The data structure is preserved, and execution remains stable even with large outputs.
+    </Update>
+
+    <Update label="August 10, 2026 - More Stable Event Processing" tags={["Performance"]}>
+        We fixed a pool exhaustion and event amplification scenario that could affect asynchronous processing. The pipeline now uses resources more safely under load.
+    </Update>
+
+    <Update label="August 10, 2026 - Deduplication Remains Stable with BYOK" tags={["AI Engine", "BYOK"]}>
+        The embeddings used to prevent duplicate suggestions are now pinned to the correct provider, even when an organization uses BYOK or a custom endpoint.
+    </Update>
+
     <Update label="July 30, 2026 - Global Rules Sync from Repositories" tags={["Kody Rules", "UX & Interface", "Billing & Licenses"]}>
         Organizations on the Teams plan can now configure repositories as sources for Global Rules. This allows teams to keep their review rules version-controlled directly in Git, alongside the project's technical context, while Kody automatically syncs those rules for use during reviews.
 

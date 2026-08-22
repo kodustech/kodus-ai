@@ -492,6 +492,92 @@ export class AzureDevOpsProvider extends BaseProvider {
         };
     }
 
+    // Posts a NEW thread as a (possibly different) Azure DevOps identity —
+    // `token` overrides the auth PAT. The conversation scenario calls this
+    // with AZ_TEST_TOKEN by default: unlike GitHub's dedicated e2e bot
+    // (kodus-e2e-bot-N, filtered by isKodyComment), AZ_TEST_TOKEN is already
+    // a plain human account, so no separate non-Kody identity is needed
+    // here. Kept as a token override (not a hardcoded call to postComment)
+    // so a dedicated Azure bot account can be introduced later without
+    // touching this signature.
+    async postCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        const repoId = await this.resolveRepoId();
+        const auth = `Basic ${Buffer.from(`:${token}`).toString("base64")}`;
+        const resp = await http<{
+            id: number;
+            comments: { id: number }[];
+        }>(
+            `${this.apiBase}/_apis/git/repositories/${repoId}/pullRequests/${prNumber}/threads?api-version=${this.apiVersion}`,
+            {
+                method: "POST",
+                headers: { Authorization: auth, Accept: "application/json" },
+                body: {
+                    comments: [
+                        { parentCommentId: 0, content: body, commentType: 1 },
+                    ],
+                    status: 1,
+                },
+            },
+        );
+        ensureOk(resp, "azure:postCommentAs");
+        return {
+            id: String(resp.body.comments?.[0]?.id ?? resp.body.id),
+        };
+    }
+
+    // Kody's getPullRequestReviewComment flattens ALL threads — Azure's
+    // comment model is thread-based for everything, general comments are
+    // threads too. A plain new-thread comment (unlike GitHub) is already
+    // visible there. No positioning needed.
+    async postReviewCommentAs(
+        prNumber: number,
+        body: string,
+        token: string,
+    ): Promise<{ id: string }> {
+        return this.postCommentAs(prNumber, body, token);
+    }
+
+    // Polls for Kody's conversational reply to an `@kody <question>`
+    // comment. Returns the first NEW, non-system comment that is neither
+    // ours (`@kody …`) nor a code-review finding (those carry the
+    // `<!-- kody-codereview` marker). null at timeout.
+    async pollForKodyReply(
+        pr: { number: number },
+        opts: { sinceIso: string; triggerId?: string; timeoutSec?: number },
+    ): Promise<{ id: string; body: string } | null> {
+        const repoId = await this.resolveRepoId();
+        return pollUntil(
+            async () => {
+                const resp = await http<{ value: AzureThread[] }>(
+                    `${this.apiBase}/_apis/git/repositories/${repoId}/pullRequests/${pr.number}/threads?api-version=${this.apiVersion}`,
+                    { headers: this.headers() },
+                );
+                ensureOk(resp, "azure:pollForKodyReply");
+                for (const thread of resp.body.value ?? []) {
+                    if (thread.isDeleted) continue;
+                    for (const c of thread.comments ?? []) {
+                        if (c.publishedDate <= opts.sinceIso) continue;
+                        if (opts.triggerId && String(c.id) === opts.triggerId)
+                            continue;
+                        if ((c.commentType ?? "").toLowerCase() === "system")
+                            continue;
+                        const text = c.content ?? "";
+                        if (text.toLowerCase().startsWith("@kody")) continue;
+                        if (text.includes("<!-- kody-codereview")) continue;
+                        if (!text.trim()) continue;
+                        return { id: String(c.id), body: text.slice(0, 600) };
+                    }
+                }
+                return null;
+            },
+            { timeoutSec: opts.timeoutSec ?? 300, intervalSec: 10 },
+        );
+    }
+
     authMode(): "token" {
         return "token";
     }

@@ -116,12 +116,15 @@
 | `API_ANTHROPIC_API_KEY` | – | secret | ☁️ Cloud |  |
 | `API_GOOGLE_AI_API_KEY` | – | secret | ☁️ Cloud | Optional secondary providers — appear commented in the installer template. |
 | `GEMINI_API_KEY` | – | secret | ☁️ Cloud |  |
-| `API_VERTEX_AI_API_KEY` | – | secret | ☁️ Cloud | Service Account JSON (base64-encoded) for Vertex AI. |
+| `API_VERTEX_AI_API_KEY` | – | secret | ☁️ Cloud | Service Account JSON (base64-encoded) for Vertex AI. Leave empty to authenticate with Application Default Credentials instead (Workload Identity, an attached service account, or `gcloud auth application-default login`); GOOGLE_CLOUD_PROJECT must then be set. |
+| `GOOGLE_CLOUD_PROJECT` | – | string | ☁️ Cloud | GCP project for Vertex AI when authenticating with Application Default Credentials rather than a service account key. Only needed when API_VERTEX_AI_API_KEY is empty — with a key the project is read from the key itself. GCLOUD_PROJECT is accepted as an alias. |
 | `API_VERTEX_AI_LOCATION` | – | string | ☁️ Cloud |  |
 | `API_GOOGLE_AI_PROVIDER` | – | enum(gemini,vertex) | ☁️ Cloud | Google AI provider: gemini (AI Studio) or vertex (Vertex AI). |
 | `API_NOVITA_AI_API_KEY` | – | secret | ☁️ Cloud |  |
 | `API_MOONSHOT_API_KEY` | – | secret | ☁️ Cloud | Moonshot AI (Kimi) — used by the public-demo trial flow in libs/code-review/infrastructure/agents/llm/byok-to-vercel.ts when the default model name matches /^kimi[-_.]/. Wires through the OpenAI- compatible adapter pointed at https://api.moonshot.ai/v1. The eval scripts (evals/\{investigation,promotion\}/run-eval.js) also reference this key by name. Cloud-only — self-hosted has no Moonshot demo path. |
-| `API_DEEPSEEK_API_KEY` | – | secret | ☁️ Cloud | DeepSeek — the managed default model (deepseek-v4-flash) for the trial / no-BYOK flow: libs/llm/byok-to-vercel.ts routes any default model name matching /^deepseek[-_.]/ through the OpenAI-compatible adapter pointed at API_DEEPSEEK_BASE_URL. Used by the v5 code-review agents, PR summary, kody-rules generation, reference detection, and issue generation/closing. Cloud-only — self-hosted brings its own model via API_LLM_PROVIDER_MODEL. |
+| `API_FIREWORKS_API_KEY` | – | secret | ☁️ Cloud | Fireworks AI — the managed default model (deepseek-v4-flash hosted on Fireworks) for the trial / no-BYOK flow: libs/llm/byok-to-vercel.ts routes any default model name matching /^accounts\\/fireworks\\/models\\// through the OpenAI-compatible adapter pointed at API_FIREWORKS_BASE_URL. Used by the v5 code-review agents, PR summary, kody-rules generation, reference detection, and issue generation/closing. Cloud-only — self-hosted brings its own model via API_LLM_PROVIDER_MODEL. |
+| `API_FIREWORKS_BASE_URL` | – | url | ☁️ Cloud |  |
+| `API_DEEPSEEK_API_KEY` | – | secret | ☁️ Cloud | DeepSeek — legacy managed fallback. Kept only for any lingering explicit deepseek-* overrides; the default trial path now routes through Fireworks. |
 | `API_DEEPSEEK_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_GROQ_BASE_URL` | – | url | ☁️ Cloud |  |
 | `API_GROQ_API_KEY` | – | secret | ☁️ Cloud |  |

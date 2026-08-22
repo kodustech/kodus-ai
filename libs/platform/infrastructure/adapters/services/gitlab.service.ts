@@ -3337,6 +3337,141 @@ export class GitlabService implements Omit<
         }
     }
 
+    /**
+     * The current `path_with_namespace` for a project, looked up by its numeric
+     * id.
+     *
+     * `repository.fullName` is whatever was persisted when the repository was
+     * first selected, and it is not reliably the URL slug: it can hold the
+     * display form (`My Group/My Project` rather than `my-group/my-project`)
+     * and it goes stale when a project is renamed or moved between groups, which
+     * also drops any subgroup added along the way (`group/project` where the
+     * project now lives at `parent/group/project`). Cloning such a URL fails
+     * with a 302 to `/users/sign_in` — git reports it as
+     * `unable to update url base from redirection`, which reads like an auth
+     * problem but is really a path that GitLab won't resolve.
+     *
+     * The numeric id survives renames and moves, which is why every REST call in
+     * this service keeps working while only the clone breaks. Falls back to the
+     * stored `fullName` so a lookup failure is no worse than the old behaviour.
+     *
+     * Callers without a real project id are expected to skip this entirely —
+     * see `hasResolvableProjectId`.
+     *
+     * The result is cached for 30 minutes per
+     * `(organizationId, repository.id)`: every clone otherwise pays this
+     * round-trip on its critical path, including repeated clones of the same
+     * repository across reviews. The slug only changes on a rename or group
+     * move, so a short TTL is enough to pick that up without keeping the
+     * common case on the network. A failed lookup is not cached — that falls
+     * back to `fullName` for this call only, and retries the API next time.
+     */
+    private async resolveProjectPathWithNamespace(
+        gitlabAuthDetail: GitlabAuthDetail,
+        repository: Pick<Repository, 'id' | 'fullName'>,
+        organizationAndTeamData: OrganizationAndTeamData,
+    ): Promise<string> {
+        // The GitLab integration (and therefore the numeric project id) is
+        // resolved per team, not per organization — two teams in the same
+        // org can point to different GitLab instances and share a numeric
+        // project id, so the key must include teamId and the instance host
+        // or one team can serve another's cached path_with_namespace.
+        // Normalized through the same getGitlabWebBaseUrl used to build the
+        // clone URL and the API client host, so equivalent raw values
+        // (`gitlab.example.com`, `https://gitlab.example.com/`, ...) share
+        // one cache entry instead of missing on every representation.
+        const normalizedHost = this.getGitlabWebBaseUrl(gitlabAuthDetail?.host);
+        const cacheKey = `gitlab-project-path-${organizationAndTeamData?.organizationId}-${organizationAndTeamData?.teamId}-${normalizedHost}-${repository?.id}`;
+
+        try {
+            const cachedPath =
+                await this.cacheService.getFromCache<string>(cacheKey);
+            if (cachedPath) {
+                return cachedPath;
+            }
+        } catch (cacheError) {
+            this.logger.warn({
+                message: 'Error reading project path from cache, continuing with API call',
+                context: GitlabService.name,
+                serviceName: 'GitlabService resolveProjectPathWithNamespace',
+                error: cacheError,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                },
+            });
+        }
+
+        try {
+            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
+            const project = await gitlabAPI.Projects.show(repository.id);
+
+            if (project?.path_with_namespace) {
+                const path = project.path_with_namespace as string;
+
+                try {
+                    await this.cacheService.addToCache(
+                        cacheKey,
+                        path,
+                        1800000, // 30 minutos
+                    );
+                } catch (cacheError) {
+                    this.logger.warn({
+                        message: 'Error caching project path',
+                        context: GitlabService.name,
+                        serviceName:
+                            'GitlabService resolveProjectPathWithNamespace',
+                        error: cacheError,
+                        metadata: {
+                            organizationAndTeamData,
+                            repositoryId: repository?.id,
+                        },
+                    });
+                }
+
+                return path;
+            }
+
+            this.logger.warn({
+                message: `Project ${repository?.id} returned no path_with_namespace; falling back to the stored fullName`,
+                context: GitlabService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    fullName: repository?.fullName,
+                },
+            });
+        } catch (error) {
+            this.logger.warn({
+                message: `Could not resolve path_with_namespace for project ${repository?.id}; falling back to the stored fullName`,
+                context: GitlabService.name,
+                error,
+                metadata: {
+                    organizationAndTeamData,
+                    repositoryId: repository?.id,
+                    fullName: repository?.fullName,
+                },
+            });
+        }
+
+        return repository?.fullName || '';
+    }
+
+    /**
+     * Whether `repository.id` is a real GitLab project id worth a lookup.
+     *
+     * CLI mode has no project id to give — it builds its params straight from
+     * the local git remote and passes the placeholder `'0'` with a `fullName`
+     * parsed from that remote, which is already the authoritative slug. Note
+     * `'0'` is a truthy string, so a plain truthiness check does not catch it
+     * and every CLI clone would spend a guaranteed-failing round-trip.
+     */
+    private hasResolvableProjectId(id?: string | number): boolean {
+        const normalized = String(id ?? '').trim();
+
+        return normalized !== '' && normalized !== '0';
+    }
+
     async getCloneParams(params: {
         repository: Pick<
             Repository,
@@ -3359,7 +3494,21 @@ export class GitlabService implements Omit<
                 throw new Error('GitLab authentication details not found');
             }
 
-            const encodedPath = (params?.repository?.fullName || '')
+            // Resolve the slug from the numeric project id instead of trusting
+            // the stored `fullName`. See resolveProjectPathWithNamespace. With
+            // no real id (CLI mode) `fullName` came straight from the local
+            // remote and is already authoritative, so skip the round-trip.
+            const projectPath = this.hasResolvableProjectId(
+                params.repository?.id,
+            )
+                ? await this.resolveProjectPathWithNamespace(
+                      gitlabAuthDetail,
+                      params.repository,
+                      params.organizationAndTeamData,
+                  )
+                : params.repository?.fullName || '';
+
+            const encodedPath = projectPath
                 .split('/')
                 .map(encodeURIComponent)
                 .join('/');

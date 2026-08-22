@@ -21,6 +21,12 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any, // pullRequestManagerService — unused when summary is off
+            {
+                execute: jest.fn().mockResolvedValue({
+                    action: 'skipped',
+                    reason: 'no-decisions',
+                }),
+            } as any, // postTracePrCommentUseCase
         );
         return { stage, commentManagerService };
     };
@@ -93,6 +99,44 @@ describe('UpdateCommentsAndGenerateSummaryStage - lineComments forwarding', () =
     });
 });
 
+describe('UpdateCommentsAndGenerateSummaryStage - Trace pack forwarding', () => {
+    it('passes the exact selected prompt decisions to the sticky comment', async () => {
+        const postTrace = {
+            execute: jest.fn().mockResolvedValue({ action: 'created' }),
+        };
+        const stage = new UpdateCommentsAndGenerateSummaryStage(
+            {} as any,
+            {} as any,
+            postTrace as any,
+        );
+        const selected = [
+            {
+                type: 'convention',
+                decision: 'Use the repository-scoped adapter',
+                scope: ['src/trace'],
+                pinned: true,
+            },
+        ];
+        const context = {
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
+            pullRequest: { number: 42 },
+            repository: { id: 'repo-1', name: 'repo-1' },
+            traceDecisions: selected,
+            dryRun: { enabled: false },
+        };
+
+        await (stage as any).postTraceComment(context);
+
+        expect(postTrace.execute).toHaveBeenCalledWith(
+            expect.objectContaining({ decisions: selected }),
+        );
+        expect(postTrace.execute.mock.calls[0][0].decisions).toBe(selected);
+    });
+});
+
 /**
  * Guards the frozen-context error-recording path (issue #1452 matrix-gaps
  * item 3, same family as create-file-comments #c886e369a / agent-review
@@ -125,6 +169,12 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         const stage = new UpdateCommentsAndGenerateSummaryStage(
             commentManagerService,
             {} as any,
+            {
+                execute: jest.fn().mockResolvedValue({
+                    action: 'skipped',
+                    reason: 'no-decisions',
+                }),
+            } as any, // postTracePrCommentUseCase
         );
         return { stage, commentManagerService };
     };

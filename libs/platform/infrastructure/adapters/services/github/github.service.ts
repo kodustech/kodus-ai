@@ -5,6 +5,7 @@ import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/i
 import { graphql } from '@octokit/graphql';
 import { enterpriseServer313 } from '@octokit/plugin-enterprise-server';
 import { retry } from '@octokit/plugin-retry';
+import { groupCommentsByPullRequest } from './github-comment-sample';
 import { throttling } from '@octokit/plugin-throttling';
 import { Octokit, RestEndpointMethodTypes } from '@octokit/rest';
 
@@ -3198,37 +3199,68 @@ export class GithubService
 
             const octokit = await this.instanceOctokit(organizationAndTeamData);
 
-            // Usar cache do accountType se disponível
-            let isOrgAccount = githubAuthDetail.accountType === 'organization';
-
-            // Para integrações legadas, assumir organização (historicamente só orgs eram permitidas)
-            if (!githubAuthDetail.accountType) {
-                isOrgAccount = true;
-                this.logger.log({
-                    message:
-                        'Legacy integration detected - assuming organization',
-                    context: 'GitHubService',
-                    metadata: { org: githubAuthDetail?.org },
-                });
+            if (githubAuthDetail.accountType === 'user') {
+                return await this.getAccountOwnerAsMember(
+                    octokit,
+                    githubAuthDetail.org,
+                );
             }
 
-            if (isOrgAccount) {
-                const members = await octokit.paginate(
-                    octokit.rest.orgs.listMembers,
-                    {
+            try {
+                return await octokit.paginate(octokit.rest.orgs.listMembers, {
+                    org: githubAuthDetail?.org,
+                    per_page: 100,
+                });
+            } catch (err) {
+                // Integrations created before `accountType` was recorded have
+                // no way to tell an org from a personal account, and personal
+                // accounts 404 here. Anything else is a real failure.
+                if (githubAuthDetail.accountType || this.statusOf(err) !== 404) {
+                    throw err;
+                }
+
+                this.logger.log({
+                    message:
+                        'Legacy integration 404d as an organization - treating it as a personal account',
+                    context: GithubService.name,
+                    metadata: {
+                        ...organizationAndTeamData,
                         org: githubAuthDetail?.org,
-                        per_page: 100,
                     },
+                });
+
+                return await this.getAccountOwnerAsMember(
+                    octokit,
+                    githubAuthDetail.org,
                 );
-                return members;
-            } else {
-                // Para contas pessoais, retornar o próprio usuário como "membro"
-                const user = await octokit.rest.users.getAuthenticated();
-                return [user.data];
             }
         } catch (err) {
             throw new BadRequestException(err);
         }
+    }
+
+    /**
+     * A personal account has no members, so the account owner is the whole
+     * list. Resolved by login rather than via `users.getAuthenticated()`:
+     * on cloud this octokit carries a GitHub App *installation* token, which
+     * answers 403 on `GET /user`. `GET /users/{login}` is public data and
+     * works under both an installation token and a PAT.
+     */
+    private async getAccountOwnerAsMember(octokit: Octokit, login: string) {
+        const owner = await octokit.rest.users.getByUsername({
+            username: login,
+        });
+
+        return [owner.data];
+    }
+
+    private statusOf(err: unknown): number | undefined {
+        const candidate = err as {
+            status?: number;
+            response?: { status?: number };
+        };
+
+        return candidate?.status ?? candidate?.response?.status;
     }
 
     async getAllCommits(
@@ -4676,18 +4708,20 @@ This is an experimental feature that generates committable changes. Review the d
                     /No commit found for the ref/i.test(
                         (error as any)?.message ?? '',
                     );
-                this.logger.warn({
-                    message: refDeleted
-                        ? 'PR head ref missing — falling back to base ref'
-                        : 'Error getting file content from pull request',
-                    context: GithubService.name,
-                    error,
-                    metadata: {
-                        ...params,
-                        prHeadMissing: refDeleted,
-                        httpStatus: status,
-                    },
-                });
+                if (!(params.suppressNotFoundLogs && status === 404)) {
+                    this.logger.warn({
+                        message: refDeleted
+                            ? 'PR head ref missing — falling back to base ref'
+                            : 'Error getting file content from pull request',
+                        context: GithubService.name,
+                        error,
+                        metadata: {
+                            ...params,
+                            prHeadMissing: refDeleted,
+                            httpStatus: status,
+                        },
+                    });
+                }
 
                 // If it fails, try to fetch from the base branch
                 const lines = (await octokit.repos.getContent({
@@ -4700,12 +4734,16 @@ This is an experimental feature that generates committable changes. Review the d
                 return lines;
             }
         } catch (error) {
-            this.logger.error({
-                message: 'Error getting file content to branch base',
-                context: GithubService.name,
-                error,
-                metadata: { ...params },
-            });
+            const status =
+                (error as any)?.status ?? (error as any)?.response?.status;
+            if (!(params.suppressNotFoundLogs && status === 404)) {
+                this.logger.error({
+                    message: 'Error getting file content to branch base',
+                    context: GithubService.name,
+                    error,
+                    metadata: { ...params },
+                });
+            }
         }
     }
 
@@ -6617,6 +6655,155 @@ This is an experimental feature that generates committable changes. Review the d
                 error: error.message,
                 metadata: params,
             });
+            return null;
+        }
+    }
+
+    /**
+     * Recent review + conversation comments for a whole repository, newest
+     * first, grouped by pull request.
+     *
+     * Answers the question rule generation actually asks -- "what have
+     * reviewers been saying in this repo lately" -- with two paginated
+     * listings, instead of walking every PR in the window and issuing three
+     * calls each.
+     *
+     * The old shape cost 3 requests per PR, uncapped, to produce a list the
+     * consumer then truncated to 100 comments. On a repo with 816 PRs in the
+     * window that was ~2450 requests out of GitHub's 5000/hour, spent to
+     * throw almost all of it away -- see issue #1686. Here the cap lives at
+     * the source: we stop paginating once enough substantive comments are in
+     * hand.
+     *
+     * It also fixes what those 100 comments WERE. The per-PR loop filled the
+     * quota in PR order, so the surviving comments came from the OLDEST pull
+     * requests in the window -- rules were being learned from the least
+     * current conventions in the repo. Sorting by recency is the point, not a
+     * side effect.
+     */
+    async getRecentRepositoryComments(params: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: {
+            id: string;
+            name: string;
+        };
+        filters?: {
+            startDate?: string;
+            endDate?: string;
+        };
+        limit?: number;
+    }): Promise<Array<{
+        pr: { pull_number: number };
+        generalComments: any[];
+        reviewComments: any[];
+        files: { filename: string }[];
+    }> | null> {
+        try {
+            const { organizationAndTeamData, repository, filters } = params;
+            // Oversampled against the ~100 the consumer keeps: bot authors,
+            // Kody's own past comments and denylisted reviewers are all
+            // dropped downstream, so collecting exactly 100 here would leave
+            // fewer than that after filtering.
+            const limit = params.limit ?? 300;
+
+            const githubAuthDetail = await this.getGithubAuthDetails(
+                organizationAndTeamData,
+            );
+            const octokit = await this.instanceOctokit(organizationAndTeamData);
+
+            const startTime = filters?.startDate
+                ? new Date(filters.startDate).getTime()
+                : null;
+            const endTime = filters?.endDate
+                ? new Date(filters.endDate).getTime()
+                : null;
+
+            // Mirrors the consumer's own filter (commentAnalysis.service:
+            // `body.length > 100`). Applying it while paginating means the
+            // budget counts comments that can actually become a rule, not
+            // "LGTM" and ":+1:".
+            const substantive = (body?: string): boolean =>
+                (body ?? '').length > 100;
+
+            const budget = { kept: 0 };
+
+            // Shared across both listings: the two endpoints feed one sample,
+            // so they must not each spend the full budget.
+            const collectPage = <T extends { created_at: string; body?: string }>(
+                page: T[],
+                done: () => void,
+            ): T[] => {
+                const inWindow: T[] = [];
+                for (const comment of page) {
+                    const t = new Date(comment.created_at).getTime();
+                    // Sorted newest first, so the first one older than the
+                    // window means every remaining page is older too.
+                    if (startTime !== null && t < startTime) {
+                        done();
+                        break;
+                    }
+                    if (endTime !== null && t > endTime) {
+                        continue;
+                    }
+                    inWindow.push(comment);
+                    if (substantive(comment.body)) {
+                        budget.kept++;
+                        if (budget.kept >= limit) {
+                            done();
+                            break;
+                        }
+                    }
+                }
+                return inWindow;
+            };
+
+            const listParams = {
+                owner: githubAuthDetail.org,
+                repo: repository.name,
+                sort: 'created' as const,
+                direction: 'desc' as const,
+                per_page: 100,
+                ...(filters?.startDate && { since: filters.startDate }),
+            };
+
+            // Sequential on purpose, NOT a missed Promise.all. Both listings
+            // draw from one budget, and running them in order gives review
+            // comments first claim on it -- they carry the `path` they were
+            // left on, which is what replaces the per-PR files call. In
+            // parallel the split between the two sources would depend on
+            // which pages return first, making the sample that feeds rule
+            // generation nondeterministic. The cost is one extra round trip
+            // on a background job nobody is waiting for.
+            const reviewComments = await octokit.paginate(
+                octokit.pulls.listReviewCommentsForRepo,
+                listParams,
+                (response, done) => collectPage(response.data, done),
+            );
+
+            const issueComments = await octokit.paginate(
+                octokit.issues.listCommentsForRepo,
+                listParams,
+                (response, done) => collectPage(response.data, done),
+            );
+
+            // /issues/comments covers issues AND pull requests -- on GitHub a
+            // PR is an issue -- so the sample is filtered and grouped by
+            // github-comment-sample.ts, where that logic is unit-tested.
+            return groupCommentsByPullRequest(
+                reviewComments as any[],
+                issueComments as any[],
+            );
+        } catch (error) {
+            this.logger.error({
+                message: 'Error to get recent repository comments',
+                context: GithubService.name,
+                serviceName: 'GithubService getRecentRepositoryComments',
+                error: error.message,
+                metadata: params,
+            });
+            // null (not []) so the caller can tell "this provider path
+            // failed, fall back to the per-PR walk" from "this repo genuinely
+            // has no recent comments".
             return null;
         }
     }

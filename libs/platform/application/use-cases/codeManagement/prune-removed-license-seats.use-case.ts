@@ -6,6 +6,12 @@ import {
     ILicenseService,
     LICENSE_SERVICE_TOKEN,
 } from '@libs/ee/license/interfaces/license.interface';
+import {
+    IOrganizationParametersService,
+    ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+} from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
+import { OrganizationParametersAutoAssignConfig } from '@libs/organization/domain/organizationParameters/types/organizationParameters.types';
+import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationMemberListService } from '@libs/platform/application/services/organization-member-list.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 
@@ -35,6 +41,8 @@ export class PruneRemovedLicenseSeatsUseCase {
         private readonly codeManagementService: CodeManagementService,
         @Inject(LICENSE_SERVICE_TOKEN)
         private readonly licenseService: ILicenseService,
+        @Inject(ORGANIZATION_PARAMETERS_SERVICE_TOKEN)
+        private readonly organizationParametersService: IOrganizationParametersService,
     ) {}
 
     public async execute(
@@ -74,9 +82,21 @@ export class PruneRemovedLicenseSeatsUseCase {
 
         const requested = gitIds?.length ? new Set(gitIds.map(String)) : null;
 
+        // No provider enumerates apps in its member listing, and the pull
+        // request author fallback only reaches back 60 days. A bot missing
+        // from the list is therefore never evidence that it left the
+        // organization — revoking its seat would silently stop reviews on an
+        // agent that simply had a quiet month. The same holds for any seat an
+        // admin granted by git id precisely because the list could not show it.
+        const protectedIds = await this.resolveProtectedIds(
+            organizationAndTeamData,
+            memberList.members,
+        );
+
         const candidates = activeSeats
             .map((seat) => String(seat.git_id))
             .filter((gitId) => !memberIds.has(gitId))
+            .filter((gitId) => !protectedIds.has(gitId))
             .filter((gitId) => !requested || requested.has(gitId));
 
         if (dryRun || candidates.length === 0) {
@@ -107,5 +127,47 @@ export class PruneRemovedLicenseSeatsUseCase {
         });
 
         return { status: 'ok', candidates, revoked, failed };
+    }
+
+    private async resolveProtectedIds(
+        organizationAndTeamData: OrganizationAndTeamData,
+        members: ReadonlyArray<{ id: string | number; type?: string }>,
+    ): Promise<Set<string>> {
+        const botIds = new Set(
+            members
+                .filter((member) => member.type === 'bot')
+                .map((member) => String(member.id)),
+        );
+
+        // Bots discovered on earlier runs, recorded when they were seeded into
+        // the ignore list. Covers the ones that have gone quiet and dropped out
+        // of the member list entirely.
+        try {
+            const parameter =
+                await this.organizationParametersService.findByKey(
+                    OrganizationParametersKey.AUTO_LICENSE_ASSIGNMENT,
+                    organizationAndTeamData,
+                );
+
+            const config =
+                parameter?.configValue as OrganizationParametersAutoAssignConfig;
+
+            for (const gitId of [
+                ...(config?.seededBotIds ?? []),
+                ...(config?.manuallyAssignedIds ?? []),
+            ]) {
+                botIds.add(String(gitId));
+            }
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not read protected seat ids; a bot or manually assigned seat may be proposed for revocation',
+                context: PruneRemovedLicenseSeatsUseCase.name,
+                metadata: { ...organizationAndTeamData },
+                error,
+            });
+        }
+
+        return botIds;
     }
 }

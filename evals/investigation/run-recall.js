@@ -25,6 +25,7 @@ function parseArgs(argv) {
             process.env.RECALL_THRESHOLD ||
             '',
         output: '',
+        concurrency: Number(process.env.RECALL_CONCURRENCY) || 4,
         listModels: false,
         gate: process.env.RECALL_GATE === '1',
     };
@@ -58,6 +59,9 @@ function parseArgs(argv) {
             if (consumesNext) i += 1;
         } else if (key === 'output') {
             out.output = value || '';
+            if (consumesNext) i += 1;
+        } else if (key === 'concurrency') {
+            out.concurrency = Number(value);
             if (consumesNext) i += 1;
         } else if (key === 'list-models') {
             out.listModels = true;
@@ -152,6 +156,71 @@ function tryParseJson(value) {
     }
 }
 
+/** Saída interna do engine -> entrada de submission pública (evals/scorer/README.md). */
+function submissionResultFromOutput(caseId, output, tokenUsage) {
+    const parsed = tryParseJson(output) || {};
+    const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
+    const trace = parsed.trace || {};
+    const SEV = new Set(['critical', 'high', 'medium', 'low', 'info']);
+    const sev = (v) => {
+        const x = typeof v === 'string' ? v.toLowerCase().trim() : null;
+        return SEV.has(x) ? x : null;
+    };
+    return {
+        caseId,
+        findings: findings.map((f) => ({
+            path: f.relevantFile ?? f.path ?? null,
+            // 0 = "sem linha especifica" na saida de alguns modelos (achado
+            // conceitual, ex.: padrao duplicado em outro arquivo, decorator).
+            // Linha e 1-indexed, entao 0 nunca e valida — normaliza para null
+            // em vez de deixar o schema rejeitar a submission inteira.
+            startLine: Number.isInteger(f.relevantLinesStart) && f.relevantLinesStart > 0 ? f.relevantLinesStart : null,
+            endLine: Number.isInteger(f.relevantLinesEnd) && f.relevantLinesEnd > 0 ? f.relevantLinesEnd : null,
+            severity: sev(f.severity),
+            ...(f.severity && !sev(f.severity) ? { severityRaw: String(f.severity) } : {}),
+            category: f.label ?? f.category ?? null,
+            description: [f.oneSentenceSummary, f.suggestionContent].filter(Boolean).join(' — '),
+        })),
+        usage: {
+            inputTokens: tokenUsage?.prompt ?? tokenUsage?.inputTokens ?? 0,
+            outputTokens: tokenUsage?.completion ?? tokenUsage?.outputTokens ?? 0,
+            reasoningTokens: trace.usage?.reasoningTokens ?? null,
+            cacheReadTokens: trace.usage?.cacheReadTokens ?? null,
+        },
+        trace: {
+            finishReason: trace.finishReason ?? null,
+            steps: typeof trace.steps === 'number' ? trace.steps : null,
+            replayCalls: typeof trace.replayCalls === 'number' ? trace.replayCalls : null,
+            unexpectedToolCalls: Array.isArray(trace.unexpectedToolCalls)
+                ? trace.unexpectedToolCalls.length : 0,
+        },
+    };
+}
+
+function runMetaOf(args) {
+    return {
+        harness: { name: 'kodus', version: process.env.KODUS_VERSION || 'dev' },
+        model: {
+            // id publico = modelo real; sufixo (@sub, @nvidia) e so roteamento
+            id: (TIER0[args.model] && (TIER0[args.model].codexModel || TIER0[args.model].doModel)) || args.model,
+            provider: (TIER0[args.model] && TIER0[args.model].provider) || 'unknown',
+            accessPath:
+                TIER0[args.model]?.provider === 'codex_subscription' ? 'subscription' : 'api',
+        },
+        executionMode: 'replay',
+        // heavy = passadas de resample ativadas. Eixo de regime: não comparar
+        // entrada heavy com entrada normal sem rotular.
+        heavy: process.env.RECALL_HEAVY === '1',
+        // RECALL_REASONING_EFFORT ja injeta o effort de verdade na chamada
+        // (ver withReasoningEffort em agent-provider.js); sem isto o artefato
+        // registrava 'vendor-default' mesmo quando o run era em thinking high.
+        reasoning: process.env.RECALL_REASONING_EFFORT
+            ? { config: 'explicit', effortRequested: process.env.RECALL_REASONING_EFFORT }
+            : { config: 'vendor-default', effortRequested: null },
+        runAt: new Date().toISOString(),
+    };
+}
+
 function traceSummaryFromOutput(output) {
     const parsed = tryParseJson(output);
     const trace = parsed?.trace || {};
@@ -219,7 +288,7 @@ async function main() {
     process.env.RECALL_MODEL = args.model;
 
     const tests = await buildTests();
-    const selectedTests = Number.isFinite(args.limit)
+    let selectedTests = Number.isFinite(args.limit)
         ? tests.slice(0, args.limit)
         : tests;
 
@@ -242,7 +311,17 @@ async function main() {
         `════ finder-recall · model=${args.model} · set=${args.all ? 'all' : args.cases ? 'custom' : args.set} · cases=${selectedTests.length} · threshold=${process.env.RECALL_THRESHOLD || 0} ════`,
     );
 
-    for (const test of selectedTests) {
+    const submissionResults = [];
+    // O checkpoint deriva do --output, nao do modelo: duas rodadas do MESMO
+    // modelo em paralelo (braços de A/B) escreviam no mesmo arquivo e se
+    // sobrescreviam. A submission final ja usava --output; o checkpoint nao,
+    // entao um recover pegaria casos misturados dos dois braços sem aviso.
+    const checkpointBase = args.output
+        ? path.basename(String(args.output)).replace(/\.json$/, '')
+        : `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}`;
+    const checkpointPath = path.join(RESULTS_DIR, `${checkpointBase}.submission.partial.json`);
+
+    const runOneCase = async (test) => {
         const caseId = test.vars?.caseId || test.description || 'unknown-case';
         const prompt = JSON.stringify(test.vars || {});
         let apiResult;
@@ -259,7 +338,7 @@ async function main() {
             };
             rows.push(row);
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
-            continue;
+            return;
         }
 
         if (!apiResult?.output) {
@@ -272,7 +351,7 @@ async function main() {
             };
             rows.push(row);
             console.log(`INFRA ${caseId} ${row.reason.slice(0, 180)}`);
-            continue;
+            return;
         }
 
         // eslint-disable-next-line no-await-in-loop
@@ -293,10 +372,65 @@ async function main() {
             traceSummary: traceSummaryFromOutput(apiResult.output),
         });
 
+        // RECALL_DUMP=<dir>: grava a saida crua do agente por caso. Sem isso a
+        // submission so guarda findings + trace, entao um modelo que devolve
+        // ZERO findings e indistinguivel de um parsing que falhou.
+        if (process.env.RECALL_DUMP) {
+            try {
+                fs.mkdirSync(process.env.RECALL_DUMP, { recursive: true });
+                fs.writeFileSync(
+                    path.join(process.env.RECALL_DUMP, `${caseId}.raw.txt`),
+                    typeof apiResult.output === 'string'
+                        ? apiResult.output
+                        : JSON.stringify(apiResult.output, null, 2),
+                );
+            } catch (e) {
+                console.warn(`[dump] ${caseId}: ${e.message}`);
+            }
+        }
+        submissionResults.push(
+            submissionResultFromOutput(caseId, apiResult.output, apiResult.tokenUsage),
+        );
+        // checkpoint por caso: passada longa que morre não pode perder o que já foi pago
+        writeJson(checkpointPath, {
+            benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
+            run: runMetaOf(args), partial: true,
+            completedCases: submissionResults.length, results: submissionResults,
+        });
+
         console.log(
             `${status.toUpperCase().padEnd(6)} ${caseId} recall=${fmtPct(metadata.recall ?? assertion.score)} precision=${fmtPct(metadata.precision)} fidelity=${fmtPct(metadata.hitRate)} findings=${metadata.findings ?? 'n/a'}`,
         );
-    }
+    };
+
+    // Pool: casos são independentes (replay determinístico próprio), então
+    // sequencial era só desperdício de relógio.
+    const concurrency = Math.max(1, Math.min(Number(args.concurrency) || 4, selectedTests.length));
+    console.log(`(concorrência: ${concurrency}${process.env.RECALL_HEAVY === '1' ? ' · HEAVY' : ''})\n`);
+    let cursor = 0;
+    const worker = async () => {
+        for (;;) {
+            const idx = cursor++;
+            if (idx >= selectedTests.length) return;
+            try {
+                await runOneCase(selectedTests[idx]);
+            } catch (error) {
+                infraFailures += 1;
+                rows.push({
+                    caseId: selectedTests[idx]?.vars?.caseId || `idx-${idx}`,
+                    status: 'infra',
+                    reason: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+    };
+    await Promise.all(Array.from({ length: concurrency }, worker));
+
+    // pool devolve fora de ordem: reordena pela ordem do dataset (artefato estável)
+    const orderOf = new Map(selectedTests.map((t, i) => [t.vars?.caseId || t.description || `idx-${i}`, i]));
+    const byOrder = (a, b) => (orderOf.get(a.caseId) ?? 1e9) - (orderOf.get(b.caseId) ?? 1e9);
+    rows.sort(byOrder);
+    submissionResults.sort(byOrder);
 
     const summary = {
         model: args.model,
@@ -323,6 +457,14 @@ async function main() {
         args.output ||
         path.join(RESULTS_DIR, `finder-recall-${args.model.replace(/[^\w.-]+/g, '-')}.json`);
     writeJson(outputPath, summary);
+
+    const submissionPath = outputPath.replace(/\.json$/, '.submission.json');
+    writeJson(submissionPath, {
+        benchmarkVersion: `${args.all ? 'all50' : args.cases ? 'custom' : args.set}-v1`,
+        run: runMetaOf(args),
+        results: submissionResults,
+    });
+    try { fs.unlinkSync(checkpointPath); } catch {}
 
     console.log('\n════ finder-recall summary ════');
     console.log(`model: ${summary.model}`);

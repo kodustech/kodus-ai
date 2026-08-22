@@ -218,6 +218,7 @@ header a[href*="changelog"]:hover svg {
 .kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .filter-kody-rules,
 .kodus-changelog-shell:has(#kodus-filter-mcp:checked) .filter-mcp,
 .kodus-changelog-shell:has(#kodus-filter-billing-licenses:checked) .filter-billing-licenses,
+.kodus-changelog-shell:has(#kodus-filter-cli:checked) .filter-cli,
 .kodus-changelog-shell:has(#kodus-filter-security:checked) .kodus-changelog-section:has(.filter-security),
 .kodus-changelog-shell:has(#kodus-filter-cockpit:checked) .kodus-changelog-section:has(.filter-cockpit),
 .kodus-changelog-shell:has(#kodus-filter-byok:checked) .kodus-changelog-section:has(.filter-byok),
@@ -229,7 +230,8 @@ header a[href*="changelog"]:hover svg {
 .kodus-changelog-shell:has(#kodus-filter-notifications:checked) .kodus-changelog-section:has(.filter-notifications),
 .kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .kodus-changelog-section:has(.filter-kody-rules),
 .kodus-changelog-shell:has(#kodus-filter-mcp:checked) .kodus-changelog-section:has(.filter-mcp),
-.kodus-changelog-shell:has(#kodus-filter-billing-licenses:checked) .kodus-changelog-section:has(.filter-billing-licenses) {
+.kodus-changelog-shell:has(#kodus-filter-billing-licenses:checked) .kodus-changelog-section:has(.filter-billing-licenses),
+.kodus-changelog-shell:has(#kodus-filter-cli:checked) .kodus-changelog-section:has(.filter-cli) {
     display: block;
 }
 
@@ -244,7 +246,8 @@ header a[href*="changelog"]:hover svg {
 .kodus-changelog-shell:has(#kodus-filter-notifications:checked) .kodus-changelog-release:has(.filter-notifications),
 .kodus-changelog-shell:has(#kodus-filter-kody-rules:checked) .kodus-changelog-release:has(.filter-kody-rules),
 .kodus-changelog-shell:has(#kodus-filter-mcp:checked) .kodus-changelog-release:has(.filter-mcp),
-.kodus-changelog-shell:has(#kodus-filter-billing-licenses:checked) .kodus-changelog-release:has(.filter-billing-licenses) {
+.kodus-changelog-shell:has(#kodus-filter-billing-licenses:checked) .kodus-changelog-release:has(.filter-billing-licenses),
+.kodus-changelog-shell:has(#kodus-filter-cli:checked) .kodus-changelog-release:has(.filter-cli) {
     display: grid;
 }
 

@@ -1,0 +1,111 @@
+name: "E2E: prune throwaway images"
+
+# Deletes `test-*` and `cloud-*` container versions once they age out.
+#
+# These tags exist so anyone can run the e2e matrix against unreleased code
+# without cutting an RC. They are disposable by construction: each one is tied
+# to a single commit and is worthless the moment that run finishes.
+#
+# Retention rather than isolation. The alternative considered was publishing
+# them under a personal namespace to keep the org registry clean — but that
+# ties shared infrastructure to one person's PAT, breaks on rotation or
+# turnover, and gives every contributor a different setup. Publishing where
+# the release images already go costs nothing (GITHUB_TOKEN + packages:write,
+# the same auth the release train uses) and the mess is solved by deleting it
+# on a schedule.
+#
+# Release tags are NEVER touched: the prefix filter only matches the two
+# throwaway namespaces, and anything unrecognised is skipped loudly.
+
+permissions:
+    contents: read
+    packages: write
+
+on:
+    schedule:
+        # Daily 05:00 UTC — after the nightly runs, before the working day.
+        - cron: "0 5 * * *"
+    workflow_dispatch:
+        inputs:
+            keep_days:
+                description: "Delete throwaway tags older than this many days"
+                required: false
+                default: "7"
+                type: string
+            dry_run:
+                description: "List what would be deleted, delete nothing"
+                required: false
+                default: true
+                type: boolean
+
+jobs:
+    prune:
+        name: Prune test-* / cloud-* image versions
+        runs-on: ubuntu-latest
+        steps:
+            - name: Prune
+              env:
+                  # The CI org when one is configured. GITHUB_TOKEN cannot
+                  # delete packages outside this repo's own org, so the publish
+                  # token (delete:packages) is what makes the prune effective
+                  # there — without it every delete would warn and skip.
+                  GH_TOKEN: ${{ secrets.GHCR_PUBLISH_TOKEN || secrets.GITHUB_TOKEN }}
+                  ORG: ${{ vars.E2E_IMAGE_OWNER || github.repository_owner }}
+                  KEEP_DAYS: ${{ inputs.keep_days || '7' }}
+                  DRY_RUN: ${{ inputs.dry_run == false && 'false' || (github.event_name == 'schedule' && 'false' || 'true') }}
+              run: |
+                  set -uo pipefail
+                  CUTOFF=$(date -u -d "-${KEEP_DAYS} days" +%s)
+                  echo "Deleting throwaway tags created before $(date -u -d "@$CUTOFF" +%FT%TZ) (dry_run=$DRY_RUN)"
+
+                  TOTAL=0
+                  for PKG in kodus-ai-api kodus-ai-webhook kodus-ai-worker kodus-ai-web kodus-mcp-manager; do
+                      echo "::group::$PKG"
+                      # Some packages may not exist yet (nothing built for them).
+                      VERSIONS=$(gh api --paginate \
+                          "/orgs/$ORG/packages/container/$PKG/versions" \
+                          --jq '.[] | {id, created: .created_at, tags: (.metadata.container.tags // [])} | @json' \
+                          2>/dev/null) || { echo "not found or not readable — skipping"; echo "::endgroup::"; continue; }
+
+                      while read -r row; do
+                          [ -n "$row" ] || continue
+                          ID=$(echo "$row" | jq -r .id)
+                          CREATED=$(echo "$row" | jq -r .created)
+                          TAGS=$(echo "$row" | jq -r '.tags | join(",")')
+
+                          # Untagged layers are left alone: they may still be
+                          # referenced by a tagged manifest.
+                          [ -z "$TAGS" ] && continue
+
+                          # EVERY tag on the version must be throwaway. A version
+                          # that also carries a release tag is shared by both and
+                          # deleting it would break the release.
+                          if echo "$TAGS" | tr ',' '\n' | grep -qvE '^(test|cloud)-'; then
+                              continue
+                          fi
+
+                          AGE=$(date -u -d "$CREATED" +%s)
+                          [ "$AGE" -ge "$CUTOFF" ] && continue
+
+                          if [ "$DRY_RUN" = "true" ]; then
+                              echo "would delete $PKG#$ID [$TAGS] created $CREATED"
+                          else
+                              if gh api -X DELETE "/orgs/$ORG/packages/container/$PKG/versions/$ID" >/dev/null 2>&1; then
+                                  echo "deleted $PKG#$ID [$TAGS]"
+                              else
+                                  echo "::warning::could not delete $PKG#$ID [$TAGS] — GITHUB_TOKEN may lack delete:packages"
+                              fi
+                          fi
+                          TOTAL=$((TOTAL + 1))
+                      done <<< "$VERSIONS"
+                      echo "::endgroup::"
+                  done
+
+                  echo "$TOTAL throwaway version(s) matched."
+                  {
+                      echo "### Throwaway image prune"
+                      echo ""
+                      echo "- older than: **${KEEP_DAYS} days**"
+                      echo "- dry run: **${DRY_RUN}**"
+                      echo "- matched: **${TOTAL}**"
+                  } >> "$GITHUB_STEP_SUMMARY"

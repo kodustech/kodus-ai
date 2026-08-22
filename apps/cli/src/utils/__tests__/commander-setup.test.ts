@@ -4,7 +4,9 @@ import { applyCommanderBehavior } from '../commander-setup.js';
 
 describe('commander setup', () => {
     it('applies exit override and suppresses default error output for subcommands', async () => {
-        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const errorSpy = vi
+            .spyOn(console, 'error')
+            .mockImplementation(() => {});
 
         const program = new Command();
         const config = new Command('config');
@@ -15,7 +17,14 @@ describe('commander setup', () => {
 
         await expect(
             program.parseAsync(
-                ['node', 'kodus', 'config', '-r', 'Wellington01/kodus-extension', 'setup'],
+                [
+                    'node',
+                    'kodus',
+                    'config',
+                    '-r',
+                    'Wellington01/kodus-extension',
+                    'setup',
+                ],
                 { from: 'node' },
             ),
         ).rejects.toMatchObject({

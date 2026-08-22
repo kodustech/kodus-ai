@@ -64,6 +64,23 @@ describe('buildOrchestratorInput — context→agent wiring', () => {
         expect(input.reviewMode).toBe('deep');
     });
 
+    it('forwards the exact selected Trace decisions into the agent input', () => {
+        const traceDecisions = [
+            {
+                type: 'tradeoff',
+                decision: 'Keep retries bounded to one attempt.',
+                scope: ['src/payments'],
+            },
+        ];
+
+        const input = buildOrchestratorInput(
+            makeContext({ traceDecisions }),
+            computed,
+        );
+
+        expect(input.traceDecisions).toBe(traceDecisions);
+    });
+
     it('defaults reviewMode to normal when unset', () => {
         expect(
             buildOrchestratorInput(makeContext(), computed).reviewMode,

@@ -43,6 +43,7 @@ SERVER_IP=$(state_get "$NAME" .server_ip)
 SSH_KEY_ID=$(state_get "$NAME" .ssh_key_id)
 SSH_KEY_PATH=$(state_get "$NAME" .ssh_key_path)
 CREATED_AT=$(state_get "$NAME" .created_at)
+AWS_REGION_E2E=$(state_get "$NAME" '.aws_region // "us-east-2"')
 
 log "About to destroy:"
 echo "  name:        $NAME"
@@ -108,6 +109,23 @@ if [ "$PROVIDER" = "digitalocean" ]; then
             ;;
     esac
 fi
+if [ "$PROVIDER" = "aws" ]; then
+    require_cmd aws
+    LIVE_FIELDS=$(aws ec2 describe-instances \
+        --region "$AWS_REGION_E2E" --instance-ids "$SERVER_ID" \
+        --query 'Reservations[0].Instances[0].[Tags[?Key==`Name`]|[0].Value,Tags[?Key==`Project`]|[0].Value]' \
+        --output text 2>/dev/null || echo "")
+    LIVE_NAME=$(printf '%s' "$LIVE_FIELDS" | awk '{print $1}')
+    LIVE_PROJECT=$(printf '%s' "$LIVE_FIELDS" | awk '{print $2}')
+    case "$LIVE_NAME:$LIVE_PROJECT" in
+        "${EXPECTED_NAME_PREFIX}"*:kodus-e2e) : ;;
+        *)
+            err "SAFETY: refusing to terminate EC2 instance $SERVER_ID."
+            err "Expected Name=${EXPECTED_NAME_PREFIX}* and Project=kodus-e2e; got '$LIVE_NAME' and '$LIVE_PROJECT'."
+            exit 1
+            ;;
+    esac
+fi
 
 # ---------- destroy server ----------
 case "$PROVIDER" in
@@ -126,6 +144,12 @@ case "$PROVIDER" in
             "https://api.hetzner.cloud/v1/servers/$SERVER_ID" >/dev/null \
             && ok "Destroyed Hetzner server $SERVER_ID" \
             || warn "Could not destroy server $SERVER_ID — check at hetzner.cloud"
+        ;;
+    aws)
+        aws ec2 terminate-instances \
+            --region "$AWS_REGION_E2E" --instance-ids "$SERVER_ID" >/dev/null \
+            && ok "Terminated EC2 instance $SERVER_ID" \
+            || warn "Could not terminate $SERVER_ID — check EC2 in $AWS_REGION_E2E"
         ;;
     *)
         err "Unknown provider in state file: $PROVIDER"
@@ -149,6 +173,12 @@ if [ -n "$SSH_KEY_ID" ]; then
                 "https://api.hetzner.cloud/v1/ssh_keys/$SSH_KEY_ID" >/dev/null \
                 && ok "Removed Hetzner SSH key $SSH_KEY_ID" \
                 || warn "Could not remove SSH key — clean up at hetzner.cloud/ssh-keys"
+            ;;
+        aws)
+            aws ec2 delete-key-pair \
+                --region "$AWS_REGION_E2E" --key-name "$SSH_KEY_ID" >/dev/null \
+                && ok "Removed EC2 key pair $SSH_KEY_ID" \
+                || warn "Could not remove EC2 key pair $SSH_KEY_ID"
             ;;
     esac
 fi

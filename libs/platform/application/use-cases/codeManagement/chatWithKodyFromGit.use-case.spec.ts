@@ -16,6 +16,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
         addReactionToComment: jest.Mock;
         getPullRequestReviewComment: jest.Mock;
         createResponseToComment: jest.Mock;
+        getCloneParams: jest.Mock;
     };
     let conversationAgentUseCase: {
         execute: jest.Mock;
@@ -25,6 +26,10 @@ describe('ChatWithKodyFromGitUseCase', () => {
     };
     let permissionValidationService: {
         validateExecutionPermissions: jest.Mock;
+    };
+    let leaseManager: {
+        acquire: jest.Mock;
+        release: jest.Mock;
     };
 
     beforeEach(() => {
@@ -42,6 +47,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
             addReactionToComment: jest.fn().mockResolvedValue(undefined),
             getPullRequestReviewComment: jest.fn().mockResolvedValue([]),
             createResponseToComment: jest.fn().mockResolvedValue({ id: 999 }),
+            getCloneParams: jest.fn().mockResolvedValue(undefined),
         };
         conversationAgentUseCase = {
             execute: jest.fn().mockResolvedValue('an answer'),
@@ -55,7 +61,7 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 .mockResolvedValue({ allowed: true }),
         };
 
-        const leaseManager = {
+        leaseManager = {
             acquire: jest.fn().mockResolvedValue({
                 sandbox: { type: 'null', remoteCommands: undefined },
                 leaseId: 'lease-test',
@@ -334,5 +340,229 @@ describe('ChatWithKodyFromGitUseCase', () => {
                 }),
             );
         });
+
+        it('continues with a null sandbox when sandbox creation fails', async () => {
+            permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+                {
+                    allowed: true,
+                    byokConfig: { main: { provider: 'anthropic' } },
+                },
+            );
+            leaseManager.acquire.mockRejectedValue(
+                new Error('git clone failed with 403'),
+            );
+
+            await useCase.execute(conversationPayload());
+
+            expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    sandbox: expect.objectContaining({ type: 'null' }),
+                }),
+            );
+            expect(leaseManager.release).not.toHaveBeenCalled();
+            expect(
+                codeManagementService.createResponseToComment,
+            ).toHaveBeenCalledWith(
+                expect.objectContaining({ body: 'an answer' }),
+            );
+        });
+    });
+
+    it('handles Bitbucket description as a structured content object', async () => {
+        const ORG_UUID = '11111111-1111-4111-8111-111111111111';
+        const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
+        codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValue(
+            {
+                integration: { organization: { uuid: ORG_UUID } },
+                team: { uuid: TEAM_UUID },
+            },
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            {
+                id: 123,
+                body: '@kody what changed?',
+                author: { username: 'alice' },
+            },
+        ]);
+        codeManagementService.createResponseToComment.mockResolvedValue({
+            id: 999,
+            parent: { id: 123 },
+        });
+        permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            { allowed: true },
+        );
+
+        await useCase.execute({
+            event: 'pullrequest:comment_created',
+            platformType: PlatformType.BITBUCKET,
+            payload: {
+                pullrequest: {
+                    id: 42,
+                    title: 'Add feature',
+                    description: {
+                        raw: 'Bitbucket description raw text',
+                        html: '<p>Bitbucket description raw text</p>',
+                        markup: 'markdown',
+                    },
+                    source: {
+                        branch: { name: 'feature' },
+                        repository: { full_name: 'acme/repo' },
+                    },
+                    destination: {
+                        branch: { name: 'main' },
+                        repository: { full_name: 'acme/repo' },
+                    },
+                },
+                comment: {
+                    id: 123,
+                    content: { raw: '@kody what changed?' },
+                    user: { nickname: 'alice' },
+                },
+                actor: { id: 'user-1', nickname: 'alice' },
+            },
+        } as any);
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    pullRequestDescription: 'Bitbucket description raw text',
+                }),
+            }),
+        );
+    });
+
+    it('uses GitLab path_with_namespace for sandbox clone params', async () => {
+        const ORG_UUID = '11111111-1111-4111-8111-111111111111';
+        const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
+        codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValue(
+            {
+                integration: { organization: { uuid: ORG_UUID } },
+                team: { uuid: TEAM_UUID },
+            },
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            {
+                id: 123,
+                body: '@kody what changed?',
+                discussionId: 'discussion-1',
+                author: { username: 'alice' },
+            },
+        ]);
+        codeManagementService.getCloneParams.mockResolvedValue({
+            url: 'https://gitlab.com/juniorsartori/kodex',
+            auth: { token: 'token' },
+        });
+        permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            { allowed: true },
+        );
+
+        await useCase.execute({
+            event: 'Note Hook',
+            platformType: PlatformType.GITLAB,
+            payload: {
+                object_attributes: {
+                    id: 123,
+                    note: '@kody what changed?',
+                    discussion_id: 'discussion-1',
+                    action: 'create',
+                },
+                project: {
+                    id: 77,
+                    name: 'kodex',
+                    namespace: 'Junior Sartori',
+                    path_with_namespace: 'juniorsartori/kodex',
+                    default_branch: 'main',
+                },
+                merge_request: {
+                    iid: 33,
+                    source_branch: 'feat/goals',
+                    target_branch: 'main',
+                    description: 'Description',
+                },
+                user: { id: 1, username: 'alice' },
+            },
+        } as any);
+
+        expect(codeManagementService.getCloneParams).toHaveBeenCalledWith(
+            expect.objectContaining({
+                repository: expect.objectContaining({
+                    fullName: 'juniorsartori/kodex',
+                }),
+            }),
+            PlatformType.GITLAB,
+        );
+    });
+
+    it('answers an @kody mention that starts a brand-new Azure DevOps thread (not a reply)', async () => {
+        // Regression test: getPullRequestReviewComment groups Azure comments
+        // by thread and puts everything AFTER the first comment into
+        // `.replies` — the thread's root comment lives on the thread object
+        // itself. getReviewThreadByCommentId used to only search `.replies`,
+        // so a brand-new `@kody <question>` (the root comment of a fresh
+        // thread, not a reply to an existing one) was never found and Kody
+        // silently never answered. Confirmed live against a real Azure
+        // DevOps PR: a single-comment thread's lone comment never got a
+        // reply.
+        const ORG_UUID = '11111111-1111-4111-8111-111111111111';
+        const TEAM_UUID = '22222222-2222-4222-8222-222222222222';
+        codeManagementService.findTeamAndOrganizationIdByConfigKey.mockResolvedValue(
+            {
+                integration: { organization: { uuid: ORG_UUID } },
+                team: { uuid: TEAM_UUID },
+            },
+        );
+        codeManagementService.getPullRequestReviewComment.mockResolvedValue([
+            {
+                id: 1,
+                threadId: 3239,
+                replies: [],
+                body: '@kody what does this pull request change?',
+                createdAt: '2026-08-18T18:19:00.000Z',
+                author: { id: 'author-1', name: 'alice' },
+            },
+        ]);
+        codeManagementService.updateResponseToComment = jest
+            .fn()
+            .mockResolvedValue({});
+        permissionValidationService.validateExecutionPermissions.mockResolvedValue(
+            { allowed: true },
+        );
+
+        await useCase.execute({
+            event: 'ms.vss-code.git-pullrequest-comment-event',
+            platformType: PlatformType.AZURE_REPOS,
+            payload: {
+                resource: {
+                    comment: {
+                        id: 1,
+                        content: '@kody what does this pull request change?',
+                        parentCommentId: 0,
+                        author: { displayName: 'alice', id: 'author-1' },
+                        _links: {
+                            threads: {
+                                href: 'https://dev.azure.com/org/proj/_apis/git/repositories/repo/pullRequests/55/threads/3239',
+                            },
+                        },
+                    },
+                    pullRequest: {
+                        pullRequestId: 55,
+                        repository: { id: 'repo-1', name: 'kodus-e2e' },
+                        sourceRefName: 'refs/heads/feature',
+                        targetRefName: 'refs/heads/main',
+                        description: 'PR description',
+                    },
+                    repository: { project: { name: 'kodus-e2e-project' } },
+                },
+                resourceContainers: { project: { id: 'project-1' } },
+            },
+        } as any);
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    userQuestion: '@kody what does this pull request change?',
+                }),
+            }),
+        );
     });
 });

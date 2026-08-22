@@ -229,6 +229,58 @@ const TRANSPORT_RETRIES = 5;
 const RATE_LIMIT_RETRIES = 6;
 const RETRY_AFTER_CAP_MS = 60_000;
 
+// GitHub does NOT use 429 for its rate limits — it answers 403 and puts the
+// reason in the headers. That is why the Retry-After handling above never
+// fired for GitHub: the matrix saw a bare 403, the runner classified it as
+// "quota exhausted", and SKIPPED the whole cell. On the 2026-08-07 release
+// gate that cost five P0 cells; the github×free and github×community-byok
+// columns executed nothing at all.
+//
+// Most of those are SECONDARY limits (content-creation bursts on the
+// abuse-flagged bot accounts), which GitHub asks us to retry within ~60s.
+// Waiting is strictly better than losing the coverage. PRIMARY limits reset
+// on the hour, which is NOT worth waiting for inside a job — those still
+// surface as the rate-limit error and skip.
+//
+// Cap: how long we are willing to sit still for quota. Anything beyond it is
+// reported rather than waited out.
+const GITHUB_QUOTA_WAIT_CAP_MS = Number(
+    process.env.E2E_GITHUB_QUOTA_WAIT_CAP_MS ?? 5 * 60_000,
+);
+
+/**
+ * Wait implied by a GitHub rate-limit response, or null when this is not a
+ * rate-limit response (a plain 403 for missing scopes must NOT be retried —
+ * it would turn a permission bug into a silent 5-minute stall).
+ */
+export function githubRateLimitWaitMs(
+    resp: Pick<HttpResponse<unknown>, "status" | "headers" | "raw">,
+    now: number = Date.now(),
+): number | null {
+    if (resp.status !== 403 && resp.status !== 429) return null;
+
+    const remaining = resp.headers.get("x-ratelimit-remaining");
+    const looksSecondary =
+        /secondary rate limit|abuse detection/i.test(resp.raw ?? "");
+    const looksPrimary = remaining === "0";
+    // A retry-after on a 403 is GitHub explicitly telling us to wait.
+    const retryAfter = resp.headers.get("retry-after");
+
+    if (!looksSecondary && !looksPrimary && !retryAfter) return null;
+
+    if (retryAfter) {
+        const secs = Number(retryAfter);
+        if (Number.isFinite(secs) && secs >= 0) return secs * 1_000;
+    }
+    const reset = resp.headers.get("x-ratelimit-reset");
+    if (reset) {
+        const resetMs = Number(reset) * 1_000;
+        if (Number.isFinite(resetMs)) return Math.max(0, resetMs - now);
+    }
+    // Secondary limit with no guidance: GitHub's documented advice is ~60s.
+    return looksSecondary ? 60_000 : null;
+}
+
 function retryAfterMs(resp: HttpResponse<unknown>, attempt: number): number {
     const header = resp.headers.get("retry-after");
     if (header) {
@@ -262,6 +314,27 @@ export async function http<T = unknown>(
                 await new Promise((r) => setTimeout(r, delay));
                 i--; // this loop turn didn't consume a transport retry
                 continue;
+            }
+            // GitHub's 403-shaped rate limits. Waiting out a short reset buys
+            // back a cell we would otherwise report as unverified; a long one
+            // (primary quota, resets hourly) is handed back to the caller so
+            // it surfaces as the rate-limit error and skips honestly.
+            if (resp.status === 403 && rateLimitHits < RATE_LIMIT_RETRIES) {
+                const wait = githubRateLimitWaitMs(resp);
+                if (wait !== null && wait <= GITHUB_QUOTA_WAIT_CAP_MS) {
+                    rateLimitHits++;
+                    log.info(
+                        `[http] GitHub rate limit on ${opts.method ?? "GET"} ${url} (${rateLimitHits}/${RATE_LIMIT_RETRIES}) — waiting ${Math.round(wait / 1000)}s for the reset instead of dropping the cell`,
+                    );
+                    await new Promise((r) => setTimeout(r, wait));
+                    i--;
+                    continue;
+                }
+                if (wait !== null) {
+                    log.info(
+                        `[http] GitHub rate limit on ${url} needs ${Math.round(wait / 1000)}s — beyond the ${Math.round(GITHUB_QUOTA_WAIT_CAP_MS / 1000)}s cap, surfacing instead of stalling the job`,
+                    );
+                }
             }
             return resp;
         } catch (err) {

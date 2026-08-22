@@ -364,6 +364,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             contextPack: context?.sharedContextPack as ContextPack | undefined,
             crossFileSnippets: context?.crossFileSnippets,
             memories: context?.codeReviewConfig?.kodyMemoryRules || [],
+            traceDecisions: context?.traceDecisions,
             documentationContext: context?.documentationContext || [],
         };
 

@@ -28,6 +28,7 @@ import {
 import { extractTaskContextFromToolResult } from './task-context/result-normalization';
 import { buildToolAliasKey } from './task-context/tool-aliases';
 import { buildTaskContextArgsCandidates } from './task-context/arg-building';
+import { resolveTaskContextSiteHints } from './task-context/site-resolution';
 import type {
     TaskContextHints,
     TaskContextReadParams,
@@ -87,6 +88,8 @@ interface AgentFallbackParams {
     params: TaskContextReadParams;
     providerType: string;
     candidateTools: string[];
+    /** Carries the resolved tenant, which params alone can't reproduce. */
+    hints: TaskContextHints;
     hooks?: TaskContextReadHooks;
     logger: ReturnType<typeof createLogger>;
 }
@@ -130,6 +133,22 @@ export async function fetchTaskContext(
         params.enableAgenticFallback !== false &&
         discovery.registeredTools.length > 0;
 
+    // Tenant-scoped tools (Atlassian's getJiraIssue et al) require a site id the
+    // PR text usually doesn't carry. Resolve it before args are built, otherwise
+    // those tools yield zero candidates and get skipped for the whole run.
+    const siteHints = await resolveTaskContextSiteHints({
+        toolCaller,
+        registeredTools: discovery.registeredTools,
+        organizationId: params.organizationId,
+        providerType,
+        logger,
+    });
+    // One representation per tenant: ids and urls from the resolver identify the
+    // same sites, so keeping both would probe every tenant twice.
+    hints.siteIds = siteHints.siteIds.length
+        ? siteHints.siteIds
+        : siteHints.siteUrls;
+
     const traces: CapabilityExecutionTrace[] = [];
 
     if (!discovery.orderedTools.length && !allowAgenticFallback) {
@@ -159,6 +178,7 @@ export async function fetchTaskContext(
             params,
             providerType,
             candidateTools: discovery.orderedTools,
+            hints,
             hooks,
             logger,
         });
@@ -225,6 +245,7 @@ export async function fetchTaskContext(
         params,
         providerType,
         candidateTools: discovery.orderedTools,
+        hints,
         hooks,
         logger,
     });
@@ -436,6 +457,7 @@ function resolveTaskContextHints(
             .join('\n'),
         urlHosts: [...urlHosts],
         siteUrls: [...siteUrls],
+        siteIds: [],
         resourceIds,
     };
 }
@@ -738,7 +760,7 @@ async function fetchTaskContextWithAgentFallback(
         };
     }
 
-    const hints = resolveTaskContextHints(input.params);
+    const hints = input.hints;
     const userLanguage =
         typeof input.params.userLanguage === 'string' &&
         input.params.userLanguage.trim().length > 0
@@ -755,9 +777,11 @@ KNOWN_TOKENS: ${[...hints.issueKeys, ...hints.issueLinks].join(', ') || '(none)'
 KNOWN_ISSUE_NUMBERS: ${hints.issueNumbers.join(', ') || '(none)'}
 KNOWN_REPOSITORY_OWNER: ${input.params.repositoryOwner ?? '(unknown)'}
 KNOWN_REPOSITORY_NAME: ${input.params.repositoryName ?? '(unknown)'}
+KNOWN_SITE_IDS: ${hints.siteIds.join(', ') || '(none)'}
 USER_LANGUAGE: ${userLanguage}
 
 When calling tools that require repository data, prioritize KNOWN_REPOSITORY_OWNER and KNOWN_REPOSITORY_NAME.
+When a tool requires a tenant/site/cloud identifier, use a value from KNOWN_SITE_IDS. Never invent one; if it is (none), prefer a tool that does not require it.
 
 Return ONLY JSON:
 {
@@ -897,6 +921,12 @@ function orderCandidateTools(params: {
         ordered.push(tool);
     };
 
+    // A seed is a curated precision order (getJiraIssue before the generic
+    // search); learning can only observe "returned something", so a broad tool
+    // that always answers would otherwise outrank the precise one forever.
+    if (params.seededTools.length) {
+        params.seededTools.forEach(pushIfCandidate);
+    }
     pushIfCandidate(params.preferredTool);
     params.cachedTools.forEach(pushIfCandidate);
     params.seededTools.forEach(pushIfCandidate);

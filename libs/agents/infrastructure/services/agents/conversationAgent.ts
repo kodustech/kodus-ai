@@ -26,6 +26,7 @@ import { ObservabilityService } from '@libs/core/log/observability.service';
 import { resolveAgentModel } from '@libs/llm/agent-model';
 import { createAgentRunContext } from '@libs/llm/agent-run-context';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
+import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
@@ -143,7 +144,9 @@ export class ConversationAgentProvider {
         // that only accept their own value (e.g. kimi-k2.7-code wants 1).
         // `temperature` is passed through only when configured; omitting it lets
         // the provider use its valid default.
-        const temperature = byokConfig?.main?.temperature;
+        // Withheld entirely on Anthropic 4.7+, which removed sampling params
+        // and 400s the whole request when one is present.
+        const temperature = resolveByokTemperature(byokConfig?.main);
         const maxOutputTokens =
             byokConfig?.main?.maxOutputTokens ?? this.defaultLLMConfig.maxTokens;
 

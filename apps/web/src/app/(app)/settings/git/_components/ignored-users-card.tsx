@@ -75,19 +75,30 @@ export const IgnoredUsersCard = ({
         ResourceType.GitSettings,
     );
 
+    // Always merge into the stored config: it also carries the auto-revoke
+    // settings, the pending-revocation timers written by the cron, and the
+    // record of which bots were auto-ignored. Replacing it wholesale drops
+    // them and lets an ignored bot be seeded back on the next discovery run.
+    const saveAutoAssignConfig = (
+        patch: Partial<OrganizationParametersAutoAssignConfig>,
+    ) =>
+        createOrUpdateOrganizationParameter(
+            OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
+            {
+                enabled: false,
+                ignoredUsers: [],
+                ...autoLicenseAssignmentConfig,
+                ...patch,
+            },
+        );
+
     const [handleIgnoredUsersChange, { loading: isSavingIgnoredUsers }] =
         useAsyncAction(async () => {
             try {
-                await createOrUpdateOrganizationParameter(
-                    OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
-                    {
-                        enabled: autoLicenseAssignmentConfig?.enabled ?? false,
-                        ignoredUsers:
-                            mode === "ignore" ? pendingIgnoredUsers : [],
-                        allowedUsers:
-                            mode === "allow" ? pendingAllowedUsers : [],
-                    },
-                );
+                await saveAutoAssignConfig({
+                    ignoredUsers: mode === "ignore" ? pendingIgnoredUsers : [],
+                    allowedUsers: mode === "allow" ? pendingAllowedUsers : [],
+                });
 
                 toast({
                     variant: "success",
@@ -107,14 +118,10 @@ export const IgnoredUsersCard = ({
     const [handleResetFilters, { loading: isResettingFilters }] =
         useAsyncAction(async () => {
             try {
-                await createOrUpdateOrganizationParameter(
-                    OrganizationParametersConfigKey.AUTO_LICENSE_ASSIGNMENT,
-                    {
-                        enabled: autoLicenseAssignmentConfig?.enabled ?? false,
-                        ignoredUsers: [],
-                        allowedUsers: [],
-                    },
-                );
+                await saveAutoAssignConfig({
+                    ignoredUsers: [],
+                    allowedUsers: [],
+                });
 
                 setPendingIgnoredUsers([]);
                 setPendingAllowedUsers([]);
