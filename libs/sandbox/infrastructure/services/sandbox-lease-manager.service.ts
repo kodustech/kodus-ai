@@ -781,8 +781,15 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 this.leaseIdToPrKey.set(leaseId, prKey);
                 return { sandbox, leaseId, sandboxId, wasCreated: false };
             }
-            // Local provider but dir is gone/host-remote: force cold-create instead of
-            // silently degrading to NULL sandbox when no E2B key is configured.
+            // Local provider but dir is gone or on another host.
+            // Check if other workers hold this lease before deleting DB lease.
+            const doc = await this.leaseRepo.findByPrKey(prKey);
+            if (doc && doc.leaseCount > 1) {
+                await this.leaseRepo.decrementLease(prKey);
+                throw new Error(
+                    `SandboxLeaseManager: local sandbox directory "${sandboxId}" is missing on this host for prKey="${prKey}", but lease has active holders (leaseCount=${doc.leaseCount})`,
+                );
+            }
             throw new SandboxStaleConnectionError(prKey, sandboxId);
         }
 
