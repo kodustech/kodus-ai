@@ -505,9 +505,11 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         },
                         // First DELIVERED (sent) suggestion — deep-link target for
                         // the PR-list count (?file=...&suggestion=...). $unwind
-                        // preserves file/suggestion order, so the first pushed
-                        // entry is the earliest sent finding; $$REMOVE skips
-                        // non-sent rows.
+                        // preserves arrival order through the $push, so we keep
+                        // every sent row and pick the earliest one in the mapper
+                        // below; $REMOVE would store a null (not skip) in a $group
+                        // $push accumulator, so non-sent rows are pushed as null
+                        // and filtered out instead.
                         firstSent: {
                             $push: {
                                 $cond: [
@@ -539,7 +541,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                         id: '$files.suggestions.id',
                                         filePath: '$files.path',
                                     },
-                                    '$$REMOVE',
+                                    null,
                                 ],
                             },
                         },
@@ -565,7 +567,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         umedium: 1,
                         ulow: 1,
                         categories: 1,
-                        firstSent: 1,
+                        firstSent: { $slice: ['$firstSent', 1] },
                     },
                 },
             ])
@@ -599,8 +601,8 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                       )
                     : [],
                 firstSentSuggestion:
-                    Array.isArray(row.firstSent) && row.firstSent.length > 0
-                        ? row.firstSent[0]
+                    Array.isArray(row.firstSent)
+                        ? (row.firstSent.filter(Boolean)[0] ?? null)
                         : null,
             });
         }
