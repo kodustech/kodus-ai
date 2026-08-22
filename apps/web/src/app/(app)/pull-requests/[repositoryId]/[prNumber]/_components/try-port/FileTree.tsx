@@ -98,7 +98,7 @@ export function FileTree({
                             {prRef}
                         </p>
                     )}
-                    <p className="shrink-0 text-[10px] tracking-wider text-[var(--text-dim)] uppercase">
+                    <p className="shrink-0 text-3xs tracking-wider text-[var(--text-dim)] uppercase">
                         {files.length} file{files.length === 1 ? "" : "s"}
                     </p>
                 </div>
@@ -136,7 +136,7 @@ export function FileTree({
                     )}
                 </div>
             </header>
-            <div className="py-1.5 text-[13px] select-none">
+            <div className="py-1.5 text-review select-none">
                 {grouped ? (
                     <CohortView
                         files={files}
@@ -282,11 +282,11 @@ function FileRow({
                 {children}
             </span>
             {count > 0 && (
-                <span className="shrink-0 rounded bg-[var(--yellow)]/15 px-1.5 py-px text-[10px] font-semibold text-[var(--yellow)]">
+                <span className="shrink-0 rounded bg-[var(--yellow)]/15 px-1.5 py-px text-3xs font-semibold text-[var(--yellow)]">
                     {count}
                 </span>
             )}
-            <span className="shrink-0 font-mono text-[11px]">
+            <span className="shrink-0 font-mono text-2xs">
                 <span className="text-[var(--green)]">+{file.additions}</span>{" "}
                 <span className="text-[var(--red)]">−{file.deletions}</span>
             </span>
@@ -322,13 +322,13 @@ function CohortView({
                     <div
                         className="flex items-center gap-2 border-t border-[var(--border)] bg-[var(--bg)]/60 px-2.5 py-1 first:border-t-0"
                         title={cohort.meta.hint}>
-                        <span className="truncate text-[10px] font-semibold tracking-wider text-[var(--text-muted)] uppercase">
+                        <span className="truncate text-3xs font-semibold tracking-wider text-[var(--text-muted)] uppercase">
                             {cohort.meta.label}
                         </span>
-                        <span className="shrink-0 text-[10px] text-[var(--text-dim)]">
+                        <span className="shrink-0 text-3xs text-[var(--text-dim)]">
                             {cohort.files.length}
                         </span>
-                        <span className="ml-auto shrink-0 font-mono text-[11px]">
+                        <span className="ml-auto shrink-0 font-mono text-2xs">
                             <span className="text-[var(--green)]">
                                 +{cohort.additions}
                             </span>{" "}

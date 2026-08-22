@@ -1,28 +1,28 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { Textarea } from "@components/ui/textarea";
 import { toast } from "@components/ui/toaster/use-toast";
-import type { LLMConfigStatus } from "@services/organizationParameters/fetch";
 import {
     createOrUpdateOrganizationParameter,
     testBYOK,
+    type LLMConfigStatus,
     type TestBYOKResult,
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { PlugIcon, PlusIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
 import { useCatalog } from "../../_data/catalog-context";
 import type {
-    BYOKConnectInput,
     BYOKConfig,
+    BYOKConnectInput,
     BYOKCredential,
     BYOKModelConfig,
 } from "../../_types";
@@ -112,9 +112,15 @@ export const ModelsTab = ({
 
     // ── add model / add provider (dedup key by provider) ──────────────────────
     const connectedKeyByProvider: Record<string, string> = {};
+    // Models connected per provider — surfaced on the connect grid's "Connected"
+    // card ("Connected · N models"). Summed across a provider's credentials.
+    const connectedModelCountByProvider: Record<string, number> = {};
     for (const group of groupModelsByProvider(config)) {
         connectedKeyByProvider[group.credential.provider] =
             group.credential.apiKey ?? "••••";
+        connectedModelCountByProvider[group.credential.provider] =
+            (connectedModelCountByProvider[group.credential.provider] ?? 0) +
+            group.models.length;
     }
 
     const saveAdd = async (cfg: BYOKConnectInput) => {
@@ -124,33 +130,29 @@ export const ModelsTab = ({
         const name = displayNameFor(cfg.model);
         const blob = existingCred
             ? buildByokBlob(config, {
-                  kind: "add-existing-provider",
-                  credentialId: existingCred.id,
-                  model: modelFieldsFromConfig(cfg),
-              })
+                kind: "add-existing-provider",
+                credentialId: existingCred.id,
+                model: modelFieldsFromConfig(cfg),
+            })
             : buildByokBlob(config, {
-                  kind: "add-new-provider",
-                  newCredential: {
-                      provider: cfg.provider,
-                      apiKey: cfg.apiKey,
-                      settings: credentialSettingsFromConfig(cfg),
-                  },
-                  model: modelFieldsFromConfig(cfg),
-              });
+                kind: "add-new-provider",
+                newCredential: {
+                    provider: cfg.provider,
+                    apiKey: cfg.apiKey,
+                    settings: credentialSettingsFromConfig(cfg),
+                },
+                model: modelFieldsFromConfig(cfg),
+            });
         await persist(blob, `${name} added`);
     };
 
     // ── per-model edit (uiFields form) ────────────────────────────────────────
     const openEdit = (model: BYOKModelConfig, credential: BYOKCredential) => {
-        const curated = catalog.find(
-            (m) => m.id === model.model,
-        );
+        const curated = catalog.find((m) => m.id === model.model);
         if (!curated || !curatedProviders.has(credential.provider)) {
             // Non-curated model: the manual form edits it in place (pre-filled
             // via ?model=<id>), not a blank "add" form.
-            router.push(
-                `/byok/manual?model=${encodeURIComponent(model.id)}`,
-            );
+            router.push(`/byok/manual?model=${encodeURIComponent(model.id)}`);
             return;
         }
         setView({ mode: "edit", model, credential });
@@ -180,6 +182,7 @@ export const ModelsTab = ({
         return (
             <ConnectProviderFlow
                 existingKeyByProvider={connectedKeyByProvider}
+                connectedModelCountByProvider={connectedModelCountByProvider}
                 lockedProvider={view.provider}
                 onSave={saveAdd}
                 onCancel={() => setView({ mode: "list" })}
@@ -212,9 +215,7 @@ export const ModelsTab = ({
 
     // ── view: per-model edit ──────────────────────────────────────────────────
     if (view.mode === "edit") {
-        const curated = catalog.find(
-            (m) => m.id === view.model.model,
-        )!;
+        const curated = catalog.find((m) => m.id === view.model.model)!;
         const settings = (view.credential.settings ?? {}) as Record<
             string,
             unknown
@@ -381,8 +382,8 @@ function RotatePanel({
                 baseURL.trim()
                     ? { ...settings, baseURL: baseURL.trim() }
                     : Object.keys(settings).length > 0
-                      ? settings
-                      : undefined;
+                        ? settings
+                        : undefined;
             await onSave(apiKey, nextSettings);
         } finally {
             setIsSaving(false);
@@ -397,8 +398,8 @@ function RotatePanel({
                     <span className="font-mono">
                         {maskKey(credential.apiKey)}
                     </span>
-                    ). Paste a new one to replace it — or leave blank to keep the
-                    current key while you change the endpoint.
+                    ). Paste a new one to replace it — or leave blank to keep
+                    the current key while you change the endpoint.
                 </AlertDescription>
             </Alert>
 

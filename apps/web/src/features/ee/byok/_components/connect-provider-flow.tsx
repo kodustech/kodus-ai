@@ -8,7 +8,7 @@ import {
     listByokProviders,
     type ByokProviderDescriptor,
 } from "@services/organizationParameters/fetch";
-import { CheckCircle2Icon, LinkIcon } from "lucide-react";
+import { ArrowLeftIcon, CheckCircle2Icon, LinkIcon } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { useCatalog } from "../_data/catalog-context";
@@ -136,11 +136,15 @@ const isCustomProvider = (id: string): boolean =>
 function ProviderGridCard({
     provider,
     connected,
+    connectedCount,
     onPick,
 }: {
     provider: ProviderChoice;
     /** The org already has a stored (non-managed) key for this provider. */
     connected?: boolean;
+    /** How many models the org has ACTUALLY connected on this provider (not the
+     *  catalog size) — shown next to "Connected" as a fact, not a promise. */
+    connectedCount?: number;
     onPick: (p: ProviderChoice) => void;
 }) {
     // No curated models AND not auto-listable ⇒ a custom endpoint the user must
@@ -160,15 +164,22 @@ function ProviderGridCard({
                 <span className="text-text-primary line-clamp-2 text-sm leading-tight font-semibold">
                     {provider.label}
                 </span>
-                {/* Model COUNT dropped — there's no per-provider model list to
-                    preview anymore (you go straight to the Add-a-model form), so a
-                    count reads as a promise the flow no longer makes. When a key is
-                    already stored we say so (you're adding another model, reusing
-                    it); otherwise only the "custom endpoint" hint stays. */}
+                {/* Catalog COUNT stays dropped — there's no per-provider model
+                    list to preview (you go straight to the Add-a-model form), so a
+                    catalog count reads as a promise the flow no longer makes. But
+                    once a key is stored we show how many models are ACTUALLY
+                    connected next to "Connected" (a fact); otherwise only the
+                    "custom endpoint" hint stays. */}
                 {connected ? (
                     <span className="text-success flex items-center gap-1 text-xs">
                         <CheckCircle2Icon size={11} className="shrink-0" />
                         Connected
+                        {connectedCount && connectedCount > 0 ? (
+                            <span className="text-text-tertiary">
+                                · {connectedCount}{" "}
+                                {connectedCount === 1 ? "model" : "models"}
+                            </span>
+                        ) : null}
                     </span>
                 ) : (
                     needsEndpoint && (
@@ -201,6 +212,7 @@ function ProviderGridCard({
  */
 export function ConnectProviderFlow({
     existingKeyByProvider = {},
+    connectedModelCountByProvider = {},
     lockedProvider,
     onSave,
     onCancel,
@@ -208,6 +220,9 @@ export function ConnectProviderFlow({
     footer,
 }: {
     existingKeyByProvider?: Partial<Record<string, string>>;
+    /** Provider id → number of models the org has connected on it, so a
+     *  connected card can read "Connected · N models". */
+    connectedModelCountByProvider?: Partial<Record<string, number>>;
     lockedProvider?: string;
     onSave: (cfg: BYOKConnectInput) => Promise<void>;
     onCancel?: () => void;
@@ -298,6 +313,15 @@ export function ConnectProviderFlow({
     );
     const isConnected = (p: ProviderChoice) =>
         connectedIds.has(normalizeId(p.id));
+    // Connected-model counts, normalized so id variants (open_router/openrouter)
+    // resolve to the same grid card.
+    const connectedCountByNorm = new Map<string, number>();
+    for (const [prov, count] of Object.entries(connectedModelCountByProvider)) {
+        if (typeof count === "number")
+            connectedCountByNorm.set(normalizeId(prov), count);
+    }
+    const connectedCountOf = (p: ProviderChoice) =>
+        connectedCountByNorm.get(normalizeId(p.id));
 
     return (
         <Card
@@ -308,6 +332,22 @@ export function ConnectProviderFlow({
                     "flex flex-col items-center gap-5",
                     hero ? "px-6 py-10 text-center" : "p-5",
                 )}>
+                {/* Breadcrumb back — the grid is reached from "Add another
+                    provider"; the top-left arrow returns to the connected list
+                    (matches the manual form's back affordance). Hidden on the
+                    first-run hero, which has no list to go back to. */}
+                {onCancel && !hero && (
+                    <div className="flex w-full">
+                        <Button
+                            type="button"
+                            size="icon-xs"
+                            variant="cancel"
+                            aria-label="Back"
+                            onClick={onCancel}>
+                            <ArrowLeftIcon />
+                        </Button>
+                    </div>
+                )}
                 {hero}
 
                 <div className="flex w-full flex-col gap-6 text-left">
@@ -322,6 +362,7 @@ export function ConnectProviderFlow({
                                         key={p.id}
                                         provider={p}
                                         connected={isConnected(p)}
+                                        connectedCount={connectedCountOf(p)}
                                         onPick={onPickProvider}
                                     />
                                 ))}
@@ -340,6 +381,7 @@ export function ConnectProviderFlow({
                                         key={p.id}
                                         provider={p}
                                         connected={isConnected(p)}
+                                        connectedCount={connectedCountOf(p)}
                                         onPick={onPickProvider}
                                     />
                                 ))}

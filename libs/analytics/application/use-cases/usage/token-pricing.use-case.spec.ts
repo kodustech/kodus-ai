@@ -301,6 +301,52 @@ describe('TokenPricingUseCase', () => {
         expect(info.pricing.output.default).toBe(0);
     });
 
+    // Fix A: last-known-good — a fetch failure AFTER a prior successful fetch
+    // (i.e. the cache expired and the upstream blipped) must keep pricing from
+    // the in-memory copy, not degrade every priced model to $0.
+    it('serves the last-known-good catalog when models.dev fails after cache expiry', async () => {
+        mockCatalogs();
+        const first = await useCase.execute('kimi-k2.6');
+        expect(first.pricing.input.default).toBeCloseTo(0.929e-6, 12);
+
+        // Cache now misses (24h TTL elapsed) AND the upstream is down.
+        cache.getFromCache.mockResolvedValue(null);
+        mockedAxios.get.mockImplementation(async (url: string) => {
+            if (url === MODELS_DEV_URL) throw new Error('models.dev down');
+            if (url === LITELLM_URL) return { data: liteLLMFixture };
+            throw new Error(`Unexpected URL ${url}`);
+        });
+
+        const second = await useCase.execute('kimi-k2.6');
+        // Still priced from the last-known-good, not unpriced.
+        expect(second.pricing.input.default).toBeCloseTo(0.929e-6, 12);
+    });
+
+    // Fix B: the prefix fallback must NOT price a bare family stem with no
+    // version signal — `gemini` would otherwise land on the shortest `gemini-*`
+    // variant and show a wrong number. Unpriced (all-zero) is the correct,
+    // overridable outcome.
+    it('does NOT price a bare family stem (no version) via the prefix fallback', async () => {
+        mockCatalogs();
+
+        const info = await useCase.execute('gemini');
+
+        expect(info.pricing.input.default).toBe(0);
+        expect(info.pricing.output.default).toBe(0);
+    });
+
+    // Fix B: a SPECIFIC versioned id still resolves via the prefix fallback —
+    // `deepseek-v4-flash` (a real BYOK config id) lands on the catalog's
+    // `deepseek-v4-flash-0731`. The digit in the query is the version signal.
+    it('still prices a versioned id missing its suffix via the prefix fallback', async () => {
+        mockCatalogs();
+
+        const info = await useCase.execute('deepseek-v4-flash');
+
+        expect(info.pricing.input.default).toBeCloseTo(0.13e-6, 12);
+        expect(info.pricing.output.default).toBeCloseTo(0.28e-6, 12);
+    });
+
     it('fetches each catalog at most once thanks to the cache', async () => {
         mockCatalogs();
 

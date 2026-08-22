@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@components/ui/button";
 import { Calendar } from "@components/ui/calendar";
@@ -42,47 +42,56 @@ type DateRangeString = { from: string; to: string };
 const dateToString = (date: Date) => formatDate(date, "yyyy-MM-dd");
 const stringToDate = (date: string) => new Date(parseISO(date));
 
-const today = new Date();
-const ranges = [
-    {
-        label: "Last week",
-        range: {
-            from: dateToString(subWeeks(today, 1)),
-            to: dateToString(today),
+/**
+ * Built on demand rather than once at module scope.
+ *
+ * These presets are all relative to "today", and a module-level `new Date()`
+ * freezes that at the moment the chunk loads. A dashboard left open across
+ * midnight would then offer ranges that end yesterday — hiding the current
+ * day's pull requests — and stop matching the saved range, so the trigger
+ * would fall back to raw dates instead of the preset's name.
+ */
+const buildRanges = (today = new Date()) =>
+    [
+        {
+            label: "Last week",
+            range: {
+                from: dateToString(subWeeks(today, 1)),
+                to: dateToString(today),
+            },
         },
-    },
-    {
-        label: "Last 15 days",
-        range: {
-            from: dateToString(subDays(today, 15)),
-            to: dateToString(today),
+        {
+            label: "Last 15 days",
+            range: {
+                from: dateToString(subDays(today, 15)),
+                to: dateToString(today),
+            },
         },
-    },
-    {
-        label: "Last month",
-        range: {
-            from: dateToString(subMonths(today, 1)),
-            to: dateToString(today),
+        {
+            label: "Last month",
+            range: {
+                from: dateToString(subMonths(today, 1)),
+                to: dateToString(today),
+            },
         },
-    },
-    {
-        label: "Last 3 months",
-        range: {
-            from: dateToString(subMonths(today, 3)),
-            to: dateToString(today),
+        {
+            label: "Last 3 months",
+            range: {
+                from: dateToString(subMonths(today, 3)),
+                to: dateToString(today),
+            },
         },
-    },
-] satisfies Array<{
-    label: string;
-    range: {
-        from: string | undefined;
-        to: string | undefined;
-    };
-}>;
+    ] satisfies Array<{
+        label: string;
+        range: {
+            from: string | undefined;
+            to: string | undefined;
+        };
+    }>;
 
 // "Last 15 days" is the default window across the cockpit / token-usage / BYOK
 // cost — kept in sync with getSelectedDateRange()'s server-side default.
-const defaultItem = ranges[1];
+const DEFAULT_RANGE_INDEX = 1;
 
 export const DateRangePicker = ({
     cookieValue,
@@ -94,6 +103,13 @@ export const DateRangePicker = ({
     const searchParams = useSearchParams();
     const [loading, startTransition] = useTransition();
     const [open, setOpen] = useState(false);
+
+    // Recomputed whenever the popover opens, so the presets — and the upper
+    // bound on the calendar — are relative to the day the user is actually
+    // looking at them.
+    const today = useMemo(() => new Date(), [open]);
+    const ranges = useMemo(() => buildRanges(today), [today]);
+    const defaultItem = ranges[DEFAULT_RANGE_INDEX];
 
     const [selectedRange, setSelectedRange] = useState<DateRangeString>(() => {
         // URL wins: keep the trigger label in sync with a shared link.
@@ -214,9 +230,7 @@ export const DateRangePicker = ({
                         variant="helper"
                         leftIcon={<CalendarIcon />}
                         className="w-68 justify-start">
-                        {label ? (
-                            label
-                        ) : (
+                        {label || (
                             <span className="flex items-center gap-1 font-semibold">
                                 {selectedRange?.from ? (
                                     selectedRange.to ? (
@@ -252,13 +266,13 @@ export const DateRangePicker = ({
                             deferred && pendingRange
                                 ? pendingRange
                                 : {
-                                      from: selectedRange?.from
-                                          ? stringToDate(selectedRange.from)
-                                          : undefined,
-                                      to: selectedRange?.to
-                                          ? stringToDate(selectedRange.to)
-                                          : undefined,
-                                  }
+                                    from: selectedRange?.from
+                                        ? stringToDate(selectedRange.from)
+                                        : undefined,
+                                    to: selectedRange?.to
+                                        ? stringToDate(selectedRange.to)
+                                        : undefined,
+                                }
                         }
                         // Deferred mode: a click on a complete range starts a
                         // fresh pick ({from, to: undefined}) instead of moving
@@ -283,8 +297,8 @@ export const DateRangePicker = ({
                                 to: d?.to
                                     ? dateToString(d?.to)
                                     : d?.from
-                                      ? dateToString(d.from)
-                                      : defaultItem.range.to,
+                                        ? dateToString(d.from)
+                                        : defaultItem.range.to,
                             };
 
                             setOpen(false);

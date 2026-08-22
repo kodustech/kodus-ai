@@ -633,7 +633,7 @@ function FileTreeRail({
                 </svg>
             </span>
             <span
-                className="font-mono text-[10px] tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
+                className="font-mono text-3xs tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
                 style={{
                     writingMode: "vertical-rl",
                     transform: "rotate(180deg)",

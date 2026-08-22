@@ -377,6 +377,16 @@
 
     --radius-lg: 8px;
     --radius-md: 6px;
+    /* Two steps below Tailwind's text-xs floor (12px). The review surface is
+       dense by design and needs them; without a name they are forced to be
+       arbitrary literals scattered across files. */
+    --text-3xs: 10px;
+    --text-2xs: 11px;
+
+    /* The review surface reads between the dense metadata (12px) and ordinary
+       body (14px). Named by the surface it belongs to rather than by size,
+       because it is a scoped exception and not a general step. */
+    --text-review: 13px;
     --radius-sm: 4px;
 
     --animate-collapsible-down: collapsible-down 0.2s ease-out;
@@ -518,4 +528,58 @@ body {
 .field-highlight {
     animation: field-highlight-pulse 0.6s ease-in-out 3;
     border-radius: 8px;
+}
+
+/* Reduced motion.
+
+   Deliberately not a blanket kill. A global `animation: none` would also erase
+   the feedback these animations carry, so each one is replaced by an
+   alternative that keeps its signal and drops only the movement:
+
+   - Entrances (fade-up / fade-in-up) exist to soften arrival. Under reduce the
+     content is simply already there.
+   - The skeleton wave is the only infinite motion in the app. It stops, and the
+     placeholder holds a flat mid-tone — the block's shape is what says
+     "loading"; the sweep was decoration on top of that.
+   - Accordion and collapsible are state changes whose real signal is the
+     content appearing or disappearing, not the height easing, so they resolve
+     immediately.
+   - field-highlight tells the user which field was jumped to. Killing the pulse
+     would drop the affordance entirely, so it becomes a ring that stays put
+     instead of one that blinks three times.
+
+   Colour, brightness and ring transitions are intentionally preserved: they are
+   short filter changes rather than movement, and they carry every hover, focus,
+   active and disabled state in this system. */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --animate-collapsible-down: collapsible-down 1ms linear;
+        --animate-collapsible-up: collapsible-up 1ms linear;
+        --animate-accordion-down: accordion-down 1ms linear;
+        --animate-accordion-up: accordion-up 1ms linear;
+        --animate-fade-in-up: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+        /* Keep the light-based idiom; drop anything that moves or resizes
+           (transform, grid-template-columns, height, width). */
+        transition-property:
+            color, background-color, border-color, box-shadow, filter, opacity !important;
+    }
+
+    .fade-up {
+        animation: none;
+    }
+
+    .kodus-skeleton {
+        animation: none;
+        background: var(--bg-3);
+    }
+
+    .field-highlight {
+        animation: none;
+        box-shadow: 0 0 0 3px var(--color-primary-light);
+    }
 }

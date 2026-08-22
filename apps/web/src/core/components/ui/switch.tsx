@@ -14,7 +14,7 @@ const switchVariants = cva(
         "switch-checked:bg-primary-light",
         "switch-unchecked:bg-text-placeholder/50",
         "switch-disabled:bg-text-placeholder/50 switch-disabled:cursor-not-allowed",
-        "switch-focused:ring-3 switch-focused:ring-card-lv3",
+        "switch-focused:ring-3 switch-focused:ring-ring",
         "switch-hover:brightness-120",
         "switch-loading:cursor-wait!",
     ),
@@ -37,15 +37,22 @@ const Switch = React.forwardRef<
         loading?: boolean;
         decorative?: boolean;
     } & VariantProps<typeof switchVariants>
->(({ className, disabled, size, loading, ...props }, ref) => (
+>(({ className, disabled, size, loading, decorative, ...props }, ref) => (
     <SwitchPrimitives.Root
         ref={ref}
         className={cn(
             switchVariants({ size }),
-            props.decorative && "pointer-events-none",
+            decorative && "pointer-events-none",
             className,
         )}
         {...props}
+        // A decorative switch is a picture of state, not the control for it:
+        // something else (usually the card wrapping it) owns the click. Radix
+        // still renders a focusable `role="switch"`, so without this it becomes
+        // a tab stop that does nothing and announces itself with no name.
+        // `decorative` is destructured rather than spread so it stops leaking
+        // into the DOM as an unknown attribute.
+        {...(decorative && { "aria-hidden": true, "tabIndex": -1 })}
         disabled={disabled || loading}
         {...(loading && { "data-loading": true })}
         asChild>

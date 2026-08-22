@@ -131,7 +131,7 @@ export const PrDataTable = ({
             <div
                 className={cn(
                     PR_ROW_GRID,
-                    "border-card-lv3/40 bg-card-lv1/95 text-text-secondary sticky top-0 z-10 border-b px-5 py-2.5 text-[0.6875rem] font-medium tracking-wide uppercase backdrop-blur",
+                    "border-card-lv3/40 bg-card-lv1/95 text-text-secondary sticky top-0 z-10 border-b px-5 py-2.5 text-2xs font-medium tracking-wide uppercase backdrop-blur",
                 )}>
                 {/* Column explanations. side="bottom" opens into the list (the
                     header sits at the top of the scroll container); the shared

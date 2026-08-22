@@ -185,7 +185,7 @@ export function DiffViewer({
                             <p className="text-xs text-red-400">
                                 Failed to load file diff
                             </p>
-                            <p className="text-text-tertiary mt-1 text-[10px]">
+                            <p className="text-text-tertiary mt-1 text-3xs">
                                 {patchesError.message}
                             </p>
                         </div>

@@ -331,7 +331,7 @@ const FileBlock = memo(function FileBlock({
                                 {baseOf(file.path)}
                             </span>
                         </p>
-                        <p className="text-[11px] text-[var(--text-dim)] mt-0.5">
+                        <p className="text-2xs text-[var(--text-dim)] mt-0.5">
                             <FileStatusBadge status={file.status} />
                         </p>
                     </div>
@@ -412,7 +412,7 @@ function FileStatusBadge({ status }: { status: DiffFile["status"] }) {
                 ? "renamed"
                 : "modified";
     return (
-        <span className="text-[10px] uppercase tracking-wider font-semibold text-[var(--text-dim)]">
+        <span className="text-3xs uppercase tracking-wider font-semibold text-[var(--text-dim)]">
             {label}
         </span>
     );

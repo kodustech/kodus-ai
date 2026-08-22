@@ -119,7 +119,7 @@ export const GetStartedChecklist = () => {
                         className="group h-full overflow-visible text-black"
                         leftIcon={
                             <div className="-mr-2 -mb-0.5 -ml-3 size-11">
-                                <Image src="/assets/images/kody/look-right.png" />
+                                <Image alt="" src="/assets/images/kody/look-right.png" />
                             </div>
                         }
                         rightIcon={
@@ -150,7 +150,7 @@ export const GetStartedChecklist = () => {
                         </div>
 
                         <div className="absolute -right-1 -bottom-3 size-14">
-                            <Image src="/assets/images/kody/look-left-with-paws.png" />
+                            <Image alt="" src="/assets/images/kody/look-left-with-paws.png" />
                         </div>
                     </div>
 

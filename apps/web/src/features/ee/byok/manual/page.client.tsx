@@ -117,6 +117,17 @@ export function ByokManualPageClient({
               (c) => !c.managed && c.provider === lockedProvider,
           )
         : undefined;
+    // The endpoint the stored credential already points at — so ADDING a model
+    // to a connected custom-endpoint provider shows the URL its models actually
+    // hit (mirroring the reused key), instead of a blank Base URL field.
+    const storedSettings = (storedCred?.settings ?? {}) as Record<
+        string,
+        unknown
+    >;
+    const storedBaseURL =
+        typeof storedSettings.baseURL === "string"
+            ? storedSettings.baseURL
+            : undefined;
     // The key counts as "already stored" when editing, or when adding a model to
     // a provider that already has a non-managed credential.
     const keyIsStored = isEditing || !!storedCred;
@@ -150,6 +161,13 @@ export function ByokManualPageClient({
                       : undefined,
           }
         : null;
+
+    // Endpoint currently in effect for this provider: the edited model's, or the
+    // stored credential's when adding a model to a connected one. Feeds BOTH the
+    // pre-filled Base URL field and the "did the user change the endpoint?" check
+    // (so pre-filling the stored URL never reads as a change and wrongly forces
+    // the re-auth probe).
+    const currentBaseURL = existingConfig?.baseURL ?? storedBaseURL;
 
     // Models already enabled on this provider — hidden from the "Add model"
     // dropdown so it never offers a duplicate. The currently-edited model stays
@@ -187,7 +205,7 @@ export function ByokManualPageClient({
         defaultValues: {
             provider: existingConfig?.provider ?? lockedProvider,
             model: existingConfig?.model,
-            baseURL: existingConfig?.baseURL,
+            baseURL: currentBaseURL,
             apiKey: "",
             temperature: existingConfig?.temperature ?? null,
             maxInputTokens: existingConfig?.maxInputTokens ?? null,
@@ -268,7 +286,7 @@ export function ByokManualPageClient({
         const urlChanged =
             (data.provider === "openai_compatible" ||
                 data.provider === "anthropic_compatible") &&
-            (data.baseURL ?? undefined) !== existingConfig?.baseURL;
+            (data.baseURL ?? undefined) !== currentBaseURL;
 
         if (!hasNewCredentials && !urlChanged) {
             // No NEW key typed. If a key is already stored (edit, or adding a
