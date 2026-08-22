@@ -259,6 +259,40 @@ function resolveEnumParamCandidates(
 }
 
 /**
+ * A parameter is only a *closed* enum when every possible value is fixed.
+ * A `const` or an `anyOf`/`oneOf` of `const` branches is closed; but if any
+ * `anyOf`/`oneOf` variant is an open `type: 'string'` (no `const`/`enum`),
+ * the parameter accepts free-form text, so treating it as a closed enum
+ * would replace a legitimate issue-key/query-token value with the const (or
+ * drop it) — the exact class of bug we are guarding against.
+ */
+function hasOpenStringBranch(
+    paramSchema: Record<string, unknown> | undefined,
+): boolean {
+    if (!paramSchema) {
+        return false;
+    }
+
+    return (['anyOf', 'oneOf'] as const).some((key) => {
+        const variants = paramSchema[key];
+        return (
+            Array.isArray(variants) &&
+            variants.some((variant) => {
+                if (!variant || typeof variant !== 'object') {
+                    return false;
+                }
+                const branch = variant as Record<string, unknown>;
+                return (
+                    branch.type === 'string' &&
+                    !('const' in branch) &&
+                    !Array.isArray(branch.enum)
+                );
+            })
+        );
+    });
+}
+
+/**
  * Extract the concrete value set of a closed-enum parameter.
  *
  * Reads a top-level JSON-schema `enum` array AND the two other shapes a
@@ -268,7 +302,12 @@ function resolveEnumParamCandidates(
  *     `enum`), e.g. `'markdown' | 'adf'` surfaced as
  *     `anyOf: [{ const: 'markdown' }, { const: 'adf' }]`.
  *
- * Without this, a param declared via `anyOf`/`oneOf`/`const` evades the
+ * A top-level `enum` is always closed. `const` / `anyOf` / `oneOf` extraction
+ * is skipped when any variant is an open `type: 'string'` — those params take
+ * free-form values and must NOT be treated as closed (their value comes from
+ * the issue-key/query-token pipeline, not a fixed set).
+ *
+ * Without this, a param declared via `const`/`anyOf`/`oneOf` evades the
  * closed-enum guard in `resolveEnumParamCandidates` and gets treated as a
  * generic string, so issue keys / query tokens are stuffed into it and the
  * tool's own validator rejects the call (#1760).
@@ -288,7 +327,7 @@ function extractEnumValues(
         }
     };
 
-    // 1. Top-level `enum: ['a', 'b']`.
+    // 1. Top-level `enum: ['a', 'b']` is always a closed set.
     const rawEnum = paramSchema.enum;
     if (Array.isArray(rawEnum)) {
         for (const value of rawEnum) {
@@ -296,28 +335,33 @@ function extractEnumValues(
         }
     }
 
-    // 2. Lone `const: 'a'`.
-    pushConc(paramSchema.const);
+    // 2. `const` / `anyOf` / `oneOf` are only closed when no branch is an
+    //    open string. An open string branch means the param accepts
+    //    free-form values, so don't narrow it.
+    if (!hasOpenStringBranch(paramSchema)) {
+        // Lone `const: 'a'`.
+        pushConc(paramSchema.const);
 
-    // 3. `anyOf` / `oneOf` branches — each branch may declare `const` or a
-    //    nested `enum`. Recursively walk them.
-    for (const key of ['anyOf', 'oneOf'] as const) {
-        const variants = paramSchema[key];
-        if (!Array.isArray(variants)) {
-            continue;
-        }
-        for (const variant of variants) {
-            if (!variant || typeof variant !== 'object') {
+        // `anyOf` / `oneOf` branches — each branch may declare `const` or a
+        // nested `enum`.
+        for (const key of ['anyOf', 'oneOf'] as const) {
+            const variants = paramSchema[key];
+            if (!Array.isArray(variants)) {
                 continue;
             }
-            const branch = variant as Record<string, unknown>;
-            if ('const' in branch) {
-                pushConc(branch.const);
-                continue;
-            }
-            if (Array.isArray(branch.enum)) {
-                for (const value of branch.enum) {
-                    pushConc(value);
+            for (const variant of variants) {
+                if (!variant || typeof variant !== 'object') {
+                    continue;
+                }
+                const branch = variant as Record<string, unknown>;
+                if ('const' in branch) {
+                    pushConc(branch.const);
+                    continue;
+                }
+                if (Array.isArray(branch.enum)) {
+                    for (const value of branch.enum) {
+                        pushConc(value);
+                    }
                 }
             }
         }

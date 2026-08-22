@@ -234,5 +234,42 @@ describe('buildTaskContextArgsCandidates (characterization)', () => {
                 expect(args.outputFormat).toBe('markdown');
             }
         });
+
+        it('keeps issue keys flowing into a param with const + open string branches', () => {
+            // A union like `anyOf: [{type:'string'}, {const:'default'}]` is an
+            // OPEN text param (free-form text with a suggested default), not a
+            // closed enum. The issue key must still flow through it — treating
+            // it as closed would replace the real value with the const.
+            const sig: TaskContextToolSignature = {
+                requiredParams: ['issueKey', 'format'],
+                properties: {
+                    issueKey: { type: 'string' },
+                    format: {
+                        anyOf: [{ type: 'string' }, { const: 'default' }],
+                    },
+                },
+                normalizedProperties: {
+                    issuekey: { type: 'string' },
+                    format: {
+                        anyOf: [{ type: 'string' }, { const: 'default' }],
+                    },
+                },
+            };
+
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({ issueKeys: ['FMT-7'] }),
+                sig,
+            );
+
+            expect(out.length).toBeGreaterThan(0);
+            for (const args of out) {
+                expect(args.issueKey).toBe('FMT-7');
+                // Open string param: the const must NOT replace the real
+                // value. The issue key flows through because the param is
+                // treated as free-form, not narrowed to the const.
+                expect(args.format).toBe('FMT-7');
+            }
+        });
     });
 });
