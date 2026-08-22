@@ -280,4 +280,49 @@ describe('UpdateCommentsAndGenerateSummaryStage - frozen-context error recording
         const args = commentManagerService.updateOverallComment.mock.calls[0];
         expect(args[12]).toBe(true); // reviewHasPartialErrors
     });
+
+    // Regression: the summary must route by the `prSummary` task, not reuse the
+    // `codeReview`-resolved slot. Forwarding codeReviewConfig.byokConfig made the
+    // summary silently run the review model and skip any prSummary override.
+    it('never forwards the code-review byokConfig to the summary (routes prSummary itself)', async () => {
+        const generateSummaryPR = jest.fn().mockResolvedValue('summary text');
+        const commentManagerService = {
+            generateSummaryPR,
+            updateSummarizationInPR: jest.fn().mockResolvedValue(undefined),
+            updateOverallComment: jest.fn().mockResolvedValue(undefined),
+            createComment: jest.fn().mockResolvedValue(undefined),
+            processEndReviewMessageTemplate: jest
+                .fn()
+                .mockResolvedValue('rendered body'),
+        } as any;
+        const stage = new UpdateCommentsAndGenerateSummaryStage(
+            commentManagerService,
+            {} as any,
+        );
+
+        const ctx = frozenContext({
+            ...summaryFailContext(),
+            codeReviewConfig: {
+                languageResultPrompt: 'en-US',
+                summary: { generatePRSummary: true },
+                // A code-review-resolved slot the summary must IGNORE.
+                byokConfig: {
+                    main: {
+                        provider: 'openai',
+                        model: 'code-review-model',
+                        apiKey: 'x',
+                    },
+                },
+            },
+        } as any);
+
+        await (stage as any).executeStage(ctx);
+
+        expect(generateSummaryPR).toHaveBeenCalledTimes(1);
+        // The code-review-resolved slot must not reach the summary at all —
+        // generateSummaryPR takes no byokConfig arg and routes prSummary itself.
+        expect(generateSummaryPR.mock.calls[0]).not.toContainEqual(
+            ctx.codeReviewConfig.byokConfig,
+        );
+    });
 });

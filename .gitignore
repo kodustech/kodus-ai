@@ -54,8 +54,24 @@ e2b-sandbox/config.json
 _*
 !apps/web/src/**/_*
 !libs/common/email/templates/_*
+# Shared test fixtures live in `__test-utils__` dirs — the `_*` rule above would
+# ignore them (dir starts with `_`), which silently breaks CI (the files exist
+# only on dev disks). Keep them tracked.
+!**/__test-utils__/
+!**/__test-utils__/**
 !scripts/selfhosted/_common.sh
 !test/__mocks__/
+# Provider-module conformance fixtures are committed artifacts (Phase 3 / D-05):
+# recorded doGenerate results the offline gate replays. `_*` above would ignore
+# the `__fixtures__` dir, so un-ignore it (its JSON files don't start with `_`).
+!libs/llm/providers/__fixtures__/
+!libs/llm/providers/__fixtures__/**
+# Per-provider recorded fixtures (openai/__fixtures__, anthropic/__fixtures__,
+# …) — same committed-artifact rule; the shared pattern above does not reach the
+# nested dirs, so un-ignore them explicitly (otherwise `_*` swallows them and CI
+# can't load the offline conformance specs).
+!libs/llm/providers/**/__fixtures__/
+!libs/llm/providers/**/__fixtures__/**
 !**/__tests__/
 !scripts/selfhosted/_*.sh
 

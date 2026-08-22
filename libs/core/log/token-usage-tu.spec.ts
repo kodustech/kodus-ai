@@ -1,13 +1,16 @@
 import {
     deriveArea,
     deriveTu,
+    ROUTING_TASKS,
     SUGGESTION_RUN_NAMES,
     SYSTEM_RUN_NAMES,
 } from './token-usage-tu';
 import {
+    BACKFILL_ROUTING_TASKS,
     BACKFILL_SUGGESTION_RUN_NAMES,
     BACKFILL_SYSTEM_RUN_NAMES,
 } from '../infrastructure/database/mongo/token-usage/backfill-tu';
+import { LLM_TASK } from '@libs/llm/byok-config';
 
 /**
  * `deriveTu` is the single source of the `attributes.tu` sub-doc mirrored onto
@@ -89,6 +92,63 @@ describe('deriveTu', () => {
             expect(deriveTu(usage)!.area).toBe('other');
         });
 
+        it('captures the routing task from `route` (the per-task dimension)', () => {
+            expect(deriveTu({ ...usage, route: 'codeReview' })!.route).toBe(
+                'codeReview',
+            );
+        });
+
+        it('stamped `route` wins over the area de-para', () => {
+            // Even in a review-area span, an explicit route is authoritative.
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'code-review-security',
+                    route: 'kodyRulesReview',
+                })!.route,
+            ).toBe('kodyRulesReview');
+        });
+
+        it('IGNORES a non-task `route` (stale tier string) → area de-para', () => {
+            // A pre-realignment span stamped the TIER ('default'/'taskOverride')
+            // in `route`. That is not a valid task, so the per-task view must not
+            // show it — fall back to the area de-para instead.
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'code-review-security',
+                    route: 'default',
+                })!.route,
+            ).toBe('codeReview');
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'generateSummaryPR',
+                    route: 'taskOverride',
+                })!.route,
+            ).toBe('prSummary');
+        });
+
+        it('BACK-COMPAT: infers the task from area when `route` is absent', () => {
+            // Pre-launch spans have no `route` attr → de-para from the area.
+            expect(
+                deriveTu({ ...usage, 'gen_ai.run.name': 'code-review-security' })!
+                    .route,
+            ).toBe('codeReview');
+            expect(
+                deriveTu({ ...usage, 'gen_ai.run.name': 'generateSummaryPR' })!
+                    .route,
+            ).toBe('prSummary');
+            expect(
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'kodyRulesAnalyzeCodeWithAI',
+                })!.route,
+            ).toBe('kodyRulesReview');
+            // system/other are not attributable → '' (never undefined).
+            expect(deriveTu(usage)!.route).toBe('');
+        });
+
         it('sys is true only for the internal system-analysis run-names', () => {
             for (const name of SYSTEM_RUN_NAMES) {
                 expect(
@@ -116,6 +176,9 @@ describe('deriveArea', () => {
         ['generateCodeSuggestions', 'system'],
         // kody rules — analysis, sharded classifiers, PR-level, generation, sync
         ['kodyRulesAnalyzeCodeWithAI', 'kody_rules'],
+        // the review AGENT run-name spells the product "kodus" (with the S) —
+        // must still resolve, else it leaks into 'other' → "Unrouted".
+        ['kodus-rules-review-agent.shard', 'kody_rules'],
         ['classifierKodyRulesAnalyzeCodeWithAI', 'kody_rules'],
         ['suggestionGenerationKodyRulesAnalyzeCodeWithAI', 'kody_rules'],
         ['prLevelKodyRulesAnalyzer', 'kody_rules'],
@@ -124,17 +187,18 @@ describe('deriveArea', () => {
         ['kodyRulesRecommendationFromSuggestions', 'kody_rules'],
         ['kodyRulesFilesToRulesFastBatch', 'kody_rules'],
         ['kodyMemoryResolution', 'kody_rules'],
-        // cross-file
-        ['crossFileAnalyzeCodeWithAI', 'cross_file'],
-        ['crossFileContextPlanner', 'cross_file'],
-        ['crossFileContextSufficiency', 'cross_file'],
-        // generalist review agents
+        // generalist review agents — every leaf model call the harness review
+        // makes carries a `code-review-*` runName so LLM.run's ONE usage span
+        // lands in `review` (there is no separate aggregate span anymore).
         ['code-review-security', 'review'],
         ['code-review-bug-verify', 'review'],
+        ['code-review-bug-recovery', 'review'],
         ['code-review-dedup', 'review'],
         ['analyzeCodeWithAI', 'review'],
         ['analyzeCodeWithAI_v2', 'review'],
-        // suggestion refinement
+        // suggestion refinement — current run-names + legacy
+        ['severity-classifier', 'suggestions'],
+        ['suggestion-formatter', 'suggestions'],
         ['severityAnalysis', 'suggestions'],
         ['validateWithLLM', 'suggestions'],
         ['checkSuggestionSimplicity', 'suggestions'],
@@ -179,5 +243,12 @@ describe('deriveArea', () => {
         expect(new Set(BACKFILL_SUGGESTION_RUN_NAMES)).toEqual(
             new Set(SUGGESTION_RUN_NAMES),
         );
+        expect(new Set(BACKFILL_ROUTING_TASKS)).toEqual(ROUTING_TASKS);
+    });
+
+    it('ROUTING_TASKS matches the real LlmTask enum', () => {
+        // The guard must trust exactly the valid tasks — no more (would let a
+        // garbage value through), no fewer (would de-para a real task away).
+        expect(ROUTING_TASKS).toEqual(new Set(Object.values(LLM_TASK)));
     });
 });

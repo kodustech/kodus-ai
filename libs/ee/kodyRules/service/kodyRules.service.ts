@@ -6,6 +6,7 @@ import {
     Optional,
 } from '@nestjs/common';
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
+import { LLM } from '@libs/llm/llm';
 import { v4 } from 'uuid';
 import bucketsData from './data/buckets.json';
 import libraryKodyRules from './data/library-kody-rules.json';
@@ -17,7 +18,6 @@ import {
     buildKodyRuleCentralizedFilePath,
     buildKodyRuleCentralizedMutationRequest,
 } from '@libs/centralized-config/utils/kody-rules-centralized-pr.builder';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import {
     CODE_BASE_CONFIG_SERVICE_TOKEN,
     ICodeBaseConfigService,
@@ -26,8 +26,8 @@ import {
     kodyMemoryResolutionSchema,
     prompt_kodyMemoryResolution_system,
     prompt_kodyMemoryResolution_user,
-} from '@libs/common/utils/langchainCommon/prompts/kodyMemoryResolution';
-import { kodyRulesRecommendationSchema } from '@libs/common/utils/langchainCommon/prompts/kodyRulesRecommendation';
+} from '@libs/common/utils/prompts/kodyMemoryResolution';
+import { kodyRulesRecommendationSchema } from '@libs/common/utils/prompts/kodyRulesRecommendation';
 import { ProgrammingLanguage } from '@libs/core/domain/enums';
 import {
     ActionType,
@@ -40,7 +40,7 @@ import {
 } from '@libs/core/infrastructure/config/types/general/kodyRules.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuditLogEvents } from '@libs/ee/codeReviewSettingsLog/events/audit-log.events';
 import {
@@ -119,8 +119,6 @@ export class KodyRulesService implements IKodyRulesService {
         private readonly kodyRulesValidationService: KodyRulesValidationService,
 
         private readonly mcpManagerService: MCPManagerService,
-
-        private readonly promptRunnerService: PromptRunnerService,
 
         private readonly observabilityService: ObservabilityService,
 
@@ -1586,9 +1584,12 @@ export class KodyRulesService implements IKodyRulesService {
                     severity: rule.severity,
                 }));
 
+            // native: resolve the codeReview task to a carrier for
+            // runStructuredReviewCall; non-v2/managed/BLOCKED → env default.
             const byokConfigValue =
-                await this.permissionValidationService.getBYOKConfig(
+                await this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 );
 
             const mainRun = 'kodyRulesRecommendationFromSuggestions';
@@ -1634,7 +1635,7 @@ ${JSON.stringify(filteredLibrary)}
 
 Analyze the suggestions and recommend the most relevant rules.`;
 
-            const result = await runStructuredReviewCall({
+            const result = await LLM.run({
                 byokConfig: byokConfigValue ?? undefined,
                 schema: kodyRulesRecommendationSchema,
                 system: systemPrompt,
@@ -1646,7 +1647,6 @@ Analyze the suggestions and recommend the most relevant rules.`;
                     suggestionsCount: allSuggestions.length,
                     libraryRulesCount: filteredLibrary.length,
                 },
-                observabilityService: this.observabilityService,
             });
 
             if (
@@ -2103,9 +2103,12 @@ Analyze the suggestions and recommend the most relevant rules.`;
         memory: IKodyRuleMemory,
         existingMemories: Partial<IKodyRule>[],
     ) {
+        // native: resolve the codeReview task to a carrier for
+        // runStructuredReviewCall; non-v2/managed/BLOCKED → env default.
         const byokConfigValue =
-            await this.permissionValidationService.getBYOKConfig(
+            await this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
+                LLM_TASK.codeReview,
             );
         const runName = 'kodyMemoryResolution';
 
@@ -2126,7 +2129,7 @@ Analyze the suggestions and recommend the most relevant rules.`;
             path: existingMemory.path,
         }));
 
-        const result = await runStructuredReviewCall({
+        const result = await LLM.run({
             byokConfig: byokConfigValue ?? undefined,
             schema: kodyMemoryResolutionSchema,
             system: prompt_kodyMemoryResolution_system(),
@@ -2139,7 +2142,6 @@ Analyze the suggestions and recommend the most relevant rules.`;
             attrs: {
                 existingMemoriesCount: existingMemories.length,
             },
-            observabilityService: this.observabilityService,
         });
 
         return result;

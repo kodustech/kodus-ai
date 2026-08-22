@@ -1,49 +1,31 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import {
     BehaviourForExistingDescription,
+    ClusteringType,
     SummaryConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 
-// Mock BYOKPromptRunnerService at module level so we can capture the
-// SYSTEM prompt the LLM receives (Bug E) and short-circuit the LLM
-// call to a deterministic summary (Bug A).
+// generateSummaryPR runs through the v5 path (byok-to-vercel + tracedGenerateText);
+// capturedPrompts collects the prompts the LLM receives (Bug E) and NEW_SUMMARY_TEXT
+// is the deterministic summary returned (Bug A). The legacy BYOKPromptRunner
+// (LangChain wrapper) was deleted in plan 03-13, so its module-level mock is gone.
 const capturedPrompts: Array<{ prompt: string; role: string }> = [];
 const NEW_SUMMARY_TEXT = 'NEW_SUMMARY_CONTENT';
 
-jest.mock(
-    '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service',
-    () => ({
-        BYOKPromptRunnerService: jest
-            .fn()
-            .mockImplementation(() => ({
-                executeMode: 'mock',
-                builder: () => {
-                    const chain: any = {
-                        setParser: () => chain,
-                        setLLMJsonMode: () => chain,
-                        setPayload: () => chain,
-                        addPrompt: (p: { prompt: string; role: string }) => {
-                            capturedPrompts.push(p);
-                            return chain;
-                        },
-                        addMetadata: () => chain,
-                        addCallbacks: () => chain,
-                        setRunName: () => chain,
-                        setTemperature: () => chain,
-                        execute: async () => NEW_SUMMARY_TEXT,
-                    };
-                    return chain;
-                },
-            })),
-    }),
-);
-
 // generateSummaryPR now runs through the v5 path (byok-to-vercel +
-// tracedGenerateText) instead of the v2 BYOKPromptRunnerService builder, so
+// tracedGenerateText) instead of the BYOKPromptRunner builder, so
 // Claude-on-Vertex works. Mock that path: capture the system/user prompts
 // (Bug E) and return a deterministic summary (Bug A).
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn(() => ({ __mockModel: true })),
+    mayUseJsonSchema: jest.fn(() => true),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
+    // generateSummaryPR (v5 path) now builds via buildModelFromSlot(slot).
+    buildModelFromSlot: jest.fn(() => ({ __mockModel: true })),
+    // runStructuredReviewCall (clustering path) reads getModelName for the span.
+    getModelName: jest.fn(() => 'test-model'),
+    // The shared review executor consults the slot's limiter on its error path.
+    getLimiterForSlot: jest.fn(() => null),
 }));
 // `tracedGenerateText` moved to @libs/llm/llm-call (the legacy
 // agents/engine/agent-loop module was removed). requireActual keeps the rest of
@@ -61,6 +43,9 @@ jest.mock('@libs/llm/llm-call', () => ({
             return { text: NEW_SUMMARY_TEXT };
         },
     ),
+    // The summary now runs through runTextReviewCall, which arms a real 10-min
+    // timeoutSignal — stub it so the suite doesn't leak long-lived timers.
+    timeoutSignal: jest.fn(() => undefined),
 }));
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: () => ({ isEnabled: false, functionId: 'test' }),
@@ -119,7 +104,7 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         observabilityService = {
             runLLMInSpan: jest.fn(async ({ exec }) => {
-                // Run the exec callback so the mocked BYOKPromptRunnerService
+                // Run the exec callback so the mocked BYOKPromptRunner
                 // (above) actually receives the prompts via addPrompt(...).
                 const result = await exec(() => {});
                 return { result };
@@ -137,7 +122,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
         service = new CommentManagerService(
             parametersService,
             messageProcessor,
-            promptRunnerService,
             observabilityService as any,
             permissionValidationService,
             codeManagementService as any,
@@ -167,7 +151,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 /* isCommitRun */ false,
                 /* prPreview */ false,
                 /* externalPromptContext */ undefined,
@@ -204,7 +187,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -231,7 +213,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -259,7 +240,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -287,7 +267,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -314,7 +293,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -336,7 +314,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 summaryConfig,
-                null,
                 false,
                 false,
                 undefined,
@@ -376,7 +353,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                     stubOrg,
                     'en-US',
                     summaryConfig,
-                    null,
                 ),
             ).rejects.toThrow('Path not found: /chat/completions');
         });
@@ -395,7 +371,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                     stubOrg,
                     'en-US',
                     summaryConfig,
-                    null,
                 )
                 .catch((e) => e);
 
@@ -410,7 +385,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
                 stubOrg,
                 'en-US',
                 { ...summaryConfig, generatePRSummary: false } as any,
-                null,
             );
 
             expect(result).toBeNull();
@@ -466,5 +440,121 @@ describe('CommentManagerService.generateSummaryPR', () => {
             // so the note renders on separate lines in the PR comment.
             expect(result).toContain('line one  \nline two  \nline three');
         });
+    });
+});
+
+// repeatedCodeReviewSuggestionClustering was migrated from the legacy
+// STRING/JSON PromptRunner onto runStructuredReviewCall (REQ-NOLC-01). The
+// structured result is JSON.stringify'd and fed through LLMResponseProcessor
+// exactly as the STRING path did — this suite pins that the downstream
+// clustering/enrichment mapping is byte-for-byte identical. It mocks the
+// tracedGenerateText seam (like structured-review-call.spec.ts), not the
+// LangChain builder that no longer exists on this path.
+describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — structured-call parity', () => {
+    let service: CommentManagerService;
+    let observabilityService: any;
+    let parametersService: any;
+
+    const stubOrg = { organizationId: 'org-1', teamId: 'team-1' };
+
+    beforeEach(() => {
+        // Shared module-level mock — clear accumulated calls from the summary
+        // suite above so the per-test call-count assertion is isolated.
+        (tracedGenerateText as jest.Mock).mockClear();
+        parametersService = {
+            findByKey: jest
+                .fn()
+                .mockResolvedValue({ configValue: 'en-US' }),
+        };
+        observabilityService = {
+            runLLMInSpan: jest.fn(),
+            // runStructuredReviewCall runs its exec inside runAiSdkLLMInSpan and
+            // reads `experimental_output` off the result.
+            runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
+        };
+
+        service = new CommentManagerService(
+            parametersService,
+            {} as any,
+            observabilityService,
+            {} as any,
+            {} as any,
+        );
+    });
+
+    it('re-serializes the structured clustering result and maps it byte-for-byte through enrichment', async () => {
+        const codeSuggestions = [
+            { id: 'a', relevantFile: 'a.ts', suggestionContent: 'A' },
+            { id: 'b', relevantFile: 'b.ts', suggestionContent: 'B' },
+            { id: 'c', relevantFile: 'c.ts', suggestionContent: 'C' },
+        ];
+
+        // The migrated call is runStructuredReviewCall → tracedGenerateText.
+        // Return the structured object the LLM would produce (a and b cluster).
+        (tracedGenerateText as jest.Mock).mockResolvedValueOnce({
+            experimental_output: {
+                codeSuggestions: [
+                    {
+                        id: 'a',
+                        sameSuggestionsId: ['b'],
+                        problemDescription: 'dup issue',
+                        actionStatement: 'Please fix it',
+                    },
+                ],
+            },
+        });
+
+        const result = await service.repeatedCodeReviewSuggestionClustering(
+            stubOrg as any,
+            7,
+            codeSuggestions,
+        );
+
+        // c stays non-clustered; a becomes PARENT; b becomes RELATED — the exact
+        // enrichment the STRING path produced from the same JSON payload.
+        expect(result).toEqual([
+            { id: 'c', relevantFile: 'c.ts', suggestionContent: 'C' },
+            {
+                id: 'a',
+                relevantFile: 'a.ts',
+                suggestionContent: 'A',
+                clusteringInformation: {
+                    type: ClusteringType.PARENT,
+                    relatedSuggestionsIds: ['b'],
+                    problemDescription: 'dup issue',
+                    actionStatement: 'Please fix it',
+                },
+            },
+            {
+                id: 'b',
+                relevantFile: 'b.ts',
+                suggestionContent: 'B',
+                clusteringInformation: {
+                    type: ClusteringType.RELATED,
+                    parentSuggestionId: 'a',
+                },
+            },
+        ]);
+
+        // Exactly one structured call — the outer runLLMInSpan wrapper is gone (Q4).
+        expect(tracedGenerateText).toHaveBeenCalledTimes(1);
+        expect(observabilityService.runLLMInSpan).not.toHaveBeenCalled();
+    });
+
+    it('returns the original suggestions unchanged when the model finds no duplicates', async () => {
+        const codeSuggestions = [
+            { id: 'a', relevantFile: 'a.ts', suggestionContent: 'A' },
+        ];
+        (tracedGenerateText as jest.Mock).mockResolvedValueOnce({
+            experimental_output: { codeSuggestions: [] },
+        });
+
+        const result = await service.repeatedCodeReviewSuggestionClustering(
+            stubOrg as any,
+            7,
+            codeSuggestions,
+        );
+
+        expect(result).toEqual(codeSuggestions);
     });
 });

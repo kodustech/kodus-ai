@@ -28,7 +28,31 @@ describe('GetSpendLimitConfigUseCase', () => {
             modelPricing: {},
             models: [],
             priceable: true,
+            scope: 'total',
         });
+    });
+
+    it("defaults scope to 'total' when the stored config has none", async () => {
+        configService.getConfig.mockResolvedValue({
+            enabled: true,
+            monthlyLimitUsd: 500,
+        });
+
+        const result = await useCase.execute(ORG);
+
+        expect(result.scope).toBe('total');
+    });
+
+    it('echoes the stored scope when the config carries one', async () => {
+        configService.getConfig.mockResolvedValue({
+            enabled: true,
+            monthlyLimitUsd: 500,
+            scope: 'per-credential',
+        });
+
+        const result = await useCase.execute(ORG);
+
+        expect(result.scope).toBe('per-credential');
     });
 
     it('resolves prices for the org models using the stored overrides', async () => {

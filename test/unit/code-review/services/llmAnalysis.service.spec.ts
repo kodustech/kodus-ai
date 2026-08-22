@@ -2,9 +2,20 @@ import { LLMAnalysisService } from '@/code-review/infrastructure/adapters/servic
 import { SafeguardPipelineService } from '@/code-review/infrastructure/adapters/services/safeguardPipeline.service';
 import { ReviewModeResponse } from '@/core/infrastructure/config/types/general/codeReview.type';
 import { ObservabilityService } from '@/core/log/observability.service';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { SANDBOX_PROVIDER_TOKEN } from '@libs/sandbox/domain/contracts/sandbox.provider';
+import { LLM } from '@libs/llm/llm';
 import { Test, TestingModule } from '@nestjs/testing';
+
+// The service was migrated off the LangChain PromptRunner onto the AI SDK
+// `LLM.run` seam. Mock that seam so these unit tests are deterministic and NEVER
+// touch a real model/network — otherwise, whenever a valid LLM key happens to be
+// in the env, the real call succeeds and the "returns original on error" paths
+// never fire (the old PromptRunner mock below is dead: the service no longer
+// calls it).
+jest.mock('@libs/llm/llm', () => ({
+    LLM: { run: jest.fn() },
+}));
+const mockLLMRun = LLM.run as jest.Mock;
 
 // Mock logger to silence logs during tests
 jest.mock('@libs/core/log/logger', () => ({
@@ -55,10 +66,6 @@ describe('LLMAnalysisService', () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 LLMAnalysisService,
-                {
-                    provide: PromptRunnerService,
-                    useValue: mockPromptRunnerService,
-                },
                 {
                     provide: ObservabilityService,
                     useValue: mockObservabilityService,
@@ -170,21 +177,7 @@ describe('LLMAnalysisService', () => {
 
     describe('validateImplementedSuggestions', () => {
         it('should return original suggestions on error', async () => {
-            const mockBuilder = {
-                setProviders: jest.fn().mockReturnThis(),
-                setParser: jest.fn().mockReturnThis(),
-                setLLMJsonMode: jest.fn().mockReturnThis(),
-                setPayload: jest.fn().mockReturnThis(),
-                addPrompt: jest.fn().mockReturnThis(),
-                addMetadata: jest.fn().mockReturnThis(),
-                addCallbacks: jest.fn().mockReturnThis(),
-                setRunName: jest.fn().mockReturnThis(),
-                setTemperature: jest.fn().mockReturnThis(),
-                setMaxReasoningTokens: jest.fn().mockReturnThis(),
-                execute: jest.fn().mockRejectedValue(new Error('LLM error')),
-            };
-
-            mockPromptRunnerService.builder.mockReturnValue(mockBuilder);
+            mockLLMRun.mockRejectedValue(new Error('LLM error'));
 
             const suggestions = [
                 { id: 's1', suggestionContent: 'Original suggestion' },
@@ -204,21 +197,7 @@ describe('LLMAnalysisService', () => {
 
     describe('severityAnalysisAssignment', () => {
         it('should return original suggestions on error', async () => {
-            const mockBuilder = {
-                setProviders: jest.fn().mockReturnThis(),
-                setParser: jest.fn().mockReturnThis(),
-                setLLMJsonMode: jest.fn().mockReturnThis(),
-                setPayload: jest.fn().mockReturnThis(),
-                addPrompt: jest.fn().mockReturnThis(),
-                addMetadata: jest.fn().mockReturnThis(),
-                addCallbacks: jest.fn().mockReturnThis(),
-                setRunName: jest.fn().mockReturnThis(),
-                setTemperature: jest.fn().mockReturnThis(),
-                setMaxReasoningTokens: jest.fn().mockReturnThis(),
-                execute: jest.fn().mockRejectedValue(new Error('LLM error')),
-            };
-
-            mockPromptRunnerService.builder.mockReturnValue(mockBuilder);
+            mockLLMRun.mockRejectedValue(new Error('LLM error'));
 
             const suggestions = [{ id: 's1', severity: 'unknown' }];
 

@@ -1,4 +1,5 @@
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { llmErrorLogLevel } from '@libs/llm/error-classifier';
 import { Injectable, Inject } from '@nestjs/common';
 import pLimit from 'p-limit';
 
@@ -182,7 +183,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
         context: contextToGenerateIssues,
         filePath: string,
         newSuggestions: any[],
-        byokConfig: BYOKConfig | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<any> {
         const { organizationAndTeamData, repository, pullRequest } = context;
 
@@ -255,7 +256,9 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             // 4. Processar resultado do merge
             await this.processMergeResult(context, mergeResult, newSuggestions);
         } catch (error) {
-            this.logger.error({
+            // Terminal BYOK billing/auth → warn (user's provider config; one
+            // suspended key fans out per-file), real fault → error.
+            this.logger[llmErrorLogLevel(error)]({
                 message: `Error merging suggestions into issues for file ${filePath}`,
                 context: KodyIssuesManagementService.name,
                 error,
@@ -370,7 +373,7 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
             'organizationAndTeamData' | 'repository' | 'pullRequest'
         >,
         files: any[],
-        byokConfig: BYOKConfig | null,
+        byokConfig: NormalizedModel | undefined,
     ): Promise<void> {
         try {
             if (!files || files?.length === 0) {
@@ -461,7 +464,8 @@ export class KodyIssuesManagementService implements IKodyIssuesManagementService
                 await Promise.all(updatePromises);
             }
         } catch (error) {
-            this.logger.error({
+            // See mergeSuggestionsIntoIssues: terminal BYOK → warn, else error.
+            this.logger[llmErrorLogLevel(error)]({
                 message: 'Error resolving existing issues',
                 context: KodyIssuesManagementService.name,
                 error,

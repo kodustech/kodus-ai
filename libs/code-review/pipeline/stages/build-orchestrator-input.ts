@@ -1,6 +1,6 @@
 import type { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
 import type { OrchestratorInput } from '@libs/code-review/infrastructure/agents/review-orchestrator.service';
-import { KODUS_TRIAL_MODEL } from '@libs/llm/byok-to-vercel';
+import { trialDefaultModel } from '@libs/llm/byok-to-vercel';
 
 /**
  * The stage-computed locals that the orchestrator input needs on top of the
@@ -91,19 +91,20 @@ export function buildOrchestratorInput(
         // resolves the requested flag AND the feature gate into `computed.heavy`;
         // this reads only that so the gate can't be bypassed here.
         heavy: computed.heavy || undefined,
-        // Trial-only forced model (ignored when a BYOK config is present —
-        // byokToVercelModel prefers BYOK). Both subscription trial and the
-        // anonymous public demo (try.kodus.io) → DeepSeek V4 Flash on Fireworks.
-        // The isTrialMode flag lives on the CLI pipeline context; the cast avoids
+        // Trial-only forced model (ignored when a BYOK config is present — the
+        // resolver prefers BYOK). Both the subscription trial and the anonymous
+        // public demo (try.kodus.io) → DeepSeek V4 Flash on Fireworks. The
+        // isTrialMode flag lives on the CLI pipeline context; the cast avoids
         // inverting the dep graph (cli-review depends on code-review).
-        defaultModelOverride:
-            context.pipelineMetadata?.subscriptionStatus === 'trial'
-                ? KODUS_TRIAL_MODEL
-                : (context as { isTrialMode?: boolean }).isTrialMode
-                  ? KODUS_TRIAL_MODEL
-                  : undefined,
+        defaultModelOverride: trialDefaultModel({
+            subscriptionStatus: context.pipelineMetadata?.subscriptionStatus,
+            isTrialMode: (context as { isTrialMode?: boolean }).isTrialMode,
+        }),
         // Per-repo/directory model override resolved by ValidateConfigStage.
+        // byokModel = legacy NAME (window); byokModelId = id-based override
+        // (Phase 4, wins over the name at the model factory's resolver).
         byokModel: context.codeReviewConfig?.byokModel,
+        byokModelId: context.codeReviewConfig?.byokModelId,
         adaptiveProfile: computed.adaptiveProfile,
         skipHeavyPasses: computed.adaptiveProfile.skipHeavyPasses || undefined,
         // Experimental A/B knob (config-driven, default off): outline-first

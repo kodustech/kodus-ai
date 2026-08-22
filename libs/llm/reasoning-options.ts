@@ -6,10 +6,11 @@
  * provider's native thinking format, and layers OpenRouter provider-pinning on
  * top. No review/agent shapes — any caller building a model request can use it.
  */
-import { BYOKProvider } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
 import { createLogger } from '@libs/core/log/logger';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
-import { resolveAnthropicModelTraits } from '@libs/llm/anthropic-model-traits';
+import { REGISTRY } from '@libs/llm/providers';
+import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
 
 const logger = createLogger('ReasoningOptions');
 
@@ -110,29 +111,28 @@ function buildOpenRouterRouting(input?: {
 }
 
 /**
- * Maps a BYOK provider ID to the Vercel AI SDK `providerOptions` namespace key
- * that the corresponding adapter listens on.
+ * The Vercel AI SDK `providerOptions` namespace key for a BYOK provider id,
+ * resolved from its provider module (the single source) — never a hand-kept map.
  */
-const PROVIDER_OPTIONS_NAMESPACE: Partial<Record<string, string>> = {
-    [BYOKProvider.ANTHROPIC]: 'anthropic',
-    [BYOKProvider.ANTHROPIC_COMPATIBLE]: 'anthropic',
-    [BYOKProvider.GOOGLE_GEMINI]: 'google',
-    [BYOKProvider.GOOGLE_VERTEX]: 'google',
-    [BYOKProvider.OPENAI]: 'openai',
-    [BYOKProvider.OPEN_ROUTER]: 'openrouter',
-    [BYOKProvider.OPENAI_COMPATIBLE]: 'openaiCompatible',
-    [BYOKProvider.NOVITA]: 'openaiCompatible',
-};
+function providerOptionsNamespace(provider?: BYOKProvider | string): string | undefined {
+    if (!provider) return undefined;
+    const id = String(provider);
+    return REGISTRY.has(id)
+        ? REGISTRY.get(id).providerOptionsNamespace?.(id)
+        : undefined;
+}
 
-/** Keys that count as "already namespaced" at the top level of an override. */
-const KNOWN_NAMESPACE_KEYS = new Set([
-    'anthropic',
-    'google',
-    'openai',
-    'openrouter',
-    'openaiCompatible',
-    'langsmith',
-]);
+/** Keys that count as "already namespaced" at the top level of an override:
+ *  every namespace the registry's modules declare, plus `langsmith` (a telemetry
+ *  namespace, not a provider). Derived so a new provider is recognized for free. */
+function knownNamespaceKeys(): Set<string> {
+    const keys = new Set<string>(['langsmith']);
+    for (const id of REGISTRY.ids()) {
+        const ns = REGISTRY.get(id).providerOptionsNamespace?.(id);
+        if (ns) keys.add(ns);
+    }
+    return keys;
+}
 
 /**
  * Auto-wrap a user-pasted override JSON under the active provider's namespace
@@ -153,12 +153,11 @@ function autoWrapProviderOverride(
     const keys = Object.keys(obj);
     if (keys.length === 0) return {};
 
-    const alreadyNamespaced = keys.some((k) => KNOWN_NAMESPACE_KEYS.has(k));
+    const known = knownNamespaceKeys();
+    const alreadyNamespaced = keys.some((k) => known.has(k));
     if (alreadyNamespaced) return obj;
 
-    const ns = provider
-        ? PROVIDER_OPTIONS_NAMESPACE[provider as string]
-        : undefined;
+    const ns = providerOptionsNamespace(provider);
     if (!ns) return obj; // Unknown provider — pass through and let the SDK decide.
 
     return { [ns]: obj };
@@ -182,7 +181,7 @@ function mergeOpenRouterOptions(
  * Build provider-specific reasoning/thinking options for generateText.
  *
  * Maps a normalized effort level to each provider's native format:
- *   - Anthropic: per model generation — see `anthropic-model-traits.ts`
+ *   - Anthropic: per model generation — see `providers/anthropic/traits.ts`
  *   - Google Gemini 3+: thinkingConfig.thinkingLevel (minimal/low/medium/high)
  *   - Google Gemini 2.5: thinkingConfig.thinkingBudget
  *   - OpenAI o-series: reasoningEffort (low/medium/high)
@@ -209,150 +208,18 @@ export function buildReasoningProviderOptions(
 ): Record<string, any> {
     if (!provider) return {};
 
-    // Anthropic is the only provider where "off" needs to be said out loud:
-    // Opus 5, Sonnet 5 and Fable 5 think by default, so omitting the config
-    // leaves thinking ON for a user who explicitly picked Off.
-    if (provider === BYOKProvider.ANTHROPIC && (!effort || effort === 'none')) {
-        return buildAnthropicThinkingOff(modelName);
-    }
-
-    if (!effort || effort === 'none') return {};
-
-    switch (provider) {
-        case BYOKProvider.ANTHROPIC:
-            return buildAnthropicReasoning(effort, modelName);
-
-        case BYOKProvider.GOOGLE_GEMINI:
-        case BYOKProvider.GOOGLE_VERTEX: {
-            // Gemini 3+: thinkingLevel (minimal/low/medium/high)
-            // Gemini 2.5: thinkingBudget (number)
-            // Cannot disable thinking on Gemini 3.1 Pro.
-            const isGemini3 =
-                modelName &&
-                (modelName.includes('gemini-3') ||
-                    modelName.includes('gemini3'));
-
-            if (isGemini3) {
-                return {
-                    google: {
-                        thinkingConfig: { thinkingLevel: effort },
-                    },
-                };
-            }
-
-            return {
-                google: {
-                    thinkingConfig: {
-                        thinkingBudget: EFFORT_TO_BUDGET[effort],
-                    },
-                },
-            };
-        }
-
-        case BYOKProvider.OPENAI:
-            // o-series and GPT-5: reasoningEffort (low/medium/high)
-            return {
-                openai: { reasoningEffort: effort },
-            };
-
-        case BYOKProvider.OPEN_ROUTER:
-            // OpenRouter normalizes across all providers
-            return {
-                openrouter: { reasoning: { effort } },
-            };
-
-        case BYOKProvider.OPENAI_COMPATIBLE: {
-            // Kimi K2.5: thinking ON by default, only need to send disable
-            // GLM-5/5.1: thinking.type = enabled/disabled
-            // For compatible providers that support thinking, send the
-            // standard OpenAI-compatible thinking param
-            return {
-                openaiCompatible: {
-                    thinking: { type: 'enabled' },
-                },
-            };
-        }
-
-        case BYOKProvider.ANTHROPIC_COMPATIBLE:
-            // Anthropic-protocol endpoints from other vendors (Kimi Code,
-            // Z.ai, DeepSeek). They speak the classic thinking shape
-            // (enabled + budget_tokens); none of them implement Anthropic's
-            // newer adaptive thinking, so always use the budget form.
-            return {
-                anthropic: {
-                    thinking: {
-                        type: 'enabled',
-                        budgetTokens: EFFORT_TO_BUDGET[effort],
-                    },
-                },
-            };
-
-        default:
-            return {};
-    }
-}
-
-/**
- * Map an effort tier onto the thinking shape the given Claude accepts.
- *
- * The three generations are mutually exclusive on the wire: sending
- * `budgetTokens` to a 4.7+ model is a 400, and sending `type: 'adaptive'` to a
- * pre-4.6 model is a 400 too. When the model can't be identified we send
- * nothing — a review that runs without thinking beats a review that dies on a
- * request the provider rejects outright.
- */
-function buildAnthropicReasoning(
-    effort: Exclude<ReasoningEffort, 'none'>,
-    modelName?: string,
-): Record<string, any> {
-    const traits = resolveAnthropicModelTraits(modelName);
-
-    switch (traits.thinkingShape) {
-        case 'adaptive':
-            // `effort` is the SDK-level key; @ai-sdk/anthropic renders it as
-            // `output_config.effort` on the wire. Passing `output_config`
-            // ourselves would be silently stripped by the provider's schema.
-            return {
-                anthropic: { thinking: { type: 'adaptive' }, effort },
-            };
-
-        case 'budget':
-            return {
-                anthropic: {
-                    thinking: {
-                        type: 'enabled',
-                        budgetTokens: EFFORT_TO_BUDGET[effort],
-                    },
-                },
-            };
-
-        default:
-            logger.warn({
-                message:
-                    '[thinking] unrecognized Anthropic model — thinking config omitted',
-                context: 'buildAnthropicReasoning',
-                metadata: { modelName, effort },
-            });
-            return {};
-    }
-}
-
-/**
- * Express "thinking off" for Anthropic. On Opus 5, Sonnet 5 and Fable 5
- * thinking is on by default, so omitting the config is not the same as
- * disabling it — the user picks Off and still pays for thinking.
- *
- * Fable/Mythos reject `disabled` outright (400), so there the only honest
- * answer is to leave thinking on.
- */
-function buildAnthropicThinkingOff(modelName?: string): Record<string, any> {
-    const traits = resolveAnthropicModelTraits(modelName);
-
-    if (traits.thinkingShape === 'adaptive' && traits.canDisableThinking) {
-        return { anthropic: { thinking: { type: 'disabled' } } };
-    }
-
-    // Legacy models don't think unless asked, and unidentified models get no
-    // config at all — omitting is already "off" for both.
-    return {};
+    // The provider module's reasoning() is the SINGLE source for the effort→
+    // native mapping — including "off": Anthropic must say `disabled` out loud on
+    // models that think by default, and only its own module knows that. Generic
+    // code stays provider-agnostic: one uniform call for every effort, no
+    // per-provider branch. An unknown / reasoning-less provider (novita, bedrock)
+    // yields {}.
+    const id = String(provider);
+    if (!REGISTRY.has(id)) return {};
+    const providerModule = REGISTRY.get(id);
+    if (!providerModule.reasoning) return {};
+    return providerModule.reasoning(
+        { provider: id, model: modelName ?? '', apiKey: '' } as ProviderBuildConfig,
+        effort ?? 'none',
+    );
 }

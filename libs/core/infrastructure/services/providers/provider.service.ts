@@ -1,5 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { BYOKProvider } from '@kodus/kodus-common/llm';
+// The provider REGISTRY (libs/llm/providers) is the SINGLE source of truth for
+// which providers are connectable — the folder where validated providers are
+// added. This service is a thin projection of it for the web (list + validate);
+// it must never re-declare a parallel provider list (that would silently shadow
+// a registered provider, e.g. Moonshot, from the picker + the model listing).
+// The UI flags come from the shared describeAllProviderIds derivation so there
+// is exactly ONE place that decides key/base-URL/listing behavior.
+import { REGISTRY } from '@libs/llm/providers';
+import { describeAllProviderIds } from '@libs/llm/providers/provider-ui-descriptor';
 
 export interface ProviderInfo {
     id: string;
@@ -8,87 +16,40 @@ export interface ProviderInfo {
     supported: boolean;
     requiresApiKey: boolean;
     requiresBaseUrl: boolean;
+    /**
+     * Whether the model list can be auto-fetched (show a dropdown) vs. typed by
+     * hand. True for a static catalog or an HTTP listing with a resolvable base
+     * URL (a default, or none required); false for custom-endpoint providers
+     * whose URL is only known once the user types it, and for `manual` listings.
+     */
+    autoListModels: boolean;
+    /** Provider documentation URL (hardcoded on the module) — the UI links to it
+     *  from the key field so the user can grab a key / find model ids. */
+    doc?: string;
 }
 
 @Injectable()
 export class ProviderService {
-    private readonly providers: Record<string, ProviderInfo> = {
-        [BYOKProvider.OPENAI]: {
-            id: BYOKProvider.OPENAI,
-            name: 'OpenAI',
-            description: 'GPT models from OpenAI',
-            supported: true,
-            requiresApiKey: true,
-            requiresBaseUrl: false,
-        },
-        [BYOKProvider.ANTHROPIC]: {
-            id: BYOKProvider.ANTHROPIC,
-            name: 'Anthropic',
-            description: 'Claude models from Anthropic',
-            supported: true,
-            requiresApiKey: true,
-            requiresBaseUrl: false,
-        },
-        [BYOKProvider.GOOGLE_GEMINI]: {
-            id: BYOKProvider.GOOGLE_GEMINI,
-            name: 'Google Gemini',
-            description: 'Gemini models from Google AI',
-            supported: true,
-            requiresApiKey: true,
-            requiresBaseUrl: false,
-        },
-        [BYOKProvider.GOOGLE_VERTEX]: {
-            id: BYOKProvider.GOOGLE_VERTEX,
-            name: 'Google Vertex AI',
-            description:
-                'Vertex AI models via service account (needs SA JSON + region)',
-            supported: true,
-            requiresApiKey: true,
-            requiresBaseUrl: false,
-        },
-        [BYOKProvider.AMAZON_BEDROCK]: {
-            id: BYOKProvider.AMAZON_BEDROCK,
-            name: 'Amazon Bedrock',
-            description:
-                'AWS-hosted foundation models (needs AWS access key, secret, and region)',
-            supported: true,
-            requiresApiKey: false,
-            requiresBaseUrl: false,
-        },
-        [BYOKProvider.OPEN_ROUTER]: {
-            id: BYOKProvider.OPEN_ROUTER,
-            name: 'OpenRouter',
-            description: 'Multiple models through OpenRouter',
-            supported: true,
-            requiresApiKey: true,
-            requiresBaseUrl: false,
-        },
-        [BYOKProvider.NOVITA]: {
-            id: BYOKProvider.NOVITA,
-            name: 'Novita',
-            description: 'Open source models from Novita',
-            supported: true,
-            requiresApiKey: true,
-            requiresBaseUrl: false,
-        },
-        [BYOKProvider.OPENAI_COMPATIBLE]: {
-            id: BYOKProvider.OPENAI_COMPATIBLE,
-            name: 'OpenAI Compatible',
-            description: 'Any OpenAI-compatible API endpoint',
-            supported: true,
-            requiresApiKey: true,
-            requiresBaseUrl: true,
-        },
-        [BYOKProvider.ANTHROPIC_COMPATIBLE]: {
-            id: BYOKProvider.ANTHROPIC_COMPATIBLE,
-            name: 'Anthropic Compatible',
-            description:
-                'Any Anthropic-compatible API endpoint (Kimi Code, Z.ai, DeepSeek, etc.)',
-            supported: true,
-            requiresApiKey: true,
-            requiresBaseUrl: true,
-        },
-    };
+    // Built once from the registry. Each connectable id (module id + its aliases)
+    // becomes one ProviderInfo via the shared descriptor — no hand-kept list.
+    private readonly providers: Record<string, ProviderInfo> =
+        ProviderService.buildFromRegistry();
+
+    private static buildFromRegistry(): Record<string, ProviderInfo> {
+        const out: Record<string, ProviderInfo> = {};
+        for (const d of describeAllProviderIds(REGISTRY.all())) {
+            out[d.id] = {
+                id: d.id,
+                name: d.label,
+                supported: true,
+                requiresApiKey: d.requiresApiKey,
+                requiresBaseUrl: d.requiresBaseUrl,
+                autoListModels: d.autoListModels,
+                doc: d.doc,
+            };
+        }
+        return out;
+    }
 
     /**
      * Get all available providers

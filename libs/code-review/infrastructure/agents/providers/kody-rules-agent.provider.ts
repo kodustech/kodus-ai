@@ -1,14 +1,14 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
+import { LLM } from '@libs/llm/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { createLogger } from '@libs/core/log/logger';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
 import { fileMatchesRulePath } from '@libs/common/utils/kody-rules/file-patterns';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { BaseCodeReviewAgentProvider } from '@libs/code-review/infrastructure/agents/providers/base-code-review-agent.provider';
-import { resolveAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
+import { resolveReviewAgentModel } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
 import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
 import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import {
@@ -50,7 +50,6 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
     private readonly shardLogger = createLogger('KodyRulesShardedAgent');
 
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         observabilityService: ObservabilityService,
         @Optional()
@@ -64,7 +63,6 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         private readonly externalReferenceLoaderService?: ExternalReferenceLoaderService,
     ) {
         super(
-            promptRunnerService,
             permissionValidationService,
             observabilityService,
             documentationSearchService,
@@ -165,9 +163,12 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
         let shardsRun = 0;
         let shardsErrored = 0;
         if (semanticRules.length > 0) {
-            const { byokConfig, main } = await resolveAgentModel(
+            const { byokConfig, main } = await resolveReviewAgentModel(
                 input,
                 this.permissionValidationService,
+                // Route the Kody-Rules review agent to its own task — falls back
+                // to the org's codeReview model when no override is set.
+                LLM_TASK.kodyRulesReview,
             );
 
             // Resolve the org's Kody Language into a human-readable label
@@ -191,14 +192,14 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
             });
 
             // Single-shot structured call on the LOCAL (Vercel) stack — no tools,
-            // no loop, no kodus-common. Main = the org's BYOK model or our managed
-            // default (kimi-k2.7-code via Moonshot); fallback = the org's own
-            // fallback (BYOK) or, for trial only, our managed Groq gpt-oss-120b.
+            // no loop. One model = the org's BYOK model or our
+            // managed default (kimi-k2.7-code via Moonshot); there is no 2nd-model
+            // fallback (removed in 04b-05), only the same-model latency guard.
             // See runStructuredReviewCall for the model policy. runAiSdkLLMInSpan
             // (inside the helper) emits the `tu`-stamped LLM-usage span so the
             // sharded path's tokens still reach the user-facing token analytics.
             const runJudge: RunJudge = async ({ system, user, filename }) => {
-                const parsed = await runStructuredReviewCall({
+                const parsed = await LLM.run({
                     byokConfig: byokConfig ?? undefined,
                     // Wire schema, NOT the zod object: zodSchema() would
                     // re-derive `required` from the zod input side and
@@ -215,7 +216,6 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                         agentName: this.getIdentity().name,
                         ...(filename ? { file: filename } : {}),
                     },
-                    observabilityService: this.observabilityService,
                 });
                 return ((parsed as any)?.violations ??
                     []) as RawShardViolation[];

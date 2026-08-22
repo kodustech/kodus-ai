@@ -14,7 +14,7 @@ import {
     SuggestionEmbeddedFeedbacksWithLanguage,
 } from '@libs/kodyFineTuning/domain/suggestionEmbedded/interfaces/suggestionEmbedded.interface';
 import { SuggestionEmbeddedEntity } from '@libs/kodyFineTuning/domain/suggestionEmbedded/entities/suggestionEmbedded.entity';
-import { getOpenAIEmbedding } from '@libs/common/utils/langchainCommon/document';
+import { getOpenAIEmbedding } from '@libs/common/utils/document';
 import { FeedbackType } from '@libs/kodyFineTuning/domain/enums/feedbackType.enum';
 import { SuggestionEmbeddedDatabaseRepository } from '../../repositories/suggestionEmbedded.repository';
 

@@ -46,6 +46,15 @@ const ALLOWLIST: Array<{ pattern: RegExp; reason: string }> = [
         reason: 'test/dev fixtures (local-only helpers)',
     },
     {
+        // Opt-in flag that gates the live-API contract specs (the Fireworks
+        // trial-model availability + structured-output tests). Read only by
+        // those *.contract.spec.ts files, never by the api/worker/web runtime,
+        // so it must not live in .env.schema. Set to run the live pass:
+        // RUN_LIVE_CONTRACT_TESTS=1.
+        pattern: /^RUN_LIVE_CONTRACT_TESTS$/,
+        reason: 'test-only opt-in flag for live contract specs (not runtime config)',
+    },
+    {
         // Generic names captured by the grep that are almost certainly
         // DI tokens or test identifiers, not env vars.
         pattern: /^(API_KEY|API_KEY_SECRET|API_KEY_SECRET_PEPPER|API_SECRET_KEY|RUN_NAME)$/,

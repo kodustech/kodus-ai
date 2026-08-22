@@ -1,9 +1,12 @@
 import type { AgentThread } from './runtime/skill-runtime.types';
 import { createLogger } from '@libs/core/log/logger';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import {
+    withLangfuseTrace,
+    type LangfuseTraceAttributes,
+} from '@libs/core/log/langfuse';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -37,8 +40,17 @@ export interface SkillExecutionContext<TPrepareContext = unknown> {
      * Per-repository/directory BYOK model override resolved by the code
      * review pipeline (`codeReviewConfig.byokModel`). When set, the skill's
      * LLM calls run on this model instead of the BYOK-settings main model.
+     *
+     * Legacy NAME-based override, kept for the transition window (D-05).
      */
     byokModel?: string;
+    /**
+     * Id-based BYOK model override (Phase 4) from `codeReviewConfig.byokModelId`.
+     * References a v2 `models[]` entry by its stable id; the base provider routes
+     * the `conversation` task to it via `StaticTaskStrategy`. Wins over the
+     * legacy `byokModel` NAME during the window.
+     */
+    byokModelId?: string;
 }
 
 export interface SkillErrorContext<TPrepareContext = unknown> {
@@ -64,7 +76,6 @@ export abstract class AbstractSkillProvider<
     protected abstract readonly skillName: string;
 
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         observabilityService: ObservabilityService,
         protected readonly genericSkillRunner: GenericSkillRunnerService,
@@ -72,11 +83,7 @@ export abstract class AbstractSkillProvider<
         protected readonly capabilityStrategyService?: CapabilityStrategyService,
         protected readonly capabilityResourcePlanService?: CapabilityResourcePlanService,
     ) {
-        super(
-            promptRunnerService,
-            permissionValidationService,
-            observabilityService,
-        );
+        super(permissionValidationService, observabilityService);
     }
 
     protected abstract createBlueprint(
@@ -152,8 +159,48 @@ export abstract class AbstractSkillProvider<
 
         this.logExecutionStarted(organizationAndTeamData, userLanguage);
 
-        await this.fetchBYOKConfig(organizationAndTeamData, context.byokModel);
+        await this.fetchBYOKConfig(
+            organizationAndTeamData,
+            context.byokModel,
+            context.byokModelId,
+        );
 
+        // One trace identity for the WHOLE skill run — context fetcher, the LLM
+        // steps and the formatter alike. Wrapping any narrower leaves the
+        // fetcher's model calls outside the session, which is exactly how the
+        // gathering phase went missing next to the analysis it fed.
+        return withLangfuseTrace(this.traceAttributes(context), () =>
+            this.executeTraced(context, organizationAndTeamData, userLanguage),
+        );
+    }
+
+    /**
+     * Langfuse trace identity for a skill run. The default scopes by
+     * organization only — no session, because a generic skill has nothing to
+     * group with. Override to add one (e.g. a PR-scoped skill joins the
+     * pull request's session via `pullRequestSessionId`).
+     */
+    protected traceAttributes(
+        context: SkillExecutionContext<TPrepareContext>,
+    ): LangfuseTraceAttributes {
+        const orgId =
+            context.organizationAndTeamData?.organizationId?.toString();
+        return {
+            traceName: this.skillName,
+            userId: orgId,
+            metadata: {
+                organizationId: orgId,
+                teamId: context.organizationAndTeamData?.teamId?.toString(),
+                skill: this.skillName,
+            },
+        };
+    }
+
+    private async executeTraced(
+        context: SkillExecutionContext<TPrepareContext>,
+        organizationAndTeamData: OrganizationAndTeamData,
+        userLanguage: string,
+    ): Promise<string> {
         const fetcherInitialization = await this.initializeFetcherRuntime(
             context,
             organizationAndTeamData,

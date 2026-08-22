@@ -19,7 +19,14 @@ export const LLM_CALL_TIMEOUT_MS = 10 * 60 * 1000;
 /** Create an AbortSignal that fires after the given ms. */
 export function timeoutSignal(ms: number): AbortSignal {
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), ms);
+    const timer = setTimeout(() => controller.abort(), ms);
+    // The timeout is only a guard: a settled call clears its own path, so the
+    // pending timer must NOT keep the event loop (a worker, or Jest) alive on
+    // its own. unref lets the process exit once the real work is done while the
+    // guard still fires if the process is otherwise busy waiting on the call.
+    if (typeof timer.unref === 'function') {
+        timer.unref();
+    }
     return controller.signal;
 }
 

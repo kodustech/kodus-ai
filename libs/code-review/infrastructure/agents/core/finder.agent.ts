@@ -39,15 +39,15 @@ import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agent
 import type { Verdict } from '@libs/agent-harness/domain/contracts/verifier.contract';
 import {
     buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 // Domain helper relocated out of the legacy file (Zod validation of findings).
 import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
-import { withStructuredOutputFallback } from '@libs/llm/byok-to-vercel';
+import { LLM } from '@libs/llm/llm';
 import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
-import { generateObject } from 'ai';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { z } from 'zod';
 
 export const FINDER_DONE_TOOL = 'submitResult' as const;
@@ -146,9 +146,14 @@ export interface BuildFinderSpecParams {
     maxSteps?: number;
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
+    /** Cost-span run name for this finder's leaf model calls (e.g.
+     *  `code-review-bug`). Buckets the usage span to `review` in `deriveArea`.
+     *  Defaults to `code-review` (still `review`) when unset. */
+    usageRunName?: string;
+    /** Cost-span agentName (the review agent's identity name). */
+    agentName?: string;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the long system prompt is cached across the loop's steps. */
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
 }
 
 export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
@@ -177,8 +182,12 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
 
     return {
         id: 'finder',
+        // Cost-span identity: LLM.run records the ONE usage span per model call
+        // with this runName; `deriveArea` buckets `code-review*` under `review`.
+        runName: params.usageRunName ?? 'code-review',
+        agentName: params.agentName,
+        phase: 'review',
         systemPrompt: params.systemPrompt,
-        modelId: params.modelId,
         tools,
         policies,
         maxSteps: params.maxSteps ?? 20,
@@ -187,7 +196,6 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // doneToolName concern — same tool, distinct roles.
         resultToolName: FINDER_DONE_TOOL,
         providerOptions: params.providerOptions,
-        systemProviderOptions: params.systemProviderOptions,
     };
 }
 
@@ -267,6 +275,12 @@ function findingsFromText(state: RunState): {
             // not valid JSON in this step — try an earlier one
         }
     }
+    // KNOWN LIMITATION (E) — total parse failure under-reports SILENTLY: no step
+    // held extractable JSON. The caller falls to prose recovery
+    // (recoverFindingsFromProse), which also returns [] when the prose doesn't read
+    // like findings. If BOTH miss, the finder's findings are dropped with no
+    // counter/log — a review can silently under-report. Accepted for now; a
+    // parse-failure metric would make the drop observable.
     return null;
 }
 
@@ -344,33 +358,33 @@ export async function extractFindingsWithRecovery(
 
 export async function recoverFindingsFromProse(
     prose: string,
-    byokConfig: BYOKConfig | undefined,
+    byokConfig: NormalizedModel | undefined,
     organizationId: string | undefined,
+    usageRunName?: string,
 ): Promise<FinderSuggestion[]> {
     if (!looksLikeFindings(prose)) return [];
     try {
-        const suggestions = await withStructuredOutputFallback(
-            {
-                byokConfig,
-                organizationId,
-                label: 'finder-prose-recovery',
-            },
-            async (model) => {
-                const { object } = await generateObject({
-                    model,
-                    schema: RECOVERY_SCHEMA,
-                    prompt:
-                        "The following is a code reviewer's analysis written as " +
-                        'prose. Extract EVERY concrete finding it describes into ' +
-                        'the structured schema — one entry per distinct issue, ' +
-                        'using the file paths and line numbers mentioned. Do NOT ' +
-                        'invent findings; only extract what is explicitly ' +
-                        `described.\n\nANALYSIS:\n${prose}`,
-                });
-                return object.suggestions as unknown as FinderSuggestion[];
-            },
-        );
-        return suggestions ?? [];
+        // ONE primitive: LLM.run resolves the slot (or managed default), owns the
+        // span + the json_schema→json_object fallback the recovery pass needs, and
+        // returns the parsed object. The runName buckets this recovery call's
+        // usage span to `review` (deriveArea) alongside the finder/verify calls —
+        // it is part of the same review, not a separate `other` area.
+        const result = await LLM.run({
+            byokConfig,
+            schema: RECOVERY_SCHEMA,
+            user:
+                "The following is a code reviewer's analysis written as " +
+                'prose. Extract EVERY concrete finding it describes into ' +
+                'the structured schema — one entry per distinct issue, ' +
+                'using the file paths and line numbers mentioned. Do NOT ' +
+                'invent findings; only extract what is explicitly ' +
+                `described.\n\nANALYSIS:\n${prose}`,
+            runName: usageRunName
+                ? `${usageRunName}-recovery`
+                : 'code-review-recovery',
+            organizationId,
+        });
+        return (result.suggestions as unknown as FinderSuggestion[]) ?? [];
     } catch {
         // Best-effort: recovery must never break the review.
         return [];
@@ -395,7 +409,6 @@ export interface RunFinderWithVerifyParams {
     providerOptions?: Readonly<Record<string, unknown>>;
     /** System-message provider options (e.g. Anthropic prompt caching), forwarded
      *  to the finder spec and the verifier runs. */
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
     /** Skip the recall pass entirely (fast mode / self-contained trial). */
     skipHeavyPasses?: boolean;
     /** Skip ONLY the synthesis-rescue pass. */
@@ -409,6 +422,9 @@ export interface RunFinderWithVerifyParams {
     telemetryMetadata?: LangfuseTelemetryMetadata;
     /** Agent name (finder/security/...) — prefixes every observation name. */
     agentName?: string;
+    /** Cost-span run name base (e.g. `code-review-bug`) forwarded to the verifier
+     *  runs so their leaf usage spans bucket to `review` in `deriveArea`. */
+    usageRunName?: string;
     /** Injected prose-findings recovery capability (see ProseRecoverer). The
      *  adapter wires it to the internal-model fallback; omit to disable. */
     recoverProse?: ProseRecoverer;
@@ -466,9 +482,11 @@ export async function runFinderWithVerify(
         params.finderSpec,
         {
             ...input,
-            telemetry: buildLangfuseTelemetry(
-                params.agentName ?? 'finder',
-                params.telemetryMetadata,
+            ...toAiSdkTelemetryArgs(
+                buildLangfuseTelemetry(
+                    params.agentName ?? 'finder',
+                    params.telemetryMetadata,
+                ),
             ),
         },
         ctx,
@@ -543,9 +561,9 @@ export async function runFinderWithVerify(
         modelId: params.modelId,
         tools: params.tools,
         providerOptions: params.providerOptions,
-        systemProviderOptions: params.systemProviderOptions,
         telemetryMetadata: params.telemetryMetadata,
         agentName: params.agentName,
+        usageRunName: params.usageRunName,
     });
     const pass = await runVerificationPass<FinderSuggestion>(
         { candidates: suggestions, verifier, concurrency: params.concurrency },
@@ -575,9 +593,9 @@ export async function runFinderWithVerify(
             tools: params.tools,
             forceFull: true,
             providerOptions: params.providerOptions,
-            systemProviderOptions: params.systemProviderOptions,
             telemetryMetadata: params.telemetryMetadata,
             agentName: params.agentName,
+            usageRunName: params.usageRunName,
         });
         const gate = await runVerificationPass<FinderSuggestion>(
             {
@@ -747,9 +765,11 @@ export async function runRecallPasses(
             spec,
             {
                 prompt,
-                telemetry: buildLangfuseTelemetry(
-                    `${params.agentName ?? 'finder'}-${label}`,
-                    params.telemetryMetadata,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        `${params.agentName ?? 'finder'}-${label}`,
+                        params.telemetryMetadata,
+                    ),
                 ),
             },
             ctx,
@@ -813,7 +833,7 @@ export async function runRecallPasses(
         // between them) → run them CONCURRENTLY. Cuts heavy latency from
         // base+synthesis+N×finder to base+synthesis+~1×finder. Cost note: the
         // base run has already WRITTEN the Anthropic prompt cache (system prompt
-        // via anthropicSystemCacheControl), so the parallel re-runs both get
+        // via systemCacheControl), so the parallel re-runs both get
         // cache READS on the static prefix — the marginal cost of a re-run is
         // well under a full run's input price.
         await Promise.all(

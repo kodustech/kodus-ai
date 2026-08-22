@@ -21,4 +21,16 @@ export interface IOrganizationParametersService extends IOrganizationParametersR
         organizationId: string,
         configType: 'main' | 'fallback',
     ): Promise<boolean>;
+    /**
+     * v2 delete-by-model-id (REQ-DELETE-01). Removes the `models[]` entry with
+     * `modelId`, drops any now-orphan non-managed credential, and performs the
+     * explicit last-model disconnect (removes the whole BYOK config) rather than
+     * leaving an empty pool. The referential-integrity guard runs in the
+     * use-case; this receives an already-validated model id. Retained ciphertext
+     * is written back verbatim (never re-encrypted).
+     */
+    deleteByokModel(
+        organizationId: string,
+        modelId: string,
+    ): Promise<boolean>;
 }

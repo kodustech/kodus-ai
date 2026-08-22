@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { IAIAnalysisService } from '@libs/code-review/domain/contracts/AIAnalysisService.contract';
@@ -248,7 +249,7 @@ export class SuggestionService implements ISuggestionService {
         suggestions: any[],
         languageResultPrompt: string,
         reviewMode: ReviewModeResponse,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedModel,
         crossFileSnippets?: CrossFileContextSnippet[],
         remoteCommands?: RemoteCommands,
         memories?: Array<Partial<IKodyRule>>,
@@ -713,7 +714,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -757,7 +758,6 @@ export class SuggestionService implements ISuggestionService {
                     ? await this.commentManagerService.repeatedCodeReviewSuggestionClustering(
                           organizationAndTeamData,
                           prNumber,
-                          LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
                           suggestionsToCluster,
                           byokConfig,
                       )
@@ -813,7 +813,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -880,7 +880,7 @@ export class SuggestionService implements ISuggestionService {
         suggestionControl: SuggestionControlConfig,
         prNumber: number,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         prioritizedSuggestions: any[];
         discardedSuggestionsBySeverityOrQuantity: any[];
@@ -1580,7 +1580,7 @@ export class SuggestionService implements ISuggestionService {
         codeSuggestions: CodeSuggestion[],
         selectedCategories: ReviewOptions,
         codeReviewVersion: CodeReviewVersion,
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ) {
         try {
             if (!codeSuggestions?.length) {

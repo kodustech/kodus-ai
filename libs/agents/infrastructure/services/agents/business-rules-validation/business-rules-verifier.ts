@@ -27,10 +27,7 @@ import {
     buildVerifierAgentSpec,
     extractVerdict,
 } from '@libs/agent-harness/infrastructure/verify/llm-verdict';
-import {
-    buildLangfuseTelemetry,
-    type LangfuseTelemetryMetadata,
-} from '@libs/core/log/langfuse';
+import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 
 import type { ValidationResult } from './types';
 
@@ -47,6 +44,12 @@ const SYSTEM_PROMPT = [
 
 export interface BusinessRulesVerifierParams {
     modelId: string;
+    /** Cost-attribution labels forwarded onto the spec so LLM.run's span records
+     *  the verify pass under the right agentName/phase (set by the agent wiring). */
+    agentName?: string;
+    phase?: string;
+    runName?: string;
+    spanName?: string;
     /** The PR diff the analyzer judged. */
     diff: string;
     /** The task requirements / acceptance criteria the analyzer judged against. */
@@ -65,8 +68,9 @@ export interface BusinessRulesVerifierParams {
 export class BusinessRulesVerifier implements Verifier<ValidationResult> {
     private _usage: TokenUsage = {};
 
-    /** Token usage of the last verify() run — the caller records it to the cost
-     *  dataset (recordAgentRunUsage), same as the analyzer. */
+    /** Token usage of the last verify() run. The cost span is recorded by
+     *  LLM.run (the runner reads the spec's cost labels), same as the analyzer —
+     *  this getter just exposes the numbers for logging/tests. */
     get usage(): TokenUsage {
         return this._usage;
     }
@@ -84,24 +88,33 @@ export class BusinessRulesVerifier implements Verifier<ValidationResult> {
         const systemPrompt = lang
             ? `${SYSTEM_PROMPT}\n\nWrite "rationale" as a complete, user-facing sentence in ${lang} (it is shown to the user when the violation is dropped). Do not mix languages.`
             : SYSTEM_PROMPT;
-        const spec = buildVerifierAgentSpec({
-            id: 'business-rules-verifier',
-            systemPrompt,
-            modelId: this.params.modelId,
-            tools: this.params.tools ?? new InMemoryToolRegistry([]),
-            maxSteps: this.params.maxSteps ?? 4,
-            providerOptions: this.params.providerOptions,
-        });
+        const spec = {
+            ...buildVerifierAgentSpec({
+                id: 'business-rules-verifier',
+                systemPrompt,
+                modelId: this.params.modelId,
+                tools: this.params.tools ?? new InMemoryToolRegistry([]),
+                maxSteps: this.params.maxSteps ?? 4,
+                providerOptions: this.params.providerOptions,
+            }),
+            // Cost labels for LLM.run's span (the runner reads them off the spec).
+            ...(this.params.agentName
+                ? { agentName: this.params.agentName }
+                : {}),
+            ...(this.params.phase ? { phase: this.params.phase } : {}),
+            ...(this.params.runName ? { runName: this.params.runName } : {}),
+            ...(this.params.spanName ? { spanName: this.params.spanName } : {}),
+        };
         const state = await this.runner.run(
             spec,
             {
                 prompt: this.buildPrompt(candidate),
                 ...(this.params.telemetryMetadata
                     ? {
-                          telemetry: buildLangfuseTelemetry(
-                              'business-rules/verify',
-                              this.params.telemetryMetadata,
-                          ),
+                          telemetryMetadata: this.params
+                              .telemetryMetadata as Readonly<
+                              Record<string, unknown>
+                          >,
                       }
                     : {}),
             },

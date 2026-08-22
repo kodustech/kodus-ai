@@ -16,8 +16,6 @@ import { WebhookEnqueueModule } from './webhook-enqueue.module';
 
 import { NotificationModule } from '@libs/notifications/modules/notification.module';
 import { KodyRulesModule } from '@libs/kodyRules/modules/kodyRules.module';
-import { LLMModule } from '@kodus/kodus-common/llm';
-import { LoggerWrapperService } from '@libs/core/log/loggerWrapper.service';
 
 import { AzureReposController } from '../controllers/azureRepos.controller';
 import { BillingController } from '../controllers/billing.controller';
@@ -37,9 +35,6 @@ import { WebhookHealthController } from '../controllers/webhook-health.controlle
         FeatureGateModule,
         SharedPostgresModule.forRoot({ poolSize: 8 }),
         SharedMongoModule.forRoot(),
-        LLMModule.forRoot({
-            logger: LoggerWrapperService,
-        }),
 
         EventEmitterModule.forRoot(),
         RabbitMQWrapperModule.register({ enableConsumers: false }),

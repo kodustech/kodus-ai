@@ -27,28 +27,38 @@ import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
-import catalog from "../../../../_data/curated-models.json";
 import {
     getAnnotationForModel,
     type CuratedModelsCatalog,
 } from "../../../../_data/curated-models.types";
 
-const annotations = (catalog as CuratedModelsCatalog).annotations;
+// Annotations (per-model badges) are not part of the backend catalog and are
+// currently empty — default to none. Re-add via the catalog endpoint if needed.
+const annotations: CuratedModelsCatalog["annotations"] = {};
 
-export const ByokModelSelect = () => {
+export const ByokModelSelect = ({
+    excludeIds = [],
+}: {
+    /** Model ids to hide from the dropdown — e.g. models already enabled on this
+     *  provider, so "Add model" never offers a duplicate. */
+    excludeIds?: string[];
+} = {}) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
     const { providers } = useSuspenseGetLLMProviders();
     const foundProvider = providers.find((p) => p.id === provider);
 
+    // Force manual model entry only when the provider's models can't be
+    // auto-listed (custom endpoint whose URL isn't known yet, or a `manual`
+    // listing) — driven by the registry, so a provider with a real listing +
+    // default base URL (e.g. Moonshot) shows the dropdown instead.
     const [manual, setManual] = useState<boolean>(
-        Boolean(foundProvider?.requiresBaseUrl),
+        !(foundProvider?.autoListModels ?? false),
     );
 
     useEffect(() => {
-        // Providers that require base URL force manual input
-        setManual(Boolean(foundProvider?.requiresBaseUrl));
-    }, [foundProvider?.requiresBaseUrl]);
+        setManual(!(foundProvider?.autoListModels ?? false));
+    }, [foundProvider?.autoListModels]);
 
     if (manual) {
         return (
@@ -62,7 +72,12 @@ export const ByokModelSelect = () => {
         );
     }
 
-    return <ModelSelect onUseManual={() => setManual(true)} />;
+    return (
+        <ModelSelect
+            excludeIds={excludeIds}
+            onUseManual={() => setManual(true)}
+        />
+    );
 };
 
 // Exported lightweight manual input for external fallbacks
@@ -84,6 +99,10 @@ const ModelInput = ({ onBackToSelect }: { onBackToSelect?: () => void }) => {
                     <FormControl.Input>
                         <Input
                             {...field}
+                            // Controlled from first render: the RHF field starts
+                            // undefined for a fresh add, which would flip the input
+                            // uncontrolled→controlled on first keystroke.
+                            value={field.value ?? ""}
                             size="md"
                             id={field.name}
                             className="w-full justify-between"
@@ -107,12 +126,25 @@ const ModelInput = ({ onBackToSelect }: { onBackToSelect?: () => void }) => {
     );
 };
 
-const ModelSelect = ({ onUseManual }: { onUseManual?: () => void }) => {
+const ModelSelect = ({
+    onUseManual,
+    excludeIds = [],
+}: {
+    onUseManual?: () => void;
+    excludeIds?: string[];
+}) => {
     const form = useFormContext<EditKeyForm>();
     const [open, setOpen] = useState(false);
     const provider = form.watch("provider");
-    const { models } = useSuspenseGetLLMProviderModels({ provider });
+    const { models: allModels } = useSuspenseGetLLMProviderModels({ provider });
     const { reset: resetErrorBoundary } = useQueryErrorResetBoundary();
+
+    // Hide already-enabled models (add-model never offers a duplicate). Never
+    // filter out the currently-selected value, so an edit that lands on an
+    // "enabled" id still renders its own label.
+    const selected = form.watch("model");
+    const excludeSet = new Set(excludeIds.filter((id) => id !== selected));
+    const models = allModels.filter((m) => !excludeSet.has(m.id));
 
     const { providers } = useSuspenseGetLLMProviders();
     const foundProvider = providers.find((p) => p.id === provider);

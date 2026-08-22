@@ -1,11 +1,7 @@
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { LLM } from '@libs/llm/llm';
 import { Inject, Injectable } from '@nestjs/common';
+import { z } from 'zod';
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
@@ -30,7 +26,6 @@ import {
     type LinkedRepositoriesReviewMetadata,
 } from '@libs/ee/linked-repositories';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import {
     IParametersService,
@@ -44,29 +39,23 @@ import {
 } from './messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import {
-    byokToVercelModel,
-    KODUS_TRIAL_MODEL,
-} from '@libs/llm/byok-to-vercel';
+import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
+import { getModelName, KODUS_TRIAL_MODEL } from '@libs/llm/byok-to-vercel';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     attachClassification,
     classifyLLMError,
+    llmErrorLogLevel,
 } from '@libs/llm/error-classifier';
-import { tracedGenerateText } from '@libs/llm/llm-call';
-import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
 import {
     getTranslationsForLanguageByCategory,
     TranslationsCategory,
 } from '@libs/common/utils/translations/translations';
-import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils/langchainCommon/prompts/repeatedCodeReviewSuggestionClustering';
+import { prompt_repeated_suggestion_clustering_system } from '@libs/common/utils/prompts/repeatedCodeReviewSuggestionClustering';
 import { createLogger } from '@libs/core/log/logger';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { estimateTokens, tokensToChars } from './utils/token-estimator';
-import { resolveByokTemperature } from '@libs/llm/anthropic-model-traits';
 
 interface ClusteredSuggestion {
     id: string;
@@ -74,6 +63,26 @@ interface ClusteredSuggestion {
     problemDescription?: string;
     actionStatement?: string;
 }
+
+/**
+ * Structured-output schema for `repeatedCodeReviewSuggestionClustering`. Mirrors
+ * the JSON shape the `prompt_repeated_suggestion_clustering_system` prompt
+ * already declares in its `<output_format>` block, so migrating the STRING/JSON
+ * parser onto the structured AI-SDK path does not force the model to fabricate
+ * fields. The structured result is re-serialized (JSON.stringify) and fed through
+ * `LLMResponseProcessor.processResponse` exactly as the STRING path did, keeping
+ * the downstream clustering/enrichment mapping byte-for-byte identical.
+ */
+export const repeatedClusteringSchema = z.object({
+    codeSuggestions: z.array(
+        z.object({
+            id: z.string(),
+            sameSuggestionsId: z.array(z.string()).optional(),
+            problemDescription: z.string().optional(),
+            actionStatement: z.string().optional(),
+        }),
+    ),
+});
 
 @Injectable()
 export class CommentManagerService implements ICommentManagerService {
@@ -84,7 +93,6 @@ export class CommentManagerService implements ICommentManagerService {
         @Inject(PARAMETERS_SERVICE_TOKEN)
         private readonly parametersService: IParametersService,
         private readonly messageProcessor: MessageTemplateProcessor,
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
         private readonly permissionValidationService: PermissionValidationService,
         private readonly codeManagementService: CodeManagementService,
@@ -97,11 +105,11 @@ export class CommentManagerService implements ICommentManagerService {
      * SDK) path so the user's BYOK model — including Claude-on-Vertex — is
      * honored. The legacy v2 langchain path (PromptRunnerService) only spoke
      * Gemini on Vertex, so a Claude-on-Vertex BYOK crashed the summary step
-     * before suggestions could be posted. Defaults to kimi-k2.7-code (Moonshot)
-     * when no BYOK is configured (cloud/trial default).
+     * before suggestions could be posted. Defaults to deepseek-v4-flash
+     * (DeepSeek) when no BYOK is configured (cloud/trial default).
      */
     private async runSummaryPromptV5(params: {
-        byokConfig: BYOKConfig | null;
+        slot: NormalizedModel | undefined;
         systemPrompt: string;
         userPrompt: string;
         runName: string;
@@ -114,7 +122,7 @@ export class CommentManagerService implements ICommentManagerService {
         };
     }): Promise<string> {
         const {
-            byokConfig,
+            slot,
             systemPrompt,
             userPrompt,
             runName,
@@ -123,48 +131,27 @@ export class CommentManagerService implements ICommentManagerService {
             metadata,
         } = params;
 
-        // This is an AI SDK call (tracedGenerateText), so use runAiSdkLLMInSpan —
-        // it reads token usage from result.usage. runLLMInSpan is the
-        // LangChain-callback path (TokenTrackingHandler) and can't see AI SDK
-        // usage, which is why summary spans were recorded with 0 tokens.
-        const result = await this.observabilityService.runAiSdkLLMInSpan<any>({
-            spanName,
+        // One-shot PLAIN-TEXT call through the shared review executor (Porta 2).
+        // It resolves the ONE model (org BYOK slot, else the KODUS_TRIAL_MODEL
+        // default), honors the slot's temperature + reasoning, wraps it in the
+        // BYOK concurrency limiter, and records the observability span — the same
+        // policy every structured review call uses. Replaces the hand-rolled
+        // buildModelFromSlot + telemetry copy this used to be, which silently
+        // dropped the limiter (the user's maxConcurrentRequests) and the slot's
+        // reasoning. Temperature handling is preserved (resolveSlotCallOptions
+        // withholds it on models that reject sampling params, e.g. kimi-k2.7-code
+        // and Anthropic 4.7+).
+        return LLM.run({
+            byokConfig: slot,
+            system: systemPrompt,
+            user: userPrompt,
             runName,
-            model: byokConfig?.main?.model ?? KODUS_TRIAL_MODEL,
+            spanName,
             attrs,
-            exec: async () => {
-                const model = byokToVercelModel(
-                    byokConfig ?? undefined,
-                    'main',
-                    {},
-                    KODUS_TRIAL_MODEL,
-                );
-                // Only pin temperature when the BYOK config sets one. Forcing 0
-                // broke models that reject a non-default temperature — Moonshot's
-                // kimi-k2.7-code rejects anything but 1 (HTTP 400), so the summary
-                // silently failed for kimi users while reviews kept working. The
-                // finder omits temperature for the same reason (finder.agent.ts),
-                // letting the provider default apply.
-                // Also withheld on Anthropic 4.7+, which removed sampling
-                // params and 400s the request when one is present.
-                const configuredTemperature = resolveByokTemperature(
-                    byokConfig?.main,
-                );
-                return await tracedGenerateText({
-                    model: model as any,
-                    system: systemPrompt,
-                    prompt: userPrompt,
-                    ...(configuredTemperature !== undefined
-                        ? { temperature: configuredTemperature }
-                        : {}),
-                    ...toAiSdkTelemetryArgs(
-                        buildLangfuseTelemetry(runName, metadata),
-                    ),
-                });
-            },
+            organizationId: metadata?.organizationId,
+            telemetryMetadata: metadata,
+            defaultModelOverride: KODUS_TRIAL_MODEL,
         });
-
-        return (result?.text as string) ?? '';
     }
 
     async generateSummaryPR(
@@ -174,18 +161,16 @@ export class CommentManagerService implements ICommentManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         languageResultPrompt: string,
         summaryConfig: SummaryConfig,
-        byokConfig?: BYOKConfig,
         isCommitRun?: boolean,
         prPreview?: boolean,
         externalPromptContext?: any,
         platformType?: PlatformType,
     ): Promise<string> {
-        let byokConfigValue: BYOKConfig | null = byokConfig ?? null;
-
         if (!summaryConfig?.generatePRSummary) {
             return null;
         }
 
+        // Preview is gated behind a basic-license check.
         if (prPreview) {
             const validationResult =
                 await this.permissionValidationService.validateBasicLicense(
@@ -195,28 +180,23 @@ export class CommentManagerService implements ICommentManagerService {
             if (!validationResult.allowed) {
                 return null;
             }
-
-            byokConfigValue =
-                await this.permissionValidationService.getBYOKConfig(
-                    organizationAndTeamData,
-                );
         }
 
-        // Resolve the org's BYOK when the caller didn't pass one (the review
-        // flow passes codeReviewConfig.byokConfig, which can be null even when
-        // the org has BYOK). Without this, the summary falls to the internal
-        // default provider — which hard-fails when that provider is blocked
-        // (e.g. "project denied access") — while the review agents, which
-        // resolve BYOK themselves, keep working. Fetch the same BYOK they use.
-        if (!byokConfigValue) {
-            try {
-                byokConfigValue =
-                    (await this.permissionValidationService.getBYOKConfig(
-                        organizationAndTeamData,
-                    )) ?? null;
-            } catch {
-                byokConfigValue = null;
-            }
+        // The summary OWNS its model resolution: always route the org's config
+        // by the `prSummary` task. There is no caller-supplied slot — passing the
+        // codeReview-resolved slot here used to make the summary silently reuse
+        // the review model and skip any prSummary override. Absent / legacy /
+        // BLOCKED config → undefined slot → managed default downstream, exactly
+        // as the review agents (which resolve their own BYOK) degrade.
+        let byokConfigValue: NormalizedModel | undefined;
+        try {
+            byokConfigValue =
+                await this.permissionValidationService.resolveTaskSlot(
+                    organizationAndTeamData,
+                    LLM_TASK.prSummary,
+                );
+        } catch {
+            byokConfigValue = undefined;
         }
 
         const maxRetries = 2;
@@ -339,7 +319,7 @@ export class CommentManagerService implements ICommentManagerService {
                 };
 
                 // --- Chunk changedFiles if maxInputTokens is configured ---
-                const maxInputTokens = byokConfigValue?.main?.maxInputTokens;
+                const maxInputTokens = byokConfigValue?.maxInputTokens;
 
                 const fileChunks = this.chunkChangedFilesForSummary(
                     changedFiles,
@@ -366,11 +346,10 @@ export class CommentManagerService implements ICommentManagerService {
 
                 if (fileChunks.length === 1) {
                     // Single chunk — normal path (no chunking needed)
-                    const userPrompt =
-                        `<changedFilesContext>${JSON.stringify(fileChunks[0]) || 'No files changed'}</changedFilesContext>`;
+                    const userPrompt = `<changedFilesContext>${JSON.stringify(fileChunks[0]) || 'No files changed'}</changedFilesContext>`;
 
                     result = await this.runSummaryPromptV5({
-                        byokConfig: byokConfigValue,
+                        slot: byokConfigValue ?? null,
                         systemPrompt: promptBase,
                         userPrompt,
                         runName,
@@ -401,14 +380,13 @@ export class CommentManagerService implements ICommentManagerService {
                     // is small (2–4).
                     const chunkResults = await Promise.allSettled(
                         fileChunks.map((chunk, i) => {
-                            const chunkUserPrompt =
-                                `<changedFilesContext>${JSON.stringify(chunk)}</changedFilesContext>`;
+                            const chunkUserPrompt = `<changedFilesContext>${JSON.stringify(chunk)}</changedFilesContext>`;
 
                             const chunkRunName = `${runName}_chunk_${i + 1}`;
                             const chunkSpanName = `${CommentManagerService.name}::${chunkRunName}`;
 
                             return this.runSummaryPromptV5({
-                                byokConfig: byokConfigValue,
+                                slot: byokConfigValue ?? null,
                                 systemPrompt:
                                     promptBase +
                                     `\n\n**Note**: This is chunk ${i + 1} of ${fileChunks.length}. Generate a summary for these files only.`,
@@ -471,7 +449,7 @@ You must always respond in ${languageResultPrompt}.`;
                         .join('\n\n');
 
                     result = await this.runSummaryPromptV5({
-                        byokConfig: byokConfigValue,
+                        slot: byokConfigValue ?? null,
                         systemPrompt: consolidationPrompt,
                         userPrompt: consolidationUserPrompt,
                         runName: consolidationRunName,
@@ -613,7 +591,10 @@ You must always respond in ${languageResultPrompt}.`;
 
                 return finalDescription.toString();
             } catch (error) {
-                this.logger.error({
+                // Terminal BYOK billing/auth (suspended key, no credit) → warn:
+                // it's the user's provider, retrying won't help, and each retry
+                // re-logged it. A real fault stays error.
+                this.logger[llmErrorLogLevel(error)]({
                     message: `Error generateOverallComment pull request: PR#${pullRequest?.number}`,
                     context: CommentManagerService.name,
                     error,
@@ -621,7 +602,7 @@ You must always respond in ${languageResultPrompt}.`;
                 });
                 retryCount++;
                 if (retryCount === maxRetries) {
-                    this.logger.error({
+                    this.logger[llmErrorLogLevel(error)]({
                         message: `Error generateOverallComment pull request. Max retries exceeded: PR#${pullRequest?.number}`,
                         context: CommentManagerService.name,
                         error,
@@ -639,9 +620,7 @@ You must always respond in ${languageResultPrompt}.`;
                             : new Error(String(error)),
                         classifyLLMError(
                             error,
-                            byokConfigValue?.main?.provider as
-                                | string
-                                | undefined,
+                            byokConfigValue?.provider as string | undefined,
                         ),
                     );
                 }
@@ -1806,9 +1785,8 @@ ${reviewOptions}
     async repeatedCodeReviewSuggestionClustering(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        provider: LLMModelProvider,
         codeSuggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ) {
         const language = (
             await this.parametersService.findByKey(
@@ -1821,68 +1799,34 @@ ${reviewOptions}
         let repeteadSuggetionsClustered;
 
         try {
-            const fallbackProvider =
-                provider === LLMModelProvider.OPENAI_GPT_4O
-                    ? LLMModelProvider.NOVITA_DEEPSEEK_V3
-                    : LLMModelProvider.OPENAI_GPT_4O;
-
             const userPrompt = `<codeSuggestionsContext>${JSON.stringify(baseContext?.codeSuggestions) || 'No code suggestions provided'}</codeSuggestionsContext>`;
 
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                provider,
-                fallbackProvider,
-                byokConfig,
-            );
-
             const runName = 'repeatedCodeReviewSuggestionClustering';
-            const spanName = `${CommentManagerService.name}::${runName}`;
-            const spanAttrs = {
-                type: promptRunner.executeMode,
-                organizationId: organizationAndTeamData?.organizationId,
-                prNumber,
-            };
 
-            const { result } =
-                await this.observabilityService.runLLMInSpan<string>({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    byokConfig,
-                    exec: async (callbacks) => {
-                        return await promptRunner
-                            .builder()
-                            .setParser(ParserType.STRING)
-                            .setLLMJsonMode(true)
-                            .setPayload(baseContext)
-                            .addPrompt({
-                                prompt: prompt_repeated_suggestion_clustering_system,
-                                role: PromptRole.SYSTEM,
-                            })
-                            .addPrompt({
-                                prompt: userPrompt,
-                                role: PromptRole.USER,
-                            })
-                            .addMetadata({
-                                organizationId:
-                                    organizationAndTeamData?.organizationId,
-                                teamId: organizationAndTeamData?.teamId,
-                                pullRequestId: prNumber,
-                                provider:
-                                    byokConfig?.main?.provider || provider,
-                                model: byokConfig?.main?.model,
-                                fallbackProvider:
-                                    byokConfig?.fallback?.provider ||
-                                    fallbackProvider,
-                                fallbackModel: byokConfig?.fallback?.model,
-                                runName,
-                            })
-                            .addCallbacks(callbacks)
-                            .setRunName(runName)
-                            .setTemperature(0)
-                            .execute();
-                    },
-                });
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
+            // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the
+            // outer runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its
+            // own model. The structured result is re-serialized and fed through
+            // LLMResponseProcessor exactly as the STRING/JSON path did, preserving
+            // the downstream clustering/enrichment mapping. `prompt_repeated_*` is
+            // a payload-taking prompt fn (the builder called it with the payload),
+            // so it is invoked explicitly here with the language.
+            const clustered = await LLM.run({
+                schema: repeatedClusteringSchema,
+                system: prompt_repeated_suggestion_clustering_system({
+                    language,
+                }),
+                user: userPrompt,
+                runName,
+                organizationId: organizationAndTeamData?.organizationId,
+                byokConfig,
+                attrs: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    prNumber,
+                },
+            });
+
+            const result = clustered ? JSON.stringify(clustered) : null;
 
             if (!result) {
                 const message =
@@ -1893,9 +1837,10 @@ ${reviewOptions}
                     metadata: {
                         organizationAndTeamData,
                         prNumber,
-                        provider: byokConfig?.main?.provider || provider,
-                        fallbackProvider:
-                            byokConfig?.fallback?.provider || fallbackProvider,
+                        // The actual model that ran (same name
+                        // runStructuredReviewCall traces): BYOK slot or the
+                        // managed default.
+                        model: getModelName(byokConfig),
                     },
                 });
                 throw new Error(message);
@@ -1916,7 +1861,7 @@ ${reviewOptions}
                 metadata: {
                     organizationAndTeamData,
                     prNumber,
-                    provider,
+                    model: getModelName(byokConfig),
                 },
             });
 

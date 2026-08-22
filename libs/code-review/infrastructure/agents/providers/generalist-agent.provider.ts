@@ -1,5 +1,4 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
@@ -15,7 +14,6 @@ import { buildGeneralistReviewPrompt } from '@libs/code-review/infrastructure/ag
 @Injectable()
 export class GeneralistAgentProvider extends BaseCodeReviewAgentProvider {
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         observabilityService: ObservabilityService,
         @Optional()
@@ -24,7 +22,6 @@ export class GeneralistAgentProvider extends BaseCodeReviewAgentProvider {
         byokErrorCounter?: ByokErrorCounter,
     ) {
         super(
-            promptRunnerService,
             permissionValidationService,
             observabilityService,
             documentationSearchService,

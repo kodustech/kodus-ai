@@ -31,14 +31,29 @@ export interface TokenUsageTu {
     isByok: boolean;
     sys: boolean;
     model: string;
+    /** BYOK credential the spend attributes to — the per-key dimension the store
+     *  otherwise lacked (spend rolled up by model-NAME, which breaks on versioned
+     *  response names). `''` for env/managed/legacy usage → falls back to the
+     *  name-based rollup. Mirrored by backfill-tu.ts (asserted equal by the spec). */
+    credentialId: string;
     input: number;
     output: number;
     total: number;
     reasoning: number;
     cacheRead: number;
     cacheWrite: number;
-    /** Process area the tokens were spent in — see {@link deriveArea}. */
+    /** Process area the tokens were spent in — see {@link deriveArea}. This is
+     *  the PROCESS axis (where in the pipeline: review/suggestions/summary/…),
+     *  derived from the run name. Distinct from {@link route}. */
     area: TokenUsageArea;
+    /** Routing TASK the call served (`codeReview`/`prSummary`/`kodyRulesReview`/
+     *  `businessValidation`), stamped on the span by the router. This is the
+     *  CONFIG axis (which model-slot you picked per task) — the dimension the
+     *  per-task spend view groups by. `''` when the call was not task-routed
+     *  (env/managed default, or a direct-slot call). Distinct from {@link area}:
+     *  one task (e.g. `codeReview`) fans out across several areas (review +
+     *  suggestions), so they answer different questions. */
+    route: string;
 }
 
 /**
@@ -49,7 +64,6 @@ export interface TokenUsageTu {
 export type TokenUsageArea =
     | 'review' // generalist code-review agents (incl. verify/dedup)
     | 'kody_rules' // kody-rules analysis, generation and sync
-    | 'cross_file' // cross-file context collection + analysis
     | 'suggestions' // suggestion refinement (severity/safeguard/validation)
     | 'summary' // PR summary generation
     | 'conversation' // @kody conversation
@@ -63,6 +77,12 @@ export type TokenUsageArea =
  * a copy, asserted equal by token-usage-tu.spec.ts.
  */
 export const SUGGESTION_RUN_NAMES: ReadonlySet<string> = new Set([
+    // Current run-names (classify-severity.ts / format-suggestion-content.ts).
+    // Without these the suggestion-refinement spend leaked into `other` — the
+    // "Other" bucket on the Token Usage screen was really mislabeled suggestions.
+    'severity-classifier',
+    'suggestion-formatter',
+    // Legacy names kept so historical spans still bucket correctly.
     'severityAnalysis',
     'validateWithLLM',
     'checkSuggestionSimplicity',
@@ -81,7 +101,6 @@ export const SYSTEM_RUN_NAMES: ReadonlySet<string> = new Set([
     'selectReviewMode',
     'validateImplementedSuggestions',
     'generateCodeSuggestions',
-    'analyzeASTWithAI',
 ]);
 
 const n = (v: unknown): number => (typeof v === 'number' ? v : 0);
@@ -103,10 +122,13 @@ export function deriveArea(
     if (SYSTEM_RUN_NAMES.has(rn)) return 'system';
     // kodyRulesAnalyzeCodeWithAI, generateKodyRules.*, prLevelKodyRules*,
     // *KodyRulesAnalyzeCodeWithAI, kodyRulesFileToRules*, kodyMemoryResolution…
-    if (/kody.?rules?/i.test(rn) || rn.startsWith('kodyMemory')) {
+    // `kod(y|us)` — the review AGENT run-name is `kodus-rules-review-agent`
+    // (product is "Kodus"), while the analysis/generation run-names use `kody`
+    // (`kodyRulesAnalyzeCodeWithAI`). Match BOTH, or the kody-rules review agent
+    // falls through to `other` and shows up as "Unrouted" in the per-task view.
+    if (/kod(?:y|us).?rules?/i.test(rn) || rn.startsWith('kodyMemory')) {
         return 'kody_rules';
     }
-    if (rn.startsWith('crossFile')) return 'cross_file';
     if (rn.startsWith('code-review') || rn.startsWith('analyzeCodeWithAI')) {
         return 'review';
     }
@@ -118,6 +140,54 @@ export function deriveArea(
         return 'conversation';
     }
     return 'other';
+}
+
+/**
+ * BACK-COMPAT de-para: infer the routing TASK from the process {@link
+ * TokenUsageArea} for spans recorded BEFORE the router stamped `route` (and for
+ * any call that wasn't task-routed). Old data has no `route` attribute, so
+ * without this every historical/pre-launch span would show blank in the
+ * per-task view; here it attributes to the task it de-facto served.
+ *
+ * The mapping is the inverse of how tasks fan out into areas: the whole code
+ * review (defect finding + suggestion refinement) is the
+ * `codeReview` task; kody-rules → `kodyRulesReview`; the PR summary →
+ * `prSummary`; @kody chat → `conversation`. `system`/`other` stay '' — genuinely
+ * not attributable to a routed task. Task strings are pinned to `LlmTask`
+ * (@libs/llm/byok-config) — this low-level core module can't import it, mirrored
+ * like SYSTEM_RUN_NAMES. When `route` IS stamped, it always wins over this.
+ */
+/**
+ * The valid routing TASK values (`LlmTask` in @libs/llm/byok-config). Pinned
+ * here — this low-level core module can't import it — and asserted against the
+ * real enum by a unit test in the llm package. Used to GUARD the `route`
+ * attribute: only a genuine task is trusted; anything else (a stale tier string
+ * from a pre-realignment span, garbage) falls back to the area de-para, so the
+ * per-task view never shows a non-task bucket like `default`/`taskOverride`.
+ */
+export const ROUTING_TASKS: ReadonlySet<string> = new Set([
+    'codeReview',
+    'kodyRulesReview',
+    'ruleGeneration',
+    'businessValidation',
+    'prSummary',
+    'conversation',
+]);
+
+export function routeFromArea(area: TokenUsageArea): string {
+    switch (area) {
+        case 'review':
+        case 'suggestions':
+            return 'codeReview';
+        case 'kody_rules':
+            return 'kodyRulesReview';
+        case 'summary':
+            return 'prSummary';
+        case 'conversation':
+            return 'conversation';
+        default: // 'system' | 'other'
+            return '';
+    }
 }
 
 /**
@@ -145,17 +215,30 @@ export function deriveTu(
 
     const input = n(attrs['gen_ai.usage.input_tokens']);
     const runName = attrs['gen_ai.run.name'];
+    const area = deriveArea(runName, attrs['agent.phase']);
 
+    const credentialId = attrs['credentialId'];
     return {
         isByok: attrs['type'] === 'byok',
         sys: typeof runName === 'string' && SYSTEM_RUN_NAMES.has(runName),
         model,
+        credentialId:
+            typeof credentialId === 'string' && credentialId
+                ? credentialId
+                : '',
         input,
         output: n(attrs['gen_ai.usage.output_tokens']),
         total,
         reasoning: n(attrs['gen_ai.usage.reasoning_tokens']),
         cacheRead: n(attrs['gen_ai.usage.cache_read_input_tokens']),
         cacheWrite: n(attrs['gen_ai.usage.cache_creation_input_tokens']),
-        area: deriveArea(runName, attrs['agent.phase']),
+        area,
+        // The router stamps the LlmTask as `route` (see llm-observability.ts /
+        // resolveTaskSlot). A VALID task wins; otherwise (absent, or a stale
+        // tier string from a pre-realignment span) fall back to the area→task
+        // de-para — so old/garbage never shows as a bogus task bucket.
+        route: ROUTING_TASKS.has(attrs['route'])
+            ? attrs['route']
+            : routeFromArea(area),
     };
 }

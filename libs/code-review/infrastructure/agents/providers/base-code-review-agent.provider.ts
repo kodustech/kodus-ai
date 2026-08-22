@@ -3,8 +3,8 @@ import {
     attachClassification,
     classifyLLMError,
     getClassification,
+    isTerminalCategory,
 } from '@libs/llm/error-classifier';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { Injectable, Optional } from '@nestjs/common';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
 import { ByokErrorCounter } from '@libs/notifications/application/byok-error-counter.service';
@@ -27,7 +27,6 @@ import {
 } from '@libs/code-review/infrastructure/agents/prompts/prompt-builder';
 import { resolveContextWindow } from '@libs/llm/model-context-window';
 import {
-    buildProviderFallbackWarning,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
@@ -42,17 +41,11 @@ import {
 import { CoverageTier } from '@libs/code-review/infrastructure/agents/engine/coverage-ledger';
 import { mapAgentFindings } from '@libs/code-review/infrastructure/agents/collaborators/finding-mapper';
 import {
-    resolveAgentModel,
+    resolveReviewAgentModel,
     type AgentModelParams,
 } from '@libs/code-review/infrastructure/agents/collaborators/model-factory';
-import {
-    runWithProviderFallback,
-    providerErrorFromResult,
-} from '@libs/code-review/infrastructure/agents/collaborators/model-fallback';
-import {
-    recordAgentUsageSpans,
-    runAgentWithTrace,
-} from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
+import { providerErrorFromResult } from '@libs/code-review/infrastructure/agents/collaborators/provider-error';
+import { runAgentWithTrace } from '@libs/code-review/infrastructure/agents/collaborators/review-observability';
 import { runChunkedReview } from '@libs/code-review/infrastructure/agents/collaborators/batch-runner';
 import { AgentProgressReporter } from '@libs/code-review/infrastructure/agents/collaborators/agent-progress-reporter';
 
@@ -84,7 +77,6 @@ export abstract class BaseCodeReviewAgentProvider {
     private readonly agentLogger = createLogger('CodeReviewAgent');
 
     constructor(
-        protected readonly promptRunnerService: PromptRunnerService,
         protected readonly permissionValidationService: PermissionValidationService,
         protected readonly observabilityService: ObservabilityService,
         /** Optional: when injected, enables the `searchDocs` tool on the
@@ -200,11 +192,13 @@ export abstract class BaseCodeReviewAgentProvider {
 
         // Resolve BYOK config + model (org config → per-repo override → trial
         // default). Scoped locally to prevent cross-review races. → ModelFactory.
-        const { byokConfig, main: mainModel, fallback: fallbackModel } =
-            await resolveAgentModel(input, this.permissionValidationService);
-        // Preflight (context window + warnings) runs against the MAIN model.
-        // `effectiveModelName` tracks the model that actually ran, so post-run
-        // telemetry/logs reflect the fallback when the main provider fails over.
+        const { byokConfig, main: mainModel } = await resolveReviewAgentModel(
+            input,
+            this.permissionValidationService,
+        );
+        // Preflight (context window + warnings) runs against the resolved model.
+        // `effectiveModelName` tracks the model that actually ran (there is one
+        // model per run now — no fallback provider swap).
         const modelName = mainModel.modelName;
         let effectiveModelName = mainModel.modelName;
 
@@ -536,10 +530,9 @@ export abstract class BaseCodeReviewAgentProvider {
                     : undefined,
             };
 
-            // One agent-loop attempt against a single resolved model. Called
-            // for `main` first; on a thrown provider/API error the fallback
-            // runner re-invokes it with the org's configured `fallback` model.
-            // Progress counters live inside so each attempt starts fresh.
+            // The single agent-loop run against the one resolved model. There is
+            // no fallback provider swap (removed in 04b-05) — a provider failure
+            // fails the run. Progress counters live inside so it starts fresh.
             const runAttempt = async (modelParams: AgentModelParams) => {
                 effectiveModelName = modelParams.modelName;
 
@@ -549,10 +542,14 @@ export abstract class BaseCodeReviewAgentProvider {
                 const PROGRESS_BATCH_SIZE = 5;
 
                 const loopParams = {
-                    model: modelParams.model,
                     systemPrompt,
                     userPrompt,
                     agentName: identity.name,
+                    // Cost-span run name for THIS category's leaf model calls.
+                    // LLM.run records the ONE usage span per call under this name;
+                    // deriveArea buckets `code-review*` to the `review` area. No
+                    // separate aggregate span is emitted (that double-counted).
+                    usageRunName: `code-review-${this.getCategoryLabel()}`,
                     telemetryMetadata: {
                         organizationId:
                             input.organizationAndTeamData?.organizationId,
@@ -580,9 +577,7 @@ export abstract class BaseCodeReviewAgentProvider {
                     // so without this line the resample passes never run.
                     heavy: input.heavy,
                     outlineFirst: input.outlineFirst,
-                    // Context window is sized against the main model; the
-                    // fallback reuses it (usually a comparable model) rather
-                    // than re-running the whole preflight/prompt build.
+                    // Context window is sized against the resolved model.
                     contextWindowTokens: contextWindow,
                     reasoningEffort: modelParams.reasoningEffort,
                     reasoningConfigOverride: modelParams.reasoningConfigOverride,
@@ -659,81 +654,29 @@ export abstract class BaseCodeReviewAgentProvider {
                 );
             };
 
-            let usedFallback = false;
-            const agentResult = await runWithProviderFallback({
-                main: mainModel,
-                fallback: fallbackModel,
-                attempt: runAttempt,
-                // The harness catches a provider throw and returns an
-                // error-status result (finishReason 'error') rather than
-                // throwing — so the fallback must trigger on that result, not
-                // just on an exception. 'timeout' (budget exhaustion) is NOT a
-                // provider failure and must not fall back.
-                isFailure: (result) => result?.finishReason === 'error',
-                // Don't burn a fallback attempt on a cancelled job — only on a
-                // genuine main-provider failure.
-                shouldFallback: () => !input.parentSignal?.aborted,
-                onFallback: (reason) => {
-                    usedFallback = true;
-                    const failMsg =
-                        reason instanceof Error
-                            ? reason.message
-                            : 'agent run returned error status (provider call failed)';
-                    this.agentLogger.warn({
-                        message: `[AGENT] ${identity.name} main provider (${mainModel.modelName}) failed for PR#${input.prNumber}; retrying with fallback provider (${fallbackModel?.modelName}): ${failMsg}`,
-                        context: identity.name,
-                        metadata: {
-                            prNumber: input.prNumber,
-                            mainModel: mainModel.modelName,
-                            fallbackModel: fallbackModel?.modelName,
-                            errorName:
-                                reason instanceof Error
-                                    ? reason.name
-                                    : undefined,
-                        },
-                    });
-                },
-            });
+            // Single run against the one resolved model — no fallback provider
+            // swap (removed in 04b-05).
+            const agentResult = await runAttempt(mainModel);
 
-            // Every provider attempt failed (main errored, and either no
-            // fallback or the fallback errored too). Throw so the orchestrator
-            // records a real failure — otherwise the harness's swallowed error
-            // would surface as a silent "0 suggestions, 0 failures" SUCCESS,
-            // masking a total provider outage. The thrown message is classified
-            // (classifyLLMError) into the end-review comment's failure reason.
+            // The provider run failed. Throw so the orchestrator records a real
+            // failure — otherwise the harness's swallowed error (a non-throwing
+            // error-status result, finishReason 'error') would surface as a
+            // silent "0 suggestions, 0 failures" SUCCESS, masking a provider
+            // outage. The thrown message is classified (classifyLLMError) into
+            // the end-review comment's failure reason.
             const providerError = providerErrorFromResult(agentResult);
             if (providerError) {
                 throw providerError;
             }
 
-            // The fallback rescued the run: surface a dashboard notice so the
-            // user can see the main provider failed and the review ran on the
-            // fallback (dataExecution.reviewWarnings → web Pull Requests view).
-            if (usedFallback) {
-                agentWarnings.push(
-                    buildProviderFallbackWarning({
-                        failedModel: mainModel.modelName,
-                        usedModel: effectiveModelName,
-                        agentName: identity.name,
-                    }),
-                );
-            }
-
             const durationMs = Date.now() - startTime;
 
-            // Per-agent usage spans (main + verify). Best-effort. → ReviewObservability.
-            await recordAgentUsageSpans({
-                agentResult,
-                modelName: effectiveModelName,
-                isByok: !!byokConfig,
-                categoryLabel: this.getCategoryLabel(),
-                identityName: identity.name,
-                organizationId: input.organizationAndTeamData?.organizationId,
-                teamId: input.organizationAndTeamData?.teamId,
-                prNumber: input.prNumber,
-                durationMs,
-                observability: this.observabilityService,
-            });
+            // Usage is recorded by LLM.run — ONE cost span per leaf model call
+            // (finder + verify + resample + prose-recovery), each carrying the
+            // `code-review-*` runName so `deriveArea` buckets it to `review`.
+            // The old aggregate span (recordAgentUsageSpans) is gone: it
+            // re-recorded the same tokens the leaf spans already record, which
+            // double-counted the review's cost on the Token Usage screen.
 
             // Map raw agent findings → CodeSuggestion (path validation,
             // kody-rule UUID recovery, label/severity). Extracted to FindingMapper.
@@ -863,8 +806,8 @@ export abstract class BaseCodeReviewAgentProvider {
                 getClassification(error) ??
                 classifyLLMError(
                     error,
-                    typeof byokConfig?.main?.provider === 'string'
-                        ? byokConfig.main.provider
+                    typeof byokConfig?.provider === 'string'
+                        ? byokConfig.provider
                         : undefined,
                 );
             if (error instanceof Error) {
@@ -878,7 +821,12 @@ export abstract class BaseCodeReviewAgentProvider {
                 errorName: errName,
                 errorFriendlyMessage: classification.friendlyMessage,
             });
-            this.agentLogger.error({
+            // Terminal BYOK (suspended key / no credit) → warn: user's provider
+            // config, not a Kodus fault. Reuses the classification computed
+            // above; a real fault stays error.
+            this.agentLogger[
+                isTerminalCategory(classification.category) ? 'warn' : 'error'
+            ]({
                 message: `[AGENT] ${identity.name} failed for PR#${input.prNumber} after ${durationMs}ms: ${errMsg}`,
                 context: identity.name,
                 error,

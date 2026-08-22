@@ -10,7 +10,7 @@ import { CliSessionClassifiedDecision } from '@libs/cli-review/domain/types/cli-
 type CliSessionCaptureDedupLookup = Pick<CliSessionCaptureModel, 'captureId'>;
 type CliSessionCaptureForClassification = Pick<
     CliSessionCaptureModel,
-    'captureId' | 'event' | 'summary' | 'signals'
+    'captureId' | 'organizationId' | 'event' | 'summary' | 'signals'
 >;
 
 @Injectable()
@@ -43,6 +43,7 @@ export class CliSessionCaptureRepository {
             .findOne({ captureId })
             .select({
                 captureId: 1,
+                organizationId: 1,
                 event: 1,
                 summary: 1,
                 signals: 1,

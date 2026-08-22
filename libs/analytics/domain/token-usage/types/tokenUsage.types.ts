@@ -90,6 +90,37 @@ export interface UsageByAreaResultContract extends BaseUsageContract {
     area: string;
 }
 
+/**
+ * Token spend grouped by the routing TASK × process AREA cross. The TASK
+ * (`attributes.tu.route` — codeReview/prSummary/…, the model-slot the org picked
+ * per task) is the top level; the AREA (the process stage) is the drill-down —
+ * one task fans out over several areas (codeReview → review + suggestions +
+ * cross_file). Pre-launch rows with no stamped `route` are attributed by the
+ * same area→task de-para as deriveTu; unattributable spend surfaces as task ''.
+ */
+export interface UsageByTaskAreaResultContract extends BaseUsageContract {
+    task: string;
+    area: string;
+}
+
+/**
+ * The active window (first/last usage-span timestamp) of a MODEL within a
+ * routing TASK. Lets the per-task view show which model served a task AND when —
+ * so a mid-period provider/model switch reads as two windows instead of a single
+ * misleading model label. Same (task, model) grain as byTaskArea; carries only
+ * the min/max timestamp (token counts come from byTaskArea). Cheap to compute:
+ * `timestamp` is already read (covered) to derive the daily bucket, so the
+ * min/max adds no index cost.
+ */
+export interface UsageByTaskModelSpanContract {
+    task: string;
+    model: string;
+    /** Earliest usage-span timestamp for this (task, model), ISO string. */
+    firstAt: string;
+    /** Latest usage-span timestamp for this (task, model), ISO string. */
+    lastAt: string;
+}
+
 export interface DailyUsageByDeveloperResultContract
     extends UsageByDeveloperResultContract {
     date: string; // YYYY-MM-DD
@@ -150,6 +181,12 @@ export interface UsageOverviewReportContract {
     byPr: UsageByPrResultContract[];
     /** Token spend per process area — powers the "where tokens go" breakdown. */
     byArea: UsageByAreaResultContract[];
+    /** Token spend per routing task × area — powers the task breakdown that
+     *  drills into each task's areas. */
+    byTaskArea: UsageByTaskAreaResultContract[];
+    /** First/last usage timestamp per routing task × model — powers the
+     *  "models used" timeline inside each task (which model, and when). */
+    byTaskModelSpan: UsageByTaskModelSpanContract[];
 }
 
 export interface TokenUsageBreakdown {

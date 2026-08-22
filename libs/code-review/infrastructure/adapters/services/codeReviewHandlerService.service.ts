@@ -201,7 +201,7 @@ export class CodeReviewHandlerService {
                     status: AutomationStatus.IN_PROGRESS,
                     message: 'Pipeline started',
                 },
-                pipelineVersion: '1.0.1',
+                pipelineVersion: '1.0.2',
                 errors: [],
                 organizationAndTeamData,
                 repository,
@@ -340,8 +340,7 @@ export class CodeReviewHandlerService {
                 statusInfo: finalStatus,
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 reviewWarnings: result?.reviewWarnings,
-                linkedRepositoriesMetadata:
-                    result?.linkedRepositoriesMetadata,
+                linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
             };
         } catch (error) {
             if (initialContext) {

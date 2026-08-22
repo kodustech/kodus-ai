@@ -100,7 +100,7 @@ export const PullRequestsFilters = ({
                             selectedRepository && "border-primary-light/50",
                         )}>
                         <span className="truncate">
-                            {selectedRepository ?? "Any repository"}
+                            {selectedRepository ?? "Repository"}
                         </span>
                     </Button>
                 </PopoverTrigger>
@@ -163,9 +163,9 @@ export const PullRequestsFilters = ({
                     <SelectValue placeholder="Authors" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="reviewable">
-                        Actionable authors
-                    </SelectItem>
+                    {/* Default policy — reads as the neutral "Authors" resting
+                        label (matches "Any repository" / "Any status"). */}
+                    <SelectItem value="reviewable">Authors</SelectItem>
                     <SelectItem value="all">All authors</SelectItem>
                     <SelectItem value="excluded">Excluded authors</SelectItem>
                 </SelectContent>
@@ -187,7 +187,9 @@ export const PullRequestsFilters = ({
                     <SelectValue placeholder="Suggestions" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="all">Any suggestions</SelectItem>
+                    {/* Neutral reset reads as the plain noun at rest (matches
+                        "Authors" / "Repository" / "Status") — "Any" is filler. */}
+                    <SelectItem value="all">Suggestions</SelectItem>
                     <SelectItem value="true">Has suggestions</SelectItem>
                     <SelectItem value="false">No suggestions</SelectItem>
                 </SelectContent>

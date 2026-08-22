@@ -109,6 +109,36 @@ describe('ConfigureSpendLimitUseCase', () => {
         });
     });
 
+    it('persists the chosen budget readout scope', async () => {
+        const saved = await useCase.execute({
+            organizationAndTeamData: ORG,
+            enabled: true,
+            monthlyLimitUsd: 1000,
+            scope: 'per-credential',
+            models: ['custom'],
+        });
+
+        expect(saved.scope).toBe('per-credential');
+        expect(configService.saveConfig).toHaveBeenCalledWith(ORG, saved);
+    });
+
+    it('falls back to the previously stored scope when none is provided', async () => {
+        configService.getConfig.mockResolvedValue({
+            enabled: true,
+            monthlyLimitUsd: 500,
+            scope: 'per-model',
+        });
+
+        const saved = await useCase.execute({
+            organizationAndTeamData: ORG,
+            enabled: true,
+            monthlyLimitUsd: 1000,
+            models: ['custom'],
+        });
+
+        expect(saved.scope).toBe('per-model');
+    });
+
     it('disables without a priceability check', async () => {
         const saved = await useCase.execute({
             organizationAndTeamData: ORG,

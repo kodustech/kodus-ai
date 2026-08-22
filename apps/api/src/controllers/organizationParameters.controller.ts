@@ -25,6 +25,14 @@ import {
     LLMConfigStatus,
 } from '@libs/organization/application/use-cases/organizationParameters/get-llm-config-status.use-case';
 import {
+    GetByokProvidersUseCase,
+    ByokProvidersResult,
+} from '@libs/organization/application/use-cases/organizationParameters/get-byok-providers.use-case';
+import {
+    GetByokCatalogUseCase,
+    ByokCatalogResult,
+} from '@libs/organization/application/use-cases/organizationParameters/get-byok-catalog.use-case';
+import {
     TestByokConnectionUseCase,
     TestByokResult,
 } from '@libs/organization/application/use-cases/organizationParameters/test-byok-connection.use-case';
@@ -85,6 +93,8 @@ export class OrganizationParametersController {
         private readonly providerService: ProviderService,
         private readonly deleteByokConfigUseCase: DeleteByokConfigUseCase,
         private readonly getLLMConfigStatusUseCase: GetLLMConfigStatusUseCase,
+        private readonly getByokProvidersUseCase: GetByokProvidersUseCase,
+        private readonly getByokCatalogUseCase: GetByokCatalogUseCase,
         private readonly testByokConnectionUseCase: TestByokConnectionUseCase,
         private readonly testByokModelUseCase: TestByokModelUseCase,
         private readonly listModelOverridesUseCase: ListModelOverridesUseCase,
@@ -201,6 +211,8 @@ export class OrganizationParametersController {
                 description: provider.description,
                 requiresApiKey: provider.requiresApiKey,
                 requiresBaseUrl: provider.requiresBaseUrl,
+                autoListModels: provider.autoListModels,
+                doc: provider.doc,
             })),
         };
     }
@@ -230,28 +242,34 @@ export class OrganizationParametersController {
         }),
     )
     @ApiOperation({
-        summary: 'Delete BYOK config',
-        description: 'Delete main or fallback BYOK configuration.',
+        summary: 'Delete a v2 BYOK model by id',
+        description:
+            'Delete a single v2 BYOK model by its stable id. The domain use-case runs the referential-integrity guard (routing + repo/folder overrides) and rejects an in-use model.',
     })
     @ApiQuery({
-        name: 'configType',
+        name: 'modelId',
         required: true,
-        schema: { type: 'string', enum: ['main', 'fallback'] },
+        schema: { type: 'string' },
     })
     @ApiOkResponse({ type: ApiBooleanResponseDto })
-    public async deleteByokConfig(
-        @Query('configType') configType: 'main' | 'fallback',
-    ) {
+    public async deleteByokConfig(@Query('modelId') modelId: string) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
             throw new Error('Organization ID is missing from request');
         }
 
-        return await this.deleteByokConfigUseCase.execute(
-            organizationId,
-            configType,
-        );
+        // V5 input validation: reject an empty/whitespace modelId before the
+        // domain guard runs.
+        if (typeof modelId !== 'string' || modelId.trim().length === 0) {
+            throw new BadRequestException(
+                'modelId is required to delete a v2 BYOK model',
+            );
+        }
+
+        return await this.deleteByokConfigUseCase.execute(organizationId, {
+            modelId,
+        });
     }
 
     @Post('/test-byok')
@@ -453,6 +471,60 @@ export class OrganizationParametersController {
         return await this.getLLMConfigStatusUseCase.execute({
             organizationId,
         });
+    }
+
+    @Get('/byok/providers')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        // Static, non-sensitive descriptor of the connectable BYOK providers
+        // (registry-driven; never a secret). Same read gate as
+        // /llm-config/status: code-review settings editors need the provider
+        // LIST to render the connect picker, so allow either
+        // organization-settings or code-review-settings read.
+        checkAnyPermission([
+            {
+                action: Action.Read,
+                resource: ResourceType.OrganizationSettings,
+            },
+            {
+                action: Action.Read,
+                resource: ResourceType.CodeReviewSettings,
+            },
+        ]),
+    )
+    @ApiOperation({
+        summary: 'List connectable BYOK providers',
+        description:
+            'Return the registry-driven list of connectable BYOK providers (id, label, aliases). Static and non-sensitive — never returns any credential.',
+    })
+    public async getByokProviders(): Promise<ByokProvidersResult> {
+        return await this.getByokProvidersUseCase.execute();
+    }
+
+    @Get('/byok/catalog')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        // The curated model catalog is static + non-sensitive (Kodus's editorial
+        // picks, aggregated from the provider modules). Same read gate as
+        // /byok/providers — the connect picker needs it to render the models.
+        checkAnyPermission([
+            {
+                action: Action.Read,
+                resource: ResourceType.OrganizationSettings,
+            },
+            {
+                action: Action.Read,
+                resource: ResourceType.CodeReviewSettings,
+            },
+        ]),
+    )
+    @ApiOperation({
+        summary: 'List the curated BYOK model catalog',
+        description:
+            "Return the curated model catalog aggregated from every provider module's `catalog` (the single source of truth; replaces the frontend curated-models.json). Static and non-sensitive.",
+    })
+    public async getByokCatalog(): Promise<ByokCatalogResult> {
+        return await this.getByokCatalogUseCase.execute();
     }
 
     @Get('/cockpit-metrics-visibility')

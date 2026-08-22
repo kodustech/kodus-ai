@@ -13,6 +13,7 @@ import {
     ModelPricingInfo,
     UsageByReviewResultContract,
 } from "@services/usage/types";
+import { formatUsd } from "@services/usage/format";
 
 import { rowCost } from "../_utils/cost";
 
@@ -26,11 +27,6 @@ const formatTokens = (t: number) => {
     if (t < 1000) return t.toString();
     if (t < 1000000) return `${(t / 1000).toFixed(1)}K`;
     return `${(t / 1000000).toFixed(1)}M`;
-};
-
-const formatUsd = (v: number) => {
-    if (v < 0.01 && v > 0) return "<$0.01";
-    return `$${v.toFixed(2)}`;
 };
 
 const formatWhen = (iso?: string) => {
@@ -122,7 +118,6 @@ export const ReviewActivityTable = ({
                 <table className="w-full text-xs">
                     <thead>
                         <tr className="text-text-tertiary border-card-lv3 border-b text-left">
-                            <th className="py-2 pr-4 font-medium">Review</th>
                             <th className="py-2 pr-4 font-medium">PR</th>
                             <th className="py-2 pr-4 font-medium">Started</th>
                             <th className="py-2 pr-4 font-medium">Models</th>
@@ -137,9 +132,6 @@ export const ReviewActivityTable = ({
                     <tbody className="divide-card-lv3/60 divide-y">
                         {visible.map((run) => (
                             <tr key={run.review}>
-                                <td className="text-text-secondary max-w-40 truncate py-2 pr-4 font-mono">
-                                    {run.review}
-                                </td>
                                 <td className="text-text-primary py-2 pr-4 tabular-nums">
                                     {run.prNumber != null
                                         ? `#${run.prNumber}`

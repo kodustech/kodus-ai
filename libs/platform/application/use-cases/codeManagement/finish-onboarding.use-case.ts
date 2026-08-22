@@ -347,15 +347,14 @@ export class FinishOnboardingUseCase {
         }
 
         try {
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig({
-                    organizationId,
-                    teamId,
-                });
-
+            // native "has BYOK": the org brought at least one non-managed
+            // credential (a managed/env-default credential does NOT count).
             const provisioned = await this.licenseService.startTrial(
                 { organizationId, teamId },
-                Boolean(byokConfig?.main),
+                await this.permissionValidationService.hasBYOK({
+                    organizationId,
+                    teamId,
+                }),
             );
 
             if (!provisioned) {

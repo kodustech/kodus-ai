@@ -12,7 +12,8 @@ import { Skeleton } from "@components/ui/skeleton";
 import {
     BaseUsageContract,
     ModelPricingInfo,
-    UsageByAreaResultContract,
+    UsageByTaskAreaResultContract,
+    UsageByTaskModelSpanContract,
     UsageByReviewResultContract,
     UsageSummaryContract,
 } from "@services/usage/types";
@@ -21,7 +22,7 @@ import { DateRangePicker } from "src/features/ee/cockpit/_components/date-range-
 
 import { useTokenUsageFilters } from "../_hooks/filter.hook";
 import { cacheSavings } from "../_utils/cost";
-import { AreaBreakdown } from "./area-breakdown";
+import { TaskBreakdown } from "./task-breakdown";
 import { Chart, type ChartUnit } from "./chart";
 import { Filters } from "./filters";
 import { ModelBreakdownTable } from "./model-breakdown-table";
@@ -70,7 +71,8 @@ const ZERO_TOTALS = {
 
 export const TokenUsagePageClient = ({
     data,
-    byArea,
+    byTaskArea,
+    byTaskModelSpan,
     reviewRows,
     summary,
     previousTotals,
@@ -83,7 +85,9 @@ export const TokenUsagePageClient = ({
     pricing,
 }: {
     data: BaseUsageContract[];
-    byArea: UsageByAreaResultContract[];
+    byTaskArea: UsageByTaskAreaResultContract[];
+    /** First/last model window per task — feeds the "models used" timeline. */
+    byTaskModelSpan: UsageByTaskModelSpanContract[];
     /** Raw by-review rows (per run × model) — feeds the activity table. */
     reviewRows: UsageByReviewResultContract[];
     summary: UsageSummaryContract | null;
@@ -291,8 +295,14 @@ export const TokenUsagePageClient = ({
                 />
             )}
 
-            {/* Where tokens go — spend per area of the review process */}
-            <AreaBreakdown rows={byArea} selectedModels={selectedModels} />
+            {/* Where tokens go — spend per routing task, expandable into the
+                process areas each task ran (unifies the old area + task views) */}
+            <TaskBreakdown
+                rows={byTaskArea}
+                modelSpans={byTaskModelSpan}
+                selectedModels={selectedModels}
+                pricing={pricing}
+            />
 
             {/* Per-model breakdown (collapsed by default) */}
             <ModelBreakdownTable

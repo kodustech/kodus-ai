@@ -9,8 +9,6 @@ import {
     CheckCircle2Icon,
     CoinsIcon,
     ArrowUpRightIcon,
-    KeyRoundIcon,
-    LinkIcon,
     PencilIcon,
     ThermometerIcon,
     TrashIcon,
@@ -20,10 +18,8 @@ import Link from "next/link";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { formatUsd } from "@services/usage/format";
 
-import curatedCatalog from "../_data/curated-models.json";
-import type { CuratedModel } from "../_data/curated-models.types";
-import type { BYOKConfig } from "../_types";
-import { maskKey } from "../_utils";
+import { useCatalogModel } from "../_data/catalog-context";
+import type { BYOKConnectInput } from "../_types";
 import { PROVIDER_LABELS } from "./catalog/model-card";
 
 function formatTokens(n: number): string {
@@ -32,7 +28,7 @@ function formatTokens(n: number): string {
     return n.toLocaleString();
 }
 
-const formatReasoning = (config: BYOKConfig): string | null => {
+const formatReasoning = (config: BYOKConnectInput): string | null => {
     if (!config.reasoningEffort || config.reasoningEffort === "none")
         return null;
     if (config.reasoningConfigOverride) return "Custom";
@@ -51,7 +47,7 @@ export function ConfiguredSummary({
     periodLabel,
     costRangeQuery,
 }: {
-    config: BYOKConfig;
+    config: BYOKConnectInput;
     onChange: () => void;
     onDelete: () => void;
     isDeleting?: boolean;
@@ -65,9 +61,7 @@ export function ConfiguredSummary({
     /** `start=..&end=..` so the Costs deep-link opens on the SAME window. */
     costRangeQuery?: string;
 }) {
-    const curated = (curatedCatalog.models as CuratedModel[]).find(
-        (m) => m.id === config.model,
-    );
+    const curated = useCatalogModel(config.model);
     const displayName = curated?.displayName ?? config.model;
     const providerLabel =
         curated?.providerDisplayName ??
@@ -123,25 +117,10 @@ export function ConfiguredSummary({
             <CardContent>
                 <Separator className="bg-card-lv2 mb-3" />
 
+                {/* Key + Base URL rows were removed in SLICE 2 — the credential
+                    now lives on the provider group header, not the per-model
+                    summary. This card keeps only per-model config + cost. */}
                 <dl className="text-text-secondary grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
-                    <dt className="flex items-center gap-1.5">
-                        <KeyRoundIcon size={12} /> Key
-                    </dt>
-                    <dd className="font-mono text-xs">
-                        {maskKey(config.apiKey)}
-                    </dd>
-
-                    {config.baseURL && (
-                        <>
-                            <dt className="flex items-center gap-1.5">
-                                <LinkIcon size={12} /> Base URL
-                            </dt>
-                            <dd className="font-mono text-xs break-all">
-                                {config.baseURL}
-                            </dd>
-                        </>
-                    )}
-
                     {reasoningLabel && (
                         <>
                             <dt className="flex items-center gap-1.5">

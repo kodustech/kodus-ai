@@ -84,11 +84,11 @@ describe('KodyRulesService update/sync field preservation', () => {
             {} as any, // pullRequestsRepository
             { validateRulesLimit } as any, // kodyRulesValidationService
             {} as any, // mcpManagerService
-            {} as any, // promptRunnerService
             {} as any, // observabilityService
             {} as any, // permissionValidationService
             {} as any, // moduleRef
             {} as any, // codeBaseConfigService
+            // kodyRuleSummaryService (optional) omitted → summary path skipped
         );
 
         return { service, updateRule };

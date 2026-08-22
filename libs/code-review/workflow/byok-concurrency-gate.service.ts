@@ -1,7 +1,10 @@
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
 import { Inject, Injectable } from '@nestjs/common';
 import { createHash } from 'crypto';
+
+import { LLM_TASK } from '@libs/llm/byok-config';
+import type { BYOKConfig, NormalizedModel } from '@libs/llm/byok-config';
+import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import {
@@ -25,7 +28,7 @@ import {
 } from '@libs/core/domain/contracts/message-broker.service.contracts';
 import type { DistributedLock } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 
-type MainByokSlotConfig = NonNullable<BYOKConfig['main']>;
+type MainByokSlotConfig = NormalizedModel;
 
 @Injectable()
 export class ByokConcurrencyGateService {
@@ -211,10 +214,16 @@ export class ByokConcurrencyGateService {
                     organizationAndTeamData,
                 );
 
-            const byokConfig = byokParameter?.configValue as
-                | BYOKConfig
-                | undefined;
-            const mainConfig = byokConfig?.main;
+            // Resolve the codeReview slot through the SAME resolution primitive
+            // every consumer uses (`resolveTaskSlot`: isByokConfig guard →
+            // StaticTaskStrategy → resolveModelSlot) — NOT a parallel resolver.
+            // The slot carries CIPHERTEXT apiKey and is used only for the scope
+            // key hash + the concurrency limit — the gate NEVER decrypts, so we
+            // route to the slot WITHOUT building a model (no buildModelFromSlot).
+            const { slot: mainConfig } = resolveTaskSlot(
+                byokParameter?.configValue as BYOKConfig | null | undefined,
+                LLM_TASK.codeReview,
+            );
 
             if (
                 !mainConfig?.provider ||

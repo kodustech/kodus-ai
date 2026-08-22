@@ -9,7 +9,8 @@ import {
 import {
     BaseUsageContract,
     ModelPricingInfo,
-    UsageByAreaResultContract,
+    UsageByTaskAreaResultContract,
+    UsageByTaskModelSpanContract,
     UsageByPrResultContract,
     UsageSummaryContract,
 } from "@services/usage/types";
@@ -174,7 +175,10 @@ export default async function TokenUsagePage({
 
     const dailyRows = overview.daily ?? [];
     const prRows = overview.byPr ?? [];
-    const byArea: UsageByAreaResultContract[] = overview.byArea ?? [];
+    const byTaskArea: UsageByTaskAreaResultContract[] =
+        overview.byTaskArea ?? [];
+    const byTaskModelSpan: UsageByTaskModelSpanContract[] =
+        overview.byTaskModelSpan ?? [];
 
     // One review run = one correlationId. Keep the FULL id in the key so two
     // runs on the same PR never collide into one bar/row; the chart axis and
@@ -293,7 +297,8 @@ export default async function TokenUsagePage({
             <Page.Content className="max-w-full px-6">
                 <TokenUsagePageClient
                     data={data}
-                    byArea={byArea}
+                    byTaskArea={byTaskArea}
+                    byTaskModelSpan={byTaskModelSpan}
                     reviewRows={reviewData ?? []}
                     previousTotals={previousTotals}
                     summary={summary}

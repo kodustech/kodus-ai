@@ -7,9 +7,18 @@
  * Validates what only the adapter does (the wiring + the output mapping) and that
  * the recall passes actually fire through it (skipped in fast mode).
  */
+// core-agent-loop now passes the SLOT to the runner; LLM.run resolves the model
+// via resolveModelConfig — mock it to inject the scripted MockLanguageModelV3.
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+
 import { MockLanguageModelV3 } from 'ai/test';
+import { resolveModelConfig } from '@libs/llm/model-invocation';
 
 import { runAgentLoopViaCore } from '@libs/code-review/infrastructure/agents/core/core-agent-loop.adapter';
+
+const mockResolve = resolveModelConfig as jest.Mock;
 
 const findings = {
     reasoning: 'two candidates',
@@ -78,6 +87,15 @@ const fakeRemoteCommands = {
 };
 
 function makeInput(model: any, over: Record<string, unknown> = {}): any {
+    // The adapter no longer builds from input.model — LLM.run resolves via
+    // resolveModelConfig, so point the mock at this test's scripted model.
+    mockResolve.mockReturnValue({
+        model,
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    });
     return {
         model,
         systemPrompt: 'find bugs',

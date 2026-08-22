@@ -65,6 +65,7 @@ import {
 } from '@libs/identity/domain/permissions/enums/permissions.enum';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import {
     IIntegrationConfigService,
     INTEGRATION_CONFIG_SERVICE_TOKEN,
@@ -759,6 +760,17 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             deepDifference(parentConfig, newResolvedConfig),
         );
 
+        // An empty byok model override means "inherit" — it must never be stored
+        // as a scope-level key. deepDifference keeps it (parent has no key, so
+        // "" !== undefined), which would persist a phantom override: the value
+        // correctly inherits, but the settings badge reads the leftover repo/dir
+        // key as "Overridden". Drop the empty leaves so clearing truly inherits.
+        for (const key of ['byokModelId', 'byokModel'] as const) {
+            if ((newDelta as Record<string, unknown>)[key] === '') {
+                delete (newDelta as Record<string, unknown>)[key];
+            }
+        }
+
         const pathsChanged = !!previousFolders && previousFolders.length > 0;
         const isSelectionOnlyPayload =
             this.isSelectionOnlyConfigPayload(sanitizedIncomingConfig) &&
@@ -1221,9 +1233,11 @@ export class UpdateOrCreateCodeReviewParameterUseCase {
             directoryId,
         );
 
+        // native slot for the reference-detection chain (codeReview task).
         const [byokConfig, subscriptionStatus] = await Promise.all([
-            this.permissionValidationService.getBYOKConfig(
+            this.permissionValidationService.resolveTaskSlot(
                 organizationAndTeamData,
+                LLM_TASK.codeReview,
             ),
             this.permissionValidationService.getSubscriptionStatus(
                 organizationAndTeamData,

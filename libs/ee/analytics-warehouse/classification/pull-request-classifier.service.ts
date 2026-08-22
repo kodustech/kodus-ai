@@ -1,15 +1,11 @@
-import {
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
 import { Injectable, Logger } from '@nestjs/common';
+import { LLM } from '@libs/llm/llm';
 import { InjectModel } from '@nestjs/mongoose';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { Model } from 'mongoose';
 import { DataSource } from 'typeorm';
 
+import { ObservabilityService } from '@libs/core/log/observability.service';
 import { PullRequestsModel } from '@libs/platformData/infrastructure/adapters/repositories/schemas/pullRequests.model';
 
 import { ANALYTICS_DATA_SOURCE } from '../schema.constant';
@@ -75,7 +71,7 @@ export class PullRequestClassifierService {
         private readonly ds: DataSource,
         @InjectModel(PullRequestsModel.name)
         private readonly pullRequestsModel: Model<PullRequestsModel>,
-        private readonly promptRunnerService: PromptRunnerService,
+        private readonly observabilityService: ObservabilityService,
     ) {}
 
     async run(options: ClassifierRunOptions = {}): Promise<ClassifierRunResult> {
@@ -209,24 +205,21 @@ export class PullRequestClassifierService {
             title: row.title,
         }));
 
-        const result = await this.promptRunnerService
-            .builder()
-            .setProviders({
-                main: LLMModelProvider.GEMINI_3_1_FLASH_LITE_PREVIEW,
-                fallback: LLMModelProvider.NOVITA_DEEPSEEK_V3_0324,
-            })
-            .setParser(ParserType.ZOD, classificationBatchSchema)
-            .setLLMJsonMode(true)
-            .addPrompt({
-                role: PromptRole.SYSTEM,
-                prompt: prompt_ClassifyPRTypesSystem,
-            })
-            .addPrompt({
-                role: PromptRole.USER,
-                prompt: prompt_ClassifyPRTypesUser(payload),
-            })
-            .setRunName('analytics.pr-type-classifier')
-            .execute();
+        // Migrated off the legacy LangChain PromptRunner path onto the AI
+        // SDK path (REQ-NOLC-01). byokConfig is undefined here →
+        // runStructuredReviewCall resolves the managed review default; the previous
+        // GEMINI_3_1_FLASH_LITE_PREVIEW/NOVITA_DEEPSEEK_V3_0324 provider pin
+        // is intentionally dropped (RESEARCH Pattern 1 — consolidation to the
+        // managed default). This is a cost/latency profile change for a high-volume
+        // batch job; it is flagged, reversible, and re-optimized by Phase 4 routing.
+        // Parity is proven on the parsed classifications[] → Map<string, PRType>.
+        const result = await LLM.run({
+            schema: classificationBatchSchema,
+            system: prompt_ClassifyPRTypesSystem,
+            user: prompt_ClassifyPRTypesUser(payload),
+            runName: 'analytics.pr-type-classifier',
+            byokConfig: undefined,
+        });
 
         const classifications = result?.classifications ?? [];
         const map = new Map<string, PRType>();

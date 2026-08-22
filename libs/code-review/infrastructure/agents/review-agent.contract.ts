@@ -24,7 +24,8 @@ import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface
 import type { TraceContextDecision } from '@libs/cli-review/domain/types/trace-context.types';
 
 import type { LanguageModel } from 'ai';
-import { BYOKProvider, BYOKConfig } from '@kodus/kodus-common/llm';
+import { BYOKProvider } from '@libs/llm/model-providers';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import type { ReasoningEffort } from '@libs/llm/reasoning-options';
 
@@ -168,7 +169,7 @@ export interface ModelConfig {
     /**
      * When the caller has no BYOK config (e.g. the public-demo / trial
      * flow with `organizationId='trial'`), this overrides the hardcoded
-     * gemini-3.1-pro default that `byokToVercelModel` falls back to.
+     * gemini-3.1-pro default that `buildModelFromSlot` falls back to.
      * Used by the trial pipeline to force a cheaper, faster model
      * (`gemini-2.5-flash`) so anonymous reviews don't take 5 minutes.
      */
@@ -178,8 +179,18 @@ export interface ModelConfig {
      * settings) from `codeReviewConfig.byokModel`. When set, it replaces
      * `byokConfig.main.model` for this run so the agent uses the same model
      * the rest of the pipeline does. Empty/undefined means "inherit".
+     *
+     * Legacy NAME-based override, kept for the transition window (D-05).
      */
     byokModel?: string;
+    /**
+     * Id-based BYOK model override (Phase 4) from `codeReviewConfig.byokModelId`.
+     * References a v2 `models[]` entry by its stable id. When set, the model
+     * factory routes the `codeReview` task to this exact model (top of the
+     * routing precedence) via `StaticTaskStrategy`. Takes precedence over the
+     * legacy `byokModel` NAME. Empty/undefined means "inherit".
+     */
+    byokModelId?: string;
     /** Optional per-agent step budget for the main investigation loop. */
     maxSteps?: number;
 }
@@ -312,10 +323,19 @@ export interface ReviewAgentOutput {
 // now commented out.
 
 export interface AgentLoopInput {
-    model: LanguageModel;
+    // No built model here — LLM.run resolves it from the slot (in AgentLoopSecrets.
+    // byokConfig). The finder reads the slot's model id for the strict-tools
+    // decision; nothing downstream needs a pre-built LanguageModel.
     systemPrompt: string;
     userPrompt: string;
     agentName?: string; // e.g. 'kodus-bug-review-agent' — used as Langfuse observation name
+    /** Cost-span run name base for THIS review category (e.g. `code-review-bug`).
+     *  Threaded onto every leaf model call the review makes (finder + verify +
+     *  resample + prose-recovery) so `deriveArea` buckets them all under
+     *  `review`. LLM.run records the ONE usage span per call — there is no
+     *  separate aggregate recording. Absent → the finder default (`code-review`),
+     *  which still buckets to `review`. */
+    usageRunName?: string;
     telemetryMetadata?: LangfuseTelemetryMetadata;
     maxSteps?: number;
     onStepFinish?: (event: any) => void;
@@ -394,7 +414,7 @@ export interface AgentLoopSecrets {
      * is no sandbox available.
      */
     remoteCommands: RemoteCommands | undefined;
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedModel;
     gitHubToken?: string;
     /** Cross-repo linked-repo access for agent tools (#1576). */
     linkedRepoAccess?: LinkedRepoAccess;

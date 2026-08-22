@@ -5,7 +5,6 @@ import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { FormControl } from "@components/ui/form-control";
-import { Textarea } from "@components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
     testBYOK,
@@ -16,7 +15,6 @@ import {
     ArrowLeftIcon,
     CheckCircle2Icon,
     ExternalLinkIcon,
-    PlugIcon,
     SaveIcon,
     XCircleIcon,
 } from "lucide-react";
@@ -27,8 +25,9 @@ import type {
     CuratedModel,
     ModelVariant,
 } from "../../_data/curated-models.types";
-import type { BYOKConfig } from "../../_types";
+import type { BYOKConnectInput } from "../../_types";
 import { ByokAdvancedSettings } from "../_modals/edit-key/_components/advanced-settings";
+import { SecretInput } from "../_modals/edit-key/_components/secret-input";
 import type { EditKeyForm } from "../_modals/edit-key/_types";
 import { CuratedModelCard, PROVIDER_LABELS } from "./model-card";
 
@@ -91,10 +90,10 @@ export function CuratedConnectPanel({
     onSave,
 }: {
     model: CuratedModel;
-    existingConfig?: BYOKConfig;
+    existingConfig?: BYOKConnectInput;
     existingKey?: string;
     onBack: () => void;
-    onSave: (_: BYOKConfig) => Promise<void>;
+    onSave: (_: BYOKConnectInput) => Promise<void>;
 }) {
     const [testState, setTestState] = useState<
         | { status: "idle" }
@@ -185,7 +184,7 @@ export function CuratedConnectPanel({
         if (testState.status !== "idle") setTestState({ status: "idle" });
     };
 
-    const buildConfig = (data: EditKeyForm): BYOKConfig => {
+    const buildConfig = (data: EditKeyForm): BYOKConnectInput => {
         const effort = data.reasoningEffort;
         return {
             provider: data.provider,
@@ -292,7 +291,7 @@ export function CuratedConnectPanel({
                 </CardHeader>
 
                 <CardContent className="flex flex-col gap-5">
-                    <CuratedModelCard model={model} isSelected />
+                    <CuratedModelCard model={model} isSelected showScore={false} />
 
                     {model.variants && model.variants.length > 0 && (
                         <VariantSelector
@@ -304,67 +303,75 @@ export function CuratedConnectPanel({
                         />
                     )}
 
-                    {existingKey && (
-                        <Alert variant="info">
-                            <AlertDescription className="text-pretty">
-                                A key for <strong>{providerLabel}</strong> is
-                                already stored. Paste a new one to replace it
-                                — or leave blank to keep the current key while
-                                you switch models or tweak advanced settings.
-                            </AlertDescription>
-                        </Alert>
+                    {/* Provider already connected (add-model / switch-model): the
+                        key lives at the credential level, so this panel never
+                        re-asks for it — just a muted confirmation + where to change
+                        it. Changing the key is the dedicated "Edit key" flow. */}
+                    {existingKey ? (
+                        <p className="text-text-tertiary text-xs text-pretty">
+                            Using your stored <strong>{providerLabel}</strong> key.
+                            {activeBaseURL && (
+                                <>
+                                    {" "}
+                                    Endpoint:{" "}
+                                    <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
+                                        {activeBaseURL}
+                                    </code>
+                                </>
+                            )}{" "}
+                            Change it in <strong>Edit key</strong>.
+                        </p>
+                    ) : (
+                        <Controller
+                            name="apiKey"
+                            control={form.control}
+                            render={({ field, fieldState }) => (
+                                <FormControl.Root>
+                                    <FormControl.Label htmlFor={field.name}>
+                                        {providerLabel} API key
+                                    </FormControl.Label>
+                                    <FormControl.Input>
+                                        <SecretInput
+                                            id={field.name}
+                                            value={field.value ?? ""}
+                                            onChange={(e) => {
+                                                field.onChange(e);
+                                                resetTestOnChange();
+                                            }}
+                                            placeholder={`Paste your ${providerLabel} API key`}
+                                            error={fieldState.error}
+                                        />
+                                    </FormControl.Input>
+                                    <FormControl.Helper>
+                                        <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                            <a
+                                                href={activeApiKeyUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-primary-light inline-flex items-center gap-1 hover:underline">
+                                                Get a key from {providerLabel}
+                                                {variant
+                                                    ? ` (${variant.label})`
+                                                    : ""}
+                                                <ExternalLinkIcon size={12} />
+                                            </a>
+                                            {activeBaseURL && (
+                                                <span className="text-text-tertiary text-xs">
+                                                    Endpoint:{" "}
+                                                    <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
+                                                        {activeBaseURL}
+                                                    </code>
+                                                </span>
+                                            )}
+                                        </span>
+                                    </FormControl.Helper>
+                                    <FormControl.Error>
+                                        {fieldState.error?.message}
+                                    </FormControl.Error>
+                                </FormControl.Root>
+                            )}
+                        />
                     )}
-
-                    <Controller
-                        name="apiKey"
-                        control={form.control}
-                        render={({ field, fieldState }) => (
-                            <FormControl.Root>
-                                <FormControl.Label htmlFor={field.name}>
-                                    {providerLabel} API key
-                                </FormControl.Label>
-                                <FormControl.Input>
-                                    <Textarea
-                                        id={field.name}
-                                        value={field.value ?? ""}
-                                        onChange={(e) => {
-                                            field.onChange(e);
-                                            resetTestOnChange();
-                                        }}
-                                        className="max-h-40 min-h-24"
-                                        placeholder={`Paste your ${providerLabel} API key`}
-                                        error={fieldState.error}
-                                    />
-                                </FormControl.Input>
-                                <FormControl.Helper>
-                                    <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                        <a
-                                            href={activeApiKeyUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-primary-light inline-flex items-center gap-1 hover:underline">
-                                            Get a key from {providerLabel}
-                                            {variant
-                                                ? ` (${variant.label})`
-                                                : ""}
-                                            <ExternalLinkIcon size={12} />
-                                        </a>
-                                        {activeBaseURL && (
-                                            <span className="text-text-tertiary text-xs">
-                                                Endpoint:{" "}
-                                                <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
-                                                    {activeBaseURL}
-                                                </code>
-                                            </span>
-                                        )}
-                                    </span>
-                                </FormControl.Helper>
-                                <FormControl.Error>
-                                    {fieldState.error?.message}
-                                </FormControl.Error>
-                            </FormControl.Root>
-                        )}
-                    />
 
                     <TestResultBanner state={testState} />
 
@@ -372,45 +379,54 @@ export function CuratedConnectPanel({
                         defaultOpen={!!model.variants?.length}
                     />
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Button
-                            type="button"
-                            size="md"
-                            variant="cancel"
-                            onClick={onBack}>
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            size="md"
-                            variant="helper"
-                            leftIcon={<PlugIcon />}
-                            loading={testing}
-                            disabled={!isValid || !apiKey?.trim() || isSaving}
-                            onClick={() => {
-                                void runTest();
-                            }}>
-                            Test
-                        </Button>
-                        <Button
-                            type="button"
-                            size="md"
-                            variant="primary"
-                            leftIcon={<SaveIcon />}
-                            loading={testing || isSaving}
-                            disabled={
-                                !isValid ||
-                                (!apiKey?.trim() && !existingKey)
-                            }
-                            onClick={() => {
-                                void handleTestAndSave();
-                            }}>
-                            {existingKey && !apiKey?.trim() ? (
-                                "Save"
-                            ) : (
-                                <>Test &amp; save</>
-                            )}
-                        </Button>
+                    {/* One primary action: "Test & save" tests the key and, on
+                        success, saves it. "Just test the key" is a subtle
+                        secondary path for anyone who wants to validate without
+                        committing — a text link, not a second equal-weight
+                        button. It's only meaningful when there's a pasted key to
+                        test. */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        {apiKey?.trim() ? (
+                            <button
+                                type="button"
+                                disabled={!isValid || testing || isSaving}
+                                onClick={() => {
+                                    void runTest();
+                                }}
+                                className="text-text-secondary hover:text-text-primary text-sm transition-colors hover:underline disabled:cursor-not-allowed disabled:opacity-50">
+                                Just test the key
+                            </button>
+                        ) : (
+                            <span />
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                                type="button"
+                                size="md"
+                                variant="cancel"
+                                onClick={onBack}>
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                size="md"
+                                variant="primary"
+                                leftIcon={<SaveIcon />}
+                                loading={testing || isSaving}
+                                disabled={
+                                    !isValid ||
+                                    (!apiKey?.trim() && !existingKey)
+                                }
+                                onClick={() => {
+                                    void handleTestAndSave();
+                                }}>
+                                {existingKey && !apiKey?.trim() ? (
+                                    "Save"
+                                ) : (
+                                    <>Test &amp; save</>
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -418,7 +434,7 @@ export function CuratedConnectPanel({
     );
 }
 
-function VariantSelector({
+export function VariantSelector({
     variants,
     selectedId,
     docsUrl,

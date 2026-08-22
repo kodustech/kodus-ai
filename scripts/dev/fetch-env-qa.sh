@@ -116,8 +116,6 @@ KEYS=(
     "/qa/kodus-orchestrator/API_ECS_AGENT_URI"
     "/qa/kodus-orchestrator/API_WORKER_DRAIN_TIMEOUT_MS"
 
-    "/qa/kodus-orchestrator/API_CEREBRAS_BASE_URL"
-    "/qa/kodus-orchestrator/API_CEREBRAS_API_KEY"
 
     "/qa/kodus-orchestrator/API_FIREWORKS_BASE_URL"
     "/qa/kodus-orchestrator/API_FIREWORKS_API_KEY"

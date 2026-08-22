@@ -15,7 +15,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-import type { LanguageModel } from 'ai';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import type { AgentSpec } from '@libs/agent-harness/domain/contracts/agent.contract';
 import { finalText } from '@libs/agent-harness/domain/run-state.util';
@@ -75,7 +75,6 @@ async function runAnalyzer(
     const spec: AgentSpec = {
         id: 'br-eval-analyzer',
         systemPrompt: system,
-        modelId: 'resolved',
         tools: new InMemoryToolRegistry([]),
         policies: [],
         maxSteps: 1,
@@ -108,10 +107,10 @@ const ANALYZER_SYSTEM = [
 
 /** Build the analyze fn: without_skill = raw analyzer; with_skill = + verify. */
 export function buildBusinessRulesAnalyze(params: {
-    resolveModel: () => LanguageModel;
+    slot?: NormalizedModel;
     fixtures: Map<string | number, { diff: string; task: string }>;
 }): AnalyzeFn {
-    const runner = new AiSdkAgentRunner({ resolve: () => params.resolveModel() });
+    const runner = new AiSdkAgentRunner(params.slot);
     return async (evalCase, config) => {
         const fx = params.fixtures.get(evalCase.id) ?? { diff: '', task: '' };
         const { result, state } = await runAnalyzer(
@@ -144,9 +143,9 @@ export function buildBusinessRulesAnalyze(params: {
 
 /** Build an LLM grader: asks the model PASS/FAIL per assertion, with evidence. */
 export function buildLlmGrader(params: {
-    resolveModel: () => LanguageModel;
+    slot?: NormalizedModel;
 }): GradeFn {
-    const runner = new AiSdkAgentRunner({ resolve: () => params.resolveModel() });
+    const runner = new AiSdkAgentRunner(params.slot);
     return async (output, assertions) => {
         const results: AssertionResult[] = [];
         for (const text of assertions) {
@@ -154,7 +153,6 @@ export function buildLlmGrader(params: {
                 id: 'br-eval-grader',
                 systemPrompt:
                     'You grade an output against ONE assertion. Reply ONLY JSON: {"passed": boolean, "evidence": string}. Require concrete evidence for passed=true.',
-                modelId: 'resolved',
                 tools: new InMemoryToolRegistry([]),
                 policies: [],
                 maxSteps: 1,
@@ -187,15 +185,15 @@ export function buildLlmGrader(params: {
 
 /** End-to-end: load the suite, run with/without verify, grade, return the report. */
 export async function runBusinessRulesVerifierEval(params: {
-    resolveModel: () => LanguageModel;
+    slot?: NormalizedModel;
 }): Promise<SkillEvalReport> {
     const { suite, fixtures } = loadBusinessRulesEvalSuite();
     return runSkillEval({
         suite,
         analyze: buildBusinessRulesAnalyze({
-            resolveModel: params.resolveModel,
+            slot: params.slot,
             fixtures,
         }),
-        grade: buildLlmGrader({ resolveModel: params.resolveModel }),
+        grade: buildLlmGrader({ slot: params.slot }),
     });
 }

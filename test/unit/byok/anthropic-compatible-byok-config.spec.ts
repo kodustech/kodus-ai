@@ -1,17 +1,14 @@
-import {
-    anthropicCompatibleRootURL,
-    BYOKProvider,
-    getAdapter,
-} from '@kodus/kodus-common/llm';
+import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
+import { BYOKProvider } from '@libs/llm/model-providers';
 
 // Encryption is irrelevant here — deterministic reversible stand-in so
-// byokToVercelModel can decrypt the stored key without a real crypto env.
+// buildModelFromSlot can decrypt the stored key without a real crypto env.
 jest.mock('@libs/common/utils/crypto', () => ({
     encrypt: (value: string) => `enc(${value})`,
     decrypt: (value: string) => value.replace(/^enc\(|\)$/g, ''),
 }));
 
-import { byokToVercelModel } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import {
     buildReasoningProviderOptions,
     EFFORT_TO_BUDGET,
@@ -30,22 +27,6 @@ describe('anthropic_compatible BYOK provider', () => {
             [' https://api.deepseek.com/anthropic ', 'https://api.deepseek.com/anthropic'],
         ])('normalizes %s → %s', (input, expected) => {
             expect(anthropicCompatibleRootURL(input)).toBe(expected);
-        });
-    });
-
-    describe('LangChain adapter routing', () => {
-        it('routes anthropic_compatible to the Anthropic adapter with a root anthropicApiUrl', () => {
-            const adapter = getAdapter('anthropic_compatible');
-            const model = adapter.build({
-                model: 'kimi-for-coding',
-                apiKey: 'sk-kimi-test',
-                baseURL: 'https://api.kimi.com/coding/v1',
-            });
-
-            // ChatAnthropic appends /v1/messages itself — the configured
-            // URL must be the root, not the /v1-suffixed base.
-            expect(model.constructor.name).toBe('ChatAnthropic');
-            expect((model as any).apiUrl).toBe('https://api.kimi.com/coding');
         });
     });
 
@@ -90,13 +71,11 @@ describe('anthropic_compatible BYOK provider', () => {
 
     describe('Vercel AI SDK routing', () => {
         it('maps anthropic_compatible to an anthropic model with a /v1-suffixed base', () => {
-            const model = byokToVercelModel({
-                main: {
-                    provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
-                    apiKey: 'enc(sk-kimi-test)',
-                    model: 'kimi-for-coding',
-                    baseURL: 'https://api.kimi.com/coding',
-                },
+            const model = buildModelFromSlot({
+                provider: BYOKProvider.ANTHROPIC_COMPATIBLE,
+                apiKey: 'enc(sk-kimi-test)',
+                model: 'kimi-for-coding',
+                baseURL: 'https://api.kimi.com/coding',
             } as any);
 
             expect((model as any).modelId).toBe('kimi-for-coding');

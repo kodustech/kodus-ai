@@ -41,8 +41,12 @@ describe('KodyRulesAgentProvider.execute — Langfuse trace wrapping (#sharded-n
         );
         mockRunAgentWithTrace.mockClear();
         return new KodyRulesAgentProvider(
-            {} as any, // promptRunnerService (unused — local stack)
-            { getBYOKConfig: jest.fn(async () => null) } as any, // system model
+            {
+                getBYOKConfig: jest.fn(async () => null),
+                // resolveReviewAgentModel routes through this — undefined slot →
+                // LLM.run's system/env default (the judge LLM call is mocked anyway).
+                resolveTaskSlot: jest.fn(async () => undefined),
+            } as any, // permissionValidationService
             {} as any, // observability (judge mocked)
         );
     }

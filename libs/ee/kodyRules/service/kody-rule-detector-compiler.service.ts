@@ -11,9 +11,10 @@
  * fewer T0 rules, never a wrong detector.
  */
 import { Inject, Injectable } from '@nestjs/common';
+import { LLM } from '@libs/llm/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { createLogger } from '@libs/core/log/logger';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -55,24 +56,26 @@ export class KodyRuleDetectorCompilerService
         rule: Partial<IKodyRule>,
     ): Promise<{ compiled: boolean; declineReason?: string }> {
         try {
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig(
+            // native: resolve the kody-rules (codeReview) task to a `{main}`
+            // carrier for runStructuredReviewCall. A non-v2/managed/BLOCKED
+            // config yields `null` → the managed/env default, exactly as before.
+            const taskByok =
+                await this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 );
 
-            // Local (Vercel) stack via runStructuredReviewCall — main = the
-            // org's BYOK model or our managed default (kimi-k2.7-code via
-            // Moonshot); fallback = the org's own fallback (BYOK) or, for trial
-            // only, our managed Groq gpt-oss-120b. No kodus-common.
+            // Local (Vercel) stack via runStructuredReviewCall — the org's
+            // resolved BYOK model or our managed default (kimi-k2.7-code via
+            // Moonshot). No LangChain.
             const runCompiler = makeLLMRunCompiler(async ({ system, user }) => {
-                const parsed = await runStructuredReviewCall({
-                    byokConfig: byokConfig ?? undefined,
+                const parsed = await LLM.run({
+                    byokConfig: taskByok ?? undefined,
                     schema: compilerOutputSchema,
                     system,
                     user,
                     runName: 'kody-rules.detector-compiler',
                     organizationId: organizationAndTeamData.organizationId,
-                    observabilityService: this.observabilityService,
                 });
                 return (parsed as CompilerOutput) ?? null;
             });
@@ -80,7 +83,10 @@ export class KodyRuleDetectorCompilerService
             const { detector, declineReason } = await compileRuleDetector(
                 rule,
                 runCompiler,
-                { modelName: byokConfig?.main ? 'byok' : 'system' },
+                // Marker: a resolved non-managed BYOK slot vs the managed/
+                // env-default path (`resolveTaskSlot` returns undefined
+                // for a managed/BLOCKED config).
+                { modelName: taskByok ? 'byok' : 'system' },
             );
 
             const orgId = organizationAndTeamData.organizationId;

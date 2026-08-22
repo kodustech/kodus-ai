@@ -486,18 +486,27 @@ export function PullRequestsPageClient() {
     const pulseCards = isMineView ? minePulseCards : teamPulseCards;
 
     return (
-        <Page.Root className="pb-0">
+        <Page.Root scrollable={false} className="min-h-0 gap-3 pt-6 pb-0">
             <Page.Header className="max-w-full">
-                <div className="flex w-full items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <Page.Title className="text-balance">
+                {/* Compact command bar. The whole meta-zone is folded into one
+                    band: title + count on the left, the "pulse" shortcuts
+                    (reviewed today / awaiting / needs attention) as small filter
+                    chips on the right. A 7-lens UX critique converged on the same
+                    root cause — the screen wasn't short on space, it spent the
+                    top ~half of the viewport on low-value chrome (hero title,
+                    a standalone stat band, an always-open filter bar) and starved
+                    the table, the one thing the screen exists to show. Collapsing
+                    those stacked bands into this single strip lets the table own
+                    the viewport and start near the top. */}
+                <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                    <div className="flex items-baseline gap-2">
+                        <Page.Title variant="h2" className="text-balance">
                             Pull Requests
                         </Page.Title>
-
                         {totalCount > 0 && (
                             <span className="text-text-tertiary text-sm tabular-nums">
                                 {totalCount}
-                                {isPartialCount ? "+" : ""} pull request
+                                {isPartialCount ? "+" : ""} PR
                                 {totalCount > 1 ? "s" : ""}
                                 {selectedRepository && (
                                     <>
@@ -511,65 +520,56 @@ export function PullRequestsPageClient() {
                             </span>
                         )}
                     </div>
+
+                    {/* Pulse shortcuts — each still filters the list to its
+                        segment (toggle off if active). Kept compact so they
+                        frame the table instead of out-weighting it; 0 is muted
+                        so the one actionable count (needs attention) is the only
+                        chip that draws the eye. */}
+                    {pulseCards.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {pulseCards.map((card) => {
+                                const isZero = card.value === 0;
+                                return (
+                                    <button
+                                        key={card.key}
+                                        type="button"
+                                        onClick={card.onClick}
+                                        aria-pressed={card.active}
+                                        title={card.hint}
+                                        className={cn(
+                                            "inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-left transition",
+                                            card.active
+                                                ? "border-primary-light/60 bg-primary/5 ring-primary-light/15 ring-2"
+                                                : "border-card-lv3 bg-card-lv2 hover:border-primary-light/40 hover:bg-card-lv1/70",
+                                        )}>
+                                        <span className="text-text-secondary text-xs font-medium">
+                                            {card.label}
+                                        </span>
+                                        <span
+                                            className={cn(
+                                                "text-xs font-semibold tabular-nums",
+                                                isZero
+                                                    ? "text-text-tertiary"
+                                                    : card.tone,
+                                            )}>
+                                            {card.value}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </Page.Header>
 
-            <Page.Content className="max-w-full px-6">
-                {/* Pulse of the review process — the daily "how are we doing?"
-                    that a lead wants before scanning individual PRs. Each card
-                    filters the list to its segment. */}
-                {pulseCards.length > 0 && (
-                    <div
-                        className={cn(
-                            "grid grid-cols-1 gap-3 pt-4",
-                            pulseCards.length === 2
-                                ? "sm:grid-cols-2"
-                                : "sm:grid-cols-3",
-                        )}>
-                        {pulseCards.map((card) => (
-                            <button
-                                key={card.key}
-                                type="button"
-                                onClick={card.onClick}
-                                aria-pressed={card.active}
-                                title={card.hint}
-                                className={cn(
-                                    "flex flex-col items-start gap-1 rounded-xl border px-4 py-3 text-left transition",
-                                    card.active
-                                        ? "border-primary-light/60 bg-primary/5 ring-primary-light/15 ring-3"
-                                        : "border-card-lv3 bg-card-lv2 hover:border-card-lv3 hover:bg-card-lv1/70",
-                                )}>
-                                <span className="flex w-full items-center justify-between gap-2">
-                                    <span className="text-text-tertiary text-xs font-medium">
-                                        {card.label}
-                                    </span>
-                                    {/* Scope tag — the cards mix "today" numbers
-                                        (digest) with current totals (facets), so
-                                        each one says which it is. */}
-                                    <span className="text-text-tertiary/70 bg-card-lv3/40 rounded px-1.5 py-0.5 text-[0.625rem] font-medium tracking-wide uppercase">
-                                        {card.sub}
-                                    </span>
-                                </span>
-                                <span
-                                    className={cn(
-                                        "text-2xl font-semibold tabular-nums",
-                                        card.tone,
-                                    )}>
-                                    {card.value}
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-
-                {/* Filter toolbar — two rows: free-text searches on top,
-                    structured filters below, so neither row feels crammed. */}
-                <div className="flex flex-col gap-2 py-4">
-                    {/* Row 1 — one search box, three scopes: Title / Number /
-                        Author. Title & Number drive the `q` query; Author drives
-                        the author-name filter — so the user picks WHAT to search
-                        instead of juggling two inputs. */}
-                    <div className="flex flex-wrap items-center gap-2">
+            <Page.Content className="max-w-full min-h-0 gap-3 px-6">
+                {/* Filter toolbar — search + structured filters on ONE wrapping
+                    row so the table gets more vertical room; wraps to a second
+                    line only on narrow widths. Search scopes: Title / Number /
+                    Author (Title & Number drive `q`; Author drives the author
+                    filter). */}
+                <div className="flex flex-wrap items-center gap-2">
                         <div className="border-card-lv3 bg-card-lv2 focus-within:border-primary-light/50 focus-within:ring-primary-light/15 flex h-9 min-w-[18rem] flex-1 items-center gap-2 rounded-xl border pr-1.5 pl-3 transition focus-within:ring-3">
                             {showAuthorSearch ? (
                                 <UserIcon className="text-text-tertiary size-4 shrink-0" />
@@ -636,11 +636,8 @@ export function PullRequestsPageClient() {
                                 )}
                             </div>
                         </div>
-                    </div>
 
-                    {/* Row 2 — structured filters. */}
-                    <div className="flex flex-wrap items-center gap-2">
-                        <PullRequestsFilters
+                    <PullRequestsFilters
                             teamId={teamId}
                             selectedRepository={selectedRepository ?? undefined}
                             onRepositoryChange={(value) =>
@@ -682,7 +679,7 @@ export function PullRequestsPageClient() {
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">Any status</SelectItem>
+                                <SelectItem value="all">Status</SelectItem>
                                 {STATUSES.map((s) => (
                                     <SelectItem key={s} value={s}>
                                         {STATUS_LABEL[s]}
@@ -690,11 +687,10 @@ export function PullRequestsPageClient() {
                                 ))}
                             </SelectContent>
                         </Select>
-                    </div>
                 </div>
 
                 {activeChips.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 pb-4">
+                    <div className="flex flex-wrap items-center gap-2">
                         {activeChips.map((chip) => (
                             <Button
                                 key={chip.key}
@@ -715,9 +711,11 @@ export function PullRequestsPageClient() {
                 )}
 
                 {isAwaiting ? (
-                    <AwaitingList teamId={teamId} />
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                        <AwaitingList teamId={teamId} />
+                    </div>
                 ) : error ? (
-                    <div className="py-12 text-center">
+                    <div className="min-h-0 flex-1 overflow-y-auto py-12 text-center">
                         <p className="text-sm text-red-600">
                             Error loading pull requests. Please try again.
                         </p>
