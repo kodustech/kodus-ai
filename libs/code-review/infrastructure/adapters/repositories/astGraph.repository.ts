@@ -61,7 +61,7 @@ export class AstGraphRepository {
         @InjectRepository(AstEdgeModel)
         private readonly _edgeRepo: Repository<AstEdgeModel>,
         private readonly dataSource: DataSource,
-    ) { }
+    ) {}
 
     // -----------------------------------------------------------------------
     // Delete helpers
@@ -515,184 +515,61 @@ export class AstGraphRepository {
             [repoId, sha || '', changedFiles],
         );
 
-        let jsonOutput = result[0]?.graph_json || '{"sha":"","nodes":[],"edges":[]}';
-        try {
-            const parsed = JSON.parse(jsonOutput);
+        return result[0]?.graph_json || '{"sha":"","nodes":[],"edges":[]}';
+    }
 
-            // Pair changed functions against twin pool matching params, return type, & shared callees.
-            if (includeDuplicates) {
-                // Requires diff patches to identify changed functions.
-                const hasPatches = (fileChanges || []).some((fc) => !!fc?.patch);
-                if (hasPatches) {
-                    // Build per-PR-function callee sets from the edges the
-                    // main subgraph query already returned
-                    const prCalleesBySource = new Map<string, Set<string>>();
-                    for (const e of prEdges || []) {
-                        if (e?.kind !== 'CALLS') continue;
-                        if (!e.source_qualified) continue;
-                        if (!prCalleesBySource.has(e.source_qualified)) {
-                            prCalleesBySource.set(e.source_qualified, new Set());
-                        }
-                        prCalleesBySource.get(e.source_qualified)!.add(e.target_qualified);
-                    }
+    /**
+     * Single batch query: fetch every repo function that shares at least one callee with any PR function.
+     */
+    public async findTwinCandidatePool(
+        repoId: string,
+        allPrCallees: string[],
+        options?: {
+            organizationId?: string;
+            repository?: string;
+            prNumber?: string | number;
+        },
+    ): Promise<any[]> {
+        if (!allPrCallees || allPrCallees.length === 0) return [];
+        const { organizationId, repository, prNumber } = options || {};
 
-                    // Collect the union of all PR-function callees so we can
-                    // pre-filter candidates in Postgres (keeps the result set
-                    // small before the per-function 80% gate runs in JS).
-                    const allPrCallees = [
-                        ...new Set(
-                            [...prCalleesBySource.values()].flatMap((s) => [...s]),
-                        ),
-                    ];
-
-                    // Single batch query: fetch every repo function that shares
-                    // at least one callee with any PR function.
-                    const batchTwinQuery = `
-                        SELECT n.qualified_name, n.params, n.return_type,
-                               n.file_path, COALESCE(n.line_start, 0) AS line_start,
-                               COALESCE(n.line_end, 0) AS line_end,
-                               COALESCE(array_agg(DISTINCT e.target_qualified)
-                                        FILTER (WHERE e.kind = 'CALLS'
-                                                AND e.target_qualified IS NOT NULL),
-                                        ARRAY[]::text[]) AS callees
-                        FROM ast_nodes n
-                        LEFT JOIN ast_edges e
-                             ON e.repo_id = n.repo_id
-                            AND e.source_qualified = n.qualified_name
-                        WHERE n.repo_id = $1
-                          AND n.kind IN ('Function', 'Method')
-                          AND n.params IS NOT NULL AND n.params <> ''
-                        GROUP BY n.qualified_name, n.params, n.return_type,
-                                 n.file_path, n.line_start, n.line_end
-                        HAVING $2::text[] && COALESCE(
-                            array_agg(DISTINCT e.target_qualified)
+        const batchTwinQuery = `
+            SELECT n.qualified_name, n.params, n.return_type,
+                   n.file_path, COALESCE(n.line_start, 0) AS line_start,
+                   COALESCE(n.line_end, 0) AS line_end,
+                   COALESCE(array_agg(DISTINCT e.target_qualified)
                             FILTER (WHERE e.kind = 'CALLS'
                                     AND e.target_qualified IS NOT NULL),
-                            ARRAY[]::text[]
-                        )
-                    `;
+                            ARRAY[]::text[]) AS callees
+            FROM ast_nodes n
+            LEFT JOIN ast_edges e
+                 ON e.repo_id = n.repo_id
+                AND e.source_qualified = n.qualified_name
+            WHERE n.repo_id = $1
+              AND n.kind IN ('Function', 'Method')
+              AND n.params IS NOT NULL AND n.params <> ''
+            GROUP BY n.qualified_name, n.params, n.return_type,
+                     n.file_path, n.line_start, n.line_end
+            HAVING $2::text[] && COALESCE(
+                array_agg(DISTINCT e.target_qualified)
+                FILTER (WHERE e.kind = 'CALLS'
+                        AND e.target_qualified IS NOT NULL),
+                ARRAY[]::text[]
+            )
+            LIMIT 500
+        `;
 
-                    // Helper: what fraction of prCallees does candidate share?
-                    const overlapRatio = (
-                        candidateCallees: string[],
-                        prCallees: Set<string>,
-                    ): number => {
-                        if (prCallees.size === 0) return 0;
-                        const hits = candidateCallees.filter((c) =>
-                            prCallees.has(c),
-                        ).length;
-                        return hits / prCallees.size;
-                    };
-
-                    const poolRows: any[] = [];
-                    if (allPrCallees.length > 0) {
-                        try {
-                            const res = await this.dataSource.query(batchTwinQuery, [
-                                repoId,
-                                allPrCallees,
-                            ]);
-                            const rows: any[] = Array.isArray(res) ? res : (res?.rows || []);
-
-                            // Per-function overlap gate (>=80%) applied in JS.
-                            const seenQns = new Set<string>();
-                            for (const row of rows) {
-                                if (seenQns.has(row.qualified_name)) continue;
-                                const candidateCallees: string[] = row.callees || [];
-                                // Accept if this candidate clears the threshold for
-                                // at least one changed PR function, and is not the
-                                // PR function itself.
-                                const qualifies = [...prCalleesBySource.entries()].some(
-                                    ([prQn, prCallees]) =>
-                                        row.qualified_name !== prQn &&
-                                        overlapRatio(candidateCallees, prCallees) >= 0.8,
-                                );
-                                if (qualifies) {
-                                    seenQns.add(row.qualified_name);
-                                    poolRows.push(row);
-                                }
-                            }
-                        } catch (err) {
-                            this.logger.warn({
-                                message: '[AST-GRAPH] Batch twin pool query failed',
-                                context: AstGraphRepository.name,
-                                error: err,
-                                metadata: {
-                                    repoId,
-                                    organizationId: organizationId || 'unknown',
-                                    ...(repository && { repository }),
-                                    ...(prNumber && { prNumber }),
-                                },
-                            });
-                        }
-                    }
-                    // Rows -> node objects (shape the matcher reads).
-                    const twinPool: any[] = poolRows.map((r) => ({
-                        kind: 'Function',
-                        qualified_name: r.qualified_name,
-                        name: (r.qualified_name || '').split('::').pop(),
-                        params: r.params,
-                        return_type: r.return_type,
-                        file_path: r.file_path,
-                        line_start: r.line_start ?? 0,
-                        line_end: r.line_end ?? 0,
-                    }));
-                    // Rows -> CALLS edges (unpack callees) for the overlap gate.
-                    const poolEdges: any[] = poolRows.flatMap((r) =>
-                        (r.callees || []).map((cal: string) => ({
-                            kind: 'CALLS',
-                            source_qualified: r.qualified_name,
-                            target_qualified: cal,
-                        })),
-                    );
-                    this.pairDuplicateTwinsInGraph(
-                        {
-                            // byQn = twin pool; sources = prNodes ∩ hunks (4th arg).
-                            nodes: twinPool,
-                            edges: [...poolEdges, ...(prEdges || [])],
-                        },
-                        prEdges,
-                        prNodes || [],
-                        fileChanges,
-                    );
-                    // Merge flagged (PR + pool) nodes into parsed.nodes for the output.
-                    const nodeIndexByQn = new Map<string, number>(
-                        (parsed.nodes as any[]).map((n: any, i: number) => [
-                            n?.qualified_name,
-                            i,
-                        ]),
-                    );
-                    const flaggedNodes = [
-                        ...(prNodes || []).filter((n: any) => n?.is_duplicate),
-                        ...twinPool.filter((n: any) => n?.is_duplicate),
-                    ];
-                    for (const f of flaggedNodes) {
-                        const idx = nodeIndexByQn.get(f.qualified_name);
-                        if (idx !== undefined) parsed.nodes[idx] = f;
-                        else {
-                            nodeIndexByQn.set(f.qualified_name, parsed.nodes.length);
-                            parsed.nodes.push(f);
-                        }
-                    }
-                }
-                // Re-serialize so the pair flags survive — jsonOutput is the
-                // string the consumers re-parse.
-                jsonOutput = JSON.stringify(parsed);
-            }
-
-            const duplicateNodes = (parsed.nodes || []).filter((n: any) => n.is_duplicate);
-            if (duplicateNodes.length > 0) {
-                this.logger.log({
-                    message: `Flagged ${duplicateNodes.length} duplicate twin nodes in subgraph`,
-                    context: AstGraphRepository.name,
-                    metadata: { repoId, count: duplicateNodes.length },
-                });
-            }
-
-        } catch (e) {
+        try {
+            const res = await this.dataSource.query(batchTwinQuery, [
+                repoId,
+                allPrCallees,
+            ]);
+            return Array.isArray(res) ? res : (res?.rows || []);
+        } catch (err) {
             this.logger.warn({
-                message: '[AST-GRAPH] Failed to parse or process subgraph JSON in exportSubgraphJsonString',
+                message: '[AST-GRAPH] Batch twin pool query failed',
                 context: AstGraphRepository.name,
-                error: e,
+                error: err,
                 metadata: {
                     repoId,
                     organizationId: organizationId || 'unknown',
@@ -700,215 +577,7 @@ export class AstGraphRepository {
                     ...(prNumber && { prNumber }),
                 },
             });
-        }
-
-        return jsonOutput;
-    }
-
-    // -----------------------------------------------------------------------
-    // Duplicate twin pairing (TypeScript)
-    // -----------------------------------------------------------------------
-
-    /**
-     * Mark duplicate pairs in-place on `graph.nodes`.
-     *
-     * Matches changed functions against every function in the graph: same
-     * {name|type} param token-set (order-insensitive, lowercased), compatible
-     * return types (NULL==NULL allowed), and at least one overlapping repo
-     * callee. Sets `is_duplicate` + `duplicate_twin` on both members.
-     */
-    private pairDuplicateTwinsInGraph(
-        graph: { nodes?: any[]; edges?: any[] },
-        prEdges: { source_qualified: string; target_qualified: string; kind: string }[] = [],
-        prNodes: any[] = [],
-        fileChanges: Array<{ filename?: string; patch?: string }> = [],
-    ): void {
-        const nodes = graph.nodes ?? [];
-
-        if (nodes.length < 2) return;
-
-        // Sources = nodes the PR actually touched. The sandbox parses WHOLE
-        // files, so every PR node (changed or not) is in prNodes. The diff's
-        // added-line ranges (new-file side) pick out the ones with changed
-        // lines. Sources can ONLY come from prNodes — they carry NEW-file line
-        // numbers (the coordinate space hunks use). DB-only nodes carry OLD
-        // lines and would false-match hunks.
-        const addedRangesByFile = new Map<string, Array<[number, number]>>();
-        for (const fc of fileChanges || []) {
-            const path = fc?.filename;
-            if (!path || !fc?.patch) continue;
-            const ranges: Array<[number, number]> = [];
-            let newStart = 0, newCount = 0, newLine = 0;
-            for (const line of fc.patch.split('\n')) {
-                const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
-                if (hunk) {
-                    newStart = parseInt(hunk[1], 10);
-                    newCount = hunk[2] ? parseInt(hunk[2], 10) : 1;
-                    newLine = newStart;
-                    continue;
-                }
-                if (newLine === 0) continue; // pre-hunk header lines
-                if (line.startsWith('+')) {
-                    ranges.push([newLine, newLine]);
-                    newLine++;
-                } else if (line.startsWith('-')) {
-                    // deleted line — does not advance the new-file cursor
-                } else {
-                    newLine++; // context line
-                }
-            }
-            if (ranges.length) addedRangesByFile.set(path, ranges);
-        }
-        const lineHitsHunk = (filePath: string, lineStart: number, lineEnd: number) => {
-            const normPath = (filePath || '');
-            const ranges = addedRangesByFile.get(normPath);
-            if (!ranges) return false;
-            for (const [s, e] of ranges) {
-                if (s >= lineStart && s <= lineEnd) return true;
-            }
-            return false;
-        };
-
-        // --- Tokenize params into {name|type} tokens (lowercased) ---
-        const tokenize = (raw: unknown): Set<string> => {
-            const s = typeof raw === 'string' ? raw : '';
-            const tokens = new Set<string>();
-            // Signed ({ a, b }: { a: T; b: U }): the trailing {…} holds the types.
-            // Multiple destructures ({ a }, { b }): no head (`}:` absent) → keep all.
-            const blocks = s.match(/\{[^{}]*\}/g) || [];
-            const hasHead = blocks.some((b) => {
-                let i = s.indexOf(b) + b.length;
-                while (i < s.length && s[i] === ' ') i++;
-                return s[i] === ':';
-            });
-            const ann = hasHead ? blocks[blocks.length - 1] : s;
-            // name (optional `?`) : type — charset stops at `,;|=>}` so defaults,
-            // unions, arrays, arrows leave the plain leading type.
-            const colonMatches = ann.matchAll(/([A-Za-z_$][\w$]*)\s*\??\s*:\s*([^,;|=>}]+)/g);
-            for (const m of colonMatches) {
-                tokens.add(`${m[1].toLowerCase()}|${m[2].trim().toLowerCase()}`);
-            }
-            // No colons → untyped (a, b): name-only tokens so they still match.
-            if (tokens.size === 0) {
-                for (const m of ann.matchAll(/([A-Za-z_$][\w$]*)/g)) {
-                    tokens.add(`${m[1].toLowerCase()}|`);
-                }
-            }
-            return tokens;
-        };
-
-        const byQn = new Map<string, any>();
-        for (const n of nodes) {
-            if (n?.kind === 'Function' || n?.kind === 'Method') {
-                byQn.set(n.qualified_name, n);
-            }
-        }
-
-        // Skip if no patch data reached us (the hasPatches gate in the caller
-        // should prevent this — belt-and-suspenders here).
-        if (addedRangesByFile.size === 0) {
-            return;
-        }
-        const changed = (prNodes || []).filter((n: any) => {
-            const filePath = n?.file_path as string | undefined;
-            if (!filePath) return false;
-            // Source = a PR node (new-file lines) whose range intersects an
-            // added hunk.
-            return lineHitsHunk(filePath, n.line_start ?? 0, n.line_end ?? 0);
-        });
-
-        if (changed.length === 0) return;
-
-        // Changed functions are those SQL pre-filtered (changed_functions); that
-        // subset now narrows to functions with >=1 repo callee. Build callee sets
-        // from the graph edges for the overlap requirement.
-        const calleeOf = new Map<string, Set<string>>();
-        const seedCallee = (from: string, to: string) => {
-            if (!from) return;
-            if (!calleeOf.has(from)) calleeOf.set(from, new Set<string>());
-            calleeOf.get(from)!.add(to);
-        };
-
-        for (const e of graph?.edges || []) {
-            if (e?.kind !== 'CALLS') continue;
-            if (Boolean(e.source_qualified) && Boolean(e.target_qualified)) {
-                seedCallee(e.source_qualified, e.target_qualified);
-            }
-        }
-
-        // The overlap check needs each function's callee set — who does it call?
-        // But the sandbox-side calls (the ones from new files) would be invisible if we only used graph.edges
-        for (const e of prEdges || []) {
-            if (e?.kind !== 'CALLS') continue;
-            if (Boolean(e.source_qualified) && Boolean(e.target_qualified)) {
-                seedCallee(e.source_qualified, e.target_qualified);
-            }
-        }
-
-        // Pairs where the changed function is the "source" (twin is anywhere in repo).
-        const seen = new Set<string>();
-        const addPair = (a: any, b: any) => {
-            if (!a || !b || a === b) return;
-            const key = [...[a.qualified_name, b.qualified_name]].sort().join('|');
-            if (seen.has(key)) return;
-            seen.add(key);
-            a.is_duplicate = true;
-            b.is_duplicate = true;
-            a.duplicate_twin = {
-                qualified_name: b.qualified_name,
-                file_path: b.file_path,
-                line_start: b.line_start ?? 0,
-                line_end: b.line_end ?? 0,
-            };
-            b.duplicate_twin = {
-                qualified_name: a.qualified_name,
-                file_path: a.file_path,
-                line_start: a.line_start ?? 0,
-                line_end: a.line_end ?? 0,
-            };
-        };
-
-        for (const c of changed) {
-            // changed function param
-            const cTokens = tokenize(c.params);
-            const cRet = c.return_type;
-            const why: any = { returnType: 0, tokens: 0, noOverlap: 0, lowSimilarity: 0, pairs: 0 };
-            if (cTokens.size === 0) continue; // unparseable/missing params — skip
-
-            for (const other of byQn.values()) {
-                if (other.qualified_name === c.qualified_name) continue;
-                // Return-type compatibility (NULL==NULL allowed)
-                if (cRet !== other.return_type &&
-                    !(cRet == null && other.return_type == null)) {
-                    why.returnType++;
-                    continue;
-                }
-                // twin function param
-                const oTokens = tokenize(other.params);
-                if (oTokens.size === 0) { why.tokens++; continue; }
-                // Similarity: fraction of c's tokens present in o's set.
-                // Providers rename params (payid vs csid), so exact equality is
-                // too strict — allow >=50% overlap.
-                let matched = 0;
-                for (const tk of cTokens) {
-                    if (oTokens.has(tk)) matched++;
-                }
-                const similarity = matched / cTokens.size;
-                if (similarity < 0.5) { why.lowSimilarity++; continue; }
-                // Overlapping repo callees. Require >=2 shared callees for generic similarity (0.50),
-                // but allow minOverlap=1 when parameter token similarity is high (>=0.70).
-                const cc = calleeOf.get(c.qualified_name) ?? new Set<string>();
-                const oc = calleeOf.get(other.qualified_name) ?? new Set<string>();
-                let overlap = 0;
-                for (const cal of cc) {
-                    if (oc.has(cal)) overlap++;
-                }
-                const minOverlap = similarity >= 0.7 ? 1 : 2;
-                if (overlap < minOverlap) { why.noOverlap++; continue; }
-                addPair(c, other);
-                why.pairs++;
-                why.i = similarity;
-            }
+            return [];
         }
     }
 

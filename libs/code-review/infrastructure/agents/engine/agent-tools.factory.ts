@@ -594,7 +594,7 @@ export function buildAgentTools(
                 }
                 if (!result && result !== '') {
                     logger.warn({
-                        message: 'ReadFile failed: returned ${typeof result} for ${filePath}',
+                        message: `ReadFile failed: returned ${typeof result} for ${filePath}`,
                         context: 'AgentTools',
                         metadata: { filePath, startLine, endLine },
                     });

@@ -267,15 +267,12 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
                 doc.sandboxId,
             );
         } catch (err) {
-            if (
-                err instanceof SandboxStaleConnectionError ||
-                err instanceof SandboxCreateTimeoutError
-            ) {
-                // Lease referenced a sandbox that timed out or is stale.
+            if (err instanceof SandboxStaleConnectionError) {
+                // Lease referenced a sandbox that is stale.
                 // Delete the stuck lease and restart acquire from scratch
                 // so this caller becomes the creator.
                 this.logger.log({
-                    message: `SandboxLeaseManager: re-acquiring after stale/timed-out sandbox prKey="${prKey}" consumer="${consumer}"`,
+                    message: `SandboxLeaseManager: re-acquiring after stale sandbox prKey="${prKey}" consumer="${consumer}"`,
                     context: SandboxLeaseManager.name,
                     metadata: { prKey, consumer },
                 });
@@ -760,7 +757,6 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             }
         }
 
-        await this.leaseRepo.delete(prKey).catch(() => {});
         throw new SandboxCreateTimeoutError(prKey);
     }
 

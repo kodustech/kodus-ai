@@ -462,30 +462,30 @@ export function buildCompactUserPrompt(input: ReviewAgentInput, meta: PromptAgen
             ? `\n    Label each finding as one of: ${allowedSuggestionLabels.join(', ')}.`
             : '';
 
-              if (categoryLabel === 'duplicate_logic') {
-    return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
-  ${prContextSection}
-  <Diffs>
-${diffsSection}
-  </Diffs>
-${callGraphSection}
-  <Task>Review this PR for logic drift between sibling or duplicate functions. You MUST process every <TwinPair> listed in <DuplicateCandidates> inside <CallGraph>.
-  For EACH <TwinPair>:
-  1. Call readFile on the exact file and line range specified in \`first\`.
-  2. Call readFile on the exact file and line range specified in \`second\`. Do NOT skip reading the \`second\` side.
-  3. Compare the two function implementations line-by-line for structural or functional drift: check database persistence, side-effects, validations, event emissions, and error handling.
-  4. If one twin executes critical business operations or side-effects that its sibling twin omits or implements inconsistently, flag it as a duplicate logic drift finding.
-  Deduplication Rule: If multiple <TwinPair> candidates reveal the SAME root missing logic or defect in a function, emit ONLY ONE consolidated suggestion for that defect instead of duplicate suggestions.
-  Focus exclusively on logic drift between twins — do NOT report generic syntax or schema errors in this category.${labelHint}</Task>
-  <CoverageContract>Examine every <TwinPair> candidate. Call readFile on both sides of every pair before submitting.</CoverageContract>
-  <Rules>
-    - Root cause must be logic drift or missing business logic between twin functions.
-    - Focus exclusively on twin/sibling logic drift — do NOT report generic TypeScript or schema validation errors.
-    - Assign confidence 1–10. Be honest: ≥9 only when both twin sides are read; ≤4 = speculative, do not report below 5.
-    - Submit via the submitResult tool with perPairVerdicts for every twin pair.
-  </Rules>
-</ReviewTask>`;
-  }
+        if (categoryLabel === 'duplicate_logic') {
+            return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
+                      ${prContextSection}
+                      <Diffs>
+                    ${diffsSection}
+                      </Diffs>
+                    ${callGraphSection}
+                      <Task>Review this PR for logic drift between sibling or duplicate functions. You MUST process every <TwinPair> listed in <DuplicateCandidates> inside <CallGraph>.
+                      For EACH <TwinPair>:
+                      1. Call readFile on the exact file and line range specified in \`first\`.
+                      2. Call readFile on the exact file and line range specified in \`second\`. Do NOT skip reading the \`second\` side.
+                      3. Compare the two function implementations line-by-line for structural or functional drift: check database persistence, side-effects, validations, event emissions, and error handling.
+                      4. If one twin executes critical business operations or side-effects that its sibling twin omits or implements inconsistently, flag it as a duplicate logic drift finding.
+                      Deduplication Rule: If multiple <TwinPair> candidates reveal the SAME root missing logic or defect in a function, emit ONLY ONE consolidated suggestion for that defect instead of duplicate suggestions.
+                      Focus exclusively on logic drift between twins — do NOT report generic syntax or schema errors in this category.${labelHint}</Task>
+                      <CoverageContract>Examine every <TwinPair> candidate. Call readFile on both sides of every pair before submitting.</CoverageContract>
+                      <Rules>
+                        - Root cause must be logic drift or missing business logic between twin functions.
+                        - Focus exclusively on twin/sibling logic drift — do NOT report generic TypeScript or schema validation errors.
+                        - Assign confidence 1–10. Be honest: ≥9 only when both twin sides are read; ≤4 = speculative, do not report below 5.
+                        - Submit findings via the submitResult tool.
+                      </Rules>
+                    </ReviewTask>`;
+        }
   
         return `<ReviewTask>${formatReviewFocus(input.reviewDirective)}
   ${prContextSection}

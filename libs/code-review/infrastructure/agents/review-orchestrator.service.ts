@@ -107,10 +107,10 @@ export class ReviewOrchestratorService {
         }> = [];
 
         const enabledCategories = [
-            reviewOptions.bug ? 'bug' : null,
-            reviewOptions.security ? 'security' : null,
-            reviewOptions.performance ? 'performance' : null,
-            reviewOptions.duplicate_logic ? 'duplicate_logic' : null,
+            reviewOptions.bug !== false && 'bug',
+            reviewOptions.security !== false && 'security',
+            reviewOptions.performance !== false && 'performance',
+            reviewOptions.duplicate_logic === true && 'duplicate_logic',
         ].filter(Boolean) as Array<'bug' | 'security' | 'performance' | 'duplicate_logic'>;
 
         if (agentInput.reviewMode === 'deep') {

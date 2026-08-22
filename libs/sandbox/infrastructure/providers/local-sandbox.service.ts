@@ -952,7 +952,7 @@ export class LocalSandboxService implements ISandboxProvider {
         // explicitly instead of piggybacking on this entry point.
         const run = async (
             command: string,
-            opts?: { timeoutMs?: number },
+            opts?: { timeoutMs?: number; envs?: Record<string, string> },
         ): Promise<SandboxRunResult> => {
             if (/`|\$\(/.test(command)) {
                 this.logger.warn({
@@ -975,7 +975,9 @@ export class LocalSandboxService implements ISandboxProvider {
                     cwd: capturedRepoDir,
                     timeout: opts?.timeoutMs ?? CMD_TIMEOUT_MS,
                     maxBuffer: MAX_BUFFER,
-                    env: process.env,
+                    env: opts?.envs
+                        ? { ...process.env, ...opts.envs }
+                        : process.env,
                     shell: bashShell,
                 });
                 return {

@@ -434,6 +434,34 @@ function buildCurrentPrompts(caseData) {
     }
 
     const provider = new ProviderClass({}, {}, {});
+    const callGraphData = parseMaybeJson(caseData.callGraph);
+    if (category === 'duplicate_logic' && callGraphData?.prNodes && callGraphData?.prEdges) {
+        const { pairDuplicateTwinsInGraph, formatDuplicateCandidatesXml } = require(
+            path.join(
+                __dirname,
+                '../../libs/code-review/infrastructure/adapters/services/graph/twin-matcher.helper.ts',
+            ),
+        );
+        const nodes = [...(callGraphData.nodes || []), ...(callGraphData.prNodes || [])];
+        const edges = [...(callGraphData.edges || []), ...(callGraphData.prEdges || [])];
+        const fileChanges = (normalizeChangedFiles(parseMaybeJson(caseData.changedFiles)) || []).map((f) => ({
+            filename: f.filename,
+            patch: f.patchWithLinesStr || f.patch,
+        }));
+
+        pairDuplicateTwinsInGraph(
+            { nodes, edges },
+            callGraphData.prEdges || [],
+            callGraphData.prNodes || [],
+            fileChanges,
+        );
+
+        const twins = nodes.filter((n) => n.is_duplicate);
+        if (twins.length > 0) {
+            callGraphData.duplicatesBlock = formatDuplicateCandidatesXml(twins);
+        }
+    }
+
     const input = {
         organizationAndTeamData: {
             organizationId: 'eval-org',
