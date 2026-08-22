@@ -226,9 +226,9 @@ async function createModel(config) {
             return buildCodexSubscriptionModel(spec.codexModel || modelId);
         }
 
-        const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+        const { buildModelFromSlot } = require('../../libs/llm/byok-to-vercel.ts');
         applyModelEnv(modelId);
-        return withReasoningEffort(byokToVercelModel(undefined, 'main', {}), modelId);
+        return withReasoningEffort(buildModelFromSlot(undefined, {}, modelId), modelId);
     }
 
     // Env overrides so ANY model runs from one yaml (no per-provider config):

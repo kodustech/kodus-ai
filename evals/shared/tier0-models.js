@@ -25,6 +25,7 @@ const TIER0 = {
     // Google. O fetch do Node negocia HTTP/1.1, entao este caminho funciona;
     // reproduzir com curl exige --http1.1.
     'gemini-3.7-flash': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
+    'gemini-3.1-flash-lite': { provider: 'google', keyEnvs: ['BYOK_GOOGLE_API_KEY', 'API_GOOGLE_AI_API_KEY'] },
     'kimi-k2.7-code': { provider: 'openai_compatible', keyEnvs: ['BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
     'glm-5.2': { provider: 'openai_compatible', keyEnvs: ['BYOK_ZHIPU_API_KEY', 'API_ZHIPU_API_KEY'], baseURL: 'https://api.z.ai/api/paas/v4' },
     // V4-Pro saiu de preview em 2026-08 (build 0813). Mesmo endpoint do flash.
