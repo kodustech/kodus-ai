@@ -258,6 +258,21 @@ function resolveEnumParamCandidates(
     return [];
 }
 
+/**
+ * Extract the concrete value set of a closed-enum parameter.
+ *
+ * Reads a top-level JSON-schema `enum` array AND the two other shapes a
+ * tool's runtime schema (Zod-generated / MCP / Atlassian) commonly emits:
+ *   - a lone `const` (frozen single value),
+ *   - `anyOf` / `oneOf` where each branch is `{ const: 'x' }` (or has its own
+ *     `enum`), e.g. `'markdown' | 'adf'` surfaced as
+ *     `anyOf: [{ const: 'markdown' }, { const: 'adf' }]`.
+ *
+ * Without this, a param declared via `anyOf`/`oneOf`/`const` evades the
+ * closed-enum guard in `resolveEnumParamCandidates` and gets treated as a
+ * generic string, so issue keys / query tokens are stuffed into it and the
+ * tool's own validator rejects the call (#1760).
+ */
 function extractEnumValues(
     paramSchema: Record<string, unknown> | undefined,
 ): string[] {
@@ -265,14 +280,50 @@ function extractEnumValues(
         return [];
     }
 
-    const raw = paramSchema.enum;
-    if (Array.isArray(raw)) {
-        return raw
-            .filter((value): value is string => typeof value === 'string')
-            .map((value) => value);
+    const collected: string[] = [];
+
+    const pushConc = (value: unknown): void => {
+        if (typeof value === 'string') {
+            collected.push(value);
+        }
+    };
+
+    // 1. Top-level `enum: ['a', 'b']`.
+    const rawEnum = paramSchema.enum;
+    if (Array.isArray(rawEnum)) {
+        for (const value of rawEnum) {
+            pushConc(value);
+        }
     }
 
-    return [];
+    // 2. Lone `const: 'a'`.
+    pushConc(paramSchema.const);
+
+    // 3. `anyOf` / `oneOf` branches — each branch may declare `const` or a
+    //    nested `enum`. Recursively walk them.
+    for (const key of ['anyOf', 'oneOf'] as const) {
+        const variants = paramSchema[key];
+        if (!Array.isArray(variants)) {
+            continue;
+        }
+        for (const variant of variants) {
+            if (!variant || typeof variant !== 'object') {
+                continue;
+            }
+            const branch = variant as Record<string, unknown>;
+            if ('const' in branch) {
+                pushConc(branch.const);
+                continue;
+            }
+            if (Array.isArray(branch.enum)) {
+                for (const value of branch.enum) {
+                    pushConc(value);
+                }
+            }
+        }
+    }
+
+    return [...new Set(collected)];
 }
 
 type ParamIntent = 'issue' | 'query' | 'context' | 'url' | 'ari' | 'generic';
