@@ -786,6 +786,11 @@ export class SandboxLeaseManager implements ISandboxLeaseManager {
             const doc = await this.leaseRepo.findByPrKey(prKey);
             if (doc && doc.leaseCount > 1) {
                 await this.leaseRepo.decrementLease(prKey);
+                this.logger.error({
+                    message: `SandboxLeaseManager: local sandbox directory "${sandboxId}" is missing on this host for prKey="${prKey}", but lease has active holders (leaseCount=${doc.leaseCount})`,
+                    context: SandboxLeaseManager.name,
+                    metadata: { prKey, sandboxId, leaseCount: doc.leaseCount },
+                });
                 throw new Error(
                     `SandboxLeaseManager: local sandbox directory "${sandboxId}" is missing on this host for prKey="${prKey}", but lease has active holders (leaseCount=${doc.leaseCount})`,
                 );
