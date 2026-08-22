@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { createLogger } from '@libs/core/log/logger';
@@ -7,7 +7,7 @@ import {
     DistributedLock,
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
-import { SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
+import { SANDBOX_LEASE_REPOSITORY_TOKEN, SandboxLeaseRepository } from '@libs/sandbox/infrastructure/repositories/sandbox-lease.repository';
 import {
     isLocalSandboxPath,
     deleteLocalSandbox,
@@ -56,6 +56,7 @@ export class SandboxLeaseReaperService {
     private readonly logger = createLogger(SandboxLeaseReaperService.name);
 
     constructor(
+        @Inject(SANDBOX_LEASE_REPOSITORY_TOKEN)
         private readonly leaseRepository: SandboxLeaseRepository,
         private readonly distributedLockService: DistributedLockService,
         private readonly configService: ConfigService,
