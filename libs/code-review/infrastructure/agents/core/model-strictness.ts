@@ -29,3 +29,24 @@ export function supportsStrictTools(modelId: string | undefined): boolean {
     if (process.env.RECALL_NO_STRICT === '1') return false;
     return /^gemini[-_]/i.test(modelId);
 }
+
+/**
+ * Strict decision for a RUN that may fail over from `primary` to `fallback`.
+ *
+ * The done-tool's `strict` flag is baked into the agent spec ONCE, but a runtime
+ * failover (runWithModelFailover) can swap the model mid-flight. Strict is only
+ * safe if EVERY model that could actually run the call accepts it — a strict tool
+ * built for a Gemini primary and then sent to an OpenAI fallback is rejected up
+ * front ("Invalid schema for function ...", every property must be `required`).
+ * So enable strict only when the primary supports it AND there is no fallback the
+ * swap could land on that doesn't. Losing strict on the primary is a cheap
+ * validation cost; a fallback that can't run at all is a broken failover.
+ */
+export function supportsStrictToolsForRun(
+    primaryModelId: string | undefined,
+    fallbackModelId?: string | undefined,
+): boolean {
+    if (!supportsStrictTools(primaryModelId)) return false;
+    if (fallbackModelId && !supportsStrictTools(fallbackModelId)) return false;
+    return true;
+}

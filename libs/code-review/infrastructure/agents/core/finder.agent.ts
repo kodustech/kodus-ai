@@ -34,7 +34,7 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 
 import { LlmVerifier } from '@libs/code-review/infrastructure/agents/core/verifier.agent';
 import { buildToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/core/agent-anomalies';
-import { supportsStrictTools } from '@libs/code-review/infrastructure/agents/core/model-strictness';
+import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import type { ToolEvidenceSummary } from '@libs/code-review/infrastructure/agents/review-agent.contract';
 import type { Verdict } from '@libs/agent-harness/domain/contracts/verifier.contract';
 import {
@@ -139,6 +139,11 @@ export const submitResultTool: AgentTool = {
 export interface BuildFinderSpecParams {
     systemPrompt: string;
     modelId: string;
+    /** The runtime failover target's model id, when the resolved slot has one.
+     *  Strict tool use is only enabled when BOTH this and `modelId` support it —
+     *  a strict tool built for the primary but swapped onto a non-strict fallback
+     *  (e.g. Gemini → OpenAI) is rejected by the fallback's Structured Outputs. */
+    fallbackModelId?: string;
     /** Investigation tools (grep/readFile/...) from buildFinderToolRegistry. */
     tools: ToolRegistry;
     coverageLedger: ProgressLedger;
@@ -163,7 +168,15 @@ export function buildFinderAgentSpec(params: BuildFinderSpecParams): AgentSpec {
         // strict-capable models (Gemini VALIDATED mode) so the findings payload
         // can't be omitted or emitted as prose. Best-effort otherwise. NOT
         // enabled for Anthropic — see model-strictness.ts (it craters recall).
-        { ...submitResultTool, strict: supportsStrictTools(params.modelId) },
+        // Considers the failover target too: a strict tool built for a Gemini
+        // primary must NOT be sent to an OpenAI fallback (it rejects the schema).
+        {
+            ...submitResultTool,
+            strict: supportsStrictToolsForRun(
+                params.modelId,
+                params.fallbackModelId,
+            ),
+        },
     ]);
 
     const policies = [
@@ -401,6 +414,9 @@ export interface RunFinderWithVerifyParams {
     makeResampleSpec?: () => AgentSpec;
     /** Model id for the verifier runs. */
     modelId: string;
+    /** Failover target model id — threaded to the verifier so its strict tool
+     *  use accounts for the failover model (Gemini→OpenAI must not send strict). */
+    fallbackModelId?: string;
     /** Investigation tools shared with the verifier. */
     tools: ToolRegistry;
     /** Verify concurrency (default 4). */
@@ -559,6 +575,7 @@ export async function runFinderWithVerify(
     // LlmVerifier: high-confidence → light depth, low-confidence → full depth.
     const verifier = new LlmVerifier(params.runner, {
         modelId: params.modelId,
+        fallbackModelId: params.fallbackModelId,
         tools: params.tools,
         providerOptions: params.providerOptions,
         telemetryMetadata: params.telemetryMetadata,
@@ -590,6 +607,7 @@ export async function runFinderWithVerify(
     if (unevidenced.length > 0) {
         const fullVerifier = new LlmVerifier(params.runner, {
             modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
             tools: params.tools,
             forceFull: true,
             providerOptions: params.providerOptions,

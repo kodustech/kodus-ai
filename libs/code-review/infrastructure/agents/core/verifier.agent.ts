@@ -25,7 +25,7 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 
 import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
-import { supportsStrictTools } from '@libs/code-review/infrastructure/agents/core/model-strictness';
+import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
@@ -56,6 +56,9 @@ const submitVerdictTool = {
 
 export interface BuildVerifierSpecParams {
     modelId: string;
+    /** Failover target model id (when the slot has one). Strict tool use is only
+     *  enabled when BOTH it and `modelId` support it — see supportsStrictToolsForRun. */
+    fallbackModelId?: string;
     /** Cost-span run name (e.g. `code-review-bug-verify`) + agentName for the
      *  verify leaf usage span (bucketed to `review` by deriveArea). */
     runName?: string;
@@ -79,7 +82,13 @@ export function buildVerifierAgentSpec(
         ...params.tools.list(),
         // Strict/structured done-tool for strict-capable models (Gemini
         // VALIDATED mode) so the verdict can't be omitted or emitted as prose.
-        { ...submitVerdictTool, strict: supportsStrictTools(params.modelId) },
+        {
+            ...submitVerdictTool,
+            strict: supportsStrictToolsForRun(
+                params.modelId,
+                params.fallbackModelId,
+            ),
+        },
     ]);
     return {
         id: 'verifier',
@@ -175,6 +184,9 @@ function collectVerifierToolCalls(state: RunState): Verdict['toolCalls'] {
 
 export interface LlmVerifierParams {
     modelId: string;
+    /** Failover target model id — threaded to the verifier spec so strict tool
+     *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
+    fallbackModelId?: string;
     tools: ToolRegistry;
     /** Depth for high-confidence findings (light verify). Default 5. */
     lightMaxSteps?: number;
@@ -227,6 +239,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             : 'code-review-verify';
         this.lightSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
             runName: verifyRunName,
             agentName: params.agentName,
             tools: params.tools,
@@ -235,6 +248,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         });
         this.fullSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
             runName: verifyRunName,
             agentName: params.agentName,
             tools: params.tools,
