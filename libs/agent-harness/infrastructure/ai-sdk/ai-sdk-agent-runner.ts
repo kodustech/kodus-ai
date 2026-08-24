@@ -222,6 +222,12 @@ export class AiSdkAgentRunner implements AgentRunner {
             }
         };
 
+        // PR/team for cost attribution: the code-review finder opts these in via
+        // `runtimeContext`; other callers hand over raw `telemetryMetadata`.
+        const runMeta = (input.runtimeContext ?? input.telemetryMetadata) as
+            | { pullRequestId?: number; teamId?: string }
+            | undefined;
+
         try {
             // ── the model call: ONE door. LLM.run resolves the slot → model +
             // tuning + reasoning + prompt-cache, runs the loop from these seams,
@@ -241,6 +247,18 @@ export class AiSdkAgentRunner implements AgentRunner {
                     agentName: spec.agentName ?? spec.id,
                     ...(spec.phase ? { phase: spec.phase } : {}),
                     source: 'harness',
+                    // Per-PR / per-team cost attribution. organizationId reaches
+                    // the span via LLM.run's own param above, but prNumber/teamId
+                    // ride the cost attrs — without threading them the biggest
+                    // spans (the agent loop) record prNumber undefined, so per-PR
+                    // cost in the dashboard misses the finder/verify entirely.
+                    // The code-review finder opts these values in through
+                    // `runtimeContext` (via toAiSdkTelemetryArgs); other callers
+                    // pass raw `telemetryMetadata`. Read both.
+                    ...(runMeta?.pullRequestId != null
+                        ? { prNumber: runMeta.pullRequestId }
+                        : {}),
+                    ...(runMeta?.teamId ? { teamId: runMeta.teamId } : {}),
                 },
                 system: spec.systemPrompt,
                 messages,
