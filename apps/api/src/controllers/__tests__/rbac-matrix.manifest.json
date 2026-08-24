@@ -1177,6 +1177,28 @@
     }
   },
   {
+    "key": "organizationParameters.controller.ts#listModelsWithKey",
+    "httpMethod": "POST",
+    "urlPath": "/organization-parameters/list-models",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "key": "organizationParameters.controller.ts#modelCapabilities",
+    "httpMethod": "GET",
+    "urlPath": "/organization-parameters/model-capabilities",
+    "expected": {
+      "owner": "allow",
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "key": "organizationParameters.controller.ts#testByokConnection",
     "httpMethod": "POST",
     "urlPath": "/organization-parameters/test-byok",
