@@ -166,7 +166,10 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // wait for the holder and try again; only once the retry window
             // is spent do we give up, and then we say so on the PR.
             if (isPrReviewInProgressError(error)) {
-                const deferral = this.prReviewDeferralService.next(job);
+                const deferral = this.prReviewDeferralService.next(
+                    job,
+                    error.holderVisibleUntil,
+                );
 
                 if (deferral) {
                     await this.prReviewDeferralService.defer(job, deferral);

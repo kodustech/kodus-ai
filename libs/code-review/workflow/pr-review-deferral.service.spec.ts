@@ -61,21 +61,44 @@ describe('PrReviewDeferralService', () => {
             expect(service.next(withDeferrals(8))?.delayMs).toBe(MAX_DELAY_MS);
         });
 
-        // Retrying past the active-execution lookback is worse than giving
-        // up: the holder's row stops being visible there while it is still
-        // running, and its lock TTL expired minutes earlier, so the retry
-        // clears both gates and starts a second concurrent review.
-        it('gives up before the holder stops being visible to the gate', () => {
-            let total = 0;
-            for (let i = 0; i < MAX_DEFERRALS; i++) {
-                total += service.next(withDeferrals(i))!.delayMs;
-            }
-            expect(total).toBeLessThan(GATE_LOOKBACK_MS);
-            // ...but still long enough to outlast an ordinary review.
-            expect(total).toBeGreaterThan(20 * 60_000);
+        // Retrying past the point where the holder stops being visible is
+        // worse than giving up: its row has aged out of the gate's lookback
+        // and its lock TTL expired minutes earlier, so the retry clears both
+        // gates while the holder still runs and starts a second review.
+        it('stops once the next attempt would land past the holder deadline', () => {
+            const almostUp = new Date(Date.now() + 5_000);
+
+            expect(service.next(withDeferrals(0), almostUp)).toBeNull();
         });
 
-        it('gives up once the deferral cap is reached', () => {
+        it('keeps going while the holder is still comfortably visible', () => {
+            const plentyLeft = new Date(Date.now() + GATE_LOOKBACK_MS);
+
+            expect(service.next(withDeferrals(0), plentyLeft)).toEqual({
+                deferredCount: 1,
+                delayMs: BASE_DELAY_MS,
+            });
+        });
+
+        // The deadline is anchored to the HOLDER's start, not to the
+        // collision, so a command arriving late into a long review gets a
+        // correspondingly smaller budget than one arriving immediately.
+        it('gives a late collision less budget than an early one', () => {
+            const holderJustStarted = new Date(Date.now() + GATE_LOOKBACK_MS);
+            const holderNearlyAgedOut = new Date(Date.now() + 30_000);
+
+            // Same attempt number, opposite answers — the holder's age
+            // decides, not how many times we have already retried.
+            expect(
+                service.next(withDeferrals(3), holderJustStarted),
+            ).not.toBeNull();
+            expect(
+                service.next(withDeferrals(3), holderNearlyAgedOut),
+            ).toBeNull();
+        });
+
+        it('falls back to the attempt cap when no deadline is known', () => {
+            expect(service.next(withDeferrals(MAX_DEFERRALS - 1))).not.toBeNull();
             expect(service.next(withDeferrals(MAX_DEFERRALS))).toBeNull();
         });
 

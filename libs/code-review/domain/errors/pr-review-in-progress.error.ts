@@ -23,9 +23,18 @@ export class PrReviewInProgressError extends Error {
     /** Everything needed to answer the user on the PR, if we give up. */
     readonly target: CommandReviewFeedbackTarget;
 
+    /**
+     * When the run holding this PR stops being visible to the gate that
+     * refused us. Retrying past it is unsafe: the holder may still be
+     * running while both gates have gone blind to it, so the retry would
+     * start a second concurrent review.
+     */
+    readonly holderVisibleUntil?: Date;
+
     constructor(params: {
         gate: 'lock' | 'execution';
         target: CommandReviewFeedbackTarget;
+        holderVisibleUntil?: Date;
         message?: string;
     }) {
         super(
@@ -34,6 +43,7 @@ export class PrReviewInProgressError extends Error {
         );
         this.gate = params.gate;
         this.target = params.target;
+        this.holderVisibleUntil = params.holderVisibleUntil;
     }
 }
 

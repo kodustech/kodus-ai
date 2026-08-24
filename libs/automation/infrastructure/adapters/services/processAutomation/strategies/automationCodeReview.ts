@@ -33,6 +33,14 @@ import { describePipelineError } from '@libs/code-review/utils/describe-pipeline
  * these on a FAILED run tells the user nothing about what went wrong — a
  * failed review used to be labelled "Pipeline started" (#1568).
  */
+/**
+ * How far back `getActiveExecution` will look for the run holding a PR.
+ * A holder older than this stops being visible to the gate even while it
+ * is still running, so it also bounds how long a refused command may keep
+ * retrying — past it, a retry sees no holder and starts a second review.
+ */
+const ACTIVE_EXECUTION_LOOKBACK_MINUTES = 30;
+
 const STALE_STARTUP_MESSAGES = new Set([
     'pipeline started',
     'code review started',
@@ -188,7 +196,7 @@ export class AutomationCodeReviewService implements Omit<
                     pullRequestNumber: pullRequest?.number,
                 },
             });
-            this.refuseCommand('lock', payload);
+            this.refuseCommand('lock', payload, this.holderVisibleUntil());
             return 'Code review already in progress for this PR';
         }
 
@@ -212,7 +220,11 @@ export class AutomationCodeReviewService implements Omit<
                         pullRequestNumber: pullRequest?.number,
                     },
                 });
-                this.refuseCommand('execution', payload);
+                this.refuseCommand(
+                    'execution',
+                    payload,
+                    this.holderVisibleUntil(existingExecution.createdAt),
+                );
                 return 'Code review already in progress for this PR';
             }
 
@@ -324,9 +336,23 @@ export class AutomationCodeReviewService implements Omit<
      * `@kody review` gets their request handed back to the job processor to
      * retry once the PR frees up (#1700).
      */
+    /**
+     * When the run holding this PR stops being visible to the gate. The
+     * lock path has no execution row to read, but a held lock means the
+     * holder started within the lock's TTL, so "now" is off by at most
+     * that — well inside the margin the retry budget leaves.
+     */
+    private holderVisibleUntil(holderCreatedAt?: Date): Date {
+        const since = holderCreatedAt ?? new Date();
+        return new Date(
+            since.getTime() + ACTIVE_EXECUTION_LOOKBACK_MINUTES * 60_000,
+        );
+    }
+
     private refuseCommand(
         gate: 'lock' | 'execution',
         payload: Record<string, any>,
+        holderVisibleUntil: Date,
     ): void {
         const {
             origin,
@@ -343,6 +369,7 @@ export class AutomationCodeReviewService implements Omit<
 
         throw new PrReviewInProgressError({
             gate,
+            holderVisibleUntil,
             target: {
                 organizationAndTeamData,
                 repository: { id: repository?.id, name: repository?.name },
@@ -360,7 +387,9 @@ export class AutomationCodeReviewService implements Omit<
     ): Promise<IAutomationExecution | null> {
         try {
             const cutoffTime = new Date();
-            cutoffTime.setMinutes(cutoffTime.getMinutes() - 30);
+            cutoffTime.setMinutes(
+                cutoffTime.getMinutes() - ACTIVE_EXECUTION_LOOKBACK_MINUTES,
+            );
 
             const activeExecutions = await this.automationExecutionService.find(
                 {

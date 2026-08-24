@@ -45,14 +45,9 @@ export class PrReviewDeferralService {
     private static readonly MAX_DELAY_MS = 60_000;
 
     /**
-     * Chosen so the whole retry window (~24.75 min) stays INSIDE the
-     * 30-minute lookback `getActiveExecution` uses to spot the holder.
-     *
-     * Past that lookback the holder's execution row stops being visible
-     * even while it is still running, and its lock TTL expired long
-     * before — so a retry landing there would sail through both gates and
-     * start a SECOND concurrent review. Better to give up and tell the
-     * user than to double-review the PR.
+     * Upper bound on attempts (~24.75 min of waiting). The real stop
+     * condition is `holderVisibleUntil` below — this only caps a case
+     * where no deadline is known.
      */
     private static readonly MAX_DEFERRALS = 26;
 
@@ -68,24 +63,41 @@ export class PrReviewDeferralService {
     ) {}
 
     /**
-     * The next deferral for this job, or null once we have waited long
-     * enough that the caller should give up and say so on the PR.
+     * The next deferral for this job, or null once the caller should give
+     * up and say so on the PR.
+     *
+     * `holderVisibleUntil` is the moment the run holding the PR stops
+     * being visible to the gate that refused us. It is measured from the
+     * HOLDER's start, not from the collision, so it cannot be expressed as
+     * a fixed number of attempts: a command colliding 20 minutes into a
+     * long review has far less budget than one colliding immediately.
+     * Retrying past it would clear both gates while the holder is still
+     * running and start a second concurrent review.
      */
-    next(job: IWorkflowJob): PrReviewDeferral | null {
+    next(
+        job: IWorkflowJob,
+        holderVisibleUntil?: Date,
+    ): PrReviewDeferral | null {
         const deferredCount = this.getDeferredCount(job) + 1;
 
         if (deferredCount > PrReviewDeferralService.MAX_DEFERRALS) {
             return null;
         }
 
-        return {
-            deferredCount,
-            delayMs: Math.min(
-                PrReviewDeferralService.BASE_DELAY_MS *
-                    2 ** Math.max(0, deferredCount - 1),
-                PrReviewDeferralService.MAX_DELAY_MS,
-            ),
-        };
+        const delayMs = Math.min(
+            PrReviewDeferralService.BASE_DELAY_MS *
+                2 ** Math.max(0, deferredCount - 1),
+            PrReviewDeferralService.MAX_DELAY_MS,
+        );
+
+        if (
+            holderVisibleUntil &&
+            Date.now() + delayMs >= holderVisibleUntil.getTime()
+        ) {
+            return null;
+        }
+
+        return { deferredCount, delayMs };
     }
 
     async defer(
