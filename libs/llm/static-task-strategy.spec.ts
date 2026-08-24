@@ -85,40 +85,33 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
         });
     });
 
-    describe('task-inheritance fallback', () => {
-        it('resolves kodyRulesReview to the codeReview override when it has none of its own', () => {
+    describe('flat inheritance (no task→task chaining)', () => {
+        // Routing is FLAT (TASK_ROUTING_FALLBACK is empty): a task with no override
+        // of its own inherits the org DEFAULT directly — never another task's model.
+        it('resolves kodyRulesReview to the DEFAULT (not the codeReview override) when it has none of its own', () => {
             const v = strategy.resolve(
                 'kodyRulesReview',
                 NO_CTX,
                 cfg({ taskOverrides: { codeReview: 'm-B' }, defaultModelId: 'm-A' }),
             );
-            expect(v.modelId).toBe('m-B');
-            expect(v.reason).toMatch(/inherited:codeReview/);
+            expect(v.modelId).toBe('m-A');
+            expect(v.reason).not.toMatch(/inherited:/);
         });
 
-        it('resolves ruleGeneration to the codeReview override when it has none of its own', () => {
-            const v = strategy.resolve(
-                'ruleGeneration',
-                NO_CTX,
-                cfg({ taskOverrides: { codeReview: 'm-B' }, defaultModelId: 'm-A' }),
-            );
-            expect(v.modelId).toBe('m-B');
-        });
-
-        it('resolves businessValidation to the conversation override, NOT codeReview', () => {
+        it('resolves businessValidation to the DEFAULT (not the conversation override) when it has none of its own', () => {
             const v = strategy.resolve(
                 'businessValidation',
                 NO_CTX,
                 cfg({
-                    taskOverrides: { codeReview: 'm-A', conversation: 'm-ANT' },
+                    taskOverrides: { conversation: 'm-ANT' },
                     defaultModelId: 'm-A',
                 }),
             );
-            expect(v.modelId).toBe('m-ANT');
-            expect(v.reason).toMatch(/inherited:conversation/);
+            expect(v.modelId).toBe('m-A');
+            expect(v.reason).not.toMatch(/inherited:/);
         });
 
-        it("prefers the task's OWN override over the inherited one", () => {
+        it("uses the task's OWN override when it has one", () => {
             const v = strategy.resolve(
                 'kodyRulesReview',
                 NO_CTX,
@@ -130,7 +123,7 @@ describe('StaticTaskStrategy — REQ-ROUTE-01', () => {
             expect(v.modelId).toBe('m-B');
         });
 
-        it('falls all the way to defaultModelId when neither own nor inherited override exists', () => {
+        it('falls to defaultModelId when the task has no override', () => {
             const v = strategy.resolve(
                 'kodyRulesReview',
                 NO_CTX,

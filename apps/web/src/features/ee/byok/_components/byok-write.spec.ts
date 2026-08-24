@@ -363,4 +363,70 @@ describe("buildByokBlob — v2 write builder (blank-key keep rule)", () => {
             },
         );
     });
+
+    describe("routing save + reset-to-default (Routing tab)", () => {
+        const existing: BYOKConfig = {
+            version: 2,
+            credentials: [
+                { id: "cred-openai", provider: "openai", apiKey: MASK },
+                { id: "cred-anthropic", provider: "anthropic", apiKey: MASK },
+            ],
+            models: [
+                { id: "m-1", credentialId: "cred-openai", model: "gpt-5-high" },
+                {
+                    id: "m-2",
+                    credentialId: "cred-anthropic",
+                    model: "claude-opus",
+                },
+            ],
+            routing: {
+                mode: "manual",
+                defaultModelId: "m-1",
+                fallbackModelId: "m-2",
+                taskOverrides: { prSummary: "m-2" },
+            },
+        };
+
+        it("replaces routing wholesale while preserving credentials + models (keys blanked)", () => {
+            const blob = buildByokBlob(existing, {
+                kind: "routing",
+                routing: {
+                    mode: "manual",
+                    defaultModelId: "m-2",
+                    taskOverrides: { codeReview: "m-1" },
+                },
+            });
+
+            expect(blob.routing).toEqual({
+                mode: "manual",
+                defaultModelId: "m-2",
+                taskOverrides: { codeReview: "m-1" },
+            });
+            // Models untouched; credential keys blanked (never the •••• mask).
+            expect(blob.models).toEqual(existing.models);
+            for (const cred of blob.credentials) {
+                expect(cred.apiKey ?? "").not.toContain("•");
+            }
+        });
+
+        it("reset agents to default: KEEPS the default, clears fallback + every per-agent override, keeps providers + models", () => {
+            // What the Routing tab saves after "Reset agents to default": the
+            // default model stays (everything falls back to it), fallback + all
+            // per-agent overrides are gone.
+            const blob = buildByokBlob(existing, {
+                kind: "routing",
+                routing: { mode: "manual", defaultModelId: "m-1", taskOverrides: {} },
+            });
+
+            expect(blob.routing?.defaultModelId).toBe("m-1");
+            expect(blob.routing?.fallbackModelId).toBeUndefined();
+            expect(blob.routing?.taskOverrides).toEqual({});
+            // The org's connected providers + models are NOT touched by a reset.
+            expect(blob.credentials.map((c) => c.id)).toEqual([
+                "cred-openai",
+                "cred-anthropic",
+            ]);
+            expect(blob.models).toEqual(existing.models);
+        });
+    });
 });
