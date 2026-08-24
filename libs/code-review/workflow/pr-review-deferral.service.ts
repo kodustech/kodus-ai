@@ -1,0 +1,141 @@
+import { createLogger } from '@libs/core/log/logger';
+import { Inject, Injectable } from '@nestjs/common';
+
+import {
+    IMessageBrokerService,
+    MESSAGE_BROKER_SERVICE_TOKEN,
+} from '@libs/core/domain/contracts/message-broker.service.contracts';
+import {
+    IOutboxMessageRepository,
+    OUTBOX_MESSAGE_REPOSITORY_TOKEN,
+} from '@libs/core/workflow/domain/contracts/outbox-message.repository.contract';
+import {
+    IWorkflowJobRepository,
+    WORKFLOW_JOB_REPOSITORY_TOKEN,
+} from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
+import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
+import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job.interface';
+
+export type PrReviewDeferral = {
+    delayMs: number;
+    deferredCount: number;
+};
+
+/**
+ * Reschedules a user-issued code review that collided with a run already
+ * holding the PR, so the request waits for its turn instead of being
+ * dropped (#1700).
+ *
+ * Same outbox mechanism as the BYOK concurrency gate: the job goes back to
+ * PENDING with a future `nextAttemptAt` and the existing relay re-publishes
+ * it, so no delayed-exchange plugin is involved.
+ */
+@Injectable()
+export class PrReviewDeferralService {
+    private readonly logger = createLogger(PrReviewDeferralService.name);
+
+    private static readonly BASE_DELAY_MS = 15_000;
+    private static readonly MAX_DELAY_MS = 5 * 60_000;
+
+    /**
+     * With the backoff below this spans a little over 30 minutes, which is
+     * the window the active-execution check refuses inside — retrying for
+     * less would guarantee the last attempt is still blocked.
+     */
+    private static readonly MAX_DEFERRALS = 10;
+
+    private static readonly METADATA_KEY = 'prReviewDeferral';
+
+    constructor(
+        @Inject(WORKFLOW_JOB_REPOSITORY_TOKEN)
+        private readonly jobRepository: IWorkflowJobRepository,
+        @Inject(OUTBOX_MESSAGE_REPOSITORY_TOKEN)
+        private readonly outboxRepository: IOutboxMessageRepository,
+        @Inject(MESSAGE_BROKER_SERVICE_TOKEN)
+        private readonly messageBroker: IMessageBrokerService,
+    ) {}
+
+    /**
+     * The next deferral for this job, or null once we have waited long
+     * enough that the caller should give up and say so on the PR.
+     */
+    next(job: IWorkflowJob): PrReviewDeferral | null {
+        const deferredCount = this.getDeferredCount(job) + 1;
+
+        if (deferredCount > PrReviewDeferralService.MAX_DEFERRALS) {
+            return null;
+        }
+
+        return {
+            deferredCount,
+            delayMs: Math.min(
+                PrReviewDeferralService.BASE_DELAY_MS *
+                    2 ** Math.max(0, deferredCount - 1),
+                PrReviewDeferralService.MAX_DELAY_MS,
+            ),
+        };
+    }
+
+    async defer(
+        job: IWorkflowJob,
+        deferral: PrReviewDeferral,
+    ): Promise<void> {
+        const nextAttemptAt = new Date(Date.now() + deferral.delayMs);
+
+        await this.jobRepository.update(job.id, {
+            status: JobStatus.PENDING,
+            scheduledAt: nextAttemptAt,
+            lastError:
+                'Waiting for the review already running on this PR to finish',
+            metadata: {
+                ...(job.metadata || {}),
+                [PrReviewDeferralService.METADATA_KEY]: {
+                    deferredCount: deferral.deferredCount,
+                    delayMs: deferral.delayMs,
+                    deferredAt: new Date().toISOString(),
+                    nextAttemptAt: nextAttemptAt.toISOString(),
+                },
+            },
+        });
+
+        await this.outboxRepository.create({
+            jobId: job.id,
+            exchange: 'workflow.exchange',
+            routingKey: `workflow.jobs.deferred.${job.workflowType}`,
+            payload: this.messageBroker.transformMessageToMessageBroker({
+                eventName: 'workflow.jobs.deferred',
+                message: {
+                    jobId: job.id,
+                    correlationId: job.correlationId,
+                    workflowType: job.workflowType,
+                    handlerType: job.handlerType,
+                    organizationId: job.organizationAndTeamData?.organizationId,
+                    teamId: job.organizationAndTeamData?.teamId,
+                },
+            }) as unknown as Record<string, unknown>,
+            nextAttemptAt,
+        });
+
+        this.logger.warn({
+            message: `Deferred code review command for job ${job.id} — PR is busy`,
+            context: PrReviewDeferralService.name,
+            metadata: {
+                jobId: job.id,
+                correlationId: job.correlationId,
+                deferredCount: deferral.deferredCount,
+                delayMs: deferral.delayMs,
+                nextAttemptAt: nextAttemptAt.toISOString(),
+            },
+        });
+    }
+
+    private getDeferredCount(job: IWorkflowJob): number {
+        const state = (job.metadata as Record<string, unknown> | null)?.[
+            PrReviewDeferralService.METADATA_KEY
+        ] as { deferredCount?: unknown } | undefined;
+
+        return typeof state?.deferredCount === 'number'
+            ? state.deferredCount
+            : 0;
+    }
+}

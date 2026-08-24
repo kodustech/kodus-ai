@@ -37,6 +37,18 @@ import { CodeManagementService } from '@libs/platform/infrastructure/adapters/se
 import { TelemetryService } from '@libs/telemetry/application/services/telemetry.service';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 
+/**
+ * The minimum needed to answer a user on the PR outside the pipeline —
+ * a refusal happens before any pipeline context exists.
+ */
+export type CommandReviewFeedbackTarget = {
+    organizationAndTeamData: OrganizationAndTeamData;
+    repository: { id: string; name: string };
+    pullRequest: { number: number };
+    platformType: PlatformType;
+    triggerCommentId?: number | string;
+};
+
 @Injectable()
 export class CodeReviewHandlerService {
     private readonly logger = createLogger(CodeReviewHandlerService.name);
@@ -365,6 +377,73 @@ export class CodeReviewHandlerService {
 
             return null;
         }
+    }
+
+    /**
+     * Answer a user-issued `@kody review` that was refused because another
+     * run already holds the PR. Every other piece of review feedback is
+     * posted from inside the pipeline, which a refusal never reaches — so
+     * without this the request gets no reaction, no comment and no error,
+     * and the silence is indistinguishable from a clean review (#1700).
+     *
+     * Best-effort: a provider failure here must not change the refusal.
+     */
+    async notifyCommandReviewRefused(
+        target: CommandReviewFeedbackTarget,
+    ): Promise<void> {
+        const {
+            organizationAndTeamData,
+            repository,
+            pullRequest,
+            platformType,
+            triggerCommentId,
+        } = target;
+
+        const params = {
+            organizationAndTeamData,
+            repository: { id: repository?.id, name: repository?.name },
+            prNumber: pullRequest?.number,
+            body: this.commandReviewRefusedMessage(),
+        };
+
+        try {
+            // Bitbucket threads the answer under the command itself; the
+            // other providers get a top-level comment, matching how the
+            // pipeline already delivers status feedback per platform.
+            if (triggerCommentId && platformType === PlatformType.BITBUCKET) {
+                await this.codeManagement.createResponseToComment({
+                    ...params,
+                    inReplyToId:
+                        typeof triggerCommentId === 'string'
+                            ? parseInt(triggerCommentId, 10) || triggerCommentId
+                            : triggerCommentId,
+                });
+                return;
+            }
+
+            await this.codeManagement.createIssueComment(params);
+        } catch (error) {
+            this.logger.error({
+                message: `Could not tell the user their review request for PR#${pullRequest?.number} was refused`,
+                context: CodeReviewHandlerService.name,
+                error: error instanceof Error ? error : undefined,
+                metadata: {
+                    organizationAndTeamData,
+                    platformType,
+                    prNumber: pullRequest?.number,
+                },
+            });
+        }
+    }
+
+    private commandReviewRefusedMessage(): string {
+        return (
+            '## Kody is already reviewing this PR ⏳\n\n' +
+            'Another review for this pull request is still running, so this ' +
+            '`@kody review` request was not started.\n\n' +
+            'Wait for the review in progress to finish, then ask again.\n\n' +
+            '<!-- kody-codereview -->'
+        );
     }
 
     private async handleReactionsByStatus(

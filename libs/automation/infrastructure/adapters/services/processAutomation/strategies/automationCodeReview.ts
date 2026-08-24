@@ -22,6 +22,10 @@ import {
 } from '@libs/automation/domain/teamAutomation/contracts/team-automation.service';
 import { ITeamAutomation } from '@libs/automation/domain/teamAutomation/interfaces/team-automation.interface';
 import { CodeReviewHandlerService } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
+import {
+    isPrReviewInProgressError,
+    PrReviewInProgressError,
+} from '@libs/code-review/domain/errors/pr-review-in-progress.error';
 import { describePipelineError } from '@libs/code-review/utils/describe-pipeline-error';
 
 /**
@@ -150,28 +154,15 @@ export class AutomationCodeReviewService implements Omit<
 
         const lockKey = `CODE_REVIEW:${orgId}:${repoId}:${prNumber}`;
         let lock: DistributedLock | null = null;
+        // Distinct from `!lock`: a lock service outage also leaves `lock`
+        // null, and that has to stay fail-open rather than read as "busy".
+        let lockHeldByAnotherRun = false;
 
         try {
             lock = await this.distributedLockService.acquire(lockKey, {
                 ttl: 1000 * 60, // 1 minute TTL
             });
-
-            if (!lock) {
-                this.logger.warn({
-                    message: `Code review already being processed for PR#${pullRequest?.number}, skipping`,
-                    context: AutomationCodeReviewService.name,
-                    metadata: {
-                        lockKey,
-                        organizationAndTeamData,
-                        repository: {
-                            id: repository?.id,
-                            name: repository?.name,
-                        },
-                        pullRequestNumber: pullRequest?.number,
-                    },
-                });
-                return 'Code review already in progress for this PR';
-            }
+            lockHeldByAnotherRun = !lock;
         } catch (error) {
             // Fail-open: if lock service is unavailable, proceed with the review
             // (better to risk a duplicate than to block all reviews)
@@ -181,6 +172,24 @@ export class AutomationCodeReviewService implements Omit<
                 error: error instanceof Error ? error : undefined,
                 metadata: { lockKey },
             });
+        }
+
+        if (lockHeldByAnotherRun) {
+            this.logger.warn({
+                message: `Code review already being processed for PR#${pullRequest?.number}, skipping`,
+                context: AutomationCodeReviewService.name,
+                metadata: {
+                    lockKey,
+                    organizationAndTeamData,
+                    repository: {
+                        id: repository?.id,
+                        name: repository?.name,
+                    },
+                    pullRequestNumber: pullRequest?.number,
+                },
+            });
+            this.refuseCommand('lock', payload);
+            return 'Code review already in progress for this PR';
         }
 
         let execution: IAutomationExecution | null = null;
@@ -203,6 +212,7 @@ export class AutomationCodeReviewService implements Omit<
                         pullRequestNumber: pullRequest?.number,
                     },
                 });
+                this.refuseCommand('execution', payload);
                 return 'Code review already in progress for this PR';
             }
 
@@ -283,6 +293,12 @@ export class AutomationCodeReviewService implements Omit<
             await this._handleExecutionCompletion(execution, result, payload);
             return 'Automation executed successfully';
         } catch (error) {
+            // A refused command is not a failed run — there is no execution
+            // to mark errored, and swallowing it here would put the request
+            // back on the silent path this whole change removes.
+            if (isPrReviewInProgressError(error)) {
+                throw error;
+            }
             await this._handleExecutionError(execution, error, payload);
             return 'Error executing automation';
         } finally {
@@ -299,6 +315,42 @@ export class AutomationCodeReviewService implements Omit<
                 }
             }
         }
+    }
+
+    /**
+     * Both refusal paths drop the run before the pipeline, which is where
+     * every other piece of user feedback is posted. An automation losing
+     * the race is genuinely redundant and stays dropped; a person who typed
+     * `@kody review` gets their request handed back to the job processor to
+     * retry once the PR frees up (#1700).
+     */
+    private refuseCommand(
+        gate: 'lock' | 'execution',
+        payload: Record<string, any>,
+    ): void {
+        const {
+            origin,
+            organizationAndTeamData,
+            repository,
+            pullRequest,
+            platformType,
+            triggerCommentId,
+        } = payload;
+
+        if (typeof origin !== 'string' || !origin.startsWith('command')) {
+            return;
+        }
+
+        throw new PrReviewInProgressError({
+            gate,
+            target: {
+                organizationAndTeamData,
+                repository: { id: repository?.id, name: repository?.name },
+                pullRequest: { number: pullRequest?.number },
+                platformType,
+                triggerCommentId,
+            },
+        });
     }
 
     private async getActiveExecution(

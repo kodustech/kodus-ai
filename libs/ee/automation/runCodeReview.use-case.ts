@@ -12,6 +12,7 @@ import { getMappedPlatform } from '@libs/common/utils/webhooks';
 import { createLogger } from '@libs/core/log/logger';
 import { EnqueueCodeReviewJobInput } from '@libs/core/workflow/application/use-cases/enqueue-code-review-job.use-case';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
+import { isPrReviewInProgressError } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
 
 @Injectable()
 export class RunCodeReviewAutomationUseCase implements IUseCase {
@@ -244,6 +245,14 @@ export class RunCodeReviewAutomationUseCase implements IUseCase {
 
             return result;
         } catch (error) {
+            // This catch swallows everything so a broken review never takes
+            // the worker down with it. A refused `@kody review` must not be
+            // swallowed too: the job processor is what reschedules it, and
+            // absorbing it here is what left the request dropped (#1700).
+            if (isPrReviewInProgressError(error)) {
+                throw error;
+            }
+
             this.logger.error({
                 message: 'Error executing code review automation',
                 context: RunCodeReviewAutomationUseCase.name,
