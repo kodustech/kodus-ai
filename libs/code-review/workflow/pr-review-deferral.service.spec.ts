@@ -2,8 +2,9 @@ import { PrReviewDeferralService } from './pr-review-deferral.service';
 import { JobStatus } from '@libs/core/workflow/domain/enums/job-status.enum';
 
 const BASE_DELAY_MS = 15_000;
-const MAX_DELAY_MS = 5 * 60_000;
-const MAX_DEFERRALS = 10;
+const MAX_DELAY_MS = 60_000;
+const MAX_DEFERRALS = 26;
+const GATE_LOOKBACK_MS = 30 * 60_000;
 
 const makeJob = (overrides: Partial<any> = {}): any => ({
     id: 'job-1',
@@ -60,15 +61,18 @@ describe('PrReviewDeferralService', () => {
             expect(service.next(withDeferrals(8))?.delayMs).toBe(MAX_DELAY_MS);
         });
 
-        // Total backoff has to outlast the 30-minute window the
-        // active-execution check refuses inside, or the last retry lands
-        // while the holder still blocks it.
-        it('keeps retrying for at least 30 minutes', () => {
+        // Retrying past the active-execution lookback is worse than giving
+        // up: the holder's row stops being visible there while it is still
+        // running, and its lock TTL expired minutes earlier, so the retry
+        // clears both gates and starts a second concurrent review.
+        it('gives up before the holder stops being visible to the gate', () => {
             let total = 0;
             for (let i = 0; i < MAX_DEFERRALS; i++) {
                 total += service.next(withDeferrals(i))!.delayMs;
             }
-            expect(total).toBeGreaterThanOrEqual(30 * 60_000);
+            expect(total).toBeLessThan(GATE_LOOKBACK_MS);
+            // ...but still long enough to outlast an ordinary review.
+            expect(total).toBeGreaterThan(20 * 60_000);
         });
 
         it('gives up once the deferral cap is reached', () => {

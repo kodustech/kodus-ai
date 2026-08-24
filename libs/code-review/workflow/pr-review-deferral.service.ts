@@ -35,14 +35,26 @@ export class PrReviewDeferralService {
     private readonly logger = createLogger(PrReviewDeferralService.name);
 
     private static readonly BASE_DELAY_MS = 15_000;
-    private static readonly MAX_DELAY_MS = 5 * 60_000;
 
     /**
-     * With the backoff below this spans a little over 30 minutes, which is
-     * the window the active-execution check refuses inside — retrying for
-     * less would guarantee the last attempt is still blocked.
+     * Capped low on purpose. The holder releases at a moment we cannot
+     * predict, and retrying costs almost nothing, so a long sleep just
+     * adds dead time — a 5-minute cap left a queued command waiting ~2.5
+     * minutes after the review it was waiting for had already finished.
      */
-    private static readonly MAX_DEFERRALS = 10;
+    private static readonly MAX_DELAY_MS = 60_000;
+
+    /**
+     * Chosen so the whole retry window (~24.75 min) stays INSIDE the
+     * 30-minute lookback `getActiveExecution` uses to spot the holder.
+     *
+     * Past that lookback the holder's execution row stops being visible
+     * even while it is still running, and its lock TTL expired long
+     * before — so a retry landing there would sail through both gates and
+     * start a SECOND concurrent review. Better to give up and tell the
+     * user than to double-review the PR.
+     */
+    private static readonly MAX_DEFERRALS = 26;
 
     private static readonly METADATA_KEY = 'prReviewDeferral';
 
