@@ -8,6 +8,7 @@ import conversationVertexByok from './conversation-vertex-byok.js';
 import conversationAnthropicByok from './conversation-anthropic-byok.js';
 import commandReview from './command-review.js';
 import commandReviewFocus from './command-review-focus.js';
+import commandReviewWhileBusy from './command-review-while-busy.js';
 import kodyRulesCreateAndApply from './kody-rules.js';
 import kodyRulesFileSync from './kody-rules-file-sync.js';
 import kodyRulesLifecycle from './kody-rules-lifecycle.js';
@@ -41,6 +42,7 @@ export const allScenarios: Record<string, Scenario> = {
     [centralizedConfigSync.id]: centralizedConfigSync,
     [commandReview.id]: commandReview,
     [commandReviewFocus.id]: commandReviewFocus,
+    [commandReviewWhileBusy.id]: commandReviewWhileBusy,
     [cockpitAnalytics.id]: cockpitAnalytics,
     [kodyRulesCreateAndApply.id]: kodyRulesCreateAndApply,
     [kodyRulesFileSync.id]: kodyRulesFileSync,
@@ -84,6 +86,7 @@ export {
     conversationVertexByok,
     commandReview,
     commandReviewFocus,
+    commandReviewWhileBusy,
     kodyRulesCreateAndApply,
     kodyRulesFileSync,
     kodyRulesLifecycle,
