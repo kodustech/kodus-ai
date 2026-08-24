@@ -32,31 +32,36 @@ def main():
         print("No agent output to extract ({}).".format(exc))
         return
 
-    # Last fenced json block is the machine-readable contract.
-    blocks = re.findall(r"```json\s*\n(.*?)```", raw, flags=re.DOTALL)
+    # The contract block is the LAST fenced json that parses as a list of
+    # finding dicts. Item selection and report truncation are tied to the
+    # SAME match: the narrative may contain other json fences (an echoed
+    # schema example, quoted payloads), and cutting at a different fence
+    # than the one parsed would ship a report inconsistent with the data.
+    matches = list(re.finditer(r"```json\s*\n(.*?)```", raw, flags=re.DOTALL))
     items = None
-    for block in reversed(blocks):
+    contract_start = None
+    for match in reversed(matches):
         try:
-            parsed = json.loads(block)
-            if isinstance(parsed, list):
-                items = parsed
-                break
+            parsed = json.loads(match.group(1))
         except ValueError:
             continue
+        if isinstance(parsed, list) and all(
+            isinstance(x, dict) and "signature" in x for x in parsed
+        ):
+            items = parsed
+            contract_start = match.start()
+            break
 
     if items is None:
-        print("::warning title=E2E investigation (advisory)::no parseable json block in agent output")
+        print("::warning title=E2E investigation (advisory)::no parseable contract json block in agent output")
     else:
         with open(out_dir + "/investigation.json", "w") as fh:
             json.dump(items, fh, indent=1)
         print("Extracted {} finding(s) to investigation.json".format(len(items)))
 
     report = raw
-    if blocks:
-        # Drop only the final contract fence from the human report.
-        idx = raw.rfind("```json")
-        if idx > 0:
-            report = raw[:idx].rstrip() + "\n"
+    if contract_start is not None and contract_start > 0:
+        report = raw[:contract_start].rstrip() + "\n"
     if report.strip():
         with open(out_dir + "/investigation.md", "w") as fh:
             fh.write(report)
