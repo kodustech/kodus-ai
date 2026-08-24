@@ -104,6 +104,36 @@ describe('AutomationCodeReviewService', () => {
             ).resolves.toBeDefined();
         });
 
+        // Recomputing the deadline from "now" on every retry would let it
+        // slide indefinitely, so the only stop left would be the attempt
+        // cap — safe today only because the lock TTL is short.
+        it('anchors the retry deadline on the holder, not on the collision', async () => {
+            const holderCreatedAt = new Date(Date.now() - 12 * 60_000);
+            automationExecutionService.find.mockResolvedValue([
+                { uuid: 'execution-1', createdAt: holderCreatedAt },
+            ]);
+
+            const error = await service
+                .run!(makePayload({ origin: 'command' }))
+                .catch((raised) => raised);
+
+            expect(error.holderVisibleUntil).toEqual(
+                new Date(holderCreatedAt.getTime() + 30 * 60_000),
+            );
+        });
+
+        it('falls back to now when the holder has no execution row yet', async () => {
+            automationExecutionService.find.mockResolvedValue([]);
+
+            const error = await service
+                .run!(makePayload({ origin: 'command' }))
+                .catch((raised) => raised);
+
+            expect(error.holderVisibleUntil.getTime()).toBeGreaterThan(
+                Date.now() + 29 * 60_000,
+            );
+        });
+
         it('never starts the pipeline', async () => {
             await service
                 .run!(makePayload({ origin: 'command' }))

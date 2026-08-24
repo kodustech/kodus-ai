@@ -196,7 +196,24 @@ export class AutomationCodeReviewService implements Omit<
                     pullRequestNumber: pullRequest?.number,
                 },
             });
-            this.refuseCommand('lock', payload, this.holderVisibleUntil());
+            // Anchor the deadline on the holder's row rather than on "now".
+            // Recomputing it per retry would let it slide forever, leaving
+            // MAX_DEFERRALS as the only stop — safe today only because the
+            // lock's TTL is short enough that this path stops firing after a
+            // minute. Only commands defer, so only they pay for the lookup.
+            const lockHolder = this.isCommandOrigin(origin)
+                ? await this.getActiveExecution(
+                      teamAutomationId,
+                      pullRequest?.number,
+                      repository?.id,
+                  )
+                : null;
+
+            this.refuseCommand(
+                'lock',
+                payload,
+                this.holderVisibleUntil(lockHolder?.createdAt),
+            );
             return 'Code review already in progress for this PR';
         }
 
@@ -337,11 +354,17 @@ export class AutomationCodeReviewService implements Omit<
      * retry once the PR frees up (#1700).
      */
     /**
-     * When the run holding this PR stops being visible to the gate. The
-     * lock path has no execution row to read, but a held lock means the
-     * holder started within the lock's TTL, so "now" is off by at most
-     * that — well inside the margin the retry budget leaves.
+     * When the run holding this PR stops being visible to the gate.
+     *
+     * Falls back to "now" only when the holder has no execution row yet —
+     * it takes the lock just before creating one, so a collision can land
+     * in that gap. Anywhere else the holder's own `createdAt` is used, so
+     * the deadline is fixed rather than sliding with each retry.
      */
+    private isCommandOrigin(origin: unknown): boolean {
+        return typeof origin === 'string' && origin.startsWith('command');
+    }
+
     private holderVisibleUntil(holderCreatedAt?: Date): Date {
         const since = holderCreatedAt ?? new Date();
         return new Date(
@@ -363,7 +386,7 @@ export class AutomationCodeReviewService implements Omit<
             triggerCommentId,
         } = payload;
 
-        if (typeof origin !== 'string' || !origin.startsWith('command')) {
+        if (!this.isCommandOrigin(origin)) {
             return;
         }
 
