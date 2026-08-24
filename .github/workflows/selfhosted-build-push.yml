@@ -473,9 +473,12 @@ jobs:
         # e2e-history branch and requests `contents: write`. GitHub validates
         # that permission against this caller before creating any jobs. The
         # matrix job inside the reusable workflow remains pinned to read-only.
+        # `issues: write` is for the investigate job's one-issue-per-failure
+        # upsert; without it that step degrades to a warning.
         permissions:
             contents: write
             packages: read
+            issues: write
         uses: ./.github/workflows/e2e-self-hosted-matrix.yml
         with:
             # rc_version (the DOCKER tag, e.g. 2.1.16-rc.68) — NOT rc_tag
@@ -774,16 +777,23 @@ jobs:
               uses: sarisia/actions-status-discord@v1.16.0
               with:
                   webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK_SELFHOSTED || secrets.DISCORD_WEBHOOK }}
-                  content: ":white_check_mark: RC validated — **waiting promote approval**"
-                  title: "Self-Hosted RC validated (matrix green)"
+                  # "matrix green" alone hid real signal: advisory failures and
+                  # setup skips don't gate, so a green run can still carry
+                  # failed scenarios and coverage gaps. Say the numbers, wear
+                  # amber when there are caveats, and attach the LLM read when
+                  # one was produced.
+                  content: "${{ needs.e2e-matrix.outputs.status == 'yellow' && ':warning: RC validated **with caveats** — waiting promote approval' || ':white_check_mark: RC validated — **waiting promote approval**' }}"
+                  title: "Self-Hosted RC validated (${{ needs.e2e-matrix.outputs.digest || 'matrix green' }})"
                   description: |
                       RC tag:      `${{ needs.plan-release.outputs.rc_tag }}`
                       Will become: `${{ needs.plan-release.outputs.release_tag }}` + `:latest`
-
+                      ${{ needs.e2e-matrix.outputs.advisory_count != '' && needs.e2e-matrix.outputs.advisory_count != '0' && format('⚠️ {0} advisory (non-gating) failure(s) — check the run summary before approving.', needs.e2e-matrix.outputs.advisory_count) || '' }}
+                      ${{ needs.e2e-matrix.outputs.setup_skipped != '' && needs.e2e-matrix.outputs.setup_skipped != '0' && format('⏭️ {0} planned scenario(s) skipped on setup — coverage gap, not a pass.', needs.e2e-matrix.outputs.setup_skipped) || '' }}
+                      ${{ needs.e2e-matrix.outputs.llm_note || '' }}
                       Full e2e matrix passed against this RC. Approve (or ignore to let it expire) at:
                       https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   username: "GitHub Actions"
-                  color: 0x00cc66
+                  color: ${{ needs.e2e-matrix.outputs.discord_color || '0x00cc66' }}
 
     notify-discord-failure:
         name: Notify Discord (failure only)

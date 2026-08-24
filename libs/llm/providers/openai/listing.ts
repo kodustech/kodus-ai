@@ -10,6 +10,9 @@ import {
 const nativeListing: ModelListing = {
     kind: 'http',
     apiKeyEnv: 'API_OPEN_AI_API_KEY',
+    // Bound the live /models call so a hung request rejects (→ the UI's manual
+    // fallback) instead of leaving the connect form stuck on "Loading models…".
+    timeoutMs: 15_000,
     url: () => 'https://api.openai.com/v1/models',
     headers: ({ apiKey }) => bearerHeaders(apiKey),
     parse: (body) => parseOpenAiIds(body).map((m) => catalogWithReasoning(m.id)),

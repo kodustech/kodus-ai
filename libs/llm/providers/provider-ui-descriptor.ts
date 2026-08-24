@@ -17,6 +17,12 @@ export interface ProviderUiDescriptor {
     requiresBaseUrl: boolean;
     /** The provider's models can be enumerated (dropdown) vs. typed by hand. */
     autoListModels: boolean;
+    /** The provider enumerates its models through a LIVE `/models` HTTP call
+     *  (needs the org's key), as opposed to a static/curated list served without
+     *  one. Drives the connect form: for these, the picker fetches the real list
+     *  from the typed key instead of showing a curated placeholder. False for
+     *  `static`/`manual` listings and curated-only brands. */
+    listsModelsLive: boolean;
     /** Provider documentation URL (hardcoded on the module). The UI links to this
      *  when a curated model has no Kodus-specific docsUrl. */
     doc?: string;
@@ -83,6 +89,16 @@ export function describeProviderId(
             !custom &&
             (listingIsAutoListable(listing) ||
                 (module.catalog?.length ?? 0) > 0),
+        // A LIVE `/models` call — an `http` listing whose base URL resolves
+        // without the user (a native brand like OpenAI). Custom endpoints also
+        // list over http but their URL is unknown until typed, so they stay on
+        // manual entry (not "live" for the connect picker). `static`/`manual`
+        // and curated-only brands are not live.
+        listsModelsLive:
+            !custom &&
+            !!listing &&
+            listing.kind === 'http' &&
+            (!listing.requiresBaseURL || !!listing.defaultBaseURL),
         doc: module.doc,
     };
 }

@@ -249,6 +249,13 @@ export const anthropicModule: ProviderModule = {
         { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top' },
     ],
     providerOptionsNamespace: () => 'anthropic',
+    // Native Anthropic accepts the adaptive thinking shape (the form every Claude
+    // 4.6+ takes); an anthropic_compatible upstream isn't the brand, so it falls
+    // back to the generic enabled-thinking example (undefined here).
+    reasoningOverrideExample: (id) =>
+        id === 'anthropic_compatible'
+            ? undefined
+            : '{\n  "thinking": { "type": "adaptive" },\n  "effort": "high"\n}',
     modelListing: anthropicModelListing,
 };
 

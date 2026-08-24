@@ -61,6 +61,27 @@ describe('ProviderService — registry-driven', () => {
             expect(b.autoListModels).toBe(true);
         });
 
+        describe('listsModelsLive — the live `/models` (candidate-key) flag', () => {
+            it('OpenAI: native http listing with a default URL → lists live', () => {
+                const o = byId('openai');
+                expect(o.autoListModels).toBe(true);
+                expect(o.listsModelsLive).toBe(true);
+            });
+
+            it('Bedrock / Vertex: static catalogs are auto-listable but NOT live (no key needed)', () => {
+                expect(byId('amazon_bedrock').listsModelsLive).toBe(false);
+                expect(byId('google_vertex').listsModelsLive).toBe(false);
+            });
+
+            it('openai_compatible: custom endpoint → not live (URL unknown until typed)', () => {
+                expect(byId('openai_compatible').listsModelsLive).toBe(false);
+            });
+
+            it('anthropic_compatible: manual listing → not live', () => {
+                expect(byId('anthropic_compatible').listsModelsLive).toBe(false);
+            });
+        });
+
         it('Vertex: static catalog is listable', () => {
             expect(byId('google_vertex').autoListModels).toBe(true);
         });
