@@ -67,6 +67,79 @@ rss: true
 
     <div className="kodus-changelog-release">
         <div className="kodus-changelog-meta">
+            <span className="kodus-changelog-date">August 24, 2026</span>
+        </div>
+
+        <div className="kodus-changelog-content">
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Improvements</div>
+
+                <div className="kodus-changelog-item kodus-changelog-filterable filter-self-hosted filter-ai-engine">
+                    <div role="heading" aria-level="3" className="kodus-changelog-title">Vertex AI without static keys</div>
+                    <p className="kodus-changelog-copy">Self-hosted installations can now authenticate with Vertex AI using the identity already provided by the cloud infrastructure. This reduces the need to store sensitive credentials and simplifies setup in environments such as GKE, EKS, and Cloud Run.</p>
+                </div>
+            </div>
+
+            <div className="kodus-changelog-section">
+                <div role="heading" aria-level="2" className="kodus-changelog-section-label">Bug fixes</div>
+
+                <div className="kodus-changelog-fix-list">
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Jira task context:</strong> Kody now correctly identifies the Atlassian environment when fetching Jira issues used as review context. This allows it to access the right task information and use it when evaluating the pull request.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-performance">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More reliable GitLab clones:</strong> we fixed clone failures that could occur when a project was renamed or moved to another GitLab group. We now also cache this information for a period of time, reducing API calls and speeding up the start of reviews.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Conversations with Kody in Azure DevOps:</strong> questions asked with <code className="kodus-changelog-code">@kody</code> directly in a new Azure DevOps thread now receive a response as expected. Previously, Kody could only find comments that were already replies within an existing conversation.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-billing-licenses">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Safer license management:</strong> we improved seat management to prevent licenses from being removed incorrectly and make assignment based on Git identity more reliable. Bot accounts are now handled correctly in this flow as well.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Clearer reviewer selection:</strong> we refined the loading states and buttons in the reviewer selection step. The flow now makes it clearer when an action is being processed and prevents inconsistent clicks or navigation.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Centralized Kody Rules sync:</strong> rules being changed through a configuration PR no longer disappear during synchronization. They remain visible while waiting for the PR to be merged and return to the correct state once the change is complete.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-mcp filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More resilient business rule validation:</strong> we improved the handling of MCP integration failures and parameters with predefined options. This prevents integration errors or valid argument formats from incorrectly interrupting a validation.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Kody Rules in the organization’s language:</strong> comments generated from Kody Rules now respect the organization’s configured language. Teams configured to use Portuguese, for example, will receive rule explanations and guidance in the expected language.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-kody-rules filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Safer interpretation of Kody Rules:</strong> we added a validation step to make sure examples used internally by Kody do not reverse the intended meaning of a rule. This reduces the risk of suggesting a change that conflicts with the policy defined by the team.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-ux-interface">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">More predictable selection lists:</strong> selection menus now use the browser’s native scrolling behavior. This makes interactions more stable, especially in longer lists.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider filter-ai-engine">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Conversations with Kody in GitLab and Bitbucket:</strong> we fixed Kody’s reply flow in pull request conversations on GitLab and Bitbucket, ensuring that questions posted in comments receive the expected response.</p>
+                    </div>
+
+                    <div className="kodus-changelog-fix kodus-changelog-filterable filter-git-provider">
+                        <p className="kodus-changelog-copy"><strong className="kodus-changelog-fix-label">Bitbucket Data Center webhooks:</strong> pull requests from Bitbucket Data Center and Server are now correctly recognized when a webhook is received. Previously, some of these events could be ignored and fail to trigger an automatic review.</p>
+                    </div>
+                </div>
+            </div>
+
+            <p className="kodus-changelog-empty">No changelog entries for this filter yet.</p>
+        </div>
+    </div>
+
+    <div className="kodus-changelog-release">
+        <div className="kodus-changelog-meta">
             <span className="kodus-changelog-date">August 17, 2026</span>
         </div>
 
