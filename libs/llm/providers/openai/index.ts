@@ -200,6 +200,13 @@ export const openaiModule: ProviderModule = {
     ],
     providerOptionsNamespace: (id) =>
         id === 'openai_compatible' ? 'openaiCompatible' : 'openai',
+    // Native OpenAI takes `reasoningEffort` (+ optional serviceTier); an
+    // openai_compatible upstream takes the standard `thinking` toggle — so the
+    // Custom-override example differs per served id. Mirrors reasoning() above.
+    reasoningOverrideExample: (id) =>
+        id === 'openai_compatible'
+            ? '{\n  "thinking": { "type": "enabled" }\n}'
+            : '{\n  "reasoningEffort": "high",\n  "serviceTier": "flex"\n}',
     modelListing: openAiModelListing,
 };
 

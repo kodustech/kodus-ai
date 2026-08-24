@@ -94,6 +94,8 @@ export const openRouterModule: ProviderModule = {
         { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top', placeholder: 'https://openrouter.ai/api/v1' },
     ],
     providerOptionsNamespace: () => 'openrouter',
+    reasoningOverrideExample: () =>
+        '{\n  "reasoning": { "effort": "high" },\n  "ignore": ["deepinfra"]\n}',
     modelListing: openRouterModelListing,
 };
 

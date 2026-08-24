@@ -71,6 +71,14 @@ jest.mock("./spend-limit-section", () => ({
     SpendLimitSection: () => <div data-testid="spend-limit-section" />,
 }));
 
+// The connect flow's advanced settings now reads per-model capabilities from the
+// hooks module, which transitively imports reactQuery → auth.provider → next-auth
+// (ESM, unparseable by Jest). Stub the hook — capabilities aren't exercised by
+// this v2-read render tracer.
+jest.mock("@services/organizationParameters/hooks", () => ({
+    useModelCapabilities: () => ({ data: undefined }),
+}));
+
 // The interactive Models tab (04-08) writes via revalidateServerSidePath, which
 // imports next/cache → next's server request code that references the `Request`
 // web global (absent in jsdom). Stub the server-only util to keep this render

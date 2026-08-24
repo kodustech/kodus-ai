@@ -19,6 +19,10 @@ import {
     GetModelsByProviderUseCase,
     ModelResponse,
 } from '@libs/organization/application/use-cases/organizationParameters/get-models-by-provider.use-case';
+import {
+    GetModelCapabilitiesUseCase,
+    ModelUiCapabilities,
+} from '@libs/organization/application/use-cases/organizationParameters/get-model-capabilities.use-case';
 import { DeleteByokConfigUseCase } from '@libs/organization/application/use-cases/organizationParameters/delete-byok-config.use-case';
 import {
     GetLLMConfigStatusUseCase,
@@ -90,6 +94,7 @@ export class OrganizationParametersController {
         private readonly createOrUpdateOrganizationParametersUseCase: CreateOrUpdateOrganizationParametersUseCase,
         private readonly findByKeyOrganizationParametersUseCase: FindByKeyOrganizationParametersUseCase,
         private readonly getModelsByProviderUseCase: GetModelsByProviderUseCase,
+        private readonly getModelCapabilitiesUseCase: GetModelCapabilitiesUseCase,
         private readonly providerService: ProviderService,
         private readonly deleteByokConfigUseCase: DeleteByokConfigUseCase,
         private readonly getLLMConfigStatusUseCase: GetLLMConfigStatusUseCase,
@@ -212,6 +217,7 @@ export class OrganizationParametersController {
                 requiresApiKey: provider.requiresApiKey,
                 requiresBaseUrl: provider.requiresBaseUrl,
                 autoListModels: provider.autoListModels,
+                listsModelsLive: provider.listsModelsLive,
                 doc: provider.doc,
             })),
         };
@@ -231,6 +237,60 @@ export class OrganizationParametersController {
             provider,
             organizationId ? { organizationId } : undefined,
         );
+    }
+
+    @Post('/list-models')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.OrganizationSettings,
+        }),
+    )
+    @ApiBody({
+        schema: {
+            type: 'object',
+            required: ['provider'],
+            properties: {
+                provider: { type: 'string' },
+                apiKey: { type: 'string' },
+                baseURL: { type: 'string' },
+            },
+        },
+    })
+    @ApiOperation({
+        summary: 'List models with a candidate key',
+        description:
+            "Live-list a provider's models using a just-typed (unsaved) API key + base URL — for the connect form, before the credential is saved. The key travels in the body (never a query string). Falls back to the org's saved credential when no key is supplied. Strict: an http provider with a candidate key does a live `/models` call and surfaces the error instead of a curated placeholder.",
+    })
+    @ApiOkResponse({ type: OrganizationProviderModelsResponseDto })
+    public async listModelsWithKey(
+        @Body()
+        body: {
+            provider: string;
+            apiKey?: string;
+            baseURL?: string;
+        },
+    ): Promise<ModelResponse> {
+        const organizationId = this.request?.user?.organization?.uuid;
+        return await this.getModelsByProviderUseCase.execute(
+            body.provider,
+            organizationId ? { organizationId } : undefined,
+            { apiKey: body.apiKey, baseURL: body.baseURL },
+        );
+    }
+
+    @Get('/model-capabilities')
+    @ApiOperation({
+        summary: 'Per-model UI capabilities',
+        description:
+            "Provider-owned hints for the connect form: whether a model accepts sampling params (Temperature) and whether it can reason (and at which levels). Read straight from the provider module in the registry — never hand-coded in the web — so a community-contributed provider change flows to the UI automatically. `model` is a plain model id (not a secret), so it travels in the query string.",
+    })
+    public async modelCapabilities(
+        @Query('provider') provider: string,
+        @Query('model') model: string,
+    ): Promise<ModelUiCapabilities> {
+        return this.getModelCapabilitiesUseCase.execute(provider, model ?? '');
     }
 
     @Delete('/delete-byok-config')

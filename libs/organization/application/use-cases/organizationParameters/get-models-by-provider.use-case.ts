@@ -41,12 +41,21 @@ export class GetModelsByProviderUseCase {
     async execute(
         provider: string,
         organizationAndTeamData?: OrganizationAndTeamData,
+        // A just-typed, UNSAVED credential from the connect form. Takes precedence
+        // over the org's saved slot and env keys so the picker can live-list the
+        // real models before the credential is persisted. When an apiKey is
+        // supplied here, the http path is STRICT — a failed live call surfaces the
+        // error instead of degrading to the curated placeholder (the user asked
+        // for the real list, not a stand-in).
+        candidate?: { apiKey?: string; baseURL?: string },
     ): Promise<ModelResponse> {
         if (!this.providerService.isProviderSupported(provider)) {
             throw new BadRequestException(`Unsupported provider: ${provider}`);
         }
 
         const byokProvider = provider as BYOKProvider;
+        const candidateKey = candidate?.apiKey?.trim() || undefined;
+        const candidateBaseURL = candidate?.baseURL?.trim() || undefined;
 
         const providerModule = REGISTRY.has(provider)
             ? REGISTRY.get(provider)
@@ -95,21 +104,25 @@ export class GetModelsByProviderUseCase {
             organizationAndTeamData,
         );
 
+        // A just-typed connect-form key wins over the saved slot and env keys, so
+        // the picker lists the models THAT key can actually reach before it's saved.
         const apiKey =
+            candidateKey ??
             creds?.apiKey ??
             (listing.apiKeyEnv ? process.env[listing.apiKeyEnv] : undefined);
         const baseURL =
+            candidateBaseURL ??
             creds?.baseURL ??
             (listing.baseURLEnv
                 ? process.env[listing.baseURLEnv] || undefined
                 : undefined) ??
             listing.defaultBaseURL;
 
-        // No key yet — e.g. a NEW connect where the user typed the key in the form
-        // but hasn't saved it, so `resolveByokSlot` finds nothing. The live
-        // `/models` call would 401, so fall back to the curated catalog: the big
-        // providers (OpenAI, …) still list their known models keyless, and the
-        // live list takes over automatically once a key is stored.
+        // No key yet — e.g. a NEW connect where the user hasn't typed or saved a
+        // key, so nothing resolves. The live `/models` call would 401, so fall
+        // back to the curated catalog: the big providers (OpenAI, …) still list
+        // their known models keyless, and the live list takes over once a key is
+        // supplied. Skipped when the caller passed a candidate key (strict live).
         if (!apiKey) {
             const curated = curatedFallback();
             if (curated) return curated;
@@ -141,12 +154,15 @@ export class GetModelsByProviderUseCase {
                 models: listing.parse(response.data),
             };
         } catch (error) {
-            // Live fetch failed (bad/expired key, provider down, parse error). If
-            // the provider ships a curated catalog, degrade to it instead of
-            // breaking the picker; only a provider with NO curated list surfaces
-            // the error (→ the UI's "type the model id" fallback).
-            const curated = curatedFallback();
-            if (curated) return curated;
+            // Live fetch failed (bad/expired key, provider down, parse error).
+            // STRICT when the caller supplied a candidate key: the user is trying
+            // that specific key, so surface the failure (→ the UI's "type the
+            // model id" fallback) rather than masking a bad key behind the curated
+            // list. Only the keyless/saved path degrades to the curated catalog.
+            if (!candidateKey) {
+                const curated = curatedFallback();
+                if (curated) return curated;
+            }
             throw new BadRequestException(
                 `Error fetching ${provider} models: ${(error as Error).message}`,
             );

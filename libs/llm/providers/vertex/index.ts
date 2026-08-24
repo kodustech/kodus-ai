@@ -114,6 +114,8 @@ export const vertexModule: ProviderModule = {
         { key: 'vertexLocation', label: 'Location', type: 'text', required: false, scope: 'settings', placeholder: 'global' },
     ],
     providerOptionsNamespace: () => 'google',
+    reasoningOverrideExample: () =>
+        '{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}',
     modelListing: vertexModelListing,
 };
 
