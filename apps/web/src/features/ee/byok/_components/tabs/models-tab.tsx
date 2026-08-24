@@ -240,6 +240,7 @@ export const ModelsTab = ({
                 model={curated}
                 existingConfig={existingConfig}
                 existingKey={view.credential.apiKey ?? "••••"}
+                isEditing
                 onBack={() => setView({ mode: "list" })}
                 onSave={(cfg) => saveEdit(view.model, cfg)}
             />

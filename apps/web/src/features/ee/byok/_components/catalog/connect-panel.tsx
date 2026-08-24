@@ -87,12 +87,18 @@ export function CuratedConnectPanel({
     model,
     existingConfig,
     existingKey,
+    isEditing = false,
     onBack,
     onSave,
 }: {
     model: CuratedModel;
     existingConfig?: BYOKConnectInput;
     existingKey?: string;
+    // Editing an already-connected model (not a fresh connect): the per-model
+    // config IS the point of this screen, so its editable fields must be visible
+    // up front rather than hidden behind the collapsed "Advanced settings"
+    // accordion (progressive disclosure only makes sense while ADDING).
+    isEditing?: boolean;
     onBack: () => void;
     onSave: (_: BYOKConnectInput) => Promise<void>;
 }) {
@@ -377,7 +383,7 @@ export function CuratedConnectPanel({
                     <TestResultBanner state={testState} />
 
                     <ByokAdvancedSettings
-                        defaultOpen={!!model.variants?.length}
+                        defaultOpen={isEditing || !!model.variants?.length}
                     />
 
                     {/* One primary action: "Test & save" tests the key and, on

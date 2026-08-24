@@ -12,6 +12,7 @@ import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 import { createLogger } from '@libs/core/log/logger';
 import { deriveTu } from './token-usage-tu';
 import { setLlmObservability } from '@libs/llm/llm-observability';
+import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
 
 export type TokenUsage = {
     input_tokens?: number;
@@ -446,40 +447,10 @@ export class ObservabilityService implements OnModuleInit {
                         prNumber: a.prNumber as number | undefined,
                         source: a.source as string | undefined,
                         durationMs: Date.now() - startedAt,
-                        usage: {
-                            inputTokens: usage?.inputTokens,
-                            outputTokens: usage?.outputTokens,
-                            totalTokens: usage?.totalTokens,
-                            // ai@7: nested details; ai@6: top-level fields.
-                            reasoningTokens:
-                                (
-                                    usage as
-                                        | {
-                                              outputTokenDetails?: {
-                                                  reasoningTokens?: number;
-                                              };
-                                              reasoningTokens?: number;
-                                          }
-                                        | undefined
-                                )?.outputTokenDetails?.reasoningTokens ??
-                                usage?.reasoningTokens,
-                            cacheReadTokens:
-                                (
-                                    usage as
-                                        | {
-                                              inputTokenDetails?: {
-                                                  cacheReadTokens?: number;
-                                              };
-                                              cachedInputTokens?: number;
-                                          }
-                                        | undefined
-                                )?.inputTokenDetails?.cacheReadTokens ??
-                                (
-                                    usage as
-                                        | { cachedInputTokens?: number }
-                                        | undefined
-                                )?.cachedInputTokens,
-                        },
+                        // Single shared reader — same mapping the agent harness
+                        // uses, so cache-read/write + reasoning can't be captured
+                        // in one path and dropped in the other.
+                        usage: readAiSdkUsage(usage),
                     }),
                 );
                 return result;

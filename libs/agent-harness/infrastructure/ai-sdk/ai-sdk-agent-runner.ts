@@ -16,6 +16,7 @@
  */
 import { jsonSchema, tool as aiTool, type ModelMessage } from 'ai';
 import { LLM, type AgentLoopResult } from '@libs/llm/llm';
+import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import type {
@@ -511,26 +512,11 @@ function parseArtifactInput(input: unknown): unknown {
     return input;
 }
 
-/**
- * Map AI SDK `LanguageModelUsage` onto our TokenUsage.
- *
- * ai@7 removed top-level `cachedInputTokens` / `reasoningTokens` in favour of
- * `inputTokenDetails.cacheReadTokens` / `outputTokenDetails.reasoningTokens`.
- * Keep the ai@6 field names as fallbacks so mixed-version / vendor shims still
- * report cache hits.
- */
-export function readAiSdkUsage(usage: any): TokenUsage {
-    return {
-        inputTokens: usage?.inputTokens,
-        outputTokens: usage?.outputTokens,
-        reasoningTokens:
-            usage?.outputTokenDetails?.reasoningTokens ??
-            usage?.reasoningTokens,
-        cacheReadTokens:
-            usage?.inputTokenDetails?.cacheReadTokens ??
-            usage?.cachedInputTokens,
-    };
-}
+// The AI SDK → usage mapping lives in ONE place (`@libs/llm/ai-sdk-usage`) so it
+// can never again be fixed in the harness but missed in observability.service
+// (the duplication that dropped cache tokens). Re-exported here (it is imported
+// above for internal use) for back-compat with existing importers.
+export { readAiSdkUsage };
 
 /** Best-effort token usage from the steps collected before a failure —
  *  the error path has no provider-level total to read. */
@@ -539,13 +525,21 @@ function aggregateUsage(steps: readonly RunStep[]): TokenUsage {
     let outputTokens = 0;
     let reasoningTokens = 0;
     let cacheReadTokens = 0;
+    let cacheWriteTokens = 0;
     for (const s of steps) {
         inputTokens += s.usage?.inputTokens ?? 0;
         outputTokens += s.usage?.outputTokens ?? 0;
         reasoningTokens += s.usage?.reasoningTokens ?? 0;
         cacheReadTokens += s.usage?.cacheReadTokens ?? 0;
+        cacheWriteTokens += s.usage?.cacheWriteTokens ?? 0;
     }
-    return { inputTokens, outputTokens, reasoningTokens, cacheReadTokens };
+    return {
+        inputTokens,
+        outputTokens,
+        reasoningTokens,
+        cacheReadTokens,
+        cacheWriteTokens,
+    };
 }
 
 // --- mappers (AI SDK <-> core contracts) ---
