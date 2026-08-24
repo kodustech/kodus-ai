@@ -13,8 +13,18 @@
  * on a transient (5xx/network) blip; it never touches a 2nd model.
  * (Reliability caveat accepted 2026-07-29; resilience is re-addressed in Phase 5.)
  */
-import { Output, type LanguageModel, type Schema } from 'ai';
+import {
+    Output,
+    NoObjectGeneratedError,
+    type LanguageModel,
+    type Schema,
+} from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import {
+    ensureValidatingSchema,
+    readOutput,
+    salvageStructuredError,
+} from '@libs/llm/structured-output-repair';
 import { z } from 'zod';
 import {
     getLimiterForSlot,
@@ -106,6 +116,17 @@ interface ReviewCallMode<T> {
     outputArgs: Record<string, unknown>;
     /** Pull the caller-facing result from the SDK response. */
     extract: (r: any) => T;
+    /** The output JSON schema, stringified. Set for structured mode so the
+     *  json_object fallback (a provider that rejects strict `json_schema`, or a
+     *  non-strict upstream) can put the contract INTO the prompt — without it the
+     *  schema never reaches the model and the model invents its own shape
+     *  (the dedup keep-all class, issue #1786). Undefined for text mode. */
+    schemaForPrompt?: string;
+    /** The validating wire schema (structured mode). Handed to the shared
+     *  `salvageStructuredError` so a JSON PARSE failure is repaired+revalidated
+     *  against the exact contract before escalating to a model re-ask. Undefined
+     *  for text mode. */
+    validatingSchema?: unknown;
 }
 
 /**
@@ -196,11 +217,16 @@ async function runReviewCall<T>(
         ...(organizationId ? { organizationId } : {}),
     };
 
-    const call = (model: LanguageModel, modelName: string): Promise<T> => {
+    const call = (
+        model: LanguageModel,
+        modelName: string,
+        systemOverride?: string,
+        extraAttrs?: Record<string, unknown>,
+    ): Promise<T> => {
         const exec = () =>
             tracedGenerateText({
                 model: model as any,
-                system,
+                system: systemOverride ?? system,
                 prompt: user,
                 // Output mode: structured spreads `output: Output.object`, text
                 // spreads nothing (plain generateText → r.text).
@@ -254,12 +280,32 @@ async function runReviewCall<T>(
                   // resolveTaskSlot (route = the LlmTask, not the tier).
                   route: mainSlot?.route,
                   usedFallback: mainSlot?.usedFallback,
-                  attrs: spanAttrs,
+                  attrs: extraAttrs
+                      ? { ...spanAttrs, ...extraAttrs }
+                      : spanAttrs,
                   exec,
               })
             : exec();
 
         return run.then((r: any) => mode.extract(r));
+    };
+
+    // ONE re-issue in json_object mode with the schema written INTO the prompt —
+    // the shared recovery for both "provider rejected json_schema" and "model
+    // returned an unparseable/mismatched object". json_object does NOT send the
+    // schema to the provider, so without the prompt contract the model invents
+    // its own shape and the parse silently mismatches (the dedup keep-all class,
+    // issue #1786). `reason` is stamped on the re-issue span so a recovery is
+    // observable instead of silent. Skipped by the caller when schemaForPrompt is
+    // unset (a byte-identical retry would add nothing).
+    const reissueDowngraded = (reason: string): Promise<T> => {
+        const downgraded = buildInvocation(false);
+        const downgradedSystem = mode.schemaForPrompt
+            ? `${system ? `${system}\n\n` : ''}Return ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n${mode.schemaForPrompt}`
+            : system;
+        return call(downgraded.model, downgraded.modelName, downgradedSystem, {
+            structuredRecovery: reason,
+        });
     };
 
     try {
@@ -274,9 +320,41 @@ async function runReviewCall<T>(
         // retry. Folds `withStructuredOutputFallback` into the ONE executor, so
         // every structured LLM.run caller gets this resilience, not just dedup.
         if (sentJsonSchema && isJsonSchemaUnsupportedError(err)) {
+            // The provider advertised json_schema but rejected the body at
+            // runtime — a slot-level fact: cache it so future structured calls
+            // skip json_schema, then re-issue once in json_object mode.
             markJsonSchemaUnsupported(mainSlot);
-            const downgraded = buildInvocation(false);
-            return await call(downgraded.model, downgraded.modelName);
+            return await reissueDowngraded('json-schema-unsupported');
+        }
+
+        // Structured parse/validation failure: `Output.object` threw
+        // NoObjectGeneratedError (`.text` = raw output, `.cause` = JSONParseError
+        // when it wasn't JSON, or TypeValidationError when it was valid JSON of
+        // the wrong shape — the latter only fires now that the wire schema is
+        // guaranteed to validate; see ensureValidatingSchema / #1786). Recover in
+        // two tiers: (a) free deterministic repair for a pure PARSE error (fence /
+        // prose / trailing comma), then (b) ONE model re-ask in json_object mode
+        // with the schema in the prompt. NOT a slot-level fault — never mark the
+        // slot unsupported. Bounded: the re-ask's own failure propagates.
+        if (structuredMode && NoObjectGeneratedError.isInstance(err)) {
+            // (a) free deterministic repair for a pure PARSE error — the shared
+            // salvage returns undefined for a shape mismatch (needs the model).
+            const repaired = await salvageStructuredError<T>(
+                err,
+                mode.validatingSchema,
+            );
+            if (repaired !== undefined) {
+                logger.warn({
+                    message: `[structured-output] recovered ${runName} via deterministic JSON repair (no model re-ask)`,
+                    context: 'runReviewCall',
+                    metadata: { runName, organizationId },
+                });
+                return repaired;
+            }
+            if (mode.schemaForPrompt) {
+                return await reissueDowngraded('schema-mismatch');
+            }
+            throw err;
         }
 
         // D-00c latency guard — the SINGLE app-level retry owner (the AI SDK's
@@ -363,10 +441,37 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         }
     }
 
+    // Stringify the wire JSON schema so the json_object fallback can put the
+    // contract into the prompt (the model gets no schema in json_object mode).
+    // Fail-soft: an unstringifiable schema just skips the prompt augmentation.
+    let schemaForPrompt: string | undefined;
+    try {
+        const jsonForm =
+            wireSchema && typeof wireSchema === 'object'
+                ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ??
+                  wireSchema)
+                : undefined;
+        if (jsonForm) schemaForPrompt = JSON.stringify(jsonForm);
+    } catch {
+        schemaForPrompt = undefined;
+    }
+
+    // Guarantee the schema actually VALIDATES: a raw jsonSchema() caller (dedup)
+    // has no validate fn, so Output.object would parse but never check the shape
+    // and a renamed-key object slips through (issue #1786). Zod strict-wire
+    // schemas already validate and pass through untouched.
+    const validatingSchema = ensureValidatingSchema(wireSchema);
+
     return runReviewCall(params, {
         modelOptions: { structuredOutputs: true },
-        outputArgs: { output: Output.object({ schema: wireSchema as any }) },
-        extract: (r) => (r.experimental_output ?? r.output) as any,
+        outputArgs: {
+            output: Output.object({ schema: validatingSchema as any }),
+        },
+        extract: (r) => readOutput(r),
+        schemaForPrompt,
+        // The executor's shared salvage repairs a parse failure against this exact
+        // schema before escalating to the model re-ask (never returns bad data).
+        validatingSchema,
     });
 }
 

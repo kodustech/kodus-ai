@@ -38,6 +38,12 @@ import {
     runStructuredReviewCall,
     runTextReviewCall,
 } from '@libs/llm/structured-review-call';
+import {
+    NoObjectGeneratedError,
+    JSONParseError,
+    TypeValidationError,
+    jsonSchema,
+} from 'ai';
 import { tracedGenerateText, timeoutSignal } from '@libs/llm/llm-call';
 import { buildProviderOptions } from '@libs/llm/reasoning-options';
 import { setLlmObservability } from '@libs/llm/llm-observability';
@@ -88,6 +94,8 @@ beforeEach(() => {
     mockBuild.mockClear();
     mockGetLimiter.mockReset();
     mockGetLimiter.mockReturnValue(null); // default: slot not in cooldown
+    (markJsonSchemaUnsupported as jest.Mock).mockClear();
+    (isJsonSchemaUnsupportedError as jest.Mock).mockReturnValue(false);
     observabilityService.runAiSdkLLMInSpan.mockClear();
     (buildProviderOptions as jest.Mock).mockClear();
     // The executor records its span through the observability PORT — register
@@ -323,6 +331,132 @@ describe('runStructuredReviewCall — json_schema → json_object fallback', () 
         // exactly two attempts: the json_schema try + the one json_object retry.
         expect(mockGenerate).toHaveBeenCalledTimes(2);
         expect(out).toEqual({ recovered: true });
+    });
+});
+
+describe('runStructuredReviewCall — structured parse/validation recovery (issue #1786)', () => {
+    const spanCalls = () => observabilityService.runAiSdkLLMInSpan.mock.calls;
+
+    // Faithful stand-in for the error `generateText` + Output.object throws on a
+    // parse/validation failure (`.text` = raw output, `.cause` = the underlying
+    // JSONParseError / TypeValidationError). response/usage/finishReason are
+    // required by the type but unread by the recovery path.
+    const noObjectError = (cause: Error, text: string) =>
+        new NoObjectGeneratedError({
+            message: 'No object generated (test)',
+            cause,
+            text,
+            response: {} as any,
+            usage: {} as any,
+            finishReason: 'stop',
+        });
+
+    it('deterministically repairs a JSON PARSE error (fence) WITHOUT a model re-ask', async () => {
+        // Output.object threw NoObjectGeneratedError because the model wrapped the
+        // JSON in a ```json fence. Free string repair fixes it → no 2nd model call.
+        const badText = '```json\n{"violations":[]}\n```';
+        const parseErr = new JSONParseError({
+            text: badText,
+            cause: new Error('Unexpected token `'),
+        });
+        mockGenerate.mockRejectedValueOnce(noObjectError(parseErr, badText));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1); // recovered locally, no re-ask
+        assertNoSecondModelBuilt();
+    });
+
+    it('escalates to ONE model re-ask (json_object + schema in prompt) on a SHAPE mismatch', async () => {
+        // Valid JSON, wrong shape → TypeValidationError. String repair can't fix a
+        // shape, so the executor re-asks the model with the schema in the prompt.
+        const typeErr = new TypeValidationError({
+            value: { wrong: 1 },
+            cause: new Error('did not match schema'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '{"wrong":1}'))
+            .mockResolvedValueOnce(ok({ recovered: true }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ recovered: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        // The re-ask carries the schema in the system prompt (json_object can't
+        // send it to the provider) — the missing contract is the #1786 root cause.
+        expect(mockGenerate.mock.calls[1][0].system).toContain(
+            'Return ONLY a JSON object',
+        );
+        // ...and the recovery is stamped on the re-ask span (not silent).
+        expect(spanCalls()[1][0].attrs.structuredRecovery).toBe('schema-mismatch');
+        // NOT a slot-level fault: the provider supports json_schema, the model
+        // flubbed — so the slot is never cached as unsupported.
+        expect(markJsonSchemaUnsupported).not.toHaveBeenCalled();
+        assertNoSecondModelBuilt();
+    });
+
+    it('falls back to the model re-ask when deterministic repair cannot recover', async () => {
+        // Parse error whose text is unrepairable garbage → repair returns
+        // undefined → escalate to the one model re-ask rather than throwing.
+        const badText = 'not json at all';
+        mockGenerate
+            .mockRejectedValueOnce(
+                noObjectError(
+                    new JSONParseError({
+                        text: badText,
+                        cause: new Error('nope'),
+                    }),
+                    badText,
+                ),
+            )
+            .mockResolvedValueOnce(ok({ recovered: true }));
+
+        const out = await runStructuredReviewCall({ ...base });
+
+        expect(out).toEqual({ recovered: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        expect(spanCalls()[1][0].attrs.structuredRecovery).toBe('schema-mismatch');
+    });
+});
+
+describe('runStructuredReviewCall — typed output contract (compile-time inference)', () => {
+    // These assignments are the real test: they only compile if the primitive
+    // infers the caller's output type from the schema. A regression that widens
+    // the return to `any`/`unknown` would still run but stop type-checking here.
+    const typedBase = {
+        system: 'sys',
+        user: 'usr',
+        runName: 't',
+        observabilityService,
+    };
+
+    it('infers z.infer<S> from a zod schema and returns it', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ count: 5, label: 'x' }));
+        const schema = z.object({ count: z.number(), label: z.string() });
+
+        const out = await runStructuredReviewCall({ ...typedBase, schema });
+
+        const count: number = out.count; // ← out is { count: number; label: string }
+        const label: string = out.label;
+        expect({ count, label }).toEqual({ count: 5, label: 'x' });
+    });
+
+    it('infers T from a jsonSchema<T>() Schema and returns it', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ sameBug: true }));
+
+        const out = await runStructuredReviewCall({
+            ...typedBase,
+            schema: jsonSchema<{ sameBug: boolean }>({
+                type: 'object',
+                properties: { sameBug: { type: 'boolean' } },
+                required: ['sameBug'],
+                additionalProperties: false,
+            } as any),
+        });
+
+        const sameBug: boolean = out.sameBug; // ← out is { sameBug: boolean }
+        expect(sameBug).toBe(true);
     });
 });
 

@@ -5,9 +5,7 @@ import { finalText } from '@libs/agent-harness/domain/run-state.util';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 import {
-    buildLangfuseTelemetry,
     pullRequestSessionId,
-    toAiSdkTelemetryArgs,
     type LangfuseTraceAttributes,
 } from '@libs/core/log/langfuse';
 import { createLogger } from '@libs/core/log/logger';
@@ -578,10 +576,11 @@ export class BusinessRulesValidationAgentProvider extends AbstractSkillProvider<
     }
 
     /**
-     * Run a single LLM completion on the Vercel AI SDK. Replaces the legacy
-     * `super.createLLMAdapter(...).call(...)` (the legacy flow-engine LLM bridge):
-     * `buildModelFromSlot` resolves the BYOK model and `generateText` runs a
-     * plain (no-tools) completion. Langfuse parity via `buildLangfuseTelemetry`.
+     * Run a single LLM completion via `LLM.run` (the one door to the model).
+     * Replaces the legacy `super.createLLMAdapter(...).call(...)` (the flow-engine
+     * LLM bridge): this method resolves ONLY the BYOK slot and passes it to
+     * `LLM.run`, which resolves the model and runs a plain (no-tools) completion.
+     * Langfuse parity via `buildLangfuseTelemetry`.
      */
     /**
      * Telemetry metadata (org/team/PR/repo) for Langfuse so the analyzer +
