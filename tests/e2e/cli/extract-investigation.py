@@ -45,7 +45,10 @@ def main():
             parsed = json.loads(match.group(1))
         except ValueError:
             continue
-        if isinstance(parsed, list) and all(
+        # Non-empty required: `all()` is vacuously True for [], and this
+        # job only runs when there ARE failures — an empty contract is
+        # never the real one (a trailing [] fence must not beat it).
+        if isinstance(parsed, list) and parsed and all(
             isinstance(x, dict) and "signature" in x for x in parsed
         ):
             items = parsed
