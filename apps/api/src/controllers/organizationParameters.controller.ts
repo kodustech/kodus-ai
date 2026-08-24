@@ -281,6 +281,13 @@ export class OrganizationParametersController {
     }
 
     @Get('/model-capabilities')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.OrganizationSettings,
+        }),
+    )
     @ApiOperation({
         summary: 'Per-model UI capabilities',
         description:

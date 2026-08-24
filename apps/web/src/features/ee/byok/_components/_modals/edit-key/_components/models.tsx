@@ -440,6 +440,17 @@ const ModelSelectLive = ({
                         </span>
                     </Button>
                 </FormControl.Input>
+                {/* Escape hatch: never trap the form on a slow/hung fetch — the
+                    request is time-bounded, but the manual path stays available. */}
+                {onUseManual && (
+                    <Button
+                        variant="tertiary"
+                        size="xs"
+                        className="mt-2"
+                        onClick={onUseManual}>
+                        Type model manually
+                    </Button>
+                )}
             </FormControl.Root>
         );
     }
