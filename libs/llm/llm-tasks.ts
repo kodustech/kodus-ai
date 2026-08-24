@@ -39,20 +39,17 @@ export type LlmTask = (typeof LLM_TASK)[keyof typeof LLM_TASK];
 
 /**
  * Task → the task it inherits a routing target from when it has no explicit
- * `taskOverrides[task]`. The resolver applies it between the task's own override
- * and the org default (see StaticTaskStrategy); the routing UI mirrors it to
- * nest inheriting rows under their parent. Lives HERE (a bundle-safe leaf, like
- * LLM_TASK) so the backend resolver and the frontend grid import the SAME map
- * instead of hand-copying it — the inheritance graph has one source of truth.
+ * `taskOverrides[task]`. Consumed by BOTH the backend resolver (StaticTaskStrategy)
+ * and the frontend routing grid from this one bundle-safe leaf, so the
+ * inheritance graph never drifts between them.
  *
- * Each addition inherits the task it was carved out of, so an org that never
- * sets the new override keeps exactly today's behavior:
- *  - kodyRulesReview / ruleGeneration were part of the code-review flow → codeReview
- *  - businessValidation ran on the agent (chat) model → conversation
- * A single hop only (no chains).
+ * INTENTIONALLY EMPTY — the routing model is FLAT: a task with no override of its
+ * own inherits the org DEFAULT directly (routing.defaultModelId), never another
+ * task's model. There is no task→task chaining ("Same as Code Review / Same as
+ * Chat"); the UI shows every un-overridden agent as "Use default · <default>".
+ *
+ * Kept as an (empty) exported map, rather than deleted, so the resolver + UI keep
+ * ONE seam to reintroduce a chain here if a future task ever needs one — add an
+ * entry and both sides pick it up. No entry ⇒ inherit the default.
  */
-export const TASK_ROUTING_FALLBACK: Partial<Record<LlmTask, LlmTask>> = {
-    kodyRulesReview: LLM_TASK.codeReview,
-    ruleGeneration: LLM_TASK.codeReview,
-    businessValidation: LLM_TASK.conversation,
-};
+export const TASK_ROUTING_FALLBACK: Partial<Record<LlmTask, LlmTask>> = {};

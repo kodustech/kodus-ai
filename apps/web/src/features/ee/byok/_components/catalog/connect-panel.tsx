@@ -28,6 +28,7 @@ import type {
 import type { BYOKConnectInput } from "../../_types";
 import { ByokAdvancedSettings } from "../_modals/edit-key/_components/advanced-settings";
 import { SecretInput } from "../_modals/edit-key/_components/secret-input";
+import { providerOwnsField } from "../_modals/edit-key/credential-config";
 import type { EditKeyForm } from "../_modals/edit-key/_types";
 import { CuratedModelCard, PROVIDER_LABELS } from "./model-card";
 
@@ -202,13 +203,13 @@ export function CuratedConnectPanel({
                     ? (data.reasoningConfigOverride ?? undefined)
                     : undefined,
             openrouterProviderOrder:
-                data.provider === "open_router" &&
+                providerOwnsField(data.provider, "openrouterProviderOrder") &&
                 data.openrouterProviderOrder &&
                 data.openrouterProviderOrder.length > 0
                     ? data.openrouterProviderOrder
                     : undefined,
             openrouterAllowFallbacks:
-                data.provider === "open_router" &&
+                providerOwnsField(data.provider, "openrouterAllowFallbacks") &&
                 typeof data.openrouterAllowFallbacks === "boolean"
                     ? data.openrouterAllowFallbacks
                     : undefined,

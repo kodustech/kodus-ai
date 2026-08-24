@@ -26,6 +26,7 @@ describe('OrganizationParametersController.deleteByokConfig — v2 { modelId } r
             undefined as any, // createOrUpdateOrganizationParametersUseCase
             undefined as any, // findByKeyOrganizationParametersUseCase
             undefined as any, // getModelsByProviderUseCase
+            undefined as any, // getModelCapabilitiesUseCase
             undefined as any, // providerService
             deleteByokConfigUseCase as any,
             undefined as any, // getLLMConfigStatusUseCase

@@ -180,6 +180,8 @@ export const googleGeminiModule: ProviderModule = {
         { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top' },
     ],
     providerOptionsNamespace: () => 'google',
+    reasoningOverrideExample: () =>
+        '{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}',
     modelListing: googleGeminiModelListing,
 };
 

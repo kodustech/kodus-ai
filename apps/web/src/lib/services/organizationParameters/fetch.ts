@@ -263,6 +263,51 @@ export const getLLMProviderModels = async (
     return response?.models ?? [];
 };
 
+/**
+ * Live-list a provider's models using a JUST-TYPED, unsaved credential — for the
+ * connect form, before the key is persisted. POST so the key rides in the body
+ * (never a query string). Server prefers this key over the saved slot and is
+ * strict for http providers (a bad key surfaces an error, not a curated stand-in).
+ */
+export const previewLLMProviderModels = async (input: {
+    provider: string;
+    apiKey?: string;
+    baseURL?: string;
+}): Promise<LLMProviderModel[]> => {
+    const envelope = await axiosAuthorized.post<{
+        data: { models: LLMProviderModel[] };
+    }>(ORGANIZATION_PARAMETERS_PATHS.GET_PROVIDER_MODELS_LIST, input);
+    return envelope.data?.models ?? [];
+};
+
+/** Per-model UI capability hints, read from the provider module server-side
+ *  (temperature/reasoning support). `model` is a plain id, not a secret, so a
+ *  GET with query params is fine. */
+export type ModelUiCapabilities = {
+    supportsTemperature: boolean;
+    supportsReasoning: boolean;
+    reasoningOptions: Array<"low" | "medium" | "high">;
+    /** Provider-owned example for the "Custom" reasoning-override textarea. */
+    reasoningOverrideExample?: string;
+};
+
+export const getModelCapabilities = async (input: {
+    provider: string;
+    model: string;
+}): Promise<ModelUiCapabilities> => {
+    const response = await authorizedFetch<ModelUiCapabilities>(
+        ORGANIZATION_PARAMETERS_PATHS.GET_MODEL_CAPABILITIES,
+        { cache: "no-store", params: input },
+    );
+    return (
+        response ?? {
+            supportsTemperature: true,
+            supportsReasoning: false,
+            reasoningOptions: [],
+        }
+    );
+};
+
 export const getOrganizationParameterByKey = async <
     T extends { configValue: unknown },
 >(

@@ -10,7 +10,6 @@ import {
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { Separator } from "@components/ui/separator";
-import { Switch } from "@components/ui/switch";
 import { Textarea } from "@components/ui/textarea";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import {
@@ -19,9 +18,10 @@ import {
     Settings2Icon,
 } from "lucide-react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
+import { useModelCapabilities } from "@services/organizationParameters/hooks";
 
 import type { EditKeyForm } from "../_types";
-import { anthropicRejectsTemperature } from "../../../../_utils";
+import { ADVANCED_FIELDS } from "./credential-forms";
 
 const THINKING_OPTIONS = [
     { value: "none", label: "Off" },
@@ -31,24 +31,8 @@ const THINKING_OPTIONS = [
     { value: "custom", label: "Custom" },
 ] as const;
 
-const CUSTOM_PLACEHOLDERS: Record<string, string> = {
-    // Adaptive is the shape every Claude from 4.6 on accepts; the older
-    // budgetTokens form is a 400 on 4.7+, so it makes a poor default example.
-    anthropic: `{\n  "thinking": { "type": "adaptive" },\n  "effort": "high"\n}`,
-    google_gemini: `{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}`,
-    google_vertex: `{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}`,
-    openai: `{\n  "reasoningEffort": "high",\n  "serviceTier": "flex"\n}`,
-    open_router: `{\n  "reasoning": { "effort": "high" },\n  "ignore": ["deepinfra"]\n}`,
-    openai_compatible: `{\n  "thinking": { "type": "enabled" }\n}`,
-    novita: `{\n  "thinking": { "type": "enabled" }\n}`,
-};
-
-function getCustomPlaceholder(provider: string | undefined): string {
-    return (
-        (provider && CUSTOM_PLACEHOLDERS[provider]) ??
-        `{\n  "thinking": { "type": "enabled" }\n}`
-    );
-}
+// Generic fallback when the provider module ships no example of its own.
+const DEFAULT_REASONING_OVERRIDE_EXAMPLE = `{\n  "thinking": { "type": "enabled" }\n}`;
 
 const NumberField = ({
     name,
@@ -128,22 +112,70 @@ export const ByokAdvancedSettings = ({
     const isCustom = currentEffort === "custom";
     const currentProvider = useWatch({ control, name: "provider" });
     const currentModel = useWatch({ control, name: "model" });
-    const isOpenRouter = currentProvider === "open_router";
-    const customPlaceholder = getCustomPlaceholder(currentProvider);
+    // Provider-specific advanced fields (e.g. OpenRouter upstream pinning) come
+    // from the registry — no `provider === "x"` branch in this shared component.
+    const AdvancedFields = currentProvider
+        ? ADVANCED_FIELDS[currentProvider]
+        : undefined;
 
-    // Claude 4.7+ rejects sampling params outright, so the field is hidden
-    // rather than shown-but-ignored. Clearing the stored value matters as much
-    // as hiding the input: a config saved before the model was switched would
-    // otherwise keep submitting a temperature the provider 400s on.
-    const temperatureUnsupported = anthropicRejectsTemperature(
-        currentProvider,
-        currentModel,
-    );
+    // Per-model capabilities come from the PROVIDER module (server-side), never a
+    // hand-coded web mirror — so which models reject temperature / can reason, and
+    // the Custom-override example, are owned in one place the community contributes
+    // to. Until the answer arrives we stay permissive (show temperature, allow
+    // reasoning) to avoid a flicker that hides a valid field.
+    const { data: caps } = useModelCapabilities({
+        provider: currentProvider,
+        model: currentModel,
+        enabled: !!currentProvider && !!currentModel,
+    });
+
+    // The Custom reasoning-override example is the provider's own (module-owned);
+    // fall back to a generic enabled-thinking shape until/if none is provided.
+    const customPlaceholder =
+        caps?.reasoningOverrideExample ?? DEFAULT_REASONING_OVERRIDE_EXAMPLE;
+
+    // Temperature: hidden (not shown-but-ignored) for models that reject sampling
+    // params (OpenAI gpt-5/o-series, Anthropic 4.7+). Clearing the stored value
+    // matters as much as hiding: a config saved before the model was switched
+    // would otherwise keep submitting a temperature the provider 400s on.
+    const temperatureUnsupported = !!caps && !caps.supportsTemperature;
     useEffect(() => {
         if (temperatureUnsupported) {
             setValue("temperature", null, { shouldDirty: true });
         }
     }, [temperatureUnsupported, setValue]);
+
+    // Reasoning: the toggle mirrors what the model can actually do. When the model
+    // can't reason, lock it to Off; when it can but only at certain levels (e.g.
+    // gpt-5 → medium/high), disable the invalid ones. An effort that becomes
+    // invalid after a model switch is cleared so we never submit one the provider
+    // rejects.
+    const reasoningUnsupported = !!caps && !caps.supportsReasoning;
+    const allowedLevels = caps?.reasoningOptions ?? [];
+    const isLevelAllowed = (value: string) =>
+        value === "none" ||
+        value === "custom" ||
+        allowedLevels.length === 0 ||
+        allowedLevels.includes(value as "low" | "medium" | "high");
+    useEffect(() => {
+        if (!caps) return;
+        if (reasoningUnsupported && currentEffort) {
+            setValue("reasoningEffort", null, { shouldDirty: true });
+            setValue("reasoningConfigOverride", null, { shouldDirty: true });
+            return;
+        }
+        // A saved level the model no longer accepts (e.g. "low" on a gpt-5) →
+        // back to Off. Custom is a free-form override, left untouched.
+        if (
+            currentEffort &&
+            currentEffort !== "none" &&
+            currentEffort !== "custom" &&
+            !isLevelAllowed(currentEffort)
+        ) {
+            setValue("reasoningEffort", null, { shouldDirty: true });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [caps, reasoningUnsupported, currentEffort, setValue]);
 
     return (
         <Collapsible
@@ -189,17 +221,34 @@ export const ByokAdvancedSettings = ({
                                             value === "none" ? null : value,
                                         );
                                     }}>
-                                    {THINKING_OPTIONS.map((opt) => (
-                                        <ToggleGroup.Item
-                                            key={opt.value}
-                                            value={opt.value}
-                                            className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 rounded-md px-2 py-1.5 text-xs font-medium transition-colors data-[state=on]:shadow-sm data-[state=on]:ring-1">
-                                            {opt.label}
-                                        </ToggleGroup.Item>
-                                    ))}
+                                    {THINKING_OPTIONS.map((opt) => {
+                                        // Off is always available; every other
+                                        // option is gated by the model's declared
+                                        // reasoning support + valid levels.
+                                        const disabled =
+                                            opt.value !== "none" &&
+                                            (reasoningUnsupported ||
+                                                !isLevelAllowed(opt.value));
+                                        return (
+                                            <ToggleGroup.Item
+                                                key={opt.value}
+                                                value={opt.value}
+                                                disabled={disabled}
+                                                className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 rounded-md px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-secondary data-[state=on]:shadow-sm data-[state=on]:ring-1">
+                                                {opt.label}
+                                            </ToggleGroup.Item>
+                                        );
+                                    })}
                                 </ToggleGroup.Root>
                             )}
                         />
+
+                        {reasoningUnsupported && (
+                            <p className="text-text-tertiary text-xs">
+                                This model doesn&apos;t support reasoning — it
+                                always runs without a thinking budget.
+                            </p>
+                        )}
 
                         {isCustom && (
                             <Controller
@@ -305,109 +354,9 @@ export const ByokAdvancedSettings = ({
                         />
                     </div>
 
-                    {isOpenRouter && <OpenRouterRoutingFields />}
+                    {AdvancedFields && <AdvancedFields />}
                 </div>
             </CollapsibleContent>
         </Collapsible>
-    );
-};
-
-const OpenRouterRoutingFields = () => {
-    const { control } = useFormContext<EditKeyForm>();
-
-    return (
-        <>
-            <Separator className="bg-card-lv2" />
-
-            <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between gap-4">
-                    <div className="flex flex-col">
-                        <span className="text-text-primary text-sm font-medium">
-                            OpenRouter routing
-                        </span>
-                        <p className="text-text-tertiary text-xs text-pretty">
-                            OpenRouter routes each request to a different
-                            upstream by default. Pin providers here to avoid
-                            quality and behavior drift between calls.
-                        </p>
-                    </div>
-                    <a
-                        href="https://docs.kodus.io/how_to_use/en/byok#pinning-openrouter-providers"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary-light inline-flex shrink-0 items-center gap-1 text-xs hover:underline">
-                        Learn more
-                        <ExternalLinkIcon size={11} />
-                    </a>
-                </div>
-
-                <Controller
-                    name="openrouterProviderOrder"
-                    control={control}
-                    render={({ field, fieldState }) => {
-                        const asCsv = Array.isArray(field.value)
-                            ? field.value.join(", ")
-                            : "";
-                        return (
-                            <FormControl.Root>
-                                <FormControl.Label>
-                                    Pin providers (in order)
-                                </FormControl.Label>
-                                <FormControl.Input>
-                                    <Input
-                                        size="md"
-                                        placeholder="e.g. moonshot, together"
-                                        value={asCsv}
-                                        error={fieldState.error}
-                                        onChange={(e) => {
-                                            const raw = e.target.value;
-                                            const parsed = raw
-                                                .split(",")
-                                                .map((s) => s.trim())
-                                                .filter((s) => s.length > 0);
-                                            field.onChange(
-                                                parsed.length > 0
-                                                    ? parsed
-                                                    : null,
-                                            );
-                                        }}
-                                    />
-                                </FormControl.Input>
-                                <FormControl.Helper>
-                                    Comma-separated upstream names. First
-                                    available wins. Leave empty for OpenRouter
-                                    default routing.
-                                </FormControl.Helper>
-                            </FormControl.Root>
-                        );
-                    }}
-                />
-
-                <Controller
-                    name="openrouterAllowFallbacks"
-                    control={control}
-                    render={({ field }) => (
-                        <FormControl.Root>
-                            <div className="flex items-center justify-between gap-4">
-                                <div className="flex flex-col">
-                                    <FormControl.Label>
-                                        Allow fallbacks
-                                    </FormControl.Label>
-                                    <FormControl.Helper>
-                                        When off, requests fail if none of the
-                                        pinned providers are available (no
-                                        silent routing to other upstreams).
-                                    </FormControl.Helper>
-                                </div>
-                                <Switch
-                                    checked={field.value ?? true}
-                                    onCheckedChange={(v) => field.onChange(v)}
-                                />
-                            </div>
-                        </FormControl.Root>
-                    )}
-                />
-            </div>
-        </>
     );
 };

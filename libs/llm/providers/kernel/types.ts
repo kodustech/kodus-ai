@@ -197,6 +197,14 @@ export interface ProviderModule {
      *  namespaces. Absent/undefined ⇒ no known namespace (the override passes
      *  through unwrapped). */
     providerOptionsNamespace?(providerId: string): string | undefined;
+    /** Example JSON for the connect form's "Custom" reasoning-override textarea —
+     *  the exact shape THIS provider accepts under its reasoning namespace, per
+     *  requested id (a module serving several ids may differ, e.g. openai's native
+     *  `reasoningEffort` vs openai_compatible's `thinking`). UI help OWNED by the
+     *  module (it already owns `reasoning()` + the namespace), so a contributor
+     *  adds it in ONE place and the web picker shows it. Absent/undefined ⇒ the UI
+     *  falls back to a generic enabled-thinking example. */
+    reasoningOverrideExample?(providerId: string): string | undefined;
     /** The curated models this brand offers — Kodus's editorial picks (score,
      *  copy, billing variants, defaults). The single source for the web catalog;
      *  the aggregating use-case stamps each entry with this module's identity

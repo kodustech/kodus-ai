@@ -41,6 +41,10 @@ import {
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
 } from "../_components/byok-write";
+import {
+    providerHasCredentials,
+    providerOwnsField,
+} from "../_components/_modals/edit-key/credential-config";
 import { useCatalogModel } from "../_data/catalog-context";
 import { PROVIDER_LABELS } from "../_components/catalog/model-card";
 import { VariantSelector } from "../_components/catalog/connect-panel";
@@ -52,6 +56,7 @@ import {
     ByokModelSelect,
 } from "../_components/_modals/edit-key/_components/models";
 import { ByokProviderSelect } from "../_components/_modals/edit-key/_components/provider";
+import { ProviderDocLink } from "../_components/_modals/edit-key/_components/provider-doc-link";
 import {
     createKeySchema,
     editKeySchema,
@@ -252,12 +257,13 @@ export function ByokManualPageClient({
         // A stored key (edit, or add-to-existing-provider) is enough to save — the
         // save reuses it and the probe is skipped when no new key is typed.
         keyIsStored ||
-        (provider === "amazon_bedrock"
-            ? !!(
-                  awsBearerToken?.trim() ||
-                  (awsAccessKeyId?.trim() && awsSecretAccessKey?.trim())
-              )
-            : !!apiKey?.trim());
+        providerHasCredentials({
+            provider,
+            apiKey,
+            awsBearerToken,
+            awsAccessKeyId,
+            awsSecretAccessKey,
+        });
 
     const resetTestOnChange = () => {
         if (testState.status !== "idle") setTestState({ status: "idle" });
@@ -268,14 +274,7 @@ export function ByokManualPageClient({
         if (!valid) return null;
 
         const data = form.getValues();
-        const hasNewCredentials =
-            data.provider === "amazon_bedrock"
-                ? !!(
-                      data.awsBearerToken?.trim() ||
-                      (data.awsAccessKeyId?.trim() &&
-                          data.awsSecretAccessKey?.trim())
-                  )
-                : !!data.apiKey?.trim();
+        const hasNewCredentials = providerHasCredentials(data);
 
         // If the user changed the base URL on an openai_compatible config
         // without re-entering credentials, we can't skip the test: the
@@ -380,43 +379,49 @@ export function ByokManualPageClient({
                 effort === "custom"
                     ? (data.reasoningConfigOverride ?? undefined)
                     : undefined,
+            // Provider-scoped credential/settings fields: include one ONLY when
+            // the active provider owns it (per the credential-config registry), so
+            // a value left in RHF state after switching providers never leaks into
+            // another provider's credential. Which provider owns which field lives
+            // in ONE place now, not scattered as `provider === "x"` checks here.
             openrouterProviderOrder:
-                data.provider === "open_router" &&
+                providerOwnsField(data.provider, "openrouterProviderOrder") &&
                 data.openrouterProviderOrder &&
                 data.openrouterProviderOrder.length > 0
                     ? data.openrouterProviderOrder
                     : undefined,
             openrouterAllowFallbacks:
-                data.provider === "open_router" &&
+                providerOwnsField(data.provider, "openrouterAllowFallbacks") &&
                 typeof data.openrouterAllowFallbacks === "boolean"
                     ? data.openrouterAllowFallbacks
                     : undefined,
             vertexLocation:
-                data.provider === "google_vertex" &&
+                providerOwnsField(data.provider, "vertexLocation") &&
                 data.vertexLocation?.trim()
                     ? data.vertexLocation.trim()
                     : undefined,
             awsBearerToken:
-                data.provider === "amazon_bedrock" &&
+                providerOwnsField(data.provider, "awsBearerToken") &&
                 data.awsBearerToken?.trim()
                     ? data.awsBearerToken.trim()
                     : undefined,
             awsAccessKeyId:
-                data.provider === "amazon_bedrock" &&
+                providerOwnsField(data.provider, "awsAccessKeyId") &&
                 data.awsAccessKeyId?.trim()
                     ? data.awsAccessKeyId.trim()
                     : undefined,
             awsSecretAccessKey:
-                data.provider === "amazon_bedrock" &&
+                providerOwnsField(data.provider, "awsSecretAccessKey") &&
                 data.awsSecretAccessKey?.trim()
                     ? data.awsSecretAccessKey.trim()
                     : undefined,
             awsRegion:
-                data.provider === "amazon_bedrock" && data.awsRegion?.trim()
+                providerOwnsField(data.provider, "awsRegion") &&
+                data.awsRegion?.trim()
                     ? data.awsRegion.trim()
                     : undefined,
             awsSessionToken:
-                data.provider === "amazon_bedrock" &&
+                providerOwnsField(data.provider, "awsSessionToken") &&
                 data.awsSessionToken?.trim()
                     ? data.awsSessionToken.trim()
                     : undefined,
@@ -559,6 +564,14 @@ export function ByokManualPageClient({
                                             Using your stored key. Change it in{" "}
                                             <strong>Edit provider</strong>.
                                         </FormControl.Helper>
+                                        {/* Provider-owned docs link (grab a key /
+                                            find model ids) — present here too, not
+                                            only on the key-entry path. */}
+                                        <Suspense fallback={null}>
+                                            <ProviderDocLink
+                                                provider={lockedProvider}
+                                            />
+                                        </Suspense>
                                     </FormControl.Root>
                                 )}
                             </CardContent>
@@ -655,6 +668,9 @@ export function ByokManualPageClient({
                                                 <ByokModelSelect
                                                     excludeIds={
                                                         configuredModelIds
+                                                    }
+                                                    credentialStored={
+                                                        keyIsStored
                                                     }
                                                 />
                                             </Suspense>

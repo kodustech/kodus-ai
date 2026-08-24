@@ -155,6 +155,58 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         expect(url).toBe('https://api.moonshot.ai/v1/models');
     });
 
+    // ---- candidate (just-typed, unsaved) key — the connect form ----
+
+    it('lists OpenAI live with a JUST-TYPED candidate key, verbatim (no decrypt, no curated placeholder)', async () => {
+        mockedAxios.get.mockResolvedValue({
+            data: { object: 'list', data: [{ id: 'gpt-5.4' }, { id: 'gpt-4o' }] },
+        } as any);
+        const useCase = buildUseCase(null); // no saved config
+
+        const res = await useCase.execute(
+            BYOKProvider.OPENAI,
+            { organizationId: 'org-1' },
+            { apiKey: 'sk-typed' },
+        );
+
+        // The LIVE list — includes gpt-4o, which the curated catalog does NOT ship.
+        expect(res.models.map((m) => m.id)).toEqual(
+            expect.arrayContaining(['gpt-4o']),
+        );
+        const [url, cfg] = mockedAxios.get.mock.calls[0];
+        expect(url).toBe('https://api.openai.com/v1/models');
+        // Candidate key is plaintext — sent verbatim, never run through decrypt.
+        expect(cfg?.headers?.Authorization).toBe('Bearer sk-typed');
+    });
+
+    it('is STRICT with a candidate key: a live-fetch failure throws instead of the curated fallback', async () => {
+        mockedAxios.get.mockRejectedValue(new Error('401 Unauthorized'));
+        const useCase = buildUseCase(null);
+
+        await expect(
+            useCase.execute(
+                BYOKProvider.OPENAI,
+                { organizationId: 'org-1' },
+                { apiKey: 'sk-bad' },
+            ),
+        ).rejects.toThrow(/Error fetching openai models/i);
+    });
+
+    it('keyless OpenAI (no candidate, no saved slot, no env) still degrades to the curated catalog', async () => {
+        const prev = process.env.API_OPEN_AI_API_KEY;
+        delete process.env.API_OPEN_AI_API_KEY;
+        const useCase = buildUseCase(null);
+
+        const res = await useCase.execute(BYOKProvider.OPENAI, {
+            organizationId: 'org-1',
+        });
+
+        // Curated GPT-5.x, no live call attempted.
+        expect(res.models.length).toBeGreaterThan(0);
+        expect(mockedAxios.get).not.toHaveBeenCalled();
+        if (prev !== undefined) process.env.API_OPEN_AI_API_KEY = prev;
+    });
+
     it('serves a curated BRAND with a manual listing from its catalog (Z.ai/GLM)', async () => {
         // Z.ai speaks the Anthropic protocol → no `/models` call (manual listing).
         // As a first-class brand it still enumerates its curated models so the

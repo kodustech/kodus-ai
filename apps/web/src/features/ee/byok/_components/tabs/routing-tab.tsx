@@ -23,7 +23,6 @@ import {
     SlidersHorizontalIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
 
 import { useCatalog } from "../../_data/catalog-context";
 import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
@@ -64,14 +63,12 @@ const AUTO_TOOLTIP =
 
 /**
  * Strip task-override entries that shouldn't persist: empty ids AND overrides
- * equal to what the row would inherit anyway — the org default, OR (for a task
- * that inherits another) its parent task's model. Such an override is displayed
- * as "inherited" by the grid, so persisting it would silently re-pin the row if
- * the inherited source later moves (e.g. a child pinned to Code Review's current
- * model would strand as "Custom" when Code Review changes). Mirroring the grid's
- * collapse-to-inherited here keeps the saved blob matching what the UI shows.
- * Applied to both the serialized routing and the dirty-check baseline so the two
- * stay consistent.
+ * equal to the org default. Routing is FLAT — an un-overridden task inherits the
+ * default directly — so an override equal to the default is displayed as
+ * "inherited" by the grid; persisting it would silently re-pin the row if the
+ * default later moves. Mirroring the grid's collapse-to-inherited here keeps the
+ * saved blob matching what the UI shows. Applied to both the serialized routing
+ * and the dirty-check baseline so the two stay consistent.
  */
 const cleanOverrides = (
     overrides: Partial<Record<LlmTask, string>>,
@@ -81,11 +78,7 @@ const cleanOverrides = (
     (Object.keys(overrides) as LlmTask[]).forEach((task) => {
         const id = overrides[task];
         if (!id) return;
-        const parent = TASK_ROUTING_FALLBACK[task];
-        const inheritedId = parent
-            ? (overrides[parent] ?? defaultModelId)
-            : defaultModelId;
-        if (id !== inheritedId) out[task] = id;
+        if (id !== defaultModelId) out[task] = id;
     });
     return out;
 };
@@ -178,6 +171,14 @@ export const RoutingTab = ({
     >(routing.taskOverrides ?? {});
     const [isSaving, setIsSaving] = useState(false);
 
+    // Reset acts on the CURRENT (local) form: it sends every agent back to the
+    // default and clears the fallback — the DEFAULT model itself is KEPT (it's
+    // what everything falls back to). Nothing persists until "Save routing", so
+    // the button reflects the on-screen state, not what's stored. Enabled only
+    // when there's something to clear (a fallback or a per-agent override).
+    const hasResettableRouting =
+        !!fallbackModelId || Object.keys(taskOverrides).length > 0;
+
     const labelFor = (id?: string) =>
         pool.find((m) => m.id === id)?.label ?? id;
     const providerOf = (id?: string) =>
@@ -269,6 +270,16 @@ export const RoutingTab = ({
         } finally {
             setIsSaving(false);
         }
+    };
+
+    // Reset agents to default: send every per-agent override back to "Use default"
+    // and clear the fallback — LOCALLY. The DEFAULT model is KEPT (that's what all
+    // agents fall back to), so the "Model for all tasks" select never blanks.
+    // Nothing is written until the user hits "Save routing".
+    const handleReset = () => {
+        setFallbackModelId(undefined);
+        setShowFallback(false);
+        setTaskOverrides({});
     };
 
     return (
@@ -487,7 +498,14 @@ export const RoutingTab = ({
                     />
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex items-center justify-end gap-4">
+                    <Button
+                        variant="cancel"
+                        size="md"
+                        disabled={!hasResettableRouting || isSaving}
+                        onClick={handleReset}>
+                        Reset agents to default
+                    </Button>
                     <Button
                         variant="primary"
                         size="md"

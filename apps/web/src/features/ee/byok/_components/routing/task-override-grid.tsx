@@ -19,7 +19,6 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { TASK_ROUTING_FALLBACK } from "@libs/llm/llm-tasks";
 import {
     AlertTriangleIcon,
     ChevronsUpDownIcon,
@@ -34,7 +33,7 @@ import {
 import { cn } from "src/core/utils/components";
 
 import type { LlmTask } from "../../_types";
-import { modelLabelFor, TASK_DESCRIPTIONS, TASK_LABELS } from "../../_utils";
+import { modelLabelFor, TASK_DESCRIPTIONS } from "../../_utils";
 import { ProviderAvatar } from "../provider-avatar";
 import { capabilityGate, type SurfacedCapabilities } from "./capability-gate";
 
@@ -251,25 +250,12 @@ export const ModelCombobox = ({
     );
 };
 
-// child → parent inheritance map, shared with the backend resolver (one source
-// of truth for the whole feature).
-const TASK_INHERITS = TASK_ROUTING_FALLBACK;
-
-// Parent task → the tasks that inherit it (inverse of TASK_INHERITS), for the
-// "changing this also updates …" ripple note. Derived once.
-const CHILDREN_OF: Partial<Record<LlmTask, LlmTask[]>> = Object.entries(
-    TASK_INHERITS,
-).reduce<Partial<Record<LlmTask, LlmTask[]>>>((acc, [child, parent]) => {
-    (acc[parent as LlmTask] ??= []).push(child as LlmTask);
-    return acc;
-}, {});
-
 /**
  * One task's model control: a dropdown whose trigger carries state — the
  * resolved model's provider avatar + a solid model name when overridden, or a
- * muted "Same as Code Review · X" / "Use default · X" when it inherits. Reused by
- * the single-agent cards AND the Kody Rules sub-rows, so the picker logic lives
- * in one place.
+ * muted "Use default · X" when it inherits. Routing is FLAT: an un-overridden
+ * agent always uses the org DEFAULT (no task→task chaining), so the inherited
+ * state is uniformly "Use default". Reused by every agent card.
  */
 const TaskModelControl = ({
     task,
@@ -284,13 +270,11 @@ const TaskModelControl = ({
     taskOverrides: Partial<Record<LlmTask, string>>;
     onChange: (task: LlmTask, modelId: string | undefined) => void;
 }) => {
-    const inheritsFrom = TASK_INHERITS[task];
-    const inheritedId = inheritsFrom
-        ? (taskOverrides[inheritsFrom] ?? defaultModelId)
-        : defaultModelId;
+    // Flat inheritance: with no override of its own, the task runs the org default.
+    const inheritedId = defaultModelId;
     const rawOverrideId = taskOverrides[task];
-    // An override equal to what the row would inherit anyway is redundant —
-    // treat it as inherited so the two states never look identical.
+    // An override equal to the default is redundant — treat it as inherited so
+    // "override" and "use default" never look identical (and never re-pins).
     const overrideId =
         rawOverrideId && rawOverrideId !== inheritedId
             ? rawOverrideId
@@ -306,22 +290,12 @@ const TaskModelControl = ({
     const effectiveId = overrideId ?? inheritedId;
     const effectiveModel = models.find((m) => m.id === effectiveId);
     const inheritedLabel = modelLabelFor(models, inheritedId);
-    const inheritedOptionLabel = inheritsFrom
-        ? `Same as ${TASK_LABELS[inheritsFrom]} · ${inheritedLabel}`
-        : `Use default · ${inheritedLabel}`;
+    const inheritedOptionLabel = `Use default · ${inheritedLabel}`;
 
-    // Ripple note: children that currently follow this task move when its model
-    // changes.
-    const followingChildren = (CHILDREN_OF[task] ?? []).filter((child) => {
-        const own = taskOverrides[child];
-        return !own || own === effectiveId;
-    });
-    const note =
-        followingChildren.length > 0
-            ? `Changing this also updates ${followingChildren
-                .map((c) => TASK_LABELS[c])
-                .join(", ")}, which follow it.`
-            : undefined;
+    // The default model is already reachable via the "Use default" row — don't
+    // ALSO list it as a standalone pick (picking it explicitly just collapses
+    // back to inherited anyway).
+    const pickableModels = models.filter((m) => m.id !== defaultModelId);
 
     return (
         <div className="flex shrink-0 items-center gap-2">
@@ -338,10 +312,9 @@ const TaskModelControl = ({
                 </Tooltip>
             )}
             <ModelCombobox
-                models={models}
+                models={pickableModels}
                 value={overrideId}
                 gateTask={task}
-                note={note}
                 onSelect={(id) => onChange(task, id)}
                 defaultOption={{
                     label: inheritedOptionLabel,
