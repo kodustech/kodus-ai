@@ -690,23 +690,31 @@ jobs:
                       exit 0
                   fi
                   npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
-                  # Read-only investigation; Write is allowed solely so the
-                  # agent can produce the two contract files (the prompt pins
-                  # that, and the runner is ephemeral either way).
+                  # The evidence the agent reads (droplet logs, scenario
+                  # errors) is untrusted text, and the NEXT step executes a
+                  # script from this checkout with GH_TOKEN — so the agent is
+                  # STRICTLY read-only: Bash/Write/Edit are denied (deny rules
+                  # take precedence over every allow, including any settings
+                  # file in the checkout). Its report arrives on stdout; the
+                  # trusted extractor below materializes the contract files.
+                  # --strict-mcp-config: never load MCP servers from any
+                  # config that lands in the checkout — MCP tools would be
+                  # an unvetted side door around the deny list.
                   claude -p "$(cat tests/e2e/cli/investigate-prompt.md)" \
-                      --allowedTools "Read,Grep,Glob,Write" \
+                      --allowedTools "Read,Grep,Glob" \
+                      --disallowedTools "Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task" \
+                      --strict-mcp-config \
                       --max-turns 60 \
                       --output-format text > investigation-agent.log 2>&1 || {
                       echo "::warning title=E2E investigation failed (advisory)::agent run failed — see investigation-agent.log artifact"
                   }
+                  python3 tests/e2e/cli/extract-investigation.py investigation-agent.log
                   if [ -f investigation.md ]; then
                       {
                           echo "## 🔎 Failure investigation (agent — verify before acting)"
                           echo ""
                           cat investigation.md
                       } >> "$GITHUB_STEP_SUMMARY" || true
-                  else
-                      echo "::warning title=E2E investigation (advisory)::agent produced no investigation.md"
                   fi
 
             - name: Upsert one issue per failure signature

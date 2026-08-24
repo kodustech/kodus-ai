@@ -115,6 +115,13 @@ def call_llm(base_url, api_key, model, facts):
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
         data = json.load(resp)
+    # CI tooling can't route through the product's runAiSdkLLMInSpan
+    # accounting (no NestJS runtime, no org context here) — log the
+    # provider-reported usage instead so consumption stays visible.
+    usage = data.get("usage") or {}
+    print("LLM usage: prompt={} completion={} total={}".format(
+        usage.get("prompt_tokens", "?"), usage.get("completion_tokens", "?"),
+        usage.get("total_tokens", "?")))
     return (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip()
 
 

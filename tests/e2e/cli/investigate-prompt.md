@@ -38,13 +38,16 @@ Known context: quota errors from `aiplatform.googleapis.com` are a known
 external Vertex quota issue — classify as `infra`, do not re-investigate
 deeply.
 
-## Output contract (write BOTH files at the repository root)
+## Output contract (final message only — you have NO write access)
 
-`investigation.md` — a human report: one `##` section per failure with
-classification, confidence, the evidence trail you followed (quote the
-decisive log lines), and the proposed fix. Lead with a 2-3 line overview.
+Your FINAL message must be, in this order:
 
-`investigation.json` — machine-readable, exactly this shape:
+1. The human report in markdown: a 2-3 line overview, then one `##`
+   section per failure with classification, confidence, the evidence
+   trail you followed (quote the decisive log lines), and the proposed
+   fix.
+2. As the very LAST element of the message, one fenced ```json block —
+   machine-readable, exactly this shape:
 
 ```json
 [
@@ -65,6 +68,7 @@ The `signature` must be STABLE across runs for the same underlying
 failure (same scenario + same error kind ⇒ same signature; never include
 timestamps, run ids, or org ids in it).
 
-Rules: read-only investigation — do not modify any file except the two
-outputs. If the evidence is insufficient to decide, say so and mark
-confidence `low` with the missing piece named. Do not invent log lines.
+Rules: this is a strictly read-only investigation — file writes and
+shell commands are denied by policy; do not attempt them. If the
+evidence is insufficient to decide, say so and mark confidence `low`
+with the missing piece named. Do not invent log lines.

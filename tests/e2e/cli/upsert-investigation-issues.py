@@ -86,11 +86,17 @@ def main():
            "--description", "Automated E2E failure investigation",
            "--color", "D93F0B")
 
+        # gh paginates internally up to --limit; 1000 keeps reconciliation
+        # exact until the label accumulates that many issues. If we ever hit
+        # the cap, say so instead of silently duplicating.
         existing = json.loads(gh(
             "issue", "list", "--repo", repo, "--label", LABEL,
-            "--state", "all", "--limit", "200",
+            "--state", "all", "--limit", "1000",
             "--json", "number,body,state",
         ))
+        if len(existing) >= 1000:
+            print("::warning title=investigation issue upsert::{} label has ≥1000 issues — "
+                  "reconciliation may miss older ones (consider pruning closed issues)".format(LABEL))
     except Exception as exc:
         print("::warning title=investigation issue upsert failed (advisory)::{}".format(exc))
         return
