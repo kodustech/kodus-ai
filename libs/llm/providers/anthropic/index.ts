@@ -214,6 +214,15 @@ export const anthropicModule: ProviderModule = {
         }
     },
 
+    // Structured output on the Anthropic protocol (native AND anthropic_compatible)
+    // is implemented as tool use with `tool_choice: 'required'` — which the API
+    // rejects when extended thinking is enabled. Signals the model-assembly layer
+    // to suppress reasoning for a structured call so the forced tool_choice stays
+    // valid. Always true here: both endpoints speak the same protocol.
+    structuredOutputForcesToolChoice(): boolean {
+        return true;
+    },
+
     // The anthropic protocol (native AND anthropic_compatible endpoints) accepts
     // an ephemeral cacheControl on the system message → the long static system
     // prompt is written to cache once and read on every subsequent loop step. A

@@ -3,9 +3,64 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import {
     buildProviderOptions,
     buildReasoningProviderOptions,
+    structuredOutputForcesToolChoice,
     EFFORT_TO_BUDGET,
     type ReasoningEffort,
 } from '@libs/llm/reasoning-options';
+
+describe('structuredOutputForcesToolChoice (registry-backed)', () => {
+    // Anthropic-protocol providers implement structured output as forced tool_choice
+    // → incompatible with thinking. Every OTHER transport uses json_schema /
+    // responseSchema and is safe.
+    const cases: Array<{
+        name: string;
+        provider?: BYOKProvider | string;
+        model?: string;
+        expected: boolean;
+    }> = [
+        { name: 'anthropic (native)', provider: BYOKProvider.ANTHROPIC, expected: true },
+        { name: 'anthropic_compatible', provider: BYOKProvider.ANTHROPIC_COMPATIBLE, expected: true },
+        { name: 'moonshot (Kimi)', provider: BYOKProvider.MOONSHOT, expected: true },
+        { name: 'zai (GLM)', provider: BYOKProvider.ZAI, expected: true },
+        { name: 'bedrock + Claude', provider: BYOKProvider.AMAZON_BEDROCK, model: 'anthropic.claude-sonnet-4-5', expected: true },
+        { name: 'bedrock + Nova', provider: BYOKProvider.AMAZON_BEDROCK, model: 'amazon.nova-pro', expected: false },
+        { name: 'vertex + Claude', provider: BYOKProvider.GOOGLE_VERTEX, model: 'claude-sonnet-4-5', expected: true },
+        { name: 'vertex + Gemini', provider: BYOKProvider.GOOGLE_VERTEX, model: 'gemini-2.5-flash', expected: false },
+        { name: 'openai', provider: BYOKProvider.OPENAI, expected: false },
+        { name: 'google_gemini', provider: BYOKProvider.GOOGLE_GEMINI, expected: false },
+        { name: 'novita', provider: BYOKProvider.NOVITA, expected: false },
+        { name: 'undefined provider', provider: undefined, expected: false },
+    ];
+
+    it.each(cases)('$name → $expected', ({ provider, model, expected }) => {
+        expect(structuredOutputForcesToolChoice(provider, model)).toBe(expected);
+    });
+
+    // STRUCTURAL completeness: lock the EXACT set of registered providers that
+    // force tool_choice (model-agnostic, i.e. a non-Claude model). If a new
+    // provider is added to the registry — or an existing one is mis-classified —
+    // this fails, forcing a deliberate decision instead of a silent miss.
+    // Bedrock/Vertex are model-dependent (Claude only) → NOT in this set with a
+    // neutral model; their Claude case is covered above.
+    it('locks the model-agnostic set of tool_choice-forcing providers (registry-wide)', () => {
+        const { REGISTRY } = require('@libs/llm/providers');
+        const forcing = REGISTRY.ids().filter((id: string) =>
+            structuredOutputForcesToolChoice(id, 'gpt-4o'),
+        );
+        expect(new Set(forcing)).toEqual(
+            new Set(['anthropic', 'anthropic_compatible', 'moonshot', 'zai']),
+        );
+    });
+
+    it('never throws for any registered provider (all ids classify cleanly)', () => {
+        const { REGISTRY } = require('@libs/llm/providers');
+        for (const id of REGISTRY.ids()) {
+            expect(() =>
+                structuredOutputForcesToolChoice(id, 'x'),
+            ).not.toThrow();
+        }
+    });
+});
 
 describe('buildReasoningProviderOptions', () => {
     describe('returns {} when reasoning is off or provider is missing', () => {

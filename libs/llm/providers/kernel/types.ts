@@ -170,6 +170,17 @@ export interface ProviderModule {
         cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions;
+    /** Whether this provider implements STRUCTURED output via FORCED tool use
+     *  (`tool_choice: 'required'`/'tool'). The Anthropic protocol does — and its
+     *  API rejects forced tool_choice when extended thinking is enabled
+     *  ("tool_choice 'required' is incompatible with thinking enabled"), so the
+     *  model-assembly layer suppresses reasoning for a structured call on these
+     *  providers to keep the forced tool_choice valid. Provider-specific knowledge
+     *  lives HERE (sibling to `reasoning()`), per id + model — e.g. Bedrock/Vertex
+     *  only when the id is a Claude model. Absent/false ⇒ structured output uses a
+     *  reasoning-compatible mode (OpenAI json_schema, Gemini responseSchema) and
+     *  thinking is left untouched. */
+    structuredOutputForcesToolChoice?(cfg: ProviderBuildConfig): boolean;
     /** Optional system-prompt cache hint: the `providerOptions` to attach to the
      *  system message so a multi-step loop reads the (static) system prompt from
      *  cache instead of re-billing it. Provider-specific SHAPE lives here (only the

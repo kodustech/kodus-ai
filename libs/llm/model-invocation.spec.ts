@@ -6,6 +6,7 @@ import type { NormalizedModel } from './byok-config';
 // mapping so the test asserts the COMPOSITION contract — which slot fields flow to
 // which primitive — not the internals each dependency already unit-tests.
 const buildProviderOptionsMock = jest.fn();
+const structuredForcesToolChoiceMock = jest.fn((..._args: unknown[]) => false);
 
 jest.mock('./agent-model', () => ({
     resolveAgentModel: jest.fn(() => ({ __model: true })),
@@ -18,6 +19,8 @@ jest.mock('./byok-to-vercel', () => ({
 jest.mock('./reasoning-options', () => ({
     buildProviderOptions: (...args: unknown[]) =>
         buildProviderOptionsMock(...args),
+    structuredOutputForcesToolChoice: (...args: unknown[]) =>
+        structuredForcesToolChoiceMock(...args),
 }));
 
 import { resolveAgentModel } from './agent-model';
@@ -34,6 +37,7 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
     beforeEach(() => {
         jest.clearAllMocks();
         buildProviderOptionsMock.mockReturnValue({ some: 'reasoning' });
+        structuredForcesToolChoiceMock.mockReturnValue(false);
     });
 
     it('composes model + name + tuning + reasoning from the slot', () => {
@@ -90,6 +94,70 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
                 modelName: 'gpt-x',
             }),
         );
+    });
+
+    describe('thinking ⨯ forced-tool_choice suppression (Anthropic structured output)', () => {
+        it('forces reasoning OFF for a STRUCTURED call when the provider forces tool_choice (Kimi/GLM/Claude)', () => {
+            // Anthropic protocol: structured output = forced tool_choice, which the
+            // API rejects with thinking on. The slot asks for 'medium'; it must be
+            // suppressed to 'none' so the review's Kody Rules/dedup/etc. don't 400.
+            structuredForcesToolChoiceMock.mockReturnValue(true);
+
+            resolveModelConfig(
+                slot({
+                    provider: 'moonshot' as any,
+                    model: 'kimi-k2.6',
+                    reasoningEffort: 'medium',
+                    reasoningConfigOverride: '{"thinking":{"type":"enabled"}}',
+                }),
+                { runName: 'kody-rules', modelOptions: { structuredOutputs: true } },
+            );
+
+            expect(structuredForcesToolChoiceMock).toHaveBeenCalledWith(
+                'moonshot',
+                'kimi-k2.6',
+            );
+            expect(buildProviderOptionsMock).toHaveBeenCalledWith(
+                'kody-rules',
+                undefined,
+                expect.objectContaining({
+                    reasoningEffort: 'none', // suppressed from the slot's 'medium'
+                    reasoningConfigOverride: undefined, // override also dropped
+                }),
+            );
+        });
+
+        it('KEEPS the slot reasoning for a NON-structured (agent-loop) call on the same provider', () => {
+            // The finder loop uses tool_choice:auto (no structuredOutputs) → thinking
+            // is compatible and must stay on.
+            structuredForcesToolChoiceMock.mockReturnValue(true);
+
+            resolveModelConfig(
+                slot({ provider: 'moonshot' as any, reasoningEffort: 'medium' }),
+                { runName: 'finder', modelOptions: {} },
+            );
+
+            expect(buildProviderOptionsMock).toHaveBeenCalledWith(
+                'finder',
+                undefined,
+                expect.objectContaining({ reasoningEffort: 'medium' }),
+            );
+        });
+
+        it('KEEPS the slot reasoning for a structured call when the provider does NOT force tool_choice (OpenAI/Gemini)', () => {
+            structuredForcesToolChoiceMock.mockReturnValue(false);
+
+            resolveModelConfig(
+                slot({ provider: 'openai' as any, reasoningEffort: 'high' }),
+                { runName: 'kody-rules', modelOptions: { structuredOutputs: true } },
+            );
+
+            expect(buildProviderOptionsMock).toHaveBeenCalledWith(
+                'kody-rules',
+                undefined,
+                expect.objectContaining({ reasoningEffort: 'high' }),
+            );
+        });
     });
 
     it("defaults reasoning effort to 'low' when neither the slot nor opts set it", () => {

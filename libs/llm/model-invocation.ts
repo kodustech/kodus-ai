@@ -39,6 +39,7 @@ import {
 } from '@libs/llm/slot-call-options';
 import {
     buildProviderOptions,
+    structuredOutputForcesToolChoice,
     type ReasoningEffort,
 } from '@libs/llm/reasoning-options';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
@@ -105,9 +106,27 @@ export function resolveModelConfig(
         modelOptions,
     });
 
+    // Anthropic-protocol structured output uses forced tool_choice, which the API
+    // rejects when extended thinking is enabled (thinking supports only
+    // tool_choice auto/none). For a structured call on such a provider, force
+    // reasoning OFF so the forced tool_choice stays valid — otherwise Kody Rules /
+    // dedup / severity / etc. hard-fail on Kimi/GLM/Claude-with-thinking. Agent
+    // loops use tool_choice:auto (no `structuredOutputs`) and keep their reasoning.
+    const suppressReasoningForStructured =
+        modelOptions?.structuredOutputs === true &&
+        structuredOutputForcesToolChoice(
+            resolvedSlot?.provider,
+            resolvedSlot?.model,
+        );
+    const effectiveReasoningEffort: ReasoningEffort = suppressReasoningForStructured
+        ? 'none'
+        : (resolvedSlot?.reasoningEffort ?? reasoningEffortDefault);
+
     const providerOptions = buildProviderOptions(runName, telemetryMetadata, {
-        reasoningEffort: resolvedSlot?.reasoningEffort ?? reasoningEffortDefault,
-        reasoningConfigOverride: resolvedSlot?.reasoningConfigOverride,
+        reasoningEffort: effectiveReasoningEffort,
+        reasoningConfigOverride: suppressReasoningForStructured
+            ? undefined
+            : resolvedSlot?.reasoningConfigOverride,
         byokProvider: resolvedSlot?.provider,
         modelName: resolvedSlot?.model,
         openrouterProviderOrder,

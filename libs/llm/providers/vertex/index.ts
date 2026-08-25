@@ -75,6 +75,14 @@ export const vertexModule: ProviderModule = {
             : undefined;
     },
 
+    // Claude-on-Vertex (createVertexAnthropic) speaks the Anthropic protocol →
+    // structured output forces tool_choice, incompatible with thinking; Gemini
+    // on Vertex uses responseSchema and is unaffected. Vertex DOES map reasoning
+    // per model, so a Claude-on-Vertex with thinking on would hit this — suppress.
+    structuredOutputForcesToolChoice(cfg: ProviderBuildConfig): boolean {
+        return isAnthropicModel(cfg.model);
+    },
+
     build(cfg: ProviderBuildConfig): LanguageModel {
         // apiKey is the ALREADY-DECRYPTED base64 SA JSON.
         const model = vertexModelFromSaJson(cfg.apiKey, cfg.model, cfg.vertexLocation);

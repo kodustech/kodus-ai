@@ -102,6 +102,14 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         supportsSamplingParams(cfg: ProviderBuildConfig): boolean {
             return anthropicModule.supportsSamplingParams!(asCompatible(cfg));
         },
+        // Same Anthropic wire protocol → structured output forces tool_choice,
+        // incompatible with thinking. Delegate so Kimi/GLM suppress reasoning on
+        // structured calls exactly like native Anthropic.
+        structuredOutputForcesToolChoice(cfg: ProviderBuildConfig): boolean {
+            return anthropicModule.structuredOutputForcesToolChoice!(
+                asCompatible(cfg),
+            );
+        },
 
         normalize: anthropicModule.normalize,
         normalizeUsage: anthropicModule.normalizeUsage,

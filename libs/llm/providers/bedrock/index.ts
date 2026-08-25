@@ -74,6 +74,14 @@ export const bedrockModule: ProviderModule = {
             : undefined;
     },
 
+    // Claude-on-Bedrock speaks the Anthropic protocol → structured output forces
+    // tool_choice, incompatible with thinking. Non-Anthropic Bedrock families
+    // (Nova/Llama) don't. Defensive: Bedrock has no reasoning() today (thinking
+    // off), but this keeps the suppression correct if one is ever added.
+    structuredOutputForcesToolChoice(cfg: ProviderBuildConfig): boolean {
+        return isAnthropicModel(cfg.model);
+    },
+
     // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
     // @ai-sdk/amazon-bedrock maps Bedrock's usage onto the high-level ai@7
     // LanguageModelUsage shape, so generateText's result carries the same fields
