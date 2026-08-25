@@ -268,3 +268,105 @@ describe('ValidateConfigStage — v2 routing', () => {
         expect(result.codeReviewConfig.byokConfig).toBeUndefined();
     });
 });
+
+describe('ValidateConfigStage — base branch scope', () => {
+    let stage: ValidateConfigStage;
+
+    const orgAndTeam = { organizationId: 'org-1', teamId: 'team-1' } as any;
+
+    const validate = (
+        configBaseBranches: string[] | undefined,
+        apiBaseBranch: string | undefined,
+        targetBranch: string,
+        sourceBranch = 'feature/x',
+    ) =>
+        stage['_isBranchLogicValid'](
+            sourceBranch,
+            targetBranch,
+            configBaseBranches,
+            apiBaseBranch,
+            'github' as any,
+            orgAndTeam,
+        );
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                ValidateConfigStage,
+                {
+                    provide: AUTOMATION_EXECUTION_SERVICE_TOKEN,
+                    useValue: { findLatestExecutionByFilters: jest.fn() },
+                },
+                {
+                    provide: ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
+                    useValue: { findByKey: jest.fn() },
+                },
+                {
+                    provide: CodeManagementService,
+                    useValue: { createSingleIssueComment: jest.fn() },
+                },
+            ],
+        }).compile();
+
+        stage = module.get<ValidateConfigStage>(ValidateConfigStage);
+    });
+
+    describe('missing config (undefined / not an array)', () => {
+        it('does not block when baseBranches is undefined', () => {
+            expect(validate(undefined, 'main', 'develop').canProceed).toBe(true);
+        });
+
+        it('does not block when baseBranches is corrupt', () => {
+            expect(validate('main' as any, 'main', 'develop').canProceed).toBe(
+                true,
+            );
+        });
+    });
+
+    describe('empty list — scope is the repository default branch', () => {
+        it('reviews a PR targeting the default branch', () => {
+            expect(validate([], 'main', 'main').canProceed).toBe(true);
+        });
+
+        it('skips a PR targeting a non-default branch', () => {
+            const result = validate([], 'main', 'develop');
+
+            expect(result.canProceed).toBe(false);
+            expect(result.details?.message).toContain('develop');
+        });
+
+        it('falls back to reviewing when the default branch is unknown', () => {
+            expect(validate([], undefined, 'develop').canProceed).toBe(true);
+        });
+    });
+
+    describe('non-empty list — scope is the configured patterns', () => {
+        it('reviews a PR targeting a configured branch', () => {
+            expect(validate(['develop'], 'main', 'develop').canProceed).toBe(
+                true,
+            );
+        });
+
+        it('still reviews a PR targeting the default branch', () => {
+            expect(validate(['develop'], 'main', 'main').canProceed).toBe(true);
+        });
+
+        it('skips a PR targeting a branch outside the patterns', () => {
+            expect(validate(['develop'], 'main', 'staging').canProceed).toBe(
+                false,
+            );
+        });
+
+        it('lets an explicit exclusion opt the default branch out', () => {
+            expect(
+                validate(['develop', '!main'], 'main', 'main').canProceed,
+            ).toBe(false);
+        });
+
+        it('matches wildcard patterns', () => {
+            expect(
+                validate(['release/*'], 'main', 'release/2.0').canProceed,
+            ).toBe(true);
+        });
+    });
+});

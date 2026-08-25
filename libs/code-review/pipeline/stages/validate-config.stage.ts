@@ -37,7 +37,6 @@ import {
     shouldReviewBranches,
 } from '@libs/code-review/infrastructure/adapters/services/branchReview.service';
 import { isByokConfig, LLM_TASK } from '@libs/llm/byok-config';
-import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveTaskSlot } from '@libs/llm/resolve-task-model';
 
 @Injectable()
@@ -596,11 +595,12 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
         platformType: PlatformType,
         organizationAndTeamData: OrganizationAndTeamData,
     ): IStageValidationResult {
-        if (
-            !configBaseBranches ||
-            !Array.isArray(configBaseBranches) ||
-            configBaseBranches.length === 0
-        ) {
+
+        // A missing/corrupt list means we have no scope to enforce, so we let the
+        // review through. An empty list is a real configuration: it narrows the
+        // scope to the repository default branch, which mergeBaseBranches injects
+        // below. Collapsing the two is what made every base branch reviewable.
+        if (!configBaseBranches || !Array.isArray(configBaseBranches)) {
             return { canProceed: true };
         }
 
@@ -643,12 +643,16 @@ export class ValidateConfigStage extends BasePipelineStage<CodeReviewPipelineCon
             return { canProceed: true };
         }
 
+        const reason = configBaseBranches.length
+            ? `Target branch '${targetBranch}' does not match configured patterns: [${expression}]`
+            : `Target branch '${targetBranch}' is not the repository default branch, and no base branches are configured`;
+
         return {
             canProceed: false,
             details: {
                 message: StageMessageHelper.skippedWithReason(
                     PipelineReasons.CONFIG.BRANCH_MISMATCH,
-                    `Target branch '${targetBranch}' does not match configured patterns: [${expression}]`,
+                    reason,
                 ),
                 reasonCode: AutomationMessage.SKIPPED_BY_BASIC_RULES,
             },
