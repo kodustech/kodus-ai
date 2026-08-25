@@ -37,6 +37,18 @@ const PR_CONCURRENCY = 10;
  */
 const RATE_LIMIT_FAILURES_BEFORE_ABORT = 3;
 
+/**
+ * Wall-clock budget for one run, deliberately under the consumer's
+ * FEEDBACK_HANDLER_TIMEOUT_MS (5 min).
+ *
+ * The consumer's timeout is a `Promise.race`, which resolves the handler but
+ * cancels nothing — the fan-out keeps running orphaned while the message is
+ * already settled. Stopping ourselves first means the run ends on its own
+ * terms: the caller still receives what was collected and persists it, instead
+ * of the work being dropped mid-flight.
+ */
+const RUN_BUDGET_MS = 4 * 60 * 1000;
+
 @Injectable()
 export class GetReactionsUseCase implements IUseCase {
     private readonly logger = createLogger(GetReactionsUseCase.name);
@@ -84,6 +96,17 @@ export class GetReactionsUseCase implements IUseCase {
         let aborted = false;
         let resetAt: Date | undefined;
 
+        const deadline = Date.now() + RUN_BUDGET_MS;
+        let prsSkippedByDeadline = 0;
+
+        // Observation only — these separate the three ways a PR can end up
+        // with no reactions, which used to be indistinguishable in the logs:
+        // the provider returned no comments, it returned comments but none
+        // matched a suggestion, or they matched and every count was zero.
+        let totalCommentsReturned = 0;
+        let totalCommentsLinked = 0;
+        let totalReactionsFound = 0;
+
         // Logged before any provider call so a run that later times out can
         // still be sized from the logs — otherwise a timeout says nothing
         // about whether it was 50 PRs or 5000.
@@ -105,6 +128,15 @@ export class GetReactionsUseCase implements IUseCase {
         const reactionsPromises = pullRequests.map((pr) =>
             limit(async (): Promise<ICollectedReaction[]> => {
                 if (aborted) {
+                    return [];
+                }
+
+                // Checked here rather than mid-PR so a PR is either processed
+                // whole or not started — a half-processed PR would report
+                // fewer reactions than it has and the caller would treat that
+                // as a real count.
+                if (Date.now() > deadline) {
+                    prsSkippedByDeadline += 1;
                     return [];
                 }
 
@@ -159,7 +191,15 @@ export class GetReactionsUseCase implements IUseCase {
                         },
                     );
 
+                    totalCommentsReturned += comments?.length ?? 0;
+                    totalCommentsLinked += commentsLinkedToSuggestions.length;
+
                     if (!commentsLinkedToSuggestions.length) {
+                        this.logPrOutcome(pr, organizationAndTeamData, {
+                            commentsReturned: comments?.length ?? 0,
+                            commentsLinked: 0,
+                            reactionsFound: 0,
+                        });
                         return [];
                     }
 
@@ -172,6 +212,14 @@ export class GetReactionsUseCase implements IUseCase {
                                 repository: pr.repository,
                             },
                         });
+
+                    totalReactionsFound += reactionsInComments?.length ?? 0;
+
+                    this.logPrOutcome(pr, organizationAndTeamData, {
+                        commentsReturned: comments?.length ?? 0,
+                        commentsLinked: commentsLinkedToSuggestions.length,
+                        reactionsFound: reactionsInComments?.length ?? 0,
+                    });
 
                     if (!reactionsInComments?.length) {
                         return [];
@@ -314,6 +362,17 @@ export class GetReactionsUseCase implements IUseCase {
                     prsWithReactions:
                         pullRequests.length - prsWithoutReactions.length,
                     prsWithoutReactions: prsWithoutReactions.length,
+                },
+            });
+
+            // One entry per PR without reactions, and most Kody comments never
+            // get a thumbs — in a large tenant this is nearly every PR of the
+            // window in a single line.
+            this.logger.debug({
+                message: 'PRs without reactions detail',
+                context: GetReactionsUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
                     prsWithoutReactionsDetails: prsWithoutReactions.map(
                         (pr) => ({
                             prNumber: pr.number,
@@ -325,6 +384,61 @@ export class GetReactionsUseCase implements IUseCase {
             });
         }
 
+        if (prsSkippedByDeadline > 0) {
+            this.logger.warn({
+                message: 'Reaction sync stopped on its own time budget',
+                context: GetReactionsUseCase.name,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    totalPRs: pullRequests.length,
+                    prsSkippedByDeadline,
+                    budgetMs: RUN_BUDGET_MS,
+                    collectedReactions: flattenedReactions.length,
+                },
+            });
+        }
+
+        // The one line that makes "synced nothing" diagnosable at the default
+        // log level: it says whether the provider returned comments at all,
+        // whether they matched our suggestions, and whether anyone reacted.
+        this.logger.log({
+            message: 'Reaction sync run finished',
+            context: GetReactionsUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                totalPRs: pullRequests.length,
+                commentsReturned: totalCommentsReturned,
+                commentsLinked: totalCommentsLinked,
+                reactionsFound: totalReactionsFound,
+                collectedReactions: flattenedReactions.length,
+            },
+        });
+
         return flattenedReactions;
+    }
+
+    private logPrOutcome(
+        pr: IPullRequestWithDeliveredSuggestions,
+        organizationAndTeamData: OrganizationAndTeamData,
+        counts: {
+            commentsReturned: number;
+            commentsLinked: number;
+            reactionsFound: number;
+        },
+    ): void {
+        this.logger.debug({
+            message: 'Reaction lookup for PR',
+            context: GetReactionsUseCase.name,
+            metadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+                prNumber: pr.number,
+                repository: pr?.repository?.name,
+                suggestionsCount: pr.suggestions?.length ?? 0,
+                ...counts,
+            },
+        });
     }
 }

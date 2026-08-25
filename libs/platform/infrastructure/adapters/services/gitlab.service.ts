@@ -111,6 +111,14 @@ import {
  */
 const AWARD_EMOJI_CONCURRENCY = 5;
 
+/**
+ * gitbeaker's `.all()` follows the `link` header until the collection is
+ * exhausted, and without `perPage` that walks GitLab's default of 20 per page
+ * — a merge request with 200 discussions costs 10 sequential round trips
+ * instead of 2. 100 is the ceiling GitLab accepts.
+ */
+const GITLAB_MAX_PER_PAGE = 100;
+
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
 export class GitlabService implements Omit<
@@ -2877,6 +2885,7 @@ export class GitlabService implements Omit<
             const comments = await gitlabAPI.MergeRequestDiscussions.all(
                 filters.repository.id,
                 filters.pullRequestNumber,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             const originalCommit = comments?.find(
@@ -3859,6 +3868,7 @@ export class GitlabService implements Omit<
             const discussions = await gitlabAPI.MergeRequestDiscussions.all(
                 repository.id,
                 prNumber,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             return discussions.flatMap((discussion) => discussion.notes);
@@ -4290,6 +4300,7 @@ export class GitlabService implements Omit<
             const discussions = await gitlabAPI.MergeRequestDiscussions.all(
                 projectId,
                 mergeRequestIid,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             const validRequestReviews = discussions

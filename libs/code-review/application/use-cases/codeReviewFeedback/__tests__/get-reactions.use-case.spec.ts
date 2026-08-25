@@ -17,6 +17,7 @@ jest.mock('@libs/core/log/logger', () => ({
         log: jest.fn(),
         error: jest.fn(),
         warn: jest.fn(),
+        debug: jest.fn(),
     }),
 }));
 
@@ -481,6 +482,142 @@ describe('GetReactionsUseCase', () => {
             expect(
                 codeManagementService.getPullRequestReviewComment,
             ).toHaveBeenCalledTimes(6);
+        });
+    });
+
+    /**
+     * A run that finds nothing used to look identical in the logs whether the
+     * provider returned no comments at all, returned comments that matched no
+     * suggestion, or matched them and found every count at zero. Three
+     * different causes, one log line — which is exactly what blocked the live
+     * debugging of a "synced nothing" report.
+     */
+    describe('why a run found nothing', () => {
+        const runAndReadSummary = async () => {
+            const logger = (useCase as any).logger;
+            await useCase.execute(orgAndTeam, [42]);
+
+            const summary = logger.log.mock.calls
+                .map(([entry]: [any]) => entry)
+                .find(
+                    (entry: any) =>
+                        entry.message === 'Reaction sync run finished',
+                );
+
+            return summary?.metadata;
+        };
+
+        beforeEach(() => {
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [createSamplePullRequestWithSuggestions()],
+            );
+        });
+
+        it('distinguishes "the provider returned no comments"', async () => {
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [],
+            );
+
+            expect(await runAndReadSummary()).toMatchObject({
+                commentsReturned: 0,
+                commentsLinked: 0,
+                reactionsFound: 0,
+            });
+        });
+
+        it('distinguishes "comments came back but none matched a suggestion"', async () => {
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [
+                    createSampleComment({ id: 9998 }),
+                    createSampleComment({ id: 9999 }),
+                ],
+            );
+
+            expect(await runAndReadSummary()).toMatchObject({
+                commentsReturned: 2,
+                commentsLinked: 0,
+                reactionsFound: 0,
+            });
+            // The distinguishing signal: countReactions is never reached
+            expect(codeManagementService.countReactions).not.toHaveBeenCalled();
+        });
+
+        it('distinguishes "they matched but nobody reacted"', async () => {
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [createSampleComment({ id: 100 })],
+            );
+            codeManagementService.countReactions.mockResolvedValue([]);
+
+            expect(await runAndReadSummary()).toMatchObject({
+                commentsReturned: 1,
+                commentsLinked: 1,
+                reactionsFound: 0,
+            });
+            expect(codeManagementService.countReactions).toHaveBeenCalled();
+        });
+
+        it('reports the counts of a run that did find reactions', async () => {
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [createSampleComment({ id: 100 })],
+            );
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult(),
+            ]);
+
+            expect(await runAndReadSummary()).toMatchObject({
+                commentsReturned: 1,
+                commentsLinked: 1,
+                reactionsFound: 1,
+                collectedReactions: 1,
+            });
+        });
+    });
+
+    describe('run time budget', () => {
+        it('stops starting new PRs once the budget is spent and keeps what it collected', async () => {
+            const prs = Array.from({ length: 30 }, (_, i) =>
+                createSamplePullRequestWithSuggestions({
+                    _id: `pr-${i}`,
+                    number: i + 1,
+                }),
+            );
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                prs,
+            );
+
+            // First concurrency window resolves normally, then time jumps past
+            // the budget so everything still queued is dropped unstarted.
+            const realNow = Date.now;
+            let callCount = 0;
+            codeManagementService.getPullRequestReviewComment.mockImplementation(
+                async () => {
+                    callCount += 1;
+                    if (callCount === 10) {
+                        const jumped = realNow() + 10 * 60 * 1000;
+                        jest.spyOn(Date, 'now').mockImplementation(
+                            () => jumped,
+                        );
+                    }
+                    return [createSampleComment({ id: 100 })];
+                },
+            );
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult(),
+            ]);
+
+            const result = await useCase.execute(
+                orgAndTeam,
+                prs.map((pr) => pr.number),
+            );
+
+            expect(
+                codeManagementService.getPullRequestReviewComment.mock.calls
+                    .length,
+            ).toBeLessThan(30);
+            // Partial work survives — it is handed back, not thrown away
+            expect(result.length).toBeGreaterThan(0);
+
+            jest.spyOn(Date, 'now').mockRestore();
         });
     });
 });

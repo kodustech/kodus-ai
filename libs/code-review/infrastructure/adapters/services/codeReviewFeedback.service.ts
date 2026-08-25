@@ -10,11 +10,6 @@ import {
     ICodeReviewFeedback,
     ICollectedReaction,
 } from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
-import {
-    IPullRequests,
-    IRepository,
-} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
-import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 @Injectable()
 export class CodeReviewFeedbackService implements ICodeReviewFeedbackService {
@@ -69,38 +64,6 @@ export class CodeReviewFeedbackService implements ICodeReviewFeedbackService {
 
     getNativeCollection(): Promise<Collection> {
         return this.codeReviewFeedbackRepository.getNativeCollection();
-    }
-
-    async bulkCreateTransformed(
-        organizationAndTeamData: OrganizationAndTeamData,
-        comments: {
-            id: number;
-            pullRequestReviewId?: string;
-            suggestionId: string;
-        }[],
-        pullRequest: Pick<IPullRequests, 'uuid' | 'number'>,
-        repository: Pick<IRepository, 'id' | 'fullName'>,
-    ): Promise<CodeReviewFeedbackEntity[]> {
-        const codeReviewFeedbacks = comments.map((comment) => ({
-            comment: {
-                id: comment.id,
-                pullRequestReviewId: comment?.pullRequestReviewId,
-            },
-            suggestionId: comment.suggestionId,
-            pullRequest: {
-                id: pullRequest.uuid,
-                number: pullRequest.number,
-                repository: {
-                    id: repository.id,
-                    fullName: repository.fullName,
-                },
-            },
-            organizationId: organizationAndTeamData.organizationId,
-            reactions: { thumbsUp: 0, thumbsDown: 0 },
-            syncedEmbeddedSuggestions: false,
-        }));
-
-        return this.bulkCreate(codeReviewFeedbacks);
     }
 
     async updateSyncedSuggestionsFlag(
