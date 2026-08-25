@@ -486,6 +486,120 @@ describe('GetReactionsUseCase', () => {
     });
 
     /**
+     * Each adapter echoes a different identifier back on the reaction, and a
+     * comment can carry all three with different values: GitLab returns
+     * notes[0].id, Azure the threadId, GitHub the comment id. Registering only
+     * one of them meant the reaction was counted and then silently dropped when
+     * mapped back to its suggestion — observed live on Azure, where
+     * reactionsFound was 1 and collectedReactions 0.
+     */
+    describe('mapping a reaction back to its suggestion', () => {
+        const prWithCommentId = (commentId: number) =>
+            createSamplePullRequestWithSuggestions({
+                suggestions: [
+                    {
+                        id: 'suggestion-001',
+                        deliveryStatus: 'DELIVERED' as any,
+                        comment: { id: commentId, pullRequestReviewId: null },
+                    },
+                ],
+            });
+
+        it('resolves when the adapter echoes the threadId (Azure)', async () => {
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [prWithCommentId(500)],
+            );
+            // Azure carries both, with different values
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [{ id: 999, threadId: 500, replies: [] }],
+            );
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult({ comment: { id: 500 } }),
+            ]);
+
+            const result = await useCase.execute(orgAndTeam, [42]);
+
+            expect(result).toHaveLength(1);
+            expect(result[0].suggestionId).toBe('suggestion-001');
+        });
+
+        it('resolves when the adapter echoes the comment id (GitHub)', async () => {
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [prWithCommentId(100)],
+            );
+            // GitHub comments carry neither threadId nor notes
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [createSampleComment({ id: 100 })],
+            );
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult({ comment: { id: 100 } }),
+            ]);
+
+            const result = await useCase.execute(orgAndTeam, [42]);
+
+            expect(result).toHaveLength(1);
+            expect(result[0].suggestionId).toBe('suggestion-001');
+        });
+
+        it('resolves when the adapter echoes a note id (GitLab)', async () => {
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [prWithCommentId(700)],
+            );
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [{ id: 888, notes: [{ id: 700 }, { id: 701 }] }],
+            );
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult({ comment: { id: 701 } }),
+            ]);
+
+            const result = await useCase.execute(orgAndTeam, [42]);
+
+            expect(result).toHaveLength(1);
+            expect(result[0].suggestionId).toBe('suggestion-001');
+        });
+
+        it('does not let an alias steal a mapping another comment already owns', async () => {
+            pullRequestService.findPullRequestsWithDeliveredSuggestions.mockResolvedValue(
+                [
+                    createSamplePullRequestWithSuggestions({
+                        suggestions: [
+                            {
+                                id: 'suggestion-A',
+                                deliveryStatus: 'DELIVERED' as any,
+                                comment: { id: 10, pullRequestReviewId: null },
+                            },
+                            {
+                                id: 'suggestion-B',
+                                deliveryStatus: 'DELIVERED' as any,
+                                comment: { id: 20, pullRequestReviewId: null },
+                            },
+                        ],
+                    }),
+                ],
+            );
+
+            // B's own id collides with A's threadId — A registered it first
+            codeManagementService.getPullRequestReviewComment.mockResolvedValue(
+                [
+                    { id: 11, threadId: 10, notes: [{ id: 10 }] },
+                    { id: 20, threadId: 20 },
+                ],
+            );
+            codeManagementService.countReactions.mockResolvedValue([
+                createSampleReactionResult({ comment: { id: 10 } }),
+                createSampleReactionResult({ comment: { id: 20 } }),
+            ]);
+
+            const result = await useCase.execute(orgAndTeam, [42]);
+
+            expect(result.map((r) => r.suggestionId).sort()).toEqual([
+                'suggestion-A',
+                'suggestion-B',
+            ]);
+        });
+    });
+
+    /**
      * A run that finds nothing used to look identical in the logs whether the
      * provider returned no comments at all, returned comments that matched no
      * suggestion, or matched them and found every count at zero. Three

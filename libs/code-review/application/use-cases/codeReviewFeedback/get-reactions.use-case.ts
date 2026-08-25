@@ -161,6 +161,16 @@ export class GetReactionsUseCase implements IUseCase {
                         );
 
                     const reactionCommentIdToSuggestion = new Map();
+                    const linkSuggestion = (key: unknown, suggestion: any) => {
+                        if (
+                            key !== undefined &&
+                            key !== null &&
+                            !reactionCommentIdToSuggestion.has(key)
+                        ) {
+                            reactionCommentIdToSuggestion.set(key, suggestion);
+                        }
+                    };
+
                     const commentsLinkedToSuggestions = comments.filter(
                         (comment) => {
                             const threadId =
@@ -174,19 +184,24 @@ export class GetReactionsUseCase implements IUseCase {
                                 return false;
                             }
 
-                            if (comment.notes?.length > 0) {
-                                comment.notes.forEach((note) =>
-                                    reactionCommentIdToSuggestion.set(
-                                        note.id,
-                                        suggestion,
-                                    ),
-                                );
-                            } else {
-                                reactionCommentIdToSuggestion.set(
-                                    comment.id,
-                                    suggestion,
-                                );
-                            }
+                            // Adapters disagree on which identifier comes back
+                            // on the reaction: GitLab echoes notes[0].id,
+                            // Azure the threadId, GitHub the comment id. A
+                            // comment can carry all three with different
+                            // values, so registering only one of them drops
+                            // the reaction later, silently — Azure reactions
+                            // were being counted and then discarded here.
+                            //
+                            // Notes go first: they are the identifiers that
+                            // already resolved correctly, and `linkSuggestion`
+                            // never overwrites, so the aliases added after
+                            // cannot displace a working mapping.
+                            comment.notes?.forEach((note) =>
+                                linkSuggestion(note.id, suggestion),
+                            );
+                            linkSuggestion(comment.threadId, suggestion);
+                            linkSuggestion(comment.id, suggestion);
+
                             return true;
                         },
                     );
