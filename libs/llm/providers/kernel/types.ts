@@ -19,6 +19,7 @@ import type {
 } from '@libs/llm/providers/kernel/model-types';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { ProviderCatalogModel } from './catalog';
+import type { ModelReasoningTraits } from './reasoning-traits';
 
 /**
  * Provider capability descriptor. Extends the reasoning-only base
@@ -165,22 +166,20 @@ export interface ProviderModule {
     /** Normalize raw usage → NormalizedUsage. STUB in Phase 1; Phase 3 implements. */
     normalizeUsage(raw: unknown): NormalizedUsage;
     /** Optional reasoning mapping: canonical effort → provider-native options.
-     *  Folded from reasoning-options.ts in 01-04. */
+     *  Folded from reasoning-options.ts in 01-04. Emits the disable-vs-omit shape
+     *  from THIS model's `reasoningTraits` (canDisableThinking) in the provider's
+     *  own namespace. */
     reasoning?(
         cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions;
-    /** Whether this provider implements STRUCTURED output via FORCED tool use
-     *  (`tool_choice: 'required'`/'tool'). The Anthropic protocol does — and its
-     *  API rejects forced tool_choice when extended thinking is enabled
-     *  ("tool_choice 'required' is incompatible with thinking enabled"), so the
-     *  model-assembly layer suppresses reasoning for a structured call on these
-     *  providers to keep the forced tool_choice valid. Provider-specific knowledge
-     *  lives HERE (sibling to `reasoning()`), per id + model — e.g. Bedrock/Vertex
-     *  only when the id is a Claude model. Absent/false ⇒ structured output uses a
-     *  reasoning-compatible mode (OpenAI json_schema, Gemini responseSchema) and
-     *  thinking is left untouched. */
-    structuredOutputForcesToolChoice?(cfg: ProviderBuildConfig): boolean;
+    /** Per-MODEL reasoning facts (thinks-by-default / can-disable / forced-
+     *  tool_choice support + thinking rejection). The SINGLE source a model's
+     *  reasoning behavior is declared; generic code turns it into a structured
+     *  plan via `planStructuredCall` and derives `supportsReasoning` from it.
+     *  Absent ⇒ `NON_REASONING_TRAITS` (a non-thinking provider, unchanged
+     *  behavior). Sibling to `reasoning()` — the module owns both. */
+    reasoningTraits?(cfg: ProviderBuildConfig): ModelReasoningTraits;
     /** Optional system-prompt cache hint: the `providerOptions` to attach to the
      *  system message so a multi-step loop reads the (static) system prompt from
      *  cache instead of re-billing it. Provider-specific SHAPE lives here (only the

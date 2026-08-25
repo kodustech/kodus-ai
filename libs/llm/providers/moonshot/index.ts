@@ -25,8 +25,7 @@ import type { ProviderCatalogModel } from '../kernel/catalog';
 // the stored transport, and the module's build() resolves the Anthropic protocol.
 const catalog: ProviderCatalogModel[] = [
     {
-        id: 'kimi-k2.7-code',
-        displayName: 'Kimi K2.7 Code',
+        id: 'kimi-k2.7-code', // label derived: "Kimi K2.7 Code"
         tier: 'recommended',
         benchmarkScore: 86,
         description:
@@ -65,12 +64,11 @@ const catalog: ProviderCatalogModel[] = [
         defaultVariantId: 'developer',
     },
     {
-        id: 'kimi-k2.6',
-        displayName: 'Kimi K2.6 Coding',
+        id: 'kimi-k2.6', // label derived: "Kimi K2.6"
         tier: 'other',
         benchmarkScore: 86,
         description:
-            'Previous Moonshot coding model. Superseded by Kimi K2.7 Code.',
+            'Moonshot Kimi K2.6 — agentic coding model with extended thinking on by default (can be turned off).',
         speed: 'medium',
         contextWindow: '256K',
         costTier: '$',

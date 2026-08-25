@@ -32,9 +32,6 @@ jest.mock('@libs/core/log/langfuse', () => ({
 }));
 jest.mock('@libs/llm/reasoning-options', () => ({
     buildProviderOptions: jest.fn(() => ({ __providerOptions: 'reasoning' })),
-    // resolveModelConfig consults this to suppress thinking on anthropic-protocol
-    // structured calls; default false keeps these tests' behavior unchanged.
-    structuredOutputForcesToolChoice: jest.fn(() => false),
 }));
 
 import {

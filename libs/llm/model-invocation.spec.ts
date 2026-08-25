@@ -6,7 +6,6 @@ import type { NormalizedModel } from './byok-config';
 // mapping so the test asserts the COMPOSITION contract — which slot fields flow to
 // which primitive — not the internals each dependency already unit-tests.
 const buildProviderOptionsMock = jest.fn();
-const structuredForcesToolChoiceMock = jest.fn((..._args: unknown[]) => false);
 
 jest.mock('./agent-model', () => ({
     resolveAgentModel: jest.fn(() => ({ __model: true })),
@@ -19,8 +18,6 @@ jest.mock('./byok-to-vercel', () => ({
 jest.mock('./reasoning-options', () => ({
     buildProviderOptions: (...args: unknown[]) =>
         buildProviderOptionsMock(...args),
-    structuredOutputForcesToolChoice: (...args: unknown[]) =>
-        structuredForcesToolChoiceMock(...args),
 }));
 
 import { resolveAgentModel } from './agent-model';
@@ -37,7 +34,6 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
     beforeEach(() => {
         jest.clearAllMocks();
         buildProviderOptionsMock.mockReturnValue({ some: 'reasoning' });
-        structuredForcesToolChoiceMock.mockReturnValue(false);
     });
 
     it('composes model + name + tuning + reasoning from the slot', () => {
@@ -96,13 +92,11 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
         );
     });
 
-    describe('thinking ⨯ forced-tool_choice suppression (Anthropic structured output)', () => {
-        it('forces reasoning OFF for a STRUCTURED call when the provider forces tool_choice (Kimi/GLM/Claude)', () => {
-            // Anthropic protocol: structured output = forced tool_choice, which the
-            // API rejects with thinking on. The slot asks for 'medium'; it must be
-            // suppressed to 'none' so the review's Kody Rules/dedup/etc. don't 400.
-            structuredForcesToolChoiceMock.mockReturnValue(true);
-
+    describe('suppressReasoning — the executor forces thinking OFF', () => {
+        it('forces reasoning to none AND drops the override when suppressReasoning is set', () => {
+            // The structured executor sets this when planStructuredCall →
+            // 'suppress-thinking' (a disable-able model that would 400 on forced
+            // tool_choice + thinking). The slot's own 'medium' + override lose.
             resolveModelConfig(
                 slot({
                     provider: 'moonshot' as any,
@@ -110,13 +104,9 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
                     reasoningEffort: 'medium',
                     reasoningConfigOverride: '{"thinking":{"type":"enabled"}}',
                 }),
-                { runName: 'kody-rules', modelOptions: { structuredOutputs: true } },
+                { runName: 'kody-rules', suppressReasoning: true },
             );
 
-            expect(structuredForcesToolChoiceMock).toHaveBeenCalledWith(
-                'moonshot',
-                'kimi-k2.6',
-            );
             expect(buildProviderOptionsMock).toHaveBeenCalledWith(
                 'kody-rules',
                 undefined,
@@ -127,14 +117,13 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
             );
         });
 
-        it('KEEPS the slot reasoning for a NON-structured (agent-loop) call on the same provider', () => {
-            // The finder loop uses tool_choice:auto (no structuredOutputs) → thinking
-            // is compatible and must stay on.
-            structuredForcesToolChoiceMock.mockReturnValue(true);
-
+        it('KEEPS the slot reasoning when suppressReasoning is unset (agent loop / as-is / reroute)', () => {
+            // Agent loops use tool_choice:auto and the reroute-json path has no
+            // tool_choice — both keep thinking. This primitive is provider-agnostic:
+            // no suppression unless the plan explicitly asked for it.
             resolveModelConfig(
                 slot({ provider: 'moonshot' as any, reasoningEffort: 'medium' }),
-                { runName: 'finder', modelOptions: {} },
+                { runName: 'finder' },
             );
 
             expect(buildProviderOptionsMock).toHaveBeenCalledWith(
@@ -144,12 +133,10 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
             );
         });
 
-        it('KEEPS the slot reasoning for a structured call when the provider does NOT force tool_choice (OpenAI/Gemini)', () => {
-            structuredForcesToolChoiceMock.mockReturnValue(false);
-
+        it('KEEPS the slot reasoning when suppressReasoning is explicitly false', () => {
             resolveModelConfig(
                 slot({ provider: 'openai' as any, reasoningEffort: 'high' }),
-                { runName: 'kody-rules', modelOptions: { structuredOutputs: true } },
+                { runName: 'kody-rules', suppressReasoning: false },
             );
 
             expect(buildProviderOptionsMock).toHaveBeenCalledWith(

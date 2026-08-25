@@ -42,7 +42,11 @@ export interface ProviderCatalogVariant {
 export interface ProviderCatalogModel {
     /** Model id the BYOK config stores (matches capabilities()/build() input). */
     id: string;
-    displayName: string;
+    /** OPTIONAL human label override. Omit it for ids `formatModelLabel` cleans up
+     *  on its own (`kimi-k2.6` → "Kimi K2.6"); set it only when the id needs
+     *  editorial help the formatter can't derive (dated/region ids, brand casing
+     *  like "DeepSeek", clarifiers). The aggregator derives the label when absent. */
+    displayName?: string;
     /** Transport override when this model is NOT built over the module's default
      *  transport (e.g. a Kimi/GLM model served over `anthropic_compatible`).
      *  Absent ⇒ the aggregator stamps the module's own id as the transport. */
@@ -90,6 +94,7 @@ export interface ResolvedCatalogModel extends ProviderCatalogModel {
 // Type-only (erased at runtime), so this import does not create a runtime cycle
 // with types.ts even though types.ts type-imports ProviderCatalogModel from here.
 import type { ProviderModule } from './types';
+import { formatModelLabel } from './model-label';
 
 /**
  * Flatten every module's `catalog` into the resolved, identity-stamped list the
@@ -104,6 +109,9 @@ export function resolveCatalogFrom(
     return modules.flatMap((m) =>
         (m.catalog ?? []).map((entry) => ({
             ...entry,
+            // Label override is optional — derive it from the id when the entry
+            // doesn't pin one, so the served shape always carries a real name.
+            displayName: entry.displayName ?? formatModelLabel(entry.id),
             provider: entry.provider ?? m.id,
             providerKey: m.id,
             providerDisplayName: m.label,

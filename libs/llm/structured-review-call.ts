@@ -23,8 +23,15 @@ import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     ensureValidatingSchema,
     readOutput,
+    repairAndValidate,
     salvageStructuredError,
 } from '@libs/llm/structured-output-repair';
+import { REGISTRY } from '@libs/llm/providers';
+import {
+    planStructuredCall,
+    NON_REASONING_TRAITS,
+    type StructuredCallPlan,
+} from '@libs/llm/providers/kernel/reasoning-traits';
 import { z } from 'zod';
 import {
     getLimiterForSlot,
@@ -136,6 +143,33 @@ interface ReviewCallMode<T> {
  * `mode` is the only thing that differs between structured and text output — so
  * both public entry points share this exact model policy and retry contract.
  */
+/**
+ * Resolve the structured-call plan for a slot — a pure lookup over the provider's
+ * `capabilities().structuredOutput` + `reasoningTraits()`. No slot (managed/env
+ * default) → 'as-is' (the Fireworks default is a response_format model). All the
+ * per-model knowledge lives in the provider module; this is the single read.
+ */
+function resolveStructuredPlan(
+    slot: NormalizedModel | undefined,
+): StructuredCallPlan {
+    const provider = slot?.provider as string | undefined;
+    if (!provider || !slot?.model || !REGISTRY.has(provider)) {
+        return 'as-is';
+    }
+    try {
+        const mod = REGISTRY.get(provider);
+        const traits =
+            mod.reasoningTraits?.(slot as any) ?? NON_REASONING_TRAITS;
+        return planStructuredCall(
+            mod.capabilities(slot.model).structuredOutput,
+            traits,
+        );
+    } catch {
+        // Best-effort optimization — a lookup failure must never break the call.
+        return 'as-is';
+    }
+}
+
 async function runReviewCall<T>(
     params: BaseReviewCallParams,
     mode: ReviewCallMode<T>,
@@ -175,6 +209,17 @@ async function runReviewCall<T>(
     // a helper so the same invocation can be re-issued with json_schema OFF, and
     // skip json_schema up front for a slot already proven to reject it.
     const structuredMode = mode.modelOptions.structuredOutputs === true;
+
+    // The per-model structured plan (providers own the traits; this is a pure
+    // lookup). 'suppress-thinking' → force reasoning off for the forced-tool_choice
+    // call; 'reroute-json' → skip Output.object entirely and read a prompt-schema'd
+    // JSON text so thinking may stay on (always-thinking Kimi k2.7-code/k3, GLM,
+    // Claude Fable/Mythos); 'as-is' → normal. Text calls never plan.
+    const structuredPlan: StructuredCallPlan = structuredMode
+        ? resolveStructuredPlan(mainSlot)
+        : 'as-is';
+    const suppressReasoning = structuredPlan === 'suppress-thinking';
+
     const buildInvocation = (structuredOutputs: boolean) =>
         resolveModelConfig(mainSlot, {
             runName,
@@ -183,11 +228,16 @@ async function runReviewCall<T>(
             modelOptions: structuredMode
                 ? { ...mode.modelOptions, structuredOutputs }
                 : mode.modelOptions,
+            // Force reasoning off only when the plan says so (a disable-able model
+            // that would 400 on forced tool_choice + thinking). 'reroute-json' and
+            // 'as-is' keep the slot's reasoning — the reroute has no tool_choice.
+            suppressReasoning,
             defaultModelOverride,
             organizationId,
             reasoningEffortDefault: 'none',
             openrouterProviderOrder: (mainSlot as any)?.openrouterProviderOrder,
-            openrouterAllowFallbacks: (mainSlot as any)?.openrouterAllowFallbacks,
+            openrouterAllowFallbacks: (mainSlot as any)
+                ?.openrouterAllowFallbacks,
         });
 
     const sentJsonSchema = structuredMode && mayUseJsonSchema(mainSlot);
@@ -222,6 +272,13 @@ async function runReviewCall<T>(
         modelName: string,
         systemOverride?: string,
         extraAttrs?: Record<string, unknown>,
+        // The reroute-json path overrides the output channel: plain generateText
+        // (NO Output.object → NO forced tool_choice) + a text→object extractor, so
+        // an always-thinking model produces structured output without a 400.
+        override?: {
+            outputArgs?: Record<string, unknown>;
+            extract?: (r: any) => T | Promise<T>;
+        },
     ): Promise<T> => {
         const exec = () =>
             tracedGenerateText({
@@ -230,7 +287,7 @@ async function runReviewCall<T>(
                 prompt: user,
                 // Output mode: structured spreads `output: Output.object`, text
                 // spreads nothing (plain generateText → r.text).
-                ...mode.outputArgs,
+                ...(override?.outputArgs ?? mode.outputArgs),
                 // Per-model tuning (temperature / max-output) from the ONE
                 // montagem above — the review path can't silently drop it again.
                 ...callOptions,
@@ -287,7 +344,7 @@ async function runReviewCall<T>(
               })
             : exec();
 
-        return run.then((r: any) => mode.extract(r));
+        return run.then((r: any) => (override?.extract ?? mode.extract)(r));
     };
 
     // ONE re-issue in json_object mode with the schema written INTO the prompt —
@@ -307,6 +364,41 @@ async function runReviewCall<T>(
             structuredRecovery: reason,
         });
     };
+
+    // reroute-json: the model is always-thinking + forced-tool_choice (Kimi
+    // k2.7-code/k3, Claude Fable/Mythos) OR its endpoint has no forced tool_choice
+    // at all (GLM = auto-only). Either way Output.object can't be used — so issue a
+    // PLAIN generateText with the schema written into the prompt (no tool_choice)
+    // and parse+validate the text. Thinking stays ON (compatible without tool
+    // forcing). This is the universal floor that closes the whole always-thinking
+    // class, not a per-model special case.
+    if (structuredPlan === 'reroute-json') {
+        const inv = buildInvocation(false);
+        const reroutedSystem = mode.schemaForPrompt
+            ? `${system ? `${system}\n\n` : ''}Return ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n${mode.schemaForPrompt}`
+            : system;
+        return call(
+            inv.model,
+            inv.modelName,
+            reroutedSystem,
+            { structuredReroute: 'thinking-forced-tool_choice' },
+            {
+                outputArgs: {}, // plain generateText — no Output.object, no tool_choice
+                extract: async (r: any) => {
+                    const value = await repairAndValidate<T>(
+                        mode.validatingSchema,
+                        (r?.text ?? '') as string,
+                    );
+                    if (value === undefined) {
+                        throw new Error(
+                            `[structured-output] reroute-json produced no valid object for ${runName}`,
+                        );
+                    }
+                    return value;
+                },
+            },
+        );
+    }
 
     try {
         return await call(mainModel, mainModelName);

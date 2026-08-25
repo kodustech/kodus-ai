@@ -83,8 +83,7 @@ export const googleGeminiModule: ProviderModule = {
             defaults: { temperature: 0, maxOutputTokens: 8192 },
         },
         {
-            id: 'gemini-2.5-pro',
-            displayName: 'Gemini 2.5 Pro',
+            id: 'gemini-2.5-pro', // label derived: "Gemini 2.5 Pro"
             tier: 'other',
             benchmarkScore: 86.8,
             description:

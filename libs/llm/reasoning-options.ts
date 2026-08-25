@@ -223,28 +223,3 @@ export function buildReasoningProviderOptions(
         effort ?? 'none',
     );
 }
-
-/**
- * Whether a STRUCTURED-output call on this provider/model uses forced tool_choice
- * (the Anthropic protocol), which the API rejects when thinking is enabled. The
- * model-assembly layer consults this to suppress reasoning on structured calls so
- * `tool_choice: 'required'` stays valid. Provider-agnostic: one registry lookup,
- * the module answers per its own protocol (native Anthropic + Kimi/GLM = true;
- * Bedrock/Vertex only for Claude ids; OpenAI/Gemini/others = false). Unknown /
- * reasoning-less provider ⇒ false.
- */
-export function structuredOutputForcesToolChoice(
-    provider?: BYOKProvider | string,
-    modelName?: string,
-): boolean {
-    if (!provider) return false;
-    const id = String(provider);
-    if (!REGISTRY.has(id)) return false;
-    const providerModule = REGISTRY.get(id);
-    if (!providerModule.structuredOutputForcesToolChoice) return false;
-    return providerModule.structuredOutputForcesToolChoice({
-        provider: id,
-        model: modelName ?? '',
-        apiKey: '',
-    } as ProviderBuildConfig);
-}

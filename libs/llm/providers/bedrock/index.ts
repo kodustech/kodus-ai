@@ -21,9 +21,10 @@ import type {
     ProviderModule,
 } from '../kernel/types';
 import {
-    normalizeSdkResult,
-    normalizeSdkUsage,
-} from '../kernel/usage';
+    NON_REASONING_TRAITS,
+    type ModelReasoningTraits,
+} from '../kernel/reasoning-traits';
+import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 
 export const bedrockModule: ProviderModule = {
     id: 'amazon_bedrock',
@@ -68,18 +69,28 @@ export const bedrockModule: ProviderModule = {
     // Anthropic (per the AI SDK Bedrock docs). Non-Anthropic Bedrock models cache
     // implicitly / not at all, so they get no inline hint. 5-minute ephemeral only
     // (the 1h TTL is gated to specific Claude 4.5 deployments — not assumed here).
-    systemCacheControl(cfg: ProviderBuildConfig): Record<string, unknown> | undefined {
+    systemCacheControl(
+        cfg: ProviderBuildConfig,
+    ): Record<string, unknown> | undefined {
         return isAnthropicModel(cfg.model)
             ? anthropicEphemeralCacheHint()
             : undefined;
     },
 
-    // Claude-on-Bedrock speaks the Anthropic protocol → structured output forces
-    // tool_choice, incompatible with thinking. Non-Anthropic Bedrock families
-    // (Nova/Llama) don't. Defensive: Bedrock has no reasoning() today (thinking
-    // off), but this keeps the suppression correct if one is ever added.
-    structuredOutputForcesToolChoice(cfg: ProviderBuildConfig): boolean {
-        return isAnthropicModel(cfg.model);
+    // Claude-on-Bedrock: extended thinking is OPT-IN (reasoning_config) → OFF by
+    // default, so a structured call is valid as-is; forced tool_choice still
+    // rejects thinking IF one enables it. Non-Anthropic families (Nova/Llama)
+    // neither think nor force → the safe default.
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        if (!isAnthropicModel(cfg.model)) {
+            return NON_REASONING_TRAITS;
+        }
+        return {
+            thinksByDefault: false,
+            canDisableThinking: true,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: true,
+        };
     },
 
     // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
@@ -94,10 +105,35 @@ export const bedrockModule: ProviderModule = {
     normalize: normalizeSdkResult,
 
     uiFields: [
-        { key: 'awsBearerToken', label: 'Bedrock API key (bearer)', type: 'password', required: false, scope: 'settings' },
-        { key: 'awsAccessKeyId', label: 'AWS access key id', type: 'text', required: false, scope: 'settings' },
-        { key: 'awsSecretAccessKey', label: 'AWS secret access key', type: 'password', required: false, scope: 'settings' },
-        { key: 'awsRegion', label: 'AWS region', type: 'text', required: false, scope: 'settings', placeholder: 'us-east-1' },
+        {
+            key: 'awsBearerToken',
+            label: 'Bedrock API key (bearer)',
+            type: 'password',
+            required: false,
+            scope: 'settings',
+        },
+        {
+            key: 'awsAccessKeyId',
+            label: 'AWS access key id',
+            type: 'text',
+            required: false,
+            scope: 'settings',
+        },
+        {
+            key: 'awsSecretAccessKey',
+            label: 'AWS secret access key',
+            type: 'password',
+            required: false,
+            scope: 'settings',
+        },
+        {
+            key: 'awsRegion',
+            label: 'AWS region',
+            type: 'text',
+            required: false,
+            scope: 'settings',
+            placeholder: 'us-east-1',
+        },
     ],
     modelListing: bedrockModelListing,
 };

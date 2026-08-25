@@ -31,6 +31,10 @@ import type {
     ReasoningEffort,
 } from '../kernel/types';
 import {
+    resolveCompatibleReasoningTraits,
+    type ModelReasoningTraits,
+} from '../kernel/reasoning-traits';
+import {
     normalizeSdkResult,
     normalizeSdkUsage,
 } from '../kernel/usage';
@@ -169,13 +173,51 @@ export const openaiModule: ProviderModule = {
         cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions {
-        if (effort === 'none') return {};
+        if (effort === 'none') {
+            // A Kimi/Moonshot model served over `openai_compatible` (a user can
+            // point openai_compatible at api.moonshot.ai) THINKS BY DEFAULT — so
+            // "off" must be said out loud here too, or the user who picked Off
+            // still pays for thinking. Gate on the never-downgrade (Kimi/Moonshot)
+            // family so we never send a `thinking` param to an unknown upstream
+            // (self-hosted Llama/vLLM) that would reject it. Note this transport
+            // does structured via response_format (not forced tool_choice), so it
+            // never hit the tool_choice+thinking 400 — this is a cost/consistency
+            // fix, not a crash fix.
+            // Only the Kimi/Moonshot family is confirmed to accept the openai-
+            // compatible `thinking` toggle; and never send `disabled` to an
+            // always-thinking variant (k2.7-code/k3) that rejects it — decide via
+            // the shared traits.
+            if (
+                (cfg.provider as string) === 'openai_compatible' &&
+                isNeverDowngradeModel(cfg.model) &&
+                resolveCompatibleReasoningTraits(cfg.model).canDisableThinking
+            ) {
+                return { openaiCompatible: { thinking: { type: 'disabled' } } };
+            }
+            return {};
+        }
         // openai_compatible upstreams (Kimi/GLM/…) take the standard
         // openai-compatible `thinking` param; native OpenAI takes reasoningEffort.
         if ((cfg.provider as string) === 'openai_compatible') {
             return { openaiCompatible: { thinking: { type: 'enabled' } } };
         }
         return { openai: { reasoningEffort: effort } };
+    },
+
+    // Per-model reasoning facts. openai_compatible thinking models (Kimi/DeepSeek)
+    // come from the shared table; native OpenAI reasons on the o-series/gpt-5 line
+    // and always does structured via response_format (no forced tool_choice), so
+    // planStructuredCall is always 'as-is' for it.
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        if ((cfg.provider as string) === 'openai_compatible') {
+            return resolveCompatibleReasoningTraits(cfg.model);
+        }
+        return {
+            thinksByDefault: isOpenAiReasoner(cfg.model),
+            canDisableThinking: true,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: false,
+        };
     },
 
     normalizeUsage: normalizeSdkUsage,
