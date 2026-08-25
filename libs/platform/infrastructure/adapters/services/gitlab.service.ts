@@ -8,6 +8,7 @@ import {
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import pLimit from 'p-limit';
 import { v4 as uuidv4 } from 'uuid';
 
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
@@ -96,6 +97,27 @@ import {
     EMPTY_REPO_SEED_CONTENT,
     EMPTY_REPO_SEED_PATH,
 } from './code-management-defaults.constants';
+import {
+    isGitlabRateLimitError,
+    toGitlabRateLimitError,
+} from './gitlab-rate-limit.util';
+
+/**
+ * Award emojis are the one reaction source that costs a request per comment —
+ * GitLab has no inline count, unlike GitHub. A merge request with 40 Kody
+ * comments used to fire 40 simultaneous requests, and the reactions cron does
+ * that for every PR at once. Capped here so the per-PR burst is bounded
+ * regardless of how many comments Kody left.
+ */
+const AWARD_EMOJI_CONCURRENCY = 5;
+
+/**
+ * gitbeaker's `.all()` follows the `link` header until the collection is
+ * exhausted, and without `perPage` that walks GitLab's default of 20 per page
+ * — a merge request with 200 discussions costs 10 sequential round trips
+ * instead of 2. 100 is the ceiling GitLab accepts.
+ */
+const GITLAB_MAX_PER_PAGE = 100;
 
 @Injectable()
 @IntegrationServiceDecorator(PlatformType.GITLAB, 'codeManagement')
@@ -312,9 +334,7 @@ export class GitlabService implements Omit<
         });
     }
 
-    async listIssues(
-        params: ListIssuesParams,
-    ): Promise<CodeManagementIssue[]> {
+    async listIssues(params: ListIssuesParams): Promise<CodeManagementIssue[]> {
         const { organizationAndTeamData, repository, filters = {} } = params;
 
         const authDetail = await this.getAuthDetails(organizationAndTeamData);
@@ -336,9 +356,7 @@ export class GitlabService implements Omit<
             labels: filters.labels?.length
                 ? filters.labels.join(',')
                 : undefined,
-            assigneeUsername: filters.assignee
-                ? [filters.assignee]
-                : undefined,
+            assigneeUsername: filters.assignee ? [filters.assignee] : undefined,
             updatedAfter: filters.since,
             page: filters.page,
             perPage: Math.min(Math.max(1, filters.perPage ?? 30), 100),
@@ -2867,6 +2885,7 @@ export class GitlabService implements Omit<
             const comments = await gitlabAPI.MergeRequestDiscussions.all(
                 filters.repository.id,
                 filters.pullRequestNumber,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             const originalCommit = comments?.find(
@@ -2914,6 +2933,15 @@ export class GitlabService implements Omit<
                     ...params,
                 },
             });
+
+            // Listing discussions is one call per PR, so a rate limit here is
+            // just as much a "back off" signal as one on the award emojis.
+            // Rethrowing it raw would leave the caller's breaker blind to it
+            // and it would count as an ordinary per-PR failure.
+            if (isGitlabRateLimitError(error)) {
+                throw toGitlabRateLimitError(error, organizationAndTeamData);
+            }
+
             throw error;
         }
     }
@@ -3000,42 +3028,97 @@ export class GitlabService implements Omit<
         );
         const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
 
+        const limit = pLimit(AWARD_EMOJI_CONCURRENCY);
+        let rateLimited = false;
+
         const commentsWithReactions = await Promise.all(
             comments
                 .filter((comment) => comment.notes?.length > 0)
-                .map(async (comment) => {
-                    try {
-                        const awards =
-                            await gitlabAPI.MergeRequestNoteAwardEmojis.all(
-                                comment.notes[0].project_id,
-                                comment.notes[0].noteable_iid,
-                                comment.notes[0].id,
-                            );
+                .map((comment) =>
+                    limit(async () => {
+                        // Whatever is still queued when the first rate-limit
+                        // lands would hit the same exhausted bucket, so it
+                        // drains without issuing a request.
+                        if (rateLimited) {
+                            return comment;
+                        }
 
-                        const thumbsUp = awards.filter((a) =>
-                            a.name.startsWith('thumbsup'),
-                        ).length;
-                        const thumbsDown = awards.filter((a) =>
-                            a.name.startsWith('thumbsdown'),
-                        ).length;
+                        try {
+                            const awards =
+                                await gitlabAPI.MergeRequestNoteAwardEmojis.all(
+                                    comment.notes[0].project_id,
+                                    comment.notes[0].noteable_iid,
+                                    comment.notes[0].id,
+                                );
 
-                        return {
-                            ...comment,
-                            notes: [
-                                {
-                                    ...comment.notes[0],
-                                    reactions: {
-                                        thumbsUp: thumbsUp,
-                                        thumbsDown: thumbsDown,
+                            const thumbsUp = awards.filter((a) =>
+                                a.name.startsWith('thumbsup'),
+                            ).length;
+                            const thumbsDown = awards.filter((a) =>
+                                a.name.startsWith('thumbsdown'),
+                            ).length;
+
+                            return {
+                                ...comment,
+                                notes: [
+                                    {
+                                        ...comment.notes[0],
+                                        reactions: {
+                                            thumbsUp: thumbsUp,
+                                            thumbsDown: thumbsDown,
+                                        },
                                     },
+                                ],
+                            };
+                        } catch (error) {
+                            // A rate limit is about the instance, not this
+                            // note — swallowing it here is what let the cron
+                            // keep hammering a GitLab that was already
+                            // refusing requests. Everything else stays
+                            // isolated to its own comment, as before.
+                            if (isGitlabRateLimitError(error)) {
+                                rateLimited = true;
+
+                                // The use case only knows the PR. The note and
+                                // project below are the last identifiers before
+                                // the error is translated and loses them.
+                                this.logger.warn({
+                                    message:
+                                        'GitLab refused the award emoji request rate',
+                                    context: GitlabService.name,
+                                    error,
+                                    metadata: {
+                                        organizationId:
+                                            organizationAndTeamData?.organizationId,
+                                        teamId: organizationAndTeamData?.teamId,
+                                        projectId: comment.notes[0]?.project_id,
+                                        noteId: comment.notes[0]?.id,
+                                        prNumber: pr?.pull_number,
+                                    },
+                                });
+
+                                throw toGitlabRateLimitError(
+                                    error,
+                                    organizationAndTeamData,
+                                );
+                            }
+
+                            this.logger.warn({
+                                message:
+                                    'Failed to fetch award emojis for note',
+                                context: GitlabService.name,
+                                error,
+                                metadata: {
+                                    organizationId:
+                                        organizationAndTeamData?.organizationId,
+                                    noteId: comment.notes[0]?.id,
+                                    prNumber: pr?.pull_number,
                                 },
-                            ],
-                        };
-                    } catch (error) {
-                        console.error('Error fetching awards:', error);
-                        return comment;
-                    }
-                }),
+                            });
+                            return comment;
+                        }
+                    }),
+                ),
         );
 
         return commentsWithReactions
@@ -3391,7 +3474,8 @@ export class GitlabService implements Omit<
             }
         } catch (cacheError) {
             this.logger.warn({
-                message: 'Error reading project path from cache, continuing with API call',
+                message:
+                    'Error reading project path from cache, continuing with API call',
                 context: GitlabService.name,
                 serviceName: 'GitlabService resolveProjectPathWithNamespace',
                 error: cacheError,
@@ -3724,9 +3808,8 @@ export class GitlabService implements Omit<
                 });
             }
 
-            const listOfCriticalIssues = this.getListOfCriticalIssues(
-                criticalComments,
-            );
+            const listOfCriticalIssues =
+                this.getListOfCriticalIssues(criticalComments);
 
             const requestChangeBodyTitle =
                 '# Found critical issues please review the requested changes';
@@ -3758,9 +3841,7 @@ export class GitlabService implements Omit<
         }
     }
 
-    private getListOfCriticalIssues(
-        criticalComments: CommentResult[],
-    ): string {
+    private getListOfCriticalIssues(criticalComments: CommentResult[]): string {
         return criticalComments
             .map((comment) => {
                 const summary =
@@ -3787,6 +3868,7 @@ export class GitlabService implements Omit<
             const discussions = await gitlabAPI.MergeRequestDiscussions.all(
                 repository.id,
                 prNumber,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             return discussions.flatMap((discussion) => discussion.notes);
@@ -4218,6 +4300,7 @@ export class GitlabService implements Omit<
             const discussions = await gitlabAPI.MergeRequestDiscussions.all(
                 projectId,
                 mergeRequestIid,
+                { perPage: GITLAB_MAX_PER_PAGE },
             );
 
             const validRequestReviews = discussions
@@ -5164,9 +5247,7 @@ ${copyPrompt}
         return null;
     }
 
-    async getUsersByUsername(
-        _params: any,
-    ): Promise<Map<string, any> | null> {
+    async getUsersByUsername(_params: any): Promise<Map<string, any> | null> {
         // Not implemented for GitLab — callers fall back to per-user
         // `getUserByUsername`.
         return null;

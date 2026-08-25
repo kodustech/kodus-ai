@@ -9,6 +9,7 @@ describe('CodeReviewFeedbackService', () => {
     beforeEach(() => {
         repository = {
             bulkCreate: jest.fn(),
+            bulkUpsertReactions: jest.fn(),
             findById: jest.fn(),
             findOne: jest.fn(),
             find: jest.fn(),
@@ -92,64 +93,6 @@ describe('CodeReviewFeedbackService', () => {
                 ['sug-001', 'sug-002'],
                 true,
             );
-        });
-    });
-
-    describe('bulkCreateTransformed', () => {
-        it('should build objects with default reactions and syncedEmbeddedSuggestions=false', async () => {
-            repository.bulkCreate.mockResolvedValue([]);
-
-            const orgAndTeam = {
-                organizationId: 'org-001',
-                teamId: 'team-001',
-            };
-            const comments = [
-                {
-                    id: 100,
-                    pullRequestReviewId: 'pr-review-200',
-                    suggestionId: 'sug-001',
-                },
-                {
-                    id: 101,
-                    suggestionId: 'sug-002',
-                },
-            ];
-            const pullRequest = { uuid: 'pr-uuid-001', number: 42 };
-            const repoData = { id: 'repo-001', fullName: 'org/repo' };
-
-            await service.bulkCreateTransformed(
-                orgAndTeam,
-                comments,
-                pullRequest,
-                repoData,
-            );
-
-            expect(repository.bulkCreate).toHaveBeenCalledWith([
-                {
-                    comment: { id: 100, pullRequestReviewId: 'pr-review-200' },
-                    suggestionId: 'sug-001',
-                    pullRequest: {
-                        id: 'pr-uuid-001',
-                        number: 42,
-                        repository: { id: 'repo-001', fullName: 'org/repo' },
-                    },
-                    organizationId: 'org-001',
-                    reactions: { thumbsUp: 0, thumbsDown: 0 },
-                    syncedEmbeddedSuggestions: false,
-                },
-                {
-                    comment: { id: 101, pullRequestReviewId: undefined },
-                    suggestionId: 'sug-002',
-                    pullRequest: {
-                        id: 'pr-uuid-001',
-                        number: 42,
-                        repository: { id: 'repo-001', fullName: 'org/repo' },
-                    },
-                    organizationId: 'org-001',
-                    reactions: { thumbsUp: 0, thumbsDown: 0 },
-                    syncedEmbeddedSuggestions: false,
-                },
-            ]);
         });
     });
 });

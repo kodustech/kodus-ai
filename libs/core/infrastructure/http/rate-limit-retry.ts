@@ -22,6 +22,7 @@
  */
 
 import { createLogger } from '@libs/core/log/logger';
+import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 
 const logger = createLogger('rate-limit-retry');
 
@@ -62,12 +63,7 @@ export async function with429Retry<T>(
                 });
                 throw err;
             }
-            const delayMs = resolveDelayMs(
-                err,
-                attempt,
-                baseDelay,
-                maxDelay,
-            );
+            const delayMs = resolveDelayMs(err, attempt, baseDelay, maxDelay);
             logger.warn({
                 message: `${label}: 429 received, sleeping ${delayMs}ms before retry ${attempt + 2}/${maxAttempts}`,
                 context: 'with429Retry',
@@ -95,8 +91,14 @@ export function is429Error(err: unknown): boolean {
     ) {
         return true;
     }
-    const message =
-        typeof anyErr.message === 'string' ? anyErr.message : '';
+    // An adapter that already classified the failure as rate-limited has
+    // done this detection for us, and its `name` is no longer the SDK's.
+    // Without this, a translated error falls through to the text match
+    // below and only survives when the original status happened to be 429
+    // — a translated 502 would silently lose its retry.
+    if (isRateLimitError(err)) return true;
+
+    const message = typeof anyErr.message === 'string' ? anyErr.message : '';
     const name = typeof anyErr.name === 'string' ? anyErr.name : '';
     // @gitbeaker throws `GitbeakerRetryError` with status code in the
     // message text; bitbucket SDK throws `HTTPError: Too Many Requests`.
@@ -131,12 +133,7 @@ export function isTransientFetchError(err: unknown): boolean {
     // UND_ERR_* identifier in `.code` while the message is prose
     // ("Headers Timeout Error"), and when thrown through fetch() the
     // useful detail lives on `.cause`.
-    const haystack = [
-        anyErr.message,
-        anyErr.code,
-        cause.message,
-        cause.code,
-    ]
+    const haystack = [anyErr.message, anyErr.code, cause.message, cause.code]
         .filter((v): v is string => typeof v === 'string')
         .join(' ');
     return /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang ?up|network error|Recv failure|operation was aborted|UND_ERR|HeadersTimeout|BodyTimeout|ConnectTimeout|TimeoutError|Timeout Error/i.test(
@@ -168,7 +165,9 @@ function parseRetryAfter(err: unknown): number | null {
             ?.headers;
     if (!headers) return null;
     const raw =
-        headers['retry-after'] ?? headers['Retry-After'] ?? headers['RETRY-AFTER'];
+        headers['retry-after'] ??
+        headers['Retry-After'] ??
+        headers['RETRY-AFTER'];
     if (typeof raw !== 'string' && typeof raw !== 'number') return null;
     const asNumber = Number(raw);
     if (Number.isFinite(asNumber) && asNumber >= 0) {

@@ -1,3 +1,5 @@
+import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+
 import { is429Error, isTransientFetchError } from './rate-limit-retry';
 
 /**
@@ -25,7 +27,10 @@ describe('isTransientFetchError', () => {
         ['ECONNRESET', { message: 'read ECONNRESET' }],
         ['ECONNREFUSED', { message: 'connect ECONNREFUSED 127.0.0.1:443' }],
         ['ETIMEDOUT', { message: 'connect ETIMEDOUT' }],
-        ['EAI_AGAIN (DNS blip)', { message: 'getaddrinfo EAI_AGAIN api.github.com' }],
+        [
+            'EAI_AGAIN (DNS blip)',
+            { message: 'getaddrinfo EAI_AGAIN api.github.com' },
+        ],
         ['socket hang up', { message: 'socket hang up' }],
         ['socket hangup (no space)', { message: 'socket hangup' }],
         ['network error', { message: 'network error occurred' }],
@@ -66,7 +71,10 @@ describe('isTransientFetchError', () => {
         ],
         [
             '.cause carries the undici error code, not message',
-            { message: 'fetch failed', cause: { code: 'UND_ERR_HEADERS_TIMEOUT' } },
+            {
+                message: 'fetch failed',
+                cause: { code: 'UND_ERR_HEADERS_TIMEOUT' },
+            },
         ],
     ];
 
@@ -87,7 +95,10 @@ describe('isTransientFetchError', () => {
         // The exact ambiguity this function exists to resolve: a caller
         // must NOT treat "the PR really has no commits" as transient just
         // because the message happens to be generic.
-        ['a business-logic "no commits found" error', new Error('No commits found for PR')],
+        [
+            'a business-logic "no commits found" error',
+            new Error('No commits found for PR'),
+        ],
         // Deliberate: only `.message`/`.code` (own + `.cause`) are
         // inspected, never `.name` — an error that sets ONLY `.name` to
         // something timeout-shaped, with no matching text in the message,
@@ -110,9 +121,18 @@ describe('is429Error', () => {
         ['statusCode: 429', { statusCode: 429 }],
         ['response.status: 429', { response: { status: 429 } }],
         ['response.statusCode: 429', { response: { statusCode: 429 } }],
-        ['message mentions 429', { message: 'Request failed with status code 429' }],
-        ['message: Too Many Requests (bitbucket SDK shape)', { message: 'HTTPError: Too Many Requests' }],
-        ['name: GitbeakerRetryError (gitlab SDK shape)', { name: 'GitbeakerRetryError', message: 'retry exhausted' }],
+        [
+            'message mentions 429',
+            { message: 'Request failed with status code 429' },
+        ],
+        [
+            'message: Too Many Requests (bitbucket SDK shape)',
+            { message: 'HTTPError: Too Many Requests' },
+        ],
+        [
+            'name: GitbeakerRetryError (gitlab SDK shape)',
+            { name: 'GitbeakerRetryError', message: 'retry exhausted' },
+        ],
     ];
 
     it.each(rateLimitedCases)('matches: %s', (_label, err) => {
@@ -124,10 +144,47 @@ describe('is429Error', () => {
         ['status: 500', { status: 500 }],
         ['status: 404', { status: 404 }],
         ['a plain transient fetch failure', new TypeError('fetch failed')],
-        ['a message containing an unrelated number', { message: 'retrying in 4290ms' }],
+        [
+            'a message containing an unrelated number',
+            { message: 'retrying in 4290ms' },
+        ],
     ];
 
     it.each(notRateLimitedCases)('does NOT match: %s', (_label, err) => {
         expect(is429Error(err)).toBe(false);
+    });
+
+    /**
+     * An adapter may classify the failure itself before it reaches a
+     * `with429Retry` caller — GitlabService does this in
+     * `getPullRequestReviewComment`, which generate-kody-rules wraps in
+     * `with429Retry`. Translating renames the error, so matching on the SDK
+     * shape alone silently drops the retry for anything whose original
+     * status was not literally 429.
+     */
+    describe('errors already classified as rate-limited by an adapter', () => {
+        it('matches a translated 429', () => {
+            expect(
+                is429Error(
+                    new RateLimitError({
+                        resetAt: new Date('2026-08-21T00:01:00.000Z'),
+                        message:
+                            'GitLab refused the request rate: Could not successfully complete this request after 10 retries, last status code: 429.',
+                    }),
+                ),
+            ).toBe(true);
+        });
+
+        it('matches a translated 502, which has no 429 anywhere in it', () => {
+            const translated = new RateLimitError({
+                resetAt: new Date('2026-08-21T00:01:00.000Z'),
+                message:
+                    'GitLab refused the request rate: Could not successfully complete this request after 10 retries, last status code: 502.',
+            });
+
+            expect(translated.name).toBe('RateLimitError');
+            expect(/\b429\b/.test(translated.message)).toBe(false);
+            expect(is429Error(translated)).toBe(true);
+        });
     });
 });

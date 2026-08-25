@@ -6,12 +6,10 @@ import { CODE_REVIEW_FEEDBACK_REPOSITORY_TOKEN } from '@libs/code-review/domain/
 import { ICodeReviewFeedbackRepository } from '@libs/code-review/domain/codeReviewFeedback/contracts/codeReviewFeedback.repository';
 import { ICodeReviewFeedbackService } from '@libs/code-review/domain/codeReviewFeedback/contracts/codeReviewFeedback.service.contract';
 import { CodeReviewFeedbackEntity } from '@libs/code-review/domain/codeReviewFeedback/entities/codeReviewFeedback.entity';
-import { ICodeReviewFeedback } from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
 import {
-    IPullRequests,
-    IRepository,
-} from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
-import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
+    ICodeReviewFeedback,
+    ICollectedReaction,
+} from '@libs/code-review/domain/codeReviewFeedback/interfaces/codeReviewFeedback.interface';
 
 @Injectable()
 export class CodeReviewFeedbackService implements ICodeReviewFeedbackService {
@@ -24,6 +22,10 @@ export class CodeReviewFeedbackService implements ICodeReviewFeedbackService {
         feedbacks: Omit<ICodeReviewFeedback, 'uuid'>[],
     ): Promise<CodeReviewFeedbackEntity[]> {
         return this.codeReviewFeedbackRepository.bulkCreate(feedbacks);
+    }
+
+    bulkUpsertReactions(reactions: ICollectedReaction[]): Promise<number> {
+        return this.codeReviewFeedbackRepository.bulkUpsertReactions(reactions);
     }
 
     findById(uuid: string): Promise<CodeReviewFeedbackEntity | null> {
@@ -62,38 +64,6 @@ export class CodeReviewFeedbackService implements ICodeReviewFeedbackService {
 
     getNativeCollection(): Promise<Collection> {
         return this.codeReviewFeedbackRepository.getNativeCollection();
-    }
-
-    async bulkCreateTransformed(
-        organizationAndTeamData: OrganizationAndTeamData,
-        comments: {
-            id: number;
-            pullRequestReviewId?: string;
-            suggestionId: string;
-        }[],
-        pullRequest: Pick<IPullRequests, 'uuid' | 'number'>,
-        repository: Pick<IRepository, 'id' | 'fullName'>,
-    ): Promise<CodeReviewFeedbackEntity[]> {
-        const codeReviewFeedbacks = comments.map((comment) => ({
-            comment: {
-                id: comment.id,
-                pullRequestReviewId: comment?.pullRequestReviewId,
-            },
-            suggestionId: comment.suggestionId,
-            pullRequest: {
-                id: pullRequest.uuid,
-                number: pullRequest.number,
-                repository: {
-                    id: repository.id,
-                    fullName: repository.fullName,
-                },
-            },
-            organizationId: organizationAndTeamData.organizationId,
-            reactions: { thumbsUp: 0, thumbsDown: 0 },
-            syncedEmbeddedSuggestions: false,
-        }));
-
-        return this.bulkCreate(codeReviewFeedbacks);
     }
 
     async updateSyncedSuggestionsFlag(
