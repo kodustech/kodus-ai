@@ -489,6 +489,10 @@ export function buildAgentTools(
                 // Strip leading slash — paths are relative to repo root
                 filePath = filePath.replace(/^\/+/, '');
                 if (!filePath) {
+                    logger.warn({
+                        message: 'ReadFile failed: path is required',
+                        context: 'AgentTools',
+                    });
                     return 'Error: path is required';
                 }
 
@@ -589,6 +593,11 @@ export function buildAgentTools(
                     return base;
                 }
                 if (!result && result !== '') {
+                    logger.warn({
+                        message: `ReadFile failed: returned ${typeof result} for ${filePath}`,
+                        context: 'AgentTools',
+                        metadata: { filePath, startLine, endLine },
+                    });
                     return `Error: readFile returned ${typeof result} for ${filePath}`;
                 }
                 // An empty string means the read produced no content: either a

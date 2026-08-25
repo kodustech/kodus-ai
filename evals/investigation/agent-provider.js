@@ -226,9 +226,9 @@ async function createModel(config) {
             return buildCodexSubscriptionModel(spec.codexModel || modelId);
         }
 
-        const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+        const { buildModelFromSlot } = require('../../libs/llm/byok-to-vercel.ts');
         applyModelEnv(modelId);
-        return withReasoningEffort(byokToVercelModel(undefined, 'main', {}), modelId);
+        return withReasoningEffort(buildModelFromSlot(undefined, {}, modelId), modelId);
     }
 
     // Env overrides so ANY model runs from one yaml (no per-provider config):
@@ -477,14 +477,53 @@ class ReplayRemoteCommands {
 }
 
 function buildCurrentPrompts(caseData) {
-    const { GeneralistAgentProvider } = require(
-        path.join(
-            __dirname,
-            '../../libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts',
-        ),
-    );
+    const category = process.env.RECALL_CATEGORY;
+    let ProviderClass;
+    if (category === 'duplicate_logic') {
+        ProviderClass = require(
+            path.join(
+                __dirname,
+                '../../libs/code-review/infrastructure/agents/providers/duplicate-logic-agent.provider.ts',
+            ),
+        ).DuplicateLogicAgentProvider;
+    } else {
+        ProviderClass = require(
+            path.join(
+                __dirname,
+                '../../libs/code-review/infrastructure/agents/providers/generalist-agent.provider.ts',
+            ),
+        ).GeneralistAgentProvider;
+    }
 
-    const provider = new GeneralistAgentProvider({}, {}, {});
+    const provider = new ProviderClass({}, {}, {});
+    const callGraphData = parseMaybeJson(caseData.callGraph);
+    if (category === 'duplicate_logic' && callGraphData?.prNodes && callGraphData?.prEdges) {
+        const { pairDuplicateTwinsInGraph, formatDuplicateCandidatesXml } = require(
+            path.join(
+                __dirname,
+                '../../libs/code-review/infrastructure/adapters/services/graph/twin-matcher.helper.ts',
+            ),
+        );
+        const nodes = [...(callGraphData.nodes || []), ...(callGraphData.prNodes || [])];
+        const edges = [...(callGraphData.edges || []), ...(callGraphData.prEdges || [])];
+        const fileChanges = (normalizeChangedFiles(parseMaybeJson(caseData.changedFiles)) || []).map((f) => ({
+            filename: f.filename,
+            patch: f.patchWithLinesStr || f.patch,
+        }));
+
+        pairDuplicateTwinsInGraph(
+            { nodes, edges },
+            callGraphData.prEdges || [],
+            callGraphData.prNodes || [],
+            fileChanges,
+        );
+
+        const twins = nodes.filter((n) => n.is_duplicate);
+        if (twins.length > 0) {
+            callGraphData.duplicatesBlock = formatDuplicateCandidatesXml(twins);
+        }
+    }
+
     const input = {
         organizationAndTeamData: {
             organizationId: 'eval-org',
@@ -505,7 +544,7 @@ function buildCurrentPrompts(caseData) {
         maxSteps: caseData.maxSteps || 12,
         requestedCategories:
             normalizeRequestedCategories(caseData.requestedCategories),
-        callGraph: parseMaybeJson(caseData.callGraph),
+        callGraph: callGraphData,
         baseBranch: caseData.baseBranch || 'main',
     };
 
@@ -640,6 +679,7 @@ class InvestigationAgentProvider {
             );
 
             stage = 'run-agent-loop';
+            
             // runAgentLoop(input, secrets): `secrets` was split out of `input` so
             // span I/O never records keys/services. The deterministic tool replay
             // (remoteCommands) lives in `secrets` now — passing it in `input` (the

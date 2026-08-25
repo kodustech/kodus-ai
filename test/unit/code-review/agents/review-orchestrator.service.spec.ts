@@ -17,6 +17,7 @@ describe('ReviewOrchestratorService', () => {
     let mockSecurityAgent: any;
     let mockPerformanceAgent: any;
     let mockGeneralistAgent: any;
+    let mockDuplicateLogicAgent: any;
 
     const makeOutput = (
         agentName: string,
@@ -105,11 +106,18 @@ describe('ReviewOrchestratorService', () => {
             ),
         };
 
+        mockDuplicateLogicAgent = {
+            execute: jest.fn().mockResolvedValue(
+                makeOutput('duplicate-logic-agent', []),
+            ),
+        };
+
         orchestrator = new ReviewOrchestratorService(
             mockBugAgent,
             mockSecurityAgent,
             mockPerformanceAgent,
             mockGeneralistAgent,
+            mockDuplicateLogicAgent,
         );
     });
 
@@ -130,17 +138,31 @@ describe('ReviewOrchestratorService', () => {
         });
 
         it('should dispatch all agents when all categories enabled', async () => {
+            mockDuplicateLogicAgent.execute.mockResolvedValue(
+                makeOutput('duplicate-logic-agent', [
+                    {
+                        relevantFile: 'src/index.ts',
+                        suggestionContent: 'Duplicate logic warning',
+                        label: 'duplicate_logic',
+                        severity: 'medium',
+                        relevantLinesStart: 30,
+                        relevantLinesEnd: 35,
+                    },
+                ]),
+            );
+
             const result = await orchestrator.execute({
                 ...baseInput,
                 reviewMode: 'deep',
-                reviewOptions: { bug: true, security: true, performance: true },
+                reviewOptions: { bug: true, security: true, performance: true, duplicate_logic: true },
             });
 
             expect(mockBugAgent.execute).toHaveBeenCalledTimes(1);
             expect(mockSecurityAgent.execute).toHaveBeenCalledTimes(1);
             expect(mockPerformanceAgent.execute).toHaveBeenCalledTimes(1);
-            expect(result.suggestions).toHaveLength(3);
-            expect(result.agentResults).toHaveLength(3);
+            expect(mockDuplicateLogicAgent.execute).toHaveBeenCalledTimes(1);
+            expect(result.suggestions).toHaveLength(4);
+            expect(result.agentResults).toHaveLength(4);
         });
 
         it('should skip disabled categories', async () => {

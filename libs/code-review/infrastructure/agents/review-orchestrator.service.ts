@@ -1,7 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
-import { Injectable, Optional } from '@nestjs/common';
-
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
     CodeSuggestion,
     ReviewOptions,
@@ -12,10 +11,8 @@ import { SecurityAgentProvider } from '@libs/code-review/infrastructure/agents/p
 import { PerformanceAgentProvider } from '@libs/code-review/infrastructure/agents/providers/performance-agent.provider';
 import { GeneralistAgentProvider } from '@libs/code-review/infrastructure/agents/providers/generalist-agent.provider';
 import { KodyRulesAgentProvider } from '@libs/code-review/infrastructure/agents/providers/kody-rules-agent.provider';
-import {
-    ReviewAgentInput,
-    ReviewAgentOutput,
-} from '@libs/code-review/infrastructure/agents/review-agent.contract';
+import { DUPLICATE_LOGIC_AGENT_TOKEN, ReviewAgentInput, ReviewAgentOutput } from './review-agent.contract';
+import { BaseCodeReviewAgentProvider } from './providers/base-code-review-agent.provider';
 import {
     dedupReviewWarnings,
     type ReviewWarning,
@@ -75,6 +72,7 @@ export class ReviewOrchestratorService {
         'bug': 4,
         'security': 3,
         'performance': 3,
+        'duplicate_logic': 4,
         'kody-rules': 4,
     };
     private static readonly NORMAL_MODE_MAX_STEPS: Record<string, number> = {
@@ -82,6 +80,7 @@ export class ReviewOrchestratorService {
         'bug': 20,
         'security': 12,
         'performance': 12,
+        'duplicate_logic': 12,
         'kody-rules': 20,
     };
     private static readonly DEEP_MODE_MAX_STEPS = 100;
@@ -91,6 +90,8 @@ export class ReviewOrchestratorService {
         private readonly securityAgent: SecurityAgentProvider,
         private readonly performanceAgent: PerformanceAgentProvider,
         private readonly generalistAgent: GeneralistAgentProvider,
+        @Inject(DUPLICATE_LOGIC_AGENT_TOKEN)
+        private readonly duplicateLogicAgent: BaseCodeReviewAgentProvider,
         @Optional()
         private readonly kodyRulesAgent?: KodyRulesAgentProvider,
     ) {}
@@ -109,7 +110,8 @@ export class ReviewOrchestratorService {
             reviewOptions.bug !== false && 'bug',
             reviewOptions.security !== false && 'security',
             reviewOptions.performance !== false && 'performance',
-        ].filter(Boolean) as Array<'bug' | 'security' | 'performance'>;
+            reviewOptions.duplicate_logic === true && 'duplicate_logic',
+        ].filter(Boolean) as Array<'bug' | 'security' | 'performance' | 'duplicate_logic'>;
 
         if (agentInput.reviewMode === 'deep') {
             if (enabledCategories.includes('bug')) {
@@ -128,6 +130,12 @@ export class ReviewOrchestratorService {
                 agentTasks.push({
                     name: 'performance',
                     provider: this.performanceAgent,
+                });
+            }
+            if (enabledCategories.includes('duplicate_logic')) {
+                agentTasks.push({
+                    name: 'duplicate_logic',
+                    provider: this.duplicateLogicAgent,
                 });
             }
         } else if (enabledCategories.length > 0) {
