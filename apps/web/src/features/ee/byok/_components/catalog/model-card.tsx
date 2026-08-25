@@ -11,14 +11,9 @@ import {
     TooltipTrigger,
 } from "@components/ui/tooltip";
 import {
-    ActivityIcon,
     AlertTriangleIcon,
     CheckCircleIcon,
     ChevronDownIcon,
-    ClockIcon,
-    DollarSignIcon,
-    FileTextIcon,
-    GaugeIcon,
     PlugIcon,
     StarIcon,
 } from "lucide-react";
@@ -47,12 +42,6 @@ const TIER_BADGE: Record<
     "Most affordable": { variant: "in-progress" },
 };
 
-const SPEED_LABELS: Record<string, string> = {
-    fast: "Fast",
-    medium: "Medium",
-    slow: "Slow",
-};
-
 const PROVIDER_LABELS: Record<string, string> = {
     anthropic: "Anthropic",
     openai: "OpenAI",
@@ -71,44 +60,13 @@ const PROVIDER_LABELS: Record<string, string> = {
     azure: "Azure OpenAI",
 };
 
-function MetricTag({
-    icon,
-    label,
-    tooltip,
-}: {
-    icon: React.ReactNode;
-    label: string;
-    tooltip: string;
-}) {
-    return (
-        <Tooltip>
-            <TooltipTrigger asChild>
-                <span>
-                    <Badge variant="helper" size="xs">
-                        {icon}
-                        {label}
-                    </Badge>
-                </span>
-            </TooltipTrigger>
-            <TooltipPortal>
-                <TooltipContent side="bottom">{tooltip}</TooltipContent>
-            </TooltipPortal>
-        </Tooltip>
-    );
-}
-
-function formatLatency(ms?: number): string | null {
-    if (ms == null) return null;
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
-}
-
 export function CuratedModelCard({
     model,
     isSelected,
     compact = false,
     showConnect = false,
     showScore = true,
+    fillHeight = true,
     onSelect,
 }: {
     model: CuratedModel;
@@ -121,12 +79,13 @@ export function CuratedModelCard({
      *  Routing tab, where the per-task model is chosen. The connect surfaces pass
      *  `false` so wiring up a provider isn't framed as picking the best model. */
     showScore?: boolean;
+    /** Grid usage stretches every card to the tallest in its row (`h-full`).
+     *  Standalone (e.g. as an editor header) pass `false` so the card is its own
+     *  natural height instead of a giant stretched box. */
+    fillHeight?: boolean;
     onSelect?: () => void;
 }) {
     const [showDetails, setShowDetails] = useState(false);
-    const latency = formatLatency(model.latencyP50Ms);
-    const errorRate =
-        model.errorRatePct != null ? `${model.errorRatePct}%` : null;
     const tierBadge = model.recommendationLabel
         ? TIER_BADGE[model.recommendationLabel]
         : undefined;
@@ -145,7 +104,8 @@ export function CuratedModelCard({
         <Card
             color="lv1"
             className={cn(
-                "h-full transition-all",
+                "transition-all",
+                fillHeight && "h-full",
                 cardClickable
                     ? "focus-visible:ring-primary-light cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
                     : "cursor-default",
@@ -166,7 +126,11 @@ export function CuratedModelCard({
                     }
                     : undefined
             }>
-            <CardContent className="flex h-full flex-col gap-3 p-4">
+            <CardContent
+                className={cn(
+                    "flex flex-col gap-3 p-4",
+                    fillHeight && "h-full",
+                )}>
                 {model.recommendationLabel && (
                     <div>
                         <Badge
@@ -218,40 +182,8 @@ export function CuratedModelCard({
                     </p>
                 )}
 
-                <div className="mt-auto flex flex-wrap items-center gap-1.5">
-                    <MetricTag
-                        icon={<ClockIcon size={10} className="mr-1" />}
-                        label={SPEED_LABELS[model.speed] ?? model.speed}
-                        tooltip="Typical response speed"
-                    />
-                    {latency && (
-                        <MetricTag
-                            icon={<GaugeIcon size={10} className="mr-1" />}
-                            label={`p50 ${latency}`}
-                            tooltip="Median response time (p50) observed across production runs"
-                        />
-                    )}
-                    {errorRate && (
-                        <MetricTag
-                            icon={<ActivityIcon size={10} className="mr-1" />}
-                            label={`err ${errorRate}`}
-                            tooltip="Error rate observed across production runs"
-                        />
-                    )}
-                    <MetricTag
-                        icon={<FileTextIcon size={10} className="mr-1" />}
-                        label={model.contextWindow}
-                        tooltip="Context window — how much it can read per request"
-                    />
-                    <MetricTag
-                        icon={<DollarSignIcon size={10} className="mr-1" />}
-                        label={model.costTier}
-                        tooltip="Relative cost — $ is cheapest, $$$ is priciest"
-                    />
-                </div>
-
                 {!compact && hasEvidence && (
-                    <div className="flex flex-col gap-2">
+                    <div className="mt-auto flex flex-col gap-2">
                         <button
                             type="button"
                             aria-expanded={showDetails}
@@ -324,30 +256,16 @@ export function CuratedModelCard({
 }
 
 /**
- * A one-time key for the glyphs on the model cards below it. Tooltips repeat
- * this per-glyph, but a visible legend makes the shorthand ("★ 91", "$$$",
- * "Fast") readable without hovering.
+ * A one-time key for the glyphs on the model cards below it. The only glyph left
+ * on the cards is the quality score, so the legend is empty when it's hidden.
  */
 export function ModelCardLegend({ showScore = true }: { showScore?: boolean }) {
+    if (!showScore) return null;
     return (
         <div className="text-text-tertiary flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-            {showScore && (
-                <span className="flex items-center gap-1">
-                    <StarIcon size={11} />
-                    Quality score /100
-                </span>
-            )}
             <span className="flex items-center gap-1">
-                <ClockIcon size={11} />
-                Typical speed
-            </span>
-            <span className="flex items-center gap-1">
-                <FileTextIcon size={11} />
-                Context window
-            </span>
-            <span className="flex items-center gap-1">
-                <DollarSignIcon size={11} />
-                Relative cost ($–$$$)
+                <StarIcon size={11} />
+                Quality score /100
             </span>
         </div>
     );

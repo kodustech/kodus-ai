@@ -217,9 +217,12 @@ export const ByokAdvancedSettings = ({
                                     }
                                     onValueChange={(value) => {
                                         if (!value) return;
-                                        field.onChange(
-                                            value === "none" ? null : value,
-                                        );
+                                        // "Off" MUST persist as the explicit
+                                        // 'none' effort — mapping it to null made
+                                        // it indistinguishable from "unset", which
+                                        // the read resolves to the catalog default
+                                        // (medium), so Off could never be saved.
+                                        field.onChange(value);
                                     }}>
                                     {THINKING_OPTIONS.map((opt) => {
                                         // Off is always available; every other

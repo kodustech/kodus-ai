@@ -23,7 +23,7 @@ import {
     useSuspenseGetLLMProviders,
 } from "@services/organizationParameters/hooks";
 import { useQueryErrorResetBoundary } from "@tanstack/react-query";
-import { ChevronsUpDownIcon, Loader2Icon } from "lucide-react";
+import { ChevronsUpDownIcon, LockIcon, Loader2Icon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
@@ -32,6 +32,8 @@ import {
     getAnnotationForModel,
     type CuratedModelsCatalog,
 } from "../../../../_data/curated-models.types";
+import { useCatalogModel } from "../../../../_data/catalog-context";
+import { formatModelLabel } from "../../../../_data/model-label";
 
 // Annotations (per-model badges) are not part of the backend catalog and are
 // currently empty — default to none. Re-add via the catalog endpoint if needed.
@@ -40,6 +42,7 @@ const annotations: CuratedModelsCatalog["annotations"] = {};
 export const ByokModelSelect = ({
     excludeIds = [],
     credentialStored = false,
+    lockedInUse = false,
 }: {
     /** Model ids to hide from the dropdown — e.g. models already enabled on this
      *  provider, so "Add model" never offers a duplicate. */
@@ -48,11 +51,21 @@ export const ByokModelSelect = ({
      *  a connected provider). For a live-listing provider this lets the picker
      *  fetch the real list from the saved slot even before the user types a key. */
     credentialStored?: boolean;
+    /** True when the model being edited is referenced by Routing (default /
+     *  fallback / a per-agent override). Swapping its id would silently change
+     *  what runs, so the model field is read-only — tuning stays editable. */
+    lockedInUse?: boolean;
 } = {}) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
     const { providers } = useSuspenseGetLLMProviders();
     const foundProvider = providers.find((p) => p.id === provider);
+
+    // In use in Routing → the model identity is frozen. Show it read-only with a
+    // hint pointing at where to change it, instead of the editable picker.
+    if (lockedInUse) {
+        return <ModelLockedField />;
+    }
 
     // Force manual model entry only when the provider's models can't be
     // auto-listed (custom endpoint whose URL isn't known yet, or a `manual`
@@ -101,6 +114,41 @@ export const ByokModelSelect = ({
 
 // Exported lightweight manual input for external fallbacks
 export const ByokManualModelInput = () => <ModelInput />;
+
+/**
+ * Read-only Model field shown when the edited model is in use in Routing.
+ * The identity is frozen (swapping it would silently repoint Routing), so we
+ * surface the current model with a lock affordance and tell the user where to
+ * change it. Tuning fields around it stay editable.
+ */
+const ModelLockedField = () => {
+    const form = useFormContext<EditKeyForm>();
+    const model = form.watch("model");
+    // Show the friendly label (curated displayName, else derived) — never the raw
+    // id — to match the dropdown and the page title.
+    const curated = useCatalogModel(model);
+    const label = curated?.displayName ?? formatModelLabel(model);
+
+    return (
+        <FormControl.Root>
+            <FormControl.Label>Model</FormControl.Label>
+            <FormControl.Input>
+                <Button
+                    size="md"
+                    variant="helper"
+                    disabled
+                    className="w-full justify-between"
+                    rightIcon={<LockIcon className="-mr-2 size-4 opacity-70" />}>
+                    <span className="truncate font-normal">{label}</span>
+                </Button>
+            </FormControl.Input>
+            <span className="text-text-tertiary mt-1 text-xs">
+                In use in Routing — remove it there to change the model. Tuning
+                below stays editable.
+            </span>
+        </FormControl.Root>
+    );
+};
 
 const ModelInput = ({
     onBackToSelect,
@@ -221,15 +269,15 @@ const ModelPickerPopover = ({
 
                         if (!repository) return 0;
 
-                        if (
-                            repository.name
-                                .toLowerCase()
-                                .includes(search.toLowerCase())
-                        ) {
-                            return 1;
-                        }
-
-                        return 0;
+                        // Match the human name OR the raw id, so typing either
+                        // "Kimi K2.7 Code" or "kimi-k2.7-code" finds the model
+                        // (the label is now derived, so the id no longer matches
+                        // the visible text on its own).
+                        const q = search.toLowerCase();
+                        return repository.name.toLowerCase().includes(q) ||
+                            repository.id.toLowerCase().includes(q)
+                            ? 1
+                            : 0;
                     }}>
                     <CommandInput
                         placeholder="Search models..."

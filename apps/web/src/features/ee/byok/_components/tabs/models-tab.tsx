@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
@@ -32,7 +32,6 @@ import {
     credentialSettingsFromConfig,
     modelFieldsFromConfig,
 } from "../byok-write";
-import { CuratedConnectPanel } from "../catalog/connect-panel";
 import { PROVIDER_LABELS } from "../catalog/model-card";
 import { ConnectProviderFlow } from "../connect-provider-flow";
 import { FirstRunCard } from "../first-run-card";
@@ -56,8 +55,7 @@ type View =
     // `provider` set ⇒ scoped "Add a model to {provider}" (key reused);
     // absent ⇒ "Add another provider" (provider grid first).
     | { mode: "add"; provider?: string }
-    | { mode: "rotate"; credential: BYOKCredential }
-    | { mode: "edit"; model: BYOKModelConfig; credential: BYOKCredential };
+    | { mode: "rotate"; credential: BYOKCredential };
 
 /**
  * The interactive Models tab: first-run single-decision card, or the
@@ -77,12 +75,6 @@ export const ModelsTab = ({
     const [view, setView] = useState<View>({ mode: "list" });
 
     const catalog = useCatalog();
-    // Providers with curated catalog entries — decides inline edit vs. the manual
-    // escape hatch (keyed by the model's underlying credential provider).
-    const curatedProviders = useMemo(
-        () => new Set(catalog.map((m) => m.provider)),
-        [catalog],
-    );
     const displayNameFor = (modelId: string): string =>
         catalog.find((m) => m.id === modelId)?.displayName ?? modelId;
 
@@ -146,25 +138,12 @@ export const ModelsTab = ({
         await persist(blob, `${name} added`);
     };
 
-    // ── per-model edit (uiFields form) ────────────────────────────────────────
-    const openEdit = (model: BYOKModelConfig, credential: BYOKCredential) => {
-        const curated = catalog.find((m) => m.id === model.model);
-        if (!curated || !curatedProviders.has(credential.provider)) {
-            // Non-curated model: the manual form edits it in place (pre-filled
-            // via ?model=<id>), not a blank "add" form.
-            router.push(`/byok/manual?model=${encodeURIComponent(model.id)}`);
-            return;
-        }
-        setView({ mode: "edit", model, credential });
-    };
-
-    const saveEdit = async (model: BYOKModelConfig, cfg: BYOKConnectInput) => {
-        const blob = buildByokBlob(config, {
-            kind: "edit-model",
-            modelId: model.id,
-            model: modelFieldsFromConfig(cfg),
-        });
-        await persist(blob, `${displayNameFor(model.model)} updated`);
+    // ── per-model edit ────────────────────────────────────────────────────────
+    // ONE editor for every model, curated or not: the unified manual form (it
+    // carries the inline model picker, the in-use lock, the plan toggle, per-
+    // provider creds, the Test probe and save). Pre-filled in place via ?model=.
+    const openEdit = (model: BYOKModelConfig, _credential: BYOKCredential) => {
+        router.push(`/byok/manual?model=${encodeURIComponent(model.id)}`);
     };
 
     // ── delete → the 04-09 flow (confirm + in-use reason Alert + last-model
@@ -209,40 +188,6 @@ export const ModelsTab = ({
                     });
                     await persist(blob, "Key updated");
                 }}
-            />
-        );
-    }
-
-    // ── view: per-model edit ──────────────────────────────────────────────────
-    if (view.mode === "edit") {
-        const curated = catalog.find((m) => m.id === view.model.model)!;
-        const settings = (view.credential.settings ?? {}) as Record<
-            string,
-            unknown
-        >;
-        const existingConfig: BYOKConnectInput = {
-            provider: view.credential.provider,
-            model: view.model.model,
-            apiKey: view.credential.apiKey ?? "",
-            baseURL:
-                typeof settings.baseURL === "string"
-                    ? settings.baseURL
-                    : undefined,
-            temperature: view.model.temperature,
-            maxInputTokens: view.model.maxInputTokens,
-            maxOutputTokens: view.model.maxOutputTokens,
-            maxConcurrentRequests: view.model.maxConcurrentRequests,
-            reasoningEffort: view.model.reasoningEffort,
-            reasoningConfigOverride: view.model.reasoningConfigOverride,
-        };
-        return (
-            <CuratedConnectPanel
-                model={curated}
-                existingConfig={existingConfig}
-                existingKey={view.credential.apiKey ?? "••••"}
-                isEditing
-                onBack={() => setView({ mode: "list" })}
-                onSave={(cfg) => saveEdit(view.model, cfg)}
             />
         );
     }
