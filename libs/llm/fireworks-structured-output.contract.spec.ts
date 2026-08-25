@@ -43,7 +43,12 @@ const BASE_URL = (
     'https://api.fireworks.ai/inference/v1'
 ).replace(/\/$/, '');
 
-const describeIfKey = API_KEY ? describe : describe.skip;
+// Opt-in only — see trial-model-availability.contract.spec.ts. Makes a REAL
+// Fireworks call, so it must not gate the fast unit pass / pre-push (a stale or
+// suspended key here fails the whole push on a false negative). Runs only when
+// RUN_LIVE_CONTRACT_TESTS is set (the e2e matrix job sets it with a real key).
+const runLive = !!process.env.RUN_LIVE_CONTRACT_TESTS && !!API_KEY;
+const describeIfKey = runLive ? describe : describe.skip;
 
 describeIfKey('Fireworks structured-output support (contract)', () => {
     it(`${KODUS_TRIAL_MODEL} honors strict response_format: json_schema`, async () => {

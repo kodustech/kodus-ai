@@ -10,6 +10,8 @@ import {
     TierUsage,
     TokenUsageQueryContract,
     UsageByAreaResultContract,
+    UsageByTaskAreaResultContract,
+    UsageByTaskModelSpanContract,
     UsageByPrResultContract,
     UsageByReviewResultContract,
     UsageSummaryContract,
@@ -33,11 +35,79 @@ type RawAggRow = {
     review?: string;
     startedAt?: Date;
     area?: string;
+    task?: string;
+};
+
+/** Raw min/max window row from the taskModelSpan facet (no token math). */
+type RawSpanRow = {
+    task: string;
+    model: string;
+    firstAt: Date | string;
+    lastAt: Date | string;
 };
 
 // Rows written before the area backfill ran have no `tu.area` — group them
 // under the same bucket new un-mapped runs get.
 const AREA_FALLBACK = 'other';
+
+// Bucket for spend with no routing task: genuinely unattributable (system/
+// internal), OR a pre-launch row whose area de-para also yields none.
+const TASK_FALLBACK = '';
+
+/**
+ * The routing TASK for a row: the stamped `attributes.tu.route` when present
+ * (post-launch), else the SAME area→task de-para as deriveTu.routeFromArea in
+ * libs/core/log/token-usage-tu.ts — so pre-launch rows attribute to a task on
+ * READ, without waiting for the backfill. `areaField` is the already-fallback'd
+ * area expression. Keep the branches in sync with routeFromArea.
+ */
+// Valid routing tasks — mirror of ROUTING_TASKS in token-usage-tu.ts (LlmTask).
+// A `tu.route` outside this set (stale tier string, garbage) is NOT trusted.
+const ROUTING_TASKS = [
+    'codeReview',
+    'kodyRulesReview',
+    'ruleGeneration',
+    'businessValidation',
+    'prSummary',
+    'conversation',
+];
+
+const taskExpr = (areaField: unknown) => ({
+    $cond: [
+        { $in: ['$attributes.tu.route', ROUTING_TASKS] },
+        '$attributes.tu.route',
+        {
+            $let: {
+                vars: { a: areaField },
+                in: {
+                    $switch: {
+                        branches: [
+                            {
+                                case: {
+                                    $in: ['$$a', ['review', 'suggestions']],
+                                },
+                                then: 'codeReview',
+                            },
+                            {
+                                case: { $eq: ['$$a', 'kody_rules'] },
+                                then: 'kodyRulesReview',
+                            },
+                            {
+                                case: { $eq: ['$$a', 'summary'] },
+                                then: 'prSummary',
+                            },
+                            {
+                                case: { $eq: ['$$a', 'conversation'] },
+                                then: 'conversation',
+                            },
+                        ],
+                        default: TASK_FALLBACK,
+                    },
+                },
+            },
+        },
+    ],
+});
 
 // Upper bound on rows returned by the per-review read (rows are per run ×
 // model × tier). ~5 models/run → this covers the heaviest ~1600 runs, far
@@ -349,6 +419,40 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         return merged;
     }
 
+    async getModelCredentialPairs(
+        query: TokenUsageQueryContract,
+    ): Promise<Array<{ model: string; credentialId: string }>> {
+        // Distinct (tu.model, tu.credentialId) the usage actually recorded — the
+        // usage-derived attribution map. Grouping only; no tokens/pricing, so it
+        // is cheap. Empty/absent credentialId (env/managed/legacy) is excluded so
+        // those fall back to the config name-map / unattributed in the caller.
+        return this.observabilityTelemetryModel
+            .aggregate<{ model: string; credentialId: string }>([
+                {
+                    $match: {
+                        ...this._tuMatch(query),
+                        'attributes.tu.credentialId': { $nin: ['', null] },
+                    },
+                },
+                {
+                    $group: {
+                        _id: {
+                            model: '$attributes.tu.model',
+                            credentialId: '$attributes.tu.credentialId',
+                        },
+                    },
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        model: '$_id.model',
+                        credentialId: '$_id.credentialId',
+                    },
+                },
+            ] as any)
+            .exec();
+    }
+
     async getUsageByPr(
         query: TokenUsageQueryContract,
     ): Promise<UsageByPrResultContract[]> {
@@ -514,6 +618,8 @@ export class TokenUsageRepository implements ITokenUsageRepository {
         daily: DailyUsageResultContract[];
         byPr: UsageByPrResultContract[];
         byArea: UsageByAreaResultContract[];
+        byTaskArea: UsageByTaskAreaResultContract[];
+        byTaskModelSpan: UsageByTaskModelSpanContract[];
     }> {
         const thresholds = await this._thresholds();
         // Project only index fields → $facet works on a lean covered stream.
@@ -526,6 +632,7 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 tier: this._tierExpr(thresholds),
                 pr: '$attributes.prNumber',
                 area: { $ifNull: ['$attributes.tu.area', AREA_FALLBACK] },
+                task: taskExpr({ $ifNull: ['$attributes.tu.area', AREA_FALLBACK] }),
                 date: {
                     $dateToString: {
                         format: '%Y-%m-%d',
@@ -533,6 +640,10 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                         timezone: query.timezone || 'UTC',
                     },
                 },
+                // Raw event time — carried through so a single facet can take
+                // its min/max per task×model. It's the SAME covered field `date`
+                // is derived from, so projecting it adds no index cost.
+                ts: '$timestamp',
                 input: '$attributes.tu.input',
                 output: '$attributes.tu.output',
                 total: '$attributes.tu.total',
@@ -593,6 +704,34 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                         { area: '$area' },
                         { area: '$_id.area' },
                     ),
+                    // task × area cross — powers the per-task section that
+                    // drills into the areas each task fanned out over.
+                    byTaskArea: groupProject(
+                        { task: '$task', area: '$area' },
+                        { task: '$_id.task', area: '$_id.area' },
+                    ),
+                    // First/last event time per task × model. No token math —
+                    // just the min/max window so the per-task view can show
+                    // which model ran a task and WHEN (a mid-period switch reads
+                    // as two windows). `ts` is covered (see projectTu).
+                    taskModelSpan: [
+                        {
+                            $group: {
+                                _id: { task: '$task', model: '$model' },
+                                firstAt: { $min: '$ts' },
+                                lastAt: { $max: '$ts' },
+                            },
+                        },
+                        {
+                            $project: {
+                                _id: 0,
+                                task: '$_id.task',
+                                model: '$_id.model',
+                                firstAt: 1,
+                                lastAt: 1,
+                            },
+                        },
+                    ],
                 },
             },
         ];
@@ -603,6 +742,8 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 daily: RawAggRow[];
                 byPr: RawAggRow[];
                 byArea: RawAggRow[];
+                byTaskArea: RawAggRow[];
+                taskModelSpan: RawSpanRow[];
             }>(pipeline)
             .exec();
 
@@ -611,6 +752,8 @@ export class TokenUsageRepository implements ITokenUsageRepository {
             daily: [],
             byPr: [],
             byArea: [],
+            byTaskArea: [],
+            taskModelSpan: [],
         };
         // `thresholds` fetched above drives both the tier derivation and the
         // byTier merge — same source, no drift.
@@ -673,7 +816,39 @@ export class TokenUsageRepository implements ITokenUsageRepository {
                 : a.area.localeCompare(b.area),
         );
 
-        return { summary, byModel, daily, byPr, byArea };
+        const byTaskArea = this._mergeTierRows<UsageByTaskAreaResultContract>(
+            rows.byTaskArea ?? [],
+            thresholds,
+            (r) => `${r.task}|${r.area}|${r.model}`,
+            (base, row) => ({ ...base, task: row.task!, area: row.area! }),
+        ).sort((a, b) =>
+            a.task === b.task
+                ? a.area === b.area
+                    ? a.model.localeCompare(b.model)
+                    : a.area.localeCompare(b.area)
+                : a.task.localeCompare(b.task),
+        );
+
+        const iso = (v: Date | string): string =>
+            v instanceof Date ? v.toISOString() : String(v);
+        const byTaskModelSpan: UsageByTaskModelSpanContract[] = (
+            rows.taskModelSpan ?? []
+        ).map((r) => ({
+            task: r.task,
+            model: r.model,
+            firstAt: iso(r.firstAt),
+            lastAt: iso(r.lastAt),
+        }));
+
+        return {
+            summary,
+            byModel,
+            daily,
+            byPr,
+            byArea,
+            byTaskArea,
+            byTaskModelSpan,
+        };
     }
 }
 

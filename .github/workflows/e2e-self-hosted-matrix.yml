@@ -59,6 +59,30 @@ on:
                 required: false
                 default: false
                 type: boolean
+        # The gate stays binary (advisory failures don't fail the job), so the
+        # caller's notification needs these to say what "green" actually hid.
+        outputs:
+            digest:
+                description: "One-line scoreboard: passed/executed, advisories, setup skips"
+                value: ${{ jobs.aggregate.outputs.digest }}
+            status:
+                description: "Roll-up: green (all clear), yellow (advisories/coverage gaps behind a green gate), red (gating)"
+                value: ${{ jobs.aggregate.outputs.status }}
+            discord_color:
+                description: "Embed color matching status (green/amber/red)"
+                value: ${{ jobs.aggregate.outputs.discord_color }}
+            gating_count:
+                description: "Gating failure count across cells"
+                value: ${{ jobs.aggregate.outputs.gating_count }}
+            advisory_count:
+                description: "Advisory (non-gating) failure count across cells"
+                value: ${{ jobs.aggregate.outputs.advisory_count }}
+            setup_skipped:
+                description: "Planned scenarios that did not run (setup skips)"
+                value: ${{ jobs.aggregate.outputs.setup_skipped }}
+            llm_note:
+                description: "Optional LLM interpretation of the evidence (empty when no key configured)"
+                value: ${{ jobs.aggregate.outputs.llm_note }}
     # Own cadence — Tue/Thu 04:00 UTC (01:00 BRT).
     #
     # Until now the ONLY automatic caller was the release train, where this
@@ -494,13 +518,61 @@ jobs:
         runs-on: ubuntu-latest
         needs: [plan, matrix]
         if: always()
+        outputs:
+            digest: ${{ steps.scoreboard.outputs.digest }}
+            status: ${{ steps.scoreboard.outputs.status }}
+            discord_color: ${{ steps.scoreboard.outputs.discord_color }}
+            gating_count: ${{ steps.scoreboard.outputs.gating_count }}
+            advisory_count: ${{ steps.scoreboard.outputs.advisory_count }}
+            setup_skipped: ${{ steps.scoreboard.outputs.setup_skipped }}
+            llm_note: ${{ steps.llm-note.outputs.llm_note }}
         steps:
+            # Before the artifact download — checkout cleans the workspace.
+            - name: Checkout monorepo (scoreboard script + composite action)
+              uses: actions/checkout@v6.0.2
+              with:
+                  sparse-checkout: |
+                      tests/e2e/cli/render-scoreboard.py
+                      tests/e2e/cli/llm-release-note.py
+                      .github/actions/discord-notify
+                  sparse-checkout-cone-mode: false
+
             - name: Download all evidence
               uses: actions/download-artifact@v4
               with:
                   pattern: e2e-self-hosted-*
                   merge-multiple: true
                   path: evidence
+
+            # Every cell job is green by design (advisory failures don't gate),
+            # so the run page reads "all passed" even when scenarios failed or
+            # coverage silently shrank. Render the evidence the runner already
+            # writes (notify.json / result.json / summary.md) into the run's
+            # Summary tab + ::warning:: annotations, and expose a digest for
+            # the caller's Discord notification. Never fails the job.
+            - name: Render scoreboard (step summary + annotations)
+              id: scoreboard
+              if: always()
+              run: python3 tests/e2e/cli/render-scoreboard.py evidence
+
+            # Interpretation on top of the deterministic facts: a cheap LLM
+            # classifies each failure (infra/quota vs test-side vs product)
+            # and says what should block a promote approval. Numbers stay
+            # with the scoreboard; this is analysis, labeled as such. Skips
+            # silently when E2E_LLM_API_KEY isn't configured and never
+            # fails the job.
+            # Same secret/vars/defaults as the cell jobs' product LLM
+            # (DeepSeek V4 Flash on Fireworks) — one vendor, one key, one
+            # variable to debug. No extra secret to provision.
+            - name: LLM read of the evidence (advisory)
+              id: llm-note
+              if: always()
+              continue-on-error: true
+              env:
+                  E2E_LLM_API_KEY: ${{ secrets.E2E_LLM_API_KEY }}
+                  E2E_LLM_BASE_URL: ${{ vars.E2E_LLM_BASE_URL || 'https://api.fireworks.ai/inference/v1' }}
+                  E2E_LLM_MODEL: ${{ vars.E2E_LLM_MODEL || 'accounts/fireworks/models/deepseek-v4-flash-0731' }}
+              run: python3 tests/e2e/cli/llm-release-note.py evidence
 
             - name: Upload combined evidence
               uses: actions/upload-artifact@v4
@@ -557,10 +629,6 @@ jobs:
                   print('All {} planned cells reported evidence.'.format(len(planned)))
                   PYCHECK
 
-            - name: Checkout monorepo (for composite action)
-              if: needs.matrix.result == 'failure'
-              uses: actions/checkout@v6.0.2
-
             - name: Notify Discord on failure
               if: needs.matrix.result == 'failure'
               uses: ./.github/actions/discord-notify
@@ -575,6 +643,97 @@ jobs:
                   description: |
                       `${{ inputs.matrix_file || 'matrix/fast.yml' }}` failed against image `${{ needs.plan.outputs.image_tag }}`.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    # Root-cause investigation — only when the run carries failures. A
+    # read-only Claude Code agent follows each advisory/gating failure
+    # through the evidence (droplet logs + result.json) into the repo,
+    # classifies it (product / test-side / infra) and proposes a fix; a
+    # deterministic step then upserts one issue per stable failure
+    # signature so a recurring failure updates a single issue instead of
+    # being rediscovered every run.
+    #
+    # Auth is the Claude SUBSCRIPTION token (`claude setup-token` →
+    # secret CLAUDE_CODE_OAUTH_TOKEN) — no per-token API billing. The
+    # job skips silently without the secret and can never gate: it is
+    # continue-on-error and every step degrades to a notice.
+    investigate:
+        name: Investigate failures (agent, advisory)
+        runs-on: ubuntu-latest
+        needs: [aggregate]
+        if: >-
+            always() &&
+            ((needs.aggregate.outputs.gating_count != '' && needs.aggregate.outputs.gating_count != '0') ||
+             (needs.aggregate.outputs.advisory_count != '' && needs.aggregate.outputs.advisory_count != '0'))
+        continue-on-error: true
+        timeout-minutes: 25
+        permissions:
+            contents: read
+            issues: write
+        steps:
+            - name: Checkout monorepo
+              uses: actions/checkout@v6.0.2
+
+            - name: Download evidence
+              uses: actions/download-artifact@v4
+              with:
+                  name: e2e-self-hosted-matrix
+                  path: evidence
+
+            - name: Investigate with Claude Code (subscription auth)
+              env:
+                  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+              run: |
+                  set -uo pipefail
+                  if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+                      echo "CLAUDE_CODE_OAUTH_TOKEN not configured — skipping investigation."
+                      echo "Generate one with 'claude setup-token' and add it as a repo secret."
+                      exit 0
+                  fi
+                  npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
+                  # The evidence the agent reads (droplet logs, scenario
+                  # errors) is untrusted text, and the NEXT step executes a
+                  # script from this checkout with GH_TOKEN — so the agent is
+                  # STRICTLY read-only: Bash/Write/Edit are denied (deny rules
+                  # take precedence over every allow, including any settings
+                  # file in the checkout). Its report arrives on stdout; the
+                  # trusted extractor below materializes the contract files.
+                  # --strict-mcp-config: never load MCP servers from any
+                  # config that lands in the checkout — MCP tools would be
+                  # an unvetted side door around the deny list.
+                  claude -p "$(cat tests/e2e/cli/investigate-prompt.md)" \
+                      --allowedTools "Read,Grep,Glob" \
+                      --disallowedTools "Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch,Task" \
+                      --strict-mcp-config \
+                      --max-turns 60 \
+                      --output-format text > investigation-agent.log 2>&1 || {
+                      echo "::warning title=E2E investigation failed (advisory)::agent run failed — see investigation-agent.log artifact"
+                  }
+                  python3 tests/e2e/cli/extract-investigation.py investigation-agent.log
+                  if [ -f investigation.md ]; then
+                      {
+                          echo "## 🔎 Failure investigation (agent — verify before acting)"
+                          echo ""
+                          cat investigation.md
+                      } >> "$GITHUB_STEP_SUMMARY" || true
+                  fi
+
+            - name: Upsert one issue per failure signature
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              run: python3 tests/e2e/cli/upsert-investigation-issues.py investigation.json
+
+            - name: Upload investigation artifact
+              if: always()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: e2e-investigation
+                  path: |
+                      investigation.md
+                      investigation.json
+                      investigation-agent.log
+                  if-no-files-found: ignore
+                  retention-days: 30
 
     # Durable history — same rationale as the cloud workflow: a separate job
     # so `contents: write` never touches the job that holds provider tokens.

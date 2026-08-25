@@ -57,33 +57,48 @@ function PanelError({ error }: FallbackProps) {
 function ReviewProgressBar({
     viewed,
     total,
-    attention,
-    minor,
+    bugs,
+    flags,
 }: {
     viewed: number;
     total: number;
-    attention: number;
-    minor: number;
+    bugs: number;
+    flags: number;
 }) {
     const pct = total > 0 ? Math.round((100 * viewed) / total) : 0;
+    // Mirror the rail buckets exactly so the two summaries always agree:
+    // "N potential bugs · M flags · X/Y viewed".
+    const clean = bugs + flags === 0;
     return (
-        <div className="mt-3 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 px-4 py-2.5">
+        <div className="mt-2 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-2)]/70 px-4 py-2.5">
             <div className="flex items-center gap-2.5 text-sm">
-                {attention > 0 ? (
-                    <span className="inline-flex items-center gap-1.5 font-medium text-[var(--warn)]">
-                        <span className="size-1.5 rounded-full bg-[var(--warn)]" />
-                        {attention} need attention
-                    </span>
-                ) : (
+                {clean ? (
                     <span className="inline-flex items-center gap-1.5 font-medium text-[var(--green)]">
                         <span className="size-1.5 rounded-full bg-[var(--green)]" />
-                        nothing critical
+                        Nothing to flag.
                     </span>
-                )}
-                {minor > 0 && (
-                    <span className="text-[var(--text-dim)]">
-                        · {minor} minor
-                    </span>
+                ) : (
+                    <>
+                        {bugs > 0 && (
+                            <span
+                                className="inline-flex items-center gap-1.5 font-medium"
+                                style={{ color: "var(--color-danger)" }}>
+                                <span
+                                    className="size-1.5 rounded-full"
+                                    style={{
+                                        backgroundColor: "var(--color-danger)",
+                                    }}
+                                />
+                                {bugs} potential bug{bugs === 1 ? "" : "s"}
+                            </span>
+                        )}
+                        {flags > 0 && (
+                            <span className="text-[var(--text-dim)]">
+                                {bugs > 0 ? "· " : ""}
+                                {flags} flag{flags === 1 ? "" : "s"}
+                            </span>
+                        )}
+                    </>
                 )}
             </div>
             <div className="flex items-center gap-2.5">
@@ -326,7 +341,12 @@ function ReviewLayout({
         [patchFiles, fileSuggestions],
     );
 
-    const suggestionCount = fileSuggestions.length + prLevelSuggestions.length;
+    // The right rail only ever holds findings on the web app (checks /
+    // reviewers / assignees / labels aren't populated here). With zero
+    // findings it collapses to a lone "Nothing to flag." box in an empty
+    // column, so drop the rail entirely and let the diff column reclaim the
+    // width — the all-clear reads off the full-width summary bar instead.
+    const hasFindings = treeIssues.length > 0;
 
     // Orientation + signal hierarchy for the review header: how far the
     // reviewer has gotten, and how many findings actually need attention vs.
@@ -335,21 +355,23 @@ function ReviewLayout({
         () => treeFiles.filter((f) => state.viewedFiles[f.path]).length,
         [treeFiles, state.viewedFiles],
     );
-    // Count critical/high across BOTH file-level and PR-level findings so the
-    // "needs attention" figure — and the derived "minor" count below — line up
-    // with suggestionCount, which also includes prLevelSuggestions. Counting
-    // only treeIssues here let PR-level criticals leak into the "minor" tally.
-    const attentionCount = useMemo(() => {
-        const isAttention = (severity?: string) =>
-            ["critical", "high"].includes((severity ?? "").toLowerCase());
-        const fromFiles = treeIssues.filter((i) =>
-            isAttention(i.severity),
-        ).length;
-        const fromPrLevel = prLevelSuggestions.filter((s) =>
-            isAttention(s?.severity),
-        ).length;
-        return fromFiles + fromPrLevel;
-    }, [treeIssues, prLevelSuggestions]);
+    // ONE canonical taxonomy for every finding surface (Review-tab badge,
+    // summary bar, file tree, rail). All four derive from treeIssues — the
+    // findings actually rendered — so their totals can never disagree.
+    // bugs = critical/high, flags = everything else (medium/low), matching the
+    // rail's tier groups. PR-level suggestions aren't shown on this screen, so
+    // they no longer silently inflate the badge.
+    const bugCount = useMemo(
+        () =>
+            treeIssues.filter((i) =>
+                ["critical", "high"].includes(
+                    (i.severity ?? "").toLowerCase(),
+                ),
+            ).length,
+        [treeIssues],
+    );
+    const flagCount = treeIssues.length - bugCount;
+    const findingsTotal = treeIssues.length;
 
     const jumpToFile = (path: string) =>
         dispatch({ type: "SELECT_FILE", path });
@@ -482,8 +504,12 @@ function ReviewLayout({
                     <div
                         className={`grid grid-cols-1 gap-5 transition-[grid-template-columns] duration-200 ease-out ${
                             state.sidebarOpen
-                                ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]"
-                                : "lg:grid-cols-[40px_minmax(0,1fr)_300px]"
+                                ? hasFindings
+                                    ? "lg:grid-cols-[280px_minmax(0,1fr)_300px]"
+                                    : "lg:grid-cols-[280px_minmax(0,1fr)]"
+                                : hasFindings
+                                  ? "lg:grid-cols-[40px_minmax(0,1fr)_300px]"
+                                  : "lg:grid-cols-[40px_minmax(0,1fr)]"
                         }`}>
                         {/* LEFT — file tree / collapsed rail */}
                         <aside className={stickyAside}>
@@ -515,7 +541,7 @@ function ReviewLayout({
                         <div className="min-w-0">
                             <PrHeader
                                 pr={pr}
-                                suggestionCount={suggestionCount}
+                                suggestionCount={findingsTotal}
                                 activeTab={activeTab}
                                 onTabChange={setActiveTab}
                                 tabs={WEB_TABS}
@@ -525,11 +551,8 @@ function ReviewLayout({
                                 <ReviewProgressBar
                                     viewed={viewedCount}
                                     total={treeFiles.length}
-                                    attention={attentionCount}
-                                    minor={Math.max(
-                                        0,
-                                        suggestionCount - attentionCount,
-                                    )}
+                                    bugs={bugCount}
+                                    flags={flagCount}
                                 />
                             )}
 
@@ -556,17 +579,22 @@ function ReviewLayout({
                             )}
                         </div>
 
-                        {/* RIGHT — issues + PR metadata */}
-                        <aside className={stickyAside}>
-                            <ErrorBoundary FallbackComponent={PanelError}>
-                                <RightSidebar
-                                    pr={pr}
-                                    issues={treeIssues}
-                                    isCompleted
-                                    onJumpToIssue={jumpToIssue}
-                                />
-                            </ErrorBoundary>
-                        </aside>
+                        {/* RIGHT — issues + PR metadata. Reserved only when
+                            there are findings to show; otherwise the column is
+                            dropped so the diff expands to fill the width. */}
+                        {hasFindings && (
+                            <aside className={stickyAside}>
+                                <ErrorBoundary FallbackComponent={PanelError}>
+                                    <RightSidebar
+                                        pr={pr}
+                                        issues={treeIssues}
+                                        isCompleted
+                                        onJumpToIssue={jumpToIssue}
+                                        activeIssueId={activeIssueId}
+                                    />
+                                </ErrorBoundary>
+                            </aside>
+                        )}
                     </div>
                 </div>
             </section>
@@ -605,7 +633,7 @@ function FileTreeRail({
                 </svg>
             </span>
             <span
-                className="font-mono text-[10px] tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
+                className="font-mono text-3xs tracking-[0.16em] text-[var(--text-dim)] uppercase transition-colors group-hover:text-[var(--text-muted)]"
                 style={{
                     writingMode: "vertical-rl",
                     transform: "rotate(180deg)",

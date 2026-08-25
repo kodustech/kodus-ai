@@ -1,5 +1,4 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { DocumentationSearchExaService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-exa.service';
@@ -11,7 +10,6 @@ import { buildCategoryReviewPrompt } from '@libs/code-review/infrastructure/agen
 @Injectable()
 export class SecurityAgentProvider extends BaseCodeReviewAgentProvider {
     constructor(
-        promptRunnerService: PromptRunnerService,
         permissionValidationService: PermissionValidationService,
         observabilityService: ObservabilityService,
         @Optional()
@@ -20,7 +18,6 @@ export class SecurityAgentProvider extends BaseCodeReviewAgentProvider {
         byokErrorCounter?: ByokErrorCounter,
     ) {
         super(
-            promptRunnerService,
             permissionValidationService,
             observabilityService,
             documentationSearchService,

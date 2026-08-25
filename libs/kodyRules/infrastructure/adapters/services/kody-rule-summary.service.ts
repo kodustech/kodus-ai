@@ -1,15 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { LLM } from '@libs/llm/llm';
 import { createHash } from 'crypto';
 import { createLogger } from '@libs/core/log/logger';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
-import { byokToVercelModel, getModelName } from '@libs/llm/byok-to-vercel';
-import {
-    tracedGenerateText,
-    timeoutSignal,
-    LLM_CALL_TIMEOUT_MS,
-} from '@libs/llm/llm-call';
-import { buildLangfuseTelemetry } from '@libs/core/log/langfuse';
+import { getModelName } from '@libs/llm/byok-to-vercel';
+import { LLM_TASK } from '@libs/llm/byok-config';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
@@ -24,7 +20,6 @@ import {
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { z } from 'zod';
 import type { BYOKConfig } from '@kodus/kodus-common/llm';
-import { runStructuredReviewCall } from '@libs/llm/structured-review-call';
 import {
     compileRuleDetector,
     compilerOutputSchema,
@@ -295,15 +290,19 @@ export class KodyRuleSummaryService {
         }
         try {
             const [byokConfig, subscriptionStatus] = await Promise.all([
-                this.permissionValidationService.getBYOKConfig(
+                // Model policy = the review's: resolve the codeReview task to a
+                // `{main}` carrier (BYOK main when configured; managed default
+                // only during trial). null ⇒ no BYOK ⇒ env default downstream.
+                this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 ),
                 this.permissionValidationService.getSubscriptionStatus(
                     organizationAndTeamData,
                 ),
             ]);
 
-            const hasByok = !!byokConfig?.main;
+            const hasByok = !!byokConfig;
             if (
                 !hasByok &&
                 POST_TRIAL_REQUIRES_BYOK.includes(
@@ -323,36 +322,23 @@ export class KodyRuleSummaryService {
                 return null;
             }
 
-            const model = byokToVercelModel(byokConfig ?? undefined, 'main', {});
-            const modelName = getModelName(byokConfig ?? undefined);
-            const runName = 'kody-rules.summary-generation';
-            // Usage span + Langfuse telemetry: generation may run on the
-            // customer's BYOK key, so tokens must reach the user-facing
-            // analytics — same wrap the shard judge uses. The timeout keeps a
-            // hung provider call from delaying the review (the lazy backfill
-            // awaits this before the orchestrator starts).
-            const { text } = await this.observabilityService.runAiSdkLLMInSpan({
-                spanName: runName,
-                runName,
-                model: modelName,
+            // LLM.run owns it end to end: the model (built from the resolved slot,
+            // or the managed default when no BYOK), the usage span + Langfuse
+            // telemetry, and the hard timeout — the SAME one door the review path
+            // uses. Generation may run on the customer's BYOK key, so its tokens
+            // reach the user-facing analytics exactly as before.
+            const text = await LLM.run({
+                byokConfig: byokConfig ?? undefined,
+                runName: 'kody-rules.summary-generation',
+                system: SUMMARY_SYSTEM_PROMPT,
+                user: `Rule title: ${rule.title ?? ''}\n\nRule text:\n${rule.rule}`,
                 attrs: {
                     organizationId: organizationAndTeamData.organizationId,
                     ruleUuid: rule.uuid,
                 },
-                exec: () =>
-                    tracedGenerateText({
-                        model,
-                        system: SUMMARY_SYSTEM_PROMPT,
-                        prompt: `Rule title: ${rule.title ?? ''}\n\nRule text:\n${rule.rule}`,
-                        abortSignal: timeoutSignal(LLM_CALL_TIMEOUT_MS),
-                        experimental_telemetry: buildLangfuseTelemetry(
-                            runName,
-                            {
-                                organizationId:
-                                    organizationAndTeamData.organizationId,
-                            },
-                        ),
-                    } as any),
+                telemetryMetadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                },
             });
 
             const content = (text ?? '').trim();
@@ -377,7 +363,7 @@ export class KodyRuleSummaryService {
                 content,
                 sourceHash: this.hashOf(rule.rule),
                 generatedAt: new Date(),
-                model: modelName,
+                model: getModelName(byokConfig ?? undefined),
             };
         } catch (error) {
             this.logger.warn({
@@ -524,14 +510,20 @@ export class KodyRuleSummaryService {
         }
         try {
             const [byokConfig, subscriptionStatus] = await Promise.all([
-                this.permissionValidationService.getBYOKConfig(
+                // Model policy = the review's: resolve the codeReview task to a
+                // `{main}` carrier (BYOK main when configured; managed default
+                // only during trial). null ⇒ no BYOK ⇒ env default downstream.
+                this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 ),
                 this.permissionValidationService.getSubscriptionStatus(
                     organizationAndTeamData,
                 ),
             ]);
-            const hasByok = !!byokConfig?.main;
+            const hasByok = !!byokConfig;
+            // The carrier's resolved main slot, read at this consumer boundary.
+            const mainSlot = byokConfig ?? undefined;
             if (
                 !hasByok &&
                 POST_TRIAL_REQUIRES_BYOK.includes(
@@ -551,7 +543,7 @@ export class KodyRuleSummaryService {
                 return null;
             }
 
-            const decomposed = (await runStructuredReviewCall({
+            const decomposed = (await LLM.run({
                 byokConfig: byokConfig ?? undefined,
                 schema: decomposeOutputSchema,
                 system: DECOMPOSE_SYSTEM_PROMPT,
@@ -559,7 +551,6 @@ export class KodyRuleSummaryService {
                 runName: 'kody-rules.atom-decomposition',
                 organizationId: organizationAndTeamData.organizationId,
                 attrs: { ruleUuid: rule.uuid },
-                observabilityService: this.observabilityService,
             })) as z.infer<typeof decomposeOutputSchema> | null;
 
             const raw = decomposed?.atoms?.slice(0, MAX_ATOMS_PER_RULE) ?? [];
@@ -638,14 +629,13 @@ export class KodyRuleSummaryService {
             // A compiler failure only keeps that atom semantic — never fails
             // the decomposition.
             const runCompiler = makeLLMRunCompiler(async ({ system, user }) => {
-                const parsed = await runStructuredReviewCall({
+                const parsed = await LLM.run({
                     byokConfig: byokConfig ?? undefined,
                     schema: compilerOutputSchema,
                     system,
                     user,
                     runName: 'kody-rules.atom-detector-compiler',
                     organizationId: organizationAndTeamData.organizationId,
-                    observabilityService: this.observabilityService,
                 });
                 return (parsed as CompilerOutput) ?? null;
             });
@@ -693,7 +683,7 @@ export class KodyRuleSummaryService {
                 items,
                 sourceHash: this.atomsHashOf(rule),
                 generatedAt: new Date(),
-                model: getModelName(byokConfig ?? undefined),
+                model: getModelName(mainSlot),
             };
         } catch (error) {
             this.logger.warn({
@@ -753,7 +743,7 @@ export class KodyRuleSummaryService {
         // defeating the gate. Only accept indexes we actually sent.
         const sentIndexes = new Set(indexed.map((a) => a.index));
         try {
-            const parsed = (await runStructuredReviewCall({
+            const parsed = (await LLM.run({
                 byokConfig: byokConfig ?? undefined,
                 schema: verifyAtomsOutputSchema,
                 system: VERIFY_ATOMS_SYSTEM_PROMPT,
@@ -761,7 +751,6 @@ export class KodyRuleSummaryService {
                 runName: 'kody-rules.atom-verify',
                 organizationId: organizationAndTeamData.organizationId,
                 attrs: { ruleUuid: rule.uuid },
-                observabilityService: this.observabilityService,
             })) as z.infer<typeof verifyAtomsOutputSchema> | null;
             const outOfRange: number[] = [];
             const invalidIndexes = new Map<number, string>();

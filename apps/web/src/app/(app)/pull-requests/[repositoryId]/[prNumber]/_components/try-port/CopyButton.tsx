@@ -6,10 +6,13 @@ export function CopyButton({
     getText,
     label = "Copy for LLM",
     size = "sm",
+    onCopied,
 }: {
     getText: () => string;
     label?: string;
     size?: "sm" | "xs";
+    /** Fired once after the text lands on the clipboard (either path). */
+    onCopied?: () => void;
 }) {
     const [copied, setCopied] = useState(false);
 
@@ -18,6 +21,7 @@ export function CopyButton({
             await navigator.clipboard.writeText(getText());
             setCopied(true);
             setTimeout(() => setCopied(false), 1800);
+            onCopied?.();
         } catch {
             const ta = document.createElement("textarea");
             ta.value = getText();
@@ -29,6 +33,7 @@ export function CopyButton({
                 document.execCommand("copy");
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1800);
+                onCopied?.();
             } catch {
                 /* swallow */
             }
@@ -37,7 +42,7 @@ export function CopyButton({
     };
 
     const sizeClasses =
-        size === "xs" ? "text-[10.5px] px-2 py-1" : "text-xs px-2.5 py-1.5";
+        size === "xs" ? "text-2xs px-2 py-1" : "text-xs px-2.5 py-1.5";
 
     return (
         <button

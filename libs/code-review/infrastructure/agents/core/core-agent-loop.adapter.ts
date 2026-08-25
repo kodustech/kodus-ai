@@ -24,11 +24,11 @@
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 
 import { ContextWindowCompressor } from '@libs/agent-harness/infrastructure/compression/context-window-compressor';
+import { CompressionPolicy } from '@libs/agent-harness/infrastructure/policies/compression.policy';
+import { OverflowRecoveringRunner } from './overflow-recovering-runner';
 import { estimateOverheadTokens } from '@libs/agent-harness/infrastructure/compression/token-estimator';
 import { DiffCoverageLedger } from '@libs/code-review/infrastructure/agents/adapters/diff-coverage-ledger.adapter';
 import { buildFinderToolRegistry } from '@libs/code-review/infrastructure/agents/adapters/finder-tools.adapter';
-import { wrapByokModel } from '@libs/llm/byok-model-wrapper';
-import { anthropicSystemCacheControl } from '@libs/llm/system-cache';
 import {
     buildFinderAgentSpec,
     runFinderWithVerify,
@@ -58,19 +58,19 @@ export async function runAgentLoopViaCore(
     input: AgentLoopInput,
     secrets: AgentLoopSecrets,
 ): Promise<AgentLoopOutput> {
-    const model = wrapByokModel(input.model, {
-        byokConfig: secrets.byokConfig,
+    // The adapter resolves ONLY the slot — LLM.run (inside the runner) builds +
+    // wraps the model (limiter with the finder's own queueTimeoutMs + reporter),
+    // derives tuning, applies the prompt-cache, and records the cost span. The
+    // finder's config-derived reasoning is passed as a spec override below.
+    const runner = new AiSdkAgentRunner(secrets.byokConfig, {
         organizationId: input.telemetryMetadata?.organizationId,
         provider:
             typeof input.byokProvider === 'string'
                 ? input.byokProvider
                 : undefined,
-        role: input.byokRole ?? 'main',
         queueTimeoutMs: secrets.byokQueueTimeoutMs,
         reporter: secrets.byokErrorReporter,
     });
-
-    const runner = new AiSdkAgentRunner({ resolve: () => model });
 
     const { registry: tools, cache: toolCache } = buildFinderToolRegistry({
         remoteCommands: secrets.remoteCommands,
@@ -103,14 +103,6 @@ export async function runAgentLoopViaCore(
         },
     );
 
-    // Anthropic prompt caching for the (large, static) system prompt — ported
-    // from the legacy `withAnthropicCacheControl`. Cached across the loop's many
-    // steps + every verifier run, so Claude models don't re-pay the system
-    // prompt's input tokens each step. No-op for non-Anthropic models.
-    const systemProviderOptions = anthropicSystemCacheControl(
-        input.model,
-    );
-
     // Recall-pass gating — ported from the legacy loop: skip the heavy passes in
     // fast mode, self-contained (no tools) trial flow, or when the caller asks.
     // EXCEPTION: an explicit `heavy` opt-in (CLI `--heavy` / PR `@kody review
@@ -139,16 +131,26 @@ export async function runAgentLoopViaCore(
               submitResultTool,
           ])
         : 0;
-    // The AgentSpec.modelId is NOT used to resolve the model (the runner's
-    // resolver above ignores it and always returns `model`). It IS used to
-    // decide provider-native strict tool use (supportsStrictTools), so pass the
-    // REAL model id — a placeholder like 'resolved' would disable strict for
-    // every model (it matches neither the Gemini nor the Claude pattern).
-    const specModelId = (input.model as any)?.modelId ?? 'resolved';
+    // The finder spec's modelId is NOT used to resolve the model (LLM.run does
+    // that, from the slot). It IS used to decide provider-native strict tool use
+    // (supportsStrictTools), so pass the REAL model id straight off the resolved
+    // slot — the same id `buildModelFromSlot` would have stamped on the built
+    // model. Undefined (managed/env default → no slot) degrades to 'resolved',
+    // which disables strict — parity with before, since the managed default
+    // isn't a strict-capable (Gemini) model.
+    const specModelId = secrets.byokConfig?.model ?? 'resolved';
+    // The runtime failover target (if the slot has one). Strict tool use must
+    // account for it: LLM.run can swap primary → fallback mid-call, and a strict
+    // tool built for the primary would be rejected by a non-strict fallback
+    // (e.g. Gemini primary → OpenAI fallback). See supportsStrictToolsForRun.
+    const fallbackModelId = secrets.byokConfig?.fallback?.model;
     const buildSpecWithLedger = (ledger: DiffCoverageLedger) =>
         buildFinderAgentSpec({
             systemPrompt: input.systemPrompt,
             modelId: specModelId,
+            fallbackModelId,
+            usageRunName: input.usageRunName,
+            agentName: input.agentName,
             tools,
             coverageLedger: ledger,
             compressor: contextWindowTokens
@@ -158,7 +160,6 @@ export async function runAgentLoopViaCore(
                 : undefined,
             maxSteps: input.maxSteps ?? 20,
             providerOptions,
-            systemProviderOptions,
         });
 
     // Base pass uses the reported `coverageLedger` (read back below for the
@@ -174,6 +175,31 @@ export async function runAgentLoopViaCore(
             }),
         );
 
+    // Overflow net (issue #1574): if a mis-sized window lets any finder sub-run
+    // overflow mid-loop, re-run THAT pass once at a tighter window instead of
+    // failing the review. Wrapping the shared runner covers every pass (base +
+    // resamples + synthesis-rescue) at one seam. Only when a window is known —
+    // otherwise `tighten` can't scale anything, so we skip the wrapper entirely.
+    const tightenCompression = (spec: typeof finderSpec, scale: number) =>
+        contextWindowTokens
+            ? {
+                  ...spec,
+                  policies: spec.policies.map((p) =>
+                      p.name === 'compression'
+                          ? new CompressionPolicy(
+                                new ContextWindowCompressor(
+                                    Math.floor(contextWindowTokens * scale),
+                                    { overheadTokens },
+                                ),
+                            )
+                          : p,
+                  ),
+              }
+            : spec;
+    const finderRunner = contextWindowTokens
+        ? new OverflowRecoveringRunner(runner, tightenCompression)
+        : runner;
+
     // Standard agent run context: runId + a signal that aborts on the parent job
     // signal OR after the hard per-agent timeout. Shared with conversation +
     // business so every agent has the same cancellation/timeout guarantee.
@@ -184,13 +210,13 @@ export async function runAgentLoopViaCore(
 
     const r = await runFinderWithVerify(
         {
-            runner,
+            runner: finderRunner,
             finderSpec,
             makeResampleSpec,
             modelId: specModelId,
+            fallbackModelId,
             tools,
             providerOptions,
-            systemProviderOptions,
             skipHeavyPasses,
             skipSynthesisRescue,
             // HEAVY mode — extra critic pass. Only meaningful when heavy passes
@@ -198,6 +224,7 @@ export async function runAgentLoopViaCore(
             heavy: !!input.heavy && !skipHeavyPasses,
             telemetryMetadata: input.telemetryMetadata,
             agentName: input.agentName,
+            usageRunName: input.usageRunName,
             // Wire the prose-findings recovery to the internal-model fallback.
             // The finder/recall passes stay decoupled from BYOK — they only see
             // the ProseRecoverer function.
@@ -206,6 +233,7 @@ export async function runAgentLoopViaCore(
                     reasoning,
                     secrets.byokConfig,
                     input.telemetryMetadata?.organizationId,
+                    input.usageRunName,
                 ),
         },
         { prompt: input.userPrompt },

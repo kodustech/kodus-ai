@@ -2,7 +2,6 @@ import { DynamicModule, Module, Provider } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 
-import { LLMModule } from '@kodus/kodus-common/llm';
 
 import { AnalyticsWarehouseModule } from '@libs/ee/analytics-warehouse';
 import { AutomationModule } from '@libs/automation/modules/automation.module';
@@ -78,7 +77,6 @@ export class WorkerModule {
                     ...baseImports,
                     SharedPostgresModule.forRoot({ poolSize: 12 }),
                     RabbitMQWrapperModule.register({ enableConsumers: true }),
-                    LLMModule.forRoot({ logger: LoggerWrapperService }),
                     WorkflowModule.register({ type: 'worker' }),
                     CodebaseModule,
                     CodeReviewFeedbackModule,
@@ -108,7 +106,6 @@ export class WorkerModule {
                 ...baseImports,
                 // LLM is needed by the PR-type classifier; the ingestion
                 // hot path itself doesn't call any model.
-                LLMModule.forRoot({ logger: LoggerWrapperService }),
                 AnalyticsWarehouseModule.forRoot(),
                 // Postgres for cockpit warehouse queries used by the
                 // repo/org report crons.

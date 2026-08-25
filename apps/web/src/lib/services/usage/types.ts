@@ -68,6 +68,25 @@ export interface UsageByAreaResultContract extends BaseUsageContract {
     area: string;
 }
 
+/** Token spend grouped by routing task × process area. Task (`codeReview`/… —
+ *  the model picked per task) is the top level; area is the drill-down (one task
+ *  fans out over review/suggestions/cross_file). `''` task = unattributable. */
+export interface UsageByTaskAreaResultContract extends BaseUsageContract {
+    task: string;
+    area: string;
+}
+
+/** The active window (first/last usage timestamp) of a MODEL within a routing
+ *  TASK — so a mid-period model/provider switch reads as two windows instead of
+ *  one misleading model label. Token counts come from byTaskArea; this carries
+ *  only the min/max timestamp. */
+export interface UsageByTaskModelSpanContract {
+    task: string;
+    model: string;
+    firstAt: string; // ISO
+    lastAt: string; // ISO
+}
+
 export interface DailyUsageByDeveloperResultContract
     extends UsageByDeveloperResultContract {
     date: string; // YYYY-MM-DD
@@ -103,6 +122,8 @@ export interface UsageOverviewReportContract {
     daily: DailyUsageResultContract[];
     byPr: UsageByPrResultContract[];
     byArea?: UsageByAreaResultContract[];
+    byTaskArea?: UsageByTaskAreaResultContract[];
+    byTaskModelSpan?: UsageByTaskModelSpanContract[];
 }
 
 export interface UsageSummaryContract {

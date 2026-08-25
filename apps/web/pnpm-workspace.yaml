@@ -67,4 +67,10 @@ minimumReleaseAgeExclude:
   - '@tiptap/react@3.27.2'
   - '@tiptap/starter-kit@3.27.2'
   - '@types/node@26.1.1'
-  - posthog-node@5.40.0
+  - posthog-node@5.40.0 || 5.48.1
+  - '@pierre/diffs@1.3.4'
+  - '@pierre/theming@1.0.1'
+  - '@posthog/core@1.46.9'
+  - '@posthog/types@1.402.2'
+  - lucide-react@1.29.0
+  - postcss@8.5.26

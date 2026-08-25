@@ -1,12 +1,9 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
+import { LLM } from '@libs/llm/llm';
 import { createLogger } from '@libs/core/log/logger';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { z } from 'zod';
 import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4, validate as uuidValidate } from 'uuid';
 
@@ -31,13 +28,11 @@ import {
     prompt_kodyrules_classifier_user,
     prompt_kodyrules_extract_id_system,
     prompt_kodyrules_extract_id_user,
-    prompt_kodyrules_guardian_system,
-    prompt_kodyrules_guardian_user,
     prompt_kodyrules_suggestiongeneration_system,
     prompt_kodyrules_suggestiongeneration_user,
     prompt_kodyrules_updatestdsuggestions_system,
     prompt_kodyrules_updatestdsuggestions_user,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRules';
+} from '@libs/common/utils/prompts/kodyRules';
 import { tryParseJSONObject } from '@libs/common/utils/transforms/json';
 import {
     AIAnalysisResult,
@@ -51,7 +46,6 @@ import {
     SuggestionControlConfig,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { KODY_RULES_SERVICE_TOKEN } from '@libs/kodyRules/domain/contracts/kodyRules.service.contract';
 import {
@@ -92,6 +86,47 @@ export const KODY_RULES_ANALYSIS_SERVICE_TOKEN = Symbol(
     'KodyRulesAnalysisService',
 );
 
+/**
+ * Structured schema for the ID-extraction call (was a STRING parser whose raw
+ * JSON was hand-parsed into `{ ids }`). `runStructuredReviewCall` always runs
+ * `Output.object`, so the shape is declared explicitly and consumed directly.
+ */
+export const kodyRulesExtractIdSchema = z.object({
+    ids: z.array(z.string()),
+});
+
+/**
+ * Structured schema for the update-standard-suggestions call. It was a STRING
+ * parser feeding `processUpdatedSuggestions(response: string)`; every field is
+ * optional to keep the model output as permissive as the old free-form JSON.
+ * `zodToStrictWireSchema` turns the optionals into nullable-required on the
+ * wire, so a strict provider (OpenAI) still accepts it.
+ */
+export const kodyRulesUpdateSchema = z.object({
+    codeSuggestions: z
+        .array(
+            z.object({
+                id: z.string().optional(),
+                relevantFile: z.string().optional(),
+                language: z.string().optional(),
+                suggestionContent: z.string().optional(),
+                existingCode: z.string().optional(),
+                improvedCode: z.string().optional(),
+                oneSentenceSummary: z.string().optional(),
+                relevantLinesStart: z
+                    .union([z.number(), z.string()])
+                    .optional(),
+                relevantLinesEnd: z.union([z.number(), z.string()]).optional(),
+                label: z.string().optional(),
+                severity: z.string().optional(),
+                violatedKodyRulesIds: z.array(z.string()).optional(),
+                brokenKodyRulesIds: z.array(z.string()).optional(),
+                llmPrompt: z.string().optional(),
+            }),
+        )
+        .optional(),
+});
+
 @Injectable()
 export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
     private readonly logger = createLogger(KodyRulesAnalysisService.name);
@@ -101,7 +136,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         private readonly kodyRulesService: KodyRulesService,
         @Inject(CODE_BASE_CONFIG_SERVICE_TOKEN)
         private readonly codeBaseConfigService: ICodeBaseConfigService,
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly kodyRulesValidationService: KodyRulesValidationService,
         private readonly observabilityService: ObservabilityService,
         private readonly externalReferenceLoaderService: ExternalReferenceLoaderService,
@@ -191,7 +225,7 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         suggestions: AIAnalysisResult,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<AIAnalysisResult> {
         if (!suggestions?.codeSuggestions?.length) {
             return suggestions;
@@ -286,96 +320,40 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         suggestion: Partial<CodeSuggestion>,
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<string[]> {
         try {
-            const provider = LLMModelProvider.GEMINI_2_5_FLASH;
-            const fallbackProvider = LLMModelProvider.GEMINI_2_5_PRO;
-
-            const promptRunner = new BYOKPromptRunnerService(
-                this.promptRunnerService,
-                provider,
-                fallbackProvider,
-                byokConfig,
-            );
-
             const runName = 'extractKodyRuleIdsFromContent';
-            const spanName = `${KodyRulesAnalysisService.name}::${runName}`;
-            const spanAttrs = {
-                type: promptRunner.executeMode,
+
+            const extraction = await LLM.run({
+                byokConfig,
+                schema: kodyRulesExtractIdSchema,
+                system: prompt_kodyrules_extract_id_system(),
+                user: prompt_kodyrules_extract_id_user({
+                    suggestionContent: updatedContent,
+                }),
+                runName: `${KodyRulesAnalysisService.name}::${runName}`,
                 organizationId: organizationAndTeamData?.organizationId,
-                teamId: organizationAndTeamData?.teamId,
-                prNumber,
-                suggestionId: suggestion?.id,
-            };
+                attrs: {
+                    teamId: organizationAndTeamData?.teamId,
+                    prNumber,
+                    suggestionId: suggestion?.id,
+                },
+            });
 
-            const { result: extraction } =
-                await this.observabilityService.runLLMInSpan({
-                    spanName,
-                    runName,
-                    attrs: spanAttrs,
-                    byokConfig,
-                    exec: async (callbacks) => {
-                        return await promptRunner
-                            .builder()
-                            .setParser(ParserType.STRING)
-                            .setLLMJsonMode(true)
-                            .setPayload({ suggestionContent: updatedContent })
-                            .addPrompt({
-                                prompt: prompt_kodyrules_extract_id_system,
-                                role: PromptRole.SYSTEM,
-                            })
-                            .addPrompt({
-                                prompt: prompt_kodyrules_extract_id_user,
-                                role: PromptRole.USER,
-                            })
-                            .addMetadata({
-                                organizationId:
-                                    organizationAndTeamData?.organizationId,
-                                teamId: organizationAndTeamData?.teamId,
-                                pullRequestId: prNumber,
-                                provider:
-                                    byokConfig?.main?.provider || provider,
-                                fallbackProvider:
-                                    byokConfig?.fallback?.provider ||
-                                    fallbackProvider,
-                                model: byokConfig?.main?.model,
-                                fallbackModel: byokConfig?.fallback?.model,
-                                runName,
-                            })
-                            .addTags([
-                                ...this.buildTags(provider, 'primary'),
-                                ...this.buildTags(fallbackProvider, 'fallback'),
-                            ])
-                            .addCallbacks(callbacks)
-                            .setRunName(runName)
-                            .setTemperature(0)
-                            .execute();
-                    },
-                });
-
-            if (!extraction) {
-                const message = `No Kody Rule IDs extracted from content for PR#${prNumber}`;
-                this.logger.warn({
-                    message,
-                    context: KodyRulesAnalysisService.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        prNumber,
-                        suggestionId: suggestion.id,
-                    },
-                });
-                throw new Error(message);
+            if (extraction?.ids?.length) {
+                return extraction.ids;
             }
 
-            if (extraction) {
-                const cleanResponse = extraction.replace(/```json\n|```/g, '');
-                const parsedIds = tryParseJSONObject(cleanResponse);
-
-                if (parsedIds?.ids?.length) {
-                    return parsedIds.ids;
-                }
-            }
+            this.logger.warn({
+                message: `No Kody Rule IDs extracted from content for PR#${prNumber}`,
+                context: KodyRulesAnalysisService.name,
+                metadata: {
+                    organizationAndTeamData,
+                    prNumber,
+                    suggestionId: suggestion.id,
+                },
+            });
         } catch (error) {
             this.logger.error({
                 message: 'Error in LLM fallback for ID extraction',
@@ -404,12 +382,10 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
             !!suggestions &&
             !!suggestions?.codeSuggestions &&
             suggestions?.codeSuggestions?.length > 0;
+        // Retained only as an observability label for the downstream
+        // token-usage log. Actual model selection now flows through
+        // `runStructuredReviewCall` (org BYOK, or the managed review default).
         const provider = LLMModelProvider.GEMINI_2_5_PRO;
-        // Fallback to a Vertex (SA-auth) Gemini model. The legacy v2 engine
-        // builds Vertex models via `ChatVertexAI` (Gemini protocol only), so
-        // `VERTEX_CLAUDE_3_5_SONNET` was silently broken as a fallback here.
-        // Claude on Vertex is supported via BYOK (v5) only.
-        const fallbackProvider = LLMModelProvider.VERTEX_GEMINI_2_5_PRO;
 
         const baseContext = await this.prepareAnalysisContext(
             fileContext,
@@ -492,121 +468,74 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
             externalReferencesMap,
         };
 
-        const runName = 'kodyRulesAnalyzeCodeWithAI';
-        const spanName = `${KodyRulesAnalysisService.name}::${runName}`;
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            context?.codeReviewConfig?.byokConfig,
-        );
-
-        const spanAttrs = {
-            type: promptRunner.executeMode,
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            file: { name: fileContext?.file?.filename },
-        };
-
-        const byokConfigRef = context?.codeReviewConfig?.byokConfig;
+        const byokConfig = context?.codeReviewConfig?.byokConfig;
+        const organizationId = organizationAndTeamData?.organizationId;
 
         try {
-            const { result } = await this.observabilityService.runLLMInSpan({
-                spanName,
-                runName,
-                attrs: spanAttrs,
-                byokConfig: byokConfigRef,
-                exec: async (callbacks) => {
-                    const classifier = this.getClassifier(
-                        promptRunner,
-                        provider,
-                        fallbackProvider,
+            // Each structured call now carries its own AI-SDK span internally
+            // (runStructuredReviewCall). The former single `runLLMInSpan`
+            // wrapper is dropped so there is exactly one span per call (Q4 /
+            // T-03-09) instead of an outer wrapper double-counting usage.
+            const [classifiedRulesResult, updateStandardSuggestionsResult] =
+                await Promise.all([
+                    this.runClassifier(
                         extendedContext,
-                        context?.codeReviewConfig?.byokConfig,
-                        callbacks,
-                    );
-                    const updater = this.getUpdater(
-                        promptRunner,
-                        provider,
-                        fallbackProvider,
-                        extendedContext,
-                        context?.codeReviewConfig?.byokConfig,
-                        callbacks,
-                    );
-
-                    const [
-                        classifiedRulesResult,
-                        updateStandardSuggestionsResult,
-                    ] = await Promise.all([
-                        classifier.execute(),
-                        hasCodeSuggestions
-                            ? updater?.execute()
-                            : Promise.resolve(undefined),
-                    ]);
-
-                    const classifiedRules = this.processClassifierResponse(
-                        baseContext.kodyRules,
-                        classifiedRulesResult,
-                    );
-
-                    const updatedSuggestions = this.processUpdatedSuggestions(
-                        organizationAndTeamData,
+                        byokConfig,
+                        organizationId,
                         prNumber,
-                        updateStandardSuggestionsResult,
-                        fileContext,
-                        provider,
-                        extendedContext,
-                    );
+                    ),
+                    hasCodeSuggestions
+                        ? this.runUpdater(
+                              extendedContext,
+                              byokConfig,
+                              organizationId,
+                              prNumber,
+                          )
+                        : Promise.resolve(undefined),
+                ]);
 
-                    if (!classifiedRules || classifiedRules?.length === 0) {
-                        if (updatedSuggestions) {
-                            const out = this.addSeverityToSuggestions(
-                                updatedSuggestions,
-                                context?.codeReviewConfig?.kodyRules || [],
-                            );
-                            return { shortCircuit: true, output: out };
-                        }
-                        return {
-                            shortCircuit: true,
-                            output: { codeSuggestions: [] },
-                        };
-                    }
+            const classifiedRules = this.processClassifierResponse(
+                baseContext.kodyRules,
+                classifiedRulesResult,
+            );
 
-                    extendedContext = {
-                        ...extendedContext,
-                        filteredKodyRules: classifiedRules,
-                        updatedSuggestions: updatedSuggestions ?? undefined,
-                    };
+            const updatedSuggestions = this.processUpdatedSuggestions(
+                organizationAndTeamData,
+                prNumber,
+                updateStandardSuggestionsResult,
+                fileContext,
+                provider,
+                extendedContext,
+            );
 
-                    const generator = this.getGenerator(
-                        promptRunner,
-                        provider,
-                        fallbackProvider,
-                        extendedContext,
-                        context?.codeReviewConfig?.byokConfig,
-                        callbacks,
-                    );
-
-                    const generatedKodyRulesSuggestionsResult =
-                        await generator.execute();
-
-                    return {
-                        shortCircuit: false,
-                        generatedKodyRulesSuggestionsResult,
+            if (!classifiedRules || classifiedRules?.length === 0) {
+                if (updatedSuggestions) {
+                    return this.addSeverityToSuggestions(
                         updatedSuggestions,
-                    };
-                },
-            });
-
-            if (result?.shortCircuit) {
-                return result.output as AIAnalysisResult;
+                        context?.codeReviewConfig?.kodyRules || [],
+                    );
+                }
+                return { codeSuggestions: [] };
             }
+
+            extendedContext = {
+                ...extendedContext,
+                filteredKodyRules: classifiedRules,
+                updatedSuggestions: updatedSuggestions ?? undefined,
+            };
+
+            const generatedKodyRulesSuggestionsResult =
+                await this.runGenerator(
+                    extendedContext,
+                    byokConfig,
+                    organizationId,
+                    prNumber,
+                );
 
             const generatedKodyRulesSuggestions = this.processLLMResponse(
                 organizationAndTeamData,
                 prNumber,
-                result.generatedKodyRulesSuggestionsResult,
+                generatedKodyRulesSuggestionsResult,
                 fileContext,
                 provider,
                 extendedContext,
@@ -618,10 +547,10 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 ],
             };
 
-            if (result?.updatedSuggestions) {
+            if (updatedSuggestions) {
                 finalOutput.codeSuggestions = [
                     ...finalOutput.codeSuggestions,
-                    ...(result.updatedSuggestions?.codeSuggestions ?? []),
+                    ...(updatedSuggestions?.codeSuggestions ?? []),
                 ];
             }
 
@@ -650,198 +579,82 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         }
     }
 
-    private getClassifier(
-        promptRunner: BYOKPromptRunnerService,
-        provider: LLMModelProvider,
-        fallbackProvider: LLMModelProvider,
+    /**
+     * Classifier call — determines which Kody Rules are violated. Runs a single
+     * structured call on the org's BYOK model (or the managed review default),
+     * returning the parsed classifier object consumed by
+     * `processClassifierResponse`.
+     */
+    private runClassifier(
         context: KodyRulesExtendedContext,
-        byokConfig?: BYOKConfig,
-        callbacks?: any[],
-    ) {
-        const builder = promptRunner
-            .builder()
-            .setParser(ParserType.ZOD, kodyRulesClassifierSchema, {
-                provider: LLMModelProvider.OPENAI_GPT_4O_MINI,
-                fallbackProvider: LLMModelProvider.OPENAI_GPT_4O,
-            })
-            .setLLMJsonMode(true)
-            .setTemperature(0)
-            .setPayload(context)
-            .addPrompt({
-                prompt: prompt_kodyrules_classifier_system,
-                role: PromptRole.SYSTEM,
-            })
-            .addPrompt({
-                prompt: prompt_kodyrules_classifier_user,
-                role: PromptRole.USER,
-            })
-            .addMetadata({
-                organizationId:
-                    context?.organizationAndTeamData?.organizationId,
+        byokConfig: NormalizedModel | undefined,
+        organizationId: string | undefined,
+        prNumber: number,
+    ): Promise<KodyRulesClassifierSchema> {
+        return LLM.run({
+            byokConfig,
+            schema: kodyRulesClassifierSchema,
+            system: prompt_kodyrules_classifier_system(),
+            user: prompt_kodyrules_classifier_user(context),
+            runName: `${KodyRulesAnalysisService.name}::classifierKodyRulesAnalyzeCodeWithAI`,
+            organizationId,
+            attrs: {
                 teamId: context?.organizationAndTeamData?.teamId,
-                pullRequestId: context?.pullRequest?.number,
-                provider: byokConfig?.main?.provider || provider,
-                fallbackProvider:
-                    byokConfig?.fallback?.provider || fallbackProvider,
-                model: byokConfig?.main?.model,
-                fallbackModel: byokConfig?.fallback?.model,
-                runName: 'classifierKodyRulesAnalyzeCodeWithAI',
-            })
-            .addTags([
-                ...this.buildTags(provider, 'primary'),
-                ...this.buildTags(fallbackProvider, 'fallback'),
-            ])
-            .setRunName('classifierKodyRulesAnalyzeCodeWithAI');
-
-        if (callbacks?.length) {
-            builder.addCallbacks(callbacks);
-        }
-
-        return builder;
+                pullRequestId: prNumber,
+            },
+        });
     }
 
-    private getUpdater(
-        promptRunner: BYOKPromptRunnerService,
-        provider: LLMModelProvider,
-        fallbackProvider: LLMModelProvider,
+    /**
+     * Update-standard-suggestions call. The downstream
+     * `processUpdatedSuggestions` still parses a JSON STRING (kept byte-for-byte
+     * across the migration), so the structured result is re-serialized to
+     * preserve that contract exactly.
+     */
+    private async runUpdater(
         context: KodyRulesExtendedContext,
-        byokConfig?: BYOKConfig,
-        callbacks?: any[],
-    ) {
-        const builder = promptRunner
-            .builder()
-            .setParser(ParserType.STRING)
-            .setLLMJsonMode(true)
-            .setTemperature(0)
-            .setPayload(context)
-            .addPrompt({
-                prompt: prompt_kodyrules_updatestdsuggestions_system,
-                role: PromptRole.SYSTEM,
-            })
-            .addPrompt({
-                prompt: prompt_kodyrules_updatestdsuggestions_user,
-                role: PromptRole.USER,
-            })
-            .addMetadata({
-                organizationId:
-                    context?.organizationAndTeamData?.organizationId,
+        byokConfig: NormalizedModel | undefined,
+        organizationId: string | undefined,
+        prNumber: number,
+    ): Promise<string> {
+        const result = await LLM.run({
+            byokConfig,
+            schema: kodyRulesUpdateSchema,
+            system: prompt_kodyrules_updatestdsuggestions_system(),
+            user: prompt_kodyrules_updatestdsuggestions_user(context),
+            runName: `${KodyRulesAnalysisService.name}::updateStandardSuggestionsAnalyzeCodeWithAI`,
+            organizationId,
+            attrs: {
                 teamId: context?.organizationAndTeamData?.teamId,
-                pullRequestId: context?.pullRequest?.number,
-                provider: byokConfig?.main?.provider || provider,
-                fallbackProvider:
-                    byokConfig?.fallback?.provider || fallbackProvider,
-                model: byokConfig?.main?.model,
-                fallbackModel: byokConfig?.fallback?.model,
-                runName: 'updateStandardSuggestionsAnalyzeCodeWithAI',
-            })
-            .addTags([
-                ...this.buildTags(provider, 'primary'),
-                ...this.buildTags(fallbackProvider, 'fallback'),
-            ])
-            .setRunName('updateStandardSuggestionsAnalyzeCodeWithAI');
+                pullRequestId: prNumber,
+            },
+        });
 
-        if (callbacks?.length) {
-            builder.addCallbacks(callbacks);
-        }
-
-        return builder;
+        return JSON.stringify(result ?? {});
     }
 
-    private getGuardian(
-        promptRunner: BYOKPromptRunnerService,
-        provider: LLMModelProvider,
-        fallbackProvider: LLMModelProvider,
+    /**
+     * Suggestion-generation call — produces the Kody-Rules code suggestions.
+     * Returns the parsed generator object consumed by `processLLMResponse`.
+     */
+    private runGenerator(
         context: KodyRulesExtendedContext,
-        byokConfig?: BYOKConfig,
-        callbacks?: any[],
-    ) {
-        const builder = promptRunner
-            .builder()
-            .setParser(ParserType.STRING) // mantém a lógica atual
-            .setLLMJsonMode(true) // idem
-            .setTemperature(0)
-            .setPayload(context)
-            .addPrompt({
-                prompt: prompt_kodyrules_guardian_system,
-                role: PromptRole.SYSTEM,
-            })
-            .addPrompt({
-                prompt: prompt_kodyrules_guardian_user,
-                role: PromptRole.USER,
-            })
-            .addMetadata({
-                organizationId:
-                    context?.organizationAndTeamData?.organizationId,
+        byokConfig: NormalizedModel | undefined,
+        organizationId: string | undefined,
+        prNumber: number,
+    ): Promise<z.infer<typeof kodyRulesGeneratorSchema>> {
+        return LLM.run({
+            byokConfig,
+            schema: kodyRulesGeneratorSchema,
+            system: prompt_kodyrules_suggestiongeneration_system(),
+            user: prompt_kodyrules_suggestiongeneration_user(context),
+            runName: `${KodyRulesAnalysisService.name}::suggestionGenerationKodyRulesAnalyzeCodeWithAI`,
+            organizationId,
+            attrs: {
                 teamId: context?.organizationAndTeamData?.teamId,
-                pullRequestId: context?.pullRequest?.number,
-                provider: byokConfig?.main?.provider || provider,
-                fallbackProvider:
-                    byokConfig?.fallback?.provider || fallbackProvider,
-                model: byokConfig?.main?.model,
-                fallbackModel: byokConfig?.fallback?.model,
-                runName: 'guardianKodyRulesAnalyzeCodeWithAI',
-            })
-            .addTags([
-                ...this.buildTags(provider, 'primary'),
-                ...this.buildTags(fallbackProvider, 'fallback'),
-            ])
-            .setRunName('guardianKodyRulesAnalyzeCodeWithAI');
-
-        if (callbacks?.length) {
-            builder.addCallbacks(callbacks);
-        }
-
-        return builder;
-    }
-
-    private getGenerator(
-        promptRunner: BYOKPromptRunnerService,
-        provider: LLMModelProvider,
-        fallbackProvider: LLMModelProvider,
-        context: KodyRulesExtendedContext,
-        byokConfig?: BYOKConfig,
-        callbacks?: any[],
-    ) {
-        const builder = promptRunner
-            .builder()
-            .setParser(ParserType.ZOD, kodyRulesGeneratorSchema, {
-                provider: LLMModelProvider.OPENAI_GPT_4O_MINI,
-                fallbackProvider: LLMModelProvider.OPENAI_GPT_4O,
-            })
-            .setLLMJsonMode(true)
-            .setTemperature(0)
-            .setPayload(context)
-            .addPrompt({
-                prompt: prompt_kodyrules_suggestiongeneration_system,
-                role: PromptRole.SYSTEM,
-            })
-            .addPrompt({
-                prompt: prompt_kodyrules_suggestiongeneration_user,
-                role: PromptRole.USER,
-            })
-            .addMetadata({
-                organizationId:
-                    context?.organizationAndTeamData?.organizationId,
-                teamId: context?.organizationAndTeamData?.teamId,
-                pullRequestId: context?.pullRequest?.number,
-                provider: byokConfig?.main?.provider || provider,
-                fallbackProvider:
-                    byokConfig?.fallback?.provider || fallbackProvider,
-                model: byokConfig?.main?.model,
-                fallbackModel: byokConfig?.fallback?.model,
-                runName: 'suggestionGenerationKodyRulesAnalyzeCodeWithAI',
-            })
-            .addTags([
-                ...this.buildTags(provider, 'primary'),
-                ...this.buildTags(fallbackProvider, 'fallback'),
-            ])
-            .setRunName('suggestionGenerationKodyRulesAnalyzeCodeWithAI');
-
-        if (callbacks?.length) {
-            builder.addCallbacks(callbacks);
-        }
-
-        return builder;
+                pullRequestId: prNumber,
+            },
+        });
     }
 
     private addSeverityToSuggestions(
@@ -1264,13 +1077,6 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
             });
             return null;
         }
-    }
-
-    private buildTags(
-        provider: LLMModelProvider,
-        tier: 'primary' | 'fallback',
-    ) {
-        return [`model:${provider}`, `tier:${tier}`, 'kodyRules'];
     }
 
     private async logTokenUsage(metadata: any) {

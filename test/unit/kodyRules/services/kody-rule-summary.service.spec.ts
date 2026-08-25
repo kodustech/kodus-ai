@@ -1,17 +1,28 @@
 import { createHash } from 'crypto';
 import { KodyRuleSummaryService } from '@libs/kodyRules/infrastructure/adapters/services/kody-rule-summary.service';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { SubscriptionStatus } from '@libs/ee/license/interfaces/license.interface';
 import { IKodyRule } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 
-const loggerSpy = {
-    log: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
-};
-jest.mock('@libs/core/log/logger', () => ({
-    createLogger: () => loggerSpy,
-}));
+// Build the spy INSIDE the factory (and expose it) so createLogger returns a
+// real object during the hoisted service import — importing the service now
+// pulls llm.ts -> reasoning-options.ts, which calls createLogger at module load,
+// i.e. BEFORE a top-level `const loggerSpy` would be initialized (TDZ).
+jest.mock('@libs/core/log/logger', () => {
+    const spy = {
+        log: jest.fn(),
+        error: jest.fn(),
+        warn: jest.fn(),
+        debug: jest.fn(),
+        info: jest.fn(),
+    };
+    return { createLogger: () => spy, __loggerSpy: spy };
+});
+const loggerSpy = (
+    jest.requireMock('@libs/core/log/logger') as {
+        __loggerSpy: Record<string, jest.Mock>;
+    }
+).__loggerSpy;
 
 const tracedGenerateTextMock = jest.fn();
 jest.mock('@libs/llm/llm-call', () => ({
@@ -22,17 +33,35 @@ jest.mock('@libs/llm/llm-call', () => ({
 
 jest.mock('@libs/llm/byok-to-vercel', () => ({
     byokToVercelModel: jest.fn(() => ({})),
+    buildModelFromSlot: jest.fn(() => ({})),
     getModelName: jest.fn(() => 'openai_compatible:test-model'),
+    // The real runTextReviewCall path (via LLM.run) resolves a per-slot limiter.
+    // No BYOK slot here → the real getLimiterForSlot returns null (no wrapping),
+    // so a null stub is faithful. The json_schema helpers are only hit on the
+    // structured path (mocked separately) but are stubbed for completeness.
+    getLimiterForSlot: jest.fn(() => null),
+    mayUseJsonSchema: jest.fn(() => false),
+    markJsonSchemaUnsupported: jest.fn(),
+    isJsonSchemaUnsupportedError: jest.fn(() => false),
 }));
 
 jest.mock('@libs/core/log/langfuse', () => ({
     buildLangfuseTelemetry: jest.fn(() => undefined),
+    // The real runTextReviewCall spreads toAiSdkTelemetryArgs(...) onto the SDK
+    // call — undefined here would throw and get swallowed into a null summary.
+    toAiSdkTelemetryArgs: jest.fn(() => ({})),
 }));
 
 // Structured calls (atom decomposition + per-atom detector compilation) are
 // routed by runName so each test controls both stages independently.
 const structuredCallMock = jest.fn();
+// Override ONLY the schema path (atom-decomposition / detector-compilation).
+// The text path (summary generation) must keep the REAL runTextReviewCall so it
+// drives the mocked tracedGenerateText — LLM.run routes text vs schema to these
+// two functions, so a full module mock (dropping runTextReviewCall) breaks the
+// summary path.
 jest.mock('@libs/llm/structured-review-call', () => ({
+    ...jest.requireActual('@libs/llm/structured-review-call'),
     runStructuredReviewCall: (...args: unknown[]) =>
         structuredCallMock(...args),
 }));
@@ -54,6 +83,9 @@ function createService(
     } = {},
 ) {
     const permissionValidationService = {
+        // v2-native: generateAtoms/summary ask the service for the codeReview
+        // carrier (null → env/managed default).
+        resolveTaskSlot: jest.fn().mockResolvedValue(null),
         getBYOKConfig: jest
             .fn()
             .mockResolvedValue(
@@ -79,6 +111,11 @@ function createService(
     const observabilityService = {
         runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
     };
+    // LLM.run reads observability through the PORT (getLlmObservability), not the
+    // service's injected instance — register the same stub so LLM.run's text/
+    // schema calls are intercepted (the text path then runs the real
+    // runTextReviewCall → mocked tracedGenerateText).
+    setLlmObservability(observabilityService as any);
     const service = new KodyRuleSummaryService(
         permissionValidationService as any,
         repository as any,

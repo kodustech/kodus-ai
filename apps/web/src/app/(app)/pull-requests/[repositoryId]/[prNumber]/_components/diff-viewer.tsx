@@ -118,26 +118,37 @@ export function DiffViewer({
 
     return (
         <div>
-            {/* Slim toolbar — split / unified toggle */}
-            <div className="mb-3 flex items-center justify-end gap-1">
+            {/* Slim toolbar — split / unified toggle. Active mode carries a
+                filled/pressed background + ring so the current selection is
+                visible at rest; both buttons expose tooltips + aria state. */}
+            <div
+                className="mb-3 flex items-center justify-end gap-1"
+                role="group"
+                aria-label="Diff view mode">
                 <button
+                    type="button"
                     onClick={() => setDiffStyle("split")}
+                    aria-label="Split view"
+                    aria-pressed={diffStyle === "split"}
                     className={cn(
                         "rounded p-1.5 transition-colors",
                         diffStyle === "split"
-                            ? "bg-[var(--bg-input)] text-[var(--text)]"
-                            : "text-[var(--text-dim)] hover:text-[var(--text)]",
+                            ? "bg-[var(--bg-input)] text-[var(--text)] ring-1 ring-[var(--border-strong)]"
+                            : "text-[var(--text-dim)] hover:bg-[var(--bg-3)]/50 hover:text-[var(--text)]",
                     )}
                     title="Split view">
                     <ColumnsIcon className="size-3.5" />
                 </button>
                 <button
+                    type="button"
                     onClick={() => setDiffStyle("unified")}
+                    aria-label="Unified view"
+                    aria-pressed={diffStyle === "unified"}
                     className={cn(
                         "rounded p-1.5 transition-colors",
                         diffStyle === "unified"
-                            ? "bg-[var(--bg-input)] text-[var(--text)]"
-                            : "text-[var(--text-dim)] hover:text-[var(--text)]",
+                            ? "bg-[var(--bg-input)] text-[var(--text)] ring-1 ring-[var(--border-strong)]"
+                            : "text-[var(--text-dim)] hover:bg-[var(--bg-3)]/50 hover:text-[var(--text)]",
                     )}
                     title="Unified view">
                     <RowsIcon className="size-3.5" />
@@ -174,7 +185,7 @@ export function DiffViewer({
                             <p className="text-xs text-red-400">
                                 Failed to load file diff
                             </p>
-                            <p className="text-text-tertiary mt-1 text-[10px]">
+                            <p className="text-text-tertiary mt-1 text-3xs">
                                 {patchesError.message}
                             </p>
                         </div>

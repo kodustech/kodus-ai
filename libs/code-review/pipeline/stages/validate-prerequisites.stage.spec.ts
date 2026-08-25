@@ -37,6 +37,7 @@ describe('ValidatePrerequisitesStage', () => {
     let mockPermissionValidationService: {
         validateExecutionPermissions: jest.Mock;
         getBYOKConfig: jest.Mock;
+        resolveTaskSlot: jest.Mock;
     };
     let mockLicenseService: {
         startTrial: jest.Mock;
@@ -105,6 +106,9 @@ describe('ValidatePrerequisitesStage', () => {
         mockPermissionValidationService = {
             validateExecutionPermissions: jest.fn(),
             getBYOKConfig: jest.fn().mockResolvedValue(null),
+            // native "is BYOK?" heal check resolves the codeReview carrier via
+            // the per-task API; null → env/managed default (no client BYOK).
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
         };
 
         mockLicenseService = {
@@ -702,7 +706,7 @@ describe('ValidatePrerequisitesStage', () => {
                 mockCodeManagementService.createIssueComment.mock.calls[0][0]
                     .body;
             expect(body).toContain('Kodus-paid PR reviews');
-            expect(body).toContain('/organization/byok');
+            expect(body).toContain('/byok');
             expect(body).not.toContain('trial has ended');
         });
 

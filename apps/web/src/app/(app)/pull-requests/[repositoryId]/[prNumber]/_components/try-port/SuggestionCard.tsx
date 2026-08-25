@@ -1,10 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import {
+    getSeverityColorVar,
+    IssueSeverityLevelBadge,
+} from "@components/system/issue-severity-level-badge";
+import { toast } from "@components/ui/toaster/use-toast";
 import type { PrInfo, PromptContext, ReviewIssue } from "./types";
 import { CopyButton } from "./CopyButton";
 import { TOKEN_STYLE, tokenize } from "./highlight";
-import { buildLlmPromptForIssue } from "./llm-prompt";
+import { buildAgentPromptForIssue, buildLlmPromptForIssue } from "./llm-prompt";
 
 const KODY_AVATAR_URL = "https://avatars.githubusercontent.com/in/413034?v=4";
 
@@ -14,14 +19,6 @@ const LABEL_BY_SEVERITY: Record<string, string> = {
     medium: "Suggestion",
     low: "Nit",
     info: "Note",
-};
-
-const ICON_TONE_BY_SEVERITY: Record<string, string> = {
-    critical: "text-[var(--red)]",
-    high: "text-[var(--red)]",
-    medium: "text-[var(--yellow)]",
-    low: "text-[var(--accent)]",
-    info: "text-[var(--text-dim)]",
 };
 
 function sevKey(s?: string) {
@@ -46,6 +43,8 @@ export function SuggestionCard({
     const [open, setOpen] = useState(true);
     const sev = sevKey(issue.severity);
     const label = LABEL_BY_SEVERITY[sev] ?? "Suggestion";
+    // Single-source tier colour, shared with the rail dot + summary bar.
+    const accent = getSeverityColorVar(issue.severity);
     const range =
         issue.endLine && issue.endLine !== issue.line
             ? `R${issue.line}-${issue.endLine}`
@@ -54,6 +53,9 @@ export function SuggestionCard({
     return (
         <section
             id={issue.id ? `suggestion-${issue.id}` : undefined}
+            // Left accent bar tinted by severity so the card's tier reads at a
+            // glance and matches its rail item.
+            style={{ borderLeft: `3px solid ${accent}` }}
             className={`rounded-lg border bg-[var(--bg-2)] overflow-hidden my-2 ${
                 highlighted
                     ? "field-highlight border-[var(--accent)] ring-1 ring-[var(--accent)]"
@@ -62,16 +64,19 @@ export function SuggestionCard({
             <button
                 onClick={() => setOpen((v) => !v)}
                 className="w-full flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-[var(--bg-3)]/50 transition-colors">
-                <div className="flex items-center gap-2">
-                    <BugIcon tone={ICON_TONE_BY_SEVERITY[sev]} />
-                    <span className="text-[13px] font-medium text-[var(--text)]">
+                <div className="flex flex-wrap items-center gap-2">
+                    <BugIcon color={accent} />
+                    {issue.severity && (
+                        <IssueSeverityLevelBadge severity={issue.severity} />
+                    )}
+                    <span className="text-review font-medium text-[var(--text)]">
                         {label}
                     </span>
-                    <span className="text-[10.5px] font-mono px-1.5 py-0.5 rounded bg-[var(--bg-3)] border border-[var(--border)] text-[var(--text-muted)]">
+                    <span className="text-2xs font-mono px-1.5 py-0.5 rounded bg-[var(--bg-3)] border border-[var(--border)] text-[var(--text-muted)]">
                         {range}
                     </span>
                     {issue.category && (
-                        <span className="text-[11px] text-[var(--text-dim)]">
+                        <span className="text-2xs text-[var(--text-dim)]">
                             · {issue.category}
                         </span>
                     )}
@@ -116,7 +121,7 @@ function Identity() {
                 height={20}
                 className="rounded-full ring-1 ring-[var(--border)]"
             />
-            <span className="text-[13px] font-medium text-[var(--text)]">
+            <span className="text-review font-medium text-[var(--text)]">
                 Kody
             </span>
         </div>
@@ -132,7 +137,7 @@ function SuggestionBlock({
 }) {
     return (
         <div>
-            <p className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-dim)] font-semibold mb-1.5">
+            <p className="text-2xs uppercase tracking-[0.14em] text-[var(--text-dim)] font-semibold mb-1.5">
                 {label}
             </p>
             {children}
@@ -155,16 +160,36 @@ function Footer({
 
     return (
         <footer className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[var(--border)]/60">
-            <CopyButton
-                size="xs"
-                label="Copy fix"
-                getText={() =>
-                    buildLlmPromptForIssue(
-                        { ...issue, file: issue.file || filePath },
-                        promptCtx,
-                    )
-                }
-            />
+            <div className="flex flex-wrap items-center gap-2">
+                <CopyButton
+                    size="xs"
+                    label="Copy fix"
+                    getText={() =>
+                        buildLlmPromptForIssue(
+                            { ...issue, file: issue.file || filePath },
+                            promptCtx,
+                        )
+                    }
+                />
+                <CopyButton
+                    size="xs"
+                    label="Copy AI prompt"
+                    getText={() =>
+                        buildAgentPromptForIssue(
+                            { ...issue, file: issue.file || filePath },
+                            promptCtx,
+                        )
+                    }
+                    onCopied={() =>
+                        toast({
+                            variant: "success",
+                            title: "AI prompt copied",
+                            description:
+                                "Paste it into Cursor or Claude Code to apply this fix.",
+                        })
+                    }
+                />
+            </div>
             {githubHref && (
                 <FooterAction href={githubHref} icon={<GithubIcon />}>
                     Open on provider
@@ -186,7 +211,7 @@ function FooterAction({
     href?: string;
 }) {
     const base =
-        "inline-flex items-center gap-1.5 text-[12px] px-2.5 py-1 rounded-md border border-[var(--border)] bg-[var(--bg-2)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-3)] transition-colors";
+        "inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md border border-[var(--border)] bg-[var(--bg-2)] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--border-strong)] hover:bg-[var(--bg-3)] transition-colors";
     if (href) {
         return (
             <a
@@ -220,7 +245,7 @@ function RichBody({ text, muted = false }: { text: string; muted?: boolean }) {
     const colorClass = muted ? "text-[var(--text-muted)]" : "text-[var(--text)]";
     return (
         <div
-            className={`text-[13.5px] leading-relaxed ${colorClass} space-y-2 min-w-0`}>
+            className={`text-review leading-relaxed ${colorClass} space-y-2 min-w-0`}>
             {segments.map((seg, idx) => {
                 if (seg.type === "code") {
                     return <CodeBlock key={idx} code={seg.content} />;
@@ -265,7 +290,7 @@ function CodeBlock({ code }: { code: string }) {
     const tokens = tokenize(code);
     return (
         <div className="rounded-md border border-[var(--border)] bg-[var(--bg)] overflow-hidden">
-            <pre className="overflow-x-auto px-3 py-2.5 text-[12.5px] leading-[1.65] font-mono whitespace-pre kodus-scroll">
+            <pre className="overflow-x-auto px-3 py-2.5 text-xs leading-[1.65] font-mono whitespace-pre kodus-scroll">
                 <code>
                     {tokens.map((tok, idx) => (
                         <span key={idx} style={TOKEN_STYLE[tok.kind]}>
@@ -311,7 +336,7 @@ function renderInlineCode(text: string): React.ReactNode[] {
                 // `break-all` lets the long identifiers (camelCase
                 // function names, file paths) wrap inside the card
                 // instead of overflowing horizontally.
-                className="font-mono text-[12px] px-1 py-px rounded bg-[var(--bg-3)] border border-[var(--border)] text-[var(--accent)] break-all">
+                className="font-mono text-xs px-1 py-px rounded bg-[var(--bg-3)] border border-[var(--border)] text-[var(--accent)] break-all">
                 {match[1]}
             </code>,
         );
@@ -345,14 +370,14 @@ function splitFences(
     return out;
 }
 
-function BugIcon({ tone }: { tone: string }) {
+function BugIcon({ color }: { color: string }) {
     return (
         <svg
             width="13"
             height="13"
             viewBox="0 0 24 24"
             fill="currentColor"
-            className={tone}
+            style={{ color }}
             aria-hidden>
             <circle cx="12" cy="12" r="3.5" />
         </svg>

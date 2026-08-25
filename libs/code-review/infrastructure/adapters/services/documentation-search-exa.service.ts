@@ -3,7 +3,9 @@ export const DOCUMENTATION_SEARCH_EXA_SERVICE_TOKEN = Symbol.for(
 );
 
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import { LLM } from '@libs/llm/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { z } from 'zod';
 import { DocumentationSearchCacheService } from '@libs/code-review/infrastructure/adapters/services/documentation-search-cache.service';
 import {
     DocumentationItem,
@@ -12,15 +14,6 @@ import {
 } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import { ObservabilityService } from '@libs/core/log/observability.service';
-import {
-    byokToVercelModel,
-    KODUS_TRIAL_MODEL,
-} from '@libs/llm/byok-to-vercel';
-import { tracedGenerateText } from '@libs/llm/llm-call';
-import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Exa from 'exa-js';
@@ -28,7 +21,7 @@ import pLimit from 'p-limit';
 import {
     prompt_code_review_documentation_formatter_system,
     prompt_code_review_documentation_formatter_user,
-} from '../../../../common/utils/langchainCommon/prompts/codeReviewDocumentationFormatter';
+} from '../../../../common/utils/prompts/codeReviewDocumentationFormatter';
 
 const CACHE_PROVIDER = 'exa';
 type ExaSearchResponse = Awaited<ReturnType<Exa['search']>>;
@@ -60,6 +53,13 @@ type ResultLike = {
 const EXA_CONCURRENCY = 5;
 const exaCallLimiter = pLimit(EXA_CONCURRENCY);
 
+// Minimal `{ markdown }` envelope for the Exa formatter's single-document
+// structured output. Hoisted to module scope so the strict-wire governance
+// suite can assert it stays OpenAI-strict compatible.
+export const documentationSearchExaFormatSchema = z.object({
+    markdown: z.string(),
+});
+
 @Injectable()
 export class DocumentationSearchExaService {
     private readonly logger = createLogger(DocumentationSearchExaService.name);
@@ -83,7 +83,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedModel;
         },
     ): Promise<Record<string, DocumentationItem[]>> {
         if (!this.exaClient) {
@@ -116,7 +116,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedModel;
         },
     ): Promise<DocumentationItem[]> {
         const queryTasks = this.normalizeQueryTasks(plan.queryTasks);
@@ -148,7 +148,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedModel;
         },
     ): Promise<DocumentationItem | null> {
         const queryNormalized = this.normalizeCacheSegment(task.query);
@@ -188,7 +188,7 @@ export class DocumentationSearchExaService {
         options?: {
             organizationAndTeamData?: OrganizationAndTeamData;
             prNumber?: number;
-            byokConfig?: BYOKConfig;
+            byokConfig?: NormalizedModel;
         },
     ): Promise<DocumentationItem | null> {
         if (!this.exaClient) {
@@ -421,7 +421,7 @@ export class DocumentationSearchExaService {
         rawSearchContent: string;
         organizationAndTeamData?: OrganizationAndTeamData;
         prNumber?: number;
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedModel;
     }): Promise<string> {
         if (!params.rawSearchContent.trim()) {
             return '';
@@ -429,56 +429,34 @@ export class DocumentationSearchExaService {
 
         try {
             const runName = 'documentationSearchExaFormat';
-            const spanName = `${DocumentationSearchExaService.name}::${runName}`;
 
-            const result = await this.observabilityService.runAiSdkLLMInSpan<any>(
-                {
-                    spanName,
-                    runName,
-                    model:
-                        params.byokConfig?.main?.model ?? KODUS_TRIAL_MODEL,
-                    attrs: {
-                        organizationId:
-                            params.organizationAndTeamData?.organizationId,
-                        prNumber: params.prNumber,
-                        packageName: params.packageName,
-                    },
-                    exec: async () => {
-                        // BYOK model when the org configured one; otherwise our
-                        // managed trial default. Only pin temperature when
-                        // BYOK sets one — some managed models reject a
-                        // non-default temperature.
-                        const model = byokToVercelModel(
-                            params.byokConfig ?? undefined,
-                            'main',
-                            {},
-                            KODUS_TRIAL_MODEL,
-                        );
-                        const configuredTemperature =
-                            params.byokConfig?.main?.temperature;
-                        return await tracedGenerateText({
-                            model: model as any,
-                            system: prompt_code_review_documentation_formatter_system,
-                            prompt: prompt_code_review_documentation_formatter_user(
-                                params,
-                            ),
-                            ...(configuredTemperature !== undefined
-                                ? { temperature: configuredTemperature }
-                                : {}),
-                            ...toAiSdkTelemetryArgs(
-                                buildLangfuseTelemetry(runName, {
-                                    organizationId:
-                                        params.organizationAndTeamData
-                                            ?.organizationId,
-                                    pullRequestId: params.prNumber,
-                                }),
-                            ),
-                        });
-                    },
+            // The formatter returns a single markdown document. runStructuredReviewCall
+            // is structured-output only (Output.object), so the markdown is carried in a
+            // minimal `{ markdown }` envelope and unwrapped below. Under this call the
+            // BYOK org runs on its own model unchanged; a non-BYOK org consolidates to
+            // the managed default instead of the pinned GEMINI_3_FLASH_PREVIEW (accepted,
+            // RESEARCH Pattern 1). The outer runLLMInSpan wrapper is dropped — the span
+            // is emitted once inside runStructuredReviewCall (Q4).
+            const response = await LLM.run({
+                byokConfig: params.byokConfig,
+                schema: documentationSearchExaFormatSchema,
+                organizationId: params.organizationAndTeamData?.organizationId,
+                runName: `${DocumentationSearchExaService.name}::${runName}`,
+                attrs: {
+                    provider: CACHE_PROVIDER,
+                    packageName: params.packageName,
+                    prNumber: params.prNumber,
+                    fallback: false,
                 },
-            );
+                system: prompt_code_review_documentation_formatter_system,
+                user: prompt_code_review_documentation_formatter_user({
+                    packageName: params.packageName,
+                    query: params.query,
+                    rawSearchContent: params.rawSearchContent,
+                }),
+            });
 
-            return (result?.text ?? '').trim();
+            return (response?.markdown ?? '').trim();
         } catch (error) {
             this.logger.warn({
                 message:

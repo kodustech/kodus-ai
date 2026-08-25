@@ -70,7 +70,7 @@ export class ValidateSuggestionsStage extends BasePipelineStage<CodeReviewPipeli
             }
 
             const maxInputTokens =
-                context.codeReviewConfig?.byokConfig?.main?.maxInputTokens;
+                context.codeReviewConfig?.resolvedModelSlot?.maxInputTokens;
 
             const candidates = await this.prepareValidationCandidates(
                 filtered,

@@ -1,6 +1,6 @@
 import { ContextDependency } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Injectable } from '@nestjs/common';
 
 import {
@@ -10,33 +10,16 @@ import {
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import {
-    buildLangfuseTelemetry,
-    toAiSdkTelemetryArgs,
-} from '@libs/core/log/langfuse';
-import {
     prompt_detect_external_references_system,
     prompt_detect_external_references_user,
-} from '@libs/common/utils/langchainCommon/prompts/externalReferences';
+} from '@libs/common/utils/prompts/externalReferences';
 import {
     prompt_kodyrules_detect_references_system,
     prompt_kodyrules_detect_references_user,
-} from '@libs/common/utils/langchainCommon/prompts/kodyRulesExternalReferences';
+} from '@libs/common/utils/prompts/kodyRulesExternalReferences';
 import { extractJsonFromResponse } from '@libs/common/utils/prompt-parser.utils';
-import {
-    byokToVercelModel,
-    getModelName,
-    KODUS_TRIAL_MODEL,
-} from '@libs/llm/byok-to-vercel';
-import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
-
-// Trial-only override: while the org is in the 14-day subscription trial
-// and hasn't wired a BYOK key, route reference detection through the
-// Kodus-funded Fireworks model so we don't burn the expensive production
-// default on Kodus's dime. Off-trial callers get no override, so
-// byokToVercelModel falls back to the production default (cloud) or
-// API_LLM_PROVIDER_MODEL (self-hosted). Any BYOK config takes precedence
-// over this in every case.
-const TRIAL_MODEL_OVERRIDE = KODUS_TRIAL_MODEL;
+import { getModelName, trialDefaultModel } from '@libs/llm/byok-to-vercel';
+import { LLM } from '@libs/llm/llm';
 
 /**
  * Kodus control markers are instructions to the sync engine, never file
@@ -92,7 +75,7 @@ export interface DetectReferencesParams {
     organizationAndTeamData: OrganizationAndTeamData;
     context?: 'rule' | 'instruction' | 'prompt';
     detectionMode?: 'rule' | 'prompt';
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedModel;
     subscriptionStatus?: string;
 }
 
@@ -121,22 +104,17 @@ export class ReferenceDetectorService {
     ): Promise<IDetectedReference[]> {
         const { organizationAndTeamData } = params;
 
-        const defaultModelOverride =
-            params.subscriptionStatus === 'trial'
-                ? TRIAL_MODEL_OVERRIDE
-                : undefined;
+        // Trial-only override: on the 14-day trial with no BYOK key, route
+        // reference detection through the Kodus-funded default so we don't burn
+        // the production model on Kodus's dime. Off-trial → undefined (resolver
+        // uses the production/env default). Any BYOK config still wins.
+        const defaultModelOverride = trialDefaultModel({
+            subscriptionStatus: params.subscriptionStatus,
+        });
 
-        const model = byokToVercelModel(
-            params.byokConfig,
-            'main',
-            {},
-            defaultModelOverride,
-        );
-
-        const resolvedModelName = getModelName(
-            params.byokConfig,
-            defaultModelOverride,
-        );
+        // The caller passes the already-resolved slot.
+        const byokSlot = params.byokConfig;
+        const resolvedModelName = getModelName(byokSlot, defaultModelOverride);
         this.logger.log({
             message: `[REF-DETECTOR-DEBUG] Resolved model: ${resolvedModelName}`,
             context: ReferenceDetectorService.name,
@@ -145,9 +123,9 @@ export class ReferenceDetectorService {
                 teamId: organizationAndTeamData.teamId,
                 requirementId: params.requirementId,
                 subscriptionStatus: params.subscriptionStatus,
-                hasByok: !!params.byokConfig,
-                byokMainProvider: params.byokConfig?.main?.provider,
-                byokMainModel: params.byokConfig?.main?.model,
+                hasByok: !!byokSlot,
+                byokMainProvider: byokSlot?.provider,
+                byokMainModel: byokSlot?.model,
                 defaultModelOverride,
                 resolvedModelName,
             },
@@ -173,19 +151,23 @@ export class ReferenceDetectorService {
                   context: params.context,
               });
 
-        const result = await generateText({
-            model,
+        // Run through the shared text executor (Porta 2): builds the same model
+        // (slot, else the trial default), adds the BYOK limiter + the slot's
+        // reasoning + a timeout, and preserves the telemetry. No observability
+        // span here — this call never recorded one, so observabilityService is
+        // omitted (the executor runs the call directly).
+        const raw = await LLM.run({
+            byokConfig: byokSlot,
             system: systemPrompt,
-            prompt: userPrompt,
-            ...toAiSdkTelemetryArgs(
-                buildLangfuseTelemetry('detectExternalReferences', {
-                    organizationId: organizationAndTeamData.organizationId,
-                    teamId: organizationAndTeamData.teamId,
-                }),
-            ),
+            user: userPrompt,
+            runName: 'detectExternalReferences',
+            defaultModelOverride,
+            organizationId: organizationAndTeamData.organizationId,
+            telemetryMetadata: {
+                organizationId: organizationAndTeamData.organizationId,
+                teamId: organizationAndTeamData.teamId,
+            },
         });
-
-        const raw = result.text;
         if (!raw) {
             return [];
         }

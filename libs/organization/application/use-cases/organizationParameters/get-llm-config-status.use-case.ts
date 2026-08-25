@@ -2,38 +2,29 @@ import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
-    describeEnvLLMConfig,
-    type EnvLLMProviderId,
-} from '@libs/llm/env-llm-config';
+    describeLLMConfigStatus,
+    type LLMConfigStatus,
+} from '@libs/llm/llm-config-status';
 import {
     IOrganizationParametersService,
     ORGANIZATION_PARAMETERS_SERVICE_TOKEN,
 } from '@libs/organization/domain/organizationParameters/contracts/organizationParameters.service.contract';
 import { Inject, Injectable } from '@nestjs/common';
 
-import { isByokSlotConfigured, type BYOKSlot } from './byok-config.util';
+// The LLM-config status shape lives in @libs/llm (llm-config-status.ts) — the
+// whole projection is LLM logic. Re-export the types here for back-compat, since
+// callers (the FE fetch layer) import them from this use-case's barrel.
+export type {
+    LLMConfigSource,
+    LLMModelStatus,
+    LLMConfigStatus,
+} from '@libs/llm/llm-config-status';
 
-export type LLMConfigSource = 'byok' | 'env' | 'none';
-
-export interface LLMConfigStatus {
-    source: LLMConfigSource;
-    byok: {
-        configured: boolean;
-        model?: string;
-        providerId?: string;
-        baseUrl?: string;
-    };
-    env: {
-        configured: boolean;
-        model?: string;
-        providerId?: EnvLLMProviderId;
-        baseUrl?: string;
-        vertexLocation?: string;
-        /** Parsed `API_LLM_TEMPERATURE_OVERRIDE`; only present when set. */
-        temperatureOverride?: number;
-    };
-}
-
+/**
+ * Thin DB shell: fetch the org's stored BYOK_CONFIG blob and hand it to the
+ * pure `describeLLMConfigStatus` projection in @libs/llm. No LLM logic here —
+ * only the persistence read + best-effort degrade.
+ */
 @Injectable()
 export class GetLLMConfigStatusUseCase implements IUseCase {
     constructor(
@@ -51,46 +42,6 @@ export class GetLLMConfigStatusUseCase implements IUseCase {
             )
             .catch(() => null);
 
-        const byokMain = (
-            parameter?.configValue as
-                | { main?: Partial<BYOKSlot> }
-                | undefined
-        )?.main;
-
-        // Provider-aware: most providers gate on `apiKey`, but Amazon
-        // Bedrock authenticates with `awsBearerToken` / IAM credentials
-        // and never sets `apiKey`. See `isByokSlotConfigured`.
-        const byok = isByokSlotConfigured(byokMain)
-            ? {
-                  configured: true,
-                  model: byokMain?.model,
-                  providerId: byokMain?.provider,
-                  baseUrl: byokMain?.baseURL,
-              }
-            : { configured: false };
-
-        const envDescriptor = describeEnvLLMConfig();
-        const env = envDescriptor.configured
-            ? {
-                  configured: true,
-                  model: envDescriptor.model,
-                  providerId: envDescriptor.providerId,
-                  baseUrl: envDescriptor.baseUrl,
-                  vertexLocation: envDescriptor.vertexLocation,
-                  // Surfaced so the dashboard can show "your env clamps
-                  // every LLM call to N" instead of leaving admins
-                  // guessing why hard-coded prompt temperatures are
-                  // ignored.
-                  temperatureOverride: envDescriptor.temperatureOverride,
-              }
-            : { configured: false };
-
-        const source: LLMConfigSource = byok.configured
-            ? 'byok'
-            : env.configured
-              ? 'env'
-              : 'none';
-
-        return { source, byok, env };
+        return describeLLMConfigStatus(parameter?.configValue);
     }
 }

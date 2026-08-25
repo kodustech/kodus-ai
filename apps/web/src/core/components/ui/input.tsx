@@ -9,7 +9,10 @@ const inputVariants = cva(
         "flex w-full items-center rounded-xl text-sm ring-1 transition",
         "bg-card-lv2 ring-card-lv3",
         "placeholder:text-text-placeholder/50",
-        "textinput-focused:ring-3 textinput-focused:brightness-120",
+        // Resting ring stays structural (card-lv3); only focus switches to the
+        // `--color-ring` token, which clears 3:1 on every surface. Declared
+        // before the invalid rules so a focused invalid field still reads red.
+        "textinput-focused:ring-3 textinput-focused:ring-ring textinput-focused:brightness-120",
         "textinput-invalid:border-danger",
         "textinput-focused-invalid:ring-danger",
         "textinput-hover:brightness-120",

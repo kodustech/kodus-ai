@@ -458,7 +458,15 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
 
                     try {
                         if (!pullRequest) {
-                            this.logger.warn({
+                            // EXPECTED on the dashboard read: a Postgres
+                            // execution row whose Mongo PR doc was pruned (or
+                            // never persisted — e.g. an env whose Mongo was
+                            // reset) simply has no enrichment. This fired once
+                            // PER execution inside the loop → thousands of
+                            // identical warns. It is not an anomaly, so it stays
+                            // at `debug` (available when debugging, off the logs
+                            // table) instead of `warn`.
+                            this.logger.debug({
                                 message: 'Pull request not found in MongoDB',
                                 context: GetEnrichedPullRequestsUseCase.name,
                                 metadata: {

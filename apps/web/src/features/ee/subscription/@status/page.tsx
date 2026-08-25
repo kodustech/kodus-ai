@@ -1,6 +1,7 @@
 import { authorizedFetch } from "@services/fetch";
 import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import { SETUP_PATHS } from "@services/setup";
+import { hasVisibleModels } from "src/features/ee/byok/_utils";
 import type { TeamMembersResponse } from "@services/setup/types";
 import { auth } from "src/core/config/auth";
 import { publicDomainsSet } from "src/core/utils/email";
@@ -55,14 +56,14 @@ export default async function SubscriptionStatus() {
     }).catch(() => undefined);
     const trialLicense =
         recalculatedLicense?.valid &&
-        recalculatedLicense.subscriptionStatus === "trial"
+            recalculatedLicense.subscriptionStatus === "trial"
             ? {
-                  ...recalculatedLicense,
-                  // Local config is the source of truth for a connected key;
-                  // billing's plan-derived `byok` stays true for a *_byok plan
-                  // even with no key, so never OR it in here.
-                  byok: hasByok,
-              }
+                ...recalculatedLicense,
+                // Local config is the source of truth for a connected key;
+                // billing's plan-derived `byok` stays true for a *_byok plan
+                // even with no key, so never OR it in here.
+                byok: hasByok,
+            }
             : undefined;
 
     return (

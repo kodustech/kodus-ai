@@ -169,9 +169,35 @@ export function DataTable<TData>({
                                                       onRowClick(row.original)
                                                 : undefined
                                         }
+                                        // A clickable row is an interactive
+                                        // control, so it has to be reachable and
+                                        // operable without a mouse: the surfaces
+                                        // that use this (repository and rule
+                                        // health) tell the user to click a row,
+                                        // and that instruction has to hold for
+                                        // keyboard and screen-reader users too.
+                                        // Space is prevented on keydown so the
+                                        // page does not scroll before acting.
+                                        role={onRowClick ? "button" : undefined}
+                                        tabIndex={onRowClick ? 0 : undefined}
+                                        onKeyDown={
+                                            onRowClick
+                                                ? (event) => {
+                                                      if (
+                                                          event.key !==
+                                                              "Enter" &&
+                                                          event.key !== " "
+                                                      ) {
+                                                          return;
+                                                      }
+                                                      event.preventDefault();
+                                                      onRowClick(row.original);
+                                                  }
+                                                : undefined
+                                        }
                                         className={
                                             onRowClick
-                                                ? "hover:bg-card-lv2 cursor-pointer"
+                                                ? "hover:bg-card-lv2 focus-visible:ring-ring cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
                                                 : undefined
                                         }
                                         data-peek={

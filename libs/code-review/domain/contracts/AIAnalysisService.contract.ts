@@ -1,4 +1,5 @@
-import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import { LLMModelProvider } from '@libs/llm/model-providers';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { CreateSandboxParams } from '@libs/sandbox/domain/contracts/sandbox.provider';
 import {
@@ -32,7 +33,7 @@ export interface IAIAnalysisService {
         fileContext: FileChangeContext,
         reviewModeResponse: ReviewModeResponse,
         context: AnalysisContext,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedModel,
     ): Promise<AIAnalysisResult>;
     generateCodeSuggestions(
         organizationAndTeamData: OrganizationAndTeamData,
@@ -49,7 +50,7 @@ export interface IAIAnalysisService {
         suggestions: any[],
         languageResultPrompt: string,
         reviewMode: ReviewModeResponse,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedModel,
         crossFileSnippets?: CrossFileContextSnippet[],
         remoteCommands?: RemoteCommands,
         memories?: Array<Partial<IKodyRule>>,
@@ -71,13 +72,13 @@ export interface IAIAnalysisService {
         provider: LLMModelProvider,
         file: FileChange,
         codeDiff: string,
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedModel,
     ): Promise<ReviewModeResponse>;
     severityAnalysisAssignment(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         provider: LLMModelProvider,
         codeSuggestions: CodeSuggestion[],
-        byokConfig: BYOKConfig,
+        byokConfig: NormalizedModel,
     ): Promise<Partial<CodeSuggestion>[]>;
 }

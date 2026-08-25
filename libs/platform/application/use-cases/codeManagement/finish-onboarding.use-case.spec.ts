@@ -45,7 +45,8 @@ describe('FinishOnboardingUseCase', () => {
             startTrial: jest.fn().mockResolvedValue(true),
         };
         const permissionValidationService = {
-            getBYOKConfig: jest.fn().mockResolvedValue(null),
+            // native: no config → no non-managed credential → not BYOK.
+            hasBYOK: jest.fn().mockResolvedValue(false),
         };
         const organizationService = {
             update: jest.fn().mockResolvedValue(undefined),

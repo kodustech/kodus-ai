@@ -157,6 +157,14 @@ export type PricingCatalog = Record<string, CatalogEntry>;
 export class TokenPricingUseCase {
     private readonly logger = createLogger(TokenPricingUseCase.name);
 
+    // Last successfully-fetched + normalized catalog per source, kept in-memory
+    // so a fetch failure RIGHT at cache expiry serves the last-known-good instead
+    // of degrading the whole read to "unpriced" (and re-hitting the network on
+    // every request until the upstream recovers). Repopulated on the next OK
+    // fetch; lost on restart (the first successful fetch refills it).
+    private lastGoodModelsDev?: PricingCatalog;
+    private lastGoodLiteLLM?: PricingCatalog;
+
     constructor(private readonly cacheService: CacheService) {}
 
     async execute(model: string, provider?: string): Promise<ModelPricingInfo> {
@@ -270,16 +278,33 @@ export class TokenPricingUseCase {
             );
         if (cached) return cached;
 
-        const raw = await this.fetchJson<Record<string, ModelsDevProvider>>(
-            MODELS_DEV_URL,
-        );
-        const catalog = this.flattenModelsDev(raw);
-        await this.cacheService.addToCache(
-            MODELS_DEV_CACHE_KEY,
-            catalog,
-            CACHE_TTL_MS,
-        );
-        return catalog;
+        try {
+            const raw =
+                await this.fetchJson<Record<string, ModelsDevProvider>>(
+                    MODELS_DEV_URL,
+                );
+            const catalog = this.flattenModelsDev(raw);
+            await this.cacheService.addToCache(
+                MODELS_DEV_CACHE_KEY,
+                catalog,
+                CACHE_TTL_MS,
+            );
+            this.lastGoodModelsDev = catalog;
+            return catalog;
+        } catch (error) {
+            // Serve the last-known-good rather than let a transient upstream blip
+            // at cache expiry turn every priced model into "unpriced".
+            if (this.lastGoodModelsDev) {
+                this.logger.warn({
+                    message:
+                        'models.dev fetch failed; serving last-known-good catalog',
+                    error,
+                    context: TokenPricingUseCase.name,
+                });
+                return this.lastGoodModelsDev;
+            }
+            throw error;
+        }
     }
 
     /** Secondary catalog (LiteLLM), kept as a fallback during the cutover. */
@@ -290,21 +315,35 @@ export class TokenPricingUseCase {
             );
         if (cached) return cached;
 
-        const raw =
-            await this.fetchJson<Record<string, LiteLLMModel>>(
-                LITELLM_PRICING_URL,
+        try {
+            const raw =
+                await this.fetchJson<Record<string, LiteLLMModel>>(
+                    LITELLM_PRICING_URL,
+                );
+            const catalog: PricingCatalog = {};
+            for (const [key, entry] of Object.entries(raw)) {
+                if (!entry || typeof entry !== 'object') continue;
+                catalog[key] = this.fromLiteLLM(entry);
+            }
+            await this.cacheService.addToCache(
+                LITELLM_CACHE_KEY,
+                catalog,
+                CACHE_TTL_MS,
             );
-        const catalog: PricingCatalog = {};
-        for (const [key, entry] of Object.entries(raw)) {
-            if (!entry || typeof entry !== 'object') continue;
-            catalog[key] = this.fromLiteLLM(entry);
+            this.lastGoodLiteLLM = catalog;
+            return catalog;
+        } catch (error) {
+            if (this.lastGoodLiteLLM) {
+                this.logger.warn({
+                    message:
+                        'LiteLLM fetch failed; serving last-known-good catalog',
+                    error,
+                    context: TokenPricingUseCase.name,
+                });
+                return this.lastGoodLiteLLM;
+            }
+            throw error;
         }
-        await this.cacheService.addToCache(
-            LITELLM_CACHE_KEY,
-            catalog,
-            CACHE_TTL_MS,
-        );
-        return catalog;
     }
 
     private async fetchJson<T>(url: string): Promise<T> {
@@ -380,9 +419,7 @@ export class TokenPricingUseCase {
         modelId: string,
         entry: CatalogEntry,
     ): boolean {
-        const existing = bareOwner.has(modelId)
-            ? catalog[modelId]
-            : undefined;
+        const existing = bareOwner.has(modelId) ? catalog[modelId] : undefined;
         if (!existing) {
             catalog[modelId] = entry;
             return true;
@@ -534,9 +571,19 @@ export class TokenPricingUseCase {
     /**
      * Catalog keys are either the bare model id (`kimi-k2.6`) or
      * provider-prefixed (`moonshotai/kimi-k2.6`, `vertex_ai/gemini-...`). We
-     * try exact match, then the unprefixed variant, then provider-prefixed
-     * variants, then a best-effort prefix search (on the full key AND its last
-     * segment) so versioned or provider-nested ids still resolve.
+     * try exact match, then the unprefixed variant, then the BARE last segment,
+     * then provider-prefixed variants, then a best-effort prefix search (on the
+     * full key AND its last segment) so versioned or provider-nested ids still
+     * resolve.
+     *
+     * The bare-last-segment candidate is what prices DEEP-PATHED ids like
+     * Fireworks' `accounts/fireworks/models/deepseek-v4-flash-0731`:
+     * `withoutPrefix` only strips the FIRST segment (`accounts/`), leaving a
+     * 3-segment path that matches no catalog key, so before this the model
+     * resolved to $0.00 even though the catalog prices it under the bare id
+     * `deepseek-v4-flash-0731`. This mirrors the write-side `canonicalNames`,
+     * which already emits the bare form — the price path just wasn't. Kept LAST
+     * so a provider-prefixed exact match still wins over the bare alias.
      */
     private lookupModel(
         catalog: PricingCatalog,
@@ -557,8 +604,17 @@ export class TokenPricingUseCase {
         const withoutPrefix = colonNormalized.includes('/')
             ? colonNormalized.split('/').slice(1).join('/')
             : colonNormalized;
+        // The bare last segment (`accounts/fireworks/models/X` → `X`) — the form
+        // a deep-pathed provider id shares with the catalog's bare alias.
+        const bareLastSegment = colonNormalized.split('/').pop()!;
 
-        const direct = [normalized, lowered, colonNormalized, withoutPrefix];
+        const direct = [
+            normalized,
+            lowered,
+            colonNormalized,
+            withoutPrefix,
+            bareLastSegment,
+        ];
         for (const key of direct) {
             if (catalog[key]) return { id: key, data: catalog[key] };
         }
@@ -588,6 +644,17 @@ export class TokenPricingUseCase {
         // that's the only variant present. Matching the key's last segment
         // too lets a bare id land on a provider-prefixed key.
         //
+        // GUARD: this is a LAST resort and only makes sense for a SPECIFIC model
+        // id that's merely missing a variant suffix — never for a bare family
+        // stem with no version signal (`gpt`, `claude`, `gemini`), which would
+        // otherwise price as some arbitrary shortest variant (`gpt` → `gpt-4o`).
+        // A wrong number is worse than "unpriced" (which the UI flags + lets the
+        // org override). Require a digit (version) in the query first. Every real
+        // versioned id carries one; a family stem does not.
+        if (!/\d/.test(withoutPrefix)) {
+            return null;
+        }
+
         // Deterministic: pick the CLOSEST match (shortest matching segment,
         // ties broken lexicographically) instead of whatever Object.keys
         // yields first — otherwise the resolved price depends on catalog

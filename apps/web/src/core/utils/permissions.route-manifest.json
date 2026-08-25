@@ -1,5 +1,21 @@
 [
   {
+    "route": "/byok",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
+    "route": "/byok/manual",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "route": "/choose-plan",
     "expected": {
       "billing_manager": "allow",
@@ -81,22 +97,6 @@
   },
   {
     "route": "/organization",
-    "expected": {
-      "billing_manager": "deny",
-      "repo_admin": "deny",
-      "contributor": "deny"
-    }
-  },
-  {
-    "route": "/organization/byok",
-    "expected": {
-      "billing_manager": "deny",
-      "repo_admin": "deny",
-      "contributor": "deny"
-    }
-  },
-  {
-    "route": "/organization/byok/manual",
     "expected": {
       "billing_manager": "deny",
       "repo_admin": "deny",

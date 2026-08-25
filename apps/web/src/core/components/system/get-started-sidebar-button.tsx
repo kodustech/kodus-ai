@@ -201,7 +201,7 @@ export const GetStartedSidebarButton = () => {
                     </div>
 
                     <div className="absolute -right-1 -bottom-3 size-14">
-                        <Image src="/assets/images/kody/look-left-with-paws.png" />
+                        <Image alt="" src="/assets/images/kody/look-left-with-paws.png" />
                     </div>
                 </div>
 

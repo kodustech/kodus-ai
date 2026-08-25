@@ -3,7 +3,7 @@ import {
     ContextRequirement,
 } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { createLogger } from '@libs/core/log/logger';
-import { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 
 import { IPromptContextEngineService } from '@libs/ai-engine/domain/prompt/contracts/promptContextEngine.contract';
@@ -36,7 +36,7 @@ interface DetectReferencesParams {
     organizationAndTeamData: OrganizationAndTeamData;
     context?: 'rule' | 'instruction' | 'prompt';
     detectionMode?: 'rule' | 'prompt';
-    byokConfig?: BYOKConfig;
+    byokConfig?: NormalizedModel;
     subscriptionStatus?: string;
 }
 

@@ -4,10 +4,15 @@
  * extracted from the RunState — the full "produces a real review" path,
  * deterministic, zero real LLM.
  */
-import { MockLanguageModelV3 } from 'ai/test';
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+
+import { resolveModelConfig } from '@libs/llm/model-invocation';
+
+import { scriptedToolModel } from '@libs/agent-harness/infrastructure/ai-sdk/__test-utils__/scripted-tool-model';
 
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
-import type { ModelResolver } from '@libs/agent-harness/domain/contracts/model.contract';
 import type { ToolContext } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
@@ -35,33 +40,24 @@ const sampleFindings = {
 
 // model: step 1 -> grep; step 2 -> submitResult with findings
 function scriptedModel() {
-    let call = 0;
-    const doGenerate = (async () => {
-        call += 1;
-        const tc =
-            call === 1
-                ? { id: 'c1', name: 'grep', input: { pattern: 'x.y' } }
-                : { id: 'c2', name: 'submitResult', input: sampleFindings };
-        return {
-            content: [
-                {
-                    type: 'tool-call',
-                    toolCallId: tc.id,
-                    toolName: tc.name,
-                    input: JSON.stringify(tc.input),
-                },
-            ],
-            finishReason: 'tool-calls',
-            usage: { inputTokens: 10, outputTokens: 5 },
-            warnings: [],
-        };
-    }) as any;
-    return new MockLanguageModelV3({ doGenerate });
+    return scriptedToolModel((turn) =>
+        turn === 1
+            ? { id: 'c1', name: 'grep', input: { pattern: 'x.y' } }
+            : { id: 'c2', name: 'submitResult', input: sampleFindings },
+    );
 }
 
-const resolver: ModelResolver<any> = {
-    resolve: () => scriptedModel() as any,
-};
+const mockResolve = resolveModelConfig as jest.Mock;
+beforeEach(() => {
+    mockResolve.mockReset();
+    mockResolve.mockImplementation(() => ({
+        model: scriptedModel(),
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    }));
+});
 
 const grepTool = {
     name: 'grep',
@@ -105,7 +101,7 @@ describe('finder.agent (assembled on agent-harness)', () => {
             'force-finalize',
         ]);
 
-        const state = await new AiSdkAgentRunner(resolver).run(
+        const state = await new AiSdkAgentRunner(undefined).run(
             spec,
             { prompt: 'review this PR' },
             ctx,

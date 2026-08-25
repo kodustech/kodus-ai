@@ -54,6 +54,51 @@ describe('collectModelOverrides', () => {
         expect(collectModelOverrides(null)).toEqual([]);
         expect(collectModelOverrides({})).toEqual([]);
     });
+
+    it('collects id-based (byokModelId) overrides and prefers them over the legacy name', () => {
+        const out = collectModelOverrides({
+            configs: { byokModelId: 'global-id', byokModel: 'global-name' },
+            repositories: [
+                {
+                    id: 'repo-1',
+                    name: 'acme/api',
+                    // id-based only — the model selector writes THIS now.
+                    configs: { byokModelId: 'repo-id' },
+                    directories: [
+                        // legacy name-only still works (compat window).
+                        {
+                            id: 'dir-1',
+                            name: 'src/pkg',
+                            configs: { byokModel: 'dir-name' },
+                        },
+                        // empty id must not shadow into an override.
+                        {
+                            id: 'dir-2',
+                            name: 'src/empty',
+                            configs: { byokModelId: '' },
+                        },
+                    ],
+                },
+            ],
+        });
+        expect(out).toEqual([
+            { scope: 'global', model: 'global-id' },
+            {
+                scope: 'repository',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                model: 'repo-id',
+            },
+            {
+                scope: 'directory',
+                repositoryId: 'repo-1',
+                repositoryName: 'acme/api',
+                directoryId: 'dir-1',
+                directoryName: 'src/pkg',
+                model: 'dir-name',
+            },
+        ]);
+    });
 });
 
 describe('clearModelOverrides', () => {
@@ -91,5 +136,26 @@ describe('clearModelOverrides', () => {
         const input = config();
         clearModelOverrides(input, [{ repositoryId: 'repo-1' }]);
         expect(input.repositories[0].configs.byokModel).toBe('repo-model');
+    });
+
+    it('clears BOTH leaves so an id-based override truly inherits', () => {
+        const { configValue, clearedCount } = clearModelOverrides(
+            {
+                repositories: [
+                    {
+                        id: 'repo-1',
+                        name: 'acme/api',
+                        configs: { byokModelId: 'repo-id', byokModel: 'stale' },
+                        directories: [],
+                    },
+                ],
+            },
+            [{ repositoryId: 'repo-1' }],
+        );
+        const c = configValue as any;
+        expect(clearedCount).toBe(1);
+        // Leaving byokModelId behind would keep the override alive (id wins).
+        expect(c.repositories[0].configs.byokModelId).toBe('');
+        expect(c.repositories[0].configs.byokModel).toBe('');
     });
 });

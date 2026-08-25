@@ -21,7 +21,17 @@ export type CuratedModel = {
     displayName: string;
     provider: string;
     providerDisplayName?: string;
+    /** Provider IDENTITY key for the picker (the brand you connect: `moonshot`,
+     *  `zai`, …), distinct from `provider` (the TRANSPORT: how Kodus talks to it,
+     *  e.g. `openai_compatible`). The picker groups by this so each brand gets its
+     *  own card instead of being lumped under the generic transport. Defaults to
+     *  `provider` when unset (native providers where brand == transport). */
+    providerKey?: string;
     tier: ModelTier;
+    /** Optional recommendation label rendered as a colored tier badge on the
+     *  recommended card (e.g. "Best balance", "Highest quality", "Most
+     *  affordable"). Present only on the curated hero picks. */
+    recommendationLabel?: string;
     benchmarkScore: number;
     description: string;
     speed: SpeedRating;

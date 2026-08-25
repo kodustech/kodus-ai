@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidateTag } from "next/cache";
+import { updateTag } from "next/cache";
 import { cookies } from "next/headers";
 
 export const setCockpitDateRangeCookie = async (range: {
@@ -14,5 +14,7 @@ export const setCockpitDateRangeCookie = async (range: {
         value: JSON.stringify(range),
     });
 
-    revalidateTag("cockpit-date-range-dependent");
+    // Read-your-writes: the cookie above drives the analytics fetches, so the
+    // next render has to see the new range, not a stale-while-revalidate copy.
+    updateTag("cockpit-date-range-dependent");
 };

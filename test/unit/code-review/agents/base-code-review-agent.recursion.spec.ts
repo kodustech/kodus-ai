@@ -47,6 +47,7 @@ jest.mock(
     '@libs/llm/byok-to-vercel',
     () => ({
         byokToVercelModel: jest.fn(() => ({ id: 'fake-model' })),
+        buildModelFromSlot: jest.fn(() => ({ id: 'fake-model' })),
         getModelName: jest.fn(() => 'fake-model'),
     }),
 );
@@ -120,10 +121,15 @@ import type { FileChange } from '@libs/core/infrastructure/config/types/general/
 
 class TestAgent extends BaseCodeReviewAgentProvider {
     constructor() {
+        // Model resolution now goes through the task→SLOT funnel
+        // (resolveReviewAgentModel → permissionService.resolveTaskSlot). An
+        // undefined slot mirrors "no BYOK → env/managed default"; LLM.run builds
+        // the model at call time, and runAgentLoopViaCore is stubbed here anyway.
+        // The base ctor takes the permissionValidationService as its FIRST arg.
         const permissionService: any = {
-            getBYOKConfig: jest.fn().mockResolvedValue(null),
+            resolveTaskSlot: jest.fn().mockResolvedValue(undefined),
         };
-        super(null as any, permissionService, null as any);
+        super(permissionService, null as any, null as any);
     }
 
     protected getIdentity(): ReviewAgentIdentity {

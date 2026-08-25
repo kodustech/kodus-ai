@@ -16,7 +16,6 @@ import { BusinessRulesValidationAgentUseCase } from '../application/use-cases/bu
 import { ConversationAgentUseCase } from '../application/use-cases/conversation-agent.use-case';
 import { BusinessRulesValidationAgentProvider } from '../infrastructure/services/agents/business-rules-validation/businessRulesValidationAgent';
 import { ConversationAgentProvider } from '../infrastructure/services/agents/conversationAgent';
-import { LLMModule } from '@kodus/kodus-common/llm';
 import { SkillLoaderService } from '../skills/skill-loader.service';
 import { GenericSkillRunnerService } from '../skills/generic-skill-runner.service';
 import { CapabilityStrategyService } from '../skills/runtime/capability-strategy.service';
@@ -27,7 +26,6 @@ import { CapabilityResourcePlanService } from '../skills/runtime/capability-reso
         forwardRef(() => PermissionValidationModule),
         forwardRef(() => OrganizationModule),
         forwardRef(() => ParametersModule),
-        LLMModule,
         forwardRef(() => McpCoreModule),
         // Provides ByokErrorCounter so conversation/business report BYOK failures
         // (byok.llm_errors_threshold) — parity with code-review.

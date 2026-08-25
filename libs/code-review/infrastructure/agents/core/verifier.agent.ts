@@ -25,9 +25,10 @@ import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/i
 
 import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
-import { supportsStrictTools } from '@libs/code-review/infrastructure/agents/core/model-strictness';
+import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import {
     buildLangfuseTelemetry,
+    toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
 
@@ -55,6 +56,13 @@ const submitVerdictTool = {
 
 export interface BuildVerifierSpecParams {
     modelId: string;
+    /** Failover target model id (when the slot has one). Strict tool use is only
+     *  enabled when BOTH it and `modelId` support it — see supportsStrictToolsForRun. */
+    fallbackModelId?: string;
+    /** Cost-span run name (e.g. `code-review-bug-verify`) + agentName for the
+     *  verify leaf usage span (bucketed to `review` by deriveArea). */
+    runName?: string;
+    agentName?: string;
     /** Same investigation tools as the finder (grep/readFile/...). */
     tools: ToolRegistry;
     maxSteps?: number;
@@ -62,7 +70,6 @@ export interface BuildVerifierSpecParams {
     providerOptions?: Readonly<Record<string, unknown>>;
     /** Provider options attached to the system message (e.g. Anthropic prompt
      *  caching) so the verifier's system prompt is cached across steps. */
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
 }
 
 export function buildVerifierAgentSpec(
@@ -75,12 +82,22 @@ export function buildVerifierAgentSpec(
         ...params.tools.list(),
         // Strict/structured done-tool for strict-capable models (Gemini
         // VALIDATED mode) so the verdict can't be omitted or emitted as prose.
-        { ...submitVerdictTool, strict: supportsStrictTools(params.modelId) },
+        {
+            ...submitVerdictTool,
+            strict: supportsStrictToolsForRun(
+                params.modelId,
+                params.fallbackModelId,
+            ),
+        },
     ]);
     return {
         id: 'verifier',
+        // Cost-span identity: LLM.run records the ONE verify usage span with this
+        // runName; deriveArea buckets `code-review*` under `review`.
+        runName: params.runName ?? 'code-review-verify',
+        agentName: params.agentName,
+        phase: 'verify',
         systemPrompt: system,
-        modelId: params.modelId,
         tools,
         policies: [new BudgetPolicy()],
         maxSteps: params.maxSteps ?? 6,
@@ -88,7 +105,6 @@ export function buildVerifierAgentSpec(
         // RunState.artifacts — extractVerdict reads that, never re-scans steps.
         resultToolName: VERIFY_DONE_TOOL,
         providerOptions: params.providerOptions,
-        systemProviderOptions: params.systemProviderOptions,
     };
 }
 
@@ -168,6 +184,9 @@ function collectVerifierToolCalls(state: RunState): Verdict['toolCalls'] {
 
 export interface LlmVerifierParams {
     modelId: string;
+    /** Failover target model id — threaded to the verifier spec so strict tool
+     *  use accounts for it (a Gemini→OpenAI failover must not send strict). */
+    fallbackModelId?: string;
     tools: ToolRegistry;
     /** Depth for high-confidence findings (light verify). Default 5. */
     lightMaxSteps?: number;
@@ -179,12 +198,15 @@ export interface LlmVerifierParams {
     /** Provider options (reasoning/thinking config) forwarded to the model. */
     providerOptions?: Readonly<Record<string, unknown>>;
     /** System-message provider options (e.g. Anthropic prompt caching). */
-    systemProviderOptions?: Readonly<Record<string, unknown>>;
     /** Langfuse telemetry context (org/team/PR/repo) — each per-finding verify
      *  run is named so the trace shows WHICH finding each verdict judged. */
     telemetryMetadata?: LangfuseTelemetryMetadata;
     /** Agent name (finder/security/...) — prefixes the verify observation name. */
     agentName?: string;
+    /** Cost-span run name base (e.g. `code-review-bug`). The verify runs record
+     *  their leaf usage span under `${usageRunName}-verify` so `deriveArea`
+     *  buckets them to `review` (verify is part of the review cost). */
+    usageRunName?: string;
 }
 
 /** The LLM-judge Verifier (HV2): runs a verifier AgentSpec once per finding on
@@ -212,19 +234,26 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         private readonly runner: AgentRunner,
         private readonly params: LlmVerifierParams,
     ) {
+        const verifyRunName = params.usageRunName
+            ? `${params.usageRunName}-verify`
+            : 'code-review-verify';
         this.lightSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
+            runName: verifyRunName,
+            agentName: params.agentName,
             tools: params.tools,
             maxSteps: params.lightMaxSteps ?? 5,
             providerOptions: params.providerOptions,
-            systemProviderOptions: params.systemProviderOptions,
         });
         this.fullSpec = buildVerifierAgentSpec({
             modelId: params.modelId,
+            fallbackModelId: params.fallbackModelId,
+            runName: verifyRunName,
+            agentName: params.agentName,
             tools: params.tools,
             maxSteps: params.fullMaxSteps ?? 10,
             providerOptions: params.providerOptions,
-            systemProviderOptions: params.systemProviderOptions,
         });
     }
 
@@ -252,9 +281,11 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             spec,
             {
                 prompt: verifierPromptFor(candidate),
-                telemetry: buildLangfuseTelemetry(
-                    fnId,
-                    this.params.telemetryMetadata,
+                ...toAiSdkTelemetryArgs(
+                    buildLangfuseTelemetry(
+                        fnId,
+                        this.params.telemetryMetadata,
+                    ),
                 ),
             },
             ctx,

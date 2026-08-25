@@ -1,4 +1,4 @@
-import { BYOKConfig, LLMModelProvider } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 import { IPullRequestMessages } from '@libs/code-review/domain/pullRequestMessages/interfaces/pullRequestMessages.interface';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
@@ -48,7 +48,6 @@ export interface ICommentManagerService {
         organizationAndTeamData: OrganizationAndTeamData,
         languageResultPrompt: string,
         summaryConfig: SummaryConfig,
-        byokConfig?: BYOKConfig,
         isCommitRun?: boolean,
         prPreview?: boolean,
         externalPromptContext?: any,
@@ -97,9 +96,8 @@ export interface ICommentManagerService {
     repeatedCodeReviewSuggestionClustering(
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
-        provider: LLMModelProvider,
         suggestions: any[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<any>;
 
     enrichParentSuggestionsWithRelated(

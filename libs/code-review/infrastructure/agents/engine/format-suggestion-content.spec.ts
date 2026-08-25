@@ -1,21 +1,9 @@
-// Mock external SDKs BEFORE importing the module under test.
-const mockGenerateText = jest.fn();
-
-jest.mock('ai', () => ({
-    generateText: (...args: any[]) => mockGenerateText(...args),
-    stepCountIs: () => () => false,
-    hasToolCall: () => () => false,
-    tool: (opts: any) => opts,
-    Output: { object: (opts: any) => opts },
-    jsonSchema: (s: any) => s,
-}));
-
-jest.mock('@ai-sdk/google', () => ({
-    createGoogleGenerativeAI: () => () => ({ __mock: 'google-model' }),
-}));
-
-jest.mock('@libs/llm/byok-to-vercel', () => ({
-    getInternalModel: () => ({ __mock: 'byok-model' }),
+// The formatter now runs through the ONE primitive (LLM.run) — mock it at that
+// boundary and assert on the `user` prompt it receives (prompt composition is
+// what this suite verifies; the model policy is LLM.run's own tested concern).
+const mockRun = jest.fn();
+jest.mock('@libs/llm/llm', () => ({
+    LLM: { run: (...args: any[]) => mockRun(...args) },
 }));
 
 import { formatSuggestionContent } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
@@ -30,15 +18,16 @@ describe('formatSuggestionContent — prompt composition', () => {
     };
 
     beforeEach(() => {
-        mockGenerateText.mockReset();
-        mockGenerateText.mockResolvedValue({
-            text: '```json\n[{"index": 0, "suggestionContent": "ok"}]\n```',
-        });
+        mockRun.mockReset();
+        // LLM.run returns the raw text (no schema) — the formatter parses it.
+        mockRun.mockResolvedValue(
+            '```json\n[{"index": 0, "suggestionContent": "ok"}]\n```',
+        );
     });
 
     const captureLastPrompt = (): string => {
-        const call = mockGenerateText.mock.calls.at(-1);
-        return call?.[0]?.prompt ?? '';
+        const call = mockRun.mock.calls.at(-1);
+        return call?.[0]?.user ?? '';
     };
 
     describe('customWritingGuidelines', () => {
@@ -136,7 +125,7 @@ describe('formatSuggestionContent — prompt composition', () => {
             });
 
             expect(result.size).toBe(0);
-            expect(mockGenerateText).not.toHaveBeenCalled();
+            expect(mockRun).not.toHaveBeenCalled();
         });
     });
 });

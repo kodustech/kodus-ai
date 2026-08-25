@@ -3,10 +3,14 @@
  * Proves parity path: finder produces 2 findings, verifier keeps the real one
  * and refutes the false positive — all on the SAME runner (no second loop).
  */
+jest.mock('@libs/llm/model-invocation', () => ({
+    resolveModelConfig: jest.fn(),
+}));
+
 import { MockLanguageModelV3 } from 'ai/test';
+import { resolveModelConfig } from '@libs/llm/model-invocation';
 
 import type { ProgressLedger } from '@libs/agent-harness/domain/contracts/progress.contract';
-import type { ModelResolver } from '@libs/agent-harness/domain/contracts/model.contract';
 import type { ToolContext } from '@libs/agent-harness/domain/contracts/tool.contract';
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
@@ -50,7 +54,17 @@ function model() {
     return new MockLanguageModelV3({ doGenerate });
 }
 
-const resolver: ModelResolver<any> = { resolve: () => model() as any };
+const mockResolve = resolveModelConfig as jest.Mock;
+beforeEach(() => {
+    mockResolve.mockReset();
+    mockResolve.mockImplementation(() => ({
+        model: model(),
+        callOptions: {},
+        providerOptions: {},
+        modelName: 'mock',
+        usageIdentity: {},
+    }));
+});
 
 const noCriticalLedger: ProgressLedger = {
     markFromToolCall: () => undefined,
@@ -69,7 +83,7 @@ describe('runFinderWithVerify (parity: finder + verify, same runner)', () => {
             tools,
             coverageLedger: noCriticalLedger,
         });
-        const runner = new AiSdkAgentRunner(resolver);
+        const runner = new AiSdkAgentRunner(undefined);
 
         const r = await runFinderWithVerify(
             { runner, finderSpec, modelId: 'mock', tools },

@@ -19,7 +19,6 @@ import {
     CogIcon,
     GaugeIcon,
     KeyRoundIcon,
-    LockKeyholeOpenIcon,
     ShieldIcon,
 } from "lucide-react";
 import {
@@ -54,12 +53,6 @@ export const ConfigsSidebar = () => {
             icon: GaugeIcon,
             label: "Cockpit",
             href: `/organization/cockpit`,
-            visible: true,
-        },
-        {
-            icon: LockKeyholeOpenIcon,
-            label: "BYOK",
-            href: `/organization/byok`,
             visible: true,
         },
         {

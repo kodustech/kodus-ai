@@ -1,50 +1,53 @@
-import { UserRole } from "@enums";
-import { Action, ResourceType } from "@services/permissions/types";
+import { UserRole } from '@enums';
+import { Action, ResourceType } from '@services/permissions/types';
 
-describe("BYOK topbar visibility", () => {
+import type { BYOKConfig } from './_types';
+import { groupModelsByProvider, hasVisibleModels } from './_utils';
+
+describe('BYOK topbar visibility', () => {
     const activeBYOKLicense = {
-        subscriptionStatus: "active",
-        planType: "teams_byok",
+        subscriptionStatus: 'active',
+        planType: 'teams_byok',
     } as const;
     const licensedSelfHostedEnterprise = {
         valid: true,
-        subscriptionStatus: "licensed-self-hosted",
-        planType: "enterprise",
+        subscriptionStatus: 'licensed-self-hosted',
+        planType: 'enterprise',
         numberOfLicenses: 0,
     } as const;
     const noneStatus = {
-        source: "none",
+        source: 'none',
         byok: { configured: false },
         env: { configured: false },
     } as const;
     const envStatus = {
-        source: "env",
+        source: 'env',
         byok: { configured: false },
         env: {
             configured: true,
-            model: "gpt-4o",
-            providerId: "openai_compatible",
-            baseUrl: "https://api.openai.com/v1",
+            model: 'gpt-4o',
+            providerId: 'openai_compatible',
+            baseUrl: 'https://api.openai.com/v1',
         },
     } as const;
     const byokStatus = {
-        source: "byok",
-        byok: { configured: true, model: "gpt-4o", providerId: "openai" },
+        source: 'byok',
+        byok: { configured: true, model: 'gpt-4o', providerId: 'openai' },
         env: { configured: false },
     } as const;
 
-    it("does not show the missing key topbar when the user cannot update organization settings", async () => {
-        const { shouldShowBYOKMissingKeyTopbar } = await import("./_utils");
+    it('does not show the missing key topbar when the user cannot update organization settings', async () => {
+        const { shouldShowBYOKMissingKeyTopbar } = await import('./_utils');
 
         expect(
             shouldShowBYOKMissingKeyTopbar({
                 license: activeBYOKLicense as any,
                 llmConfigStatus: noneStatus as any,
-                organizationId: "org-1",
+                organizationId: 'org-1',
                 permissions: {
                     [ResourceType.CodeReviewSettings]: {
                         [Action.Manage]: {
-                            organizationId: "org-1",
+                            organizationId: 'org-1',
                         },
                     },
                 },
@@ -52,18 +55,18 @@ describe("BYOK topbar visibility", () => {
         ).toBe(false);
     });
 
-    it("shows the missing key topbar when the user can update organization settings", async () => {
-        const { shouldShowBYOKMissingKeyTopbar } = await import("./_utils");
+    it('shows the missing key topbar when the user can update organization settings', async () => {
+        const { shouldShowBYOKMissingKeyTopbar } = await import('./_utils');
 
         expect(
             shouldShowBYOKMissingKeyTopbar({
                 license: activeBYOKLicense as any,
                 llmConfigStatus: noneStatus as any,
-                organizationId: "org-1",
+                organizationId: 'org-1',
                 permissions: {
                     [ResourceType.OrganizationSettings]: {
                         [Action.Update]: {
-                            organizationId: "org-1",
+                            organizationId: 'org-1',
                         },
                     },
                 },
@@ -71,18 +74,18 @@ describe("BYOK topbar visibility", () => {
         ).toBe(true);
     });
 
-    it("shows the missing key topbar when the user has global manage permission", async () => {
-        const { shouldShowBYOKMissingKeyTopbar } = await import("./_utils");
+    it('shows the missing key topbar when the user has global manage permission', async () => {
+        const { shouldShowBYOKMissingKeyTopbar } = await import('./_utils');
 
         expect(
             shouldShowBYOKMissingKeyTopbar({
                 license: activeBYOKLicense as any,
                 llmConfigStatus: noneStatus as any,
-                organizationId: "org-1",
+                organizationId: 'org-1',
                 permissions: {
                     [ResourceType.All]: {
                         [Action.Manage]: {
-                            organizationId: "org-1",
+                            organizationId: 'org-1',
                         },
                     },
                 },
@@ -90,221 +93,193 @@ describe("BYOK topbar visibility", () => {
         ).toBe(true);
     });
 
-    it("shows the missing key topbar for owner even when permissions are unavailable", async () => {
-        const { shouldShowBYOKMissingKeyTopbar } = await import("./_utils");
+    it('shows the missing key topbar for owner even when permissions are unavailable', async () => {
+        const { shouldShowBYOKMissingKeyTopbar } = await import('./_utils');
 
         expect(
             shouldShowBYOKMissingKeyTopbar({
                 license: activeBYOKLicense as any,
                 llmConfigStatus: noneStatus as any,
-                organizationId: "org-1",
+                organizationId: 'org-1',
                 permissions: {},
                 role: UserRole.OWNER,
             }),
         ).toBe(true);
     });
 
-    it("treats licensed self-hosted enterprise as BYOK for the missing key topbar", async () => {
-        const { shouldShowBYOKMissingKeyTopbar } = await import("./_utils");
+    it('treats licensed self-hosted enterprise as BYOK for the missing key topbar', async () => {
+        const { shouldShowBYOKMissingKeyTopbar } = await import('./_utils');
 
         expect(
             shouldShowBYOKMissingKeyTopbar({
                 license: licensedSelfHostedEnterprise as any,
                 llmConfigStatus: noneStatus as any,
-                organizationId: "org-1",
+                organizationId: 'org-1',
                 permissions: {},
                 role: UserRole.OWNER,
             }),
         ).toBe(true);
     });
 
-    it("treats trial subscriptions as BYOK eligible (no planType to inspect)", async () => {
-        const { isBYOKSubscriptionPlan } = await import("./_utils");
+    it('treats trial subscriptions as BYOK eligible (no planType to inspect)', async () => {
+        const { isBYOKSubscriptionPlan } = await import('./_utils');
 
         expect(
             isBYOKSubscriptionPlan({
                 valid: true,
-                subscriptionStatus: "trial",
+                subscriptionStatus: 'trial',
                 trialEnd: new Date().toISOString(),
             } as any),
         ).toBe(true);
     });
 
-    it("does not show the missing key topbar for trial orgs (BYOK is optional during trial)", async () => {
-        const { shouldShowBYOKMissingKeyTopbar } = await import("./_utils");
+    it('does not show the missing key topbar for trial orgs (BYOK is optional during trial)', async () => {
+        const { shouldShowBYOKMissingKeyTopbar } = await import('./_utils');
 
         expect(
             shouldShowBYOKMissingKeyTopbar({
                 license: {
                     valid: true,
-                    subscriptionStatus: "trial",
+                    subscriptionStatus: 'trial',
                     trialEnd: new Date().toISOString(),
                 } as any,
                 llmConfigStatus: noneStatus as any,
-                organizationId: "org-1",
+                organizationId: 'org-1',
                 permissions: {},
                 role: UserRole.OWNER,
             }),
         ).toBe(false);
     });
 
-    it("does not show the missing key topbar when the LLM is configured via env", async () => {
-        const { shouldShowBYOKMissingKeyTopbar } = await import("./_utils");
+    it('does not show the missing key topbar when the LLM is configured via env', async () => {
+        const { shouldShowBYOKMissingKeyTopbar } = await import('./_utils');
 
         expect(
             shouldShowBYOKMissingKeyTopbar({
                 license: licensedSelfHostedEnterprise as any,
                 llmConfigStatus: envStatus as any,
-                organizationId: "org-1",
+                organizationId: 'org-1',
                 permissions: {},
                 role: UserRole.OWNER,
             }),
         ).toBe(false);
     });
 
-    it("does not show the missing key topbar when BYOK is configured", async () => {
-        const { shouldShowBYOKMissingKeyTopbar } = await import("./_utils");
+    it('does not show the missing key topbar when BYOK is configured', async () => {
+        const { shouldShowBYOKMissingKeyTopbar } = await import('./_utils');
 
         expect(
             shouldShowBYOKMissingKeyTopbar({
                 license: activeBYOKLicense as any,
                 llmConfigStatus: byokStatus as any,
-                organizationId: "org-1",
+                organizationId: 'org-1',
                 permissions: {},
                 role: UserRole.OWNER,
             }),
         ).toBe(false);
     });
 
-    it("does not treat canceled/expired/payment_failed subscriptions as BYOK eligible", async () => {
-        const { isBYOKSubscriptionPlan } = await import("./_utils");
+    it('does not treat canceled/expired/payment_failed subscriptions as BYOK eligible', async () => {
+        const { isBYOKSubscriptionPlan } = await import('./_utils');
 
         for (const status of [
-            "canceled",
-            "expired",
-            "payment_failed",
-            "inactive",
+            'canceled',
+            'expired',
+            'payment_failed',
+            'inactive',
         ] as const) {
             expect(
                 isBYOKSubscriptionPlan({
                     subscriptionStatus: status,
-                    planType: "teams_byok",
+                    planType: 'teams_byok',
                 } as any),
             ).toBe(false);
         }
     });
 });
 
-describe("isTeamsOrEnterprisePlan", () => {
-    it("allows active Teams and Enterprise plans", async () => {
-        const { isTeamsOrEnterprisePlan } = await import("./_utils");
+/** A v2 config: 2 models on 1 non-managed credential + 1 model on a managed one. */
+const configWithManaged: BYOKConfig = {
+    version: 2,
+    credentials: [
+        { id: 'cred-byok', provider: 'openai', apiKey: 'sk-••••1234' },
+        { id: 'cred-managed', provider: 'google_gemini', managed: true },
+    ],
+    models: [
+        { id: 'm1', credentialId: 'cred-byok', model: 'gpt-4o' },
+        { id: 'm2', credentialId: 'cred-byok', model: 'gpt-4o-mini' },
+        { id: 'm3', credentialId: 'cred-managed', model: 'gemini-2.5-flash' },
+    ],
+};
 
-        expect(
-            isTeamsOrEnterprisePlan({
-                valid: true,
-                subscriptionStatus: "active",
-                planType: "teams_byok",
-            } as any),
-        ).toBe(true);
-        expect(
-            isTeamsOrEnterprisePlan({
-                valid: true,
-                subscriptionStatus: "active",
-                planType: "enterprise_managed",
-            } as any),
-        ).toBe(true);
+describe('groupModelsByProvider', () => {
+    it("returns one group per NON-managed credential with only that credential's models", () => {
+        const groups = groupModelsByProvider(configWithManaged);
+
+        // The managed credential produces NO group.
+        expect(groups).toHaveLength(1);
+        expect(groups[0].credential.id).toBe('cred-byok');
+
+        // Only the 2 models on the non-managed credential are visible; the
+        // model on the managed credential is excluded.
+        expect(groups[0].models.map((m) => m.id)).toEqual(['m1', 'm2']);
     });
 
-    it("blocks free_byok and unlicensed self-hosted", async () => {
-        const { isTeamsOrEnterprisePlan } = await import("./_utils");
-
+    it('returns [] for null / undefined / a non-v2 blob', () => {
+        expect(groupModelsByProvider(null)).toEqual([]);
+        expect(groupModelsByProvider(undefined)).toEqual([]);
+        // legacy { main, fallback } blob is not v2 → no groups.
         expect(
-            isTeamsOrEnterprisePlan({
-                valid: true,
-                subscriptionStatus: "active",
-                planType: "free_byok",
-            } as any),
-        ).toBe(false);
-        expect(
-            isTeamsOrEnterprisePlan({
-                valid: true,
-                subscriptionStatus: "self-hosted",
-            } as any),
-        ).toBe(false);
+            groupModelsByProvider({ main: {}, fallback: {} } as never),
+        ).toEqual([]);
     });
 
-    it("allows trial and licensed self-hosted enterprise only", async () => {
-        const { isTeamsOrEnterprisePlan } = await import("./_utils");
-
-        expect(
-            isTeamsOrEnterprisePlan({
-                valid: true,
-                subscriptionStatus: "trial",
-            } as any),
-        ).toBe(true);
-        expect(
-            isTeamsOrEnterprisePlan({
-                valid: true,
-                subscriptionStatus: "licensed-self-hosted",
-                planType: "enterprise",
-            } as any),
-        ).toBe(true);
-        expect(
-            isTeamsOrEnterprisePlan({
-                valid: true,
-                subscriptionStatus: "licensed-self-hosted",
-                planType: "teams_byok",
-            } as any),
-        ).toBe(false);
+    it('tolerates an absent routing block without throwing', () => {
+        const noRouting: BYOKConfig = {
+            version: 2,
+            credentials: [{ id: 'c', provider: 'openai', apiKey: 'sk-••••' }],
+            models: [{ id: 'm', credentialId: 'c', model: 'gpt-4o' }],
+        };
+        expect(() => groupModelsByProvider(noRouting)).not.toThrow();
+        expect(groupModelsByProvider(noRouting)[0].models).toHaveLength(1);
     });
 });
 
-describe("anthropicRejectsTemperature", () => {
-    const check = async (provider?: string, model?: string) => {
-        const { anthropicRejectsTemperature } = await import("./_utils");
-        return anthropicRejectsTemperature(provider, model);
-    };
-
-    it("never hides the field for non-Anthropic providers", async () => {
-        // anthropic_compatible endpoints speak the Anthropic protocol but do
-        // accept temperature — kimi-k2.7-code even requires temperature=1.
-        expect(await check("anthropic_compatible", "kimi-k2.7-code")).toBe(
-            false,
-        );
-        expect(await check("openai", "gpt-5.2")).toBe(false);
-        expect(await check(undefined, "claude-opus-5")).toBe(false);
+describe('hasVisibleModels (first-run check)', () => {
+    it('is false for null / undefined / a non-v2 blob', () => {
+        expect(hasVisibleModels(null)).toBe(false);
+        expect(hasVisibleModels(undefined)).toBe(false);
+        expect(hasVisibleModels({ main: {} } as never)).toBe(false);
     });
 
-    it("hides the field on Claude 4.7 and newer", async () => {
-        for (const model of [
-            "claude-opus-4-7",
-            "claude-opus-4-8",
-            "claude-opus-5",
-            "claude-sonnet-5",
-            "claude-fable-5",
-            "anthropic.claude-opus-5",
-            "claude-opus-4-8@20260101",
-        ]) {
-            expect(await check("anthropic", model)).toBe(true);
-        }
+    it('is false when the only credential is managed', () => {
+        const managedOnly: BYOKConfig = {
+            version: 2,
+            credentials: [
+                { id: 'cm', provider: 'google_gemini', managed: true },
+            ],
+            models: [
+                { id: 'm', credentialId: 'cm', model: 'gemini-2.5-flash' },
+            ],
+        };
+        expect(hasVisibleModels(managedOnly)).toBe(false);
     });
 
-    it("keeps the field on Claude models that still accept temperature", async () => {
-        for (const model of [
-            "claude-3-7-sonnet-20250219",
-            "claude-opus-4-20250514",
-            "claude-sonnet-4-5-20250929",
-            "claude-haiku-4-5",
-            "claude-opus-4-6",
-        ]) {
-            expect(await check("anthropic", model)).toBe(false);
-        }
+    it('is false when a non-managed credential has no model yet', () => {
+        const noModels: BYOKConfig = {
+            version: 2,
+            credentials: [{ id: 'c', provider: 'openai', apiKey: 'sk-••••' }],
+            models: [],
+        };
+        expect(hasVisibleModels(noModels)).toBe(false);
     });
 
-    it("treats an unknown Claude as new, matching the backend", async () => {
-        expect(await check("anthropic", "")).toBe(true);
-        expect(await check("anthropic", "claude-something-unreleased")).toBe(
-            true,
-        );
+    it('is true when ≥1 non-managed credential has a model', () => {
+        expect(hasVisibleModels(configWithManaged)).toBe(true);
     });
 });
+
+// NOTE: temperature/reasoning support is no longer a web mirror — it's read from
+// the PROVIDER module server-side (get-model-capabilities.use-case). Its coverage
+// lives in libs/organization .../get-model-capabilities.use-case.spec.ts and each
+// provider module's own capability specs, so this file no longer tests it.

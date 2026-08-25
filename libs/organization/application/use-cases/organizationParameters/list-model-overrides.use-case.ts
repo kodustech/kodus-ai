@@ -1,4 +1,3 @@
-import { BYOKProvider } from '@kodus/kodus-common/llm';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -13,10 +12,8 @@ import {
 } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { Inject, Injectable } from '@nestjs/common';
 
-import {
-    CURATED_CATALOG_PROVIDERS,
-    GetModelsByProviderUseCase,
-} from './get-models-by-provider.use-case';
+import { isCuratedCatalogProvider } from '@libs/llm/providers';
+import { GetModelsByProviderUseCase } from './get-models-by-provider.use-case';
 import {
     collectModelOverrides,
     type CollectedModelOverride,
@@ -80,9 +77,7 @@ export class ListModelOverridesUseCase {
         // Bedrock/Vertex catalogs are curated (not exhaustive), so a miss there
         // can't be judged a mismatch — leave those as null rather than flagging
         // a valid-but-unlisted override for clearing.
-        const isCurated =
-            !!provider &&
-            CURATED_CATALOG_PROVIDERS.has(provider as BYOKProvider);
+        const isCurated = !!provider && isCuratedCatalogProvider(provider);
 
         const entries: ModelOverrideEntry[] = overrides.map((o) => ({
             ...o,

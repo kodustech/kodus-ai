@@ -3,13 +3,8 @@ export const DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN = Symbol.for(
 );
 
 import { createLogger } from '@libs/core/log/logger';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { LLM } from '@libs/llm/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import {
     DocumentationQueryPlanByFile,
@@ -22,10 +17,9 @@ import {
     DocumentationPlannerSchemaType,
     prompt_code_review_documentation_planner_system,
     prompt_code_review_documentation_planner_user,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewDocumentationPlanner';
+} from '@libs/common/utils/prompts/codeReviewDocumentationPlanner';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { Injectable } from '@nestjs/common';
 import path from 'path';
@@ -35,14 +29,13 @@ export class DocumentationLLMPlannerService {
     private readonly logger = createLogger(DocumentationLLMPlannerService.name);
 
     constructor(
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observabilityService: ObservabilityService,
     ) {}
 
     async planDocumentationByFile(params: {
         packages: RepositoryPackageReference[];
         changedFiles: FileChange[];
-        byokConfig?: BYOKConfig;
+        byokConfig?: NormalizedModel;
         organizationAndTeamData?: OrganizationAndTeamData;
     }): Promise<Record<string, DocumentationQueryPlanByFile>> {
         const { packages, changedFiles, byokConfig, organizationAndTeamData } =
@@ -56,16 +49,13 @@ export class DocumentationLLMPlannerService {
             return {};
         }
 
-        const provider = LLMModelProvider.GEMINI_3_1_FLASH_LITE_PREVIEW;
-        const fallbackProvider = LLMModelProvider.GEMINI_3_FLASH_PREVIEW;
+        // Migrated off the LangChain prompt-runner path onto the local
+        // (Vercel AI SDK) path. A BYOK org runs on its own model unchanged; a
+        // non-BYOK org consolidates to the managed default rather than the pinned
+        // GEMINI_3_1_FLASH_LITE_PREVIEW main / GEMINI_3_FLASH_PREVIEW fallback
+        // (accepted, RESEARCH Pattern 1). The outer runLLMInSpan wrapper is dropped —
+        // the span is emitted once inside runStructuredReviewCall (Q4).
         const runName = 'documentationPlanner';
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            byokConfig,
-        );
 
         const packageSlice = packages;
         const plans: Record<string, DocumentationQueryPlanByFile> = {};
@@ -91,57 +81,23 @@ export class DocumentationLLMPlannerService {
                     };
 
                     const fileRunName = `${runName}:${file.filename}`;
-                    const spanName = `${DocumentationLLMPlannerService.name}::${fileRunName}`;
 
-                    const { result: response } =
-                        await this.observabilityService.runLLMInSpan({
-                            spanName,
-                            runName: fileRunName,
-                            byokConfig,
-                            attrs: {
-                                type: promptRunner.executeMode,
-                                organizationId:
-                                    organizationAndTeamData?.organizationId,
-                                filePath: file.filename,
-                            },
-                            exec: (callbacks) =>
-                                promptRunner
-                                    .builder()
-                                    .setParser(
-                                        ParserType.ZOD,
-                                        DocumentationPlannerSchema,
-                                    )
-                                    .setLLMJsonMode(true)
-                                    .setPayload(payload)
-                                    .addPrompt({
-                                        role: PromptRole.SYSTEM,
-                                        prompt: prompt_code_review_documentation_planner_system,
-                                    })
-                                    .addPrompt({
-                                        role: PromptRole.USER,
-                                        prompt: prompt_code_review_documentation_planner_user,
-                                    })
-                                    .addMetadata({
-                                        context:
-                                            DocumentationLLMPlannerService.name,
-                                        runName: fileRunName,
-                                        metadata: {
-                                            filePath: file.filename,
-                                            language:
-                                                this.getLanguageNameForFile(
-                                                    file.filename,
-                                                ) || 'Unknown',
-                                            packageCandidates:
-                                                filePackages.length,
-                                            hasByokConfig: Boolean(byokConfig),
-                                            organizationAndTeamData,
-                                        },
-                                    })
-                                    .setTemperature(0)
-                                    .setRunName(fileRunName)
-                                    .addCallbacks(callbacks)
-                                    .execute(),
-                        });
+                    const response = await LLM.run({
+                        byokConfig,
+                        schema: DocumentationPlannerSchema,
+                        organizationId:
+                            organizationAndTeamData?.organizationId,
+                        runName: `${DocumentationLLMPlannerService.name}::${fileRunName}`,
+                        attrs: {
+                            filePath: file.filename,
+                            packageCandidates: filePackages.length,
+                            fallback: false,
+                        },
+                        system: prompt_code_review_documentation_planner_system(),
+                        user: prompt_code_review_documentation_planner_user(
+                            payload,
+                        ),
+                    });
 
                     return {
                         file,

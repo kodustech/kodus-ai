@@ -19,11 +19,23 @@ import {
     GetModelsByProviderUseCase,
     ModelResponse,
 } from '@libs/organization/application/use-cases/organizationParameters/get-models-by-provider.use-case';
+import {
+    GetModelCapabilitiesUseCase,
+    ModelUiCapabilities,
+} from '@libs/organization/application/use-cases/organizationParameters/get-model-capabilities.use-case';
 import { DeleteByokConfigUseCase } from '@libs/organization/application/use-cases/organizationParameters/delete-byok-config.use-case';
 import {
     GetLLMConfigStatusUseCase,
     LLMConfigStatus,
 } from '@libs/organization/application/use-cases/organizationParameters/get-llm-config-status.use-case';
+import {
+    GetByokProvidersUseCase,
+    ByokProvidersResult,
+} from '@libs/organization/application/use-cases/organizationParameters/get-byok-providers.use-case';
+import {
+    GetByokCatalogUseCase,
+    ByokCatalogResult,
+} from '@libs/organization/application/use-cases/organizationParameters/get-byok-catalog.use-case';
 import {
     TestByokConnectionUseCase,
     TestByokResult,
@@ -82,9 +94,12 @@ export class OrganizationParametersController {
         private readonly createOrUpdateOrganizationParametersUseCase: CreateOrUpdateOrganizationParametersUseCase,
         private readonly findByKeyOrganizationParametersUseCase: FindByKeyOrganizationParametersUseCase,
         private readonly getModelsByProviderUseCase: GetModelsByProviderUseCase,
+        private readonly getModelCapabilitiesUseCase: GetModelCapabilitiesUseCase,
         private readonly providerService: ProviderService,
         private readonly deleteByokConfigUseCase: DeleteByokConfigUseCase,
         private readonly getLLMConfigStatusUseCase: GetLLMConfigStatusUseCase,
+        private readonly getByokProvidersUseCase: GetByokProvidersUseCase,
+        private readonly getByokCatalogUseCase: GetByokCatalogUseCase,
         private readonly testByokConnectionUseCase: TestByokConnectionUseCase,
         private readonly testByokModelUseCase: TestByokModelUseCase,
         private readonly listModelOverridesUseCase: ListModelOverridesUseCase,
@@ -201,6 +216,9 @@ export class OrganizationParametersController {
                 description: provider.description,
                 requiresApiKey: provider.requiresApiKey,
                 requiresBaseUrl: provider.requiresBaseUrl,
+                autoListModels: provider.autoListModels,
+                listsModelsLive: provider.listsModelsLive,
+                doc: provider.doc,
             })),
         };
     }
@@ -221,6 +239,67 @@ export class OrganizationParametersController {
         );
     }
 
+    @Post('/list-models')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Create,
+            resource: ResourceType.OrganizationSettings,
+        }),
+    )
+    @ApiBody({
+        schema: {
+            type: 'object',
+            required: ['provider'],
+            properties: {
+                provider: { type: 'string' },
+                apiKey: { type: 'string' },
+                baseURL: { type: 'string' },
+            },
+        },
+    })
+    @ApiOperation({
+        summary: 'List models with a candidate key',
+        description:
+            "Live-list a provider's models using a just-typed (unsaved) API key + base URL — for the connect form, before the credential is saved. The key travels in the body (never a query string). Falls back to the org's saved credential when no key is supplied. Strict: an http provider with a candidate key does a live `/models` call and surfaces the error instead of a curated placeholder.",
+    })
+    @ApiOkResponse({ type: OrganizationProviderModelsResponseDto })
+    public async listModelsWithKey(
+        @Body()
+        body: {
+            provider: string;
+            apiKey?: string;
+            baseURL?: string;
+        },
+    ): Promise<ModelResponse> {
+        const organizationId = this.request?.user?.organization?.uuid;
+        return await this.getModelsByProviderUseCase.execute(
+            body.provider,
+            organizationId ? { organizationId } : undefined,
+            { apiKey: body.apiKey, baseURL: body.baseURL },
+        );
+    }
+
+    @Get('/model-capabilities')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        checkPermissions({
+            action: Action.Read,
+            resource: ResourceType.OrganizationSettings,
+        }),
+    )
+    @ApiOperation({
+        summary: 'Per-model UI capabilities',
+        description:
+            "Provider-owned hints for the connect form: whether a model accepts sampling params (Temperature) and whether it can reason (and at which levels). Read straight from the provider module in the registry — never hand-coded in the web — so a community-contributed provider change flows to the UI automatically. `model` is a plain model id (not a secret), so it travels in the query string.",
+    })
+    public async modelCapabilities(
+        @Query('provider') provider: string,
+        @Query('model') model: string,
+    ): Promise<ModelUiCapabilities> {
+        return this.getModelCapabilitiesUseCase.execute(provider, model ?? '');
+    }
+
     @Delete('/delete-byok-config')
     @UseGuards(PolicyGuard)
     @CheckPolicies(
@@ -230,28 +309,34 @@ export class OrganizationParametersController {
         }),
     )
     @ApiOperation({
-        summary: 'Delete BYOK config',
-        description: 'Delete main or fallback BYOK configuration.',
+        summary: 'Delete a v2 BYOK model by id',
+        description:
+            'Delete a single v2 BYOK model by its stable id. The domain use-case runs the referential-integrity guard (routing + repo/folder overrides) and rejects an in-use model.',
     })
     @ApiQuery({
-        name: 'configType',
+        name: 'modelId',
         required: true,
-        schema: { type: 'string', enum: ['main', 'fallback'] },
+        schema: { type: 'string' },
     })
     @ApiOkResponse({ type: ApiBooleanResponseDto })
-    public async deleteByokConfig(
-        @Query('configType') configType: 'main' | 'fallback',
-    ) {
+    public async deleteByokConfig(@Query('modelId') modelId: string) {
         const organizationId = this.request?.user?.organization?.uuid;
 
         if (!organizationId) {
             throw new Error('Organization ID is missing from request');
         }
 
-        return await this.deleteByokConfigUseCase.execute(
-            organizationId,
-            configType,
-        );
+        // V5 input validation: reject an empty/whitespace modelId before the
+        // domain guard runs.
+        if (typeof modelId !== 'string' || modelId.trim().length === 0) {
+            throw new BadRequestException(
+                'modelId is required to delete a v2 BYOK model',
+            );
+        }
+
+        return await this.deleteByokConfigUseCase.execute(organizationId, {
+            modelId,
+        });
     }
 
     @Post('/test-byok')
@@ -453,6 +538,60 @@ export class OrganizationParametersController {
         return await this.getLLMConfigStatusUseCase.execute({
             organizationId,
         });
+    }
+
+    @Get('/byok/providers')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        // Static, non-sensitive descriptor of the connectable BYOK providers
+        // (registry-driven; never a secret). Same read gate as
+        // /llm-config/status: code-review settings editors need the provider
+        // LIST to render the connect picker, so allow either
+        // organization-settings or code-review-settings read.
+        checkAnyPermission([
+            {
+                action: Action.Read,
+                resource: ResourceType.OrganizationSettings,
+            },
+            {
+                action: Action.Read,
+                resource: ResourceType.CodeReviewSettings,
+            },
+        ]),
+    )
+    @ApiOperation({
+        summary: 'List connectable BYOK providers',
+        description:
+            'Return the registry-driven list of connectable BYOK providers (id, label, aliases). Static and non-sensitive — never returns any credential.',
+    })
+    public async getByokProviders(): Promise<ByokProvidersResult> {
+        return await this.getByokProvidersUseCase.execute();
+    }
+
+    @Get('/byok/catalog')
+    @UseGuards(PolicyGuard)
+    @CheckPolicies(
+        // The curated model catalog is static + non-sensitive (Kodus's editorial
+        // picks, aggregated from the provider modules). Same read gate as
+        // /byok/providers — the connect picker needs it to render the models.
+        checkAnyPermission([
+            {
+                action: Action.Read,
+                resource: ResourceType.OrganizationSettings,
+            },
+            {
+                action: Action.Read,
+                resource: ResourceType.CodeReviewSettings,
+            },
+        ]),
+    )
+    @ApiOperation({
+        summary: 'List the curated BYOK model catalog',
+        description:
+            "Return the curated model catalog aggregated from every provider module's `catalog` (the single source of truth; replaces the frontend curated-models.json). Static and non-sensitive.",
+    })
+    public async getByokCatalog(): Promise<ByokCatalogResult> {
+        return await this.getByokCatalogUseCase.execute();
     }
 
     @Get('/cockpit-metrics-visibility')

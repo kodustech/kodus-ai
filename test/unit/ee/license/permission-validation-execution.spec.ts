@@ -36,8 +36,26 @@ jest.mock('@libs/ee/configs/environment', () => ({
 const VALID_ORG_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const orgData = { organizationId: VALID_ORG_ID };
 
+// v2-native stored blob: the service reads BYOK v2-only (04b-06 — the legacy
+// `{main}` stored shape is GONE), routing per task via `resolveByokCarrier`.
 const byokConfig = {
-    main: { provider: 'openai', model: 'gpt-4', apiKey: 'sk-test' },
+    version: 2,
+    credentials: [{ id: 'c-oa', provider: 'openai', apiKey: 'sk-test' }],
+    models: [{ id: 'm-A', credentialId: 'c-oa', model: 'gpt-4' }],
+    routing: { defaultModelId: 'm-A' },
+};
+
+// What `resolveByokCarrier` collapses the stored v2 blob to for the resolved
+// task: the routed slot under `main`. Extra NormalizedModel fields resolve to
+// `undefined` (no settings/reasoning), which `toEqual` ignores.
+// Flat NormalizedModel — the carrier `{ main: … }` shape was retired (single
+// format). `toEqual` ignores the undefined optional fields the slot also carries.
+const expectedByokSlot = {
+    provider: 'openai',
+    model: 'gpt-4',
+    apiKey: 'sk-test',
+    byokModelId: 'm-A',
+    credentialId: 'c-oa',
 };
 
 function createMockLicenseService(overrides: any = {}) {
@@ -361,7 +379,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
 
         const result = await service.validateExecutionPermissions(orgData);
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(byokConfig);
+        // toMatchObject (not toEqual): the resolved slot now also carries the
+        // runtime-failover `.fallback` + routing provenance — assert the identity
+        // fields, tolerate the extra carrier.
+        expect(result.byokConfig).toMatchObject(expectedByokSlot);
     });
 
     it('blocks a *_byok trial with billing byok:true but no local config, and warns on the divergence', async () => {
@@ -406,7 +427,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         const result = await service.validateExecutionPermissions(orgData);
 
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(byokConfig);
+        // toMatchObject (not toEqual): the resolved slot now also carries the
+        // runtime-failover `.fallback` + routing provenance — assert the identity
+        // fields, tolerate the extra carrier.
+        expect(result.byokConfig).toMatchObject(expectedByokSlot);
         expect(divergenceWarned()).toBe(false);
     });
 
@@ -431,7 +455,10 @@ describe('PermissionValidationService.validateExecutionPermissions', () => {
         );
 
         expect(result.allowed).toBe(true);
-        expect(result.byokConfig).toEqual(byokConfig);
+        // toMatchObject (not toEqual): the resolved slot now also carries the
+        // runtime-failover `.fallback` + routing provenance — assert the identity
+        // fields, tolerate the extra carrier.
+        expect(result.byokConfig).toMatchObject(expectedByokSlot);
         expect(
             licenseService.consumeTrialReviewCredit,
         ).not.toHaveBeenCalled();

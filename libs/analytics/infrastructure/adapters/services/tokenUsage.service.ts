@@ -117,6 +117,14 @@ export class TokenUsageService implements ITokenUsageService {
         return this.repository.getUsageByArea(await this.withRepositoryScope(query));
     }
 
+    async getModelCredentialPairs(
+        query: TokenUsageQueryContract,
+    ): Promise<Array<{ model: string; credentialId: string }>> {
+        return this.repository.getModelCredentialPairs(
+            await this.withRepositoryScope(query),
+        );
+    }
+
     async getUsageOverview(query: TokenUsageQueryContract) {
         return this.repository.getUsageOverview(
             await this.withRepositoryScope(query),

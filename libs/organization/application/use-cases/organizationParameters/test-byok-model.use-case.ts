@@ -1,4 +1,3 @@
-import { BYOKProvider } from '@kodus/kodus-common/llm';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 import {
     IOrganizationParametersService,
@@ -7,10 +6,8 @@ import {
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 
 import { resolveByokSlot } from './byok-credentials.util';
-import {
-    CURATED_CATALOG_PROVIDERS,
-    GetModelsByProviderUseCase,
-} from './get-models-by-provider.use-case';
+import { isCuratedCatalogProvider } from '@libs/llm/providers';
+import { GetModelsByProviderUseCase } from './get-models-by-provider.use-case';
 import {
     TestByokConnectionUseCase,
     TestByokResult,
@@ -78,7 +75,7 @@ export class TestByokModelUseCase {
             // Bedrock/Vertex catalogs are CURATED (not exhaustive), so a miss
             // isn't proof the model is invalid — fall through to a real probe.
             // Other providers list authoritatively, so a miss is a real miss.
-            if (!CURATED_CATALOG_PROVIDERS.has(input.provider as BYOKProvider)) {
+            if (!isCuratedCatalogProvider(input.provider)) {
                 return {
                     ok: false,
                     code: 'not_found',

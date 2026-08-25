@@ -216,6 +216,12 @@ export const codeReviewConfigRemovePropertiesNotInType = (
         // silently drop the field and the backend would never persist the
         // selected model.
         "byokModel",
+        // Id-based BYOK override (the model selector now writes THIS, not the
+        // legacy name). Missing from this allowlist, every per-repo/dir model
+        // pick was silently dropped on save — the model never persisted, the
+        // routing "Per repository" mirror stayed empty, and reviews kept using
+        // the inherited model.
+        "byokModelId",
         // New v2 prompt overrides for categories/severity customization
         "v2PromptOverrides",
         // Cross-repo context (#1576). Without it the stripper would drop

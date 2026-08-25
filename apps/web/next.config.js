@@ -59,10 +59,12 @@ const nextConfig = {
     turbopack: {
         root: projectRoot,
     },
-    // React Compiler (memoização automática). No Next 16 é opção top-level.
-    // Ainda roda via `babel-plugin-react-compiler` no 16.2.x (a porta nativa
-    // em Rust `experimental.turbopackRustReactCompiler` só existe no canary);
-    // migrar para ela quando chegar ao stable elimina o custo de babel (+13s).
+    // React Compiler (automatic memoization). Top-level option since Next 16.
+    // Runs through `babel-plugin-react-compiler`, which costs ~13s per build.
+    // Next 16.3 ships the native Rust port behind
+    // `experimental.turbopackRustReactCompiler`, but it hard-throws when the
+    // build is not Turbopack — and `build-analyze` still runs `--webpack` —
+    // so it stays off until the analyzer moves off webpack.
     reactCompiler: true,
     experimental: {
         // Tree-shake barrel-heavy packages: import only the icons/helpers a
@@ -71,10 +73,10 @@ const nextConfig = {
         // recharts ships a large runtime. Next rewrites these to per-export
         // deep imports at build time.
         optimizePackageImports: ["lucide-react", "date-fns", "recharts"],
-        // Cache de filesystem do Turbopack — compila mais rápido entre restarts
-        // do dev.
-        turbopackFileSystemCacheForDev: true,
-        authInterrupts: true,
+        // `turbopackFileSystemCacheForDev` and `authInterrupts` used to live
+        // here. The first is on by default since 16.3 (and is what enables the
+        // new memory eviction); the second gated `forbidden()`/`unauthorized()`,
+        // which nothing in this app calls.
         staleTimes: {
             dynamic: 300,
             static: 600,

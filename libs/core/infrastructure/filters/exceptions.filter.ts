@@ -106,7 +106,13 @@ export class ExceptionsFilter implements ExceptionFilter {
                 ? getReasonPhrase(status)
                 : 'Internal Server Error';
 
-        this.loggerService[isPgInvalidInput ? 'warn' : 'error']({
+        // Level mirrors Sentry gating: a 4xx is a CLIENT error (bad input,
+        // validation reject, not-found) — expected traffic, logged at `warn`,
+        // not `error`. Only a 5xx (server fault) is `error`. Without this every
+        // 400 ("model in use", "listing not available") inflated the error rate
+        // and the logs table. `isPgInvalidInput` is a 400 → falls into `warn`.
+        const logLevel = status >= 500 ? 'error' : 'warn';
+        this.loggerService[logLevel]({
             message: `[${status}] ${error}: ${message}`,
             context: 'ExceptionsFilter',
             serviceName: 'ExceptionsFilter',

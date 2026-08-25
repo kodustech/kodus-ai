@@ -1,4 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
+import { LLM_TASK } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     AutomationMessage,
     AutomationStatus,
@@ -294,8 +296,13 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                     if (!draft.codeReviewConfig) {
                         draft.codeReviewConfig = {} as any;
                     }
-                    draft.codeReviewConfig.byokConfig =
-                        validationResult.byokConfig;
+                    const healedByok = validationResult.byokConfig;
+                    draft.codeReviewConfig.byokConfig = healedByok;
+                    // Thread the resolved slot the downstream stages read their
+                    // limit/telemetry metadata off. The permission service now
+                    // returns the bare model slot directly.
+                    draft.codeReviewConfig.resolvedModelSlot = (healedByok ??
+                        undefined) as unknown as NormalizedModel | undefined;
                 }
                 if (validationResult.subscriptionStatus) {
                     if (!draft.pipelineMetadata) {
@@ -573,14 +580,21 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
                 return false;
             }
 
-            const byokConfig =
-                await this.permissionValidationService.getBYOKConfig(
+            // "Is BYOK configured?" = did the run resolve a non-managed slot
+            // for the codeReview task (v2 resolver). A null slot means the
+            // env/managed default — no client BYOK — so the trial is
+            // provisioned without one. resolveTaskSlot resolves without
+            // building the model (no decrypt / SDK client), so only the slot's
+            // presence is inspected here.
+            const carrier =
+                await this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
+                    LLM_TASK.codeReview,
                 );
 
             const provisioned = await this.licenseService.startTrial(
                 organizationAndTeamData,
-                Boolean(byokConfig?.main),
+                Boolean(carrier),
             );
 
             if (provisioned) {
@@ -983,7 +997,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
             "## You've used all your free Kodus-paid PR reviews 🎁\n\n" +
             'Your trial is still active — this just means the PR reviews we ' +
             'cover during the trial are used up.\n\n' +
-            '**[Connect your own AI key](https://app.kodus.io/organization/byok)** ' +
+            '**[Connect your own AI key](https://app.kodus.io/byok)** ' +
             'to keep Kody reviewing — unlimited reviews, on any plan (Free included).\n\n' +
             'Want more trial reviews to finish evaluating before adding a key? ' +
             '[Talk to our founders](https://cal.com/gabrielmalinosqui/30min). 😎\n\n' +
@@ -1014,7 +1028,7 @@ export class ValidatePrerequisitesStage extends BasePipelineStage<CodeReviewPipe
         return (
             '## BYOK Configuration Required! 🔑\n\n' +
             'Your plan requires a Bring Your Own Key (BYOK) configuration to perform code reviews.\n\n' +
-            'Please configure your API keys in [Settings > BYOK Configuration](https://app.kodus.io/organization/byok).\n\n' +
+            'Please configure your API keys in [AI Providers](https://app.kodus.io/byok).\n\n' +
             '<!-- kody-codereview -->'
         );
     }

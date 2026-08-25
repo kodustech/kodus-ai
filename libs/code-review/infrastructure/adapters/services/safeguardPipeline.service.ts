@@ -1,11 +1,8 @@
 import { createLogger } from '@libs/core/log/logger';
-import {
-    BYOKConfig,
-    LLMModelProvider,
-    ParserType,
-    PromptRole,
-    PromptRunnerService,
-} from '@kodus/kodus-common/llm';
+import { LLM } from '@libs/llm/llm';
+import { PromptRole } from '@libs/llm/prompt-role';
+import { getModelName } from '@libs/llm/byok-to-vercel';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { Inject, Injectable } from '@nestjs/common';
 import { z } from 'zod';
 
@@ -30,21 +27,20 @@ import {
     formatMemoriesSection,
     formatReferenceSection,
     formatSyncErrors,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewSafeguard';
+} from '@libs/common/utils/prompts/codeReviewSafeguard';
 import {
     STRUCTURAL_DEFECT_FEATURES,
     SafeguardFeatureExtractionResult,
     SafeguardFeatureSet,
     prompt_codeReviewSafeguard_featureExtraction,
-} from '@libs/common/utils/langchainCommon/prompts/codeReviewSafeguardFeatures';
-import { prompt_codeReviewSafeguard_verification } from '@libs/common/utils/langchainCommon/prompts/codeReviewSafeguardVerification';
+} from '@libs/common/utils/prompts/codeReviewSafeguardFeatures';
+import { prompt_codeReviewSafeguard_verification } from '@libs/common/utils/prompts/codeReviewSafeguardVerification';
 import { ReviewModeResponse } from '@libs/core/domain/enums/code-review.enum';
 import {
     DocumentationContextItem,
     ISafeguardResponse,
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
-import { BYOKPromptRunnerService } from '@libs/core/infrastructure/services/tokenTracking/byokPromptRunner.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 
 interface SafeguardPipelineParams {
@@ -56,7 +52,7 @@ interface SafeguardPipelineParams {
     suggestions: any[];
     languageResultPrompt: string;
     reviewMode: ReviewModeResponse;
-    byokConfig: BYOKConfig;
+    byokConfig: NormalizedModel;
     crossFileSnippets?: CrossFileContextSnippet[];
     remoteCommands?: RemoteCommands;
     memories?: Array<Partial<{ title?: string; rule?: string }>>;
@@ -68,12 +64,60 @@ interface SafeguardPipelineParams {
 
 const MAX_AGENT_TURNS = 6;
 
+// Boolean feature matrix extracted per suggestion in `extractFeatures`. Hoisted
+// to module scope so the strict-wire governance suite can assert it stays
+// OpenAI-strict compatible.
+export const safeguardFeatureExtractionSchema = z.object({
+    codeSuggestions: z.array(
+        z.object({
+            id: z.string(),
+            features: z.object({
+                has_resource_leak: z.boolean(),
+                has_inconsistent_contract: z.boolean(),
+                has_wrong_algorithm: z.boolean(),
+                has_data_exposure: z.boolean(),
+                has_missing_error_handling: z.boolean(),
+                has_redundant_work_in_loop: z.boolean(),
+                has_unsafe_data_flow: z.boolean(),
+                requires_assumed_input: z.boolean(),
+                requires_assumed_workload: z.boolean(),
+                is_quality_opinion: z.boolean(),
+                is_anti_pattern_only: z.boolean(),
+                targets_unchanged_code: z.boolean(),
+                improvedCode_is_correct: z.boolean(),
+            }),
+        }),
+    ),
+});
+
+// Prompt-only refute-to-drop verdict for an ambiguous suggestion. Hoisted to
+// module scope for the same strict-wire coverage reason.
+export const safeguardVerificationSchema = z.object({
+    verdict: z.boolean(),
+    evidence: z.string(),
+});
+
+// Each agent turn emits EITHER a tool call or a final verdict. All fields
+// are optional (the strict-wire converter makes absent ones nullable and
+// strips the nulls back to absent on parse), so the parsed object carries
+// ONLY the keys the model actually filled — `'verdict' in parsed` keeps
+// discriminating tool-calls from verdicts exactly as the STRING path did.
+export const agentTurnSchema = z.object({
+    tool: z.string().optional(),
+    pattern: z.string().optional(),
+    path: z.string().optional(),
+    packageName: z.string().optional(),
+    query: z.string().optional(),
+    verdict: z.boolean().optional(),
+    action: z.string().optional(),
+    evidence: z.string().optional(),
+});
+
 @Injectable()
 export class SafeguardPipelineService {
     private readonly logger = createLogger(SafeguardPipelineService.name);
 
     constructor(
-        private readonly promptRunnerService: PromptRunnerService,
         private readonly observability: ObservabilityService,
         @Inject(SANDBOX_PROVIDER_TOKEN)
         private readonly sandboxProvider: ISandboxProvider,
@@ -92,26 +136,13 @@ export class SafeguardPipelineService {
             remoteCommands,
         } = params;
 
-        const provider = LLMModelProvider.GEMINI_2_5_PRO;
-        const fallbackProvider = LLMModelProvider.NOVITA_DEEPSEEK_V3;
-
-        const promptRunner = new BYOKPromptRunnerService(
-            this.promptRunnerService,
-            provider,
-            fallbackProvider,
-            byokConfig,
-        );
-
         const pipelineStart = Date.now();
         const fileLabel = file?.filename || 'unknown';
 
         try {
             // Step 1: Feature Extraction (batch — one LLM call for all suggestions in the file)
             const feStart = Date.now();
-            const featureResult = await this.extractFeatures(
-                params,
-                promptRunner,
-            );
+            const featureResult = await this.extractFeatures(params);
             const feMs = Date.now() - feStart;
 
             if (!featureResult?.codeSuggestions?.length) {
@@ -125,7 +156,7 @@ export class SafeguardPipelineService {
                 });
                 return {
                     suggestions,
-                    codeReviewModelUsed: { safeguard: provider },
+                    codeReviewModelUsed: { safeguard: getModelName(byokConfig) },
                 };
             }
 
@@ -201,15 +232,6 @@ export class SafeguardPipelineService {
                         hasFreshCloneParams: !!params.getFreshCloneParams,
                     },
                 });
-
-                // Create a separate prompt runner for agent turns (use Flash for cost efficiency)
-                const agentProvider = LLMModelProvider.GEMINI_2_5_FLASH;
-                const agentPromptRunner = new BYOKPromptRunnerService(
-                    this.promptRunnerService,
-                    agentProvider,
-                    undefined,
-                    byokConfig,
-                );
 
                 const agentStart = Date.now();
                 let agentKept = 0;
@@ -288,7 +310,6 @@ export class SafeguardPipelineService {
                             suggestion,
                             features,
                             currentRemoteCommands,
-                            agentPromptRunner,
                             params.languageResultPrompt,
                             organizationAndTeamData,
                             prNumber,
@@ -336,7 +357,6 @@ export class SafeguardPipelineService {
                                 suggestion,
                                 features,
                                 currentRemoteCommands,
-                                agentPromptRunner,
                                 params.languageResultPrompt,
                                 organizationAndTeamData,
                                 prNumber,
@@ -420,7 +440,6 @@ export class SafeguardPipelineService {
                             suggestion,
                             features,
                             params,
-                            promptRunner,
                         );
 
                         if (result.keep) {
@@ -466,7 +485,7 @@ export class SafeguardPipelineService {
             return {
                 suggestions: kept,
                 codeReviewModelUsed: {
-                    safeguard: byokConfig?.main?.provider || provider,
+                    safeguard: getModelName(byokConfig),
                 },
             };
         } catch (error) {
@@ -477,7 +496,7 @@ export class SafeguardPipelineService {
             });
             return {
                 suggestions,
-                codeReviewModelUsed: { safeguard: provider },
+                codeReviewModelUsed: { safeguard: getModelName(byokConfig) },
             };
         }
     }
@@ -487,7 +506,6 @@ export class SafeguardPipelineService {
      */
     private async extractFeatures(
         params: SafeguardPipelineParams,
-        promptRunner: BYOKPromptRunnerService,
     ): Promise<SafeguardFeatureExtractionResult> {
         const {
             organizationAndTeamData,
@@ -497,35 +515,13 @@ export class SafeguardPipelineService {
             codeDiff,
             suggestions,
             languageResultPrompt,
-            reviewMode,
             crossFileSnippets,
             byokConfig,
         } = params;
 
         const runName = 'safeguardFeatureExtraction';
 
-        const schema = z.object({
-            codeSuggestions: z.array(
-                z.object({
-                    id: z.string(),
-                    features: z.object({
-                        has_resource_leak: z.boolean(),
-                        has_inconsistent_contract: z.boolean(),
-                        has_wrong_algorithm: z.boolean(),
-                        has_data_exposure: z.boolean(),
-                        has_missing_error_handling: z.boolean(),
-                        has_redundant_work_in_loop: z.boolean(),
-                        has_unsafe_data_flow: z.boolean(),
-                        requires_assumed_input: z.boolean(),
-                        requires_assumed_workload: z.boolean(),
-                        is_quality_opinion: z.boolean(),
-                        is_anti_pattern_only: z.boolean(),
-                        targets_unchanged_code: z.boolean(),
-                        improvedCode_is_correct: z.boolean(),
-                    }),
-                }),
-            ),
-        });
+        const schema = safeguardFeatureExtractionSchema;
 
         const systemPrompt = prompt_codeReviewSafeguard_featureExtraction({
             languageResultPrompt,
@@ -543,60 +539,36 @@ export class SafeguardPipelineService {
             externalReferenceErrors: params.externalReferenceErrors,
         });
 
-        const spanName = `${SafeguardPipelineService.name}::${runName}`;
-        const spanAttrs = {
-            type: promptRunner.executeMode,
-            organizationId: organizationAndTeamData?.organizationId,
-            prNumber,
-            file: { filePath: file?.filename },
-        };
-
-        const { result } = await this.observability.runLLMInSpan({
-            spanName,
-            runName,
-            attrs: spanAttrs,
-            byokConfig,
-            exec: async (callbacks) => {
-                return await promptRunner
-                    .builder()
-                    .setParser(ParserType.ZOD, schema as any, {
-                        provider: LLMModelProvider.OPENAI_GPT_4O_MINI,
-                        fallbackProvider: LLMModelProvider.OPENAI_GPT_4O,
-                    })
-                    .setLLMJsonMode(true)
-                    .addPrompt({
-                        prompt: systemPrompt,
-                        role: PromptRole.SYSTEM,
-                    })
-                    .addPrompt({
-                        prompt: userPrompt,
-                        role: PromptRole.USER,
-                    })
-                    .addMetadata({
-                        organizationId: organizationAndTeamData?.organizationId,
-                        teamId: organizationAndTeamData?.teamId,
-                        pullRequestId: prNumber,
-                        reviewMode,
-                        runName,
-                    })
-                    .setTemperature(0)
-                    .addCallbacks(callbacks)
-                    .setRunName(runName)
-                    .execute();
-            },
-        });
-
-        const parsed = schema.safeParse(result);
-        if (!parsed.success) {
+        // Migrated off the legacy LangChain PromptRunner onto the AI SDK
+        // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the outer
+        // runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its own model.
+        // runStructuredReviewCall validates against `schema` internally, so the
+        // trailing safeParse is unnecessary; a parse/LLM failure throws and we
+        // keep the original safe default (return no features → keep all).
+        try {
+            return await LLM.run({
+                schema,
+                system: systemPrompt,
+                user: userPrompt,
+                runName,
+                organizationId: organizationAndTeamData?.organizationId,
+                byokConfig,
+                attrs: {
+                    organizationId: organizationAndTeamData?.organizationId,
+                    prNumber,
+                    file: { filePath: file?.filename },
+                },
+            });
+        } catch (error) {
             this.logger.warn({
                 message: `Feature extraction parse failed for PR#${prNumber}`,
                 context: SafeguardPipelineService.name,
-                metadata: { error: parsed.error.message },
+                metadata: {
+                    error: error instanceof Error ? error.message : String(error),
+                },
             });
             return { codeSuggestions: [] };
         }
-
-        return parsed.data;
     }
 
     /**
@@ -608,16 +580,12 @@ export class SafeguardPipelineService {
         suggestion: any,
         features: SafeguardFeatureSet,
         params: SafeguardPipelineParams,
-        promptRunner: BYOKPromptRunnerService,
     ): Promise<{ keep: boolean; evidence: string }> {
         const claimedDefects = STRUCTURAL_DEFECT_FEATURES.filter(
             (f) => features[f],
         ).join(', ');
 
-        const schema = z.object({
-            verdict: z.boolean(),
-            evidence: z.string(),
-        });
+        const schema = safeguardVerificationSchema;
 
         const systemPrompt = `You are a code review verification assistant. A suggestion was flagged as ambiguous by triage and needs a final decision.
 
@@ -655,58 +623,39 @@ Evidence field in ${params.languageResultPrompt}.`;
 
         const runName = 'safeguardPromptOnlyVerification';
 
-        const { result } = await this.observability.runLLMInSpan({
-            spanName: `${SafeguardPipelineService.name}::${runName}`,
-            runName,
-            attrs: {
+        // Migrated off the legacy LangChain PromptRunner onto the AI SDK
+        // path (REQ-NOLC-01). Single span via runStructuredReviewCall — the outer
+        // runLLMInSpan wrapper is dropped (Q4). The BYOK org keeps its own model.
+        // runStructuredReviewCall validates against `schema` internally; a parse
+        // or LLM failure throws and we keep the suggestion (the same safe default
+        // the old safeParse-fail branch produced).
+        try {
+            const result = await LLM.run({
+                schema,
+                system: systemPrompt,
+                user: userPrompt,
+                runName,
                 organizationId: params.organizationAndTeamData?.organizationId,
-                prNumber: params.prNumber,
-                suggestionId: suggestion.id,
-                safeguardMode: 'prompt_only',
-                sandboxAvailable: false,
-                sandboxReason: 'no_remote_commands',
-            },
-            byokConfig: params.byokConfig,
-            exec: async (callbacks) => {
-                return await promptRunner
-                    .builder()
-                    .setParser(ParserType.ZOD, schema as any, {
-                        provider: LLMModelProvider.OPENAI_GPT_4O_MINI,
-                        fallbackProvider: LLMModelProvider.OPENAI_GPT_4O,
-                    })
-                    .setLLMJsonMode(true)
-                    .addPrompt({
-                        prompt: systemPrompt,
-                        role: PromptRole.SYSTEM,
-                    })
-                    .addPrompt({
-                        prompt: userPrompt,
-                        role: PromptRole.USER,
-                    })
-                    .addMetadata({
-                        organizationId:
-                            params.organizationAndTeamData?.organizationId,
-                        teamId: params.organizationAndTeamData?.teamId,
-                        pullRequestId: params.prNumber,
-                        runName,
-                    })
-                    .setTemperature(0)
-                    .addCallbacks(callbacks)
-                    .setRunName(runName)
-                    .execute();
-            },
-        });
+                byokConfig: params.byokConfig,
+                attrs: {
+                    organizationId:
+                        params.organizationAndTeamData?.organizationId,
+                    prNumber: params.prNumber,
+                    suggestionId: suggestion.id,
+                    safeguardMode: 'prompt_only',
+                    sandboxAvailable: false,
+                    sandboxReason: 'no_remote_commands',
+                },
+            });
 
-        const parsed = schema.safeParse(result);
-        if (!parsed.success) {
-            // Parse failed — keep suggestion (safe default)
+            return { keep: result.verdict, evidence: result.evidence };
+        } catch {
+            // Parse/LLM failure — keep suggestion (safe default)
             return {
                 keep: true,
                 evidence: 'prompt-only parse failed, keeping as safe default',
             };
         }
-
-        return { keep: parsed.data.verdict, evidence: parsed.data.evidence };
     }
 
     /**
@@ -716,13 +665,12 @@ Evidence field in ${params.languageResultPrompt}.`;
         suggestion: any,
         features: SafeguardFeatureSet,
         remoteCommands: RemoteCommands,
-        promptRunner: BYOKPromptRunnerService,
         languageResultPrompt: string,
         organizationAndTeamData: OrganizationAndTeamData,
         prNumber: number,
         memories?: Array<Partial<{ title?: string; rule?: string }>>,
         documentationContext?: DocumentationContextItem[],
-        byokConfig?: BYOKConfig,
+        byokConfig?: NormalizedModel,
     ): Promise<{
         verified: boolean;
         action: string;
@@ -766,10 +714,31 @@ Evidence field in ${params.languageResultPrompt}.`;
 
         const runName = 'safeguardAgentVerification';
 
+        // agentTurnSchema is defined at module scope (see the comment there);
+        // each turn emits EITHER a tool call or a final verdict.
         for (let turn = 0; turn < MAX_AGENT_TURNS; turn++) {
-            const { result: response } = await this.observability.runLLMInSpan({
-                spanName: `${SafeguardPipelineService.name}::${runName}::turn${turn}`,
-                runName,
+            // Migrated off the legacy LangChain PromptRunner onto the AI SDK
+            // path (REQ-NOLC-01); the outer runLLMInSpan wrapper is dropped (Q4).
+            // runStructuredReviewCall is single-shot (system + user only), so the
+            // multi-turn conversation is flattened: the SYSTEM prompt stays
+            // constant and every non-system turn (the agent's prior tool calls /
+            // verdicts and our tool results) is folded into a labelled transcript.
+            // The structured verdict/tool object the loop consumes is unchanged.
+            const conversation = messages
+                .filter((m) => m.role !== PromptRole.SYSTEM)
+                .map(
+                    (m) =>
+                        `${m.role === PromptRole.AI ? 'Assistant' : 'User'}: ${m.prompt}`,
+                )
+                .join('\n\n');
+
+            const response = await LLM.run({
+                schema: agentTurnSchema,
+                system: systemPrompt,
+                user: conversation,
+                runName: `${runName}_turn${turn}`,
+                organizationId: organizationAndTeamData?.organizationId,
+                byokConfig,
                 attrs: {
                     organizationId: organizationAndTeamData?.organizationId,
                     prNumber,
@@ -779,34 +748,9 @@ Evidence field in ${params.languageResultPrompt}.`;
                     sandboxAvailable: true,
                     sandboxReason: 'remote_commands_available',
                 },
-                byokConfig,
-                exec: async (callbacks) => {
-                    let builder = promptRunner
-                        .builder()
-                        .setParser(ParserType.STRING)
-                        .setPayload({});
-                    for (const msg of messages) {
-                        builder = builder.addPrompt(msg);
-                    }
-                    return await builder
-                        .setTemperature(0)
-                        .addCallbacks(callbacks)
-                        .addMetadata({
-                            organizationId:
-                                organizationAndTeamData?.organizationId,
-                            teamId: organizationAndTeamData?.teamId,
-                            pullRequestId: prNumber,
-                            runName,
-                        })
-                        .setRunName(`${runName}_turn${turn}`)
-                        .execute();
-                },
             });
 
-            const responseText =
-                typeof response === 'string'
-                    ? response
-                    : JSON.stringify(response);
+            const responseText = JSON.stringify(response);
 
             const parsed = this.parseAgentResponse(responseText);
 

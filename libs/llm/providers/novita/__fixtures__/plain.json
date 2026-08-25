@@ -1,0 +1,10 @@
+{
+    "_note": "Recorded generate result for a Novita (OpenAI-compatible) call (e.g. meta-llama/llama-3.1-70b-instruct). @ai-sdk/openai-compatible maps Novita's { prompt_tokens, completion_tokens } onto the high-level ai@7 LanguageModelUsage shape. This model reports no reasoning split, so normalizeUsage.reasoning must be 0 (a number, never null).",
+    "text": "{\"decisions\":[]}",
+    "finishReason": "stop",
+    "usage": {
+        "inputTokens": 631,
+        "outputTokens": 214,
+        "totalTokens": 845
+    }
+}

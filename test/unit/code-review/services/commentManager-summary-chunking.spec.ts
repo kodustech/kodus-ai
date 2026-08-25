@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CommentManagerService } from '@libs/code-review/infrastructure/adapters/services/commentManager.service';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { MessageTemplateProcessor } from '@libs/code-review/infrastructure/adapters/services/messageTemplateProcessor.service';
-import { PromptRunnerService } from '@kodus/kodus-common/llm';
 import { ObservabilityService } from '@libs/core/log/observability.service';
+import { setLlmObservability } from '@libs/llm/llm-observability';
 import { PermissionValidationService } from '@libs/ee/shared/services/permissionValidation.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
 import { FileChange } from '@libs/core/infrastructure/config/types/general/codeReview.type';
@@ -58,7 +58,6 @@ describe('CommentManagerService – chunkChangedFilesForSummary', () => {
                 CommentManagerService,
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
-                { provide: PromptRunnerService, useValue: {} },
                 { provide: ObservabilityService, useValue: {} },
                 { provide: PermissionValidationService, useValue: {} },
                 { provide: CodeManagementService, useValue: {} },
@@ -390,6 +389,18 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         behaviourForNewCommits: 'none',
     };
 
+    // The carrier generateSummaryPR gets back from
+    // permissionValidationService.resolveTaskSlot(org, prSummary); its
+    // main.maxInputTokens drives chunkChangedFilesForSummary.
+    // v2-native: resolveTaskSlot returns a FLAT NormalizedModel slot (no
+    // `main`/`fallback` carrier), and generateSummaryPR reads
+    // `slot.maxInputTokens` directly off it.
+    const carrierWithMaxInputTokens = (maxInputTokens: number) => ({
+        provider: 'openai',
+        model: 'gpt-4o',
+        maxInputTokens,
+    });
+
     beforeEach(async () => {
         llmCallCount = 0;
 
@@ -408,6 +419,9 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 return { text: 'Full PR summary generated.' };
             }),
         };
+        // LLM.run reads observability through the port, not DI — register the mock
+        // so every summary call is intercepted (no live model call).
+        setLlmObservability(mockObservabilityService as any);
 
         mockCodeManagementService = {
             getPullRequestByNumber: jest.fn().mockResolvedValue({
@@ -419,6 +433,10 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             validateBasicLicense: jest
                 .fn()
                 .mockResolvedValue({ allowed: true }),
+            // v2-native: generateSummaryPR resolves its own model by routing the
+            // org's v2 config for the `prSummary` task; maxInputTokens comes from
+            // the resolved slot. Default null → env default (no chunking).
+            resolveTaskSlot: jest.fn().mockResolvedValue(null),
             getBYOKConfig: jest.fn().mockResolvedValue(null),
         };
 
@@ -427,7 +445,6 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 CommentManagerService,
                 { provide: PARAMETERS_SERVICE_TOKEN, useValue: {} },
                 { provide: MessageTemplateProcessor, useValue: {} },
-                { provide: PromptRunnerService, useValue: {} },
                 {
                     provide: ObservabilityService,
                     useValue: mockObservabilityService,
@@ -469,14 +486,9 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
         it('should make a single LLM call', async () => {
             const files = [makeFile('a.ts', 50)];
 
-            const byokConfig = {
-                main: {
-                    provider: 'openai',
-                    apiKey: 'test-key',
-                    model: 'gpt-4o',
-                    maxInputTokens: 100000,
-                },
-            };
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+                carrierWithMaxInputTokens(100000),
+            );
 
             const result = await service.generateSummaryPR(
                 mockPullRequest,
@@ -485,7 +497,6 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 mockOrganizationAndTeamData as any,
                 'en-US',
                 defaultSummaryConfig as any,
-                byokConfig as any,
             );
 
             expect(result).toContain('Full PR summary generated.');
@@ -498,14 +509,9 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
             // Each file ≈ 2000 tokens, budget allows ~1 file per chunk
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            const byokConfig = {
-                main: {
-                    provider: 'openai',
-                    apiKey: 'test-key',
-                    model: 'gpt-4o',
-                    maxInputTokens: 3000,
-                },
-            };
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+                carrierWithMaxInputTokens(3000),
+            );
 
             const result = await service.generateSummaryPR(
                 mockPullRequest,
@@ -514,7 +520,6 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 mockOrganizationAndTeamData as any,
                 'en-US',
                 defaultSummaryConfig as any,
-                byokConfig as any,
             );
 
             // 2 chunk calls + 1 consolidation = 3 total
@@ -541,14 +546,9 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 makeFile('e.ts', 3000),
             ];
 
-            const byokConfig = {
-                main: {
-                    provider: 'openai',
-                    apiKey: 'test-key',
-                    model: 'gpt-4o',
-                    maxInputTokens: 4000,
-                },
-            };
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+                carrierWithMaxInputTokens(4000),
+            );
 
             const result = await service.generateSummaryPR(
                 mockPullRequest,
@@ -557,7 +557,6 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 mockOrganizationAndTeamData as any,
                 'en-US',
                 defaultSummaryConfig as any,
-                byokConfig as any,
             );
 
             // Should return null — no summary generated
@@ -590,14 +589,9 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            const byokConfig = {
-                main: {
-                    provider: 'openai',
-                    apiKey: 'test-key',
-                    model: 'gpt-4o',
-                    maxInputTokens: 3000,
-                },
-            };
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+                carrierWithMaxInputTokens(3000),
+            );
 
             const result = await service.generateSummaryPR(
                 mockPullRequest,
@@ -606,7 +600,6 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                 mockOrganizationAndTeamData as any,
                 'en-US',
                 defaultSummaryConfig as any,
-                byokConfig as any,
             );
 
             // 2 chunk calls + 1 consolidation = 3
@@ -632,14 +625,9 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
 
             const files = [makeFile('a.ts', 2000), makeFile('b.ts', 2000)];
 
-            const byokConfig = {
-                main: {
-                    provider: 'openai',
-                    apiKey: 'test-key',
-                    model: 'gpt-4o',
-                    maxInputTokens: 3000,
-                },
-            };
+            mockPermissionValidationService.resolveTaskSlot.mockResolvedValue(
+                carrierWithMaxInputTokens(3000),
+            );
 
             // generateSummaryPR has retry logic (maxRetries=2), and throws
             // when all chunks return empty, which gets caught and retried
@@ -651,7 +639,6 @@ describe('CommentManagerService – generateSummaryPR chunking integration', () 
                     mockOrganizationAndTeamData as any,
                     'en-US',
                     defaultSummaryConfig as any,
-                    byokConfig as any,
                 ),
             ).rejects.toThrow('No result returned from generateSummaryPR');
 

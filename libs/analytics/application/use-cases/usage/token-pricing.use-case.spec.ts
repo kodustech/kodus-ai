@@ -23,6 +23,18 @@ const modelsDevFixture = {
             },
         },
     },
+    // A deep-pathed model is served by Kodus as `accounts/fireworks/models/<id>`
+    // but the catalog only lists the bare `<id>` — the price path must reduce to
+    // the bare last segment to avoid a $0.00 under-report.
+    'fireworks-ai': {
+        id: 'fireworks-ai',
+        models: {
+            'deepseek-v4-flash-0731': {
+                id: 'deepseek-v4-flash-0731',
+                cost: { input: 0.13, output: 0.28, cache_read: 0.03 },
+            },
+        },
+    },
     google: {
         id: 'google',
         models: {
@@ -197,6 +209,25 @@ describe('TokenPricingUseCase', () => {
         expect(info.pricing.input.default).toBeCloseTo(0.929e-6, 12);
     });
 
+    it('prices a DEEP-PATHED Fireworks id via its bare last segment (was $0.00)', async () => {
+        mockCatalogs();
+
+        // The exact form deriveTu stores: `gen_ai.response.model.split(':').pop()`
+        // of `anthropic_compatible:accounts/fireworks/models/deepseek-v4-flash-0731`.
+        // `withoutPrefix` only strips `accounts/`, so this used to miss every
+        // catalog key and resolve to all-zero; the bare-segment candidate fixes it.
+        const info = await useCase.execute(
+            'accounts/fireworks/models/deepseek-v4-flash-0731',
+        );
+
+        expect(info.pricing.input.default).toBeCloseTo(0.13e-6, 12);
+        expect(info.pricing.output.default).toBeCloseTo(0.28e-6, 12);
+        expect(info.pricing.cacheRead.default).toBeCloseTo(0.03e-6, 12);
+        expect(
+            info.pricing.input.default > 0 || info.pricing.output.default > 0,
+        ).toBe(true);
+    });
+
     it('maps models.dev tiers[].tier.size to a tiered per-token rate', async () => {
         mockCatalogs();
 
@@ -268,6 +299,52 @@ describe('TokenPricingUseCase', () => {
 
         expect(info.pricing.input.default).toBe(0);
         expect(info.pricing.output.default).toBe(0);
+    });
+
+    // Fix A: last-known-good — a fetch failure AFTER a prior successful fetch
+    // (i.e. the cache expired and the upstream blipped) must keep pricing from
+    // the in-memory copy, not degrade every priced model to $0.
+    it('serves the last-known-good catalog when models.dev fails after cache expiry', async () => {
+        mockCatalogs();
+        const first = await useCase.execute('kimi-k2.6');
+        expect(first.pricing.input.default).toBeCloseTo(0.929e-6, 12);
+
+        // Cache now misses (24h TTL elapsed) AND the upstream is down.
+        cache.getFromCache.mockResolvedValue(null);
+        mockedAxios.get.mockImplementation(async (url: string) => {
+            if (url === MODELS_DEV_URL) throw new Error('models.dev down');
+            if (url === LITELLM_URL) return { data: liteLLMFixture };
+            throw new Error(`Unexpected URL ${url}`);
+        });
+
+        const second = await useCase.execute('kimi-k2.6');
+        // Still priced from the last-known-good, not unpriced.
+        expect(second.pricing.input.default).toBeCloseTo(0.929e-6, 12);
+    });
+
+    // Fix B: the prefix fallback must NOT price a bare family stem with no
+    // version signal — `gemini` would otherwise land on the shortest `gemini-*`
+    // variant and show a wrong number. Unpriced (all-zero) is the correct,
+    // overridable outcome.
+    it('does NOT price a bare family stem (no version) via the prefix fallback', async () => {
+        mockCatalogs();
+
+        const info = await useCase.execute('gemini');
+
+        expect(info.pricing.input.default).toBe(0);
+        expect(info.pricing.output.default).toBe(0);
+    });
+
+    // Fix B: a SPECIFIC versioned id still resolves via the prefix fallback —
+    // `deepseek-v4-flash` (a real BYOK config id) lands on the catalog's
+    // `deepseek-v4-flash-0731`. The digit in the query is the version signal.
+    it('still prices a versioned id missing its suffix via the prefix fallback', async () => {
+        mockCatalogs();
+
+        const info = await useCase.execute('deepseek-v4-flash');
+
+        expect(info.pricing.input.default).toBeCloseTo(0.13e-6, 12);
+        expect(info.pricing.output.default).toBeCloseTo(0.28e-6, 12);
     });
 
     it('fetches each catalog at most once thanks to the cache', async () => {

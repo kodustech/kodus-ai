@@ -4,6 +4,7 @@ import {
     classifyLLMError,
     getClassification,
     isTerminalCategory,
+    llmErrorLogLevel,
 } from './error-classifier';
 import {
     AgentContextWindowTooSmallError,
@@ -141,6 +142,24 @@ describe('classifyLLMError', () => {
             );
         });
 
+        it('Moonshot account-suspended prose (no status) → QUOTA_EXCEEDED', () => {
+            const err = new Error(
+                'Account gabriel-xxx is suspended, possibly due to reaching the monthly spending limit or failure to pay past invoices.',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
+        it('"account is suspended due to insufficient credit" → QUOTA_EXCEEDED', () => {
+            const err = new Error(
+                'Your account org-abc is suspended due to insufficient credit balance.',
+            );
+            expect(classifyLLMError(err).category).toBe(
+                LlmErrorCategory.QUOTA_EXCEEDED,
+            );
+        });
+
         it('invalid_api_key → AUTH_INVALID', () => {
             const err = new Error('Error code: invalid_api_key');
             expect(classifyLLMError(err).category).toBe(
@@ -246,7 +265,7 @@ describe('classifyLLMError', () => {
             // All three action options.
             expect(msg).toContain('Switch to a recommended model');
             expect(msg).toContain('Split the PR');
-            expect(msg).toContain('byokConfig.main.maxInputTokens');
+            expect(msg).toContain("Raise the model's Max input tokens");
             // Names of curated models (the ones shown as cards in BYOK
             // settings — admins should recognize these).
             expect(msg).toContain('Claude Sonnet 4.6');
@@ -277,7 +296,7 @@ describe('classifyLLMError', () => {
             expect(msg).toContain('Switch to a recommended model');
             expect(msg).toContain('Split the PR');
             // BYOK-limit option is omitted (no specific window to compare).
-            expect(msg).not.toContain('byokConfig.main.maxInputTokens');
+            expect(msg).not.toContain("Raise the model's Max input tokens");
         });
 
         it('renders as GitHub-flavored Markdown (bold + bullets) so the PR comment formats correctly', () => {
@@ -310,6 +329,21 @@ describe('isTerminalCategory', () => {
         LlmErrorCategory.UNKNOWN,
     ])('%s is not terminal', (cat) => {
         expect(isTerminalCategory(cat)).toBe(false);
+    });
+});
+
+describe('llmErrorLogLevel', () => {
+    it('terminal BYOK billing (suspended account) → warn', () => {
+        const err = new Error('Account xxx is suspended, spending limit reached');
+        expect(llmErrorLogLevel(err)).toBe('warn');
+    });
+    it('auth-invalid → warn', () => {
+        expect(llmErrorLogLevel(errorWithStatus('nope', 401))).toBe('warn');
+    });
+    it('unknown / genuine fault → error', () => {
+        expect(llmErrorLogLevel(new Error('TypeError: x is not a function'))).toBe(
+            'error',
+        );
     });
 });
 
