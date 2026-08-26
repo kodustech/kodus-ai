@@ -1,6 +1,6 @@
 import { createThreadId } from '@libs/common/utils/thread-id';
 import { createLogger } from '@libs/core/log/logger';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { BusinessRulesValidationAgentUseCase } from '@libs/agents/application/use-cases/business-rules-validation-agent.use-case';
 import { ConversationAgentUseCase } from '@libs/agents/application/use-cases/conversation-agent.use-case';
@@ -26,6 +26,10 @@ import { NULL_SANDBOX_INSTANCE } from '@libs/sandbox/infrastructure/providers/nu
 // read-side filter that drops Kody's own past comments stays in sync
 // with what every provider emitter actually writes.
 import { KODY_IDENTIFIERS } from '@libs/common/utils/kody-identifiers';
+import {
+    IPullRequestsService,
+    PULL_REQUESTS_SERVICE_TOKEN,
+} from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
 
 import { PlatformResponsePolicyFactory } from './policies/platform-response.policy';
 
@@ -173,6 +177,12 @@ interface Comment {
     commentType?: string;
 }
 
+interface OriginatingSuggestion {
+    suggestionId?: string;
+    label?: string;
+    brokenKodyRulesIds?: string[];
+}
+
 @Injectable()
 export class ChatWithKodyFromGitUseCase {
     private readonly logger = createLogger(ChatWithKodyFromGitUseCase.name);
@@ -186,6 +196,12 @@ export class ChatWithKodyFromGitUseCase {
 
         @Inject(SANDBOX_LEASE_MANAGER_TOKEN)
         private readonly leaseManager: ISandboxLeaseManager,
+
+        // Resolves the stored suggestion behind a Kody comment. Optional so
+        // lean wirings and specs still construct the use case.
+        @Optional()
+        @Inject(PULL_REQUESTS_SERVICE_TOKEN)
+        private readonly pullRequestsService?: IPullRequestsService,
     ) {}
 
     async execute(params: WebhookParams): Promise<void> {
@@ -852,9 +868,17 @@ export class ChatWithKodyFromGitUseCase {
 
         const gitUser = this.getGitUser(params);
 
+        const originalSuggestion = await this.resolveOriginatingSuggestion({
+            organizationAndTeamData,
+            repositoryId: repository.id,
+            pullRequestNumber,
+            originalKodyCommentId: originalKodyComment?.id,
+        });
+
         const prepareContext = this.prepareContext({
             comment,
             originalKodyComment,
+            originalSuggestion,
             gitUser,
             othersReplies,
             pullRequestNumber,
@@ -1801,9 +1825,73 @@ export class ChatWithKodyFromGitUseCase {
         }
     }
 
+    /**
+     * The stored suggestion the Kody comment came from — carries the rule ids a
+     * refinement needs, which the PR thread itself never exposes. Best-effort:
+     * a miss just means the agent works from the comment text alone.
+     */
+    private async resolveOriginatingSuggestion({
+        organizationAndTeamData,
+        repositoryId,
+        pullRequestNumber,
+        originalKodyCommentId,
+    }: {
+        organizationAndTeamData: OrganizationAndTeamData;
+        repositoryId?: string;
+        pullRequestNumber?: number;
+        originalKodyCommentId?: string | number;
+    }): Promise<OriginatingSuggestion | undefined> {
+        if (
+            !this.pullRequestsService ||
+            !repositoryId ||
+            pullRequestNumber == null ||
+            originalKodyCommentId == null
+        ) {
+            return undefined;
+        }
+
+        try {
+            const pullRequest =
+                await this.pullRequestsService.findByNumberAndRepositoryId(
+                    pullRequestNumber,
+                    repositoryId,
+                    organizationAndTeamData,
+                );
+
+            const commentId = String(originalKodyCommentId);
+            const suggestion = pullRequest?.files
+                ?.flatMap((file) => file.suggestions ?? [])
+                ?.find((s) => String(s?.comment?.id) === commentId);
+
+            if (!suggestion) {
+                return undefined;
+            }
+
+            return {
+                suggestionId: suggestion.id,
+                label: suggestion.label,
+                brokenKodyRulesIds: suggestion.brokenKodyRulesIds,
+            };
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Could not resolve the suggestion behind the Kody comment',
+                context: ChatWithKodyFromGitUseCase.name,
+                metadata: {
+                    organizationAndTeamData,
+                    pullRequestNumber,
+                    originalKodyCommentId,
+                },
+                error,
+            });
+            return undefined;
+        }
+    }
+
     private prepareContext({
         comment,
         originalKodyComment,
+        originalSuggestion,
         gitUser,
         othersReplies,
         pullRequestNumber,
@@ -1817,6 +1905,7 @@ export class ChatWithKodyFromGitUseCase {
     }: {
         comment?: Comment;
         originalKodyComment?: Comment;
+        originalSuggestion?: OriginatingSuggestion;
         gitUser?: { id: number; username: string };
         othersReplies?: Comment[];
         repository?: Repository;
@@ -1854,6 +1943,9 @@ export class ChatWithKodyFromGitUseCase {
                     suggestionFilePath: comment?.path,
                     suggestionText: originalKodyComment?.body,
                     diffHunk: originalKodyComment?.diff_hunk,
+                    suggestionId: originalSuggestion?.suggestionId,
+                    label: originalSuggestion?.label,
+                    brokenKodyRulesIds: originalSuggestion?.brokenKodyRulesIds,
                 },
                 othersReplies: othersReplies.map((reply) => ({
                     historyConversationText: reply.body,

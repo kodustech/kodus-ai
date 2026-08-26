@@ -59,6 +59,26 @@ describe('buildContextBlock', () => {
         expect(block).toContain('- that is intentional');
     });
 
+    it('names the rule behind the finding so it can be updated', () => {
+        const block = buildContextBlock({
+            ...THREAD,
+            codeManagementContext: {
+                ...THREAD.codeManagementContext,
+                originalComment: {
+                    ...THREAD.codeManagementContext!.originalComment,
+                    suggestionId: 'sug-9',
+                    label: 'kody_rules',
+                    brokenKodyRulesIds: ['rule-abc', 'rule-def'],
+                },
+            },
+        });
+
+        expect(block).toContain('kody_rules');
+        expect(block).toContain('rule-abc');
+        expect(block).toContain('rule-def');
+        expect(block).toContain('sug-9');
+    });
+
     it('renders nothing without a context', () => {
         expect(buildContextBlock(undefined)).toBe('');
     });

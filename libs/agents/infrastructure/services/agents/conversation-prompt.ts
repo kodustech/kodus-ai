@@ -35,6 +35,11 @@ export interface ConversationThreadContext {
             suggestionFilePath?: string;
             suggestionText?: string;
             diffHunk?: string;
+            /** Stored suggestion behind the comment, when it could be resolved. */
+            suggestionId?: string;
+            label?: string;
+            /** Kody Rules the suggestion enforced — the ids an update needs. */
+            brokenKodyRulesIds?: string[];
         };
         othersReplies?: Array<{ historyConversationText?: string }>;
     };
@@ -289,6 +294,15 @@ export function buildContextBlock(
             String(original.suggestionText),
             ...(original.diffHunk
                 ? ['Diff:', '```', String(original.diffHunk), '```']
+                : []),
+            ...(original.label ? [`Category: ${original.label}`] : []),
+            ...(original.suggestionId
+                ? [`suggestionId: ${original.suggestionId}`]
+                : []),
+            ...(original.brokenKodyRulesIds?.length
+                ? [
+                      `Kody Rules enforced by this finding (ruleId): ${original.brokenKodyRulesIds.join(', ')}`,
+                  ]
                 : []),
         );
     }
