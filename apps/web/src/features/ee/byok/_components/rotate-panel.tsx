@@ -103,6 +103,23 @@ export function RotatePanel({
         const valid = await form.trigger();
         if (!valid) return null;
         const values = form.getValues();
+
+        // Changing the endpoint must NOT reuse the stored secret: the server would
+        // otherwise send the org's key to a caller-supplied host. So a baseURL edit
+        // requires re-entering the key (which probes the new URL with the new key).
+        const baseUrlChanged =
+            (values.baseURL?.trim() || null) !== str(settings.baseURL);
+        if (baseUrlChanged && !typedNewSecret(values)) {
+            const result: TestBYOKResult = {
+                ok: false,
+                code: "bad_request",
+                latencyMs: 0,
+                message: "Re-enter your API key to change the base URL.",
+            };
+            setTestState({ status: "error", result });
+            return result;
+        }
+
         setTestState({ status: "testing" });
         try {
             const result = typedNewSecret(values)
@@ -124,10 +141,9 @@ export function RotatePanel({
                       provider: credential.provider,
                       model: probeModelId,
                       // No new secret was typed, so the stored ciphertext is
-                      // re-used server-side — but a changed NON-SECRET setting
-                      // (baseURL/region/location) must be probed as it will be
-                      // saved, else a broken new endpoint sails through the save.
-                      baseURL: values.baseURL?.trim() || undefined,
+                      // re-used server-side. Only the SAFE region/location edits
+                      // ride along (a baseURL change is gated above to require the
+                      // key, so the stored secret never reaches a new host).
                       awsRegion: values.awsRegion?.trim() || undefined,
                       vertexLocation: values.vertexLocation?.trim() || undefined,
                   });

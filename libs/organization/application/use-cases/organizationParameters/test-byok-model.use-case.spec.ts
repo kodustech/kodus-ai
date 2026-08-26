@@ -128,39 +128,71 @@ describe('TestByokModelUseCase', () => {
         );
     });
 
-    it('a CHANGED non-secret setting skips the catalog and probes the OVERRIDDEN endpoint', async () => {
+    const bedrock = {
+        version: 2,
+        credentials: [
+            {
+                id: 'c1',
+                provider: 'amazon_bedrock',
+                settings: { awsBearerToken: 'enc', awsRegion: 'us-east-1' },
+            },
+        ],
+        models: [],
+    };
+
+    it('a CHANGED safe setting (region) skips the catalog and probes with the OVERRIDDEN region', async () => {
         const { useCase, connectionUseCase } = build({
-            configValue: moonshot,
-            // The stored-endpoint catalog WOULD say "found" — but it validates the
-            // OLD endpoint, so a changed baseURL must not ride it.
-            catalog: [{ id: 'kimi-k2.7-code', name: 'Kimi' }],
+            configValue: bedrock,
+            // The stored-region catalog WOULD "find" it — but a changed region must
+            // not ride the stored-region listing.
+            catalog: [{ id: 'model-x', name: 'X' }],
         });
-        const res = await useCase.execute({
-            provider: 'openai_compatible',
-            model: 'kimi-k2.7-code',
+        await useCase.execute({
+            provider: 'amazon_bedrock',
+            model: 'model-x',
             organizationAndTeamData: org,
-            baseURL: 'https://new.endpoint/v1', // differs from the stored baseURL
+            awsRegion: 'eu-west-1', // differs from the stored us-east-1
         });
-        // Catalog shortcut skipped → a real probe ran against the NEW endpoint.
-        expect(res.ok).toBe(true);
+        // Catalog shortcut skipped → a real probe ran against the NEW region.
         expect(connectionUseCase.execute).toHaveBeenCalledWith(
-            expect.objectContaining({ baseURL: 'https://new.endpoint/v1' }),
+            expect.objectContaining({ awsRegion: 'eu-west-1' }),
         );
     });
 
-    it('the SAME non-secret setting keeps the fast catalog path (no needless probe)', async () => {
+    it('the SAME region keeps the fast catalog path (no needless probe)', async () => {
         const { useCase, connectionUseCase } = build({
-            configValue: moonshot,
-            catalog: [{ id: 'kimi-k2.7-code', name: 'Kimi' }],
+            configValue: bedrock,
+            catalog: [{ id: 'model-x', name: 'X' }],
         });
         const res = await useCase.execute({
-            provider: 'openai_compatible',
-            model: 'kimi-k2.7-code',
+            provider: 'amazon_bedrock',
+            model: 'model-x',
             organizationAndTeamData: org,
-            baseURL: 'https://api.moonshot.ai/v1', // equal to stored → not a change
+            awsRegion: 'us-east-1', // equal to stored → not a change
         });
         expect(res.ok).toBe(true);
         expect(connectionUseCase.execute).not.toHaveBeenCalled();
+    });
+
+    it('NEVER sends the stored secret to a caller-supplied baseURL (keeps the stored endpoint)', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: moonshot, // stored baseURL = https://api.moonshot.ai/v1
+            catalog: new Error('unlistable'), // force the connection probe path
+        });
+        // A caller trying to smuggle an exfil endpoint past the type. The stored
+        // secret must reach the STORED host only — never the caller's.
+        await useCase.execute({
+            provider: 'openai_compatible',
+            model: 'some-model',
+            organizationAndTeamData: org,
+            baseURL: 'https://evil.example/v1',
+        } as any);
+        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                apiKey: 'dec:enc',
+                baseURL: 'https://api.moonshot.ai/v1',
+            }),
+        );
     });
 
     it('rejects when the org has no saved slot for the provider', async () => {

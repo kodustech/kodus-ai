@@ -105,9 +105,10 @@ export const testBYOK = async (params: {
 export const testBYOKModel = async (params: {
     provider: string;
     model: string;
-    // NON-SECRET setting overrides — so editing an endpoint/region without
+    // SAFE non-secret overrides (region/location) — so editing them without
     // re-typing the secret probes the config being saved, not the stored one.
-    baseURL?: string;
+    // baseURL is NOT accepted: the server must not send the stored secret to a
+    // caller-supplied host. Changing the endpoint requires re-entering the key.
     awsRegion?: string;
     vertexLocation?: string;
 }): Promise<TestBYOKResult> => {
