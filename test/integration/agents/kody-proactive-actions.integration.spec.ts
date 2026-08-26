@@ -276,19 +276,14 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             },
         );
 
-        it.failing(
-            'carries the identifiers a write tool needs to be callable',
-            async () => {
-                const turn = await runTurn(
-                    scenarioById('real-but-out-of-scope'),
-                );
+        it('carries the identifiers a write tool needs to be callable', async () => {
+            const turn = await runTurn(scenarioById('real-but-out-of-scope'));
 
-                // KODUS_CREATE_KODY_ISSUE requires all of these.
-                expect(turn.userPrompt).toContain('GITHUB');
-                expect(turn.userPrompt).toContain('5150');
-                expect(turn.userPrompt).toContain(THREAD_GIT_USER.username);
-            },
-        );
+            // KODUS_CREATE_KODY_ISSUE requires all of these.
+            expect(turn.userPrompt).toContain('GITHUB');
+            expect(turn.userPrompt).toContain('5150');
+            expect(turn.userPrompt).toContain(THREAD_GIT_USER.username);
+        });
 
         it.failing(
             'replays its own prior offer so a confirmation can resolve it',

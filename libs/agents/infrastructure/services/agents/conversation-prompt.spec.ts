@@ -64,6 +64,29 @@ describe('buildContextBlock', () => {
     });
 });
 
+describe('identifiers', () => {
+    it('exposes every id a write tool needs to be callable', () => {
+        const prompt = userPrompt();
+
+        expect(prompt).toContain('organizationId: org-1');
+        expect(prompt).toContain('teamId: team-1');
+        expect(prompt).toContain('repositoryId: repo-1');
+        expect(prompt).toContain('platformType: GITHUB');
+        expect(prompt).toContain('pullRequestNumber: 812');
+        expect(prompt).toContain('originalKodyCommentId: 5150');
+        expect(prompt).toContain('dev-one');
+        expect(prompt).toContain('7');
+    });
+
+    it('renders only the ids the thread actually carries', () => {
+        const prompt = userPrompt({ prepareContext: undefined });
+
+        expect(prompt).toContain('organizationId: org-1');
+        expect(prompt).not.toContain('platformType:');
+        expect(prompt).not.toContain('repositoryId:');
+    });
+});
+
 describe('buildUserPrompt', () => {
     it('carries the context, the tools and the user message', () => {
         const prompt = userPrompt();

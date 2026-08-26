@@ -99,6 +99,11 @@ export function buildUserPrompt(input: UserPromptInput): string {
         sections.push(contextBlock, '');
     }
 
+    sections.push(
+        buildIdentifiersBlock(prepareContext, organizationAndTeamData),
+        '',
+    );
+
     // Tools are OPTIONAL aids, not a mandatory pipeline. This is a chat
     // agent — forcing a tool call first (especially one that may be
     // unavailable) made the model freeze and answer nothing on trivial
@@ -132,6 +137,51 @@ export function buildUserPrompt(input: UserPromptInput): string {
     );
 
     return sections.join('\n');
+}
+
+/**
+ * The concrete ids the tools need as arguments. Without them the agent can
+ * describe an action but not perform it: `KODUS_CREATE_KODY_ISSUE` alone needs
+ * the repository, the platform, the PR number and the originating comment.
+ */
+export function buildIdentifiersBlock(
+    prepareContext: ConversationThreadContext | undefined,
+    organizationAndTeamData: OrganizationAndTeamData,
+): string {
+    const gitUser = prepareContext?.gitUser;
+    const entries: Array<[string, unknown]> = [
+        ['organizationId', organizationAndTeamData?.organizationId],
+        ['teamId', organizationAndTeamData?.teamId],
+        ['repositoryId', prepareContext?.repository?.id],
+        ['repositoryName', prepareContext?.repository?.name],
+        ['platformType', prepareContext?.platformType],
+        ['pullRequestNumber', prepareContext?.pullRequest?.pullRequestNumber],
+        [
+            'originalKodyCommentId',
+            prepareContext?.codeManagementContext?.originalComment
+                ?.suggestionCommentId,
+        ],
+        [
+            'filePath',
+            prepareContext?.codeManagementContext?.originalComment
+                ?.suggestionFilePath,
+        ],
+    ];
+
+    const lines = entries
+        .filter(
+            ([, value]) =>
+                value !== undefined && value !== null && value !== '',
+        )
+        .map(([key, value]) => `- ${key}: ${String(value)}`);
+
+    if (gitUser?.username || gitUser?.id != null) {
+        lines.push(
+            `- developer replying: ${gitUser?.username ?? 'unknown'} (gitId ${gitUser?.id ?? 'unknown'})`,
+        );
+    }
+
+    return lines.length ? ['### Identifiers', ...lines].join('\n') : '';
 }
 
 /**
