@@ -68,8 +68,14 @@ describe('ProviderService — registry-driven', () => {
                 expect(o.listsModelsLive).toBe(true);
             });
 
-            it('Bedrock / Vertex: static catalogs are auto-listable but NOT live (no key needed)', () => {
-                expect(byId('amazon_bedrock').listsModelsLive).toBe(false);
+            it('Bedrock: http listing (ListInferenceProfiles) with a resolvable base URL → lists live', () => {
+                // Bedrock enumerates system-defined profiles over a live AWS
+                // endpoint; `fallbackModels` only cover the degraded path. That
+                // makes it a live listing like OpenAI, not a static catalog.
+                expect(byId('amazon_bedrock').listsModelsLive).toBe(true);
+            });
+
+            it('Vertex: static catalog is auto-listable but NOT live (no live /models endpoint)', () => {
                 expect(byId('google_vertex').listsModelsLive).toBe(false);
             });
 
