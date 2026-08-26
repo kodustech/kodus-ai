@@ -171,8 +171,8 @@ async function main() {
     let model;
     if (TIER0[MODELKEY]) {
         applyModelEnv(MODELKEY);
-        const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
-        model = byokToVercelModel(undefined, 'main', {});
+        const { buildEvalModel } = require('../shared/build-model');
+        model = buildEvalModel({});
     } else {
         const spec = MODELS[MODELKEY];
         if (!spec) throw new Error(`unknown model ${MODELKEY}`);

@@ -34,8 +34,8 @@ const rules = cases[cases.length - 1].rules; // all 27 (same set in every case)
 async function main() {
     const { applyModelEnv } = require('../shared/tier0-models');
     applyModelEnv(MODELKEY);
-    const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
-    const model = byokToVercelModel(undefined, 'main', {});
+    const { buildEvalModel } = require('../shared/build-model');
+    const model = buildEvalModel({});
     const { generateText } = require('ai');
     const {
         compileRuleDetector,

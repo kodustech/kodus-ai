@@ -68,7 +68,7 @@ const END = '<!-- kody-pr-summary:end -->';
 const MOCK_SUMMARY = 'MOCK_GENERATED_SUMMARY_BODY';
 
 const { applyModelEnv } = require('../shared/tier0-models');
-const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+const { buildEvalModel } = require('../shared/build-model');
 
 // exit-2 helper — infra errors ALWAYS fail (a broken model must never look green).
 function infra(msg) {
@@ -301,7 +301,7 @@ function routingChecks() {
     const savedEnvModel = process.env.API_LLM_PROVIDER_MODEL;
     try {
         delete process.env.API_LLM_PROVIDER_MODEL;
-        const cloud = byokToVercelModel(undefined, 'main', {}, SUMMARY_DEFAULT);
+        const cloud = buildEvalModel({}, SUMMARY_DEFAULT);
         if (cloud.modelId !== SUMMARY_DEFAULT) {
             failures.push(`cloud-default summary resolved to '${cloud.modelId}', expected '${SUMMARY_DEFAULT}' — silent model swap`);
         }
@@ -315,7 +315,7 @@ function routingChecks() {
     //    silently overridden by the kimi default. This is the per-model matrix
     //    assertion: gpt-mini stays gpt-mini, gemini-flash stays gemini-flash.
     if (!MOCK) {
-        const m = byokToVercelModel(undefined, 'main', {}, SUMMARY_DEFAULT);
+        const m = buildEvalModel({}, SUMMARY_DEFAULT);
         if (m.modelId !== MODEL) {
             failures.push(`self-hosted summary routed to '${m.modelId}', expected the configured '${MODEL}'`);
         }

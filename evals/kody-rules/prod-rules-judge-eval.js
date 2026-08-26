@@ -95,9 +95,9 @@ async function mapLimit(items, limit, fn) {
 
 async function main() {
     const { applyModelEnv } = require('../shared/tier0-models');
-    const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+    const { buildEvalModel } = require('../shared/build-model');
     applyModelEnv(MODELKEY);
-    const model = byokToVercelModel(undefined, 'main', {});
+    const model = buildEvalModel({});
     const { generateText } = require('ai');
 
     let cases = buildCases(allRules);

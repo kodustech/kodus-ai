@@ -84,8 +84,8 @@ const parseJSON = (text) => {
 async function main() {
     const { applyModelEnv } = require('../shared/tier0-models');
     applyModelEnv(MODELKEY);
-    const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
-    const model = byokToVercelModel(undefined, 'main', {});
+    const { buildEvalModel } = require('../shared/build-model');
+    const model = buildEvalModel({});
     const { generateText } = require('ai');
     const { compileRuleDetector, makeLLMRunCompiler } = require('../../libs/code-review/infrastructure/agents/collaborators/kody-rules-detector.compiler.ts');
 

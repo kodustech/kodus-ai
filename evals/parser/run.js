@@ -51,13 +51,13 @@ async function main() {
     // an unreachable model would masquerade as "recovered 0 findings" (a quality
     // fail) instead of an infra error. Surface it here so ERROR != 0-findings.
     {
-        const { getInternalModel } = require(
-            path.join(__dirname, '../../libs/llm/byok-to-vercel.ts'),
+        const { buildEvalModel } = require(
+            path.join(__dirname, '../shared/build-model'),
         );
         const { generateObject } = require('ai');
         const { z } = require('zod');
         try {
-            const m = getInternalModel(undefined, { structuredOutputs: true });
+            const m = buildEvalModel({ structuredOutputs: true });
             if (!m) throw new Error('getInternalModel returned null (no key)');
             await generateObject({
                 model: m,
