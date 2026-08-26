@@ -27,18 +27,39 @@ import {
     FormattedCodeReviewConfig,
     FormattedConfigLevel,
     FormattedGlobalCodeReviewConfig,
+    FormattedRepositoryCodeReviewConfig,
     IFormattedConfigProperty,
+    KodusConfigFileOverlay,
+    KodusConfigFileOverlayStatus,
 } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 import {
     buildDefaultGlobalCodeReviewConfig,
     getDefaultKodusConfigFile,
 } from '@libs/common/utils/validateCodeReviewConfigFile';
-import { CodeReviewConfigWithoutLLMProvider } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import {
+    CodeReviewConfigWithoutLLMProvider,
+    KodusConfigFile,
+} from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PromptSourceType } from '@libs/ai-engine/domain/prompt/interfaces/promptExternalReference.interface';
+
+type CodeReviewRepositoryEntry = NonNullable<
+    IParameters<ParametersKey.CODE_REVIEW_CONFIG>['configValue']['repositories']
+>[number];
 
 @Injectable()
 export class GetCodeReviewParameterUseCase {
     private readonly logger = createLogger(GetCodeReviewParameterUseCase.name);
+
+    /**
+     * Upper bound on the provider calls a single repository's
+     * `kodus-config.yml` overlay may spend. Repositories are formatted
+     * concurrently, so this also bounds the endpoint as a whole. A healthy
+     * read is ~400ms; 8s absorbs a short queue on the shared credential
+     * without making the settings screen wait on a backlogged one.
+     */
+    private static readonly FILE_OVERLAY_TIMEOUT_MS = Number(
+        process.env.KODUS_CONFIG_FILE_OVERLAY_TIMEOUT_MS ?? 8_000,
+    );
 
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
@@ -59,6 +80,15 @@ export class GetCodeReviewParameterUseCase {
         options: {
             skipAuthorization?: boolean;
             organizationId?: string;
+            /**
+             * Overlays each repository's `kodus-config.yml`, read live from the
+             * git provider. Defaults to true so the CLI and centralized-config
+             * callers keep the full merged view. The settings screen turns it
+             * off for its blocking first render — the provider can be slow or
+             * rate-limited, and the screen must not wait on it — then requests
+             * the overlay again from the client.
+             */
+            includeFileOverlay?: boolean;
         } = {},
     ) {
         try {
@@ -105,7 +135,7 @@ export class GetCodeReviewParameterUseCase {
             const parameters = parametersEntity.toObject();
 
             const filteredRepositories = [];
-            for (const repo of parameters.configValue.repositories) {
+            for (const repo of parameters.configValue.repositories || []) {
                 const hasPermission = options.skipAuthorization
                     ? true
                     : await this.authorizationService.check({
@@ -132,6 +162,7 @@ export class GetCodeReviewParameterUseCase {
                 await this.getCodeReviewConfigFormatted(
                     organizationAndTeamData,
                     hasPermissionParameters.configValue,
+                    options.includeFileOverlay ?? true,
                 );
 
             /**
@@ -148,17 +179,24 @@ export class GetCodeReviewParameterUseCase {
             const cutoffMonth = 8; // September (0-indexed)
             const cutoffDay = 11;
 
-            const paramYear =
-                hasPermissionParameters.createdAt.getUTCFullYear();
-            const paramMonth = hasPermissionParameters.createdAt.getUTCMonth();
-            const paramDay = hasPermissionParameters.createdAt.getUTCDate();
+            // A row created by get-or-create above (or an older row that never
+            // stored it) has no createdAt. Treat it as post-cutoff: the toggle
+            // exists only to keep pre-cutoff teams on the legacy engine.
+            const createdAt = hasPermissionParameters.createdAt
+                ? new Date(hasPermissionParameters.createdAt)
+                : null;
+
+            const paramYear = createdAt?.getUTCFullYear();
+            const paramMonth = createdAt?.getUTCMonth();
+            const paramDay = createdAt?.getUTCDate();
 
             const showToggleCodeReviewVersion =
-                paramYear < cutoffYear ||
-                (paramYear === cutoffYear && paramMonth < cutoffMonth) ||
-                (paramYear === cutoffYear &&
-                    paramMonth === cutoffMonth &&
-                    paramDay < cutoffDay);
+                createdAt !== null &&
+                (paramYear < cutoffYear ||
+                    (paramYear === cutoffYear && paramMonth < cutoffMonth) ||
+                    (paramYear === cutoffYear &&
+                        paramMonth === cutoffMonth &&
+                        paramDay < cutoffDay));
 
             return {
                 ...hasPermissionParameters,
@@ -184,6 +222,7 @@ export class GetCodeReviewParameterUseCase {
     private async getCodeReviewConfigFormatted(
         organizationAndTeamData: OrganizationAndTeamData,
         configValue: IParameters<ParametersKey.CODE_REVIEW_CONFIG>['configValue'],
+        includeFileOverlay: boolean,
     ): Promise<FormattedGlobalCodeReviewConfig> {
         const defaultConfig = getDefaultKodusConfigFile();
         const formattedDefaultConfig = this.formatDefaultConfig(defaultConfig);
@@ -204,134 +243,104 @@ export class GetCodeReviewParameterUseCase {
             globalConfigKey,
         );
 
+        // Repositories are formatted concurrently: the provider calls behind
+        // them are serialized upstream by the rate gate anyway, but running
+        // them sequentially here meant one slow repository delayed — and one
+        // failing repository could stall — every repository after it.
+        const repositories = configValue.repositories || [];
+        const settledRepositories = await Promise.allSettled(
+            repositories.map((repo) =>
+                this.formatRepository(
+                    organizationAndTeamData,
+                    formattedGlobalConfig,
+                    repo,
+                    includeFileOverlay,
+                ),
+            ),
+        );
+
         const formattedRepositories = [];
 
-        for (const repo of configValue.repositories || []) {
-            try {
-                const repository = {
-                    id: repo.id,
-                    name: repo.name,
-                };
+        settledRepositories.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                formattedRepositories.push(result.value);
+                return;
+            }
 
-                const repoFile =
-                    await this.codeBaseConfigService.getKodusConfigFile({
+            this.logger.warn({
+                message:
+                    'Skipping repository while formatting code review config due to repository-level error',
+                context: GetCodeReviewParameterUseCase.name,
+                error: result.reason,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    repositoryId: repositories[index]?.id,
+                    repositoryName: repositories[index]?.name,
+                },
+            });
+        });
+
+        return {
+            ...configValue,
+            configs: formattedGlobalConfig as any, // TODO: remove this 'any' once migration is done
+            repositories: formattedRepositories,
+        };
+    }
+
+    /**
+     * Formats one repository and its directories. Reading `kodus-config.yml`
+     * means a live call to the git provider, so every such call is bounded by
+     * a single deadline shared across this repository: when the provider is
+     * slow or throttled the repository still renders from stored config, with
+     * `kodusConfigFile.status` telling the caller the overlay is missing.
+     * Dropping the repository instead would hide it from the settings screen.
+     */
+    private async formatRepository(
+        organizationAndTeamData: OrganizationAndTeamData,
+        formattedGlobalConfig: FormattedCodeReviewConfig,
+        repo: CodeReviewRepositoryEntry,
+        includeFileOverlay: boolean,
+    ): Promise<FormattedRepositoryCodeReviewConfig> {
+        const repository = { id: repo.id, name: repo.name };
+        const directories = repo.directories || [];
+
+        const repoOverride =
+            repo.configs?.kodusConfigFileOverridesWebPreferences ?? false;
+        const overrideForDirectory = (dir: (typeof directories)[number]) =>
+            dir.configs?.kodusConfigFileOverridesWebPreferences ?? repoOverride;
+
+        const wantsFile =
+            includeFileOverlay &&
+            (repoOverride || directories.some(overrideForDirectory));
+
+        // One budget for this repository's provider calls as a whole. Since
+        // repositories run concurrently, the request's worst case is a single
+        // budget rather than one per repository or per directory.
+        const deadlineAt =
+            Date.now() + GetCodeReviewParameterUseCase.FILE_OVERLAY_TIMEOUT_MS;
+
+        // Resolved once and threaded into every getKodusConfigFile call below.
+        // Left to itself, each call re-asks the provider for the same branch —
+        // one extra round trip per directory, on the credential already under
+        // pressure.
+        let defaultBranch: string | undefined;
+        let branchError: string | undefined;
+
+        if (wantsFile) {
+            try {
+                defaultBranch = await this.withDeadline(
+                    this.codeBaseConfigService.getDefaultBranch(
                         organizationAndTeamData,
                         repository,
-                        overrideConfig:
-                            repo.configs
-                                ?.kodusConfigFileOverridesWebPreferences ??
-                            false,
-                    });
-
-                const formattedRepoConfig = this.formatLevel(
-                    formattedGlobalConfig,
-                    repo.configs,
-                    FormattedConfigLevel.REPOSITORY,
+                    ),
+                    deadlineAt,
                 );
-
-                let formattedRepoFileConfig = this.formatLevel(
-                    formattedRepoConfig,
-                    repoFile,
-                    FormattedConfigLevel.REPOSITORY_FILE,
-                );
-
-                // Buscar e adicionar referências externas do nível repositório
-                const repoConfigKey =
-                    this.promptReferenceManager.buildConfigKey(
-                        organizationAndTeamData,
-                        repo.id,
-                    );
-                formattedRepoFileConfig =
-                    await this.enrichConfigWithExternalReferences(
-                        formattedRepoFileConfig,
-                        repoConfigKey,
-                    );
-
-                const formattedDirectories = [];
-
-                for (const dir of repo.directories || []) {
-                    try {
-                        const isDirectoryGroup =
-                            Array.isArray(dir.folders) &&
-                            dir.folders.length > 0;
-
-                        const directoryFile =
-                            await this.codeBaseConfigService.getKodusConfigFile(
-                                {
-                                    organizationAndTeamData,
-                                    repository,
-                                    ...(isDirectoryGroup
-                                        ? { directoryId: dir.id }
-                                        : {
-                                              directoryPath:
-                                                  (dir as any).path,
-                                          }),
-                                    overrideConfig:
-                                        dir.configs
-                                            ?.kodusConfigFileOverridesWebPreferences ??
-                                        repo.configs
-                                            ?.kodusConfigFileOverridesWebPreferences ??
-                                        false,
-                                },
-                            );
-
-                        const formattedDirConfig = this.formatLevel(
-                            formattedRepoFileConfig,
-                            dir.configs,
-                            FormattedConfigLevel.DIRECTORY,
-                        );
-
-                        let formattedDirFileConfig = this.formatLevel(
-                            formattedDirConfig,
-                            directoryFile,
-                            FormattedConfigLevel.DIRECTORY_FILE,
-                        );
-
-                        // Buscar e adicionar referências externas do nível diretório
-                        const dirConfigKey =
-                            this.promptReferenceManager.buildConfigKey(
-                                organizationAndTeamData,
-                                repo.id,
-                                dir.id,
-                            );
-                        formattedDirFileConfig =
-                            await this.enrichConfigWithExternalReferences(
-                                formattedDirFileConfig,
-                                dirConfigKey,
-                            );
-
-                        formattedDirectories.push({
-                            ...dir,
-                            configs: formattedDirFileConfig,
-                        });
-                    } catch (error) {
-                        this.logger.warn({
-                            message:
-                                'Skipping directory while formatting code review config due to directory-level error',
-                            context: GetCodeReviewParameterUseCase.name,
-                            error,
-                            metadata: {
-                                organizationId:
-                                    organizationAndTeamData.organizationId,
-                                teamId: organizationAndTeamData.teamId,
-                                repositoryId: repo.id,
-                                directoryId: dir.id,
-                                directoryPath: dir.folders?.[0]?.path,
-                            },
-                        });
-                        continue;
-                    }
-                }
-
-                formattedRepositories.push({
-                    ...repo,
-                    configs: formattedRepoFileConfig,
-                    directories: formattedDirectories,
-                });
             } catch (error) {
+                branchError = this.getErrorMessage(error);
                 this.logger.warn({
                     message:
-                        'Skipping repository while formatting code review config due to repository-level error',
+                        'Could not resolve default branch; rendering repository without its kodus-config.yml overlay',
                     context: GetCodeReviewParameterUseCase.name,
                     error,
                     metadata: {
@@ -341,15 +350,226 @@ export class GetCodeReviewParameterUseCase {
                         repositoryName: repo.name,
                     },
                 });
-                continue;
             }
         }
 
-        return {
-            ...configValue,
-            configs: formattedGlobalConfig as any, // TODO: remove this 'any' once migration is done
-            repositories: formattedRepositories,
+        const readKodusConfigFile = async (
+            scope: { directoryPath?: string; directoryId?: string },
+            overrideConfig: boolean,
+            logMetadata: Record<string, unknown>,
+        ): Promise<{
+            file?: KodusConfigFile;
+            overlay: KodusConfigFileOverlay;
+        }> => {
+            // DISABLED is decided from stored config alone, so it is reported
+            // even when the overlay is skipped: the caller needs to tell "this
+            // scope is not governed by a file" from "the file has not been
+            // read yet".
+            if (!overrideConfig) {
+                return {
+                    overlay: { status: KodusConfigFileOverlayStatus.DISABLED },
+                };
+            }
+
+            if (!includeFileOverlay) {
+                return {
+                    overlay: { status: KodusConfigFileOverlayStatus.SKIPPED },
+                };
+            }
+
+            if (!defaultBranch) {
+                return {
+                    overlay: {
+                        status: KodusConfigFileOverlayStatus.UNAVAILABLE,
+                        error: branchError,
+                    },
+                };
+            }
+
+            try {
+                const file =
+                    await this.withDeadline(
+                        this.codeBaseConfigService.getKodusConfigFile({
+                            organizationAndTeamData,
+                            repository,
+                            defaultBranch,
+                            overrideConfig: true,
+                            ...scope,
+                        }),
+                        deadlineAt,
+                    );
+
+                return {
+                    file,
+                    overlay: { status: KodusConfigFileOverlayStatus.LOADED },
+                };
+            } catch (error) {
+                this.logger.warn({
+                    message:
+                        'Could not read kodus-config.yml; rendering stored config without the file overlay',
+                    context: GetCodeReviewParameterUseCase.name,
+                    error,
+                    metadata: {
+                        organizationId: organizationAndTeamData.organizationId,
+                        teamId: organizationAndTeamData.teamId,
+                        repositoryId: repo.id,
+                        repositoryName: repo.name,
+                        ...logMetadata,
+                    },
+                });
+
+                return {
+                    overlay: {
+                        status: KodusConfigFileOverlayStatus.UNAVAILABLE,
+                        error: this.getErrorMessage(error),
+                    },
+                };
+            }
         };
+
+        const repoFileResult = await readKodusConfigFile({}, repoOverride, {});
+
+        const formattedRepoConfig = this.formatLevel(
+            formattedGlobalConfig,
+            repo.configs,
+            FormattedConfigLevel.REPOSITORY,
+        );
+
+        let formattedRepoFileConfig = this.formatLevel(
+            formattedRepoConfig,
+            repoFileResult.file,
+            FormattedConfigLevel.REPOSITORY_FILE,
+        );
+
+        // Buscar e adicionar referências externas do nível repositório
+        const repoConfigKey = this.promptReferenceManager.buildConfigKey(
+            organizationAndTeamData,
+            repo.id,
+        );
+        formattedRepoFileConfig = await this.enrichConfigWithExternalReferences(
+            formattedRepoFileConfig,
+            repoConfigKey,
+        );
+
+        const settledDirectories = await Promise.allSettled(
+            directories.map(async (dir) => {
+                const isDirectoryGroup =
+                    Array.isArray(dir.folders) && dir.folders.length > 0;
+
+                const directoryFileResult = await readKodusConfigFile(
+                    isDirectoryGroup
+                        ? { directoryId: dir.id }
+                        : { directoryPath: (dir as any).path },
+                    overrideForDirectory(dir),
+                    {
+                        directoryId: dir.id,
+                        directoryPath: dir.folders?.[0]?.path,
+                    },
+                );
+
+                const formattedDirConfig = this.formatLevel(
+                    formattedRepoFileConfig,
+                    dir.configs,
+                    FormattedConfigLevel.DIRECTORY,
+                );
+
+                let formattedDirFileConfig = this.formatLevel(
+                    formattedDirConfig,
+                    directoryFileResult.file,
+                    FormattedConfigLevel.DIRECTORY_FILE,
+                );
+
+                // Buscar e adicionar referências externas do nível diretório
+                const dirConfigKey =
+                    this.promptReferenceManager.buildConfigKey(
+                        organizationAndTeamData,
+                        repo.id,
+                        dir.id,
+                    );
+                formattedDirFileConfig =
+                    await this.enrichConfigWithExternalReferences(
+                        formattedDirFileConfig,
+                        dirConfigKey,
+                    );
+
+                return {
+                    ...dir,
+                    configs: formattedDirFileConfig,
+                    kodusConfigFile: directoryFileResult.overlay,
+                };
+            }),
+        );
+
+        const formattedDirectories = [];
+
+        settledDirectories.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                formattedDirectories.push(result.value);
+                return;
+            }
+
+            this.logger.warn({
+                message:
+                    'Skipping directory while formatting code review config due to directory-level error',
+                context: GetCodeReviewParameterUseCase.name,
+                error: result.reason,
+                metadata: {
+                    organizationId: organizationAndTeamData.organizationId,
+                    teamId: organizationAndTeamData.teamId,
+                    repositoryId: repo.id,
+                    directoryId: directories[index]?.id,
+                    directoryPath: directories[index]?.folders?.[0]?.path,
+                },
+            });
+        });
+
+        return {
+            ...repo,
+            configs: formattedRepoFileConfig,
+            directories: formattedDirectories,
+            kodusConfigFile: repoFileResult.overlay,
+        };
+    }
+
+    /**
+     * Bounds a provider call by a deadline shared across the caller's scope.
+     * The call itself keeps running once the deadline fires — nothing below
+     * this layer exposes cancellation — but the response stops waiting on it.
+     */
+    private async withDeadline<T>(
+        promise: Promise<T>,
+        deadlineAt: number,
+    ): Promise<T> {
+        const remainingMs = deadlineAt - Date.now();
+
+        if (remainingMs <= 0) {
+            throw new Error('kodus-config.yml overlay budget exhausted');
+        }
+
+        let timer: NodeJS.Timeout;
+
+        try {
+            return await Promise.race([
+                promise,
+                new Promise<never>((_, reject) => {
+                    timer = setTimeout(
+                        () =>
+                            reject(
+                                new Error(
+                                    `kodus-config.yml overlay timed out after ${remainingMs}ms`,
+                                ),
+                            ),
+                        remainingMs,
+                    );
+                }),
+            ]);
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    private getErrorMessage(error: unknown): string {
+        return error instanceof Error ? error.message : String(error);
     }
 
     private formatDefaultConfig(config: object): FormattedCodeReviewConfig {

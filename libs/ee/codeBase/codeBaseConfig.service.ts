@@ -697,7 +697,7 @@ export default class CodeBaseConfigService implements ICodeBaseConfigService {
         );
     }
 
-    private async getDefaultBranch(
+    async getDefaultBranch(
         organizationAndTeamData: OrganizationAndTeamData,
         repository: { name: string; id: string },
     ): Promise<string> {

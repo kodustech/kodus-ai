@@ -324,6 +324,13 @@ export class ParametersController {
 
     @Get('/code-review-parameter')
     @ApiQuery({ name: 'teamId', type: String, required: true })
+    @ApiQuery({
+        name: 'includeFileOverlay',
+        type: Boolean,
+        required: false,
+        description:
+            "Overlay each repository's kodus-config.yml, read live from the git provider. Defaults to true; pass false for a fast response backed only by stored configuration.",
+    })
     @UseGuards(PolicyGuard)
     @CheckPolicies(
         checkPermissions({
@@ -336,10 +343,14 @@ export class ParametersController {
         description: 'Return code review configuration for the team.',
     })
     @ApiOkResponse({ type: CodeReviewParameterResponseDto })
-    public async getCodeReviewParameter(@Query('teamId') teamId: string) {
+    public async getCodeReviewParameter(
+        @Query('teamId') teamId: string,
+        @Query('includeFileOverlay') includeFileOverlay?: string,
+    ) {
         return await this.getCodeReviewParameterUseCase.execute(
             this.request.user,
             teamId,
+            { includeFileOverlay: includeFileOverlay !== 'false' },
         );
     }
 

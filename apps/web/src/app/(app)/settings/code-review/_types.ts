@@ -220,12 +220,31 @@ export interface FormattedGlobalCodeReviewConfig extends Omit<
     repositories: FormattedRepositoryCodeReviewConfig[];
 }
 
+/**
+ * Health of the kodus-config.yml overlay for one scope. The file is read live
+ * from the git provider, so it can be missing from a response whose stored
+ * configuration is perfectly fine — the UI has to say so rather than present
+ * partial configuration as complete.
+ */
+export enum KodusConfigFileOverlayStatus {
+    LOADED = "loaded",
+    DISABLED = "disabled",
+    UNAVAILABLE = "unavailable",
+    SKIPPED = "skipped",
+}
+
+export type KodusConfigFileOverlay = {
+    status: KodusConfigFileOverlayStatus;
+    error?: string;
+};
+
 export type FormattedRepositoryCodeReviewConfig = Omit<
     CodeReviewRepositoryConfig,
     "configs" | "directories"
 > & {
     configs: FormattedCodeReviewConfig;
     directories: FormattedDirectoryCodeReviewConfig[];
+    kodusConfigFile?: KodusConfigFileOverlay;
 };
 
 export type FormattedDirectoryCodeReviewConfig = Omit<
@@ -233,6 +252,7 @@ export type FormattedDirectoryCodeReviewConfig = Omit<
     "configs"
 > & {
     configs: FormattedCodeReviewConfig;
+    kodusConfigFile?: KodusConfigFileOverlay;
 };
 
 export enum BehaviourForNewCommits {

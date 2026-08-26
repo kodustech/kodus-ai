@@ -23,6 +23,16 @@ export const metadata: Metadata = {
     openGraph: { title: "Code Review Settings" },
 };
 
+/**
+ * Upper bound on every server-side fetch below. This layout blocks the whole
+ * /settings route: an upstream that hangs used to surface as a 500 on the
+ * document itself, with no failing XHR in the browser and no exception in the
+ * API (which was not erroring — it was still waiting). Bounded + guarded, a
+ * slow upstream degrades to a client-side fetch instead of taking the route
+ * down.
+ */
+const SERVER_FETCH_TIMEOUT_MS = 5_000;
+
 function SettingsLoadingSkeleton() {
     return (
         <div className="flex flex-1 flex-row overflow-hidden">
@@ -66,9 +76,20 @@ export default async function Layout({ children }: React.PropsWithChildren) {
         initialLanguageConfig,
         initialByokModels,
     ] = await Promise.all([
-        getFormattedCodeReviewParameterNoCache(initialTeamId),
-        getDefaultCodeReviewParameterNoCache(),
-        getPlatformConfigParameterNoCache(initialTeamId),
+        getFormattedCodeReviewParameterNoCache(initialTeamId, {
+            // The kodus-config.yml overlay is a live git-provider read and can
+            // queue behind the org's background workload. The client refetches
+            // the full config right after hydration and shows the overlay's
+            // status, so the first render never waits on the provider.
+            includeFileOverlay: false,
+            signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
+        }).catch(() => null),
+        getDefaultCodeReviewParameterNoCache({
+            signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
+        }).catch(() => null),
+        getPlatformConfigParameterNoCache(initialTeamId, {
+            signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
+        }).catch(() => null),
         getTeamParametersNoCache<{
             uuid: string;
             configKey: string;
@@ -83,14 +104,9 @@ export default async function Layout({ children }: React.PropsWithChildren) {
             : Promise.resolve([]),
     ]);
 
-    if (
-        !initialShellConfig ||
-        !initialDefaultConfig ||
-        !initialPlatformConfig
-    ) {
-        return null;
-    }
-
+    // Anything missing here is seeded as undefined rather than blanking the
+    // page: the client hooks below fetch it themselves, suspending inside the
+    // boundary instead of rendering an empty shell.
     return (
         <PageBoundary
             loading={<SettingsLoadingSkeleton />}
@@ -98,9 +114,9 @@ export default async function Layout({ children }: React.PropsWithChildren) {
             errorMessage="Failed to load settings. Please try again.">
             <SettingsLayout
                 initialTeamId={initialTeamId}
-                initialConfigValue={initialShellConfig.configValue}
-                initialDefaultConfig={initialDefaultConfig}
-                initialPlatformConfig={initialPlatformConfig}
+                initialConfigValue={initialShellConfig?.configValue}
+                initialDefaultConfig={initialDefaultConfig ?? undefined}
+                initialPlatformConfig={initialPlatformConfig ?? undefined}
                 initialParameters={{
                     [ParametersConfigKey.LANGUAGE_CONFIG]: initialLanguageConfig,
                 }}

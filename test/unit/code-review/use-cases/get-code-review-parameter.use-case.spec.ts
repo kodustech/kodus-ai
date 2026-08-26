@@ -4,6 +4,7 @@ import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/c
 import { CODE_BASE_CONFIG_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/CodeBaseConfigService.contract';
 import { AuthorizationService } from '@libs/identity/infrastructure/adapters/services/permissions/authorization.service';
 import { PROMPT_EXTERNAL_REFERENCE_MANAGER_SERVICE_TOKEN } from '@libs/ai-engine/domain/prompt/contracts/promptExternalReferenceManager.contract';
+import { KodusConfigFileOverlayStatus } from '@libs/core/infrastructure/config/types/general/codeReviewConfig.type';
 
 describe('GetCodeReviewParameterUseCase', () => {
     let useCase: GetCodeReviewParameterUseCase;
@@ -12,6 +13,36 @@ describe('GetCodeReviewParameterUseCase', () => {
     let mockAuthorizationService: any;
     let mockPromptReferenceManager: any;
 
+    const buildParameters = (overridesWebPreferences: boolean) => ({
+        toObject: () => ({
+            createdAt: new Date('2025-09-10T00:00:00.000Z'),
+            configValue: {
+                configs: {},
+                repositories: [
+                    {
+                        id: 'repo-1',
+                        name: 'repo-1',
+                        configs: {
+                            kodusConfigFileOverridesWebPreferences:
+                                overridesWebPreferences,
+                        },
+                        directories: [
+                            { id: 'dir-broken', path: 'broken/path', configs: {} },
+                            { id: 'dir-ok', path: 'ok/path', configs: {} },
+                        ],
+                    },
+                ],
+            },
+        }),
+    });
+
+    const execute = (options?: { includeFileOverlay?: boolean }) =>
+        useCase.execute(
+            { organization: { uuid: 'org-1' } } as any,
+            'team-1',
+            options,
+        );
+
     beforeEach(async () => {
         mockParametersService = {
             findByKey: jest.fn(),
@@ -19,6 +50,7 @@ describe('GetCodeReviewParameterUseCase', () => {
 
         mockCodeBaseConfigService = {
             getKodusConfigFile: jest.fn(),
+            getDefaultBranch: jest.fn().mockResolvedValue('main'),
         };
 
         mockAuthorizationService = {
@@ -58,35 +90,8 @@ describe('GetCodeReviewParameterUseCase', () => {
         );
     });
 
-    it('should keep repository and skip only failing directory', async () => {
-        mockParametersService.findByKey.mockResolvedValue({
-            toObject: () => ({
-                createdAt: new Date('2025-09-10T00:00:00.000Z'),
-                configValue: {
-                    configs: {},
-                    repositories: [
-                        {
-                            id: 'repo-1',
-                            name: 'repo-1',
-                            configs: {},
-                            directories: [
-                                {
-                                    id: 'dir-broken',
-                                    path: 'broken/path',
-                                    configs: {},
-                                },
-                                {
-                                    id: 'dir-ok',
-                                    path: 'ok/path',
-                                    configs: {},
-                                },
-                            ],
-                        },
-                    ],
-                },
-            }),
-        });
-
+    it('keeps a directory whose config file cannot be read, flagged as unavailable', async () => {
+        mockParametersService.findByKey.mockResolvedValue(buildParameters(true));
         mockCodeBaseConfigService.getKodusConfigFile.mockImplementation(
             async ({ directoryPath }: { directoryPath?: string }) => {
                 if (directoryPath === 'broken/path') {
@@ -96,16 +101,100 @@ describe('GetCodeReviewParameterUseCase', () => {
             },
         );
 
-        const result = await useCase.execute(
-            { organization: { uuid: 'org-1' } } as any,
-            'team-1',
+        const result = await execute();
+
+        const [repository] = result.configValue.repositories;
+        expect(result.configValue.repositories).toHaveLength(1);
+        expect(repository.kodusConfigFile.status).toBe(
+            KodusConfigFileOverlayStatus.LOADED,
         );
 
-        expect(result.configValue.repositories).toHaveLength(1);
-        expect(result.configValue.repositories[0].id).toBe('repo-1');
-        expect(result.configValue.repositories[0].directories).toHaveLength(1);
-        expect(result.configValue.repositories[0].directories[0].id).toBe(
-            'dir-ok',
+        // Dropping the directory would hide it from the settings screen; it
+        // renders from stored config with the overlay flagged as missing.
+        expect(repository.directories).toHaveLength(2);
+        expect(
+            repository.directories.find((dir) => dir.id === 'dir-broken')
+                .kodusConfigFile,
+        ).toEqual({
+            status: KodusConfigFileOverlayStatus.UNAVAILABLE,
+            error: 'directory config failed',
+        });
+        expect(
+            repository.directories.find((dir) => dir.id === 'dir-ok')
+                .kodusConfigFile.status,
+        ).toBe(KodusConfigFileOverlayStatus.LOADED);
+    });
+
+    it('resolves the default branch once per repository and reuses it', async () => {
+        mockParametersService.findByKey.mockResolvedValue(buildParameters(true));
+        mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({});
+
+        await execute();
+
+        expect(mockCodeBaseConfigService.getDefaultBranch).toHaveBeenCalledTimes(
+            1,
         );
+        expect(
+            mockCodeBaseConfigService.getKodusConfigFile.mock.calls,
+        ).toHaveLength(3);
+        for (const [params] of mockCodeBaseConfigService.getKodusConfigFile.mock
+            .calls) {
+            expect(params.defaultBranch).toBe('main');
+        }
+    });
+
+    it('marks every scope as unavailable when the default branch cannot be resolved', async () => {
+        mockParametersService.findByKey.mockResolvedValue(buildParameters(true));
+        mockCodeBaseConfigService.getDefaultBranch.mockRejectedValue(
+            new Error('provider unreachable'),
+        );
+
+        const result = await execute();
+
+        const [repository] = result.configValue.repositories;
+        expect(repository.kodusConfigFile).toEqual({
+            status: KodusConfigFileOverlayStatus.UNAVAILABLE,
+            error: 'provider unreachable',
+        });
+        expect(repository.directories).toHaveLength(2);
+        expect(
+            mockCodeBaseConfigService.getKodusConfigFile,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('does not touch the provider when the override flag is off', async () => {
+        mockParametersService.findByKey.mockResolvedValue(
+            buildParameters(false),
+        );
+
+        const result = await execute();
+
+        const [repository] = result.configValue.repositories;
+        expect(repository.kodusConfigFile.status).toBe(
+            KodusConfigFileOverlayStatus.DISABLED,
+        );
+        expect(
+            mockCodeBaseConfigService.getDefaultBranch,
+        ).not.toHaveBeenCalled();
+        expect(
+            mockCodeBaseConfigService.getKodusConfigFile,
+        ).not.toHaveBeenCalled();
+    });
+
+    it('skips the overlay entirely when the caller opts out', async () => {
+        mockParametersService.findByKey.mockResolvedValue(buildParameters(true));
+
+        const result = await execute({ includeFileOverlay: false });
+
+        const [repository] = result.configValue.repositories;
+        expect(repository.kodusConfigFile.status).toBe(
+            KodusConfigFileOverlayStatus.SKIPPED,
+        );
+        expect(
+            mockCodeBaseConfigService.getDefaultBranch,
+        ).not.toHaveBeenCalled();
+        expect(
+            mockCodeBaseConfigService.getKodusConfigFile,
+        ).not.toHaveBeenCalled();
     });
 });

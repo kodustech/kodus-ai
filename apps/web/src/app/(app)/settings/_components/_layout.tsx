@@ -49,6 +49,7 @@ import {
 import { resolveCodeReviewConfigForScope } from "./code-review-config-scope";
 import {
     AutomationCodeReviewConfigProvider,
+    CodeReviewConfigFetchStateProvider,
     CodeReviewModelDataProvider,
     DefaultCodeReviewConfigProvider,
     InitialParametersProvider,
@@ -73,7 +74,11 @@ const routes = [
     // Cross-repo context (#1576): relationships are directional and
     // repo-scoped by design (a global default would link EVERY repo to the
     // same siblings), so the item only renders in repository submenus.
-    { label: "Linked Repositories", href: "linked-repositories", repoOnly: true },
+    {
+        label: "Linked Repositories",
+        href: "linked-repositories",
+        repoOnly: true,
+    },
 ] satisfies Array<{
     label: string;
     href: string;
@@ -97,10 +102,17 @@ type InitialDefaultConfig = CodeReviewGlobalConfig & {
 
 type SettingsLayoutProps = React.PropsWithChildren<{
     initialTeamId: string;
-    initialConfigValue: FormattedGlobalCodeReviewConfig;
-    initialDefaultConfig: InitialDefaultConfig;
-    initialPlatformConfig: InitialPlatformConfig;
-    initialParameters: Partial<Record<string, { uuid: string; configKey: string; configValue: string } | null>>;
+    // Undefined when the server-side fetch was skipped, timed out or failed —
+    // the matching client hook then fetches it instead of the page blanking.
+    initialConfigValue: FormattedGlobalCodeReviewConfig | undefined;
+    initialDefaultConfig: InitialDefaultConfig | undefined;
+    initialPlatformConfig: InitialPlatformConfig | undefined;
+    initialParameters: Partial<
+        Record<
+            string,
+            { uuid: string; configKey: string; configValue: string } | null
+        >
+    >;
     initialModelData: CodeReviewModelData;
 }>;
 
@@ -133,41 +145,57 @@ export const SettingsLayout = ({
     );
     const { data: isMCPAvailable = true } = useMCPAvailability(canReadPlugins);
 
-    const initialShellQueryData = useMemo<{
-        uuid: string;
-        configKey: ParametersConfigKey.CODE_REVIEW_CONFIG;
-        configValue: FormattedGlobalCodeReviewConfig;
-    }>(
-        () => ({
-            uuid: "",
-            configKey: ParametersConfigKey.CODE_REVIEW_CONFIG,
-            configValue: initialConfigValue,
-        }),
+    const initialShellQueryData = useMemo<
+        | {
+              uuid: string;
+              configKey: ParametersConfigKey.CODE_REVIEW_CONFIG;
+              configValue: FormattedGlobalCodeReviewConfig;
+          }
+        | undefined
+    >(
+        () =>
+            initialConfigValue
+                ? {
+                      uuid: "",
+                      configKey: ParametersConfigKey.CODE_REVIEW_CONFIG,
+                      configValue: initialConfigValue,
+                  }
+                : undefined,
         [initialConfigValue],
     );
 
-    const { data: liveShellQuery } = useCodeReviewSettingsShell(
-        effectiveTeamId,
-        {
-            initialData:
-                effectiveTeamId === initialTeamId
-                    ? initialShellQueryData
-                    : undefined,
-        },
-    );
+    const {
+        data: liveShellQuery,
+        isFetching: isShellFetching,
+        isError: isShellError,
+    } = useCodeReviewSettingsShell(effectiveTeamId, {
+        initialData:
+            effectiveTeamId === initialTeamId
+                ? initialShellQueryData
+                : undefined,
+    });
 
     return (
         <CodeReviewModelDataProvider value={initialModelData}>
-            <InitialParametersProvider value={{ initialTeamId, parameters: initialParameters }}>
-                <SettingsLayoutShell
-                    teamId={effectiveTeamId}
-                    configValue={liveShellQuery?.configValue ?? initialConfigValue}
-                    defaultConfig={defaultConfig ?? initialDefaultConfig}
-                    platformConfig={platformConfig ?? initialPlatformConfig}
-                    isMCPAvailable={isMCPAvailable}>
-                    {children}
-                </SettingsLayoutShell>
-            </InitialParametersProvider>
+            <CodeReviewConfigFetchStateProvider
+                value={{
+                    isFetching: isShellFetching,
+                    isError: isShellError,
+                }}>
+                <InitialParametersProvider
+                    value={{ initialTeamId, parameters: initialParameters }}>
+                    <SettingsLayoutShell
+                        teamId={effectiveTeamId}
+                        configValue={
+                            liveShellQuery?.configValue ?? initialConfigValue
+                        }
+                        defaultConfig={defaultConfig ?? initialDefaultConfig}
+                        platformConfig={platformConfig ?? initialPlatformConfig}
+                        isMCPAvailable={isMCPAvailable}>
+                        {children}
+                    </SettingsLayoutShell>
+                </InitialParametersProvider>
+            </CodeReviewConfigFetchStateProvider>
         </CodeReviewModelDataProvider>
     );
 };
@@ -190,10 +218,10 @@ function SettingsLayoutShell({
     const { repositoryId, pageName, directoryId } = useCodeReviewRouteParams();
     const globalConfigOverrideCount = configValue
         ? countConfigOverridesForRoutes(
-            configValue.configs,
-            globalSettingsRoutes.map((r) => r.href),
-            FormattedConfigLevel.GLOBAL,
-        )
+              configValue.configs,
+              globalSettingsRoutes.map((r) => r.href),
+              FormattedConfigLevel.GLOBAL,
+          )
         : 0;
     const globalCustomMessagesOverrideCount = useCustomMessagesOverrideCount({
         scopeRepositoryId: "global",
@@ -259,10 +287,10 @@ function SettingsLayoutShell({
         () =>
             configValue
                 ? resolveCodeReviewConfigForScope(
-                    configValue,
-                    repositoryId,
-                    directoryId,
-                )
+                      configValue,
+                      repositoryId,
+                      directoryId,
+                  )
                 : undefined,
         [configValue, directoryId, repositoryId],
     );
@@ -360,9 +388,9 @@ function SettingsLayoutShell({
                                                         ({ label, href }) => {
                                                             const active =
                                                                 repositoryId ===
-                                                                "global" &&
+                                                                    "global" &&
                                                                 pageName ===
-                                                                href;
+                                                                    href;
 
                                                             return (
                                                                 <SidebarMenuSubItem
