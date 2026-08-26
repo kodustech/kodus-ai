@@ -38,12 +38,17 @@ export type ByokModelCost =
     | { status: "no-data"; reason: "no-usage" | "unpriced" };
 
 /**
- * Canonical model id: the last segment after `:`, trimmed. Mirrors the
- * backend aggregation (`tokenUsage.repository.ts` `_canonicalModel`).
+ * Canonical model id — the web mirror of the backend
+ * `@libs/common/utils/canonical-model` (kept as its own copy because apps/web
+ * can't import a value from `@libs/*` without breaking the isolated prod build;
+ * keep the two in lockstep). Strips a trailing `:<digits>` VERSION suffix
+ * (Amazon Bedrock's `...v1:0` → `...v1`, never `"0"`, which would collapse every
+ * Bedrock model onto one bucket and never match the configured id) and a leading
+ * `provider:` PREFIX (`anthropic:claude-opus-5` → `claude-opus-5`).
  */
 export function canonicalModelId(model: string | null | undefined): string {
-    const parts = (model ?? "").split(":");
-    return (parts[parts.length - 1] ?? "").trim();
+    const stripped = (model ?? "").trim().replace(/:\d+$/, "");
+    return (stripped.split(":").pop() ?? "").trim();
 }
 
 /**

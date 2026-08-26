@@ -283,8 +283,17 @@ export const previewLLMProviderModels = async (input: {
 /** Per-model UI capability hints, read from the provider module server-side
  *  (temperature/reasoning support). `model` is a plain id, not a secret, so a
  *  GET with query params is fine. */
+/** How the Temperature field behaves — the web-local mirror of the backend
+ *  `TemperaturePolicy` (kept as its own copy so apps/web doesn't import a value
+ *  from `@libs/*`, which breaks the isolated prod build). `adjustable` = editable,
+ *  `unsupported` = hidden, `fixed` = locked to `value`. */
+export type TemperaturePolicy =
+    | { kind: "adjustable" }
+    | { kind: "unsupported" }
+    | { kind: "fixed"; value: number };
+
 export type ModelUiCapabilities = {
-    supportsTemperature: boolean;
+    temperature: TemperaturePolicy;
     supportsReasoning: boolean;
     reasoningOptions: Array<"low" | "medium" | "high">;
     /** Provider-owned example for the "Custom" reasoning-override textarea. */
@@ -301,7 +310,7 @@ export const getModelCapabilities = async (input: {
     );
     return (
         response ?? {
-            supportsTemperature: true,
+            temperature: { kind: "adjustable" },
             supportsReasoning: false,
             reasoningOptions: [],
         }

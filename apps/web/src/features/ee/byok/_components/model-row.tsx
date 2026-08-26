@@ -1,9 +1,9 @@
 "use client";
 
 import type { ComponentProps, ReactNode } from "react";
+import Link from "next/link";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { cn } from "src/core/utils/components";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { formatUsd } from "@services/usage/format";
 import {
@@ -15,7 +15,7 @@ import {
     ThermometerIcon,
     TrashIcon,
 } from "lucide-react";
-import Link from "next/link";
+import { cn } from "src/core/utils/components";
 
 import { useCatalogModel } from "../_data/catalog-context";
 import type {
@@ -60,7 +60,10 @@ function UsageChip({
         <Badge
             size="xs"
             variant={variant}
-            className={cn(className, onOpenRouting ? "cursor-pointer" : STATUS_CHIP)}>
+            className={cn(
+                className,
+                onOpenRouting ? "cursor-pointer" : STATUS_CHIP,
+            )}>
             {children}
         </Badge>
     );
@@ -119,7 +122,7 @@ export function ModelRow({
     const provider = credential?.provider;
     const providerLabel =
         curated?.providerDisplayName ??
-        (provider ? PROVIDER_LABELS[provider] ?? provider : undefined);
+        (provider ? (PROVIDER_LABELS[provider] ?? provider) : undefined);
     const settings = (credential?.settings ?? {}) as Record<string, unknown>;
     const baseURL =
         typeof settings.baseURL === "string" ? settings.baseURL : undefined;
@@ -154,14 +157,6 @@ export function ModelRow({
                         <div className="flex min-w-0 flex-col gap-1.5">
                             <span className="text-text-primary text-sm font-semibold text-balance">
                                 {displayName}
-                                {curated && (
-                                    <span className="text-text-tertiary ml-2 text-xs font-normal">
-                                        ★{" "}
-                                        <span className="tabular-nums">
-                                            {curated.benchmarkScore}
-                                        </span>
-                                    </span>
-                                )}
                             </span>
                             {providerLabel && (
                                 <span className="text-text-tertiary text-xs">
@@ -197,11 +192,10 @@ export function ModelRow({
                                             <Link
                                                 href={`/token-usage?models=${encodeURIComponent(
                                                     cost.model,
-                                                )}${
-                                                    costRangeQuery
+                                                )}${costRangeQuery
                                                         ? `&${costRangeQuery}`
                                                         : ""
-                                                }`}
+                                                    }`}
                                                 title="See the full breakdown on the Costs page"
                                                 className="group inline-flex items-center gap-1.5 rounded-sm tabular-nums focus-visible:ring-2">
                                                 <span className="text-text-primary font-semibold">

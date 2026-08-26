@@ -5,17 +5,10 @@ import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
 import {
-    Tooltip,
-    TooltipContent,
-    TooltipPortal,
-    TooltipTrigger,
-} from "@components/ui/tooltip";
-import {
     AlertTriangleIcon,
     CheckCircleIcon,
     ChevronDownIcon,
     PlugIcon,
-    StarIcon,
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
@@ -65,7 +58,6 @@ export function CuratedModelCard({
     isSelected,
     compact = false,
     showConnect = false,
-    showScore = true,
     fillHeight = true,
     onSelect,
 }: {
@@ -75,10 +67,6 @@ export function CuratedModelCard({
     /** Render a full-width "Connect" button at the card foot (recommended-card
      *  usage). The button drives the same onSelect connect flow. */
     showConnect?: boolean;
-    /** The quality score is the "which model is best" signal — it belongs to the
-     *  Routing tab, where the per-task model is chosen. The connect surfaces pass
-     *  `false` so wiring up a provider isn't framed as picking the best model. */
-    showScore?: boolean;
     /** Grid usage stretches every card to the tallest in its row (`h-full`).
      *  Standalone (e.g. as an editor header) pass `false` so the card is its own
      *  natural height instead of a giant stretched box. */
@@ -153,27 +141,6 @@ export function CuratedModelCard({
                                 model.provider}
                         </span>
                     </div>
-
-                    {showScore && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <span>
-                                    <Badge variant="secondary" size="xs">
-                                        <StarIcon size={10} className="mr-1" />
-                                        <span className="tabular-nums">
-                                            {model.benchmarkScore}
-                                        </span>
-                                    </Badge>
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipPortal>
-                                <TooltipContent side="bottom">
-                                    Quality score out of 100 on our code-review
-                                    benchmark
-                                </TooltipContent>
-                            </TooltipPortal>
-                        </Tooltip>
-                    )}
                 </div>
 
                 {!compact && (
@@ -252,22 +219,6 @@ export function CuratedModelCard({
                 )}
             </CardContent>
         </Card>
-    );
-}
-
-/**
- * A one-time key for the glyphs on the model cards below it. The only glyph left
- * on the cards is the quality score, so the legend is empty when it's hidden.
- */
-export function ModelCardLegend({ showScore = true }: { showScore?: boolean }) {
-    if (!showScore) return null;
-    return (
-        <div className="text-text-tertiary flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-            <span className="flex items-center gap-1">
-                <StarIcon size={11} />
-                Quality score /100
-            </span>
-        </div>
     );
 }
 

@@ -11,7 +11,7 @@ jest.mock("@services/organizationParameters/hooks", () => ({
     useModelCapabilities: () => ({
         data: {
             supportsReasoning: true,
-            supportsTemperature: true,
+            temperature: { kind: "adjustable" },
             reasoningOptions: [],
         },
     }),

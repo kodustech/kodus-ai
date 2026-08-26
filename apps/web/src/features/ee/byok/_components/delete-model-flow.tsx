@@ -9,7 +9,6 @@ import { AlertTriangleIcon } from "lucide-react";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 
 import { useCatalog } from "../_data/catalog-context";
-import type { CuratedModel } from "../_data/curated-models.types";
 import type { BYOKConfig, BYOKModelConfig } from "../_types";
 import { groupModelsByProvider } from "../_utils";
 

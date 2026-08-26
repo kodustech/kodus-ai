@@ -538,7 +538,7 @@ export function ByokManualPageClient({
                             <Button
                                 size="icon-xs"
                                 variant="cancel"
-                                aria-label="Back to BYOK">
+                                aria-label="Back to providers">
                                 <ArrowLeftIcon />
                             </Button>
                         </Link>

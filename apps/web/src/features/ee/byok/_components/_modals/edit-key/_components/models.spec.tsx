@@ -43,8 +43,11 @@ describe("ByokModelSelect — lock when the model is in use in Routing", () => {
     it("locked: shows the current model read-only with the Routing hint, no search box", () => {
         render(<Harness lockedInUse />);
 
-        // The model id is shown (read-only), and the hint points at Routing.
-        expect(screen.getByText("deepseek/deepseek-v4-pro")).toBeInTheDocument();
+        // The friendly label is shown (read-only) — the locked field renders
+        // `curated?.displayName ?? formatModelLabel(model)`, never the raw id, so a
+        // deep-pathed id like "deepseek/deepseek-v4-pro" surfaces as its last
+        // segment, title-cased. The hint points at Routing.
+        expect(screen.getByText("Deepseek V4 Pro")).toBeInTheDocument();
         expect(screen.getByText(/in use in routing/i)).toBeInTheDocument();
 
         // The editable picker's search box must NOT render while locked.

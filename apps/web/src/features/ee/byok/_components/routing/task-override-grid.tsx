@@ -45,41 +45,6 @@ export type PoolModel = {
     /** Provider id (from the model's credential) — drives the provider avatar. */
     provider?: string;
     capabilities?: SurfacedCapabilities;
-    /** Curated quality/perf signal (joined by model id in routing-tab). This is
-     *  where the "which model?" decision actually happens, so the score/speed/
-     *  context/cost live HERE — pre-formatted strings so this stays decoupled
-     *  from the curated catalog. Absent for non-curated models. */
-    score?: number;
-    speedLabel?: string;
-    contextLabel?: string;
-    costLabel?: string;
-};
-
-/** The compact perf strip under a model name in the routing picker (speed +
- *  context). The quality score (★) and relative cost ($) were intentionally
- *  removed from the UI — Kodus's proprietary "model intelligence" signal, held
- *  back for a future paid feature (data still joined in routing-tab, so re-adding
- *  is just restoring the two rows). Renders nothing without curated metadata. */
-const ModelMetrics = ({ model }: { model: PoolModel }) => {
-    const parts: React.ReactNode[] = [];
-    if (model.speedLabel) parts.push(<span key="sp">{model.speedLabel}</span>);
-    if (model.contextLabel)
-        parts.push(
-            <span key="c" className="tabular-nums">
-                {model.contextLabel}
-            </span>,
-        );
-    if (parts.length === 0) return null;
-    return (
-        <span className="text-text-tertiary flex items-center gap-1.5 text-[11px]">
-            {parts.map((p, i) => (
-                <span key={i} className="flex items-center gap-1.5">
-                    {i > 0 && <span className="opacity-40">·</span>}
-                    {p}
-                </span>
-            ))}
-        </span>
-    );
 };
 
 /**
@@ -197,24 +162,19 @@ export const ModelCombobox = ({
                                         ) : (
                                             <AlertTriangleIcon className="text-warning size-3.5 shrink-0" />
                                         )}
-                                        <span className="flex min-w-0 flex-col gap-0.5">
-                                            <span
-                                                dir="rtl"
-                                                title={model.label}
-                                                style={{ textAlign: "left" }}
-                                                className={cn(
-                                                    "truncate",
-                                                    !gate.ok
-                                                        ? "text-text-tertiary"
-                                                        : selected
-                                                            ? "text-primary font-medium"
-                                                            : undefined,
-                                                )}>
-                                                {model.label}
-                                            </span>
-                                            {gate.ok && (
-                                                <ModelMetrics model={model} />
-                                            )}
+                                        <span
+                                            dir="rtl"
+                                            title={model.label}
+                                            style={{ textAlign: "left" }}
+                                            className={cn(
+                                                "min-w-0 truncate",
+                                                !gate.ok
+                                                    ? "text-text-tertiary"
+                                                    : selected
+                                                        ? "text-primary font-medium"
+                                                        : undefined,
+                                            )}>
+                                            {model.label}
                                         </span>
                                     </span>
                                 </CommandItem>
