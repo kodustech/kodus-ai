@@ -250,8 +250,8 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         });
     });
 
-    describe('but the agent is never told to use it', () => {
-        it.failing.each(actionableScenarios)(
+    describe('and the agent is told to use it', () => {
+        it.each(actionableScenarios)(
             'offers $expectedOffer when the thread reveals: $signal',
             async (scenario) => {
                 const turn = await runTurn(scenario);
@@ -263,18 +263,15 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             },
         );
 
-        it.failing(
-            'instructs the agent to evaluate whether the exchange is worth persisting',
-            async () => {
-                const turn = await runTurn(
-                    scenarioById('false-positive-on-kody-rule'),
-                );
-                const prompt =
-                    `${turn.systemPrompt}\n${turn.userPrompt}`.toLowerCase();
+        it('instructs the agent to evaluate whether the exchange is worth persisting', async () => {
+            const turn = await runTurn(
+                scenarioById('false-positive-on-kody-rule'),
+            );
+            const prompt =
+                `${turn.systemPrompt}\n${turn.userPrompt}`.toLowerCase();
 
-                expect(prompt).toMatch(/offer|propose|persist|record/);
-            },
-        );
+            expect(prompt).toMatch(/offer|propose|persist|record/);
+        });
 
         it('carries the identifiers a write tool needs to be callable', async () => {
             const turn = await runTurn(scenarioById('real-but-out-of-scope'));

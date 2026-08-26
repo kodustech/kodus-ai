@@ -87,6 +87,60 @@ describe('identifiers', () => {
     });
 });
 
+const ALL_WRITE_TOOLS = [
+    'KODUS_FIND_MEMORIES',
+    'KODUS_CREATE_MEMORY',
+    'KODUS_CREATE_KODY_RULE',
+    'KODUS_UPDATE_KODY_RULE',
+    'KODUS_DELETE_KODY_RULE',
+    'KODUS_CREATE_KODY_ISSUE',
+    'KODUS_UPDATE_KODY_ISSUE_STATUS',
+    'KODUS_UPDATE_KODY_ISSUE_CATEGORY',
+    'KODUS_DELETE_KODY_ISSUE',
+];
+
+describe('proactive actions', () => {
+    it('names each bound write tool and when to offer it', () => {
+        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+
+        expect(prompt).toContain('KODUS_CREATE_MEMORY');
+        expect(prompt).toContain('KODUS_UPDATE_KODY_RULE');
+        expect(prompt).toContain('KODUS_CREATE_KODY_ISSUE');
+        expect(prompt).toContain('KODUS_UPDATE_KODY_ISSUE_STATUS');
+        expect(prompt).toContain('KODUS_UPDATE_KODY_ISSUE_CATEGORY');
+        expect(prompt).toMatch(/false positive/i);
+        expect(prompt).toMatch(/out of scope/i);
+    });
+
+    it('tells the agent to evaluate whether the exchange is worth persisting', () => {
+        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+
+        expect(prompt).toMatch(/durable/i);
+        expect(prompt).toMatch(/offer/i);
+    });
+
+    it('keeps the write path opt-in behind the developer confirmation', () => {
+        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+
+        expect(prompt).toMatch(/NEVER call/);
+        expect(prompt).toMatch(/confirm/i);
+    });
+
+    it('never advertises the destructive tools', () => {
+        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+
+        expect(prompt).not.toContain('KODUS_DELETE_KODY_RULE');
+        expect(prompt).not.toContain('KODUS_DELETE_KODY_ISSUE');
+    });
+
+    it('says nothing about acting when MCP bound no write tool', () => {
+        const prompt = userPrompt({ availableTools: ['KODUS_FIND_MEMORIES'] });
+
+        expect(prompt).not.toMatch(/PROACTIVE ACTIONS/);
+        expect(prompt).not.toContain('KODUS_CREATE_MEMORY');
+    });
+});
+
 describe('buildUserPrompt', () => {
     it('carries the context, the tools and the user message', () => {
         const prompt = userPrompt();

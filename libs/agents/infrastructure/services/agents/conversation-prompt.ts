@@ -40,6 +40,38 @@ export interface ConversationThreadContext {
     };
 }
 
+/**
+ * The actions the agent may OFFER once the thread has revealed something worth
+ * keeping. Read-only and destructive tools are deliberately absent: the first
+ * need no offer, the second must never be proposed by the agent itself.
+ */
+const PROACTIVE_ACTIONS: Array<{ tool: string; when: string }> = [
+    {
+        tool: 'KODUS_CREATE_MEMORY',
+        when: 'the developer explains a team convention, or why a finding is a false positive — record it so future reviews stop repeating it',
+    },
+    {
+        tool: 'KODUS_CREATE_KODY_RULE',
+        when: 'the developer states a standard the team wants enforced from now on, or repeats the same explanation across threads',
+    },
+    {
+        tool: 'KODUS_UPDATE_KODY_RULE',
+        when: 'the developer says an existing rule is wrong, outdated or too broad — narrow its scope or lower its severity (look the rule up first)',
+    },
+    {
+        tool: 'KODUS_CREATE_KODY_ISSUE',
+        when: 'the developer agrees the finding is real but out of scope for this PR — track it instead of losing it',
+    },
+    {
+        tool: 'KODUS_UPDATE_KODY_ISSUE_STATUS',
+        when: 'the developer says a tracked issue is already fixed or no longer relevant',
+    },
+    {
+        tool: 'KODUS_UPDATE_KODY_ISSUE_CATEGORY',
+        when: 'the developer says a finding is filed under the wrong category',
+    },
+];
+
 export interface UserPromptInput {
     /** The developer's raw message. */
     prompt: string;
@@ -128,6 +160,11 @@ export function buildUserPrompt(input: UserPromptInput): string {
         );
     }
 
+    const proactiveBlock = buildProactiveBlock(availableTools);
+    if (proactiveBlock) {
+        sections.push('', proactiveBlock);
+    }
+
     sections.push(
         '',
         `Answer the user's message below directly. Write your entire answer in ${userLanguage} (the team's configured language) — do NOT switch to the language the user wrote in.`,
@@ -137,6 +174,32 @@ export function buildUserPrompt(input: UserPromptInput): string {
     );
 
     return sections.join('\n');
+}
+
+/**
+ * The posture that makes the agent more than reactive: after answering, weigh
+ * whether the exchange produced durable signal and, if it did, offer the one
+ * action that would persist it. Only tools MCP actually bound are named, and
+ * the write itself stays behind the developer's confirmation.
+ */
+export function buildProactiveBlock(availableTools: string[]): string {
+    const bound = new Set(availableTools);
+    const offers = PROACTIVE_ACTIONS.filter((a) => bound.has(a.tool));
+
+    if (!offers.length) {
+        return '';
+    }
+
+    return [
+        'PROACTIVE ACTIONS:',
+        'After you answer, judge whether this exchange produced durable signal — something that should outlive this thread. If it did, close your reply with ONE short offer to act, naming what you would do. If it did not (a greeting, a plain question, debugging chatter), just answer and offer nothing.',
+        ...offers.map((a) => `- ${a.tool} — ${a.when}`),
+        'Rules:',
+        '- Offer at most one action per reply, as a single closing sentence.',
+        "- NEVER call one of these tools on your own initiative. Call one ONLY when the developer's latest message explicitly confirms an offer you made earlier in this thread, or explicitly asks you to do it.",
+        '- After acting, say what you did and pass on any link or approval note the tool returned.',
+        '- If you already offered and the developer moved on, drop it — do not offer again.',
+    ].join('\n');
 }
 
 /**
