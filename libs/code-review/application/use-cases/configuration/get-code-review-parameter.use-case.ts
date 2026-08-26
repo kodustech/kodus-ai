@@ -47,36 +47,18 @@ type CodeReviewRepositoryEntry = NonNullable<
     IParameters<ParametersKey.CODE_REVIEW_CONFIG>['configValue']['repositories']
 >[number];
 
-/**
- * Reads a positive-number env override, ignoring a value that cannot be used.
- * `Number('abc')` is NaN and NaN sails straight past a `??` default, so an
- * operator's typo would not fall back — it would reach `pLimit(NaN)` (throws,
- * 500ing every settings request) or a NaN deadline (`setTimeout` treats it as
- * 0, silently marking every overlay unavailable).
- */
-function positiveNumberFromEnv(
-    raw: string | undefined,
-    fallback: number,
-): number {
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 @Injectable()
 export class GetCodeReviewParameterUseCase {
     private readonly logger = createLogger(GetCodeReviewParameterUseCase.name);
 
     /**
-     * Upper bound on the provider calls a single repository's
-     * `kodus-config.yml` overlay may spend. Repositories are formatted
-     * concurrently, so this also bounds the endpoint as a whole. A healthy
-     * read is ~400ms; 8s absorbs a short queue on the shared credential
-     * without making the settings screen wait on a backlogged one.
+     * Upper bound on the provider calls one request's `kodus-config.yml`
+     * overlay may spend. Every read shares this budget, so it bounds the
+     * endpoint as a whole. A healthy read is ~400ms; 8s absorbs a short queue
+     * on the shared credential without making the settings screen wait on a
+     * backlogged one.
      */
-    private static readonly FILE_OVERLAY_TIMEOUT_MS = positiveNumberFromEnv(
-        process.env.KODUS_CONFIG_FILE_OVERLAY_TIMEOUT_MS,
-        8_000,
-    );
+    private static readonly FILE_OVERLAY_TIMEOUT_MS = 8_000;
 
     /**
      * How many overlay reads may be in flight against the git provider at once
@@ -88,15 +70,7 @@ export class GetCodeReviewParameterUseCase {
      * every read shares one deadline, so a queue that cannot drain in time
      * degrades to UNAVAILABLE instead of running longer.
      */
-    private static readonly PROVIDER_CONCURRENCY = Math.max(
-        1,
-        Math.floor(
-            positiveNumberFromEnv(
-                process.env.KODUS_CONFIG_FILE_OVERLAY_CONCURRENCY,
-                4,
-            ),
-        ),
-    );
+    private static readonly PROVIDER_CONCURRENCY = 4;
 
     constructor(
         @Inject(PARAMETERS_SERVICE_TOKEN)
