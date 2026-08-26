@@ -11,6 +11,7 @@ test("allScenarios: includes the registered release-gate scenarios", () => {
         "code-review-vertex-byok",
         "command-review",
         "command-review-focus",
+        "command-review-while-busy",
         "conversation-anthropic-byok",
         "conversation-vertex-byok",
         "cross-repo-config",
@@ -62,6 +63,19 @@ test("command-review: cloud + self-hosted × github + github-app + 3 others × p
 
 test("command-review-focus: cloud + self-hosted × github + github-app + 3 others × paid/license-paid", () => {
     const s = allScenarios["command-review-focus"];
+    assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
+    assert.deepEqual(s.appliesTo.provider, [
+        "github",
+        "github-app",
+        "gitlab",
+        "bitbucket",
+        "azure-devops",
+    ]);
+    assert.deepEqual(s.appliesTo.license, ["paid", "license-paid"]);
+});
+
+test("command-review-while-busy: cloud + self-hosted × github + github-app + 3 others × paid/license-paid", () => {
+    const s = allScenarios["command-review-while-busy"];
     assert.deepEqual(s.appliesTo.target, ["cloud", "self-hosted"]);
     assert.deepEqual(s.appliesTo.provider, [
         "github",

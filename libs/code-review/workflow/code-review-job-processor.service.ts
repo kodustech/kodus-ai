@@ -7,6 +7,7 @@ import {
     IWorkflowJobRepository,
 } from '@libs/core/workflow/domain/contracts/workflow-job.repository.contract';
 import { IJobProcessorService } from '@libs/core/workflow/domain/contracts/job-processor.service.contract';
+import { IWorkflowJob } from '@libs/core/workflow/domain/interfaces/workflow-job.interface';
 import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 import { RunCodeReviewAutomationUseCase } from '@libs/ee/automation/runCodeReview.use-case';
 import { MetricsCollectorService } from '@libs/core/infrastructure/metrics/metrics-collector.service';
@@ -24,6 +25,9 @@ import {
 } from '@libs/core/workflow/domain/contracts/rate-limit-gate.service.contract';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
 import { classifyGitHubError } from '@libs/core/workflow/domain/errors/classify-github-error';
+import { isPrReviewInProgressError } from '@libs/code-review/domain/errors/pr-review-in-progress.error';
+import { CodeReviewHandlerService } from '@libs/code-review/infrastructure/adapters/services/codeReviewHandlerService.service';
+import { PrReviewDeferralService } from './pr-review-deferral.service';
 
 @Injectable()
 export class CodeReviewJobProcessorService implements IJobProcessorService {
@@ -38,6 +42,8 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
         private readonly prAuthorRecipientResolver: PrAuthorRecipientResolver,
         @Inject(RATE_LIMIT_GATE_SERVICE_TOKEN)
         private readonly rateLimitGate: IRateLimitGateService,
+        private readonly prReviewDeferralService: PrReviewDeferralService,
+        private readonly codeReviewHandlerService: CodeReviewHandlerService,
         @Optional()
         private readonly metricsCollector?: MetricsCollectorService,
     ) {}
@@ -155,6 +161,25 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
             // typed error, not the raw octokit shape.
             const error = classifyGitHubError(rawError) as Error;
 
+            // A user asked for this review and another run held the PR.
+            // Dropping it here is what made the request vanish (#1700), so
+            // wait for the holder and try again; only once the retry window
+            // is spent do we give up, and then we say so on the PR.
+            if (isPrReviewInProgressError(error)) {
+                const deferral = this.prReviewDeferralService.next(
+                    job,
+                    error.holderVisibleUntil,
+                );
+
+                if (deferral) {
+                    await this.prReviewDeferralService.defer(job, deferral);
+                    return;
+                }
+
+                await this.abandonBusyReview(job, error);
+                return;
+            }
+
             if (error.name === 'WorkflowPausedError') {
                 await this.jobRepository.update(jobId, {
                     status: JobStatus.WAITING_FOR_EVENT,
@@ -201,6 +226,45 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 }
             }
         }
+    }
+
+    /**
+     * The PR never freed up within the retry window. Answer the person who
+     * asked — silence here is indistinguishable from a review that ran and
+     * found nothing — and record the job as failed rather than completed so
+     * the drop is visible to metrics instead of counting as a success.
+     */
+    private async abandonBusyReview(
+        job: IWorkflowJob,
+        error: Error & { target?: unknown; gate?: string },
+    ): Promise<void> {
+        this.logger.error({
+            message: `Giving up on a code review command for job ${job.id} — the PR stayed busy`,
+            context: CodeReviewJobProcessorService.name,
+            error,
+            metadata: {
+                jobId: job.id,
+                correlationId: job.correlationId,
+                gate: error.gate,
+            },
+        });
+
+        try {
+            await this.codeReviewHandlerService.notifyCommandReviewRefused(
+                error.target as never,
+            );
+        } catch (notifyError) {
+            this.logger.error({
+                message:
+                    'Failed to tell the user their review request was dropped',
+                context: CodeReviewJobProcessorService.name,
+                error:
+                    notifyError instanceof Error ? notifyError : undefined,
+                metadata: { jobId: job.id },
+            });
+        }
+
+        await this.handleFailure(job.id, error);
     }
 
     async handleFailure(jobId: string, error: Error): Promise<void> {
