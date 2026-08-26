@@ -1,11 +1,11 @@
 // Shared tier-0 model seam for the replay evals (kody-rules, anchoring, …).
 //
 // Maps each tier-0 (curated-models.json tier="recommended") model id to the env
-// the production `byokToVercelModel` self-hosted path reads, so a single
+// the production `buildModelFromSlot` self-hosted path reads, so a single
 // `--model=<id>` runs through the SAME provider routing the engine uses in prod
 // (and the benchmark uses on QA). No per-eval provider code.
 //
-// Routing recap (byokToVercelModel, no BYOK config → self-hosted path):
+// Routing recap (buildModelFromSlot, no BYOK config → self-hosted path):
 //   API_LLM_PROVIDER_MODEL = <id>   picks the model + provider by name prefix
 //   gemini-*  → Google AI Studio   key in API_GOOGLE_AI_API_KEY
 //   claude-*  → Anthropic native   key in API_OPEN_AI_API_KEY (no force base url)
@@ -30,9 +30,17 @@ const TIER0 = {
     // V4-Pro saiu de preview em 2026-08 (build 0813). Mesmo endpoint do flash.
     'deepseek-v4-pro': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com' },
     'deepseek-v4-flash': { provider: 'openai_compatible', keyEnvs: ['BYOK_DEEPSEEK_API_KEY', 'API_DEEPSEEK_API_KEY'], baseURL: 'https://api.deepseek.com/v1' },
+    // Mirrors the PROD trial/managed default (KODUS_DEFAULT_MODEL): DeepSeek
+    // served via FIREWORKS, not DeepSeek-native — different transport + the
+    // `-0731` build. Use this to eval what the trial actually runs.
+    'deepseek-v4-flash@fireworks': { provider: 'openai_compatible', doModel: 'accounts/fireworks/models/deepseek-v4-flash-0731', keyEnvs: ['API_FIREWORKS_API_KEY', 'FIREWORKS_API_KEY'], baseURL: 'https://api.fireworks.ai/inference/v1' },
     // K3 usa chave própria (KIMI_NEW) — crédito limitado, ver custo antes de
     // disparar passada cheia: $3/$15 por milhão, ~3x o k2.7.
     'kimi-k3': { provider: 'openai_compatible', keyEnvs: ['KIMI_NEW', 'BYOK_MOONSHOT_API_KEY'], baseURL: 'https://api.moonshot.ai/v1' },
+    // Kimi k2.7-code served via NOVITA (openai_compatible transport) — the host
+    // an org may pick instead of Moonshot-native. Different wrapping than the
+    // Anthropic-protocol Moonshot endpoint, useful for the return-shape corpus.
+    'kimi-k2.7-code@novita': { provider: 'openai_compatible', doModel: 'moonshotai/kimi-k2.7-code', keyEnvs: ['API_NOVITA_AI_API_KEY'], baseURL: 'https://api.novita.ai/v3/openai' },
 
     // NVIDIA NIM (integrate.api.nvidia.com) — gateway OpenAI-compatible. Usado
     // quando a API nativa do fornecedor está indisponível (Z.ai sem saldo,
@@ -72,7 +80,7 @@ function defaultMatrix() {
     return Object.keys(TIER0).filter((id) => id !== 'gpt-5.4-mini' && !EXCLUDED_BY_DEFAULT.has(id));
 }
 
-// Point the env at `modelId` so byokToVercelModel(null,'main') builds it.
+// Point the env at `modelId` so buildModelFromSlot(undefined, ...) builds it.
 // Returns the spec; throws a clear error when the model is unknown or its key is
 // absent (so a CI matrix leg fails loudly instead of silently picking a default).
 function applyModelEnv(modelId, env = process.env) {

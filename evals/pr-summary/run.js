@@ -135,12 +135,11 @@ function buildService(existingBody, postedRef) {
         runAiSdkLLMInSpan: async ({ exec }) => exec(),
     };
     const service = new CommentManagerService(
-        /* parametersService   */ {},
-        /* messageProcessor    */ {},
-        /* promptRunnerService */ {},
-        observabilityService,
-        permissionValidationService,
-        codeManagementService,
+        /* parametersService          */ {},
+        /* messageProcessor           */ {},
+        /* observabilityService       */ observabilityService,
+        /* permissionValidationService*/ permissionValidationService,
+        /* codeManagementService      */ codeManagementService,
     );
 
     // Intercept the LLM at the service's own private seam: runSummaryPromptV5
@@ -148,7 +147,7 @@ function buildService(existingBody, postedRef) {
     // model text. Overriding it on the instance (a) captures the exact prompt —
     // so we can assert COMPLEMENT injected the existing description — and (b) in
     // mock mode returns a fixed string with NO network / NO key. In live mode we
-    // delegate to the real method, so byokToVercelModel + the real model run.
+    // delegate to the real method, so buildModelFromSlot + the real model run.
     const realRunSummaryPromptV5 = service.runSummaryPromptV5.bind(service);
     service.runSummaryPromptV5 = async (params) => {
         lastPromptSeen = {
@@ -204,7 +203,8 @@ async function runCase(c) {
         { organizationId: 'org-1', teamId: 'team-1' },
         'en-US',
         summaryConfig,
-        /* byokConfig */ null,
+        // No byokConfig arg — generateSummaryPR owns its model resolution now
+        // (matches finish-comments.stage.ts). isCommitRun is the 7th param.
         isCommitRun,
         /* prPreview */ false,
         /* externalPromptContext */ undefined,
@@ -354,7 +354,8 @@ async function commitGateChecks() {
     for (const s of scenarios) {
         const spy = { gen: 0, post: 0, isCommit: null };
         const commentManagerService = {
-            generateSummaryPR: async (...a) => { spy.gen += 1; spy.isCommit = a[7]; return 'GENERATED'; },
+            // isCommitRun is the 7th param of generateSummaryPR → index 6.
+            generateSummaryPR: async (...a) => { spy.gen += 1; spy.isCommit = a[6]; return 'GENERATED'; },
             updateSummarizationInPR: async () => { spy.post += 1; },
             updateOverallComment: async () => {},
             processEndReviewMessageTemplate: async () => 'body',
