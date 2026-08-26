@@ -47,6 +47,21 @@ type CodeReviewRepositoryEntry = NonNullable<
     IParameters<ParametersKey.CODE_REVIEW_CONFIG>['configValue']['repositories']
 >[number];
 
+/**
+ * Reads a positive-number env override, ignoring a value that cannot be used.
+ * `Number('abc')` is NaN and NaN sails straight past a `??` default, so an
+ * operator's typo would not fall back — it would reach `pLimit(NaN)` (throws,
+ * 500ing every settings request) or a NaN deadline (`setTimeout` treats it as
+ * 0, silently marking every overlay unavailable).
+ */
+function positiveNumberFromEnv(
+    raw: string | undefined,
+    fallback: number,
+): number {
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 @Injectable()
 export class GetCodeReviewParameterUseCase {
     private readonly logger = createLogger(GetCodeReviewParameterUseCase.name);
@@ -58,8 +73,9 @@ export class GetCodeReviewParameterUseCase {
      * read is ~400ms; 8s absorbs a short queue on the shared credential
      * without making the settings screen wait on a backlogged one.
      */
-    private static readonly FILE_OVERLAY_TIMEOUT_MS = Number(
-        process.env.KODUS_CONFIG_FILE_OVERLAY_TIMEOUT_MS ?? 8_000,
+    private static readonly FILE_OVERLAY_TIMEOUT_MS = positiveNumberFromEnv(
+        process.env.KODUS_CONFIG_FILE_OVERLAY_TIMEOUT_MS,
+        8_000,
     );
 
     /**
@@ -72,8 +88,14 @@ export class GetCodeReviewParameterUseCase {
      * every read shares one deadline, so a queue that cannot drain in time
      * degrades to UNAVAILABLE instead of running longer.
      */
-    private static readonly PROVIDER_CONCURRENCY = Number(
-        process.env.KODUS_CONFIG_FILE_OVERLAY_CONCURRENCY ?? 4,
+    private static readonly PROVIDER_CONCURRENCY = Math.max(
+        1,
+        Math.floor(
+            positiveNumberFromEnv(
+                process.env.KODUS_CONFIG_FILE_OVERLAY_CONCURRENCY,
+                4,
+            ),
+        ),
     );
 
     constructor(
