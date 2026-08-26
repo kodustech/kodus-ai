@@ -113,8 +113,14 @@ export type FormattedGlobalCodeReviewConfig = Omit<
  * config that differs from what a review would use.
  */
 export enum KodusConfigFileOverlayStatus {
-    /** The file was read from the provider (it may legitimately not exist). */
+    /** The file was read from the provider and merged into the config. */
     LOADED = 'loaded',
+    /**
+     * The read completed but came back empty. Either the repository has no
+     * file, or a provider error was swallowed by the adapter — the two are
+     * indistinguishable, so this must not be presented as a successful read.
+     */
+    NOT_FOUND = 'not_found',
     /** Override flag is off for this scope — no file is expected. */
     DISABLED = 'disabled',
     /** Override flag is on, but the provider did not answer in time. */

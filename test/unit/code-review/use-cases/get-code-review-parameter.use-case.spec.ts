@@ -143,6 +143,69 @@ describe('GetCodeReviewParameterUseCase', () => {
         }
     });
 
+    it('reports an empty read as not found rather than loaded', async () => {
+        mockParametersService.findByKey.mockResolvedValue(buildParameters(true));
+        // getKodusConfigFile returns undefined both for a repository with no
+        // file and for a provider error an adapter swallowed.
+        mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue(
+            undefined,
+        );
+
+        const result = await execute();
+
+        expect(result.configValue.repositories[0].kodusConfigFile.status).toBe(
+            KodusConfigFileOverlayStatus.NOT_FOUND,
+        );
+    });
+
+    it('still reads the file when the adapter reports an empty default branch', async () => {
+        mockParametersService.findByKey.mockResolvedValue(buildParameters(true));
+        // Bitbucket's getDefaultBranch catches and returns '' instead of
+        // throwing; getKodusConfigFile resolves the branch itself in that case.
+        mockCodeBaseConfigService.getDefaultBranch.mockResolvedValue('');
+        mockCodeBaseConfigService.getKodusConfigFile.mockResolvedValue({
+            reviewOptions: { bug: true },
+        });
+
+        const result = await execute();
+
+        expect(result.configValue.repositories[0].kodusConfigFile.status).toBe(
+            KodusConfigFileOverlayStatus.LOADED,
+        );
+        expect(mockCodeBaseConfigService.getKodusConfigFile).toHaveBeenCalled();
+    });
+
+    it('does not leave a floating rejection when the budget is already spent', async () => {
+        const unhandled: unknown[] = [];
+        const onUnhandled = (reason: unknown) => unhandled.push(reason);
+        process.on('unhandledRejection', onUnhandled);
+
+        const useCaseClass = GetCodeReviewParameterUseCase as any;
+        const originalTimeout = useCaseClass.FILE_OVERLAY_TIMEOUT_MS;
+        // A zero budget makes every provider call take the exhausted path, so
+        // the case is deterministic instead of a race against the real 8s.
+        useCaseClass.FILE_OVERLAY_TIMEOUT_MS = 0;
+
+        mockParametersService.findByKey.mockResolvedValue(buildParameters(true));
+
+        try {
+            const result = await execute();
+            // Node reports unhandled rejections a macrotask later.
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(result.configValue.repositories[0].kodusConfigFile.status).toBe(
+                KodusConfigFileOverlayStatus.UNAVAILABLE,
+            );
+            // Queueing the call and only then bailing would leave its promise
+            // with nothing racing it, so its rejection escapes the caller that
+            // already handled the missing overlay.
+            expect(unhandled).toEqual([]);
+        } finally {
+            useCaseClass.FILE_OVERLAY_TIMEOUT_MS = originalTimeout;
+            process.off('unhandledRejection', onUnhandled);
+        }
+    });
+
     it('marks every scope as unavailable when the default branch cannot be resolved', async () => {
         mockParametersService.findByKey.mockResolvedValue(buildParameters(true));
         mockCodeBaseConfigService.getDefaultBranch.mockRejectedValue(

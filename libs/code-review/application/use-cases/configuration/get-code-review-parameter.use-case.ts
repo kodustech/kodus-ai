@@ -346,14 +346,15 @@ export class GetCodeReviewParameterUseCase {
         // for would otherwise burn a slot (and provider budget) for nothing.
         const callProvider = <T>(fn: () => Promise<T>): Promise<T> =>
             this.withDeadline(
-                overlay.providerLimit(() => {
-                    if (Date.now() >= deadlineAt) {
-                        throw new Error(
-                            'kodus-config.yml overlay budget exhausted while queued',
-                        );
-                    }
-                    return fn();
-                }),
+                () =>
+                    overlay.providerLimit(() => {
+                        if (Date.now() >= deadlineAt) {
+                            throw new Error(
+                                'kodus-config.yml overlay budget exhausted while queued',
+                            );
+                        }
+                        return fn();
+                    }),
                 deadlineAt,
             );
 
@@ -363,6 +364,7 @@ export class GetCodeReviewParameterUseCase {
         // pressure.
         let defaultBranch: string | undefined;
         let branchError: string | undefined;
+        let branchFailed = false;
 
         if (wantsFile) {
             try {
@@ -373,6 +375,7 @@ export class GetCodeReviewParameterUseCase {
                     ),
                 );
             } catch (error) {
+                branchFailed = true;
                 branchError = this.getErrorMessage(error);
                 this.logger.warn({
                     message:
@@ -413,7 +416,13 @@ export class GetCodeReviewParameterUseCase {
                 };
             }
 
-            if (!defaultBranch) {
+            // Only a thrown resolution stops the read. Some adapters report
+            // failure by returning an empty branch rather than throwing
+            // (Bitbucket's getDefaultBranch catches and returns ''), and
+            // getKodusConfigFile resolves the branch itself when it receives a
+            // falsy one — the read still succeeded that way before this
+            // parallelisation, so it must keep succeeding.
+            if (branchFailed) {
                 return {
                     overlay: {
                         status: KodusConfigFileOverlayStatus.UNAVAILABLE,
@@ -433,9 +442,20 @@ export class GetCodeReviewParameterUseCase {
                     }),
                 );
 
+                // An empty result is NOT_FOUND, never LOADED. getKodusConfigFile
+                // returns undefined both for a repository that simply has no
+                // file and for a provider error an adapter swallowed
+                // (Bitbucket's getRepositoryContentFile catches and returns
+                // null), and the two are indistinguishable from here. Calling
+                // that LOADED would put a green "file applied" badge on a page
+                // whose config may not match what a review runs.
                 return {
                     file,
-                    overlay: { status: KodusConfigFileOverlayStatus.LOADED },
+                    overlay: {
+                        status: file
+                            ? KodusConfigFileOverlayStatus.LOADED
+                            : KodusConfigFileOverlayStatus.NOT_FOUND,
+                    },
                 };
             } catch (error) {
                 this.logger.warn({
@@ -571,11 +591,15 @@ export class GetCodeReviewParameterUseCase {
      * this layer exposes cancellation — but the response stops waiting on it.
      */
     private async withDeadline<T>(
-        promise: Promise<T>,
+        start: () => Promise<T>,
         deadlineAt: number,
     ): Promise<T> {
         const remainingMs = deadlineAt - Date.now();
 
+        // Bails before `start()`, never after. Taking a started promise here
+        // instead would leave it floating on this path — nothing races it, so
+        // its later rejection surfaces as an unhandled rejection even though
+        // the caller already handled the missing overlay.
         if (remainingMs <= 0) {
             throw new Error('kodus-config.yml overlay budget exhausted');
         }
@@ -584,7 +608,7 @@ export class GetCodeReviewParameterUseCase {
 
         try {
             return await Promise.race([
-                promise,
+                start(),
                 new Promise<never>((_, reject) => {
                     timer = setTimeout(
                         () =>

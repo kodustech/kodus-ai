@@ -228,6 +228,7 @@ export interface FormattedGlobalCodeReviewConfig extends Omit<
  */
 export enum KodusConfigFileOverlayStatus {
     LOADED = "loaded",
+    NOT_FOUND = "not_found",
     DISABLED = "disabled",
     UNAVAILABLE = "unavailable",
     SKIPPED = "skipped",

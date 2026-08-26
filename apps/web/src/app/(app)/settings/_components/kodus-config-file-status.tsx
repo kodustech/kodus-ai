@@ -6,7 +6,12 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { CheckIcon, Loader2Icon, TriangleAlertIcon } from "lucide-react";
+import {
+    CheckIcon,
+    InfoIcon,
+    Loader2Icon,
+    TriangleAlertIcon,
+} from "lucide-react";
 import { cn } from "src/core/utils/components";
 
 import { useCodeReviewRouteParams } from "../_hooks";
@@ -20,6 +25,7 @@ export type KodusConfigFileStatusView =
     | { state: "hidden" }
     | { state: "loading" }
     | { state: "loaded" }
+    | { state: "notFound" }
     | { state: "unavailable"; error?: string };
 
 /**
@@ -63,6 +69,10 @@ export const useKodusConfigFileStatus = (): KodusConfigFileStatusView => {
         return { state: "loaded" };
     }
 
+    if (overlay.status === KodusConfigFileOverlayStatus.NOT_FOUND) {
+        return { state: "notFound" };
+    }
+
     if (overlay.status === KodusConfigFileOverlayStatus.UNAVAILABLE) {
         return { state: "unavailable", error: overlay.error };
     }
@@ -92,6 +102,14 @@ const views = {
         className:
             "bg-success/10 text-success ring-success/64 [--button-foreground:var(--color-success)]",
         icon: <CheckIcon />,
+    },
+    notFound: {
+        label: "kodus-config.yml not found",
+        description:
+            "This repository is set to be overridden by kodus-config.yml, but no file came back from your git provider. Either the file does not exist, or it exists and could not be read — the settings below come from what is stored here.",
+        className:
+            "bg-alert/10 text-alert ring-alert/64 [--button-foreground:var(--color-alert)]",
+        icon: <InfoIcon />,
     },
     unavailable: {
         label: "kodus-config.yml unavailable",
