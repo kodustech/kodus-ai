@@ -76,6 +76,7 @@ const scriptedModel: { current: MockLanguageModelV3 | null } = {
     current: null,
 };
 let executedTools: Array<{ name: string; args: Record<string, unknown> }> = [];
+let logged: Array<Record<string, unknown>> = [];
 
 interface CapturedTurn {
     systemPrompt: string;
@@ -166,7 +167,7 @@ function buildProvider(conversationStore?: {
     load: jest.Mock;
     append: jest.Mock;
 }) {
-    return new ConversationAgentProvider(
+    const provider = new ConversationAgentProvider(
         {
             findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
         } as any,
@@ -179,6 +180,15 @@ function buildProvider(conversationStore?: {
         undefined,
         conversationStore as any,
     );
+
+    const logger = (provider as any).logger;
+    const log = logger.log.bind(logger);
+    logger.log = (payload: any) => {
+        logged.push(payload);
+        return log(payload);
+    };
+
+    return provider;
 }
 
 async function runTurn(
@@ -213,6 +223,7 @@ const actionableScenarios = THREAD_SCENARIOS.filter((s) => s.expectedOffer);
 
 beforeEach(() => {
     executedTools = [];
+    logged = [];
 });
 
 describe('@kody proactive actions in PR threads (issue #1761)', () => {
@@ -247,6 +258,30 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             expect(executedTools.map((t) => t.name)).toEqual([
                 'KODUS_CREATE_MEMORY',
             ]);
+        });
+
+        it('never writes silently — the call is auditable', async () => {
+            await runTurn(scenarioById('false-positive-on-kody-rule'), {
+                replies: [
+                    {
+                        toolName: 'KODUS_CREATE_MEMORY',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Recorded.',
+                ],
+            });
+
+            const audit = logged.find(
+                (entry: any) => entry?.metadata?.tool === 'KODUS_CREATE_MEMORY',
+            );
+
+            expect(audit).toBeDefined();
+            expect((audit as any).metadata.threadId).toBe(
+                'TR-cmc-false-positive-on-kody-rule',
+            );
+            expect((audit as any).metadata.developer).toBe(
+                THREAD_GIT_USER.username,
+            );
         });
     });
 

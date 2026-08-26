@@ -30,6 +30,7 @@ import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider
 
 import { connectMcpTools } from '../ai-sdk/mcp-tools';
 import { buildNativeTools } from '../ai-sdk/native-tools';
+import { auditWriteTools } from './conversation-tool-audit';
 import {
     buildSystemPrompt,
     buildUserPrompt,
@@ -144,10 +145,28 @@ export class ConversationAgentProvider {
         // readFile, listDir, exec). Both are plain AI SDK tools, carried into
         // the harness as-is by AiSdkToolRegistry (no schema round-trip).
         const mcp = await this.connectMcp(organizationAndTeamData);
-        const tools: Record<string, Tool> = {
-            ...mcp.tools,
-            ...(sandbox ? buildNativeTools(sandbox) : {}),
-        };
+        const tools: Record<string, Tool> = auditWriteTools(
+            {
+                ...mcp.tools,
+                ...(sandbox ? buildNativeTools(sandbox) : {}),
+            },
+            (event) =>
+                this.logger.log({
+                    message: `Conversation agent called write tool ${event.tool}`,
+                    context: ConversationAgentProvider.name,
+                    serviceName: ConversationAgentProvider.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        threadId: thread.id?.toString(),
+                        repositoryId:
+                            prepareContext?.repository?.id?.toString(),
+                        developer: prepareContext?.gitUser?.username,
+                        tool: event.tool,
+                        failed: Boolean(event.error),
+                        error: event.error,
+                    },
+                }),
+        );
         // Single runtime: the conversation runs as an AgentSpec on the harness
         // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
         // reasoning from the slot and records the cost span; the spec carries only
