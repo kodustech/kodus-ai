@@ -162,6 +162,51 @@ describe('GetCodeReviewParameterUseCase', () => {
         ).not.toHaveBeenCalled();
     });
 
+    it('caps how many provider reads run at once', async () => {
+        const repositories = Array.from({ length: 10 }, (_, index) => ({
+            id: `repo-${index}`,
+            name: `repo-${index}`,
+            configs: { kodusConfigFileOverridesWebPreferences: true },
+            directories: [],
+        }));
+
+        mockParametersService.findByKey.mockResolvedValue({
+            toObject: () => ({
+                createdAt: new Date('2025-09-10T00:00:00.000Z'),
+                configValue: { configs: {}, repositories },
+            }),
+        });
+
+        let inFlight = 0;
+        let peakInFlight = 0;
+        const trackConcurrency = async () => {
+            inFlight += 1;
+            peakInFlight = Math.max(peakInFlight, inFlight);
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            inFlight -= 1;
+        };
+
+        mockCodeBaseConfigService.getDefaultBranch.mockImplementation(
+            async () => {
+                await trackConcurrency();
+                return 'main';
+            },
+        );
+        mockCodeBaseConfigService.getKodusConfigFile.mockImplementation(
+            async () => {
+                await trackConcurrency();
+                return {};
+            },
+        );
+
+        const result = await execute();
+
+        expect(result.configValue.repositories).toHaveLength(10);
+        // Providers without a rate gate (GitHub, GitLab, Azure) would otherwise
+        // see one connection per repository open at the same instant.
+        expect(peakInFlight).toBeLessThanOrEqual(4);
+    });
+
     it('does not touch the provider when the override flag is off', async () => {
         mockParametersService.findByKey.mockResolvedValue(
             buildParameters(false),

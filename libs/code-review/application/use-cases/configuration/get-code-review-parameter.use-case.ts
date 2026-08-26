@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import pLimit from 'p-limit';
 import { DeepPartial } from 'typeorm';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -59,6 +60,20 @@ export class GetCodeReviewParameterUseCase {
      */
     private static readonly FILE_OVERLAY_TIMEOUT_MS = Number(
         process.env.KODUS_CONFIG_FILE_OVERLAY_TIMEOUT_MS ?? 8_000,
+    );
+
+    /**
+     * How many overlay reads may be in flight against the git provider at once
+     * for a single request. Bitbucket serializes them anyway (one gate slot per
+     * app-password), but GitHub, GitLab and Azure have no such gate, and an
+     * organization with dozens of repositories would otherwise open one
+     * connection per repository at the same instant — the shape that trips
+     * GitHub's secondary rate limits. The cap does not lengthen the request:
+     * every read shares one deadline, so a queue that cannot drain in time
+     * degrades to UNAVAILABLE instead of running longer.
+     */
+    private static readonly PROVIDER_CONCURRENCY = Number(
+        process.env.KODUS_CONFIG_FILE_OVERLAY_CONCURRENCY ?? 4,
     );
 
     constructor(
@@ -243,11 +258,18 @@ export class GetCodeReviewParameterUseCase {
             globalConfigKey,
         );
 
-        // Repositories are formatted concurrently: the provider calls behind
-        // them are serialized upstream by the rate gate anyway, but running
-        // them sequentially here meant one slow repository delayed — and one
-        // failing repository could stall — every repository after it.
+        // Repositories are formatted concurrently — sequentially, one slow
+        // repository delayed every repository after it, which is what made this
+        // endpoint unbounded. The provider reads underneath are throttled by
+        // `providerLimit` and share one `deadlineAt`, so neither the fan-out nor
+        // the total duration grows with the number of repositories.
         const repositories = configValue.repositories || [];
+        const providerLimit = pLimit(
+            GetCodeReviewParameterUseCase.PROVIDER_CONCURRENCY,
+        );
+        const deadlineAt =
+            Date.now() + GetCodeReviewParameterUseCase.FILE_OVERLAY_TIMEOUT_MS;
+
         const settledRepositories = await Promise.allSettled(
             repositories.map((repo) =>
                 this.formatRepository(
@@ -255,6 +277,7 @@ export class GetCodeReviewParameterUseCase {
                     formattedGlobalConfig,
                     repo,
                     includeFileOverlay,
+                    { providerLimit, deadlineAt },
                 ),
             ),
         );
@@ -290,17 +313,23 @@ export class GetCodeReviewParameterUseCase {
 
     /**
      * Formats one repository and its directories. Reading `kodus-config.yml`
-     * means a live call to the git provider, so every such call is bounded by
-     * a single deadline shared across this repository: when the provider is
-     * slow or throttled the repository still renders from stored config, with
-     * `kodusConfigFile.status` telling the caller the overlay is missing.
-     * Dropping the repository instead would hide it from the settings screen.
+     * means a live call to the git provider, so every such call goes through
+     * `overlay.providerLimit` (capping how many repositories hit the provider
+     * at once) and races `overlay.deadlineAt`, which is shared by the whole
+     * request. When the provider is slow or throttled the repository still
+     * renders from stored config, with `kodusConfigFile.status` telling the
+     * caller the overlay is missing — dropping the repository instead would
+     * hide it from the settings screen.
      */
     private async formatRepository(
         organizationAndTeamData: OrganizationAndTeamData,
         formattedGlobalConfig: FormattedCodeReviewConfig,
         repo: CodeReviewRepositoryEntry,
         includeFileOverlay: boolean,
+        overlay: {
+            providerLimit: ReturnType<typeof pLimit>;
+            deadlineAt: number;
+        },
     ): Promise<FormattedRepositoryCodeReviewConfig> {
         const repository = { id: repo.id, name: repo.name };
         const directories = repo.directories || [];
@@ -314,11 +343,23 @@ export class GetCodeReviewParameterUseCase {
             includeFileOverlay &&
             (repoOverride || directories.some(overrideForDirectory));
 
-        // One budget for this repository's provider calls as a whole. Since
-        // repositories run concurrently, the request's worst case is a single
-        // budget rather than one per repository or per directory.
-        const deadlineAt =
-            Date.now() + GetCodeReviewParameterUseCase.FILE_OVERLAY_TIMEOUT_MS;
+        const { deadlineAt } = overlay;
+
+        // Queues the call behind the request's concurrency cap and drops it if
+        // the deadline passed while it waited — a queued call nobody is waiting
+        // for would otherwise burn a slot (and provider budget) for nothing.
+        const callProvider = <T>(fn: () => Promise<T>): Promise<T> =>
+            this.withDeadline(
+                overlay.providerLimit(() => {
+                    if (Date.now() >= deadlineAt) {
+                        throw new Error(
+                            'kodus-config.yml overlay budget exhausted while queued',
+                        );
+                    }
+                    return fn();
+                }),
+                deadlineAt,
+            );
 
         // Resolved once and threaded into every getKodusConfigFile call below.
         // Left to itself, each call re-asks the provider for the same branch —
@@ -329,12 +370,11 @@ export class GetCodeReviewParameterUseCase {
 
         if (wantsFile) {
             try {
-                defaultBranch = await this.withDeadline(
+                defaultBranch = await callProvider(() =>
                     this.codeBaseConfigService.getDefaultBranch(
                         organizationAndTeamData,
                         repository,
                     ),
-                    deadlineAt,
                 );
             } catch (error) {
                 branchError = this.getErrorMessage(error);
@@ -387,17 +427,15 @@ export class GetCodeReviewParameterUseCase {
             }
 
             try {
-                const file =
-                    await this.withDeadline(
-                        this.codeBaseConfigService.getKodusConfigFile({
-                            organizationAndTeamData,
-                            repository,
-                            defaultBranch,
-                            overrideConfig: true,
-                            ...scope,
-                        }),
-                        deadlineAt,
-                    );
+                const file = await callProvider(() =>
+                    this.codeBaseConfigService.getKodusConfigFile({
+                        organizationAndTeamData,
+                        repository,
+                        defaultBranch,
+                        overrideConfig: true,
+                        ...scope,
+                    }),
+                );
 
                 return {
                     file,
