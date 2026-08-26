@@ -111,6 +111,8 @@ export class TestByokModelUseCase {
                           error,
                           metadata: {
                               provider: input.provider,
+                              organizationId:
+                                  input.organizationAndTeamData?.organizationId,
                               organizationAndTeamData:
                                   input.organizationAndTeamData,
                           },

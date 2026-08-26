@@ -94,6 +94,20 @@ export function RotatePanel({
         !!values.awsBearerToken?.trim() ||
         (!!values.awsAccessKeyId?.trim() && !!values.awsSecretAccessKey?.trim());
 
+    // Changing the endpoint must NOT reuse the stored secret: the server would
+    // otherwise send the org's key to a caller-supplied host. So a baseURL edit
+    // requires re-entering the key (probed with the new key via testBYOK). Gates
+    // BOTH the probe and the save, so it holds even when there is no probe model.
+    const baseUrlChangeNeedsKey = (values: EditKeyForm): boolean =>
+        (values.baseURL?.trim() || null) !== str(settings.baseURL) &&
+        !typedNewSecret(values);
+    const baseUrlKeyError: TestBYOKResult = {
+        ok: false,
+        code: "bad_request",
+        latencyMs: 0,
+        message: "Re-enter your API key to change the base URL.",
+    };
+
     // Probe the credential — the just-typed one if a new secret was entered,
     // otherwise the STORED one via testBYOKModel (server resolves the ciphertext).
     // The stored-credential probe is what surfaces a lapsed key (e.g. an expired
@@ -104,20 +118,9 @@ export function RotatePanel({
         if (!valid) return null;
         const values = form.getValues();
 
-        // Changing the endpoint must NOT reuse the stored secret: the server would
-        // otherwise send the org's key to a caller-supplied host. So a baseURL edit
-        // requires re-entering the key (which probes the new URL with the new key).
-        const baseUrlChanged =
-            (values.baseURL?.trim() || null) !== str(settings.baseURL);
-        if (baseUrlChanged && !typedNewSecret(values)) {
-            const result: TestBYOKResult = {
-                ok: false,
-                code: "bad_request",
-                latencyMs: 0,
-                message: "Re-enter your API key to change the base URL.",
-            };
-            setTestState({ status: "error", result });
-            return result;
+        if (baseUrlChangeNeedsKey(values)) {
+            setTestState({ status: "error", result: baseUrlKeyError });
+            return baseUrlKeyError;
         }
 
         setTestState({ status: "testing" });
@@ -166,6 +169,13 @@ export function RotatePanel({
     };
 
     const handleTestAndSave = form.handleSubmit(async (values) => {
+        // Gate the SAVE on a baseURL change independently of probeModelId: the
+        // probe guard below is skipped when there is no probe model, so without
+        // this a blank-secret endpoint edit would persist unauthenticated.
+        if (baseUrlChangeNeedsKey(values)) {
+            setTestState({ status: "error", result: baseUrlKeyError });
+            return;
+        }
         setIsSaving(true);
         try {
             // Always probe before persisting — a new secret is validated, and an
