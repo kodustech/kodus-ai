@@ -173,9 +173,9 @@ function refPrompt(rule, file) {
 // ── main ─────────────────────────────────────────────────────────────────────
 async function main() {
     const { applyModelEnv } = require('../shared/tier0-models');
-    const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+    const { buildEvalModel } = require('../shared/build-model');
     applyModelEnv(MODELKEY);
-    const model = byokToVercelModel(undefined, 'main', {});
+    const model = buildEvalModel({});
     const { generateText } = require('ai');
 
     const tok = { in: 0, cached: 0, out: 0, calls: 0, errored: 0 };

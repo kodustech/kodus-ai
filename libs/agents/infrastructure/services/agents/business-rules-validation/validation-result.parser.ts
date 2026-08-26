@@ -1,3 +1,5 @@
+import { extractJsonFromText } from '@libs/llm/structured-output-repair';
+
 import {
     asRecord,
     safeJsonParse,
@@ -238,72 +240,14 @@ function parseJsonLikeString(text: string): unknown | undefined {
         return direct;
     }
 
-    const fencedCandidates = [
-        ...text.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi),
-    ];
-    for (const match of fencedCandidates) {
-        const candidate = match[1]?.trim();
-        if (!candidate) {
-            continue;
-        }
-        const parsed = safeJsonParse<unknown | undefined>(candidate, undefined);
-        if (parsed !== undefined) {
-            return parsed;
-        }
-    }
-
-    const extractedObject = extractFirstJsonObject(text);
-    if (!extractedObject) {
+    // Shared text→JSON extractor: unwraps a ```json fence and slices the outermost
+    // balanced object (string-aware, trailing-comma tolerant) — the same primitive
+    // the review structured path uses, replacing this file's bespoke copy.
+    const extracted = extractJsonFromText(text);
+    if (extracted == null) {
         return undefined;
     }
-    return safeJsonParse<unknown | undefined>(extractedObject, undefined);
-}
-
-function extractFirstJsonObject(text: string): string | undefined {
-    let startIndex = -1;
-    let depth = 0;
-    let inString = false;
-    let escaped = false;
-
-    for (let index = 0; index < text.length; index += 1) {
-        const char = text[index];
-
-        if (inString) {
-            if (escaped) {
-                escaped = false;
-            } else if (char === '\\') {
-                escaped = true;
-            } else if (char === '"') {
-                inString = false;
-            }
-            continue;
-        }
-
-        if (char === '"') {
-            inString = true;
-            continue;
-        }
-
-        if (char === '{') {
-            if (depth === 0) {
-                startIndex = index;
-            }
-            depth += 1;
-            continue;
-        }
-
-        if (char === '}') {
-            if (depth === 0) {
-                continue;
-            }
-            depth -= 1;
-            if (depth === 0 && startIndex >= 0) {
-                return text.slice(startIndex, index + 1);
-            }
-        }
-    }
-
-    return undefined;
+    return safeJsonParse<unknown | undefined>(extracted, undefined);
 }
 
 function looksLikeValidationLimitation(value: string): boolean {

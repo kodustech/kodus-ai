@@ -165,14 +165,14 @@ async function runFinder(model, caseData) {
 }
 
 async function main() {
-    // tier-0 model ids build through the production byokToVercelModel routing
+    // tier-0 model ids build through the production buildModelFromSlot routing
     // (any supported provider); legacy local presets build directly.
     const { TIER0, applyModelEnv } = require('../shared/tier0-models');
     let model;
     if (TIER0[MODELKEY]) {
         applyModelEnv(MODELKEY);
-        const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
-        model = byokToVercelModel(undefined, 'main', {});
+        const { buildEvalModel } = require('../shared/build-model');
+        model = buildEvalModel({});
     } else {
         const spec = MODELS[MODELKEY];
         if (!spec) throw new Error(`unknown model ${MODELKEY}`);

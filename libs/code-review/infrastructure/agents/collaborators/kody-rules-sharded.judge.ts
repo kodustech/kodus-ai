@@ -157,9 +157,9 @@ export interface ShardViolation {
 
 /**
  * The injected single-shot LLM call. The provider supplies a closure backed by
- * BYOKPromptRunner.builder() (so it runs on the customer's model); tests
- * supply a replay. Returns the parsed violations for this shard, or [] on a
- * parse/LLM miss (the caller counts errors separately).
+ * `runStructuredReviewCall` (the AI SDK path, so it runs on the customer's BYOK
+ * model); tests supply a replay. Returns the parsed violations for this shard,
+ * or [] on a parse/LLM miss (the caller counts errors separately).
  */
 export type RunJudge = (args: {
     system: string;

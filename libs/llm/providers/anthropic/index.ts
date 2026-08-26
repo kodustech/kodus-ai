@@ -24,6 +24,11 @@ import type {
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
+import type { TemperaturePolicy } from '../kernel/model-types';
+import {
+    resolveCompatibleReasoningTraits,
+    type ModelReasoningTraits,
+} from '../kernel/reasoning-traits';
 import {
     normalizeSdkResult,
     normalizeSdkUsage,
@@ -175,13 +180,26 @@ export const anthropicModule: ProviderModule = {
         effort: ReasoningEffort,
     ): ProviderReasoningOptions {
         if (effort === 'none') {
-            // "Off" must be said OUT LOUD on the models that think by default
-            // (Opus 5, Sonnet 5), or the user who picked Off still pays for
-            // thinking. Only the adaptive generation both thinks-by-default AND
-            // accepts `disabled`; legacy models don't think unasked, Fable/Mythos
-            // reject `disabled` (400), and anthropic_compatible never thinks by
-            // default — for all three, omitting the config IS "off".
-            if ((cfg.provider as string) === 'anthropic_compatible') return {};
+            // "Off" must be said OUT LOUD on every model that thinks by default,
+            // or the user who picked Off still pays for thinking — and worse, a
+            // structured (forced-tool_choice) call 400s with "tool_choice
+            // 'required' is incompatible with thinking enabled".
+            //
+            // anthropic_compatible: the compatible THINKING models (Kimi K2.5/K2.6,
+            // GLM ≤5.2, DeepSeek) enable thinking by DEFAULT and accept
+            // `{ type: 'disabled' }` — omitting it leaves thinking ON (the PR#144-146
+            // Kody-Rules failure). But the ALWAYS-thinking ones (Kimi k2.7-code/k3,
+            // GLM-5.3) expose NO disable and would REJECT the field — for those,
+            // omitting IS the only "off". Decide per model via the shared traits.
+            if ((cfg.provider as string) === 'anthropic_compatible') {
+                return resolveCompatibleReasoningTraits(cfg.model)
+                    .canDisableThinking
+                    ? { anthropic: { thinking: { type: 'disabled' } } }
+                    : {};
+            }
+            // Native Anthropic: only the adaptive generation both thinks-by-default
+            // AND accepts `disabled`; legacy models don't think unasked and
+            // Fable/Mythos reject `disabled` (400) — for those, omitting IS "off".
             const traits = resolveAnthropicModelTraits(cfg.model);
             return traits.thinkingShape === 'adaptive' && traits.canDisableThinking
                 ? { anthropic: { thinking: { type: 'disabled' } } }
@@ -196,6 +214,16 @@ export const anthropicModule: ProviderModule = {
 
         // Compatible endpoints (Kimi/Z.ai/DeepSeek) never implement adaptive
         // thinking → always budget, whatever the id looks like.
+        //
+        // KNOWN CAVEAT (k3 / GLM-5.3): the newest generations control reasoning
+        // with a TOP-LEVEL `reasoning_effort` (low/high/max), NOT a thinking
+        // budget — and that param isn't expressible through the anthropic
+        // providerOptions namespace this transport uses. It's non-blocking: these
+        // models ALWAYS reason (canDisableThinking=false), a structured call on
+        // them REROUTES to json (no reasoning param sent to force a tool), and a
+        // finder call gets a budget hint they simply ignore. A faithful
+        // reasoning_effort needs the /v1 (OpenAI) transport — deferred until a k3
+        // slot exists to verify against.
         if ((cfg.provider as string) === 'anthropic_compatible') {
             return budget;
         }
@@ -212,6 +240,24 @@ export const anthropicModule: ProviderModule = {
             default:
                 return {};
         }
+    },
+
+    // Per-model reasoning facts — native Claude from its own trait resolver;
+    // anthropic_compatible (Kimi/GLM/DeepSeek/unknown) from the shared table.
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        if ((cfg.provider as string) === 'anthropic_compatible') {
+            return resolveCompatibleReasoningTraits(cfg.model);
+        }
+        const t = resolveAnthropicModelTraits(cfg.model);
+        // Only the adaptive generation (4.6+, 5.x, Fable/Mythos) thinks by default;
+        // budget (3.7–4.5) and unknown do not. Native Claude always speaks the
+        // tool-use protocol and rejects a forced tool_choice while thinking.
+        return {
+            thinksByDefault: t.thinkingShape === 'adaptive',
+            canDisableThinking: t.canDisableThinking,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: true,
+        };
     },
 
     // The anthropic protocol (native AND anthropic_compatible endpoints) accepts
@@ -232,13 +278,23 @@ export const anthropicModule: ProviderModule = {
     // an anthropic-compatible upstream that DOES surface a split still works. output
     // is the FULL completion count and is NEVER reduced by reasoning (Q4 double-count
     // trap: reasoning is additive info only).
-    supportsSamplingParams(cfg: ProviderBuildConfig): boolean {
-        // Only the REAL anthropic endpoint withholds sampling params on 4.7+
-        // (a 400 otherwise). `anthropic_compatible` upstreams (Kimi/Z.ai/DeepSeek)
-        // implement the legacy shape and accept temperature — never gate them.
-        return (cfg.provider as string) === 'anthropic_compatible'
-            ? true
-            : supportsSamplingParams(true, cfg.model);
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        // `anthropic_compatible` upstreams (Kimi/Z.ai/DeepSeek) implement the legacy
+        // shape and ACCEPT temperature — but the always-thinking ones (Kimi
+        // k2.7-code/k3, GLM-5.3) reason UNCONDITIONALLY, and the Anthropic protocol
+        // pins temperature to 1 while thinking, so 1 is their only sound value.
+        // Disable-able ones (Kimi k2.6, DeepSeek) keep a free temperature.
+        if ((cfg.provider as string) === 'anthropic_compatible') {
+            const traits = resolveCompatibleReasoningTraits(cfg.model);
+            return traits.thinksByDefault && !traits.canDisableThinking
+                ? { kind: 'fixed', value: 1 }
+                : { kind: 'adjustable' };
+        }
+        // Real Anthropic: 4.7+ REJECT temperature (a 400); older accept it. Native
+        // thinking models don't need a pin — they withhold temperature outright.
+        return supportsSamplingParams(true, cfg.model)
+            ? { kind: 'adjustable' }
+            : { kind: 'unsupported' };
     },
 
     normalizeUsage: normalizeSdkUsage,

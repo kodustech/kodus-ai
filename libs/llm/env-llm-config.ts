@@ -1,6 +1,6 @@
 /**
  * Pure, side-effect-free inspection of the self-hosted `.env`-driven LLM
- * configuration. Mirrors the provider-selection branches of `getInternalModel`
+ * configuration. Mirrors the provider-selection branches of `buildModelFromSlot`
  * in `byok-to-vercel.ts` but never instantiates an SDK client — safe to call
  * from HTTP handlers that only want to *describe* what the pipeline would use.
  *

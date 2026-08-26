@@ -47,8 +47,8 @@ Keep EVERY enforceable requirement from the rule — do not drop rare or edge co
 async function main() {
     const { applyModelEnv } = require(path.join(ROOT, 'evals/shared/tier0-models'));
     applyModelEnv('gpt-5.4-mini');
-    const { byokToVercelModel } = require(path.join(ROOT, 'libs/llm/byok-to-vercel.ts'));
-    const model = byokToVercelModel(undefined, 'main', {});
+    const { buildEvalModel } = require(path.join(ROOT, 'evals/shared/build-model.js'));
+    const model = buildEvalModel({});
     const { generateText } = require('ai');
 
     const cases = JSON.parse(fs.readFileSync(IN, 'utf8'));

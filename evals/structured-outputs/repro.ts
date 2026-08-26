@@ -43,9 +43,9 @@ import 'dotenv/config';
 
 import { generateText, Output, jsonSchema, type LanguageModel } from 'ai';
 
-import { byokToVercelModel, buildModelFromSlot } from '@libs/llm/byok-to-vercel';
+import { buildModelFromSlot } from '@libs/llm/byok-to-vercel';
 import { encrypt } from '@/common/utils/crypto';
-import type { BYOKConfig } from '@libs/llm/byok-config';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import { BYOKProvider } from '@libs/llm/model-providers';
 
 type Expectation = 'json_schema' | 'json_object' | 'gemini-native';
@@ -152,15 +152,15 @@ const minimalSchema = jsonSchema({
     required: ['answer'],
 } as any);
 
-function buildByokConfig(scenario: Scenario, apiKey: string): BYOKConfig {
+function buildSlot(scenario: Scenario, apiKey: string): NormalizedModel {
+    // A resolved slot (NormalizedModel) — the single shape buildModelFromSlot
+    // takes now (the legacy `{ main }` BYOKConfig + byokToVercelModel are gone).
     return {
-        main: {
-            provider: scenario.provider,
-            apiKey: encrypt(apiKey),
-            model: scenario.model,
-            ...(scenario.baseURL ? { baseURL: scenario.baseURL } : {}),
-        },
-    };
+        provider: scenario.provider,
+        apiKey: encrypt(apiKey),
+        model: scenario.model,
+        ...(scenario.baseURL ? { baseURL: scenario.baseURL } : {}),
+    } as NormalizedModel;
 }
 
 function fakeBodyFor(scenario: Scenario): {
@@ -390,11 +390,11 @@ async function runScenario(scenario: Scenario): Promise<ScenarioResult> {
         };
     }
 
-    const byok = buildByokConfig(scenario, apiKey as string);
+    const slot = buildSlot(scenario, apiKey as string);
     // The structured-output capability gate now lives in `buildModelFromSlot`
     // (the json_schema→json_object fallback folded into the review executor,
     // structured-review-call.ts). Build the slot model directly.
-    const internalModel = buildModelFromSlot(byok.main as any, {
+    const internalModel = buildModelFromSlot(slot, {
         structuredOutputs: true,
     });
     if (!internalModel) {
@@ -404,7 +404,7 @@ async function runScenario(scenario: Scenario): Promise<ScenarioResult> {
             structuredSummary: '',
             toolOk: false,
             toolSummary: '',
-            error: 'getInternalModel returned null',
+            error: 'buildModelFromSlot returned null',
         };
     }
 
@@ -414,7 +414,8 @@ async function runScenario(scenario: Scenario): Promise<ScenarioResult> {
         structuredCaptured?.body ?? null,
     );
 
-    const mainModel = byokToVercelModel(byok, 'main');
+    // Plain (tool-loop) model from the SAME slot — no structuredOutputs flag.
+    const mainModel = buildModelFromSlot(slot);
     const toolCaptured = await probeToolLoop(scenario, mainModel);
     const toolEval = evaluateToolLoop(
         scenario.expected,

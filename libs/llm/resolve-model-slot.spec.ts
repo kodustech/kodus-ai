@@ -101,3 +101,59 @@ describe('resolveModelSlot — materialize ONE v2 model slot by id (04b)', () =>
         expect(resolveModelSlot(v2, 'm-managed')).toBeUndefined();
     });
 });
+
+describe('resolveModelSlot — Amazon Bedrock authenticates with aws* fields, NOT apiKey', () => {
+    // Regression: Bedrock credentials carry NO `apiKey` (they use awsBearerToken or
+    // a SigV4 IAM pair). Requiring `apiKey` silently degraded every Bedrock slot to
+    // the managed default — a review configured for Bedrock ran on DeepSeek instead,
+    // with no error, because the routing verdict still named the model.
+    const bedrockCfg = (settings: Record<string, unknown>): BYOKConfig => ({
+        version: 2,
+        credentials: [{ id: 'b', provider: 'amazon_bedrock', settings }],
+        models: [
+            {
+                id: 'mb',
+                credentialId: 'b',
+                model: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+            },
+        ],
+    });
+
+    it('resolves a slot from awsBearerToken (no apiKey)', () => {
+        const slot = resolveModelSlot(
+            bedrockCfg({ awsBearerToken: 'enc-bearer', awsRegion: 'us-east-1' }),
+            'mb',
+        );
+        expect(slot).toMatchObject({
+            provider: 'amazon_bedrock',
+            model: 'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+            awsBearerToken: 'enc-bearer',
+            awsRegion: 'us-east-1',
+        });
+        // No apiKey on the credential → empty ciphertext (decrypt('') is a no-op).
+        expect(slot?.apiKey).toBe('');
+    });
+
+    it('resolves a slot from a SigV4 IAM pair (no apiKey)', () => {
+        const slot = resolveModelSlot(
+            bedrockCfg({
+                awsAccessKeyId: 'enc-akid',
+                awsSecretAccessKey: 'enc-secret',
+                awsRegion: 'us-east-1',
+            }),
+            'mb',
+        );
+        expect(slot?.provider).toBe('amazon_bedrock');
+        expect(slot?.awsAccessKeyId).toBe('enc-akid');
+    });
+
+    it('degrades to null when NO auth material is present (no apiKey, no aws*)', () => {
+        expect(
+            resolveModelSlot(bedrockCfg({ awsRegion: 'us-east-1' }), 'mb'),
+        ).toBeUndefined();
+        // A lone access key id without its secret is not a usable IAM pair.
+        expect(
+            resolveModelSlot(bedrockCfg({ awsAccessKeyId: 'enc-akid' }), 'mb'),
+        ).toBeUndefined();
+    });
+});

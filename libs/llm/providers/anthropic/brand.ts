@@ -70,9 +70,16 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         settingsSchema: z.object({ baseURL: z.string().optional() }),
         catalog: spec.catalog,
 
-        // Intrinsic to the Anthropic wire protocol → one source, the anthropic module.
+        // Intrinsic to the Anthropic wire protocol → one source, the anthropic
+        // module. But every brand model (Kimi/GLM) is a THINKING model that reasons
+        // by default — the anthropic reasoning-config resolver only recognizes
+        // `claude-*` ids, so it would report supportsReasoning=false and the UI
+        // would wrongly show "doesn't support reasoning". The brand knows better.
         capabilities(model: string): ModelCapabilities {
-            return anthropicModule.capabilities(model);
+            return {
+                ...anthropicModule.capabilities(model),
+                supportsReasoning: true,
+            };
         },
         build(
             cfg: ProviderBuildConfig,
@@ -85,6 +92,11 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
             effort: ReasoningEffort,
         ): ProviderReasoningOptions {
             return anthropicModule.reasoning!(asCompatible(cfg), effort);
+        },
+        // Per-model reasoning facts — same shared compatible table (knows the
+        // Kimi/GLM variants), reached through the anthropic module.
+        reasoningTraits(cfg: ProviderBuildConfig) {
+            return anthropicModule.reasoningTraits!(asCompatible(cfg));
         },
         // NO inline cache marker. Unlike native Anthropic (which REQUIRES an
         // explicit `cache_control: ephemeral` breakpoint), the Anthropic-protocol
@@ -99,8 +111,10 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         systemCacheControl(): Record<string, unknown> | undefined {
             return undefined;
         },
-        supportsSamplingParams(cfg: ProviderBuildConfig): boolean {
-            return anthropicModule.supportsSamplingParams!(asCompatible(cfg));
+        // The temperature policy is intrinsic to the protocol → one source, the
+        // anthropic module (which knows the always-thinking brand ids pin it to 1).
+        temperaturePolicy(cfg: ProviderBuildConfig) {
+            return anthropicModule.temperaturePolicy!(asCompatible(cfg));
         },
 
         normalize: anthropicModule.normalize,

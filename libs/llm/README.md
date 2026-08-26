@@ -5,7 +5,7 @@ turns configuration into a usable model, or governs how model calls are made,
 lives here (NOT review/agent logic).
 
 - **`byok-to-vercel.ts`** — maps a BYOK config (provider + apiKey + model) to a
-  Vercel AI SDK `LanguageModel`; plus `getInternalModel`, `getModelName`, and the
+  Vercel AI SDK `LanguageModel`; plus `buildModelFromSlot`, `getModelName`, and the
   process-wide BYOK concurrency limiter (`runWithBYOKLimiter`).
 - **`env-llm-config.ts`** — pure, side-effect-free inspection of the self-hosted
   `.env`-driven LLM configuration.

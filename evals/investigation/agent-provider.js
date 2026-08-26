@@ -217,7 +217,7 @@ async function createModel(config) {
         const modelId = process.env.RECALL_MODEL || config.model;
         const { applyModelEnv, TIER0 } = require('../shared/tier0-models');
 
-        // Assinatura: nao passa por byokToVercelModel (que espera chave de API).
+        // Assinatura: nao passa por buildModelFromSlot (que espera chave de API).
         // Fala com chatgpt.com/backend-api via token OAuth do Codex; o wrapper
         // resolve o streaming-only + store:false.
         const spec = TIER0[modelId];
@@ -226,9 +226,9 @@ async function createModel(config) {
             return buildCodexSubscriptionModel(spec.codexModel || modelId);
         }
 
-        const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+        const { buildEvalModel } = require('../shared/build-model');
         applyModelEnv(modelId);
-        return withReasoningEffort(byokToVercelModel(undefined, 'main', {}), modelId);
+        return withReasoningEffort(buildEvalModel({}), modelId);
     }
 
     // Env overrides so ANY model runs from one yaml (no per-provider config):

@@ -43,13 +43,25 @@ function slotFromModel(
     }
     const provider = STR(cred.provider);
     const apiKey = STR(cred.apiKey);
-    if (!provider || !apiKey || !STR(model.model)) {
+    const s = (cred.settings ?? {}) as Record<string, unknown>;
+    // A credential is usable when it carries the auth material its provider's
+    // builder actually consumes: an API key for key-based providers, OR Amazon
+    // Bedrock's bearer token / SigV4 IAM pair (Bedrock authenticates with the aws*
+    // fields, NEVER `apiKey` — requiring one here silently degraded every Bedrock
+    // slot to the managed default). Checks the material, not the provider name, so
+    // a new auth shape extends this in one place next to the field mapping below.
+    const hasAuth =
+        !!apiKey ||
+        !!STR(s.awsBearerToken) ||
+        (!!STR(s.awsAccessKeyId) && !!STR(s.awsSecretAccessKey));
+    if (!provider || !hasAuth || !STR(model.model)) {
         return undefined;
     } // degrade: skip
-    const s = (cred.settings ?? {}) as Record<string, unknown>;
     return {
         provider: provider as BYOKProvider,
-        apiKey, // ciphertext — NOT decrypted here
+        // Ciphertext — NOT decrypted here. Empty for aws*-authenticated Bedrock;
+        // its build() reads the aws* fields and `decrypt('')` is a no-op ('').
+        apiKey: apiKey ?? '',
         model: model.model,
         // Stable attribution ids carried from the config model that resolved —
         // used to stamp the usage span (spend attributes by id, not model-name).

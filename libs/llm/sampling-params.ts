@@ -1,35 +1,40 @@
 /**
- * Generic sampling-param resolution — asks the provider module (via REGISTRY)
- * whether a slot may carry temperature, instead of hardcoding which providers
- * reject it. Provider-specific knowledge lives in the module's
- * `supportsSamplingParams()`; this stays provider-agnostic.
+ * Generic temperature resolution — asks the provider module (via REGISTRY) for the
+ * model's `temperaturePolicy`, instead of hardcoding which providers reject or pin
+ * it. Provider-specific knowledge lives in the module; this stays provider-agnostic.
  */
 import { REGISTRY } from './providers';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from './byok-config';
 
 /**
- * The temperature to actually send for a BYOK slot: the configured value,
- * unless the resolved provider module reports the model would reject it.
+ * The temperature to actually send for a BYOK slot, resolved through the model's
+ * {@link TemperaturePolicy}:
+ *   - `unsupported` → `undefined` (omit the field; the provider 400s if it's sent).
+ *   - `fixed`       → the pinned value, sent OVER whatever is stored (so an old
+ *                     config saved with e.g. 0 can't degrade always-thinking Kimi).
+ *   - `adjustable`  → the configured value, or `undefined` when none is set.
  *
- * Returns `undefined` both when nothing is configured and when the value must
- * be withheld — callers already treat `undefined` as "omit the field and let
- * the provider default apply", so no call site needs new branching. A provider
- * without a `supportsSamplingParams` method (every provider but Anthropic) is
- * treated as accepting the param.
+ * Returns `undefined` when the value must be withheld or nothing is configured —
+ * callers already treat `undefined` as "omit the field and let the provider default
+ * apply", so no call site needs new branching. A provider without a
+ * `temperaturePolicy` method (every provider but Anthropic) is treated as
+ * `adjustable`.
  */
 export function resolveByokTemperature(slot?: {
     provider?: BYOKProvider | string;
     model?: string;
     temperature?: number;
 }): number | undefined {
-    if (slot?.temperature === undefined) return undefined;
-
-    const provider = slot.provider as string | undefined;
+    const provider = slot?.provider as string | undefined;
     const module =
         provider && REGISTRY.has(provider) ? REGISTRY.get(provider) : undefined;
-    const allowed =
-        module?.supportsSamplingParams?.(slot as NormalizedModel) ?? true;
 
-    return allowed ? slot.temperature : undefined;
+    const policy = module?.temperaturePolicy?.(slot as NormalizedModel) ?? {
+        kind: 'adjustable' as const,
+    };
+
+    if (policy.kind === 'unsupported') return undefined;
+    if (policy.kind === 'fixed') return policy.value;
+    return slot?.temperature;
 }

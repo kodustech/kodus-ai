@@ -19,8 +19,7 @@ import type { ProviderCatalogModel } from '../kernel/catalog';
 // resolves the Anthropic protocol.
 const catalog: ProviderCatalogModel[] = [
     {
-        id: 'glm-5.2',
-        displayName: 'GLM 5.2',
+        id: 'glm-5.2', // label derived: "GLM 5.2"
         tier: 'recommended',
         benchmarkScore: 84,
         description:

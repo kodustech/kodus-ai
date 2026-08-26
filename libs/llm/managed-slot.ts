@@ -266,7 +266,7 @@ export function resolveManagedSlot(
 ): ManagedResolution {
     // Self-hosted: honor `API_LLM_PROVIDER_MODEL` (+ `API_OPEN_AI_API_KEY` /
     //   `API_OPENAI_FORCE_BASE_URL` / `API_VERTEX_AI_API_KEY`) so the customer's
-    //   own keys from .env drive the main model, the same way `getInternalModel`
+    //   own keys from .env drive the main model, the same way `buildModelFromSlot`
     //   does for helper calls.
     // Cloud (managed/trial): fall back to Kodus's bundled managed default
     //   (`DEFAULT_MODEL.model` = KODUS_TRIAL_MODEL → Fireworks-hosted
@@ -361,8 +361,13 @@ export function resolveManagedSlot(
         };
     }
 
-    // DeepSeek — legacy managed fallback, kept for any lingering explicit
-    // `deepseek-*` override still in flight. New default is Fireworks above.
+    // @deprecated DEAD BRANCH — unreachable in the current code. The managed
+    // default comes from `defaultModelOverride || DEFAULT_MODEL.model`, and both
+    // resolve to the Fireworks-prefixed `KODUS_TRIAL_MODEL` (handled above) —
+    // nothing produces a bare `deepseek-*` managed id anymore (BYOK DeepSeek goes
+    // through the registry, not here). Kept only as a legacy safety net; safe to
+    // remove together with API_DEEPSEEK_API_KEY / DEEPSEEK_API_KEY /
+    // API_DEEPSEEK_BASE_URL once we confirm no self-hosted install sets them.
     if (/^deepseek[-_.]/i.test(defaultModel)) {
         const deepseekKey =
             process.env.API_DEEPSEEK_API_KEY ||
@@ -380,9 +385,12 @@ export function resolveManagedSlot(
         };
     }
 
-    // Kimi (Moonshot AI) — legacy managed fallback, kept for any lingering
-    // `kimi-*` override still in flight. New default is Fireworks above. Routes
-    // through the moonshot registry module (createOpenAICompatible under the hood).
+    // @deprecated DEAD BRANCH — unreachable in the current code (same reasoning as
+    // the DeepSeek branch above): the managed default is always the Fireworks
+    // `KODUS_TRIAL_MODEL`, and BYOK Kimi routes through the moonshot registry
+    // module with a DB credential — NOT this env path. Kept only as a legacy
+    // safety net; safe to remove together with API_MOONSHOT_API_KEY /
+    // MOONSHOT_API_KEY once we confirm no self-hosted install sets them.
     if (/^kimi[-_.]/i.test(defaultModel)) {
         const moonshotKey =
             process.env.API_MOONSHOT_API_KEY ||

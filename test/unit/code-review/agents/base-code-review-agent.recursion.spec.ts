@@ -46,7 +46,6 @@ jest.mock('@libs/core/log/logger', () => ({
 jest.mock(
     '@libs/llm/byok-to-vercel',
     () => ({
-        byokToVercelModel: jest.fn(() => ({ id: 'fake-model' })),
         buildModelFromSlot: jest.fn(() => ({ id: 'fake-model' })),
         getModelName: jest.fn(() => 'fake-model'),
     }),

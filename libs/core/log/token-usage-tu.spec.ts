@@ -75,6 +75,15 @@ describe('deriveTu', () => {
         ).toBe('gpt-5');
         // bare name (no provider prefix) is unchanged
         expect(deriveTu(usage)!.model).toBe('claude-sonnet-5');
+        // Bedrock `:<version>` suffix is stripped to the model, NOT stored as "0"
+        // (which collapsed every Bedrock model onto one bucket). Regression.
+        expect(
+            deriveTu({
+                ...usage,
+                'gen_ai.response.model':
+                    'us.anthropic.claude-3-5-haiku-20241022-v1:0',
+            })!.model,
+        ).toBe('us.anthropic.claude-3-5-haiku-20241022-v1');
     });
 
     describe('byok view flags', () => {

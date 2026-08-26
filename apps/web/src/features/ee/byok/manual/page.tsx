@@ -10,10 +10,10 @@ import { ByokManualPageClient } from "./page.client";
 export default async function ByokManualPage({
     searchParams,
 }: {
-    // `model=<BYOKModelConfig.id>` opens the manual form in EDIT mode for that
-    // connected model (used by the Models tab for non-curated providers, whose
-    // models have no CuratedConnectPanel). `provider=<id>` pre-scopes an ADD to
-    // that provider (reusing its stored key). Absent ⇒ ADD a fresh model.
+    // `model=<BYOKModelConfig.id>` opens this form in EDIT mode for that connected
+    // model — the single editor for EVERY model, curated or not (the Models tab
+    // routes all edits here). `provider=<id>` pre-scopes an ADD to that provider
+    // (reusing its stored key). Absent ⇒ ADD a fresh model.
     searchParams: Promise<{ model?: string; provider?: string }>;
 }) {
     const { model: editModelId, provider: presetProvider } = await searchParams;

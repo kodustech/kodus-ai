@@ -55,9 +55,9 @@ const { parseViolations, scoreCase, normalizePath } = require('./behavioral-scor
 
 async function main() {
     const { applyModelEnv } = require('../shared/tier0-models');
-    const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+    const { buildEvalModel } = require('../shared/build-model');
     applyModelEnv(MODELKEY);
-    const model = byokToVercelModel(undefined, 'main', {});
+    const model = buildEvalModel({});
     const { generateText } = require('ai');
 
     let inTok = 0, outTok = 0, calls = 0, errored = 0;

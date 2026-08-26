@@ -76,15 +76,19 @@ export function buildCompilerUserPrompt(rule: Partial<IKodyRule>): string {
             );
         }
     }
-    parts.push(`</Rule>`, ``, `Compile this rule or decline. Return ONLY the JSON.`);
+    parts.push(
+        `</Rule>`,
+        ``,
+        `Compile this rule or decline. Return ONLY the JSON.`,
+    );
     return parts.join('\n');
 }
 
 /**
  * Adapt a raw LLM call (returning the compiler JSON) into the `RunCompiler`
  * the gate consumes. The engine passes a closure backed by
- * PromptRunnerService.builder().setParser(ParserType.ZOD, compilerOutputSchema);
- * tests pass a stub.
+ * `runStructuredReviewCall` (the AI SDK path, schema-validated against
+ * compilerOutputSchema); tests pass a stub.
  */
 export function makeLLMRunCompiler(
     call: (args: {
@@ -228,7 +232,10 @@ export async function compileRuleDetector(
     // recall: every incorrect example must be flagged.
     for (const e of bad) {
         if (!anyLineMatches(e.snippet)) {
-            return { detector: null, declineReason: 'missed-incorrect-example' };
+            return {
+                detector: null,
+                declineReason: 'missed-incorrect-example',
+            };
         }
     }
     // precision: no correct example may be flagged.
@@ -282,7 +289,11 @@ export interface DetectorHit {
  */
 export function runDetector(
     plan: DetectorPlan,
-    changedFiles: Array<{ filename: string; patchWithLinesStr?: string; patch?: string }>,
+    changedFiles: Array<{
+        filename: string;
+        patchWithLinesStr?: string;
+        patch?: string;
+    }>,
 ): DetectorHit[] {
     let rx: RegExp;
     try {

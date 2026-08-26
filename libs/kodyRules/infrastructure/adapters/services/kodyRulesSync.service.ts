@@ -1450,7 +1450,7 @@ export class KodyRulesSyncService {
     /**
      * Fast, non-persisting sync used for onboarding.
      * - Scans only known rule patterns (same list as full sync)
-     * - Uses Groq (OpenAI-compatible) via the existing PromptRunner/BYOK wrapper
+     * - Uses Groq (OpenAI-compatible) through the AI SDK structured call (BYOK model)
      * - Persists parsed rules as global (repositoryId = "global") for onboarding review
      */
     async syncRepositoryMainFast(

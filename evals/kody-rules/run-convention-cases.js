@@ -42,13 +42,13 @@ const near = (a, b) => a.file === b.file && Math.abs(a.line - b.line) <= LINE_TO
 
 async function main() {
     const { applyModelEnv } = require('../shared/tier0-models');
-    const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+    const { buildEvalModel } = require('../shared/build-model');
     applyModelEnv(MODELKEY);
     // --base-url overrides the tier0 spec's baseURL AFTER applyModelEnv (which
     // resets it), so a model like glm-5.2 can be pointed at a customer's own
     // openai-compatible router (e.g. verboo) instead of the default provider.
     if (args['base-url']) process.env.API_OPENAI_FORCE_BASE_URL = args['base-url'];
-    const model = byokToVercelModel(undefined, 'main', {});
+    const model = buildEvalModel({});
     const { generateText } = require('ai');
 
     let calls = 0, errored = 0, inTok = 0, outTok = 0;

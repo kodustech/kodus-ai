@@ -46,8 +46,10 @@ import {
     providerOwnsField,
 } from "../_components/_modals/edit-key/credential-config";
 import { useCatalogModel } from "../_data/catalog-context";
+import { formatModelLabel } from "../_data/model-label";
 import { PROVIDER_LABELS } from "../_components/catalog/model-card";
-import { VariantSelector } from "../_components/catalog/connect-panel";
+import { VariantSelector } from "../_components/catalog/variant-selector";
+import { planAccountChanged } from "./plan-account";
 import { ByokAdvancedSettings } from "../_components/_modals/edit-key/_components/advanced-settings";
 import { ByokBaseURLInput } from "../_components/_modals/edit-key/_components/baseurl-input";
 import { ByokCredentialsInput } from "../_components/_modals/edit-key/_components/credentials-input";
@@ -111,6 +113,19 @@ export function ByokManualPageClient({
         string,
         unknown
     >;
+
+    // A model in use by Routing (default / fallback / a per-agent override) has
+    // its identity frozen: swapping the model id here would silently repoint
+    // Routing. We lock only the model field — tuning stays editable — and the
+    // user removes it from Routing to change the model. Routing references the
+    // model ENTRY id (BYOKModelConfig.id), which is exactly editModelId.
+    const routing = existing?.routing ?? {};
+    const modelInUse =
+        isEditing &&
+        editModelId != null &&
+        (routing.defaultModelId === editModelId ||
+            routing.fallbackModelId === editModelId ||
+            Object.values(routing.taskOverrides ?? {}).includes(editModelId));
 
     // The provider is FIXED when we know it up front — editing a model, or an
     // "Add a model to <provider>" (?provider=). We lock it (no re-picking, no
@@ -245,9 +260,27 @@ export function ByokManualPageClient({
     const provider = form.watch("provider");
     const model = form.watch("model");
     const apiKey = form.watch("apiKey");
+    const watchedBaseURL = form.watch("baseURL");
+    // Title label: prefer the curated displayName, else derive from the id — so
+    // the header reads "Edit Kimi K2.6" / "Edit Deepseek V4 Pro", never a raw id.
+    const editedCatalogModel = useCatalogModel(existingConfig?.model ?? "");
+    const editLabel = existingConfig?.model
+        ? (editedCatalogModel?.displayName ??
+          formatModelLabel(existingConfig.model))
+        : "";
     const awsBearerToken = form.watch("awsBearerToken");
     const awsAccessKeyId = form.watch("awsAccessKeyId");
     const awsSecretAccessKey = form.watch("awsSecretAccessKey");
+
+    // A plan/variant whose endpoint is a DIFFERENT account than the stored one
+    // (Kimi Developer API on api.moonshot.ai vs Kimi Code Plan on api.kimi.com —
+    // separate billing, separate keys) can't reuse the stored key. Detect the
+    // account switch by endpoint host and force the plan's own key to be entered.
+    const planNeedsNewKey = planAccountChanged(
+        isEditing,
+        currentBaseURL,
+        watchedBaseURL,
+    );
 
     // Bedrock has no apiKey field; "creds entered" means either a bearer
     // token or the IAM access key + secret pair. Used to gate the "Test"
@@ -255,8 +288,9 @@ export function ByokManualPageClient({
     // because apiKey is always empty for that provider.
     const hasCredsForTest =
         // A stored key (edit, or add-to-existing-provider) is enough to save — the
-        // save reuses it and the probe is skipped when no new key is typed.
-        keyIsStored ||
+        // save reuses it and the probe is skipped when no new key is typed. But a
+        // plan switch to a different account needs a fresh key, not the stored one.
+        (keyIsStored && !planNeedsNewKey) ||
         providerHasCredentials({
             provider,
             apiKey,
@@ -274,6 +308,17 @@ export function ByokManualPageClient({
         if (!valid) return null;
 
         const data = form.getValues();
+
+        // Switched to a plan on a different account without pasting that account's
+        // key — the stored key belongs to the old account and would fail auth.
+        if (planNeedsNewKey && !data.apiKey.trim()) {
+            form.setError("apiKey", {
+                type: "manual",
+                message:
+                    "This plan uses a different account — paste its API key.",
+            });
+            return null;
+        }
         const hasNewCredentials = providerHasCredentials(data);
 
         // If the user changed the base URL on an openai_compatible config
@@ -493,13 +538,13 @@ export function ByokManualPageClient({
                             <Button
                                 size="icon-xs"
                                 variant="cancel"
-                                aria-label="Back to BYOK">
+                                aria-label="Back to providers">
                                 <ArrowLeftIcon />
                             </Button>
                         </Link>
                         <Page.Title className="text-balance">
                             {isEditing
-                                ? `Edit ${existingConfig?.model}`
+                                ? `Edit ${editLabel}`
                                 : lockedProviderLabel
                                   ? `Add a ${lockedProviderLabel} model`
                                   : "Configure a model manually"}
@@ -538,10 +583,21 @@ export function ByokManualPageClient({
                                 </h3>
                             </CardHeader>
                             <CardContent className="flex flex-col gap-4">
-                                {showKeyInput ? (
+                                {/* Show the key field when the user opened it OR the
+                                    plan moved to a different account. Derived (not
+                                    sticky state) so switching back to the stored
+                                    account restores the "using stored key" view. */}
+                                {showKeyInput || planNeedsNewKey ? (
                                     <ErrorBoundary
                                         resetKeys={[provider, model]}
                                         fallbackRender={() => null}>
+                                        {planNeedsNewKey && (
+                                            <p className="text-warning border-warning/30 bg-warning/10 mb-1 rounded-md border px-3 py-2 text-xs">
+                                                This plan runs on a different
+                                                account than your stored key —
+                                                paste the key for this plan.
+                                            </p>
+                                        )}
                                         <Suspense fallback={null}>
                                             <ByokCredentialsInput />
                                         </Suspense>
@@ -672,6 +728,7 @@ export function ByokManualPageClient({
                                                     credentialStored={
                                                         keyIsStored
                                                     }
+                                                    lockedInUse={modelInUse}
                                                 />
                                             </Suspense>
                                         </ErrorBoundary>
@@ -813,6 +870,11 @@ function ModelPlanAndEndpoint({ isEditing }: { isEditing: boolean }) {
             shouldValidate: true,
             shouldDirty: true,
         });
+        // Plans are separate accounts — a key typed for one must not leak into the
+        // other. Clear it on every switch so each plan starts from its own key
+        // (or the stored key, when the plan matches the stored account).
+        form.setValue("apiKey", "", { shouldValidate: true });
+        form.clearErrors("apiKey");
         form.setValue(
             "maxConcurrentRequests",
             next.maxConcurrentRequests ?? null,
@@ -834,14 +896,34 @@ function ModelPlanAndEndpoint({ isEditing }: { isEditing: boolean }) {
 
     return (
         <div className="flex flex-col gap-4">
-            {hasVariants && (
-                <VariantSelector
-                    variants={variants}
-                    selectedId={activeVariant?.id}
-                    docsUrl={curated?.docsUrl}
-                    onSelect={applyVariant}
-                />
-            )}
+            {hasVariants &&
+                (isEditing ? (
+                    // A plan is a SEPARATE account (its own key + endpoint) stored on
+                    // the credential, so it can't be switched on an existing model.
+                    // Show the current plan read-only and point at the real path:
+                    // connect the provider again with the other plan's key.
+                    <div className="flex flex-col gap-1.5">
+                        <span className="text-text-secondary text-xs font-medium">
+                            Plan
+                        </span>
+                        <div className="bg-card-lv2 text-text-secondary rounded-lg px-3 py-2 text-sm">
+                            {activeVariant?.label ?? "—"}
+                        </div>
+                        <p className="text-text-tertiary text-xs text-pretty">
+                            The plan is fixed for this connection — each plan is a
+                            separate account with its own key and endpoint. To run
+                            this model on a different plan, add the provider again
+                            with that plan's key (a new connection).
+                        </p>
+                    </div>
+                ) : (
+                    <VariantSelector
+                        variants={variants}
+                        selectedId={activeVariant?.id}
+                        docsUrl={curated?.docsUrl}
+                        onSelect={applyVariant}
+                    />
+                ))}
             {endpoint && (
                 <p className="text-text-tertiary text-xs text-pretty">
                     Endpoint:{" "}

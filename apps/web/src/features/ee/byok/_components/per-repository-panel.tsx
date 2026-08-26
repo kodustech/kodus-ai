@@ -14,7 +14,6 @@ import {
     ExternalLinkIcon,
     FolderIcon,
 } from "lucide-react";
-import { cn } from "src/core/utils/components";
 
 import { providerFromModel } from "../_utils";
 import { ProviderAvatar } from "./provider-avatar";

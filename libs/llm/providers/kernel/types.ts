@@ -16,9 +16,11 @@ import type { z } from 'zod';
 import type {
     ModelCapabilities as BaseModelCapabilities,
     ReasoningConfig,
+    TemperaturePolicy,
 } from '@libs/llm/providers/kernel/model-types';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import type { ProviderCatalogModel } from './catalog';
+import type { ModelReasoningTraits } from './reasoning-traits';
 
 /**
  * Provider capability descriptor. Extends the reasoning-only base
@@ -90,6 +92,11 @@ export interface CatalogModel {
 export interface ResolvedListingCreds {
     apiKey?: string;
     baseURL?: string;
+    /** Amazon Bedrock auth — the bearer token authenticates the control-plane
+     *  list call (`Authorization: Bearer …`) and the region scopes its host. Both
+     *  are decrypted by the org-layer fetcher; the descriptor stays pure. */
+    awsBearerToken?: string;
+    awsRegion?: string;
 }
 
 /**
@@ -116,6 +123,12 @@ export type ModelListing =
           requiresBaseURL?: boolean;
           /** Optional request timeout in ms. */
           timeoutMs?: number;
+          /** Curated models to return when the live call CAN'T run — no usable
+           *  creds, or the fetch failed on a non-candidate (saved/keyless) path.
+           *  Lets a provider that can only live-list WITH creds (e.g. Bedrock via a
+           *  bearer token) still offer a sane picker before/without them, without a
+           *  full curated `catalog`. Absent ⇒ the fetcher's curated-catalog fallback. */
+          fallbackModels?: CatalogModel[];
           /** Build the `/models` URL (pure). */
           url(creds: ResolvedListingCreds): string;
           /** Build request headers (pure). */
@@ -165,11 +178,20 @@ export interface ProviderModule {
     /** Normalize raw usage → NormalizedUsage. STUB in Phase 1; Phase 3 implements. */
     normalizeUsage(raw: unknown): NormalizedUsage;
     /** Optional reasoning mapping: canonical effort → provider-native options.
-     *  Folded from reasoning-options.ts in 01-04. */
+     *  Folded from reasoning-options.ts in 01-04. Emits the disable-vs-omit shape
+     *  from THIS model's `reasoningTraits` (canDisableThinking) in the provider's
+     *  own namespace. */
     reasoning?(
         cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions;
+    /** Per-MODEL reasoning facts (thinks-by-default / can-disable / forced-
+     *  tool_choice support + thinking rejection). The SINGLE source a model's
+     *  reasoning behavior is declared; generic code turns it into a structured
+     *  plan via `planStructuredCall` and derives `supportsReasoning` from it.
+     *  Absent ⇒ `NON_REASONING_TRAITS` (a non-thinking provider, unchanged
+     *  behavior). Sibling to `reasoning()` — the module owns both. */
+    reasoningTraits?(cfg: ProviderBuildConfig): ModelReasoningTraits;
     /** Optional system-prompt cache hint: the `providerOptions` to attach to the
      *  system message so a multi-step loop reads the (static) system prompt from
      *  cache instead of re-billing it. Provider-specific SHAPE lives here (only the
@@ -180,15 +202,16 @@ export interface ProviderModule {
     systemCacheControl?(
         cfg: ProviderBuildConfig,
     ): Record<string, unknown> | undefined;
-    /** Whether sampling params (temperature / top_p / top_k) may be sent for
-     *  this model. Provider-specific knowledge lives HERE (the single source),
-     *  sibling to `reasoning()`: only the module knows, per its own id + model
-     *  id, whether a request carrying temperature 400s — e.g. real Anthropic
-     *  4.7+ rejects them while `anthropic_compatible` (Kimi/Z.ai) accepts them.
-     *  Absent/undefined ⇒ the provider accepts sampling params (the default for
-     *  every provider but Anthropic); generic callers treat a missing method as
-     *  `true`. */
-    supportsSamplingParams?(cfg: ProviderBuildConfig): boolean;
+    /** How this model treats `temperature` — the ONE per-model answer, sibling to
+     *  `reasoning()`. Only the module knows, per its own id + model id, whether a
+     *  request carrying temperature 400s (real Anthropic 4.7+), must be pinned to a
+     *  single value (always-thinking Anthropic-protocol upstreams — Kimi k2.7-code/
+     *  k3, GLM-5.3 — where the protocol fixes it to 1 while thinking), or is free
+     *  (`anthropic_compatible` Kimi k2.6 / DeepSeek, and every non-Anthropic
+     *  provider). Both the runtime (`resolveByokTemperature`) and the connect form
+     *  read this ONE shape. Absent/undefined ⇒ the caller falls back to the static
+     *  `capabilities().supportsTemperature` flag (every provider but Anthropic). */
+    temperaturePolicy?(cfg: ProviderBuildConfig): TemperaturePolicy;
     /** The Vercel AI SDK `providerOptions` namespace key this provider's adapter
      *  listens on, per requested id (a module may serve several ids with
      *  DIFFERENT namespaces — the openai module serves `openai` → 'openai' and

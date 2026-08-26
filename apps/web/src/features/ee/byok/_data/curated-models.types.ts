@@ -1,6 +1,4 @@
 export type ModelTier = "recommended" | "bestValue" | "budget" | "other";
-export type SpeedRating = "fast" | "medium" | "slow";
-export type CostTier = "$" | "$$" | "$$$";
 export type BadgeType = "tested" | "untested" | "legacy";
 
 export type ModelVariant = {
@@ -32,11 +30,7 @@ export type CuratedModel = {
      *  recommended card (e.g. "Best balance", "Highest quality", "Most
      *  affordable"). Present only on the curated hero picks. */
     recommendationLabel?: string;
-    benchmarkScore: number;
     description: string;
-    speed: SpeedRating;
-    contextWindow: string;
-    costTier: CostTier;
     strengths: string[];
     weaknesses: string[];
     apiKeyUrl: string;
@@ -49,8 +43,6 @@ export type CuratedModel = {
     variants?: ModelVariant[];
     defaultVariantId?: string;
     docsUrl?: string;
-    latencyP50Ms?: number;
-    errorRatePct?: number;
 };
 
 export type ModelAnnotation = {

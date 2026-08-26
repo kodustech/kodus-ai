@@ -39,7 +39,6 @@ import {
 } from './messageTemplateProcessor.service';
 import { ObservabilityService } from '@libs/core/log/observability.service';
 import { CodeManagementService } from '@libs/platform/infrastructure/adapters/services/codeManagement.service';
-import { CodeReviewPipelineContext } from '@libs/code-review/pipeline/context/code-review-pipeline.context';
 import { getModelName, KODUS_TRIAL_MODEL } from '@libs/llm/byok-to-vercel';
 import { LLM_TASK } from '@libs/llm/byok-config';
 import {
@@ -103,10 +102,10 @@ export class CommentManagerService implements ICommentManagerService {
     /**
      * Run a one-shot text prompt for the PR summary through the v5 (Vercel AI
      * SDK) path so the user's BYOK model — including Claude-on-Vertex — is
-     * honored. The legacy v2 langchain path (PromptRunnerService) only spoke
-     * Gemini on Vertex, so a Claude-on-Vertex BYOK crashed the summary step
-     * before suggestions could be posted. Defaults to deepseek-v4-flash
-     * (DeepSeek) when no BYOK is configured (cloud/trial default).
+     * honored. The removed legacy path only spoke Gemini on Vertex, so a
+     * Claude-on-Vertex BYOK crashed the summary step before suggestions could be
+     * posted. Defaults to deepseek-v4-flash (DeepSeek) when no BYOK is configured
+     * (cloud/trial default).
      */
     private async runSummaryPromptV5(params: {
         slot: NormalizedModel | undefined;

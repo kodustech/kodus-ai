@@ -83,8 +83,15 @@ describe('moonshotModule — Anthropic-protocol brand contract', () => {
         expect(caps.usageGranularity).toBe('output_only');
         // The Anthropic system prompt is cacheable — the brand inherits it.
         expect(caps.promptCaching).toBe(true);
-        // Identical to the anthropic module for the same id (one source of truth).
-        expect(caps).toEqual(anthropicModule.capabilities('kimi-k2.7-code'));
+        // Kimi is a THINKING model → the brand overrides supportsReasoning to true
+        // (the claude-only reasoning-config resolver would report false, which the
+        // UI showed as "doesn't support reasoning").
+        expect(caps.supportsReasoning).toBe(true);
+        // Otherwise identical to the anthropic module for the same id (one source).
+        expect(caps).toEqual({
+            ...anthropicModule.capabilities('kimi-k2.7-code'),
+            supportsReasoning: true,
+        });
     });
 
     it('emits NO inline cache marker — Kimi caches automatically (marker ignored)', () => {
@@ -94,16 +101,35 @@ describe('moonshotModule — Anthropic-protocol brand contract', () => {
         expect(moonshotModule.systemCacheControl!(moonshotCfg)).toBeUndefined();
     });
 
-    it("reasoning 'none' → off; a set effort → Anthropic budget thinking", () => {
+    it("reasoning 'none' → OMITS for always-thinking k2.7-code; EXPLICIT disabled for k2.6; a set effort → Anthropic budget thinking", () => {
+        // k2.7-code (moonshotCfg) thinks PERMANENTLY and exposes no disable —
+        // omitting the config is the only "off"; the executor reroutes it to json.
         expect(moonshotModule.reasoning!(moonshotCfg, 'none')).toEqual({});
+        // K2.6 CAN be disabled — "off" is said out loud (the PR#144/#145/#146 fix).
+        const k26 = { ...moonshotCfg, model: 'kimi-k2.6' };
+        expect(moonshotModule.reasoning!(k26, 'none')).toEqual({
+            anthropic: { thinking: { type: 'disabled' } },
+        });
         // Compatible endpoints never implement adaptive thinking → always budget.
         expect(
             JSON.stringify(moonshotModule.reasoning!(moonshotCfg, 'medium')),
         ).toMatch(/"type":"enabled".*budgetTokens/);
     });
 
-    it('accepts sampling params (Kimi over the compatible endpoint is not gated)', () => {
-        expect(moonshotModule.supportsSamplingParams!(moonshotCfg)).toBe(true);
+    it('temperature policy: k2.7-code is always-thinking → PINNED to 1', () => {
+        // The Anthropic protocol fixes temperature to 1 while thinking, and
+        // k2.7-code reasons unconditionally, so 1 is its only sound value.
+        expect(moonshotModule.temperaturePolicy!(moonshotCfg)).toEqual({
+            kind: 'fixed',
+            value: 1,
+        });
+    });
+
+    it('temperature policy: k2.6 is disable-able → adjustable (not gated, not pinned)', () => {
+        const k26 = { ...moonshotCfg, model: 'kimi-k2.6' };
+        expect(moonshotModule.temperaturePolicy!(k26)).toEqual({
+            kind: 'adjustable',
+        });
     });
 });
 

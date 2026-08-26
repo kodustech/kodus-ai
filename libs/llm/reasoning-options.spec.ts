@@ -7,6 +7,10 @@ import {
     type ReasoningEffort,
 } from '@libs/llm/reasoning-options';
 
+// The tool_choice-forcing classification + registry-wide lock moved to the
+// trait model: see providers/thinking-forced-toolchoice.contract.spec.ts
+// (planStructuredCall over capabilities().structuredOutput + reasoningTraits).
+
 describe('buildReasoningProviderOptions', () => {
     describe('returns {} when reasoning is off or provider is missing', () => {
         const cases: Array<{

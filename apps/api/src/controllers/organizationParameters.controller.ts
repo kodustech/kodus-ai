@@ -403,6 +403,12 @@ export class OrganizationParametersController {
             properties: {
                 provider: { type: 'string' },
                 model: { type: 'string' },
+                // Optional SAFE non-secret overrides (region/location) so an edit
+                // that changed them is probed as it will be saved. baseURL is not
+                // accepted: the stored secret must not be sent to a caller-supplied
+                // host (see TestByokModelUseCase).
+                awsRegion: { type: 'string' },
+                vertexLocation: { type: 'string' },
             },
         },
     })
@@ -412,7 +418,13 @@ export class OrganizationParametersController {
             "Validate a model id against the org's SAVED BYOK provider (credentials resolved server-side). Surfaces the provider's real error (e.g. model-not-found) at config time instead of at review time.",
     })
     public async testByokModel(
-        @Body() body: { provider: string; model: string },
+        @Body()
+        body: {
+            provider: string;
+            model: string;
+            awsRegion?: string;
+            vertexLocation?: string;
+        },
     ): Promise<TestByokResult> {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId) {
@@ -423,6 +435,8 @@ export class OrganizationParametersController {
         return await this.testByokModelUseCase.execute({
             provider: body.provider,
             model: body.model,
+            awsRegion: body.awsRegion,
+            vertexLocation: body.vertexLocation,
             organizationAndTeamData: { organizationId },
         });
     }

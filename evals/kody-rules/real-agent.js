@@ -8,7 +8,7 @@
 //
 //   node evals/kody-rules/real-agent.js [--runs=3] [--model=gpt-5.4-mini]
 //
-// The model is driven through the real `byokToVercelModel` self-hosted path:
+// The model is driven through the real `buildModelFromSlot` self-hosted path:
 // API_LLM_PROVIDER_MODEL + API_OPEN_AI_API_KEY (+ optional API_OPENAI_FORCE_BASE_URL).
 // esbuild require-hook for .ts (NOT ts-node): agent-loop.ts places value
 // imports mid-file (line 296), which ts-node/transpile-only leaves un-hoisted →
@@ -60,7 +60,7 @@ const MODEL_TARGET = KODY_TARGETS[MODELKEY] || {};
 const OCC_MIN = +(args['occ-min'] ?? MODEL_TARGET.occMin ?? 0);
 const SPEC_MIN = +(args['spec-min'] ?? MODEL_TARGET.specMin ?? 95);
 
-// Model presets → drive the real self-hosted byokToVercelModel path via env.
+// Model presets → drive the real self-hosted buildModelFromSlot path via env.
 const MODELS = {
     'gpt-5.4-mini': { model: 'gpt-5.4-mini', keyEnv: ['BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'] },
     'gpt-5.4': { model: 'gpt-5.4', keyEnv: ['BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'] },
