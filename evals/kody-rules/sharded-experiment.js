@@ -12,7 +12,7 @@
 // Reuses the SAME fixtures (github-cases.json) and the SAME occurrence-recall
 // metric as real-agent.js, so the number is apples-to-apples with the agentic
 // engine (which measured ~36-53% on gpt-5.4). Model routing goes through the
-// same production seam (byokToVercelModel via applyModelEnv), so --model matches.
+// same production seam (buildModelFromSlot via applyModelEnv), so --model matches.
 const fs = require('fs');
 const esbuild = require('esbuild');
 require.extensions['.ts'] = function (module, filename) {

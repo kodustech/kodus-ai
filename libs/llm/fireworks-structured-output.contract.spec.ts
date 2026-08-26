@@ -5,7 +5,7 @@
  *
  * Bug (PR "fix(llm): enable supportsStructuredOutputs on Fireworks trial
  * fallback", 2026-08-14): the trial/no-BYOK default path
- * (accounts/fireworks/models/* in byokToVercelModel) builds its
+ * (accounts/fireworks/models/* in buildModelFromSlot) builds its
  * `createOpenAICompatible` client directly, bypassing the BYOK provider
  * switch — so an earlier fix that added `supportsStructuredOutputs: true`
  * for BYOK-configured OpenAI-compatible providers had NO EFFECT for trial

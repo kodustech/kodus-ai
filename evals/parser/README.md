@@ -21,7 +21,7 @@ Run: `pnpm test --testPathPatterns="finder.agent.spec"`
 ## Layer 2 — recovery quality (real LLM, on demand)
 
 `run.js` + `fixtures.json`. Feeds REAL captured prose payloads through the ACTUAL
-production `recoverFindingsFromProse` (via `getInternalModel`, same per-mode
+production `recoverFindingsFromProse` (via `buildModelFromSlot`, same per-mode
 resolution prod uses) and checks the recovery is faithful: it extracts at least
 the expected number of findings and references the right files.
 

@@ -266,7 +266,7 @@ export function resolveManagedSlot(
 ): ManagedResolution {
     // Self-hosted: honor `API_LLM_PROVIDER_MODEL` (+ `API_OPEN_AI_API_KEY` /
     //   `API_OPENAI_FORCE_BASE_URL` / `API_VERTEX_AI_API_KEY`) so the customer's
-    //   own keys from .env drive the main model, the same way `getInternalModel`
+    //   own keys from .env drive the main model, the same way `buildModelFromSlot`
     //   does for helper calls.
     // Cloud (managed/trial): fall back to Kodus's bundled managed default
     //   (`DEFAULT_MODEL.model` = KODUS_TRIAL_MODEL → Fireworks-hosted

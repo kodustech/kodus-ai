@@ -115,7 +115,7 @@ function gtSites(uuid) {
 }
 
 // DigitalOcean-hosted models (not in the tier0 registry) — wire the env the
-// self-hosted byokToVercelModel path reads, same as real-agent.js.
+// self-hosted buildModelFromSlot path reads, same as real-agent.js.
 const DO_MODELS = {
     'deepseek-4-flash': 'deepseek-4-flash',
     'deepseek-v4-pro': 'deepseek-v4-pro',

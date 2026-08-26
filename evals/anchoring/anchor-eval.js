@@ -165,7 +165,7 @@ async function runFinder(model, caseData) {
 }
 
 async function main() {
-    // tier-0 model ids build through the production byokToVercelModel routing
+    // tier-0 model ids build through the production buildModelFromSlot routing
     // (any supported provider); legacy local presets build directly.
     const { TIER0, applyModelEnv } = require('../shared/tier0-models');
     let model;
