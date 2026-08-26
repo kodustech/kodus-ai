@@ -17,6 +17,14 @@ export interface TestByokModelInput {
     provider: string;
     model: string;
     organizationAndTeamData: OrganizationAndTeamData;
+    // Optional NON-SECRET setting overrides from the edit form. When the user
+    // changes an endpoint/region without re-entering the secret, the probe must
+    // exercise the settings BEING SAVED, not the stored ones — otherwise a broken
+    // new baseURL/region passes "Test & save" and is persisted broken. Secrets are
+    // never accepted here (blank = keep the stored ciphertext, resolved server-side).
+    baseURL?: string;
+    awsRegion?: string;
+    vertexLocation?: string;
 }
 
 /**
@@ -61,11 +69,29 @@ export class TestByokModelUseCase {
             );
         }
 
+        // Merge any NON-SECRET setting overrides (from an edit that changed the
+        // endpoint/region but kept the stored secret) onto the resolved slot.
+        const baseURL = input.baseURL?.trim() || slot.baseURL;
+        const awsRegion = input.awsRegion?.trim() || slot.awsRegion;
+        const vertexLocation = input.vertexLocation?.trim() || slot.vertexLocation;
+        const changedSetting =
+            (!!input.baseURL?.trim() && input.baseURL.trim() !== slot.baseURL) ||
+            (!!input.awsRegion?.trim() &&
+                input.awsRegion.trim() !== slot.awsRegion) ||
+            (!!input.vertexLocation?.trim() &&
+                input.vertexLocation.trim() !== slot.vertexLocation);
+
         // 1) Authoritative catalog check (accurate — uses the org's own creds).
+        // SKIP it when a non-secret setting changed: the catalog is fetched with
+        // the STORED endpoint/region, so it can't validate the new one — probe the
+        // overridden endpoint directly instead (step 2) so a broken new setting is
+        // caught here instead of being persisted.
         const start = Date.now();
-        const catalog = await this.getModelsByProviderUseCase
-            .execute(input.provider, input.organizationAndTeamData)
-            .catch(() => null);
+        const catalog = changedSetting
+            ? null
+            : await this.getModelsByProviderUseCase
+                  .execute(input.provider, input.organizationAndTeamData)
+                  .catch(() => null);
 
         if (catalog?.models?.length) {
             const found = catalog.models.some((m) => m.id === model);
@@ -86,17 +112,18 @@ export class TestByokModelUseCase {
             }
         }
 
-        // 2) No/curated catalog → probe the provider directly with the model.
+        // 2) No/curated catalog (or a changed setting) → probe the provider
+        // directly, using the overridden endpoint/region where the edit changed it.
         return this.testByokConnectionUseCase.execute({
             provider: input.provider,
             model,
             apiKey: slot.apiKey,
-            baseURL: slot.baseURL,
-            vertexLocation: slot.vertexLocation,
+            baseURL,
+            vertexLocation,
             awsBearerToken: slot.awsBearerToken,
             awsAccessKeyId: slot.awsAccessKeyId,
             awsSecretAccessKey: slot.awsSecretAccessKey,
-            awsRegion: slot.awsRegion,
+            awsRegion,
             awsSessionToken: slot.awsSessionToken,
         });
     }

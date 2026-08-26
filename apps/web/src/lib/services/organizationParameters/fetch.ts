@@ -105,6 +105,11 @@ export const testBYOK = async (params: {
 export const testBYOKModel = async (params: {
     provider: string;
     model: string;
+    // NON-SECRET setting overrides — so editing an endpoint/region without
+    // re-typing the secret probes the config being saved, not the stored one.
+    baseURL?: string;
+    awsRegion?: string;
+    vertexLocation?: string;
 }): Promise<TestBYOKResult> => {
     const envelope = await axiosAuthorized.post<{ data: TestBYOKResult }>(
         ORGANIZATION_PARAMETERS_PATHS.TEST_BYOK_MODEL,

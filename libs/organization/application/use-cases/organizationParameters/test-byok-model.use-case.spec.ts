@@ -128,6 +128,41 @@ describe('TestByokModelUseCase', () => {
         );
     });
 
+    it('a CHANGED non-secret setting skips the catalog and probes the OVERRIDDEN endpoint', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: moonshot,
+            // The stored-endpoint catalog WOULD say "found" — but it validates the
+            // OLD endpoint, so a changed baseURL must not ride it.
+            catalog: [{ id: 'kimi-k2.7-code', name: 'Kimi' }],
+        });
+        const res = await useCase.execute({
+            provider: 'openai_compatible',
+            model: 'kimi-k2.7-code',
+            organizationAndTeamData: org,
+            baseURL: 'https://new.endpoint/v1', // differs from the stored baseURL
+        });
+        // Catalog shortcut skipped → a real probe ran against the NEW endpoint.
+        expect(res.ok).toBe(true);
+        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({ baseURL: 'https://new.endpoint/v1' }),
+        );
+    });
+
+    it('the SAME non-secret setting keeps the fast catalog path (no needless probe)', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: moonshot,
+            catalog: [{ id: 'kimi-k2.7-code', name: 'Kimi' }],
+        });
+        const res = await useCase.execute({
+            provider: 'openai_compatible',
+            model: 'kimi-k2.7-code',
+            organizationAndTeamData: org,
+            baseURL: 'https://api.moonshot.ai/v1', // equal to stored → not a change
+        });
+        expect(res.ok).toBe(true);
+        expect(connectionUseCase.execute).not.toHaveBeenCalled();
+    });
+
     it('rejects when the org has no saved slot for the provider', async () => {
         const { useCase } = build({ configValue: null });
         await expect(

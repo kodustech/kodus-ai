@@ -123,6 +123,13 @@ export function RotatePanel({
                 : await testBYOKModel({
                       provider: credential.provider,
                       model: probeModelId,
+                      // No new secret was typed, so the stored ciphertext is
+                      // re-used server-side — but a changed NON-SECRET setting
+                      // (baseURL/region/location) must be probed as it will be
+                      // saved, else a broken new endpoint sails through the save.
+                      baseURL: values.baseURL?.trim() || undefined,
+                      awsRegion: values.awsRegion?.trim() || undefined,
+                      vertexLocation: values.vertexLocation?.trim() || undefined,
                   });
             setTestState(
                 result.ok

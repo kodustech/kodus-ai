@@ -168,9 +168,18 @@ describe('PermissionValidationService — BYOK model integrity (never silently m
         );
     };
 
+    // The integrity gate is scoped to the code-review flow (its contextName), so
+    // a broken codeReview credential never blocks the chat/issues callers that
+    // route their own model. Exercise it as the review pipeline does.
+    const REVIEW_CTX = 'ValidatePrerequisitesStage';
+
     it('BYOK present + model unroutable + NOT trial → BYOK_REQUIRED (never managed)', async () => {
         const svc = makeService('active');
-        const res = await svc.validateExecutionPermissions(orgTeam, undefined);
+        const res = await svc.validateExecutionPermissions(
+            orgTeam,
+            undefined,
+            REVIEW_CTX,
+        );
         expect(res.allowed).toBe(false);
         expect(res.errorType).toBe(ValidationErrorType.BYOK_REQUIRED);
         expect(res.metadata).toMatchObject({ byokModelUnresolvable: true });
@@ -178,8 +187,24 @@ describe('PermissionValidationService — BYOK model integrity (never silently m
 
     it('BYOK present + model unroutable + TRIAL → allowed (Kodus foots managed credits)', async () => {
         const svc = makeService('trial');
-        const res = await svc.validateExecutionPermissions(orgTeam, undefined);
+        const res = await svc.validateExecutionPermissions(
+            orgTeam,
+            undefined,
+            REVIEW_CTX,
+        );
         // The integrity gate exempts trial; the review proceeds (managed credits).
         expect(res.allowed).toBe(true);
+    });
+
+    it('same broken BYOK from a NON-review caller (chat/issues) → NOT blocked (probe is review-scoped)', async () => {
+        const svc = makeService('active');
+        // A broken codeReview credential must not take down chat/issues, which
+        // route their OWN task's model — the codeReview probe stays out of them.
+        const res = await svc.validateExecutionPermissions(
+            orgTeam,
+            undefined,
+            'ChatWithKodyFromGitUseCase',
+        );
+        expect(res.errorType).not.toBe(ValidationErrorType.BYOK_REQUIRED);
     });
 });

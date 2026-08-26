@@ -82,6 +82,16 @@ export type ExecutionPermissionValidationOptions = {
     usersWithLicense?: UserWithLicense[];
 };
 
+/**
+ * `contextName` the code-review pipeline passes to validateExecutionPermissions
+ * (ValidatePrerequisitesStage.name). The BYOK codeReview-integrity probe runs
+ * ONLY for this context so a broken codeReview credential never blocks the chat
+ * or issues callers, which route their own task's model. Matched by literal to
+ * avoid a code-review → ee/shared import cycle; keep in sync with that stage's
+ * class name.
+ */
+const CODE_REVIEW_PERMISSION_CONTEXT = 'ValidatePrerequisitesStage';
+
 @Injectable()
 export class PermissionValidationService {
     private readonly isCloud: boolean;
@@ -152,37 +162,54 @@ export class PermissionValidationService {
     ): Promise<ValidationResult> {
         try {
             // BYOK integrity — enforced UNIFORMLY (no dev/prod split): if the org
-            // has a stored BYOK config but its codeReview model can't be routed
-            // (missing/incomplete credential, or a BLOCKED verdict), the review must
-            // NEVER silently fall to the managed default — the org configured a model
-            // and it's broken, so surface it (reusing BYOK_REQUIRED) and let them fix
-            // the credential. The ONE exception is an active trial: Kodus foots the
-            // managed credits there (the trial branch below owns that path), so a
-            // trial keeps running while it has quota. Runs BEFORE the dev short-circuit
-            // so a broken BYOK is caught locally exactly as in production.
+            // configured a codeReview model but its credential is broken, the review
+            // must NEVER silently fall to the managed default — surface it (reusing
+            // BYOK_REQUIRED) and let them fix the credential. Three deliberate scopes:
+            //   • ONLY the code-review flow. validateExecutionPermissions is shared
+            //     with chat and issues, which route their OWN task's model; a broken
+            //     codeReview credential must not block those unrelated flows.
+            //   • ONLY a POSITIVELY-broken credential (a model was NAMED for
+            //     codeReview but couldn't be routed — the `verdict.modelId && !slot`
+            //     signal resolveTaskSlot itself uses). A config that simply doesn't
+            //     bind codeReview legitimately uses the managed default and passes.
+            //   • ONLY outside an active trial: Kodus foots the managed credits there
+            //     (the trial branch below owns that path), so a trial keeps running.
+            // Resolves the verdict from the ALREADY-LOADED config (no second DB read).
+            // Runs BEFORE the dev short-circuit so a broken BYOK is caught locally
+            // exactly as in production.
             try {
-                const storedByok = await this.getBYOKConfig(
-                    organizationAndTeamData,
-                );
+                // The code-review pipeline is the only caller that hard-requires a
+                // routable codeReview slot; keep this coupled to that stage's context
+                // by name to avoid a code-review → ee/shared import cycle.
+                const isCodeReviewFlow =
+                    contextName === CODE_REVIEW_PERMISSION_CONTEXT;
+                const storedByok = isCodeReviewFlow
+                    ? await this.getBYOKConfig(organizationAndTeamData)
+                    : undefined;
                 if (storedByok) {
-                    const routedSlot = await this.resolveTaskSlot(
-                        organizationAndTeamData,
+                    const { slot, verdict } = resolveTaskSlotFromConfig(
+                        storedByok,
                         LLM_TASK.codeReview,
                     );
-                    if (!routedSlot) {
+                    // A NAMED model that produced no slot = incomplete credential
+                    // (the exact "configured but broken" case). An unnamed/absent
+                    // codeReview binding leaves verdict.modelId falsy → not broken.
+                    const credentialBroken = !!verdict?.modelId && !slot;
+                    if (credentialBroken) {
                         const status = await this.getSubscriptionStatus(
                             organizationAndTeamData,
                         );
                         if (status !== 'trial') {
                             this.logger.warn({
                                 message:
-                                    'BYOK configured but its model could not be routed — blocking (never falls to the managed default outside trial)',
+                                    'BYOK codeReview model configured but its credential is incomplete — blocking (never falls to the managed default outside trial)',
                                 context:
                                     contextName ||
                                     PermissionValidationService.name,
                                 metadata: {
                                     organizationAndTeamData,
                                     subscriptionStatus: status,
+                                    unroutableModelId: verdict?.modelId,
                                 },
                             });
                             return {
