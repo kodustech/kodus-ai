@@ -160,36 +160,53 @@ export class PermissionValidationService {
             // managed credits there (the trial branch below owns that path), so a
             // trial keeps running while it has quota. Runs BEFORE the dev short-circuit
             // so a broken BYOK is caught locally exactly as in production.
-            const storedByok = await this.getBYOKConfig(organizationAndTeamData);
-            if (storedByok) {
-                const routedSlot = await this.resolveTaskSlot(
+            try {
+                const storedByok = await this.getBYOKConfig(
                     organizationAndTeamData,
-                    LLM_TASK.codeReview,
                 );
-                if (!routedSlot) {
-                    const status = await this.getSubscriptionStatus(
+                if (storedByok) {
+                    const routedSlot = await this.resolveTaskSlot(
                         organizationAndTeamData,
+                        LLM_TASK.codeReview,
                     );
-                    if (status !== 'trial') {
-                        this.logger.warn({
-                            message:
-                                'BYOK configured but its model could not be routed — blocking (never falls to the managed default outside trial)',
-                            context:
-                                contextName ||
-                                PermissionValidationService.name,
-                            metadata: {
-                                organizationAndTeamData,
+                    if (!routedSlot) {
+                        const status = await this.getSubscriptionStatus(
+                            organizationAndTeamData,
+                        );
+                        if (status !== 'trial') {
+                            this.logger.warn({
+                                message:
+                                    'BYOK configured but its model could not be routed — blocking (never falls to the managed default outside trial)',
+                                context:
+                                    contextName ||
+                                    PermissionValidationService.name,
+                                metadata: {
+                                    organizationAndTeamData,
+                                    subscriptionStatus: status,
+                                },
+                            });
+                            return {
+                                allowed: false,
+                                errorType: ValidationErrorType.BYOK_REQUIRED,
+                                metadata: { byokModelUnresolvable: true },
                                 subscriptionStatus: status,
-                            },
-                        });
-                        return {
-                            allowed: false,
-                            errorType: ValidationErrorType.BYOK_REQUIRED,
-                            metadata: { byokModelUnresolvable: true },
-                            subscriptionStatus: status,
-                        };
+                            };
+                        }
                     }
                 }
+            } catch (error) {
+                // A flaky BYOK read/resolve must NEVER block on its own: we only
+                // block when we POSITIVELY resolved "configured but unroutable". On
+                // an error we can't rule out a working key, so fall through to the
+                // normal flow (which fails open for a flaky read) instead of letting
+                // the outer catch turn a transient read failure into a hard block.
+                this.logger.debug({
+                    message:
+                        'BYOK integrity probe errored; skipping the block and continuing (fail open)',
+                    context: contextName || PermissionValidationService.name,
+                    error: error as Error,
+                    metadata: { organizationAndTeamData },
+                });
             }
 
             // Development mode always allows
