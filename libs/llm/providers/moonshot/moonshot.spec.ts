@@ -116,8 +116,20 @@ describe('moonshotModule — Anthropic-protocol brand contract', () => {
         ).toMatch(/"type":"enabled".*budgetTokens/);
     });
 
-    it('accepts sampling params (Kimi over the compatible endpoint is not gated)', () => {
-        expect(moonshotModule.supportsSamplingParams!(moonshotCfg)).toBe(true);
+    it('temperature policy: k2.7-code is always-thinking → PINNED to 1', () => {
+        // The Anthropic protocol fixes temperature to 1 while thinking, and
+        // k2.7-code reasons unconditionally, so 1 is its only sound value.
+        expect(moonshotModule.temperaturePolicy!(moonshotCfg)).toEqual({
+            kind: 'fixed',
+            value: 1,
+        });
+    });
+
+    it('temperature policy: k2.6 is disable-able → adjustable (not gated, not pinned)', () => {
+        const k26 = { ...moonshotCfg, model: 'kimi-k2.6' };
+        expect(moonshotModule.temperaturePolicy!(k26)).toEqual({
+            kind: 'adjustable',
+        });
     });
 });
 

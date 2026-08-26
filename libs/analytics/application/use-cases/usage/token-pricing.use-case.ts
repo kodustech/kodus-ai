@@ -1,4 +1,5 @@
 import { createLogger } from '@libs/core/log/logger';
+import { canonicalModelId } from '@libs/common/utils/canonical-model';
 import { Injectable } from '@nestjs/common';
 import axios from 'axios';
 
@@ -253,15 +254,15 @@ export class TokenPricingUseCase {
      * Every form a catalog key can appear as in `attributes.tu.model`, so the
      * read-time tier `$switch` matches however the id was stored.
      *
-     * The write path (deriveTu) stores `gen_ai.response.model.split(':').pop()`
-     * — it strips a `provider:` prefix but KEEPS a `provider/` one. So a stored
-     * id may be the colon-stripped key (`vertex_ai/gemini-2.5-pro`) OR the fully
-     * bare last segment (`gemini-2.5-pro`). Emitting only the bare form (as a
-     * previous version did) missed slash-prefixed ids and under-reported their
-     * tiered cost — so emit BOTH.
+     * The write path (deriveTu) stores `canonicalModelId(gen_ai.response.model)`
+     * — it strips a `provider:` prefix and a Bedrock `:<version>` suffix, but KEEPS
+     * a `provider/` one. So a stored id may be the canonical key
+     * (`vertex_ai/gemini-2.5-pro`) OR the fully bare last segment
+     * (`gemini-2.5-pro`). Emitting only the bare form (as a previous version did)
+     * missed slash-prefixed ids and under-reported their tiered cost — so emit BOTH.
      */
     private canonicalNames(key: string): string[] {
-        const colonStripped = key.split(':').pop()!;
+        const colonStripped = canonicalModelId(key);
         const bare = colonStripped.split('/').pop()!;
         return colonStripped === bare ? [colonStripped] : [colonStripped, bare];
     }

@@ -111,8 +111,10 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         systemCacheControl(): Record<string, unknown> | undefined {
             return undefined;
         },
-        supportsSamplingParams(cfg: ProviderBuildConfig): boolean {
-            return anthropicModule.supportsSamplingParams!(asCompatible(cfg));
+        // The temperature policy is intrinsic to the protocol → one source, the
+        // anthropic module (which knows the always-thinking brand ids pin it to 1).
+        temperaturePolicy(cfg: ProviderBuildConfig) {
+            return anthropicModule.temperaturePolicy!(asCompatible(cfg));
         },
 
         normalize: anthropicModule.normalize,

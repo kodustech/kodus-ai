@@ -180,23 +180,30 @@ export function repairJsonText(text: string): string | null {
 }
 
 /**
- * Deterministically repair `rawText`, then validate it against `wire` (the same
- * schema `Output.object` used). Returns the parsed+validated value, or undefined
- * when repair or validation fails (→ caller escalates to a model re-ask). Reuses
- * the wire schema's own validate fn so a repaired object is held to the exact
- * contract the first attempt was.
+ * Extract the JSON out of `rawText` (clean, fenced, or prose-wrapped), then
+ * validate it against `wire` (the same schema `Output.object` used). Returns the
+ * parsed+validated value, or undefined when no JSON is present, it doesn't parse,
+ * or it fails the shape (→ caller escalates to a model re-ask). Reuses the wire
+ * schema's own validate fn so the object is held to the exact contract.
+ *
+ * Uses {@link extractJsonFromText}, NOT {@link repairJsonText}: this is a PRIMARY
+ * parser (the reroute-json path hands it the model's raw output), so ALREADY-clean
+ * JSON is the success case — an always-thinking model that returns pristine
+ * `{"…":…}` with no fence/whitespace must validate. `repairJsonText` nulls
+ * unchanged input by design (its "nothing to repair" signal for the salvage-after-
+ * SDK-failure path), which would reject exactly that clean output.
  */
 export async function repairAndValidate<T = unknown>(
     wire: unknown,
     rawText: string,
 ): Promise<T | undefined> {
-    const repaired = repairJsonText(rawText);
-    if (repaired == null) {
+    const candidate = extractJsonFromText(rawText);
+    if (candidate == null) {
         return undefined;
     }
     let value: unknown;
     try {
-        value = JSON.parse(repaired);
+        value = JSON.parse(candidate);
     } catch {
         return undefined;
     }

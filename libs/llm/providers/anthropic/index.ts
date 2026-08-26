@@ -24,6 +24,7 @@ import type {
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
+import type { TemperaturePolicy } from '../kernel/model-types';
 import {
     resolveCompatibleReasoningTraits,
     type ModelReasoningTraits,
@@ -277,13 +278,23 @@ export const anthropicModule: ProviderModule = {
     // an anthropic-compatible upstream that DOES surface a split still works. output
     // is the FULL completion count and is NEVER reduced by reasoning (Q4 double-count
     // trap: reasoning is additive info only).
-    supportsSamplingParams(cfg: ProviderBuildConfig): boolean {
-        // Only the REAL anthropic endpoint withholds sampling params on 4.7+
-        // (a 400 otherwise). `anthropic_compatible` upstreams (Kimi/Z.ai/DeepSeek)
-        // implement the legacy shape and accept temperature — never gate them.
-        return (cfg.provider as string) === 'anthropic_compatible'
-            ? true
-            : supportsSamplingParams(true, cfg.model);
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        // `anthropic_compatible` upstreams (Kimi/Z.ai/DeepSeek) implement the legacy
+        // shape and ACCEPT temperature — but the always-thinking ones (Kimi
+        // k2.7-code/k3, GLM-5.3) reason UNCONDITIONALLY, and the Anthropic protocol
+        // pins temperature to 1 while thinking, so 1 is their only sound value.
+        // Disable-able ones (Kimi k2.6, DeepSeek) keep a free temperature.
+        if ((cfg.provider as string) === 'anthropic_compatible') {
+            const traits = resolveCompatibleReasoningTraits(cfg.model);
+            return traits.thinksByDefault && !traits.canDisableThinking
+                ? { kind: 'fixed', value: 1 }
+                : { kind: 'adjustable' };
+        }
+        // Real Anthropic: 4.7+ REJECT temperature (a 400); older accept it. Native
+        // thinking models don't need a pin — they withhold temperature outright.
+        return supportsSamplingParams(true, cfg.model)
+            ? { kind: 'adjustable' }
+            : { kind: 'unsupported' };
     },
 
     normalizeUsage: normalizeSdkUsage,

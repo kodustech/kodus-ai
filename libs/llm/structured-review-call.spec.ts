@@ -251,6 +251,53 @@ describe('runStructuredReviewCall — reasoning (honors the slot, no added defau
     });
 });
 
+describe('runStructuredReviewCall — reroute-json (always-thinking, e.g. Kimi k2.7-code)', () => {
+    // A moonshot:kimi-k2.7-code slot is always-thinking (canDisableThinking=false)
+    // over the Anthropic protocol (structuredOutput:'none'), so planStructuredCall
+    // resolves to 'reroute-json': plain generateText + parse the text (no
+    // Output.object / forced tool_choice). The REGISTRY is REAL here, so this
+    // exercises the true plan, not a mock.
+    const kimiSlot = {
+        provider: 'moonshot',
+        model: 'kimi-k2.7-code',
+        apiKey: 'enc',
+    } as any;
+
+    it('parses PRISTINE JSON from r.text (no fence/whitespace) — regression for PR#152 Kimi kody-rules', async () => {
+        // The model returned exactly `{"violations":[]}` — a valid empty result.
+        // It used to throw "reroute-json produced no valid object" because
+        // repairAndValidate rejected already-clean JSON, degrading the whole
+        // Kody-Rules shard to zero findings ("all rule check(s) failed to run").
+        mockGenerate.mockResolvedValueOnce({
+            text: '{"violations":[]}',
+            usage: {},
+        });
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: z.object({ violations: z.array(z.any()) }),
+            byokConfig: kimiSlot,
+        });
+        expect(out).toEqual({ violations: [] });
+        // Took the reroute path: plain generateText, NO Output.object channel.
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
+    });
+
+    it('still parses fenced/prose-wrapped JSON on the same path', async () => {
+        mockGenerate.mockResolvedValueOnce({
+            text: 'Here you go:\n```json\n{"violations":[{"ruleId":1}]}\n```',
+            usage: {},
+        });
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: z.object({
+                violations: z.array(z.object({ ruleId: z.any() })),
+            }),
+            byokConfig: kimiSlot,
+        });
+        expect(out).toEqual({ violations: [{ ruleId: 1 }] });
+    });
+});
+
 describe('span attrs.fallback — caller override vs default', () => {
     const spanAttrs = () =>
         observabilityService.runAiSdkLLMInSpan.mock.calls[0][0].attrs;

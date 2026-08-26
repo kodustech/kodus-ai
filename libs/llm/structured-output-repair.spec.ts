@@ -173,6 +173,37 @@ describe('repairAndValidate', () => {
         expect(v).toEqual({ keep: 7 });
     });
 
+    it('validates ALREADY-CLEAN JSON with no fence or trailing whitespace', async () => {
+        // The reroute-json path (always-thinking models — Kimi k2.7-code/k3,
+        // Claude Fable/Mythos) hands the model's RAW text straight here. When the
+        // model nails the format (pristine JSON, no fence, no trailing newline)
+        // the parse MUST succeed. Regression for the Kimi kody-rules
+        // "reroute-json produced no valid object" failure: the old repairJsonText
+        // returned null for unchanged input ("nothing to repair"), so clean output
+        // was wrongly rejected. See PR#152 in the incident logs.
+        expect(await repairAndValidate(guarded, '{"keep":7}')).toEqual({
+            keep: 7,
+        });
+    });
+
+    it('accepts a valid but EMPTY-collection result (not a failure)', async () => {
+        const listWire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: {
+                    violations: { type: 'array', items: { type: 'object' } },
+                },
+                required: ['violations'],
+                additionalProperties: false,
+            } as any),
+        );
+        // "No violations found" is a legitimate answer — the exact shard payload
+        // Kimi returned on PR#152. It must parse, never degrade the shard to error.
+        expect(await repairAndValidate(listWire, '{"violations":[]}')).toEqual({
+            violations: [],
+        });
+    });
+
     it('returns undefined when repaired JSON has the wrong shape', async () => {
         // Deterministic repair fixes the fence, but the shape is wrong → the
         // executor must escalate to a model re-ask, not accept bad data.
