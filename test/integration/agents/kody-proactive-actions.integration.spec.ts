@@ -8,9 +8,9 @@
  * the result is deterministic and the failures point at a concrete omission
  * rather than at model behavior.
  *
- * The `it.failing` blocks below are the bug. They pass while the gap exists and
- * start failing ("Failing test passed") the moment it is closed — at which
- * point flip them to `it` and they become the regression guard.
+ * Written first as a red repro (`it.failing`), then flipped block by block as
+ * each gap closed. It now guards the behavior: every scenario the issue lists
+ * must keep reaching the model with the matching action named.
  */
 jest.mock('@libs/llm/model-invocation', () => ({
     resolveModelConfig: () => ({
@@ -282,32 +282,27 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             expect(turn.userPrompt).toContain(THREAD_GIT_USER.username);
         });
 
-        it.failing(
-            'replays its own prior offer so a confirmation can resolve it',
-            async () => {
-                const scenario = scenarioById(CONFIRMATION_TURN.scenarioId);
-                const conversationStore = {
-                    load: jest.fn().mockResolvedValue([
-                        { role: 'user', content: scenario.userMessage },
-                        {
-                            role: 'assistant',
-                            content: CONFIRMATION_TURN.priorOffer,
-                        },
-                    ]),
-                    append: jest.fn().mockResolvedValue(undefined),
-                };
+        it('replays its own prior offer so a confirmation can resolve it', async () => {
+            const scenario = scenarioById(CONFIRMATION_TURN.scenarioId);
+            const conversationStore = {
+                load: jest.fn().mockResolvedValue([
+                    { role: 'user', content: scenario.userMessage },
+                    {
+                        role: 'assistant',
+                        content: CONFIRMATION_TURN.priorOffer,
+                    },
+                ]),
+                append: jest.fn().mockResolvedValue(undefined),
+            };
 
-                const turn = await runTurn(
-                    { ...scenario, userMessage: CONFIRMATION_TURN.userMessage },
-                    { conversationStore },
-                );
+            const turn = await runTurn(
+                { ...scenario, userMessage: CONFIRMATION_TURN.userMessage },
+                { conversationStore },
+            );
 
-                expect(conversationStore.load).toHaveBeenCalled();
-                expect(turn.conversation).toContain(
-                    CONFIRMATION_TURN.priorOffer,
-                );
-            },
-        );
+            expect(conversationStore.load).toHaveBeenCalled();
+            expect(turn.conversation).toContain(CONFIRMATION_TURN.priorOffer);
+        });
     });
 
     it('stays quiet when the thread reveals nothing worth persisting', async () => {

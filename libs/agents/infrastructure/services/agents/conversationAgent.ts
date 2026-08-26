@@ -50,6 +50,13 @@ import {
 const CONVERSATION_MAX_STEPS = 12;
 
 /**
+ * How many prior messages of the thread travel back into the prompt. Enough to
+ * carry an offer and its confirmation without dragging a long thread into every
+ * turn.
+ */
+const CONVERSATION_HISTORY_TURNS = 10;
+
+/**
  * Thread identifier passed by the caller. Structurally compatible with the
  * legacy flow engine's `Thread` ({ id, metadata }) but typed locally so this
  * agent has no flow-engine dependency. Used only for log correlation now —
@@ -172,6 +179,11 @@ export class ConversationAgentProvider {
         });
 
         try {
+            // The PR thread strips Kody's own replies on every platform, so an
+            // offer it made last turn survives only in the conversation record.
+            // Replay it — otherwise a bare "yes, do it" resolves to nothing.
+            const seedMessages = await this.loadThreadHistory(thread);
+
             const preparedPrompt = buildUserPrompt({
                 prompt,
                 userLanguage,
@@ -204,6 +216,7 @@ export class ConversationAgentProvider {
                         spec,
                         {
                             prompt: preparedPrompt,
+                            seedMessages,
                             telemetryMetadata: {
                                 organizationId:
                                     organizationAndTeamData.organizationId?.toString(),
@@ -345,6 +358,45 @@ export class ConversationAgentProvider {
                 error,
             });
             return null;
+        }
+    }
+
+    /**
+     * The tail of this thread's conversation record, oldest first. Best-effort:
+     * the store swallows its own errors and a miss just means the agent answers
+     * without prior turns.
+     */
+    private async loadThreadHistory(
+        thread: ConversationThread,
+    ): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+        const threadId = thread?.id != null ? String(thread.id) : '';
+        if (!this.conversationStore || !threadId) {
+            return [];
+        }
+
+        try {
+            const messages = await this.conversationStore.load(threadId);
+            return messages
+                .filter(
+                    (m) =>
+                        (m.role === 'user' || m.role === 'assistant') &&
+                        typeof m.content === 'string' &&
+                        m.content.length > 0,
+                )
+                .slice(-CONVERSATION_HISTORY_TURNS)
+                .map((m) => ({
+                    role: m.role as 'user' | 'assistant',
+                    content: m.content,
+                }));
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to load conversation history; answering without it',
+                context: ConversationAgentProvider.name,
+                metadata: { threadId },
+                error,
+            });
+            return [];
         }
     }
 

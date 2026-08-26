@@ -132,6 +132,40 @@ describe('ConversationAgentProvider (harness wiring)', () => {
         expect(propagated.params).toHaveLength(0);
     });
 
+    it('replays only the tail of a long thread', async () => {
+        const { provider } = build();
+        const load = jest.fn().mockResolvedValue(
+            Array.from({ length: 30 }, (_, i) => ({
+                role: i % 2 === 0 ? 'user' : 'assistant',
+                content: `turn-${i}`,
+            })),
+        );
+        (provider as any).conversationStore = {
+            load,
+            append: jest.fn().mockResolvedValue(undefined),
+        };
+
+        const history = await (provider as any).loadThreadHistory({
+            id: 'th1',
+        });
+
+        expect(load).toHaveBeenCalledWith('th1');
+        expect(history).toHaveLength(10);
+        expect(history.at(0).content).toBe('turn-20');
+        expect(history.at(-1).content).toBe('turn-29');
+    });
+
+    it('answers without history when the store fails', async () => {
+        const { provider } = build();
+        modelRef.model = makeModel('answer');
+        (provider as any).conversationStore = {
+            load: jest.fn().mockRejectedValue(new Error('mongo down')),
+            append: jest.fn().mockResolvedValue(undefined),
+        };
+
+        await expect(provider.execute('hi', ctx)).resolves.toBe('answer');
+    });
+
     it('requires organization data and a thread', async () => {
         modelRef.model = makeModel('x');
         const { provider } = build();
