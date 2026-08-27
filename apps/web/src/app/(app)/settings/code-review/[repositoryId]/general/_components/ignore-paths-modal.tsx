@@ -16,7 +16,7 @@ import { Input } from "@components/ui/input";
 import { ScrollArea } from "@components/ui/scroll-area";
 import { AlertTriangle, CheckCircle2, Plus, X } from "lucide-react";
 import { findIgnoreMatch } from "src/core/utils/ignore-paths/match-file-against-ignore-paths";
-import { checkGlobPatternSyntax } from "src/core/utils/ignore-paths/validate-glob-pattern";
+import { checkIgnorePattern } from "src/core/utils/ignore-paths/validate-glob-pattern";
 
 /** Short enough to answer fast, long enough that every list matches `**` on the
  *  first keystroke and the answer reads as noise. */
@@ -58,11 +58,12 @@ export const IgnorePathsModal = ({
     }, [paths, query]);
 
     const isDuplicate = newPath !== "" && paths.includes(newPath);
-    const syntax = useMemo(
-        () => (newPath === "" ? null : checkGlobPatternSyntax(newPath)),
+    const patternCheck = useMemo(
+        () => (newPath === "" ? null : checkIgnorePattern(newPath)),
         [newPath],
     );
-    const canAdd = newPath !== "" && !isDuplicate && syntax?.valid === true;
+    const canAdd =
+        newPath !== "" && !isDuplicate && patternCheck?.valid === true;
 
     const addPath = () => {
         if (!canAdd) return;
@@ -131,8 +132,8 @@ export const IgnorePathsModal = ({
                         A syntactically fine pattern can still match nothing —
                         no library can tell those apart, so the wording must
                         not promise more than it checked. */}
-                    {syntax &&
-                        (syntax.valid ? (
+                    {patternCheck &&
+                        (patternCheck.valid ? (
                             <span className="text-success flex flex-row items-center gap-1.5 text-[13px]">
                                 <CheckCircle2 className="size-3.5 shrink-0" />
                                 Valid glob syntax
@@ -141,7 +142,7 @@ export const IgnorePathsModal = ({
                         ) : (
                             <span className="text-danger flex flex-row items-center gap-1.5 text-[13px]">
                                 <AlertTriangle className="size-3.5 shrink-0" />
-                                {syntax.message}
+                                {patternCheck.message}
                             </span>
                         ))}
 

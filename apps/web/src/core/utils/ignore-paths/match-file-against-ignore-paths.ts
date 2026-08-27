@@ -1,15 +1,35 @@
-import { minimatch } from "minimatch";
+import picomatch from "picomatch";
 
 /**
- * Normalizes a file path the way the backend does before matching, so the same
- * file spelled `./src/a.ts`, `/src/a.ts` or `src\a.ts` gets one answer.
+ * Mirrors `isFileMatchingGlob` in libs/common/utils/glob-utils.ts so the
+ * "Test a file" verdict cannot contradict what the review actually does.
  *
- * Mirrors `normalizeFilename` in libs/common/utils/glob-utils.ts. That module
- * can't be imported here: the web container mounts `libs/` at `/usr/libs` with
- * no `node_modules` above it, so anything under `libs/` that pulls a
- * third-party package (picomatch, in that file's case) fails to resolve at
- * build time. Same reason `match-file-against-rules.ts` re-implements it.
+ * The logic is duplicated rather than imported: the web container mounts
+ * libs/ at /usr/libs with no node_modules above it, so anything under libs/
+ * that pulls a third-party package fails to resolve at build time. The engine
+ * and its options are kept identical on purpose — an earlier version reached
+ * for minimatch instead, and the two disagreed on `**\/*- [Bb]ackup
+ * ([0-9]).rdl`, a pattern we ship by default: minimatch reads `(` as a
+ * literal, picomatch as a group. test/unit/web/match-file-against-ignore-
+ * paths.spec.ts pins the two implementations together over every shipped
+ * default.
  */
+
+// picomatch compilation is expensive and the validator re-runs on every
+// keystroke against the full list, so hold on to the compiled matchers.
+const MATCHERS = new Map<string, picomatch.Matcher>();
+
+function matcherFor(pattern: string): picomatch.Matcher {
+    let matcher = MATCHERS.get(pattern);
+    if (matcher) return matcher;
+
+    matcher = picomatch(pattern, { dot: true, nocase: false });
+    MATCHERS.set(pattern, matcher);
+
+    return matcher;
+}
+
+/** Same normalization the backend applies before matching. */
 function normalizeFilename(filename: string): string {
     return (filename || "")
         .replace(/\\/g, "/")
@@ -19,8 +39,7 @@ function normalizeFilename(filename: string): string {
 
 /**
  * Returns the first ignore pattern that would skip `filename`, or undefined
- * when the file survives every pattern. Case-sensitive with `dot: true`,
- * matching `isFileMatchingGlob` on the backend.
+ * when the file survives every pattern.
  */
 export function findIgnoreMatch(
     filename: string,
@@ -29,7 +48,5 @@ export function findIgnoreMatch(
     const normalized = normalizeFilename(filename);
     if (!normalized) return undefined;
 
-    return patterns.find((pattern) =>
-        minimatch(normalized, pattern, { dot: true, nocase: false }),
-    );
+    return patterns.find((pattern) => matcherFor(pattern)(normalized));
 }
