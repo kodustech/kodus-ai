@@ -46,11 +46,42 @@ export function checkGlobPatternSyntax(pattern: string): GlobPatternCheck {
 }
 
 /**
- * A leading "!" that is not opening an extglob. `!(foo).js` is an extglob
- * matching one segment and is fine; `!src/**` is a negation.
+ * Whether the pattern contains any negating construct: a leading "!", or an
+ * extglob "!(...)" anywhere.
+ *
+ * An earlier version allowed "!(...)" on the theory that an extglob is bound
+ * to one segment. It is not, once anything follows it. Measured against a
+ * mixed corpus:
+ *
+ *   !(foo).js               1/11   bounded
+ *   !(a|b)/**               7/11
+ *   !(node_modules)/**     10/11
+ *   **\/!(node_modules)/** 11/11   the entire repository
+ *   **\/*.!(js)             8/11   negation is not even segment-leading here
+ *
+ * Every attempt to carve out a "safe" subset left a hole in a different
+ * place, and the cost of getting it wrong is a customer's reviews silently
+ * doing nothing. So the rule is the blunt one: no negation, in any position.
+ * The list is an OR of "ignore this" with no re-inclusion, so a negation
+ * never expresses something it can express another way.
+ *
+ * Bracket classes are untouched — `[!abc]*.js` and `[!]]` negate a single
+ * character, match 1/11 and 0/11, and contain no "!(" .
  */
-function isNegation(pattern: string): boolean {
-    return pattern.startsWith("!") && pattern[1] !== "(";
+function hasNegation(pattern: string): boolean {
+    if (pattern.startsWith("!")) return true;
+
+    for (let i = 1; i < pattern.length - 1; i++) {
+        if (
+            pattern[i] === "!" &&
+            pattern[i + 1] === "(" &&
+            pattern[i - 1] !== "\\"
+        ) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 /**
@@ -69,11 +100,11 @@ export function checkIgnorePattern(pattern: string): GlobPatternCheck {
     const syntax = checkGlobPatternSyntax(pattern);
     if (!syntax.valid) return syntax;
 
-    if (isNegation(pattern.trim())) {
+    if (hasNegation(pattern.trim())) {
         return {
             valid: false,
             message:
-                'Negated patterns are not supported here — "!" would ignore every file the rest of the pattern does NOT match.',
+                'Negation is not supported here — "!" ignores every file the rest of the pattern does NOT match, which usually means the whole repository.',
         };
     }
 
