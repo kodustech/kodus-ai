@@ -60,45 +60,6 @@ export const openaiModule: ProviderModule = {
     label: 'OpenAI',
     doc: 'https://platform.openai.com/docs/models',
 
-    // Curated OpenAI models (migrated from the web curated-models.json). Native
-    // transport ⇒ no per-model `provider` override.
-    catalog: [
-        {
-            id: 'gpt-5.4',
-            displayName: 'GPT-5.4',
-            tier: 'recommended',
-            benchmarkScore: 85,
-            description:
-                'Latest OpenAI flagship. Consistent low latency and broad knowledge.',
-            speed: 'fast',
-            contextWindow: '400K',
-            costTier: '$$$',
-            apiKeyUrl: 'https://platform.openai.com/api-keys',
-            defaults: {
-                temperature: 0,
-                maxOutputTokens: 16384,
-                reasoningEffort: 'medium',
-            },
-        },
-        {
-            id: 'gpt-5.2',
-            displayName: 'GPT-5.2',
-            tier: 'other',
-            benchmarkScore: 83.2,
-            description: 'Previous GPT generation. Superseded by GPT-5.4.',
-            speed: 'fast',
-            contextWindow: '400K',
-            costTier: '$$$',
-            strengths: [
-                'Very consistent response times',
-                'Clean — few low-value comments',
-            ],
-            weaknesses: ['Catches noticeably fewer issues than average'],
-            apiKeyUrl: 'https://platform.openai.com/api-keys',
-            defaults: { temperature: 0, maxOutputTokens: 16384 },
-        },
-    ],
-
     settingsSchema: z.object({
         baseURL: z.string().optional(),
     }),

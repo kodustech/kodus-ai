@@ -33,10 +33,6 @@ import {
     ByokProvidersResult,
 } from '@libs/organization/application/use-cases/organizationParameters/get-byok-providers.use-case';
 import {
-    GetByokCatalogUseCase,
-    ByokCatalogResult,
-} from '@libs/organization/application/use-cases/organizationParameters/get-byok-catalog.use-case';
-import {
     TestByokConnectionUseCase,
     TestByokResult,
 } from '@libs/organization/application/use-cases/organizationParameters/test-byok-connection.use-case';
@@ -99,7 +95,6 @@ export class OrganizationParametersController {
         private readonly deleteByokConfigUseCase: DeleteByokConfigUseCase,
         private readonly getLLMConfigStatusUseCase: GetLLMConfigStatusUseCase,
         private readonly getByokProvidersUseCase: GetByokProvidersUseCase,
-        private readonly getByokCatalogUseCase: GetByokCatalogUseCase,
         private readonly testByokConnectionUseCase: TestByokConnectionUseCase,
         private readonly testByokModelUseCase: TestByokModelUseCase,
         private readonly listModelOverridesUseCase: ListModelOverridesUseCase,
@@ -582,31 +577,6 @@ export class OrganizationParametersController {
         return await this.getByokProvidersUseCase.execute();
     }
 
-    @Get('/byok/catalog')
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(
-        // The curated model catalog is static + non-sensitive (Kodus's editorial
-        // picks, aggregated from the provider modules). Same read gate as
-        // /byok/providers — the connect picker needs it to render the models.
-        checkAnyPermission([
-            {
-                action: Action.Read,
-                resource: ResourceType.OrganizationSettings,
-            },
-            {
-                action: Action.Read,
-                resource: ResourceType.CodeReviewSettings,
-            },
-        ]),
-    )
-    @ApiOperation({
-        summary: 'List the curated BYOK model catalog',
-        description:
-            "Return the curated model catalog aggregated from every provider module's `catalog` (the single source of truth; replaces the frontend curated-models.json). Static and non-sensitive.",
-    })
-    public async getByokCatalog(): Promise<ByokCatalogResult> {
-        return await this.getByokCatalogUseCase.execute();
-    }
 
     @Get('/cockpit-metrics-visibility')
     @UseGuards(PolicyGuard)

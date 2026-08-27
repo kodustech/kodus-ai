@@ -30,7 +30,6 @@ import type {
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
-import type { ProviderCatalogModel } from '../kernel/catalog';
 
 /** Present a brand's config to the anthropic module as its compatible transport,
  *  so the anthropic-compatible branches (budget thinking, sampling params on, `/v1`
@@ -39,7 +38,10 @@ export interface AnthropicBrandSpec {
     id: string;
     label: string;
     doc?: string;
-    catalog: ProviderCatalogModel[];
+    /** The brand's canonical Anthropic-protocol endpoint, used to fill baseURL on a
+     *  key-only connect (the field is `required: false`). This is a brand FACT owned
+     *  by the module — not a curated catalog default. */
+    defaultBaseURL: string;
     uiFields: FieldDescriptor[];
 }
 
@@ -49,13 +51,10 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
     // baseURL field is `required: false` (a key-only connect is allowed), but the
     // downstream build does `anthropicCompatibleRootURL(baseURL || '') + '/v1'`,
     // so an empty baseURL would yield the invalid relative URL '/v1' and break
-    // every call. Fall back to the curated `defaults.baseURL` for the chosen model
-    // (or the brand's first catalog entry) so a key-only connect still resolves.
+    // every call. Fall back to the brand's canonical endpoint so a key-only
+    // connect still resolves.
     const asCompatible = (cfg: ProviderBuildConfig): ProviderBuildConfig => {
-        const baseURL = cfg.baseURL?.trim()
-            ? cfg.baseURL
-            : ((spec.catalog.find((m) => m.id === cfg.model) ?? spec.catalog[0])
-                  ?.defaults?.baseURL ?? cfg.baseURL);
+        const baseURL = cfg.baseURL?.trim() ? cfg.baseURL : spec.defaultBaseURL;
         return {
             ...cfg,
             provider: 'anthropic_compatible' as ProviderBuildConfig['provider'],
@@ -68,7 +67,6 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         label: spec.label,
         doc: spec.doc,
         settingsSchema: z.object({ baseURL: z.string().optional() }),
-        catalog: spec.catalog,
 
         // Intrinsic to the Anthropic wire protocol → one source, the anthropic
         // module. But every brand model (Kimi/GLM) is a THINKING model that reasons
@@ -122,9 +120,9 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         providerOptionsNamespace: () => 'anthropic',
 
         uiFields: spec.uiFields,
-        // Curated brand: the catalog names the models; the manual field types any
-        // other. (No `/models` listing — that is the OpenAI protocol's shape, not
-        // this one's.)
+        // No `/models` listing (that is the OpenAI protocol's shape, not this one's)
+        // → the user types the model id manually. A brand that CAN live-list (e.g.
+        // Moonshot over its OpenAI-protocol endpoint) overrides `modelListing`.
         modelListing: () => ({ kind: 'manual' }),
     };
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { FormProvider, useForm } from "react-hook-form";
 import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import {
@@ -10,14 +9,15 @@ import {
     type TestBYOKResult,
 } from "@services/organizationParameters/fetch";
 import { CheckCircle2Icon, PlugIcon, SaveIcon } from "lucide-react";
+import { FormProvider, useForm } from "react-hook-form";
 
+import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type { BYOKConnectInput, BYOKCredential } from "../_types";
 import { maskKey } from "../_utils";
-import { credentialSettingsFromConfig } from "./byok-write";
-import type { EditKeyForm } from "./_modals/edit-key/_types";
 import { ByokBaseURLInput } from "./_modals/edit-key/_components/baseurl-input";
 import { ByokCredentialsInput } from "./_modals/edit-key/_components/credentials-input";
-import { PROVIDER_LABELS } from "./catalog/model-card";
+import type { EditKeyForm } from "./_modals/edit-key/_types";
+import { credentialSettingsFromConfig } from "./byok-write";
 
 /**
  * Credential-edit body for a connected provider. Renders the SAME provider-aware
@@ -92,7 +92,8 @@ export function RotatePanel({
     const typedNewSecret = (values: EditKeyForm): boolean =>
         !!values.apiKey?.trim() ||
         !!values.awsBearerToken?.trim() ||
-        (!!values.awsAccessKeyId?.trim() && !!values.awsSecretAccessKey?.trim());
+        (!!values.awsAccessKeyId?.trim() &&
+            !!values.awsSecretAccessKey?.trim());
 
     // Changing the endpoint must NOT reuse the stored secret: the server would
     // otherwise send the org's key to a caller-supplied host. So a baseURL edit
@@ -131,9 +132,12 @@ export function RotatePanel({
                       model: probeModelId,
                       apiKey: values.apiKey?.trim() || undefined,
                       baseURL: values.baseURL?.trim() || undefined,
-                      vertexLocation: values.vertexLocation?.trim() || undefined,
-                      awsBearerToken: values.awsBearerToken?.trim() || undefined,
-                      awsAccessKeyId: values.awsAccessKeyId?.trim() || undefined,
+                      vertexLocation:
+                          values.vertexLocation?.trim() || undefined,
+                      awsBearerToken:
+                          values.awsBearerToken?.trim() || undefined,
+                      awsAccessKeyId:
+                          values.awsAccessKeyId?.trim() || undefined,
                       awsSecretAccessKey:
                           values.awsSecretAccessKey?.trim() || undefined,
                       awsRegion: values.awsRegion?.trim() || undefined,
@@ -148,7 +152,8 @@ export function RotatePanel({
                       // ride along (a baseURL change is gated above to require the
                       // key, so the stored secret never reaches a new host).
                       awsRegion: values.awsRegion?.trim() || undefined,
-                      vertexLocation: values.vertexLocation?.trim() || undefined,
+                      vertexLocation:
+                          values.vertexLocation?.trim() || undefined,
                   });
             setTestState(
                 result.ok
@@ -215,10 +220,10 @@ export function RotatePanel({
                             </>
                         ) : (
                             <>
-                                Credentials for{" "}
-                                <strong>{providerLabel}</strong> are stored.
-                                Enter new values to replace them — or leave the
-                                secret fields blank to keep the current ones.
+                                Credentials for <strong>{providerLabel}</strong>{" "}
+                                are stored. Enter new values to replace them —
+                                or leave the secret fields blank to keep the
+                                current ones.
                             </>
                         )}
                     </AlertDescription>

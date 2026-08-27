@@ -16,9 +16,8 @@ import {
     TrashIcon,
 } from "lucide-react";
 
-import { useCatalogModel } from "../_data/catalog-context";
+import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type { BYOKConnectInput } from "../_types";
-import { PROVIDER_LABELS } from "./catalog/model-card";
 
 const formatReasoning = (config: BYOKConnectInput): string | null => {
     if (!config.reasoningEffort || config.reasoningEffort === "none")
@@ -53,12 +52,8 @@ export function ConfiguredSummary({
     /** `start=..&end=..` so the Costs deep-link opens on the SAME window. */
     costRangeQuery?: string;
 }) {
-    const curated = useCatalogModel(config.model);
-    const displayName = curated?.displayName ?? config.model;
-    const providerLabel =
-        curated?.providerDisplayName ??
-        PROVIDER_LABELS[config.provider] ??
-        config.provider;
+    const displayName = config.model;
+    const providerLabel = PROVIDER_LABELS[config.provider] ?? config.provider;
     const reasoningLabel = formatReasoning(config);
 
     return (
@@ -133,10 +128,11 @@ export function ConfiguredSummary({
                                     <Link
                                         href={`/token-usage?models=${encodeURIComponent(
                                             cost.model,
-                                        )}${costRangeQuery
+                                        )}${
+                                            costRangeQuery
                                                 ? `&${costRangeQuery}`
                                                 : ""
-                                            }`}
+                                        }`}
                                         title="See the full breakdown on the Costs page"
                                         className="group inline-flex items-center gap-1.5 rounded-sm tabular-nums focus-visible:ring-2">
                                         <span className="text-text-primary font-semibold">

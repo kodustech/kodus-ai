@@ -10,9 +10,9 @@ import {
 } from "@components/ui/collapsible";
 import { KeyRoundIcon, PencilIcon } from "lucide-react";
 
+import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type { BYOKCredential } from "../_types";
 import { maskKey } from "../_utils";
-import { PROVIDER_LABELS } from "./catalog/model-card";
 import { ProviderLogo } from "./provider-logo";
 
 /**

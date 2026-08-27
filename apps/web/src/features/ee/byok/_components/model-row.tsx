@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import { cn } from "src/core/utils/components";
 
-import { useCatalogModel } from "../_data/catalog-context";
+import { formatModelLabel } from "../_data/model-label";
+import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type {
     BYOKConfig,
     BYOKModelConfig,
@@ -25,7 +26,6 @@ import type {
     ReasoningEffort,
 } from "../_types";
 import { TASK_LABELS } from "../_utils";
-import { PROVIDER_LABELS } from "./catalog/model-card";
 import { DeleteRejectionAlert, useDeleteModel } from "./delete-model-flow";
 import { ProviderLogo } from "./provider-logo";
 
@@ -112,17 +112,16 @@ export function ModelRow({
     /** Deep-link a "Used in" chip to its row on the Routing tab. */
     onOpenRouting?: (anchor: string) => void;
 }) {
-    const curated = useCatalogModel(model.model);
-    const displayName = curated?.displayName ?? model.model;
+    const displayName = formatModelLabel(model.model);
     const thinking = formatThinking(model.reasoningEffort);
 
     const credential = (config?.credentials ?? []).find(
         (c) => c.id === model.credentialId,
     );
     const provider = credential?.provider;
-    const providerLabel =
-        curated?.providerDisplayName ??
-        (provider ? (PROVIDER_LABELS[provider] ?? provider) : undefined);
+    const providerLabel = provider
+        ? (PROVIDER_LABELS[provider] ?? provider)
+        : undefined;
     const settings = (credential?.settings ?? {}) as Record<string, unknown>;
     const baseURL =
         typeof settings.baseURL === "string" ? settings.baseURL : undefined;
@@ -192,10 +191,11 @@ export function ModelRow({
                                             <Link
                                                 href={`/token-usage?models=${encodeURIComponent(
                                                     cost.model,
-                                                )}${costRangeQuery
+                                                )}${
+                                                    costRangeQuery
                                                         ? `&${costRangeQuery}`
                                                         : ""
-                                                    }`}
+                                                }`}
                                                 title="See the full breakdown on the Costs page"
                                                 className="group inline-flex items-center gap-1.5 rounded-sm tabular-nums focus-visible:ring-2">
                                                 <span className="text-text-primary font-semibold">

@@ -20,12 +20,7 @@ export const ORGANIZATION_PARAMETERS_PATHS = {
     GET_LLM_CONFIG_STATUS: pathToApiUrl(
         "/organization-parameters/llm-config/status",
     ),
-    GET_BYOK_PROVIDERS: pathToApiUrl(
-        "/organization-parameters/byok/providers",
-    ),
-    GET_BYOK_CATALOG: pathToApiUrl(
-        "/organization-parameters/byok/catalog",
-    ),
+    GET_BYOK_PROVIDERS: pathToApiUrl("/organization-parameters/byok/providers"),
     GET_COCKPIT_METRICS_VISIBILITY: pathToApiUrl(
         "/organization-parameters/cockpit-metrics-visibility",
     ),

@@ -1,7 +1,9 @@
 "use client";
 
-import { Page } from "@components/ui/page";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
+import { Page } from "@components/ui/page";
 import { toast } from "@components/ui/toaster/use-toast";
 import {
     createOrUpdateOrganizationParameter,
@@ -9,14 +11,12 @@ import {
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
 import { ArrowLeftIcon } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
-import type { BYOKConfig } from "../_types";
 import { buildByokBlob } from "../_components/byok-write";
-import { PROVIDER_LABELS } from "../_components/catalog/model-card";
 import { RotatePanel } from "../_components/rotate-panel";
+import { PROVIDER_LABELS } from "../_data/provider-labels";
+import type { BYOKConfig } from "../_types";
 
 /**
  * Routed provider-credential editor — the sibling of the routed model editor
@@ -36,9 +36,7 @@ export function ByokProviderPageClient({
     const router = useRouter();
 
     const credential = credentialId
-        ? existing?.credentials.find(
-              (c) => c.id === credentialId && !c.managed,
-          )
+        ? existing?.credentials.find((c) => c.id === credentialId && !c.managed)
         : undefined;
 
     // A probe needs a model to send the test request to; use the first model that
@@ -100,8 +98,8 @@ export function ByokProviderPageClient({
                         </Page.Title>
                     </div>
                     <Page.Description className="text-pretty">
-                        Update this provider&apos;s stored credentials. Leave the
-                        secret fields blank to keep the current ones.
+                        Update this provider&apos;s stored credentials. Leave
+                        the secret fields blank to keep the current ones.
                     </Page.Description>
                 </Page.TitleContainer>
             </Page.Header>
@@ -136,8 +134,7 @@ export function ByokProviderPageClient({
                             toast({
                                 variant: "danger",
                                 title: "Couldn't save",
-                                description:
-                                    "Something went wrong. Try again.",
+                                description: "Something went wrong. Try again.",
                             });
                         }
                     }}

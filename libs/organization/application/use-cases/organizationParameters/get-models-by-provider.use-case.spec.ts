@@ -18,9 +18,9 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 function buildUseCase(configValue: unknown) {
     const providerService = { isProviderSupported: () => true } as any;
     const orgParamsService = {
-        findByKey: jest.fn().mockResolvedValue(
-            configValue ? { configValue } : null,
-        ),
+        findByKey: jest
+            .fn()
+            .mockResolvedValue(configValue ? { configValue } : null),
     } as any;
     return new GetModelsByProviderUseCase(providerService, orgParamsService);
 }
@@ -33,7 +33,7 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         } as any);
     });
 
-    it('lists openai_compatible against the org\'s OWN baseURL + decrypted key', async () => {
+    it("lists openai_compatible against the org's OWN baseURL + decrypted key", async () => {
         const useCase = buildUseCase({
             version: 2,
             credentials: [
@@ -74,7 +74,11 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         });
 
         mockedAxios.get.mockResolvedValue({
-            data: { models: [{ name: 'models/gemini-x', supportedGenerationMethods: [] }] },
+            data: {
+                models: [
+                    { name: 'models/gemini-x', supportedGenerationMethods: [] },
+                ],
+            },
         } as any);
 
         await useCase.execute('google_gemini', { organizationId: 'org-1' });
@@ -93,7 +97,11 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
 
     it('falls back to env when there is no org context (setup wizard)', async () => {
         const useCase = buildUseCase({
-            main: { provider: 'openai_compatible', apiKey: 'm', baseURL: 'https://a' },
+            main: {
+                provider: 'openai_compatible',
+                apiKey: 'm',
+                baseURL: 'https://a',
+            },
         });
 
         await useCase.execute('openai_compatible');
@@ -159,7 +167,10 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
 
     it('lists OpenAI live with a JUST-TYPED candidate key, verbatim (no decrypt, no curated placeholder)', async () => {
         mockedAxios.get.mockResolvedValue({
-            data: { object: 'list', data: [{ id: 'gpt-5.4' }, { id: 'gpt-4o' }] },
+            data: {
+                object: 'list',
+                data: [{ id: 'gpt-5.4' }, { id: 'gpt-4o' }],
+            },
         } as any);
         const useCase = buildUseCase(null); // no saved config
 
@@ -192,33 +203,29 @@ describe('GetModelsByProviderUseCase — BYOK-aware model listing', () => {
         ).rejects.toThrow(/Error fetching openai models/i);
     });
 
-    it('keyless OpenAI (no candidate, no saved slot, no env) still degrades to the curated catalog', async () => {
+    it('keyless OpenAI (no candidate, no saved slot, no env) still attempts the live listing — no curated stand-in', async () => {
         const prev = process.env.API_OPEN_AI_API_KEY;
         delete process.env.API_OPEN_AI_API_KEY;
         const useCase = buildUseCase(null);
 
-        const res = await useCase.execute(BYOKProvider.OPENAI, {
-            organizationId: 'org-1',
-        });
+        // The curated catalog is gone: there is no model list to degrade to, so the
+        // live `/models` call is attempted (and, keyless, would surface an auth
+        // error the UI turns into manual entry). No short-circuit to a static set.
+        await useCase.execute(BYOKProvider.OPENAI, { organizationId: 'org-1' });
 
-        // Curated GPT-5.x, no live call attempted.
-        expect(res.models.length).toBeGreaterThan(0);
-        expect(mockedAxios.get).not.toHaveBeenCalled();
+        expect(mockedAxios.get).toHaveBeenCalled();
         if (prev !== undefined) process.env.API_OPEN_AI_API_KEY = prev;
     });
 
-    it('serves a curated BRAND with a manual listing from its catalog (Z.ai/GLM)', async () => {
-        // Z.ai speaks the Anthropic protocol → no `/models` call (manual listing).
-        // As a first-class brand it still enumerates its curated models so the
-        // picker (and the form's plan/endpoint surface) works without hand-entry.
+    it('a manual-listing BRAND (Z.ai/GLM) can no longer be enumerated — the user types the model id', async () => {
+        // Z.ai speaks the Anthropic protocol → no `/models` call (manual listing),
+        // and there is no curated catalog to stand in. The picker falls back to
+        // manual model-id entry, so the use-case reports that plainly.
         const useCase = buildUseCase(null);
 
-        const res = await useCase.execute('zai' as any, {
-            organizationId: 'org-1',
-        });
-
-        expect(res.models.length).toBeGreaterThan(0);
-        expect(res.models.some((m) => m.id.startsWith('glm'))).toBe(true);
+        await expect(
+            useCase.execute('zai' as any, { organizationId: 'org-1' }),
+        ).rejects.toThrow(/enter the model ID manually/);
         expect(mockedAxios.get).not.toHaveBeenCalled();
     });
 });

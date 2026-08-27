@@ -19,7 +19,6 @@ import type {
     TemperaturePolicy,
 } from '@libs/llm/providers/kernel/model-types';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import type { ProviderCatalogModel } from './catalog';
 import type { ModelReasoningTraits } from './reasoning-traits';
 
 /**
@@ -228,12 +227,6 @@ export interface ProviderModule {
      *  adds it in ONE place and the web picker shows it. Absent/undefined ⇒ the UI
      *  falls back to a generic enabled-thinking example. */
     reasoningOverrideExample?(providerId: string): string | undefined;
-    /** The curated models this brand offers — Kodus's editorial picks (score,
-     *  copy, billing variants, defaults). The single source for the web catalog;
-     *  the aggregating use-case stamps each entry with this module's identity
-     *  (`providerKey`/`providerDisplayName`) and default transport. Absent ⇒ the
-     *  provider is connectable but has no curated models (custom/self-hosted). */
-    catalog?: ProviderCatalogModel[];
     /** UI fields for the BYOK settings screen. */
     uiFields: FieldDescriptor[];
     /** How to enumerate this provider's models, per requested id (a module may
