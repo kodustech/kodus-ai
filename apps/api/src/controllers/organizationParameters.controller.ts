@@ -351,6 +351,8 @@ export class OrganizationParametersController {
                 apiKey: { type: 'string' },
                 baseURL: { type: 'string' },
                 model: { type: 'string' },
+                temperature: { type: 'number' },
+                reasoningEffort: { type: 'string' },
                 vertexLocation: { type: 'string' },
                 awsBearerToken: { type: 'string' },
                 awsAccessKeyId: { type: 'string' },
@@ -372,6 +374,8 @@ export class OrganizationParametersController {
             apiKey?: string;
             baseURL?: string;
             model?: string;
+            temperature?: number;
+            reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
             vertexLocation?: string;
             awsBearerToken?: string;
             awsAccessKeyId?: string;

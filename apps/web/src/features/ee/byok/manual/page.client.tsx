@@ -370,6 +370,15 @@ export function ByokManualPageClient({
                 apiKey: data.apiKey,
                 baseURL: data.baseURL ?? undefined,
                 model: data.model,
+                // Send the configured tuning so the server validates it against
+                // the model's rules and exercises the real chat probe with it.
+                // Same effort mapping as save: 'custom'/empty → omit (the custom
+                // override isn't a plain effort); 'none' is a real "off" value.
+                temperature: data.temperature ?? undefined,
+                reasoningEffort:
+                    data.reasoningEffort === "custom" || !data.reasoningEffort
+                        ? undefined
+                        : data.reasoningEffort,
                 vertexLocation: data.vertexLocation ?? undefined,
                 awsBearerToken: data.awsBearerToken ?? undefined,
                 awsAccessKeyId: data.awsAccessKeyId ?? undefined,

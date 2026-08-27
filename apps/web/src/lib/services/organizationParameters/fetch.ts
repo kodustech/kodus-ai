@@ -83,6 +83,11 @@ export const testBYOK = async (params: {
     apiKey?: string;
     baseURL?: string;
     model?: string;
+    // The configured tuning — validated server-side against the model's rules
+    // and exercised on the real chat probe, so a mismatch (e.g. a temperature an
+    // always-thinking model won't honor) fails the Test instead of saving quiet.
+    temperature?: number;
+    reasoningEffort?: "none" | "low" | "medium" | "high";
     vertexLocation?: string;
     awsBearerToken?: string;
     awsAccessKeyId?: string;

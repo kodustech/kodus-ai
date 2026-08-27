@@ -86,3 +86,128 @@ describe('TestByokConnectionUseCase — key-only brand connect resolves the endp
         ).rejects.toThrow(/baseURL is required/i);
     });
 });
+
+// Fix 2 — the Test validates the configured tuning against the model's rules and
+// returns a client error BEFORE any network round-trip, so a value the runtime
+// would silently drop (an always-thinking Kimi ignores a non-1 temperature) fails
+// the Test instead of saving quiet.
+describe('TestByokConnectionUseCase — tuning validation short-circuits the probe', () => {
+    beforeEach(() => {
+        mockedAxios.post.mockReset();
+        mockedAxios.get.mockReset();
+        mockedAxios.post.mockResolvedValue({ status: 200, data: {} } as any);
+        mockedAxios.get.mockResolvedValue({ status: 200, data: {} } as any);
+    });
+
+    it('kimi-k2.7-code + temperature 0.2 → bad_request, no HTTP call', async () => {
+        const res = await useCase().execute({
+            provider: 'novita',
+            apiKey: 'sk-test',
+            model: 'kimi-k2.7-code',
+            temperature: 0.2,
+        });
+        expect(res.ok).toBe(false);
+        expect(res.code).toBe('bad_request');
+        expect(res.message).toContain('1');
+        expect(mockedAxios.post).not.toHaveBeenCalled();
+        expect(mockedAxios.get).not.toHaveBeenCalled();
+    });
+
+    it('kimi-k2.7-code + reasoningEffort "none" → bad_request, no HTTP call', async () => {
+        const res = await useCase().execute({
+            provider: 'anthropic_compatible',
+            apiKey: 'sk-test',
+            baseURL: 'https://api.moonshot.ai/anthropic',
+            model: 'kimi-k2.7-code',
+            reasoningEffort: 'none',
+        });
+        expect(res.ok).toBe(false);
+        expect(res.code).toBe('bad_request');
+        expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('kimi-k2.7-code + temperature 1 (matches the pin) → proceeds to probe', async () => {
+        const res = await useCase().execute({
+            provider: 'novita',
+            apiKey: 'sk-test',
+            model: 'kimi-k2.7-code',
+            temperature: 1,
+        });
+        expect(res.ok).toBe(true);
+        expect(mockedAxios.post).toHaveBeenCalled();
+    });
+});
+
+// Fix 3 — the OpenAI-protocol chat providers (generic openai_compatible + Novita)
+// exercise the model with a real 1-token chat completion carrying the RESOLVED
+// temperature, instead of a GET /v1/models that some upstreams gate differently.
+describe('TestByokConnectionUseCase — openai_compatible / novita real chat probe', () => {
+    beforeEach(() => {
+        mockedAxios.post.mockReset();
+        mockedAxios.get.mockReset();
+        mockedAxios.post.mockResolvedValue({ status: 200, data: {} } as any);
+        mockedAxios.get.mockResolvedValue({ status: 200, data: {} } as any);
+    });
+
+    it('openai_compatible + model → POST /v1/chat/completions with a ping, not GET /models', async () => {
+        const res = await useCase().execute({
+            provider: 'openai_compatible',
+            apiKey: 'sk-test',
+            baseURL: 'https://llm.example.com',
+            model: 'some-model',
+        });
+        expect(res.ok).toBe(true);
+        expect(mockedAxios.get).not.toHaveBeenCalled();
+        const [url, body] = mockedAxios.post.mock.calls[0] as [string, any];
+        expect(url).toBe('https://llm.example.com/v1/chat/completions');
+        expect(body.model).toBe('some-model');
+        expect(body.messages[0].content).toBe('ping');
+    });
+
+    it('novita + model → POST to novita chat endpoint (no baseURL needed)', async () => {
+        const res = await useCase().execute({
+            provider: 'novita',
+            apiKey: 'sk-test',
+            model: 'meta-llama/llama-3-70b',
+        });
+        expect(res.ok).toBe(true);
+        const [url] = mockedAxios.post.mock.calls[0] as [string];
+        expect(url).toBe(
+            'https://api.novita.ai/v3/openai/chat/completions',
+        );
+    });
+
+    it('always-thinking kimi on novita sends the resolved fixed temperature (1)', async () => {
+        // No temperature configured → passes validation → runtime resolves the
+        // family pin (1) → the probe sends exactly what a review would.
+        await useCase().execute({
+            provider: 'novita',
+            apiKey: 'sk-test',
+            model: 'kimi-k2.7-code',
+        });
+        const [, body] = mockedAxios.post.mock.calls[0] as [string, any];
+        expect(body.temperature).toBe(1);
+    });
+
+    it('a base URL already carrying /v1 is not double-suffixed', async () => {
+        await useCase().execute({
+            provider: 'openai_compatible',
+            apiKey: 'sk-test',
+            baseURL: 'https://llm.example.com/v1',
+            model: 'some-model',
+        });
+        const [url] = mockedAxios.post.mock.calls[0] as [string];
+        expect(url).toBe('https://llm.example.com/v1/chat/completions');
+    });
+
+    it('openai_compatible with NO model still falls back to GET /models', async () => {
+        const res = await useCase().execute({
+            provider: 'openai_compatible',
+            apiKey: 'sk-test',
+            baseURL: 'https://llm.example.com',
+        });
+        expect(res.ok).toBe(true);
+        expect(mockedAxios.get).toHaveBeenCalled();
+        expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+});
