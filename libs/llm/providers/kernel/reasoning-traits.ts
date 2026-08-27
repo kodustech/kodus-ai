@@ -99,11 +99,19 @@ export function resolveCompatibleReasoningTraits(
         };
     }
 
-    // Unknown Anthropic-compatible upstream: assume Anthropic semantics (thinks,
-    // forced tool_choice rejects thinking) but disable-able — the safe suppress
-    // path that has worked in production (matches prior behavior for k2.6).
+    // Unknown compatible upstream (a self-hosted Llama/vLLM, a generic proxy, any
+    // id we don't recognize). Two DIFFERENT safe defaults, one per consumer:
+    //   - `thinksByDefault: false` — we must NOT proactively FORCE a `thinking`
+    //     param onto a model we can't confirm reasons (it could 400 on a plain
+    //     Llama endpoint). So the reasoning-effort default stays unset and the
+    //     caller's own default (usually 'none' → no thinking) decides; a user who
+    //     DOES want thinking on their custom model sets the slot effort explicitly.
+    //   - the forced-tool_choice traits stay CONSERVATIVE (assume thinking, allow
+    //     suppress) — that path only ever SENDS a disable, never forces thinking,
+    //     so it can't break a non-reasoning upstream while it protects a reasoning
+    //     one. (`planStructuredCall` reads these, not `thinksByDefault`.)
     return {
-        thinksByDefault: true,
+        thinksByDefault: false,
         canDisableThinking: true,
         supportsForcedToolChoice: true,
         forcedToolChoiceRejectsThinking: true,

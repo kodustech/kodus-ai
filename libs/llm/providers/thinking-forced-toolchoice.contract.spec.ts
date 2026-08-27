@@ -25,7 +25,8 @@ const cfg = (provider: string, model: string) =>
 /** Resolve the structured plan the executor would take for (provider, model). */
 function planFor(provider: string, model: string): StructuredCallPlan {
     const mod = REGISTRY.get(provider);
-    const traits = mod.reasoningTraits?.(cfg(provider, model)) ?? NON_REASONING_TRAITS;
+    const traits =
+        mod.reasoningTraits?.(cfg(provider, model)) ?? NON_REASONING_TRAITS;
     return planStructuredCall(mod.capabilities(model).structuredOutput, traits);
 }
 
@@ -82,7 +83,9 @@ describe('BYOK reasoning contract — structured plan per (provider, model)', ()
             ['anthropic', 'claude-opus-5'],
             ['google_vertex', 'claude-opus-5'],
         ])('%s / %s → explicit disabled', (p, m) => {
-            expect(buildReasoningProviderOptions(p, 'none', m)).toEqual(DISABLED);
+            expect(buildReasoningProviderOptions(p, 'none', m)).toEqual(
+                DISABLED,
+            );
         });
 
         it.each([
@@ -115,20 +118,30 @@ describe('BYOK reasoning contract — structured plan per (provider, model)', ()
         });
     });
 
-    // The load-bearing INVARIANT: sweep every catalog model of every reasoning
+    // The load-bearing INVARIANT: sweep representative models of every reasoning
     // provider — none may land on a plan that would 400 (forced tool_choice while
     // thinking with no way to disable must ALWAYS reroute).
     it('INVARIANT: no model is left on a 400-ing structured plan', () => {
-        const providers = ['anthropic', 'anthropic_compatible', 'moonshot', 'zai'];
-        for (const p of providers) {
+        // Explicit probe per provider — the well-known ids each brand serves (the
+        // curated catalog that used to enumerate these is gone; the reasoning
+        // TRAITS, not a model list, are what this invariant exercises).
+        const PROBE: Record<string, string[]> = {
+            anthropic: ['claude-opus-5', 'claude-fable-5'],
+            anthropic_compatible: [
+                'kimi-k2.6',
+                'kimi-k2.7-code',
+                'glm-5.2',
+                'deepseek-v4-pro',
+                'some-unknown-upstream-7b',
+            ],
+            moonshot: ['kimi-k2.6', 'kimi-k2.7-code'],
+            zai: ['glm-5.2'],
+        };
+        for (const [p, probe] of Object.entries(PROBE)) {
             const mod = REGISTRY.get(p);
-            const models = (mod.catalog ?? []).map((c) => c.id);
-            // brands carry catalogs; the bare anthropic ids we probe explicitly.
-            const probe = models.length
-                ? models
-                : ['claude-opus-5', 'claude-fable-5'];
             for (const m of probe) {
-                const traits = mod.reasoningTraits?.(cfg(p, m)) ?? NON_REASONING_TRAITS;
+                const traits =
+                    mod.reasoningTraits?.(cfg(p, m)) ?? NON_REASONING_TRAITS;
                 const plan = planStructuredCall(
                     mod.capabilities(m).structuredOutput,
                     traits,

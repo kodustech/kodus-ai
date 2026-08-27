@@ -3,9 +3,42 @@ import { BYOKProvider } from '@libs/llm/model-providers';
 import {
     buildProviderOptions,
     buildReasoningProviderOptions,
+    defaultReasoningEffortFor,
     EFFORT_TO_BUDGET,
     type ReasoningEffort,
 } from '@libs/llm/reasoning-options';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+
+describe('defaultReasoningEffortFor — family-driven default (env + BYOK)', () => {
+    const anthropic = (model: string): NormalizedModel =>
+        ({ provider: BYOKProvider.ANTHROPIC, apiKey: '', model }) as any;
+
+    it("gives 'medium' to a thinks-by-default Claude (opus-5) — the env goal", () => {
+        // claude-opus-5 is adaptive → reasoningTraits.thinksByDefault=true, matched
+        // by FAMILY pattern (no per-model entry), so a brand-new Opus inherits it.
+        expect(defaultReasoningEffortFor(anthropic('claude-opus-5'))).toBe(
+            'medium',
+        );
+        expect(defaultReasoningEffortFor(anthropic('claude-opus-4-7'))).toBe(
+            'medium',
+        );
+    });
+
+    it('leaves a NON-thinks-by-default model unset (falls to caller default)', () => {
+        // Budget-generation Claude (4.1) reasons only when asked → not
+        // thinks-by-default → resolver returns undefined, caller policy decides.
+        expect(
+            defaultReasoningEffortFor(anthropic('claude-opus-4-1')),
+        ).toBeUndefined();
+    });
+
+    it('returns undefined for an absent/unknown slot (safe, never throws)', () => {
+        expect(defaultReasoningEffortFor(undefined)).toBeUndefined();
+        expect(
+            defaultReasoningEffortFor({ provider: 'nope', model: 'x' } as any),
+        ).toBeUndefined();
+    });
+});
 
 // The tool_choice-forcing classification + registry-wide lock moved to the
 // trait model: see providers/thinking-forced-toolchoice.contract.spec.ts
@@ -20,7 +53,11 @@ describe('buildReasoningProviderOptions', () => {
             modelName?: string;
         }> = [
             { name: 'effort=undefined', provider: BYOKProvider.ANTHROPIC },
-            { name: 'effort=none', provider: BYOKProvider.ANTHROPIC, effort: 'none' },
+            {
+                name: 'effort=none',
+                provider: BYOKProvider.ANTHROPIC,
+                effort: 'none',
+            },
             { name: 'provider=undefined', effort: 'high' },
             { name: 'provider=empty string', provider: '', effort: 'high' },
         ];
@@ -121,17 +158,23 @@ describe('buildReasoningProviderOptions', () => {
             ['anthropic:claude-opus-5'],
             ['anthropic.claude-opus-5'],
             ['claude-opus-4-8@20260101'],
-        ])('uses adaptive thinking for %s (4.7+ rejects budgetTokens)', (model) => {
-            expect(
-                buildReasoningProviderOptions(
-                    BYOKProvider.ANTHROPIC,
-                    'high',
-                    model,
-                ),
-            ).toEqual({
-                anthropic: { thinking: { type: 'adaptive' }, effort: 'high' },
-            });
-        });
+        ])(
+            'uses adaptive thinking for %s (4.7+ rejects budgetTokens)',
+            (model) => {
+                expect(
+                    buildReasoningProviderOptions(
+                        BYOKProvider.ANTHROPIC,
+                        'high',
+                        model,
+                    ),
+                ).toEqual({
+                    anthropic: {
+                        thinking: { type: 'adaptive' },
+                        effort: 'high',
+                    },
+                });
+            },
+        );
 
         it('omits thinking config when the model cannot be identified', () => {
             // Previously this fell through to budgetTokens. That shape is a hard
@@ -447,7 +490,7 @@ describe('buildLangfuseTelemetry', () => {
 
     it('returns isEnabled=false when LANGFUSE_TRACING is not true', () => {
         delete process.env.LANGFUSE_TRACING;
-         
+
         const { buildLangfuseTelemetry } = require('@libs/core/log/langfuse');
         const result = buildLangfuseTelemetry('my-run');
         expect(result.isEnabled).toBe(false);
@@ -459,7 +502,7 @@ describe('buildLangfuseTelemetry', () => {
         process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
         process.env.LANGFUSE_SECRET_KEY = 'sk-test';
         jest.resetModules();
-         
+
         const { buildLangfuseTelemetry } = require('@libs/core/log/langfuse');
         const result = buildLangfuseTelemetry('my-run', {
             organizationId: 'org-1',
@@ -476,7 +519,6 @@ describe('buildLangfuseTelemetry', () => {
     });
 
     it('omits metadata key when no metadata object is passed', () => {
-         
         const { buildLangfuseTelemetry } = require('@libs/core/log/langfuse');
         const result = buildLangfuseTelemetry('my-run');
         expect(result.metadata).toBeUndefined();
@@ -487,7 +529,7 @@ describe('buildLangfuseTelemetry', () => {
         process.env.LANGFUSE_PUBLIC_KEY = 'pk-test';
         process.env.LANGFUSE_SECRET_KEY = 'sk-test';
         jest.resetModules();
-         
+
         const {
             buildLangfuseTelemetry,
             toAiSdkTelemetryArgs,

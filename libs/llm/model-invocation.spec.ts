@@ -18,6 +18,10 @@ jest.mock('./byok-to-vercel', () => ({
 jest.mock('./reasoning-options', () => ({
     buildProviderOptions: (...args: unknown[]) =>
         buildProviderOptionsMock(...args),
+    // Default: no family override, so these tests keep asserting the slot's own
+    // effort / the caller's reasoningEffortDefault. The family-default path is
+    // covered by its own resolver spec.
+    defaultReasoningEffortFor: () => undefined,
 }));
 
 import { resolveAgentModel } from './agent-model';
@@ -122,7 +126,10 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
             // tool_choice — both keep thinking. This primitive is provider-agnostic:
             // no suppression unless the plan explicitly asked for it.
             resolveModelConfig(
-                slot({ provider: 'moonshot' as any, reasoningEffort: 'medium' }),
+                slot({
+                    provider: 'moonshot' as any,
+                    reasoningEffort: 'medium',
+                }),
                 { runName: 'finder' },
             );
 

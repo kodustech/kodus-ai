@@ -11,6 +11,8 @@ import { createLogger } from '@libs/core/log/logger';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import { REGISTRY } from '@libs/llm/providers';
 import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
+import { NON_REASONING_TRAITS } from '@libs/llm/providers/kernel/reasoning-traits';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 
 const logger = createLogger('ReasoningOptions');
 
@@ -22,6 +24,36 @@ export const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
     medium: 15_000,
     high: 40_000,
 };
+
+/**
+ * The DEFAULT reasoning effort for a model when its slot leaves `reasoningEffort`
+ * unset — derived from the provider module's own `reasoningTraits`, so it is
+ * FAMILY-driven (a new opus/sonnet/kimi inherits it with no code change) and
+ * applied UNIFORMLY to both the env-managed and BYOK slot paths through the one
+ * `resolveModelConfig` funnel. This is the tuning default that used to sit (dead)
+ * in the model catalog — now it lives with the provider, exactly like
+ * `temperaturePolicy`, and reaches BOTH config paths instead of just BYOK.
+ *
+ * Rule: a model that THINKS BY DEFAULT gets 'medium' unless the slot overrides;
+ * models that don't (budget/opt-in reasoners, non-reasoning) stay unset so the
+ * caller's own default (e.g. the review's 'none') decides. No per-model table.
+ */
+export function defaultReasoningEffortFor(
+    slot: NormalizedModel | undefined,
+): ReasoningEffort | undefined {
+    const provider = slot?.provider as string | undefined;
+    if (!provider || !slot?.model || !REGISTRY.has(provider)) return undefined;
+    try {
+        const traits =
+            REGISTRY.get(provider).reasoningTraits?.(slot as any) ??
+            NON_REASONING_TRAITS;
+        return traits.thinksByDefault ? 'medium' : undefined;
+    } catch {
+        // A lookup failure must never break the call — fall back to the caller's
+        // own default (matches resolveStructuredPlan's best-effort posture).
+        return undefined;
+    }
+}
 
 /**
  * Build provider-specific reasoning `providerOptions` for a generateText call.
@@ -114,7 +146,9 @@ function buildOpenRouterRouting(input?: {
  * The Vercel AI SDK `providerOptions` namespace key for a BYOK provider id,
  * resolved from its provider module (the single source) — never a hand-kept map.
  */
-function providerOptionsNamespace(provider?: BYOKProvider | string): string | undefined {
+function providerOptionsNamespace(
+    provider?: BYOKProvider | string,
+): string | undefined {
     if (!provider) return undefined;
     const id = String(provider);
     return REGISTRY.has(id)
@@ -219,7 +253,11 @@ export function buildReasoningProviderOptions(
     const providerModule = REGISTRY.get(id);
     if (!providerModule.reasoning) return {};
     return providerModule.reasoning(
-        { provider: id, model: modelName ?? '', apiKey: '' } as ProviderBuildConfig,
+        {
+            provider: id,
+            model: modelName ?? '',
+            apiKey: '',
+        } as ProviderBuildConfig,
         effort ?? 'none',
     );
 }
