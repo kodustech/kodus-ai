@@ -15,6 +15,13 @@ import type {
     ProviderBuildConfig,
     ProviderModule,
 } from '../kernel/types';
+import type { TemperaturePolicy } from '../kernel/model-types';
+import {
+    resolveCompatibleReasoningTraits,
+    compatibleTemperaturePolicy,
+    isCompatibleReasoner,
+    type ModelReasoningTraits,
+} from '../kernel/reasoning-traits';
 import {
     normalizeSdkResult,
     normalizeSdkUsage,
@@ -27,17 +34,37 @@ export const novitaModule: ProviderModule = {
 
     settingsSchema: z.object({ baseURL: z.string().optional() }),
 
-    capabilities(_model: string): ModelCapabilities {
-        // Reasoning is too upstream-dependent to advertise by default.
+    capabilities(model: string): ModelCapabilities {
+        // Novita is an aggregator: it hosts KNOWN reasoning families (Kimi/GLM/
+        // DeepSeek) alongside plain models (Llama/Qwen). A model's rules are the
+        // MODEL's, not the transport's — so a Kimi here reasons exactly as it does
+        // anywhere. Advertise reasoning ONLY for a recognized reasoner; an unknown
+        // upstream stays generic (no forced thinking on a plain endpoint).
+        const isReasoner = isCompatibleReasoner(model);
         return {
             supportsTemperature: true,
-            supportsReasoning: false,
+            supportsReasoning: isReasoner,
             structuredOutput: 'json_object',
             toolCalling: 'native',
             usageGranularity: 'output_only',
             streaming: true,
             promptCaching: false,
         };
+    },
+
+    // Per-model reasoning facts + temperature, resolved by FAMILY (same shared
+    // tables the Anthropic-protocol brands and openai_compatible read), so a Kimi
+    // on Novita obeys its always-thinking + temperature-1 rules like everywhere
+    // else. Unknown upstreams fall through to the safe generic (no forced thinking,
+    // free temperature). The `thinking` param itself is NOT emitted here — Novita's
+    // OpenAI-protocol Kimi reasons natively and the effort wire-format over this
+    // endpoint is unverified — so the pin is applied where it's safe (traits +
+    // temperature), not by forcing a param a plain upstream might reject.
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        return resolveCompatibleReasoningTraits(cfg.model);
+    },
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        return compatibleTemperaturePolicy(cfg.model);
     },
 
     build(cfg: ProviderBuildConfig): LanguageModel {

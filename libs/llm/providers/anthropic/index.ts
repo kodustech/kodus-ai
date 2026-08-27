@@ -27,6 +27,7 @@ import type {
 import type { TemperaturePolicy } from '../kernel/model-types';
 import {
     resolveCompatibleReasoningTraits,
+    compatibleTemperaturePolicy,
     type ModelReasoningTraits,
 } from '../kernel/reasoning-traits';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
@@ -211,10 +212,7 @@ export const anthropicModule: ProviderModule = {
         // pins temperature to 1 while thinking, so 1 is their only sound value.
         // Disable-able ones (Kimi k2.6, DeepSeek) keep a free temperature.
         if ((cfg.provider as string) === 'anthropic_compatible') {
-            const traits = resolveCompatibleReasoningTraits(cfg.model);
-            return traits.thinksByDefault && !traits.canDisableThinking
-                ? { kind: 'fixed', value: 1 }
-                : { kind: 'adjustable' };
+            return compatibleTemperaturePolicy(cfg.model);
         }
         // Real Anthropic: 4.7+ REJECT temperature (a 400); older accept it. Native
         // thinking models don't need a pin — they withhold temperature outright.

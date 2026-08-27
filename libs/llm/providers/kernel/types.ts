@@ -210,7 +210,7 @@ export interface ProviderModule {
      *  provider). Both the runtime (`resolveByokTemperature`) and the connect form
      *  read this ONE shape. Absent/undefined ⇒ the caller falls back to the static
      *  `capabilities().supportsTemperature` flag (every provider but Anthropic). */
-    temperaturePolicy?(cfg: ProviderBuildConfig): TemperaturePolicy;
+    temperaturePolicy?(cfg: ProviderBuildConfig): TemperaturePolicy | undefined;
     /** The Vercel AI SDK `providerOptions` namespace key this provider's adapter
      *  listens on, per requested id (a module may serve several ids with
      *  DIFFERENT namespaces — the openai module serves `openai` → 'openai' and

@@ -30,8 +30,11 @@ import type {
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
+import type { TemperaturePolicy } from '../kernel/model-types';
 import {
     resolveCompatibleReasoningTraits,
+    compatibleTemperaturePolicy,
+    isCompatibleReasoner,
     type ModelReasoningTraits,
 } from '../kernel/reasoning-traits';
 import {
@@ -72,7 +75,10 @@ export const openaiModule: ProviderModule = {
         return {
             // o-series / gpt-5 reject `temperature`; other OpenAI models allow it.
             supportsTemperature: !reasoner,
-            supportsReasoning: !!reasoningConfig,
+            // Native OpenAI reasoners OR a recognized compatible-family reasoner
+            // (Kimi/GLM/DeepSeek served over openai_compatible — those ids never
+            // appear on native OpenAI, so the OR is transport-safe).
+            supportsReasoning: !!reasoningConfig || isCompatibleReasoner(model),
             reasoningConfig,
             // Provider-level execution capabilities (01-04; per-model refinement
             // is a follow-up — note capabilities(model) can't see openai vs
@@ -179,6 +185,21 @@ export const openaiModule: ProviderModule = {
             supportsForcedToolChoice: true,
             forcedToolChoiceRejectsThinking: false,
         };
+    },
+
+    // Temperature is a MODEL rule, not just a transport one: a Kimi/GLM served over
+    // openai_compatible obeys the SAME always-thinking → temperature-1 pin as it
+    // does over the Anthropic protocol (shared family helper). Native OpenAI
+    // reasoners (o-series / gpt-5) reject temperature outright; other models are
+    // free — matching the `supportsTemperature` capability the UI used before.
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy | undefined {
+        if ((cfg.provider as string) === 'openai_compatible') {
+            return compatibleTemperaturePolicy(cfg.model);
+        }
+        // Native OpenAI: no opinion here — the caller derives it from the static
+        // `supportsTemperature` capability (reasoners reject temperature), exactly
+        // as before, so native behaviour is unchanged.
+        return undefined;
     },
 
     normalizeUsage: normalizeSdkUsage,

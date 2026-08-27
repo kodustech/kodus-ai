@@ -118,6 +118,32 @@ export function resolveCompatibleReasoningTraits(
     };
 }
 
+/**
+ * The temperature policy for a compatible-protocol model, DERIVED from its family
+ * reasoning traits — a MODEL rule, transport-agnostic. An always-thinking model
+ * (Kimi k2.7-code/k3, GLM-5.3) reasons unconditionally and pins temperature to 1
+ * while thinking, so 1 is its only sound value; disable-able / non-reasoning ones
+ * keep a free temperature. Shared by every transport that can host these models
+ * (Anthropic-protocol brands, openai_compatible, Novita) so the same Kimi obeys
+ * the same rule on any endpoint. Returns `undefined` for a model with no id so a
+ * caller can fall through to its own default.
+ */
+export function compatibleTemperaturePolicy(
+    model?: string,
+): { kind: 'fixed'; value: number } | { kind: 'adjustable' } {
+    const t = resolveCompatibleReasoningTraits(model);
+    return t.thinksByDefault && !t.canDisableThinking
+        ? { kind: 'fixed', value: 1 }
+        : { kind: 'adjustable' };
+}
+
+/** Whether a compatible-protocol id is a KNOWN reasoning model (Kimi/GLM/DeepSeek)
+ *  — the gate for advertising reasoning + applying the family rules on a generic
+ *  OpenAI-protocol aggregator (Novita) that also hosts non-reasoning models. */
+export function isCompatibleReasoner(model?: string): boolean {
+    return resolveCompatibleReasoningTraits(model).thinksByDefault;
+}
+
 export type StructuredOutputMode = 'json_schema' | 'json_object' | 'none';
 
 /**

@@ -64,8 +64,10 @@ const MATRIX: Array<[string, string, ReasoningEffort | undefined]> = [
     ['google_vertex', 'gemini-2.5-pro', undefined],
     // OpenRouter normalizes reasoning itself (reasoning.effort) → we don't force.
     ['open_router', 'anthropic/claude-opus-5', undefined],
-    // Non-reasoning / curated-only providers → unset.
-    ['novita', 'deepseek-v3', undefined],
+    // Novita is an aggregator that applies the family rules: a recognized reasoner
+    // (DeepSeek/Kimi/GLM) → medium; a plain hosted model → unset.
+    ['novita', 'deepseek-v3', 'medium'],
+    ['novita', 'meta-llama/llama-3-70b', undefined],
     ['amazon_bedrock', 'anthropic.claude-sonnet-4-5', undefined],
 ];
 
