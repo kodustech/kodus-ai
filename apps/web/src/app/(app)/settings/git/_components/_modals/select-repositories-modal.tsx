@@ -43,6 +43,7 @@ export const SelectRepositoriesModal = (props: {
         useReactQueryInvalidateQueries();
 
     const [isLoadingRepositories, setIsLoadingRepositories] = useState(true);
+    const [repositoryListError, setRepositoryListError] = useState(false);
     const [uploadProgress, setUploadProgress] = useState({
         current: 0,
         total: 0,
@@ -136,9 +137,9 @@ export const SelectRepositoriesModal = (props: {
     }, [props.selectedRepositories, selectedRepositories]);
 
     const closeable =
-        props.selectedRepositories.length > 0 &&
-        !loadingSaveRepositories &&
-        !hasChanges;
+        props.selectedRepositories.length > 0
+            ? !loadingSaveRepositories && !hasChanges
+            : true;
 
     return (
         <MagicModalContext value={{ closeable }}>
@@ -168,12 +169,20 @@ export const SelectRepositoriesModal = (props: {
                                 onFinishLoading={() =>
                                     setIsLoadingRepositories(false)
                                 }
+                                onError={setRepositoryListError}
                                 onChangeSelectedRepositories={
                                     setSelectedRepositories
                                 }
                             />
                         </FormControl.Input>
                     </FormControl.Root>
+
+                    {repositoryListError && (
+                        <p className="text-danger text-sm">
+                            Failed to load repositories. Check your token
+                            permissions and try again.
+                        </p>
+                    )}
 
                     <DialogFooter>
                         {props.selectedRepositories.length > 0 &&

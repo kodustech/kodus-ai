@@ -26,6 +26,7 @@ export const SelectRepositories = (props: {
     selectedRepositories: Repository[];
     onChangeSelectedRepositories: (repositories: Repository[]) => void;
     onFinishLoading?: (hasRepositories: boolean) => void;
+    onError?: (hasError: boolean) => void;
     teamId: string;
     /**
      * Optional predicate to narrow which repositories are OFFERED as choices
@@ -35,9 +36,12 @@ export const SelectRepositories = (props: {
      */
     filterRepository?: (repository: Repository) => boolean;
 }) => {
-    const { data: allRepositories = [], isLoading } = useGetRepositories(
-        props.teamId,
-    );
+    const {
+        data: allRepositories = [],
+        isLoading,
+        isError,
+        refetch,
+    } = useGetRepositories(props.teamId);
 
     const repositories = useMemo(
         () =>
@@ -50,6 +54,14 @@ export const SelectRepositories = (props: {
     useEffect(() => {
         if (!isLoading) props.onFinishLoading?.(repositories.length > 0);
     }, [isLoading, repositories.length]);
+
+    useEffect(() => {
+        props.onError?.(isError);
+    }, [isError]);
+
+    const handleRetry = () => {
+        void refetch();
+    };
 
     const {
         id = "select-repositories",
@@ -207,6 +219,21 @@ export const SelectRepositories = (props: {
 
                     <CommandList className="max-h-56 overflow-y-auto">
                         <CommandEmpty>No repository found.</CommandEmpty>
+
+                        {isError && (
+                            <div className="flex flex-col items-center gap-2 px-4 py-6 text-center">
+                                <span className="text-text-secondary text-sm">
+                                    Failed to load repositories. Please try
+                                    again.
+                                </span>
+                                <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={handleRetry}>
+                                    Try again
+                                </Button>
+                            </div>
+                        )}
 
                         {selectedRepositories.length > 0 && (
                             <CommandGroup heading="Selected">
