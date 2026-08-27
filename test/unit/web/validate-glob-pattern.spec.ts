@@ -174,13 +174,120 @@ describe('checkIgnorePattern', () => {
     });
 
     // A negated character class is not a negation of the path — it excludes
-    // one character and stays bounded.
-    it.each(['[!abc]*.js', '[!]]', '**/[!._]*.ts', 'a!b.txt'])(
-        'leaves the negated character class %j alone',
-        (pattern) => {
-            expect(checkIgnorePattern(pattern)).toEqual({ valid: true });
-        },
-    );
+    // one character and stays bounded. `[!(x)]` and `**/[!()]*.ts` are the
+    // awkward ones: "!(" appears inside the class by coincidence and must not
+    // read as an extglob.
+    it.each([
+        '[!abc]*.js',
+        '[!]]',
+        '**/[!._]*.ts',
+        'a!b.txt',
+        '[!(x)]',
+        '**/[!()]*.ts',
+        '[!(]*.ts',
+        'src/[!(a|b)]/*.ts',
+        '**/[!](]*.ts',
+        'a\\!(b).txt',
+    ])('leaves the character class or escaped "!" %j alone', (pattern) => {
+        expect(checkIgnorePattern(pattern)).toEqual({ valid: true });
+    });
+
+    // Generated rather than hand-listed: three rounds of review each found a
+    // shape the hand-listed cases missed. The safety property is what matters
+    // — nothing the checker accepts may behave like a path negation — so
+    // assert that directly over a matrix of shapes.
+    it('never accepts a pattern that swallows the tree', () => {
+        const corpus = [
+            'README.md',
+            'package.json',
+            'app.js',
+            'foo.js',
+            'src/app.ts',
+            'src/deep/a.ts',
+            'src/_private.ts',
+            'lib/x.js',
+            'a/foo.ts',
+            'b/bar.ts',
+            'docs/y.md',
+            'a/deep/n/x.ts',
+            'node_modules/p/i.js',
+            '.env',
+            'vendor/dep.php',
+        ];
+        const share = (pattern: string) => {
+            const match = picomatch(pattern, { dot: true, nocase: false });
+            // One argument on purpose — picomatch's second parameter switches
+            // the return from a boolean to an object, so handing the matcher
+            // straight to filter() makes every index >= 1 come back truthy.
+            return corpus.filter((file) => match(file)).length / corpus.length;
+        };
+
+        const bodies = ['x', 'a|b', 'node_modules', '*.js', '*', 'a|(b|c)'];
+        const prefixes = ['', '**/', 'src/', 'a/b/'];
+        const tails = ['', '.js', '/**', '/*.ts'];
+
+        const negations = new Set<string>();
+        const harmless = new Set<string>();
+
+        for (const body of bodies) {
+            for (const prefix of prefixes) {
+                for (const tail of tails) {
+                    negations.add(`${prefix}!(${body})${tail}`);
+                    negations.add(`${prefix}*.!(${body})${tail}`);
+
+                    // Same shape, quantifier head instead of "!": these group
+                    // and repeat, they do not invert, so they must be allowed
+                    // however broad they happen to be.
+                    for (const head of ['@', '+', '*', '?']) {
+                        harmless.add(`${prefix}${head}(${body})${tail}`);
+                        harmless.add(`${prefix}*.${head}(${body})${tail}`);
+                    }
+                }
+            }
+        }
+        for (const cls of ['[!abc]', '[!(x)]', '[!()]', '[abc]', '[a-z]']) {
+            for (const prefix of prefixes) {
+                for (const tail of tails) {
+                    harmless.add(`${prefix}${cls}${tail}`);
+                    harmless.add(`${prefix}${cls}*${tail}`);
+                }
+            }
+        }
+
+        // Syntax failures are a different verdict; keep them out so this only
+        // measures the negation rule.
+        const parses = (pattern: string) =>
+            checkGlobPatternSyntax(pattern).valid;
+        const negationList = [...negations].filter(parses);
+        const harmlessList = [...harmless].filter(parses);
+
+        expect(negationList.length).toBeGreaterThan(100);
+        expect(harmlessList.length).toBeGreaterThan(200);
+
+        // Every negation is rejected, wherever the "!(" sits in the pattern.
+        expect(
+            negationList.filter((p) => checkIgnorePattern(p).valid),
+        ).toEqual([]);
+
+        // Nothing else is, including the bracket classes that merely contain
+        // the characters "!" and "(" side by side.
+        expect(
+            harmlessList.filter((p) => !checkIgnorePattern(p).valid),
+        ).toEqual([]);
+
+        // The rule has to be earning its keep: enough of what it rejects must
+        // really swallow the tree, or it is guarding nothing.
+        expect(
+            negationList.filter((p) => share(p) >= 0.6).length,
+        ).toBeGreaterThan(10);
+
+        // And breadth alone is not the crime — some allowed patterns are wide
+        // on purpose (`**/*`), which is why the rule keys on negation, not on
+        // how much a pattern happens to match.
+        expect(
+            harmlessList.filter((p) => share(p) >= 0.6).length,
+        ).toBeGreaterThan(0);
+    });
 
     // Ties the rule to measured behaviour instead of to a belief about glob
     // semantics: every shape above really does swallow a large share of a

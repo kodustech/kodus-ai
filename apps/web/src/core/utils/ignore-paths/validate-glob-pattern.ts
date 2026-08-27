@@ -46,6 +46,29 @@ export function checkGlobPatternSyntax(pattern: string): GlobPatternCheck {
 }
 
 /**
+ * Index of the "]" closing the class opened at `start`, or -1 if unclosed.
+ * A "]" in the first position (after an optional "!" or "^") is a literal
+ * member of the class rather than its terminator — `[]]` holds "]", and
+ * `[!]]` is "any character except ]".
+ */
+function findClassEnd(pattern: string, start: number): number {
+    let i = start + 1;
+
+    if (pattern[i] === "!" || pattern[i] === "^") i++;
+    if (pattern[i] === "]") i++;
+
+    for (; i < pattern.length; i++) {
+        if (pattern[i] === "\\") {
+            i++;
+            continue;
+        }
+        if (pattern[i] === "]") return i;
+    }
+
+    return -1;
+}
+
+/**
  * Whether the pattern contains any negating construct: a leading "!", or an
  * extglob "!(...)" anywhere.
  *
@@ -65,20 +88,31 @@ export function checkGlobPatternSyntax(pattern: string): GlobPatternCheck {
  * The list is an OR of "ignore this" with no re-inclusion, so a negation
  * never expresses something it can express another way.
  *
- * Bracket classes are untouched — `[!abc]*.js` and `[!]]` negate a single
- * character, match 1/11 and 0/11, and contain no "!(" .
+ * Bracket classes are left alone. `[!abc]` negates a single CHARACTER, not a
+ * path — it is a wildcard in the same family as `*` and `?`, so `**\/[!_]*.ts`
+ * ("ts files not starting with an underscore") is an ordinary ignore rule.
+ * The scan therefore skips over classes: inside `[...]` a "!(" is the class's
+ * own negation followed by a literal paren, not an extglob.
  */
 function hasNegation(pattern: string): boolean {
     if (pattern.startsWith("!")) return true;
 
-    for (let i = 1; i < pattern.length - 1; i++) {
-        if (
-            pattern[i] === "!" &&
-            pattern[i + 1] === "(" &&
-            pattern[i - 1] !== "\\"
-        ) {
-            return true;
+    for (let i = 0; i < pattern.length - 1; i++) {
+        if (pattern[i] === "\\") {
+            i++;
+            continue;
         }
+
+        if (pattern[i] === "[") {
+            const end = findClassEnd(pattern, i);
+            // An unterminated "[" never reaches here — checkGlobPatternSyntax
+            // rejects it first — but treat it as literal rather than looping.
+            if (end === -1) continue;
+            i = end;
+            continue;
+        }
+
+        if (pattern[i] === "!" && pattern[i + 1] === "(") return true;
     }
 
     return false;
