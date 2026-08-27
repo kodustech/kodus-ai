@@ -103,6 +103,29 @@ describe("IgnorePathsModal", () => {
         expect(screen.getByText(/Missing closing/)).toBeInTheDocument();
     });
 
+    // `!src/**` would ignore every file OUTSIDE src/, silently dropping most
+    // of the repo from review — the list is a flat OR with no re-inclusion.
+    it("refuses a gitignore-style negation and explains what it would do", () => {
+        const { search, onSave } = setup();
+
+        fireEvent.change(search, { target: { value: "!src/**" } });
+
+        expect(
+            screen.getByText(/Negated patterns are not supported/),
+        ).toBeInTheDocument();
+
+        fireEvent.keyDown(search, { key: "Enter" });
+        expect(applied(onSave)).toEqual(PATHS);
+    });
+
+    it("still accepts an extglob that merely starts with !", () => {
+        const { search } = setup();
+
+        fireEvent.change(search, { target: { value: "!(foo).js" } });
+
+        expect(screen.getByText("Valid glob syntax.")).toBeInTheDocument();
+    });
+
     it("refuses to add a malformed pattern, by Enter or by button", () => {
         const { search, onSave } = setup();
 
