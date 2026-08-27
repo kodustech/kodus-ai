@@ -103,25 +103,30 @@ describe("IgnorePathsModal", () => {
         expect(screen.getByText(/Missing closing/)).toBeInTheDocument();
     });
 
-    // `!src/**` would ignore every file OUTSIDE src/, silently dropping most
-    // of the repo from review — the list is a flat OR with no re-inclusion.
-    it("refuses a gitignore-style negation and explains what it would do", () => {
-        const { search, onSave } = setup();
+    // Negation would ignore every file the rest of the pattern does NOT
+    // match, silently dropping most of the repo — the list is a flat OR with
+    // no re-inclusion. `**/!(node_modules)/**` matches an entire tree and does
+    // not even start with "!", which is why nothing negating gets through.
+    it.each(["!src/**", "!(a|b)/**", "**/!(node_modules)/**", "**/*.!(js)"])(
+        "refuses the negation %s and explains what it would do",
+        (pattern) => {
+            const { search, onSave } = setup();
 
-        fireEvent.change(search, { target: { value: "!src/**" } });
+            fireEvent.change(search, { target: { value: pattern } });
 
-        expect(
-            screen.getByText(/Negated patterns are not supported/),
-        ).toBeInTheDocument();
+            expect(
+                screen.getByText(/Negation is not supported/),
+            ).toBeInTheDocument();
 
-        fireEvent.keyDown(search, { key: "Enter" });
-        expect(applied(onSave)).toEqual(PATHS);
-    });
+            fireEvent.keyDown(search, { key: "Enter" });
+            expect(applied(onSave)).toEqual(PATHS);
+        },
+    );
 
-    it("still accepts an extglob that merely starts with !", () => {
+    it("leaves a negated character class alone", () => {
         const { search } = setup();
 
-        fireEvent.change(search, { target: { value: "!(foo).js" } });
+        fireEvent.change(search, { target: { value: "[!abc]*.js" } });
 
         expect(screen.getByText("Valid glob syntax.")).toBeInTheDocument();
     });

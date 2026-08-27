@@ -1,3 +1,5 @@
+import picomatch from 'picomatch';
+
 import { getDefaultKodusConfigFile } from '@libs/common/utils/validateCodeReviewConfigFile';
 
 import {
@@ -139,28 +141,99 @@ describe('checkIgnorePattern', () => {
     });
 
     // The list is an OR over independently-compiled matchers with no ordered
-    // re-inclusion, so "!" inverts instead of un-ignoring: `!src/**` matches
-    // every file OUTSIDE src/ and drops nearly the whole repo from review.
-    it.each(['!src/**', '!**/*.json', '!dist', '!!weird'])(
-        'rejects the negation %j',
-        (pattern) => {
-            const result = checkIgnorePattern(pattern);
+    // re-inclusion, so "!" inverts instead of un-ignoring: it matches every
+    // file the rest of the pattern does NOT, dropping most of the repo from
+    // review. Two earlier attempts at a "safe subset" each left a hole — a
+    // bare-"!" check missed `!(a|b)/**`, and a leading-only check missed
+    // `**/!(node_modules)/**` and `**/*.!(js)` — so nothing negating passes.
+    const NEGATIONS = [
+        '!src/**',
+        '!**/*.json',
+        '!dist',
+        '!!weird',
+        '!(foo).js',
+        '**/!(foo).js',
+        '!(a|b)/**',
+        '!(node_modules)/**',
+        '**/!(node_modules)/**',
+        'src/!(vendor)/**',
+        '**/*.!(js)',
+        '**/!(*.js)',
+        '!(a|(b|c))/**',
+        '!(*.js)',
+        '!(*/**)',
+    ];
 
-            expect(result.valid).toBe(false);
-            expect((result as { message: string }).message).toMatch(
-                /Negated patterns are not supported/,
-            );
-        },
-    );
+    it.each(NEGATIONS)('rejects the negation %j', (pattern) => {
+        const result = checkIgnorePattern(pattern);
 
-    // `!(...)` is an extglob matching a single segment, not a whole-tree
-    // negation — rejecting it on a bare startsWith("!") would be a false alarm.
-    it.each(['!(foo).js', '**/!(foo).js', '!(a|b)/**'])(
-        'accepts the extglob %j',
+        expect(result.valid).toBe(false);
+        expect((result as { message: string }).message).toMatch(
+            /Negation is not supported/,
+        );
+    });
+
+    // A negated character class is not a negation of the path — it excludes
+    // one character and stays bounded.
+    it.each(['[!abc]*.js', '[!]]', '**/[!._]*.ts', 'a!b.txt'])(
+        'leaves the negated character class %j alone',
         (pattern) => {
             expect(checkIgnorePattern(pattern)).toEqual({ valid: true });
         },
     );
+
+    // Ties the rule to measured behaviour instead of to a belief about glob
+    // semantics: every shape above really does swallow a large share of a
+    // mixed tree, and every shape below really is bounded. If picomatch ever
+    // changes its mind about one of these, this fails rather than the rule
+    // silently protecting nothing.
+    it('rejects the shapes that actually swallow a tree, keeps the bounded ones', () => {
+        const corpus = [
+            'README.md',
+            'package.json',
+            'app.js',
+            'src/app.ts',
+            'src/deep/a.ts',
+            'lib/x.js',
+            'a/foo.ts',
+            'b/bar.ts',
+            'docs/y.md',
+            'a/deep/n/x.ts',
+            'node_modules/p/i.js',
+        ];
+        const share = (pattern: string) => {
+            const match = picomatch(pattern, { dot: true, nocase: false });
+            // Call with one argument on purpose: picomatch's second parameter
+            // makes it return an object instead of a boolean, so passing the
+            // matcher straight to filter() feeds it the index and everything
+            // from index 1 on comes back truthy.
+            return corpus.filter((file) => match(file)).length / corpus.length;
+        };
+
+        const wideOpen = NEGATIONS.filter((p) => share(p) >= 0.6);
+
+        // Not every negation is wide, but the dangerous ones must be in here
+        // and must all be rejected.
+        expect(wideOpen).toEqual(
+            expect.arrayContaining([
+                '!src/**',
+                '!(a|b)/**',
+                '!(node_modules)/**',
+                '**/!(node_modules)/**',
+                '**/*.!(js)',
+            ]),
+        );
+        for (const pattern of wideOpen) {
+            expect([pattern, checkIgnorePattern(pattern).valid]).toEqual([
+                pattern,
+                false,
+            ]);
+        }
+
+        for (const pattern of ['[!abc]*.js', '[!]]', '**/*.ts']) {
+            expect(share(pattern)).toBeLessThan(0.6);
+        }
+    });
 
     it('keeps the negation rule out of the syntax check', () => {
         // `!src/**` really is valid glob syntax; only this list rejects it.
