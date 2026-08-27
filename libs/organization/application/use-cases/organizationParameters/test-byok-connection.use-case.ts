@@ -204,14 +204,23 @@ export class TestByokConnectionUseCase {
         // OK" for a key whose actual reviews would fail. (Native `anthropic`, with
         // its hardcoded api.anthropic.com endpoint, is handled in buildProbeRequest.)
         if (this.isAnthropicProtocolWithBaseURL(byokProvider)) {
-            if (!baseURL?.trim()) {
+            // A key-only connect to a known brand (Kimi/GLM) carries no baseURL —
+            // fall back to the brand's canonical endpoint, the SAME value the model
+            // build resolves. Only a generic anthropic_compatible (no fixed brand
+            // endpoint) still requires the user to supply one.
+            const effectiveBaseURL =
+                baseURL?.trim() ||
+                (REGISTRY.has(byokProvider)
+                    ? REGISTRY.get(byokProvider).defaultBaseURL
+                    : undefined);
+            if (!effectiveBaseURL) {
                 throw new BadRequestException(
                     `baseURL is required for ${byokProvider}`,
                 );
             }
             return await this.testAnthropicCompatible(
                 apiKey,
-                baseURL,
+                effectiveBaseURL,
                 input.model,
             );
         }

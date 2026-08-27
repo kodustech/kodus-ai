@@ -66,6 +66,9 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         id: spec.id,
         label: spec.label,
         doc: spec.doc,
+        // The brand's canonical endpoint — the same value `asCompatible` fills in on
+        // a key-only build, exposed so the connection probe resolves it identically.
+        defaultBaseURL: spec.defaultBaseURL,
         settingsSchema: z.object({ baseURL: z.string().optional() }),
 
         // Intrinsic to the Anthropic wire protocol → one source, the anthropic

@@ -227,6 +227,12 @@ export interface ProviderModule {
      *  adds it in ONE place and the web picker shows it. Absent/undefined ⇒ the UI
      *  falls back to a generic enabled-thinking example. */
     reasoningOverrideExample?(providerId: string): string | undefined;
+    /** The brand's canonical endpoint, when it has a fixed one (a Kimi/GLM brand
+     *  served over the Anthropic protocol). Fills baseURL on a key-only connect —
+     *  both the model build and the connection probe fall back to it so the user
+     *  never has to type the endpoint for a known brand. Absent for providers with
+     *  no fixed endpoint (native SDKs, custom/self-hosted). */
+    defaultBaseURL?: string;
     /** UI fields for the BYOK settings screen. */
     uiFields: FieldDescriptor[];
     /** How to enumerate this provider's models, per requested id (a module may

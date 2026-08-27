@@ -216,4 +216,34 @@ describe('TestByokModelUseCase', () => {
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    // Regression (catalog removal): a key-only connect to an Anthropic-protocol
+    // BRAND stores NO baseURL. On a listing miss the probe still runs, delegated to
+    // TestByokConnection with the empty stored baseURL — which resolves the brand's
+    // defaultBaseURL (covered by that use-case's own spec). Before the fix this path
+    // had no endpoint and the probe threw "baseURL is required".
+    it('key-only brand connect (no stored baseURL) delegates the probe for the endpoint to be resolved', async () => {
+        const { useCase, connectionUseCase } = build({
+            configValue: {
+                version: 2,
+                credentials: [
+                    { id: 'c1', provider: 'moonshot', apiKey: 'enc', settings: {} },
+                ],
+                models: [],
+            },
+            catalog: [], // listing miss → fall through to the probe
+        });
+        await useCase.execute({
+            provider: 'moonshot',
+            model: 'kimi-k2.7-code',
+            organizationAndTeamData: org,
+        });
+        expect(connectionUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                provider: 'moonshot',
+                model: 'kimi-k2.7-code',
+                baseURL: undefined, // stored key-only → TestByokConnection fills it
+            }),
+        );
+    });
 });
