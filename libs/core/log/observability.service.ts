@@ -12,7 +12,11 @@ import { DatabaseConnection } from '@libs/core/infrastructure/config/types';
 import { createLogger } from '@libs/core/log/logger';
 import { deriveTu } from './token-usage-tu';
 import { setLlmObservability } from '@libs/llm/llm-observability';
-import { readAiSdkUsage } from '@libs/llm/ai-sdk-usage';
+import {
+    readAiSdkUsage,
+    readAiSdkUsageFromError,
+    type AiSdkUsage,
+} from '@libs/llm/ai-sdk-usage';
 
 export type TokenUsage = {
     input_tokens?: number;
@@ -426,34 +430,52 @@ export class ObservabilityService implements OnModuleInit {
         // Measure the call duration here (parity with the old recordAgentRunUsage
         // durationMs, which the agent loop used to record by hand).
         const startedAt = Date.now();
+        const usageAttrs = (usage: AiSdkUsage, finishReason?: string) =>
+            buildUsageSpanAttributes({
+                runName: params.runName,
+                model: params.model,
+                byokModelId: params.byokModelId,
+                credentialId: params.credentialId,
+                route: params.route,
+                usedFallback: params.usedFallback,
+                agentName: (a.agentName as string) ?? spanAgent,
+                phase: (a.phase as string) ?? spanPhase,
+                type: a.type as string | undefined,
+                organizationId: a.organizationId as string | undefined,
+                teamId: a.teamId as string | undefined,
+                prNumber: a.prNumber as number | undefined,
+                source: a.source as string | undefined,
+                durationMs: Date.now() - startedAt,
+                finishReason,
+                usage,
+            });
         return this.runInSpan(
             params.spanName,
             async (span) => {
-                const result = await params.exec();
-                const usage = result?.usage;
-                span?.setAttributes?.(
-                    buildUsageSpanAttributes({
-                        runName: params.runName,
-                        model: params.model,
-                        byokModelId: params.byokModelId,
-                        credentialId: params.credentialId,
-                        route: params.route,
-                        usedFallback: params.usedFallback,
-                        agentName: (a.agentName as string) ?? spanAgent,
-                        phase: (a.phase as string) ?? spanPhase,
-                        type: a.type as string | undefined,
-                        organizationId: a.organizationId as string | undefined,
-                        teamId: a.teamId as string | undefined,
-                        prNumber: a.prNumber as number | undefined,
-                        source: a.source as string | undefined,
-                        durationMs: Date.now() - startedAt,
+                try {
+                    const result = await params.exec();
+                    span?.setAttributes?.(
                         // Single shared reader — same mapping the agent harness
                         // uses, so cache-read/write + reasoning can't be captured
                         // in one path and dropped in the other.
-                        usage: readAiSdkUsage(usage),
-                    }),
-                );
-                return result;
+                        usageAttrs(readAiSdkUsage(result?.usage)),
+                    );
+                    return result;
+                } catch (err) {
+                    // A call that died AFTER the provider answered (structured
+                    // output parse / schema mismatch) was still billed, and the
+                    // SDK hands its usage back on the error. Record it before
+                    // rethrowing, else the span lands in Mongo with the error
+                    // flag and zero tokens while Langfuse shows the real spend.
+                    // runInSpan's own catch still stamps `error`/`exception.*`.
+                    const failed = readAiSdkUsageFromError(err);
+                    if (failed) {
+                        span?.setAttributes?.(
+                            usageAttrs(failed.usage, failed.finishReason),
+                        );
+                    }
+                    throw err;
+                }
             },
             params.attrs,
         );
