@@ -21,7 +21,10 @@ import {
 
 import { CacheService } from '@libs/core/cache/cache.service';
 
-import { ModelCostCalculator } from './model-cost-calculator';
+import {
+    isChatGptSubscriptionUsage,
+    ModelCostCalculator,
+} from './model-cost-calculator';
 import { PricingResolver } from './pricing-resolver';
 
 // Overview cache TTLs. A window that ends before today is immutable (historical
@@ -165,7 +168,20 @@ export class BuildUsageSummaryUseCase {
         row: BaseUsageContract,
         overrides?: ManualPricingOverrides,
     ): Promise<EnrichedModelUsage> {
-        const resolved = await this.pricingResolver.resolve(row.model, overrides);
+        if (isChatGptSubscriptionUsage(row.model)) {
+            const costByTier = row.byTier?.map(() => zeroCost());
+            return {
+                ...row,
+                cost: zeroCost(),
+                ...(costByTier ? { costByTier } : {}),
+                pricingSource: 'missing',
+            };
+        }
+
+        const resolved = await this.pricingResolver.resolve(
+            row.model,
+            overrides,
+        );
         const pricingSource = TO_API_SOURCE[resolved.source];
 
         if (row.byTier) {
@@ -201,11 +217,7 @@ export class BuildUsageSummaryUseCase {
 /** Epoch ms for 00:00 UTC today — the cutoff for "immutable past window". */
 function startOfTodayUtc(): number {
     const now = new Date();
-    return Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate(),
-    );
+    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
 
 function zeroCost(): CostBreakdown {

@@ -121,6 +121,9 @@ type TestByokInput = {
     awsSecretAccessKey?: string;
     awsRegion?: string;
     awsSessionToken?: string;
+    codexAccessToken?: string;
+    codexRefreshToken?: string;
+    accountId?: string;
 };
 
 const TEST_TIMEOUT_MS = 15_000;
@@ -184,6 +187,23 @@ export class TestByokConnectionUseCase {
             });
         }
 
+        if (byokProvider === BYOKProvider.CHATGPT_SUBSCRIPTION) {
+            if (
+                !input.codexAccessToken?.trim() ||
+                !input.codexRefreshToken?.trim() ||
+                !input.accountId?.trim()
+            ) {
+                throw new BadRequestException(
+                    'codexAccessToken, codexRefreshToken, and accountId are required for ChatGPT subscription auth',
+                );
+            }
+            return this.testCodexSubscription(
+                input.codexAccessToken.trim(),
+                input.accountId.trim(),
+                input.model,
+            );
+        }
+
         if (!apiKey?.trim()) {
             throw new BadRequestException('apiKey is required');
         }
@@ -216,7 +236,11 @@ export class TestByokConnectionUseCase {
             );
         }
 
-        const { url, headers } = this.buildProbeRequest(byokProvider, apiKey, baseURL);
+        const { url, headers } = this.buildProbeRequest(
+            byokProvider,
+            apiKey,
+            baseURL,
+        );
 
         // SSRF guard: only openai_compatible consumes a user-provided
         // base URL here; the other providers hardcode their endpoints.
@@ -240,6 +264,58 @@ export class TestByokConnectionUseCase {
         } catch (err) {
             const latencyMs = Date.now() - start;
             return this.normalizeError(err, latencyMs);
+        }
+    }
+
+    private async testCodexSubscription(
+        accessToken: string,
+        accountId: string,
+        model?: string,
+    ): Promise<TestByokResult> {
+        const start = Date.now();
+        try {
+            const response = await fetch(
+                'https://chatgpt.com/backend-api/codex/responses',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'chatgpt-account-id': accountId,
+                        'OpenAI-Beta': 'responses=experimental',
+                        'originator': 'codex_cli_rs',
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: model?.trim() || 'gpt-5.6-luna',
+                        input: 'ping',
+                        stream: true,
+                        store: false,
+                        include: ['reasoning.encrypted_content'],
+                    }),
+                    signal: AbortSignal.timeout(TEST_TIMEOUT_MS),
+                },
+            );
+            if (!response.ok) {
+                const body = await response.text().catch(() => '');
+                return this.normalizeError(
+                    {
+                        response: {
+                            status: response.status,
+                            data: body,
+                        },
+                    },
+                    Date.now() - start,
+                );
+            }
+            await response.body?.cancel();
+            return {
+                ok: true,
+                code: 'ok',
+                latencyMs: Date.now() - start,
+                httpStatus: response.status,
+            };
+        } catch (error) {
+            return this.normalizeError(error, Date.now() - start);
         }
     }
 
@@ -359,7 +435,9 @@ export class TestByokConnectionUseCase {
             assertSafeRegion(region);
             // GCP project IDs: 6-30 chars, lowercase letters/digits/hyphens,
             // must start with a letter. Sanity-check the SA key's project.
-            if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(credentials.project_id)) {
+            if (
+                !/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(credentials.project_id)
+            ) {
                 return {
                     ok: false,
                     code: 'bad_request',
@@ -524,7 +602,9 @@ export class TestByokConnectionUseCase {
                 'https://sts.amazonaws.com/?Action=GetCallerIdentity&Version=2011-06-15';
             const res = await client.fetch(stsUrl, {
                 method: 'POST',
-                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                headers: {
+                    'content-type': 'application/x-www-form-urlencoded',
+                },
             });
 
             if (!res.ok) {
@@ -659,7 +739,7 @@ export class TestByokConnectionUseCase {
                 return {
                     url: 'https://api.openai.com/v1/models',
                     headers: {
-                        Authorization: `Bearer ${apiKey}`,
+                        'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json',
                     },
                 };
@@ -686,7 +766,7 @@ export class TestByokConnectionUseCase {
                 return {
                     url: 'https://openrouter.ai/api/v1/models',
                     headers: {
-                        Authorization: `Bearer ${apiKey}`,
+                        'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json',
                     },
                 };
@@ -695,7 +775,7 @@ export class TestByokConnectionUseCase {
                 return {
                     url: 'https://api.novita.ai/v3/openai/models',
                     headers: {
-                        Authorization: `Bearer ${apiKey}`,
+                        'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json',
                     },
                 };
@@ -714,7 +794,7 @@ export class TestByokConnectionUseCase {
                 return {
                     url,
                     headers: {
-                        Authorization: `Bearer ${apiKey}`,
+                        'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json',
                     },
                 };
@@ -782,7 +862,7 @@ export class TestByokConnectionUseCase {
                     code: 'rate_limit',
                     ...base,
                     message:
-                        "Rate-limited — the key works but the provider is throttling right now. Wait a moment and save again, or lower Max Concurrent Requests in Advanced settings.",
+                        'Rate-limited — the key works but the provider is throttling right now. Wait a moment and save again, or lower Max Concurrent Requests in Advanced settings.',
                 };
             }
 
@@ -823,7 +903,7 @@ export class TestByokConnectionUseCase {
                 ...base,
                 message: status
                     ? `The provider returned HTTP ${status} and Kodus couldn't classify the error. See the provider message below for details.`
-                    : 'Kodus reached the provider but couldn\'t classify the response. See the provider message below.',
+                    : "Kodus reached the provider but couldn't classify the response. See the provider message below.",
             };
         }
 

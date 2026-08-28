@@ -19,6 +19,8 @@
  */
 import { canonicalModelId } from '@libs/common/utils/canonical-model';
 
+const CHATGPT_SUBSCRIPTION_PREFIX = 'chatgpt_subscription:';
+
 /**
  * Canonical shape mirrored onto every LLM-usage span. `isByok` / `sys` encode
  * the two Token Usage views WITHOUT changing their logic:
@@ -114,10 +116,7 @@ const n = (v: unknown): number => (typeof v === 'number' ? v : 0);
  * specific name families. Mirrored as an aggregation `$switch` in the Mongo
  * backfill (backfill-tu.ts) — keep the two in sync.
  */
-export function deriveArea(
-    runName: unknown,
-    phase?: unknown,
-): TokenUsageArea {
+export function deriveArea(runName: unknown, phase?: unknown): TokenUsageArea {
     const rn = typeof runName === 'string' ? runName : '';
 
     if (SYSTEM_RUN_NAMES.has(rn)) return 'system';
@@ -207,13 +206,15 @@ export function deriveTu(
     }
 
     const rawModel = attrs['gen_ai.response.model'];
-    // Canonical name collapses a `provider:` prefix (`google_gemini:gemini-2.5-pro`
-    // → `gemini-2.5-pro`) while PRESERVING a Bedrock `:<version>` suffix's model
-    // (`...haiku-...-v1:0` → `...haiku-...-v1`, not `0`), identical to the read
-    // pipeline and the BYOK cost join — one shared primitive so the three agree.
+    // Canonical name collapses ordinary `provider:` prefixes while preserving
+    // Bedrock's model portion before a numeric version suffix. Subscription
+    // access keeps its prefix because the cost layer must distinguish included
+    // ChatGPT usage from identically named per-token API models.
     const model =
         typeof rawModel === 'string' && rawModel
-            ? canonicalModelId(rawModel)
+            ? rawModel.startsWith(CHATGPT_SUBSCRIPTION_PREFIX)
+                ? rawModel
+                : canonicalModelId(rawModel)
             : '';
 
     const input = n(attrs['gen_ai.usage.input_tokens']);

@@ -139,6 +139,10 @@ export interface NormalizedModel {
     awsSecretAccessKey?: string;
     awsRegion?: string;
     awsSessionToken?: string;
+    codexAccessToken?: string;
+    codexRefreshToken?: string;
+    accountId?: string;
+    codexNoRetainedReasoning?: boolean;
     /** Routing PROVENANCE (not a credential/tuning field), stamped by
      *  `resolveTaskSlot` so it rides ALONG the slot to whichever span records the
      *  call — no per-agent threading. Absent on the env/managed-default path (no
@@ -203,4 +207,6 @@ export const BYOK_SECRET_SETTINGS = [
     'awsAccessKeyId',
     'awsSecretAccessKey',
     'awsSessionToken',
+    'codexAccessToken',
+    'codexRefreshToken',
 ] as const;

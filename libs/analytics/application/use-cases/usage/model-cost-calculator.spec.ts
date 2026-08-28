@@ -22,7 +22,11 @@ const pricingFromMillions = (opts: {
     const withTier = (def: number, tieredPerM?: number) => ({
         default: def,
         ...(tieredPerM !== undefined
-            ? { tiers: [{ threshold: 200_000, rate: perToken(tieredPerM) ?? 0 }] }
+            ? {
+                  tiers: [
+                      { threshold: 200_000, rate: perToken(tieredPerM) ?? 0 },
+                  ],
+              }
             : {}),
     });
     return {
@@ -77,6 +81,24 @@ describe('ModelCostCalculator', () => {
         expect(tokenPricingUseCase.execute).not.toHaveBeenCalled();
     });
 
+    it('reports subscription usage but contributes zero to monthly spend', async () => {
+        const usage = {
+            input: 100_000,
+            output: 40_000,
+            outputReasoning: 20_000,
+            model: 'chatgpt_subscription:gpt-5.6-luna',
+        };
+
+        expect(await calculator.spendByModel([usage])).toEqual([
+            {
+                model: 'chatgpt_subscription:gpt-5.6-luna',
+                spentUsd: 0,
+            },
+        ]);
+        expect(await calculator.totalCost([usage])).toBe(0);
+        expect(tokenPricingUseCase.execute).not.toHaveBeenCalled();
+    });
+
     it('prices a flat row at default rates (no byTier present)', async () => {
         tokenPricingUseCase.execute.mockResolvedValue(
             pricingFromMillions({
@@ -119,17 +141,20 @@ describe('ModelCostCalculator', () => {
                 cacheRead: 200_000,
                 cacheWrite: 50_000,
                 model: 'g',
-                byTier: [tier({
+                byTier: [
+                    tier({
                         input: 200_000,
                         output: 100_000,
                         cacheRead: 50_000,
                         cacheWrite: 20_000,
-                    }), tier({
+                    }),
+                    tier({
                         input: 800_000,
                         output: 400_000,
                         cacheRead: 150_000,
                         cacheWrite: 30_000,
-                    })],
+                    }),
+                ],
             },
         ]);
 

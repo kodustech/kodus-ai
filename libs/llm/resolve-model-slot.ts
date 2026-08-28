@@ -52,6 +52,9 @@ function slotFromModel(
     // a new auth shape extends this in one place next to the field mapping below.
     const hasAuth =
         !!apiKey ||
+        (!!STR(s.codexAccessToken) &&
+            !!STR(s.codexRefreshToken) &&
+            !!STR(s.accountId)) ||
         !!STR(s.awsBearerToken) ||
         (!!STR(s.awsAccessKeyId) && !!STR(s.awsSecretAccessKey));
     if (!provider || !hasAuth || !STR(model.model)) {
@@ -74,6 +77,13 @@ function slotFromModel(
         awsSecretAccessKey: STR(s.awsSecretAccessKey),
         awsRegion: STR(s.awsRegion),
         awsSessionToken: STR(s.awsSessionToken),
+        codexAccessToken: STR(s.codexAccessToken),
+        codexRefreshToken: STR(s.codexRefreshToken),
+        accountId: STR(s.accountId),
+        codexNoRetainedReasoning:
+            typeof s.codexNoRetainedReasoning === 'boolean'
+                ? s.codexNoRetainedReasoning
+                : undefined,
         reasoningEffort: model.reasoningEffort,
         reasoningConfigOverride: STR(model.reasoningConfigOverride),
         temperature: model.temperature,

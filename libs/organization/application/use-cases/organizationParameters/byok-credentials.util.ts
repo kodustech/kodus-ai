@@ -20,6 +20,9 @@ export interface DecryptedByokSlot {
     awsSecretAccessKey?: string;
     awsRegion?: string;
     awsSessionToken?: string;
+    codexAccessToken?: string;
+    codexRefreshToken?: string;
+    accountId?: string;
 }
 
 /** decrypt() but tolerant of already-plaintext / undecryptable values. */
@@ -96,6 +99,9 @@ export async function resolveByokSlot(
             awsSecretAccessKey: safeDecrypt(str(settings.awsSecretAccessKey)),
             awsRegion: str(settings.awsRegion),
             awsSessionToken: safeDecrypt(str(settings.awsSessionToken)),
+            codexAccessToken: safeDecrypt(str(settings.codexAccessToken)),
+            codexRefreshToken: safeDecrypt(str(settings.codexRefreshToken)),
+            accountId: str(settings.accountId),
         };
     }
 

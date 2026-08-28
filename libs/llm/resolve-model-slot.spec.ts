@@ -1,7 +1,4 @@
-import {
-    resolveDefaultSlot,
-    resolveModelSlot,
-} from './resolve-model-slot';
+import { resolveDefaultSlot, resolveModelSlot } from './resolve-model-slot';
 import type { BYOKConfig } from './byok-config';
 
 describe('resolveDefaultSlot — the effective default slot for a config', () => {
@@ -9,7 +6,12 @@ describe('resolveDefaultSlot — the effective default slot for a config', () =>
         const v2: BYOKConfig = {
             version: 2,
             credentials: [
-                { id: 'c1', provider: 'openai_compatible', apiKey: 'enc-C1', settings: { baseURL: 'https://h:8000/v1' } },
+                {
+                    id: 'c1',
+                    provider: 'openai_compatible',
+                    apiKey: 'enc-C1',
+                    settings: { baseURL: 'https://h:8000/v1' },
+                },
             ],
             models: [{ id: 'm1', credentialId: 'c1', model: 'kimi-k2.7-code' }],
         };
@@ -44,8 +46,12 @@ describe('resolveDefaultSlot — the effective default slot for a config', () =>
     it('managed:true credential → null (env-default branch runs)', () => {
         const v2: BYOKConfig = {
             version: 2,
-            credentials: [{ id: 'mgd', provider: 'openai_compatible', managed: true }],
-            models: [{ id: 'm1', credentialId: 'mgd', model: 'kimi-k2.7-code' }],
+            credentials: [
+                { id: 'mgd', provider: 'openai_compatible', managed: true },
+            ],
+            models: [
+                { id: 'm1', credentialId: 'mgd', model: 'kimi-k2.7-code' },
+            ],
         };
         expect(resolveDefaultSlot(v2)).toBeUndefined();
     });
@@ -65,9 +71,15 @@ describe('resolveDefaultSlot — the effective default slot for a config', () =>
         expect(resolveDefaultSlot(null)).toBeUndefined();
         expect(resolveDefaultSlot('garbage')).toBeUndefined();
         expect(resolveDefaultSlot({ version: 2 })).toBeUndefined();
-        expect(resolveDefaultSlot({ version: 1, main: {} } as any)).toBeUndefined();
-        expect(() => resolveDefaultSlot({ main: 42, fallback: [] } as any)).not.toThrow();
-        expect(resolveDefaultSlot({ main: 42, fallback: [] } as any)).toBeUndefined();
+        expect(
+            resolveDefaultSlot({ version: 1, main: {} } as any),
+        ).toBeUndefined();
+        expect(() =>
+            resolveDefaultSlot({ main: 42, fallback: [] } as any),
+        ).not.toThrow();
+        expect(
+            resolveDefaultSlot({ main: 42, fallback: [] } as any),
+        ).toBeUndefined();
     });
 });
 
@@ -75,7 +87,12 @@ describe('resolveModelSlot — materialize ONE v2 model slot by id (04b)', () =>
     const v2: BYOKConfig = {
         version: 2,
         credentials: [
-            { id: 'c1', provider: 'openai_compatible', apiKey: 'enc-C1', settings: { baseURL: 'https://h/v1' } },
+            {
+                id: 'c1',
+                provider: 'openai_compatible',
+                apiKey: 'enc-C1',
+                settings: { baseURL: 'https://h/v1' },
+            },
             { id: 'mgd', provider: 'openai', managed: true },
         ],
         models: [
@@ -121,7 +138,10 @@ describe('resolveModelSlot — Amazon Bedrock authenticates with aws* fields, NO
 
     it('resolves a slot from awsBearerToken (no apiKey)', () => {
         const slot = resolveModelSlot(
-            bedrockCfg({ awsBearerToken: 'enc-bearer', awsRegion: 'us-east-1' }),
+            bedrockCfg({
+                awsBearerToken: 'enc-bearer',
+                awsRegion: 'us-east-1',
+            }),
             'mb',
         );
         expect(slot).toMatchObject({
@@ -155,5 +175,57 @@ describe('resolveModelSlot — Amazon Bedrock authenticates with aws* fields, NO
         expect(
             resolveModelSlot(bedrockCfg({ awsAccessKeyId: 'enc-akid' }), 'mb'),
         ).toBeUndefined();
+    });
+});
+
+describe('resolveModelSlot — ChatGPT subscription token credentials', () => {
+    const config: BYOKConfig = {
+        version: 2,
+        credentials: [
+            {
+                id: 'codex-credential',
+                provider: 'chatgpt_subscription',
+                settings: {
+                    codexAccessToken: 'encrypted-access',
+                    codexRefreshToken: 'encrypted-refresh',
+                    accountId: 'account-id',
+                },
+            },
+        ],
+        models: [
+            {
+                id: 'codex-model',
+                credentialId: 'codex-credential',
+                model: 'gpt-5.6-luna',
+            },
+        ],
+    };
+
+    it('resolves a token-only credential without degrading to the managed default', () => {
+        expect(resolveModelSlot(config, 'codex-model')).toMatchObject({
+            provider: 'chatgpt_subscription',
+            model: 'gpt-5.6-luna',
+            credentialId: 'codex-credential',
+            apiKey: '',
+            codexAccessToken: 'encrypted-access',
+            codexRefreshToken: 'encrypted-refresh',
+            accountId: 'account-id',
+        });
+    });
+
+    it('rejects an incomplete token credential', () => {
+        const incomplete: BYOKConfig = {
+            ...config,
+            credentials: [
+                {
+                    ...config.credentials[0],
+                    settings: {
+                        codexAccessToken: 'encrypted-access',
+                        accountId: 'account-id',
+                    },
+                },
+            ],
+        };
+        expect(resolveModelSlot(incomplete, 'codex-model')).toBeUndefined();
     });
 });

@@ -166,8 +166,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             );
 
         const existingConfig = getConfigValue?.configValue as
-            | BYOKConfig
-            | undefined;
+            BYOKConfig | undefined;
 
         const processedConfigValue = this.encryptByokConfigApiKey(
             configValue,
@@ -343,7 +342,9 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         const nextSettings = next.settings;
         const existingSettings = existing?.settings;
         if (nextSettings || existingSettings) {
-            const settings: Record<string, unknown> = { ...(nextSettings ?? {}) };
+            const settings: Record<string, unknown> = {
+                ...(nextSettings ?? {}),
+            };
             for (const field of BYOK_SECRET_SETTINGS) {
                 const kept = this.encryptOrKeep(
                     typeof nextSettings?.[field] === 'string'
@@ -379,6 +380,19 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         const has = (v: unknown): boolean =>
             typeof v === 'string' && v.length > 0;
         const settings = (cred?.settings ?? {}) as Record<string, unknown>;
+
+        if (cred?.provider === BYOKProvider.CHATGPT_SUBSCRIPTION) {
+            if (
+                !has(settings.codexAccessToken) ||
+                !has(settings.codexRefreshToken) ||
+                !has(settings.accountId)
+            ) {
+                throw new BadRequestException(
+                    'ChatGPT subscription credential requires codexAccessToken, codexRefreshToken, and accountId',
+                );
+            }
+            return;
+        }
 
         if (cred?.provider === BYOKProvider.AMAZON_BEDROCK) {
             const hasBearer = has(settings.awsBearerToken);

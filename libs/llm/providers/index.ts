@@ -19,6 +19,7 @@ import './novita';
 import './moonshot';
 import './azure';
 import './zai';
+import './codex';
 
 export { REGISTRY, registerProvider } from './kernel/registry';
 export type { ProviderModule } from './kernel/types';

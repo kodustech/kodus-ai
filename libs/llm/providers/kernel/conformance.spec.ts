@@ -29,6 +29,7 @@ import { novitaModule } from '../novita/index';
 import { moonshotModule } from '../moonshot/index';
 import { azureModule } from '../azure/index';
 import { zaiModule } from '../zai/index';
+import { codexSubscriptionModule } from '../codex/index';
 
 import openaiPlain from '../openai/__fixtures__/plain.json';
 import openaiReasoning from '../openai/__fixtures__/reasoning.json';
@@ -100,7 +101,9 @@ const CASES: ProviderCase[] = [
     {
         module: moonshotModule,
         model: 'kimi-k2.7-code',
-        fixtures: [{ name: 'plain', fixture: moonshotPlain as ProviderFixture }],
+        fixtures: [
+            { name: 'plain', fixture: moonshotPlain as ProviderFixture },
+        ],
     },
     {
         module: azureModule,
@@ -116,6 +119,16 @@ const CASES: ProviderCase[] = [
             {
                 name: 'reasoning',
                 fixture: anthropicReasoning as ProviderFixture,
+            },
+        ],
+    },
+    {
+        module: codexSubscriptionModule,
+        model: 'gpt-5.6-luna',
+        fixtures: [
+            {
+                name: 'reasoning',
+                fixture: openaiReasoning as ProviderFixture,
             },
         ],
     },

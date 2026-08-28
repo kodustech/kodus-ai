@@ -21,6 +21,7 @@ import { openRouterModule } from '../openrouter/index';
 import { bedrockModule } from '../bedrock/index';
 import { novitaModule } from '../novita/index';
 import { moonshotModule } from '../moonshot/index';
+import { codexSubscriptionModule } from '../codex/index';
 // D-05 registry-wide sweep (03-13): drive each module's real normalize boundary
 // through the 03-01 conformance harness against its committed fixture.
 import { runConformance, type ProviderFixture } from './conformance';
@@ -49,13 +50,18 @@ const ALL_IDS = [
     'moonshot',
     'azure',
     'zai',
+    'chatgpt_subscription',
 ];
 
 const EFFORTS: ReasoningEffort[] = ['none', 'low', 'medium', 'high'];
 
 /** A minimal build config for a given provider id + model (fake key — build()
  *  constructs the SDK client but makes no request). */
-function sampleConfig(provider: string, model: string, baseURL?: string): ProviderBuildConfig {
+function sampleConfig(
+    provider: string,
+    model: string,
+    baseURL?: string,
+): ProviderBuildConfig {
     return {
         provider: provider as ProviderBuildConfig['provider'],
         apiKey: 'sk-test-key-not-real',
@@ -70,14 +76,21 @@ function sampleConfig(provider: string, model: string, baseURL?: string): Provid
  */
 export function runStaticConformance(
     module: ProviderModule,
-    sample: { provider: string; model: string; baseURL?: string; reasoningModel?: string },
+    sample: {
+        provider: string;
+        model: string;
+        baseURL?: string;
+        reasoningModel?: string;
+    },
 ): void {
     const cfg = sampleConfig(sample.provider, sample.model, sample.baseURL);
 
     it(`${module.id}: build() returns a model object (no network)`, () => {
         const model = module.build(cfg);
         expect(model).toBeDefined();
-        expect(typeof model === 'object' || typeof model === 'string').toBe(true);
+        expect(typeof model === 'object' || typeof model === 'string').toBe(
+            true,
+        );
     });
 
     it(`${module.id}: settingsSchema round-trips valid settings`, () => {
@@ -144,7 +157,11 @@ describe('ProviderRegistry', () => {
     });
 
     it('rejects double-registration of an id by a different module', () => {
-        const clash: ProviderModule = { ...openaiModule, id: 'openai', aliases: [] };
+        const clash: ProviderModule = {
+            ...openaiModule,
+            id: 'openai',
+            aliases: [],
+        };
         expect(() => registerProvider(clash)).toThrow(/already registered/);
     });
 });
@@ -204,17 +221,21 @@ describe('01-02 ported modules — static conformance', () => {
         provider: 'amazon_bedrock',
         model: 'anthropic.claude-sonnet-4-20250514-v1:0',
     });
+    runStaticConformance(codexSubscriptionModule, {
+        provider: 'chatgpt_subscription',
+        model: 'gpt-5.6-luna',
+    });
 });
 
-describe('registry covers all twelve BYOKProvider ids', () => {
+describe('registry covers all thirteen BYOKProvider ids', () => {
     it('every id resolves to a registered module', () => {
         for (const id of ALL_IDS) {
             expect(REGISTRY.has(id)).toBe(true);
             expect(REGISTRY.get(id)).toBeDefined();
         }
     });
-    it('registers exactly 10 distinct module objects for the 12 ids', () => {
-        expect(REGISTRY.all().length).toBe(10);
+    it('registers exactly 11 distinct module objects for the 13 ids', () => {
+        expect(REGISTRY.all().length).toBe(11);
         expect(new Set(REGISTRY.ids())).toEqual(new Set(ALL_IDS));
     });
 });
@@ -306,6 +327,10 @@ const CONFORMANCE_SAMPLES: Record<
         cfg: sampleConfig('zai', 'glm-5.2', 'https://api.z.ai/api/anthropic'),
         fixture: anthropicReasoningFixture as ProviderFixture,
     },
+    chatgpt_subscription: {
+        cfg: sampleConfig('chatgpt_subscription', 'gpt-5.6-luna'),
+        fixture: openaiReasoningFixture as ProviderFixture,
+    },
 };
 
 describe('registry-wide conformance sweep (D-05): no module regresses to the zero stub', () => {
@@ -317,8 +342,8 @@ describe('registry-wide conformance sweep (D-05): no module regresses to the zer
         }
     });
 
-    it('covers all 10 distinct registered modules', () => {
-        expect(modules.length).toBe(10);
+    it('covers all 11 distinct registered modules', () => {
+        expect(modules.length).toBe(11);
     });
 
     for (const module of modules) {

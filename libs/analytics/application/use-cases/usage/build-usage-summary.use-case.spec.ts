@@ -87,6 +87,41 @@ describe('BuildUsageSummaryUseCase.execute (enrich)', () => {
         expect(report.totalCost.total).toBeCloseTo(row.cost.total, 10);
     });
 
+    it('reports subscription tokens without resolving or reporting per-token cost', async () => {
+        const useCase = makeUseCase(
+            [
+                {
+                    model: 'chatgpt_subscription:gpt-5.6-luna',
+                    input: 1_000,
+                    output: 400,
+                    total: 1_400,
+                    outputReasoning: 200,
+                    cacheRead: 0,
+                    cacheWrite: 0,
+                },
+            ],
+            {},
+        );
+
+        const report = await useCase.execute({} as any);
+
+        expect(report.byModel[0]).toMatchObject({
+            model: 'chatgpt_subscription:gpt-5.6-luna',
+            input: 1_000,
+            output: 400,
+            outputReasoning: 200,
+            cost: {
+                input: 0,
+                output: 0,
+                cacheRead: 0,
+                cacheWrite: 0,
+                total: 0,
+            },
+            pricingSource: 'missing',
+        });
+        expect(report.totalCost.total).toBe(0);
+    });
+
     it('prices a 3-bracket model per bracket and aligns costByTier with byTier', async () => {
         const useCase = makeUseCase(
             [

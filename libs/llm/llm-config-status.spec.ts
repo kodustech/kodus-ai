@@ -1,7 +1,4 @@
-import {
-    isByokSlotConfigured,
-    isV2ModelResolvable,
-} from './llm-config-status';
+import { isByokSlotConfigured, isV2ModelResolvable } from './llm-config-status';
 import { BYOKProvider } from './model-providers';
 import type { BYOKCredential } from './byok-config';
 
@@ -10,8 +7,15 @@ import type { BYOKCredential } from './byok-config';
 // get-llm-config-status.use-case.spec.ts.
 describe('isByokSlotConfigured — provider-aware auth-material check', () => {
     it('most providers: configured iff an apiKey is present', () => {
-        expect(isByokSlotConfigured({ provider: BYOKProvider.OPENAI, apiKey: 'k' })).toBe(true);
-        expect(isByokSlotConfigured({ provider: BYOKProvider.OPENAI })).toBe(false);
+        expect(
+            isByokSlotConfigured({
+                provider: BYOKProvider.OPENAI,
+                apiKey: 'k',
+            }),
+        ).toBe(true);
+        expect(isByokSlotConfigured({ provider: BYOKProvider.OPENAI })).toBe(
+            false,
+        );
     });
 
     it('Amazon Bedrock: bearer token OR static IAM pair, never apiKey', () => {
@@ -37,6 +41,24 @@ describe('isByokSlotConfigured — provider-aware auth-material check', () => {
         ).toBe(false);
     });
 
+    it('ChatGPT subscription: requires both tokens and the account id', () => {
+        expect(
+            isByokSlotConfigured({
+                provider: BYOKProvider.CHATGPT_SUBSCRIPTION,
+                codexAccessToken: 'access',
+                codexRefreshToken: 'refresh',
+                accountId: 'account',
+            }),
+        ).toBe(true);
+        expect(
+            isByokSlotConfigured({
+                provider: BYOKProvider.CHATGPT_SUBSCRIPTION,
+                codexAccessToken: 'access',
+                accountId: 'account',
+            }),
+        ).toBe(false);
+    });
+
     it('null / undefined → false', () => {
         expect(isByokSlotConfigured(null)).toBe(false);
         expect(isByokSlotConfigured(undefined)).toBe(false);
@@ -45,26 +67,80 @@ describe('isByokSlotConfigured — provider-aware auth-material check', () => {
 
 describe('isV2ModelResolvable — per-model resolvability', () => {
     const cred = (over: Partial<BYOKCredential> = {}): BYOKCredential =>
-        ({ id: 'c1', provider: 'openai', apiKey: 'k', ...over }) as BYOKCredential;
+        ({
+            id: 'c1',
+            provider: 'openai',
+            apiKey: 'k',
+            ...over,
+        }) as BYOKCredential;
 
     it('managed credential → resolves iff the env-default LLM is reachable', () => {
         const managed = cred({ managed: true, apiKey: undefined });
-        expect(isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, managed, true)).toBe(true);
-        expect(isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, managed, false)).toBe(false);
+        expect(
+            isV2ModelResolvable(
+                { model: 'm', credentialId: 'c1' },
+                managed,
+                true,
+            ),
+        ).toBe(true);
+        expect(
+            isV2ModelResolvable(
+                { model: 'm', credentialId: 'c1' },
+                managed,
+                false,
+            ),
+        ).toBe(false);
     });
 
     it('real BYOK credential → resolves iff provider + model + usable material', () => {
-        expect(isV2ModelResolvable({ model: 'gpt-x', credentialId: 'c1' }, cred(), false)).toBe(true);
+        expect(
+            isV2ModelResolvable(
+                { model: 'gpt-x', credentialId: 'c1' },
+                cred(),
+                false,
+            ),
+        ).toBe(true);
         // no apiKey → not resolvable
         expect(
-            isV2ModelResolvable({ model: 'gpt-x', credentialId: 'c1' }, cred({ apiKey: undefined }), false),
+            isV2ModelResolvable(
+                { model: 'gpt-x', credentialId: 'c1' },
+                cred({ apiKey: undefined }),
+                false,
+            ),
         ).toBe(false);
         // no model name → not resolvable
-        expect(isV2ModelResolvable({ model: '', credentialId: 'c1' }, cred(), false)).toBe(false);
+        expect(
+            isV2ModelResolvable(
+                { model: '', credentialId: 'c1' },
+                cred(),
+                false,
+            ),
+        ).toBe(false);
+    });
+
+    it('resolves token-only ChatGPT subscription credentials', () => {
+        const subscription = cred({
+            provider: BYOKProvider.CHATGPT_SUBSCRIPTION,
+            apiKey: undefined,
+            settings: {
+                codexAccessToken: 'access',
+                codexRefreshToken: 'refresh',
+                accountId: 'account',
+            },
+        });
+        expect(
+            isV2ModelResolvable(
+                { model: 'gpt-5.6-luna', credentialId: 'c1' },
+                subscription,
+                false,
+            ),
+        ).toBe(true);
     });
 
     it('missing model or credential → false', () => {
         expect(isV2ModelResolvable(null, cred(), true)).toBe(false);
-        expect(isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, null, true)).toBe(false);
+        expect(
+            isV2ModelResolvable({ model: 'm', credentialId: 'c1' }, null, true),
+        ).toBe(false);
     });
 });

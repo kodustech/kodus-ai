@@ -232,6 +232,25 @@ export class OrganizationParametersRepository implements IOrganizationParameters
             console.log(error);
         }
     }
+
+    async compareAndSwapConfigValue(
+        uuid: string,
+        expected: IOrganizationParameters['configValue'],
+        replacement: IOrganizationParameters['configValue'],
+    ): Promise<boolean> {
+        const result = await this.organizationParametersRepository
+            .createQueryBuilder('organizationParameters')
+            .update(OrganizationParametersModel)
+            .set({ configValue: replacement })
+            .where('"uuid" = :uuid', { uuid })
+            .andWhere('"configValue" = :expected::jsonb', {
+                expected: JSON.stringify(expected),
+            })
+            .execute();
+
+        return result.affected === 1;
+    }
+
     async delete(uuid: string): Promise<void> {
         try {
             await this.organizationParametersRepository.delete(uuid);

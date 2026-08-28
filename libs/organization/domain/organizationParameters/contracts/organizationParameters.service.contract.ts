@@ -17,6 +17,17 @@ export interface IOrganizationParametersService extends IOrganizationParametersR
         configKey: OrganizationParametersKey,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<OrganizationParametersEntity>;
+    rotateCodexTokens(input: {
+        credentialId: string;
+        expectedRefreshToken: string;
+        accessToken: string;
+        refreshToken: string;
+        accountId: string;
+    }): Promise<{
+        accessToken: string;
+        refreshToken: string;
+        accountId: string;
+    }>;
     deleteByokConfig(
         organizationId: string,
         configType: 'main' | 'fallback',
@@ -29,8 +40,5 @@ export interface IOrganizationParametersService extends IOrganizationParametersR
      * use-case; this receives an already-validated model id. Retained ciphertext
      * is written back verbatim (never re-encrypted).
      */
-    deleteByokModel(
-        organizationId: string,
-        modelId: string,
-    ): Promise<boolean>;
+    deleteByokModel(organizationId: string, modelId: string): Promise<boolean>;
 }

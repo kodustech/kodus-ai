@@ -26,6 +26,7 @@ export enum BYOKProvider {
     MOONSHOT = 'moonshot',
     ZAI = 'zai',
     AZURE = 'azure',
+    CHATGPT_SUBSCRIPTION = 'chatgpt_subscription',
 }
 
 export enum LLMModelProvider {
@@ -57,4 +58,3 @@ export enum LLMModelProvider {
     NOVITA_QWEN3_235B_A22B_THINKING_2507 = 'novita:qwen3-235b-a22b-thinking-2507',
     NOVITA_MOONSHOTAI_KIMI_K2_INSTRUCT = 'novita:moonshotai/kimi-k2-instruct',
 }
-
