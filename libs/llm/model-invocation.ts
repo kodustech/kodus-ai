@@ -107,9 +107,19 @@ export function resolveModelConfig(
 
     const resolvedSlot = slot ?? undefined;
 
+    // The env/managed path routes an `undefined` slot, so the provider lives in
+    // the env config, not the slot. Resolve it ONCE here (only when there's no
+    // BYOK slot) and reuse it for both the model build and the reasoning default —
+    // so a failing env-LLM (e.g. a suspended Moonshot/Kimi key) reports its REAL
+    // provider in the byok-error notification instead of "unknown".
+    const envDescriptor = resolvedSlot ? undefined : envManagedReasoningDescriptor();
+
     const model = resolveAgentModel(resolvedSlot, {
         ...agentModelOptions,
-        provider: agentModelOptions.provider ?? resolvedSlot?.provider,
+        provider:
+            agentModelOptions.provider ??
+            resolvedSlot?.provider ??
+            envDescriptor?.provider,
         modelOptions,
     });
 
@@ -121,7 +131,7 @@ export function resolveModelConfig(
     // itself); this descriptor only feeds the reasoning-effort default and the
     // provider-options namespace. A real BYOK slot always wins over it.
     const reasoningSlot: NormalizedModel | { provider: string; model: string } | undefined =
-        resolvedSlot ?? envManagedReasoningDescriptor();
+        resolvedSlot ?? envDescriptor;
 
     // `suppressReasoning` forces reasoning OFF (effort 'none', override dropped) —
     // the structured executor sets it when its `planStructuredCall` returns
