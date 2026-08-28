@@ -34,7 +34,11 @@ describe('resolveAgentModel', () => {
         const out = resolveAgentModel(slot);
 
         expect(buildModelFromSlot).toHaveBeenCalledTimes(1);
-        expect(buildModelFromSlot).toHaveBeenCalledWith(slot, undefined, undefined);
+        expect(buildModelFromSlot).toHaveBeenCalledWith(
+            slot,
+            undefined,
+            undefined,
+        );
         // The wrapped model IS what buildModelFromSlot returned.
         expect((wrapByokModel as jest.Mock).mock.calls[0][0]).toEqual({
             __built: true,
@@ -52,7 +56,9 @@ describe('resolveAgentModel', () => {
     });
 
     it('threads defaultModelOverride to the build (trial / cli-review default)', () => {
-        resolveAgentModel(undefined, { defaultModelOverride: 'kimi-k2.7-code' });
+        resolveAgentModel(undefined, {
+            defaultModelOverride: 'kimi-k2.7-code',
+        });
         expect(buildModelFromSlot).toHaveBeenCalledWith(
             undefined,
             undefined,
@@ -60,11 +66,17 @@ describe('resolveAgentModel', () => {
         );
     });
 
-    it('keys the wrapper off the same slot and defaults provider to the slot provider', () => {
+    it('stamps the organization scope onto the built and wrapped slot', () => {
         resolveAgentModel(slot, { organizationId: 'org-1' });
+        const scopedSlot = { ...slot, organizationId: 'org-1' };
+        expect(buildModelFromSlot).toHaveBeenCalledWith(
+            scopedSlot,
+            undefined,
+            undefined,
+        );
         const cfg = (wrapByokModel as jest.Mock).mock.calls[0][1];
         expect(cfg).toMatchObject({
-            byokConfig: slot,
+            byokConfig: scopedSlot,
             organizationId: 'org-1',
             provider: 'anthropic',
         });

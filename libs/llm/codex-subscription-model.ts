@@ -15,12 +15,15 @@ const CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 const CODEX_TOKEN_URL = 'https://auth.openai.com/oauth/token';
 const CODEX_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
 const CODEX_REFRESH_SCOPE = 'openid profile email';
+const CODEX_PERSIST_ATTEMPTS = 3;
+const CODEX_PERSIST_BACKOFF_MS = 50;
 
 export interface CodexAuth {
     accessToken: string;
     accountId: string;
     refreshToken?: string;
     credentialId?: string;
+    organizationId?: string;
     authPath?: string;
 }
 
@@ -30,9 +33,20 @@ export interface RotatedCodexAuth {
     accountId: string;
 }
 
+export class CodexCredentialRecoveryError extends Error {
+    constructor(cause: unknown) {
+        super(
+            'Codex token rotation succeeded, but the replacement credentials could not be saved. Run `codex login` and reconnect the ChatGPT subscription credential.',
+            { cause },
+        );
+        this.name = CodexCredentialRecoveryError.name;
+    }
+}
+
 export interface CodexCredentialStore {
     rotateCodexTokens(input: {
         credentialId: string;
+        organizationId: string;
         expectedRefreshToken: string;
         accessToken: string;
         refreshToken: string;
@@ -46,6 +60,12 @@ export function setCodexCredentialStore(
     store: CodexCredentialStore | undefined,
 ): void {
     credentialStore = store;
+}
+
+export function clearCodexCredentialStore(store: CodexCredentialStore): void {
+    if (credentialStore === store) {
+        credentialStore = undefined;
+    }
 }
 
 type CodexProviderModel = ReturnType<
@@ -452,6 +472,27 @@ function persistCodexAuthFile(
     return { ...refreshed, accountId: auth.accountId };
 }
 
+function validateRotatedAuthPersistence(auth: CodexAuth): void {
+    if (!auth.refreshToken) {
+        throw new Error('Codex token refresh requires a refresh token.');
+    }
+    if (auth.credentialId && !auth.organizationId) {
+        throw new Error(
+            'Codex credential persistence requires an organization scope.',
+        );
+    }
+    if (auth.credentialId && !credentialStore) {
+        throw new Error(
+            'Codex credential persistence is not available in this process.',
+        );
+    }
+    if (!auth.credentialId && !auth.authPath) {
+        throw new Error(
+            'Codex auth file persistence requires an explicit auth path.',
+        );
+    }
+}
+
 async function persistRotatedAuth(
     auth: CodexAuth,
     refreshed: { accessToken: string; refreshToken: string },
@@ -460,6 +501,11 @@ async function persistRotatedAuth(
         throw new Error('Codex token refresh requires a refresh token.');
     }
     if (auth.credentialId) {
+        if (!auth.organizationId) {
+            throw new Error(
+                'Codex credential persistence requires an organization scope.',
+            );
+        }
         if (!credentialStore) {
             throw new Error(
                 'Codex credential persistence is not available in this process.',
@@ -467,6 +513,7 @@ async function persistRotatedAuth(
         }
         return credentialStore.rotateCodexTokens({
             credentialId: auth.credentialId,
+            organizationId: auth.organizationId,
             expectedRefreshToken: auth.refreshToken,
             accessToken: refreshed.accessToken,
             refreshToken: refreshed.refreshToken,
@@ -474,6 +521,29 @@ async function persistRotatedAuth(
         });
     }
     return persistCodexAuthFile(auth, refreshed);
+}
+
+async function persistRotatedAuthWithRetry(
+    auth: CodexAuth,
+    refreshed: { accessToken: string; refreshToken: string },
+): Promise<RotatedCodexAuth> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < CODEX_PERSIST_ATTEMPTS; attempt++) {
+        try {
+            return await persistRotatedAuth(auth, refreshed);
+        } catch (error) {
+            lastError = error;
+            if (attempt < CODEX_PERSIST_ATTEMPTS - 1) {
+                await new Promise<void>((resolve) =>
+                    setTimeout(
+                        resolve,
+                        CODEX_PERSIST_BACKOFF_MS * 2 ** attempt,
+                    ),
+                );
+            }
+        }
+    }
+    throw new CodexCredentialRecoveryError(lastError);
 }
 
 /**
@@ -499,13 +569,15 @@ export function buildCodexSubscriptionModel(
     };
 
     const refresh = async (stale: CodexAuth): Promise<CodexAuth> => {
+        validateRotatedAuthPersistence(stale);
         const refreshed = await requestCodexRefresh(stale.refreshToken ?? '');
-        const persisted = await persistRotatedAuth(stale, refreshed);
+        const persisted = await persistRotatedAuthWithRetry(stale, refreshed);
         currentAuth = {
             accessToken: persisted.accessToken,
             refreshToken: persisted.refreshToken,
             accountId: persisted.accountId,
             credentialId: stale.credentialId,
+            organizationId: stale.organizationId,
             authPath: stale.authPath,
         };
         return currentAuth;

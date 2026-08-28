@@ -58,6 +58,7 @@ describe('OrganizationParametersService Codex token rotation', () => {
         await expect(
             service.rotateCodexTokens({
                 credentialId: 'credential-id',
+                organizationId: 'organization-id',
                 expectedRefreshToken: 'old-refresh',
                 accessToken: 'new-access',
                 refreshToken: 'new-refresh',
@@ -69,6 +70,13 @@ describe('OrganizationParametersService Codex token rotation', () => {
             accountId: 'account-id',
         });
 
+        expect(repository.findByKeyAndValue).toHaveBeenCalledWith(
+            expect.objectContaining({
+                organizationAndTeamData: {
+                    organizationId: 'organization-id',
+                },
+            }),
+        );
         const [uuid, expected, replacement] =
             repository.compareAndSwapConfigValue.mock.calls[0];
         expect(uuid).toBe('parameter-id');
@@ -98,6 +106,7 @@ describe('OrganizationParametersService Codex token rotation', () => {
         await expect(
             service.rotateCodexTokens({
                 credentialId: 'credential-id',
+                organizationId: 'organization-id',
                 expectedRefreshToken: 'old-refresh',
                 accessToken: 'loser-access',
                 refreshToken: 'loser-refresh',

@@ -1,4 +1,5 @@
 import type { Repository } from 'typeorm';
+import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { OrganizationParametersRepository } from './organizationParameters.repository';
 import { OrganizationParametersModel } from './schemas/organizationParameters.model';
 
@@ -63,5 +64,28 @@ describe('OrganizationParametersRepository.compareAndSwapConfigValue', () => {
         await expect(
             repository.compareAndSwapConfigValue('parameter-id', {}, {}),
         ).resolves.toBe(false);
+    });
+});
+
+describe('OrganizationParametersRepository.findByKeyAndValue', () => {
+    it('propagates query failures to the token-rotation retry path', async () => {
+        const failure = new Error('database unavailable');
+        const queryBuilder = {
+            leftJoinAndSelect: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getMany: jest.fn().mockRejectedValue(failure),
+        };
+        const repository = new OrganizationParametersRepository({
+            createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+        } as unknown as Repository<OrganizationParametersModel>);
+
+        await expect(
+            repository.findByKeyAndValue({
+                configKey: OrganizationParametersKey.BYOK_CONFIG,
+                configValue: { version: 2 },
+                fuzzy: true,
+            }),
+        ).rejects.toBe(failure);
     });
 });

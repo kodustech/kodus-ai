@@ -44,6 +44,36 @@ describe('TestByokConnectionUseCase ChatGPT subscription', () => {
         }
     });
 
+    it('classifies a 401 response as an authentication failure', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockResolvedValue(
+            new Response('{"error":{"message":"expired token"}}', {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' },
+            }),
+        ) as typeof fetch;
+        const useCase = new TestByokConnectionUseCase(
+            providerService as unknown as ProviderService,
+        );
+
+        try {
+            await expect(
+                useCase.execute({
+                    provider: 'chatgpt_subscription',
+                    codexAccessToken: 'expired-access-token',
+                    codexRefreshToken: 'refresh-token',
+                    accountId: 'account-id',
+                }),
+            ).resolves.toMatchObject({
+                ok: false,
+                code: 'auth',
+                httpStatus: 401,
+            });
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
     it('rejects incomplete token credentials before making a request', async () => {
         const useCase = new TestByokConnectionUseCase(
             providerService as unknown as ProviderService,

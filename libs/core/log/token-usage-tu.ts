@@ -19,7 +19,7 @@
  */
 import { canonicalModelId } from '@libs/common/utils/canonical-model';
 
-const CHATGPT_SUBSCRIPTION_PREFIX = 'chatgpt_subscription:';
+export const CHATGPT_SUBSCRIPTION_PREFIX = 'chatgpt_subscription:';
 
 /**
  * Canonical shape mirrored onto every LLM-usage span. `isByok` / `sys` encode

@@ -19,6 +19,7 @@ export interface IOrganizationParametersService extends IOrganizationParametersR
     ): Promise<OrganizationParametersEntity>;
     rotateCodexTokens(input: {
         credentialId: string;
+        organizationId: string;
         expectedRefreshToken: string;
         accessToken: string;
         refreshToken: string;

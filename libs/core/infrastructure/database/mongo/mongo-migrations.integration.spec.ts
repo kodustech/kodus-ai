@@ -45,8 +45,8 @@ const SEED_SPANS = [
         'gen_ai.usage.input_tokens': 250000,
         'gen_ai.usage.output_tokens': 50000,
         'gen_ai.response.model': 'google_gemini:gemini-2.5-pro',
-        type: 'byok',
-        prNumber: 7,
+        'type': 'byok',
+        'prNumber': 7,
     }),
     // internal system-analysis run-name (sys=true) — excluded from byok=false view
     span({
@@ -55,7 +55,7 @@ const SEED_SPANS = [
         'gen_ai.usage.output_tokens': 200,
         'gen_ai.usage.reasoning_tokens': 80,
         'gen_ai.response.model': 'openai:gpt-5',
-        type: 'system',
+        'type': 'system',
         'gen_ai.run.name': 'generateCodeSuggestions',
     }),
     // ordinary billable-view span
@@ -64,11 +64,19 @@ const SEED_SPANS = [
         'gen_ai.usage.input_tokens': 400,
         'gen_ai.usage.output_tokens': 100,
         'gen_ai.response.model': 'claude-sonnet-5',
-        type: 'system',
+        'type': 'system',
         'gen_ai.run.name': 'code-review-security',
     }),
+    // subscription usage keeps its transport prefix so pricing remains suppressed
+    span({
+        'gen_ai.usage.total_tokens': 2,
+        'gen_ai.usage.input_tokens': 1,
+        'gen_ai.usage.output_tokens': 1,
+        'gen_ai.response.model': 'chatgpt_subscription:gpt-5.6-luna',
+        'type': 'byok',
+    }),
     // wrapper span with NO usage — must be left unstamped
-    span({ 'gen_ai.response.model': 'claude-sonnet-5', type: 'system' }),
+    span({ 'gen_ai.response.model': 'claude-sonnet-5', 'type': 'system' }),
 ];
 
 beforeAll(async () => {
@@ -104,7 +112,7 @@ describe('token-usage migration (integration)', () => {
         const c = db.collection(TELEMETRY);
         // Seed a legacy dead index to prove the drop.
         await c.createIndex(
-            { 'attributes.organizationId': 1, createdAt: -1 },
+            { 'attributes.organizationId': 1, 'createdAt': -1 },
             { name: 'attributes.organizationId_1_createdAt_-1' },
         );
 
@@ -116,7 +124,9 @@ describe('token-usage migration (integration)', () => {
         expect(names).toContain('tu_cover_sys');
         expect(names).not.toContain('attributes.organizationId_1_createdAt_-1');
 
-        const byok = (await c.indexes()).find((i) => i.name === 'tu_cover_byok');
+        const byok = (await c.indexes()).find(
+            (i) => i.name === 'tu_cover_byok',
+        );
         expect(byok?.partialFilterExpression).toEqual({
             'attributes.tu.isByok': true,
         });
@@ -134,8 +144,11 @@ describe('token-usage migration (integration)', () => {
         const res = await c.insertMany(SEED_SPANS.map((s) => ({ ...s })));
         const ids = Object.values(res.insertedIds);
 
-        const first = await backfillTokenUsageTu(db, { sleepMs: 0, batch: 100 });
-        expect(first.stamped).toBe(3); // the 3 with usage; wrapper skipped
+        const first = await backfillTokenUsageTu(db, {
+            sleepMs: 0,
+            batch: 100,
+        });
+        expect(first.stamped).toBe(4); // the 4 with usage; wrapper skipped
 
         // The load-bearing check: pipeline output === write-path deriveTu output.
         const docs = await c.find({ _id: { $in: ids } }).toArray();
@@ -158,8 +171,18 @@ describe('token-usage migration (integration)', () => {
             input: 250000,
             total: 300000,
         });
+        expect(
+            docs.find(
+                (d) =>
+                    d.attributes.tu?.model ===
+                    'chatgpt_subscription:gpt-5.6-luna',
+            )?.attributes.tu.model,
+        ).toBe('chatgpt_subscription:gpt-5.6-luna');
 
-        const second = await backfillTokenUsageTu(db, { sleepMs: 0, batch: 100 });
+        const second = await backfillTokenUsageTu(db, {
+            sleepMs: 0,
+            batch: 100,
+        });
         expect(second.stamped).toBe(0); // idempotent
     });
 });

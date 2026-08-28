@@ -1,6 +1,8 @@
 import { generateText } from 'ai';
 import {
     buildCodexSubscriptionModel,
+    clearCodexCredentialStore,
+    CodexCredentialRecoveryError,
     setCodexCredentialStore,
     withGenerateFromStream,
 } from './codex-subscription-model';
@@ -293,11 +295,15 @@ describe('Codex subscription transport', () => {
                 },
             );
         }) as typeof fetch;
-        setCodexCredentialStore({
+        const staleStore = {
+            rotateCodexTokens: jest.fn(),
+        };
+        const activeStore = {
             rotateCodexTokens: async (input) => {
                 order.push('persist');
                 expect(input).toMatchObject({
                     credentialId: 'credential-id',
+                    organizationId: 'organization-id',
                     expectedRefreshToken: 'old-refresh',
                     accessToken: 'new-access',
                     refreshToken: 'new-refresh',
@@ -308,7 +314,10 @@ describe('Codex subscription transport', () => {
                     accountId: input.accountId,
                 };
             },
-        });
+        };
+        setCodexCredentialStore(staleStore);
+        setCodexCredentialStore(activeStore);
+        clearCodexCredentialStore(staleStore);
 
         try {
             const model = buildCodexSubscriptionModel('gpt-5.6-luna', {
@@ -316,6 +325,7 @@ describe('Codex subscription transport', () => {
                 refreshToken: 'old-refresh',
                 accountId: 'account-id',
                 credentialId: 'credential-id',
+                organizationId: 'organization-id',
             });
             await generateText({ model, prompt: 'retry' });
             expect(order).toEqual(['codex-1', 'refresh', 'persist', 'codex-2']);
@@ -325,11 +335,13 @@ describe('Codex subscription transport', () => {
         }
     });
 
-    it('does not use a refreshed access token when persistence fails', async () => {
+    it('retries persistence failures and names the credential recovery action', async () => {
         const originalFetch = global.fetch;
         let codexCalls = 0;
+        let refreshCalls = 0;
         global.fetch = jest.fn(async (input) => {
             if (String(input).includes('/oauth/token')) {
+                refreshCalls++;
                 return Response.json({
                     access_token: 'new-access',
                     refresh_token: 'new-refresh',
@@ -338,11 +350,10 @@ describe('Codex subscription transport', () => {
             codexCalls++;
             return new Response('expired', { status: 401 });
         }) as typeof fetch;
-        setCodexCredentialStore({
-            rotateCodexTokens: async () => {
-                throw new Error('database unavailable');
-            },
-        });
+        const rotateCodexTokens = jest
+            .fn()
+            .mockRejectedValue(new Error('database unavailable'));
+        setCodexCredentialStore({ rotateCodexTokens });
 
         try {
             const model = buildCodexSubscriptionModel('gpt-5.6-luna', {
@@ -350,10 +361,18 @@ describe('Codex subscription transport', () => {
                 refreshToken: 'old-refresh',
                 accountId: 'account-id',
                 credentialId: 'credential-id',
+                organizationId: 'organization-id',
             });
             await expect(
                 generateText({ model, prompt: 'retry' }),
-            ).rejects.toThrow('database unavailable');
+            ).rejects.toMatchObject({
+                name: CodexCredentialRecoveryError.name,
+                message: expect.stringContaining(
+                    'Run `codex login` and reconnect',
+                ),
+            });
+            expect(rotateCodexTokens).toHaveBeenCalledTimes(3);
+            expect(refreshCalls).toBe(1);
             expect(codexCalls).toBe(1);
         } finally {
             setCodexCredentialStore(undefined);

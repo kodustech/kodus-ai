@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+    BadRequestException,
+    Inject,
+    Injectable,
+    OnModuleDestroy,
+    OnModuleInit,
+} from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 
 import { createLogger } from '@libs/core/log/logger';
@@ -15,6 +21,7 @@ import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/
 import { BYOKConfig, isByokConfig } from '@libs/llm/byok-config';
 import { decrypt, encrypt } from '@libs/common/utils/crypto';
 import {
+    clearCodexCredentialStore,
     setCodexCredentialStore,
     type RotatedCodexAuth,
 } from '@libs/llm/codex-subscription-model';
@@ -22,14 +29,22 @@ import {
 const CODEX_ROTATION_CAS_ATTEMPTS = 5;
 
 @Injectable()
-export class OrganizationParametersService implements IOrganizationParametersService {
+export class OrganizationParametersService
+    implements IOrganizationParametersService, OnModuleInit, OnModuleDestroy
+{
     private readonly logger = createLogger(OrganizationParametersService.name);
 
     constructor(
         @Inject(ORGANIZATION_PARAMETERS_REPOSITORY_TOKEN)
         private readonly organizationParametersRepository: IOrganizationParametersRepository,
-    ) {
+    ) {}
+
+    onModuleInit(): void {
         setCodexCredentialStore(this);
+    }
+
+    onModuleDestroy(): void {
+        clearCodexCredentialStore(this);
     }
 
     find(
@@ -141,6 +156,7 @@ export class OrganizationParametersService implements IOrganizationParametersSer
 
     async rotateCodexTokens(input: {
         credentialId: string;
+        organizationId: string;
         expectedRefreshToken: string;
         accessToken: string;
         refreshToken: string;
@@ -157,6 +173,9 @@ export class OrganizationParametersService implements IOrganizationParametersSer
                     configValue: {
                         version: 2,
                         credentials: [{ id: input.credentialId }],
+                    },
+                    organizationAndTeamData: {
+                        organizationId: input.organizationId,
                     },
                     fuzzy: true,
                 });

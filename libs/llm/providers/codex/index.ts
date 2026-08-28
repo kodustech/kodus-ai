@@ -45,6 +45,7 @@ export const codexSubscriptionModule: ProviderModule = {
                       refreshToken: cfg.codexRefreshToken,
                       accountId: cfg.accountId,
                       credentialId: cfg.credentialId,
+                      organizationId: cfg.organizationId,
                   }
                 : undefined;
         return buildCodexSubscriptionModel(cfg.model, auth, {
