@@ -50,6 +50,7 @@ describe("rowCost", () => {
         const cost = rowCost(flatRow({ input: 1000, output: 500 }), undefined);
         expect(cost).toEqual({
             uncachedInput: 0,
+            cacheWrite: 0,
             cacheRead: 0,
             output: 0,
             reasoning: 0,
@@ -101,7 +102,10 @@ describe("rowCost", () => {
                 cacheWrite: 2.5e-6,
             }),
         );
-        expect(cost.uncachedInput).toBeCloseTo(400 * 2e-6 + 200 * 2.5e-6, 12);
+        // uncached pool = the 400 noCache tokens at the input rate ONLY.
+        expect(cost.uncachedInput).toBeCloseTo(400 * 2e-6, 12);
+        // the 200 cache-write tokens priced on their OWN bucket at the write rate.
+        expect(cost.cacheWrite).toBeCloseTo(200 * 2.5e-6, 12);
         expect(cost.cacheRead).toBeCloseTo(400 * 0.2e-6, 12);
         expect(cost.total).toBeCloseTo(
             400 * 2e-6 + 200 * 2.5e-6 + 400 * 0.2e-6,

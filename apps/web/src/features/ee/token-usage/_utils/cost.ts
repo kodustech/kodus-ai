@@ -6,8 +6,11 @@ import type {
 } from "@services/usage/types";
 
 export interface RowCost {
-    /** Full-price input (uncached input + cache writes). */
+    /** Full-price uncached input cost (noCache tokens at the input rate). */
     uncachedInput: number;
+    /** Cache-write (prompt-cache creation) cost, priced on its own rate so the
+     *  chart + cards can show it as a distinct band. */
+    cacheWrite: number;
     /** Discounted cache-read cost (broken out so the chart can show it). */
     cacheRead: number;
     /** Output excluding reasoning. */
@@ -38,6 +41,7 @@ export function rowCost(
     const pricing = info?.pricing;
     const zero = {
         uncachedInput: 0,
+        cacheWrite: 0,
         cacheRead: 0,
         output: 0,
         reasoning: 0,
@@ -47,24 +51,24 @@ export function rowCost(
 
     const bucketCost = (bucket: TierUsage, bracket: number) => {
         // ai@7 normalizes inputTokens = noCache + cacheRead + cacheWrite, so the
-        // full-price (uncached) pool must exclude BOTH cacheRead and cacheWrite —
-        // otherwise the cacheWrite tokens are billed twice (once here at the input
-        // rate, once again at the cacheWrite rate below). Mirrors the backend
+        // full-price (uncached) pool must exclude BOTH cacheRead and cacheWrite.
+        // cacheWrite is priced on its OWN rate as a separate bucket (not folded
+        // into uncachedInput) — otherwise those tokens are billed twice, and the
+        // chart/cards can't show cache write on its own band. Mirrors the backend
         // model-cost-calculator.ts bucketCost exactly.
         const uncached = Math.max(
             0,
             bucket.input - bucket.cacheRead - bucket.cacheWrite,
         );
-        const uncachedInput =
-            uncached * rate(pricing.input, bracket) +
-            bucket.cacheWrite * rate(pricing.cacheWrite, bracket);
+        const uncachedInput = uncached * rate(pricing.input, bracket);
+        const cacheWrite = bucket.cacheWrite * rate(pricing.cacheWrite, bracket);
         const cacheRead = bucket.cacheRead * rate(pricing.cacheRead, bracket);
         const output =
             Math.max(0, bucket.output - bucket.outputReasoning) *
             rate(pricing.output, bracket);
         const reasoning =
             bucket.outputReasoning * rate(pricing.output, bracket);
-        return { uncachedInput, cacheRead, output, reasoning };
+        return { uncachedInput, cacheWrite, cacheRead, output, reasoning };
     };
 
     const buckets = row.byTier
@@ -86,16 +90,18 @@ export function rowCost(
     const summed = buckets.reduce(
         (acc, b) => ({
             uncachedInput: acc.uncachedInput + b.uncachedInput,
+            cacheWrite: acc.cacheWrite + b.cacheWrite,
             cacheRead: acc.cacheRead + b.cacheRead,
             output: acc.output + b.output,
             reasoning: acc.reasoning + b.reasoning,
         }),
-        { uncachedInput: 0, cacheRead: 0, output: 0, reasoning: 0 },
+        { uncachedInput: 0, cacheWrite: 0, cacheRead: 0, output: 0, reasoning: 0 },
     );
     return {
         ...summed,
         total:
             summed.uncachedInput +
+            summed.cacheWrite +
             summed.cacheRead +
             summed.output +
             summed.reasoning,
