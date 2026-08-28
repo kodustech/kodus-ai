@@ -17,25 +17,30 @@ import { z } from 'zod';
 
 import { codexSubscriptionModule } from './providers/codex';
 
-const AUTH = path.join(os.homedir(), '.codex', 'auth.json');
+const AUTH =
+    process.env.CODEX_LIVE_AUTH ??
+    path.join(os.homedir(), '.codex', 'auth.json');
 const live = process.env.CODEX_LIVE === '1' && fs.existsSync(AUTH);
 const maybe = live ? describe : describe.skip;
 
 function credential() {
     const raw = JSON.parse(fs.readFileSync(AUTH, 'utf8'));
+    // Accepts either the Codex CLI's nested shape or the flat record written
+    // by an ocr auth login.
+    const t = raw.tokens ?? raw;
     return {
         provider: 'chatgpt_subscription',
-        model: 'gpt-5.6-luna',
-        codexAccessToken: raw.tokens.access_token,
-        codexRefreshToken: raw.tokens.refresh_token,
-        accountId: raw.tokens.account_id,
+        model: process.env.CODEX_LIVE_MODEL ?? 'gpt-5.6-luna',
+        codexAccessToken: t.access_token,
+        codexRefreshToken: t.refresh_token,
+        accountId: t.account_id,
     } as never;
 }
 
 maybe('Codex subscription provider (live)', () => {
     jest.setTimeout(300_000);
 
-    it('completes a single turn on gpt-5.6-luna', async () => {
+    it('completes a single turn on the configured model', async () => {
         const model = codexSubscriptionModule.build(credential());
         const result = await generateText({
             model,

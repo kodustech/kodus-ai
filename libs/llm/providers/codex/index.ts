@@ -99,9 +99,16 @@ export const codexSubscriptionModule: ProviderModule = {
 
     providerOptionsNamespace: () => 'openai',
     reasoningOverrideExample: () => '{\n  "reasoningEffort": "high"\n}',
+    // The Codex backend exposes no model-list endpoint, so this cannot be
+    // dynamic. It is a convenience picker and not an exhaustive account
+    // inventory: a ChatGPT account is served whatever its plan entitles it to,
+    // which varies by account and changes over time. A model absent from this
+    // list is still usable if it is typed in, and the endpoint reports its own
+    // refusal when it is not.
     modelListing: () => ({
         kind: 'static',
         models: [
+            { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol' },
             { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna' },
             { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra' },
         ],
