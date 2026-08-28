@@ -50,6 +50,10 @@ interface LegacySlot {
     // Non-secret settings.
     vertexLocation?: string;
     awsRegion?: string;
+    // OpenRouter provider-pinning (non-secret) — consumed at runtime to build the
+    // `provider.order` / `allow_fallbacks` payload (reasoning-options.ts).
+    openrouterProviderOrder?: string[];
+    openrouterAllowFallbacks?: boolean;
     // Encrypted Bedrock auth secrets (ciphertext).
     awsBearerToken?: string;
     awsAccessKeyId?: string;
@@ -65,14 +69,29 @@ interface LegacyConfig {
 const STR = (v: unknown): string | undefined =>
     typeof v === 'string' && v.length > 0 ? v : undefined;
 
-/** A slot is usable only when it carries a real provider + encrypted key + model. */
+/**
+ * Whether a slot carries usable auth. NOT every provider authenticates with an
+ * `apiKey`: Amazon Bedrock uses a bearer token OR an access-key pair (see
+ * `credentialFromSlot` / byok-credentials.util.ts), and stores no `apiKey` at
+ * all. Gating usability on `apiKey` alone silently drops every Bedrock BYOK org
+ * to the env/managed default. Accept the Bedrock auth shapes too.
+ */
+function hasAuth(slot: LegacySlot): boolean {
+    return (
+        !!STR(slot.apiKey) ||
+        !!STR(slot.awsBearerToken) ||
+        (!!STR(slot.awsAccessKeyId) && !!STR(slot.awsSecretAccessKey))
+    );
+}
+
+/** A slot is usable only when it carries a real provider + model + auth. */
 function isUsableSlot(slot?: LegacySlot): boolean {
     return (
         !!slot &&
         typeof slot === 'object' &&
         !!STR(slot.provider) &&
-        !!STR(slot.apiKey) &&
-        !!STR(slot.model)
+        !!STR(slot.model) &&
+        hasAuth(slot)
     );
 }
 
@@ -133,6 +152,21 @@ function sameCredential(a: LegacySlot, b: LegacySlot): boolean {
         // (ciphertext bytes differ per-encryption even for the same secret).
         if (!av || !bv || !plaintextEquals(av, bv)) return false;
     }
+    // OpenRouter provider-pinning is part of the credential's identity: two slots
+    // with the same key but a different provider order / fallback policy are
+    // DISTINCT credentials — deduping them would silently drop one slot's routing.
+    if (
+        JSON.stringify(a.openrouterProviderOrder ?? null) !==
+        JSON.stringify(b.openrouterProviderOrder ?? null)
+    ) {
+        return false;
+    }
+    if (
+        (a.openrouterAllowFallbacks ?? null) !==
+        (b.openrouterAllowFallbacks ?? null)
+    ) {
+        return false;
+    }
     return true;
 }
 
@@ -152,6 +186,19 @@ function credentialFromSlot(id: string, slot: LegacySlot): BYOKCredential {
     put('awsAccessKeyId', slot.awsAccessKeyId);
     put('awsSecretAccessKey', slot.awsSecretAccessKey);
     put('awsSessionToken', slot.awsSessionToken);
+    // OpenRouter provider-pinning — non-secret, lives under credential settings
+    // per the openrouter module's settingsSchema. Not strings, so carried
+    // explicitly (the `put` helper is string-only): an array of provider slugs
+    // and a boolean. Preserved so a migrated OpenRouter org keeps its routing.
+    if (Array.isArray(slot.openrouterProviderOrder)) {
+        const order = slot.openrouterProviderOrder.filter(
+            (x): x is string => typeof x === 'string' && x.length > 0,
+        );
+        if (order.length > 0) settings.openrouterProviderOrder = order;
+    }
+    if (typeof slot.openrouterAllowFallbacks === 'boolean') {
+        settings.openrouterAllowFallbacks = slot.openrouterAllowFallbacks;
+    }
 
     const cred: BYOKCredential = {
         id,
@@ -214,37 +261,45 @@ export function migrateLegacyToV2(blob: unknown): BYOKConfig {
     const legacy: LegacyConfig =
         blob && typeof blob === 'object' ? (blob as LegacyConfig) : {};
     const main = legacy.main;
+    const fallback = legacy.fallback;
+    const mainUsable = isUsableSlot(main);
+    const fallbackUsable = isUsableSlot(fallback);
 
-    // No usable main → env/managed default (empty v2). Mirrors the resolved
-    // behavior of a managed:true credential.
-    if (!isUsableSlot(main)) return managedDefaultV2();
+    // No usable slot at all → env/managed default (empty v2). Mirrors the
+    // resolved behavior of a managed:true credential.
+    if (!mainUsable && !fallbackUsable) return managedDefaultV2();
+
+    // Primary = the main slot when usable; otherwise the fallback is PROMOTED to
+    // primary. A legacy config that only ever set `fallback` (no usable main)
+    // still resolved that fallback at runtime (byok-to-vercel legacy resolver),
+    // so promoting it — instead of emptying the org — preserves its BYOK key.
+    // Secondary exists only when main is the primary (a promoted fallback has no
+    // secondary of its own).
+    const primary = (mainUsable ? main : fallback) as LegacySlot;
+    const secondary =
+        mainUsable && fallbackUsable ? (fallback as LegacySlot) : undefined;
 
     const mainCredId = 'cred-main';
     const mainModelId = 'model-main';
     const credentials: BYOKCredential[] = [
-        credentialFromSlot(mainCredId, main as LegacySlot),
+        credentialFromSlot(mainCredId, primary),
     ];
     const models: BYOKModelConfig[] = [
-        modelFromSlot(mainModelId, mainCredId, main as LegacySlot),
+        modelFromSlot(mainModelId, mainCredId, primary),
     ];
 
-    const fallback = legacy.fallback;
-    if (isUsableSlot(fallback)) {
-        // Dedup: fold the fallback onto main's credential ONLY when it resolves
-        // to the same credential (provider + key + settings), not merely the same
-        // key — otherwise a distinct provider/baseURL on the fallback would be
-        // lost (see sameCredential). The fallback MODEL is always emitted; only
-        // the credential is shared.
-        const same = sameCredential(main as LegacySlot, fallback as LegacySlot);
+    if (secondary) {
+        // Dedup: fold the secondary onto the primary's credential ONLY when it
+        // resolves to the same credential (provider + key + settings), not merely
+        // the same key — otherwise a distinct provider/baseURL on the fallback
+        // would be lost (see sameCredential). The fallback MODEL is always
+        // emitted; only the credential is shared.
+        const same = sameCredential(primary, secondary);
         const fallbackCredId = same ? mainCredId : 'cred-fallback';
         if (!same) {
-            credentials.push(
-                credentialFromSlot(fallbackCredId, fallback as LegacySlot),
-            );
+            credentials.push(credentialFromSlot(fallbackCredId, secondary));
         }
-        models.push(
-            modelFromSlot('model-fallback', fallbackCredId, fallback as LegacySlot),
-        );
+        models.push(modelFromSlot('model-fallback', fallbackCredId, secondary));
     }
 
     return {
