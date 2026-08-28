@@ -97,6 +97,37 @@ describe('readAiSdkUsage', () => {
         expect(readAiSdkUsage(usage).cacheWriteTokens).toBeUndefined();
     });
 
+    it('captures Gemini implicit-cache read from inputTokenDetails.cacheReadTokens (#1799)', () => {
+        // Shape ai@7 produces from @ai-sdk/google's convertGoogleUsage:
+        //   inputTokens (total, INCLUDING cached) = promptTokenCount
+        //   inputTokenDetails.cacheReadTokens      = cachedContentTokenCount
+        //   outputTokenDetails.reasoningTokens     = thoughtsTokenCount
+        //   (no cacheWrite — Gemini reports no cache CREATION count)
+        // Older @ai-sdk/google (≈4.0.8) did NOT surface cachedContentTokenCount
+        // into this normalized field, so Kody recorded cache-read = 0 even when
+        // Gemini's implicit cache hit — the root cause of #1799. Current adapters
+        // (4.0.49) map it to `inputTokens.cacheRead`; this pins that the reader
+        // captures it, so a future adapter regression can't silently zero it again.
+        const usage = {
+            inputTokens: 68660, // total, includes the 32,740 cached
+            outputTokens: 1200,
+            totalTokens: 69860,
+            inputTokenDetails: {
+                noCacheTokens: 35920,
+                cacheReadTokens: 32740,
+            },
+            outputTokenDetails: { textTokens: 200, reasoningTokens: 1000 },
+        };
+
+        const r = readAiSdkUsage(usage);
+        expect(r.cacheReadTokens).toBe(32740);
+        expect(r.cacheWriteTokens).toBeUndefined();
+        expect(r.reasoningTokens).toBe(1000);
+        // The full input count is preserved un-reduced (the cost calculator
+        // subtracts cacheRead from the full-price pool downstream).
+        expect(r.inputTokens).toBe(68660);
+    });
+
     it('returns undefined fields (not throws) for a bare/empty usage object', () => {
         expect(readAiSdkUsage({})).toEqual({
             inputTokens: undefined,

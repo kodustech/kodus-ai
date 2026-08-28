@@ -33,11 +33,7 @@ import {
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 import { agentModelIdentity } from '@libs/llm/model-identity';
-import { systemCacheControl } from '@libs/llm/system-cache';
-import {
-    markLastToolForCache,
-    markLatestUserForCache,
-} from '@libs/llm/prompt-cache';
+import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
 import {
@@ -160,30 +156,20 @@ export async function runAgentLoopCall(
     const providerOptions = params.providerOptions ?? inv.providerOptions;
 
     // ── prompt-cache breakpoints (provider concern; only a real multi-step loop
-    // pays back the write premium). systemCacheControl returns the Anthropic
-    // inline marker for providers that honor it, undefined otherwise (no-op). ──
-    const cacheHint =
-        loop.maxSteps > 1
-            ? systemCacheControl({
-                  provider: slot?.provider,
-                  // Fall back to the built model for the no-slot (managed / env
-                  // default) path: systemCacheControl keys its no-provider branch
-                  // off the model NAME (isAnthropicModel), so a self-hosted env
-                  // default on an Anthropic model still gets the system-prompt
-                  // cache hint — parity with the old core-agent-loop `?? input.model`.
-                  model: slot?.model ?? inv.model,
-              })
-            : undefined;
-    const systemArg =
-        cacheHint && system
-            ? ({ role: 'system', content: system, providerOptions: cacheHint } as any)
-            : system;
-    const callMessages = cacheHint
-        ? markLatestUserForCache(messages, cacheHint)
-        : messages;
-    const callTools = cacheHint
-        ? markLastToolForCache(loop.tools, cacheHint)
-        : loop.tools;
+    // pays back the write premium). The helper asks the model's provider whether
+    // it honors inline markers and stamps the three breakpoints when it does;
+    // otherwise (implicit-cache/unknown providers, or a single-step call) the
+    // inputs pass through untouched. Fall back to the built model for the no-slot
+    // (managed / env default) path so a self-hosted Anthropic env default still
+    // gets the hint (systemCacheControl keys its no-provider branch off the name).
+    const { systemArg, callMessages, callTools } = applyCacheBreakpoints({
+        system,
+        messages,
+        tools: loop.tools,
+        maxSteps: loop.maxSteps,
+        provider: slot?.provider,
+        model: slot?.model ?? inv.model,
+    });
 
     // ── ONE usage identity for the span — billing keys from the resolved slot ──
     const identity = agentModelIdentity(slot);
