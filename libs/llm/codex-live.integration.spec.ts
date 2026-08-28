@@ -77,4 +77,33 @@ maybe('Codex subscription provider (live)', () => {
         expect(result.steps.length).toBeGreaterThan(1);
         expect(result.text).toContain('42');
     });
+
+    // The credential above is injected directly, which skips the file-based
+    // source entirely. This drives readCodexAuth instead: no tokens are passed
+    // to build(), so the provider must locate and parse the credential itself.
+    it('resolves a credential from API_CODEX_AUTH_FILE with no tokens passed', async () => {
+        const cliAuth = path.join(os.homedir(), '.codex', 'auth.json');
+        if (!fs.existsSync(cliAuth)) {
+            return;
+        }
+        const previous = process.env.API_CODEX_AUTH_FILE;
+        process.env.API_CODEX_AUTH_FILE = cliAuth;
+        try {
+            const model = codexSubscriptionModule.build({
+                provider: 'chatgpt_subscription',
+                model: 'gpt-5.6-luna',
+            } as never);
+            const result = await generateText({
+                model,
+                prompt: 'Reply with exactly: OK',
+            });
+            expect(result.text.length).toBeGreaterThan(0);
+        } finally {
+            if (previous === undefined) {
+                delete process.env.API_CODEX_AUTH_FILE;
+            } else {
+                process.env.API_CODEX_AUTH_FILE = previous;
+            }
+        }
+    });
 });
