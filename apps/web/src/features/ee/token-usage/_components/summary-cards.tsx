@@ -77,9 +77,15 @@ export const SummaryCards = ({
     /** Totals of the same-length window immediately before this one. */
     previousTotals?: { cost: number; tokens: number } | null;
 }) => {
-    // Backend's `totals.input` already excludes cache reads — name the local
-    // alias explicitly so the rendering is unambiguous.
-    const uncachedInput = Math.max(0, totalUsage.input - totalUsage.cacheRead);
+    // `totals.input` is the TOTAL prompt tokens (ai@7: input = noCache +
+    // cacheRead + cacheWrite), so the full-price "uncached" pool excludes BOTH
+    // cacheRead and cacheWrite. Dropping the cacheWrite term inflates this card
+    // (and, on models with prompt-cache writes, double-counts those tokens with
+    // the separate Cache-write figure). Mirrors model-cost-calculator.ts.
+    const uncachedInput = Math.max(
+        0,
+        totalUsage.input - totalUsage.cacheRead - (totalUsage.cacheWrite ?? 0),
+    );
 
     const cards: CardSpec[] = [
         {

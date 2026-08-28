@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -23,21 +22,12 @@ import {
     useSuspenseGetLLMProviders,
 } from "@services/organizationParameters/hooks";
 import { useQueryErrorResetBoundary } from "@tanstack/react-query";
-import { ChevronsUpDownIcon, LockIcon, Loader2Icon } from "lucide-react";
+import { ChevronsUpDownIcon, Loader2Icon, LockIcon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
-import {
-    getAnnotationForModel,
-    type CuratedModelsCatalog,
-} from "../../../../_data/curated-models.types";
-import { useCatalogModel } from "../../../../_data/catalog-context";
 import { formatModelLabel } from "../../../../_data/model-label";
-
-// Annotations (per-model badges) are not part of the backend catalog and are
-// currently empty — default to none. Re-add via the catalog endpoint if needed.
-const annotations: CuratedModelsCatalog["annotations"] = {};
 
 export const ByokModelSelect = ({
     excludeIds = [],
@@ -61,23 +51,27 @@ export const ByokModelSelect = ({
     const { providers } = useSuspenseGetLLMProviders();
     const foundProvider = providers.find((p) => p.id === provider);
 
+    // Force manual model entry only when the provider's models can't be
+    // auto-listed (custom endpoint whose URL isn't known yet, or a `manual`
+    // listing) — driven by the registry, so a provider with a real listing +
+    // default base URL (e.g. Moonshot) shows the dropdown instead. The user can
+    // toggle it; switching provider resets to the new provider's default via a
+    // render-time reset (no effect → no cascading setState-in-effect). Hooks stay
+    // above every early return so their call order is stable across renders.
+    const autoManual = !(foundProvider?.autoListModels ?? false);
+    const [manualOverride, setManual] = useState<boolean | null>(null);
+    const [prevProvider, setPrevProvider] = useState(provider);
+    if (provider !== prevProvider) {
+        setPrevProvider(provider);
+        setManual(null);
+    }
+    const manual = manualOverride ?? autoManual;
+
     // In use in Routing → the model identity is frozen. Show it read-only with a
     // hint pointing at where to change it, instead of the editable picker.
     if (lockedInUse) {
         return <ModelLockedField />;
     }
-
-    // Force manual model entry only when the provider's models can't be
-    // auto-listed (custom endpoint whose URL isn't known yet, or a `manual`
-    // listing) — driven by the registry, so a provider with a real listing +
-    // default base URL (e.g. Moonshot) shows the dropdown instead.
-    const [manual, setManual] = useState<boolean>(
-        !(foundProvider?.autoListModels ?? false),
-    );
-
-    useEffect(() => {
-        setManual(!(foundProvider?.autoListModels ?? false));
-    }, [foundProvider?.autoListModels]);
 
     if (manual) {
         return (
@@ -124,10 +118,9 @@ export const ByokManualModelInput = () => <ModelInput />;
 const ModelLockedField = () => {
     const form = useFormContext<EditKeyForm>();
     const model = form.watch("model");
-    // Show the friendly label (curated displayName, else derived) — never the raw
-    // id — to match the dropdown and the page title.
-    const curated = useCatalogModel(model);
-    const label = curated?.displayName ?? formatModelLabel(model);
+    // Show the friendly label (derived from the id) — never the raw id — to match
+    // the dropdown and the page title.
+    const label = formatModelLabel(model);
 
     return (
         <FormControl.Root>
@@ -138,7 +131,9 @@ const ModelLockedField = () => {
                     variant="helper"
                     disabled
                     className="w-full justify-between"
-                    rightIcon={<LockIcon className="-mr-2 size-4 opacity-70" />}>
+                    rightIcon={
+                        <LockIcon className="-mr-2 size-4 opacity-70" />
+                    }>
                     <span className="truncate font-normal">{label}</span>
                 </Button>
             </FormControl.Input>
@@ -213,11 +208,9 @@ const ModelInput = ({
  */
 const ModelPickerPopover = ({
     models,
-    provider,
     onUseManual,
 }: {
     models: Array<{ id: string; name: string }>;
-    provider: string;
     onUseManual?: () => void;
 }) => {
     const form = useFormContext<EditKeyForm>();
@@ -289,50 +282,24 @@ const ModelPickerPopover = ({
                         <CommandEmpty>No model found.</CommandEmpty>
 
                         {ArrayHelpers.sortAlphabetically(models, "name").map(
-                            (r) => {
-                                const annotation = getAnnotationForModel(
-                                    annotations,
-                                    provider,
-                                    r.id,
-                                );
+                            (r) => (
+                                <CommandItem
+                                    key={r.id}
+                                    value={r.id}
+                                    onSelect={(v) => {
+                                        form.reset({
+                                            ...form.getValues(),
+                                            model: v,
+                                        });
 
-                                return (
-                                    <CommandItem
-                                        key={r.id}
-                                        value={r.id}
-                                        onSelect={(v) => {
-                                            form.reset({
-                                                ...form.getValues(),
-                                                model: v,
-                                            });
-
-                                            resetErrorBoundary();
-                                            setOpen(false);
-                                        }}>
-                                        <span className="flex items-center gap-2">
-                                            {r.name}
-                                            {annotation?.badge === "tested" && (
-                                                <Badge
-                                                    variant="success"
-                                                    size="xs">
-                                                    Tested
-                                                </Badge>
-                                            )}
-                                            {annotation?.badge ===
-                                                "untested" && (
-                                                <span className="text-warning text-xs">
-                                                    {annotation.note}
-                                                </span>
-                                            )}
-                                            {annotation?.badge === "legacy" && (
-                                                <span className="text-text-tertiary text-xs">
-                                                    {annotation.note}
-                                                </span>
-                                            )}
-                                        </span>
-                                    </CommandItem>
-                                );
-                            },
+                                        resetErrorBoundary();
+                                        setOpen(false);
+                                    }}>
+                                    <span className="flex items-center gap-2">
+                                        {r.name}
+                                    </span>
+                                </CommandItem>
+                            ),
                         )}
 
                         {/* Allow user to switch to manual input */}
@@ -378,13 +345,7 @@ const ModelSelect = ({
     const excludeSet = new Set(excludeIds.filter((id) => id !== selected));
     const models = allModels.filter((m) => !excludeSet.has(m.id));
 
-    return (
-        <ModelPickerPopover
-            models={models}
-            provider={provider}
-            onUseManual={onUseManual}
-        />
-    );
+    return <ModelPickerPopover models={models} onUseManual={onUseManual} />;
 };
 
 /** Debounce a value by `ms` — so the live model fetch fires after the user stops
@@ -509,11 +470,5 @@ const ModelSelectLive = ({
         );
     }
 
-    return (
-        <ModelPickerPopover
-            models={models}
-            provider={provider}
-            onUseManual={onUseManual}
-        />
-    );
+    return <ModelPickerPopover models={models} onUseManual={onUseManual} />;
 };

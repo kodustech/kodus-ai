@@ -60,6 +60,22 @@ function looksLikeBase64Json(value: string): boolean {
 }
 
 /**
+ * Vertex project for the KEYLESS (ADC) path — mirrors `vertexProjectFromEnv`
+ * in managed-slot.ts, but reads from the passed `env` (this module stays a pure
+ * inspector). `GOOGLE_CLOUD_PROJECT` / `GCLOUD_PROJECT` are the variables
+ * google-auth-library reads anyway; when a key is absent they are the only
+ * signal that a Vertex-via-ADC deployment is actually configured.
+ */
+function vertexProjectFromEnv(env: NodeJS.ProcessEnv): string | undefined {
+    const project = (
+        env.GOOGLE_CLOUD_PROJECT ||
+        env.GCLOUD_PROJECT ||
+        ''
+    ).trim();
+    return project || undefined;
+}
+
+/**
  * Describe the active env-based LLM config. Returns `{ configured: false }`
  * on cloud-mode installs (`API_LLM_PROVIDER_MODEL` unset or `"auto"`) and
  * on self-hosted installs that have the model set but no usable key.
@@ -120,6 +136,22 @@ export function describeEnvLLMConfig(
                 providerId: 'google_gemini',
             });
         }
+        // Keyless ADC: no key at all, project pinned via GOOGLE_CLOUD_PROJECT /
+        // GCLOUD_PROJECT (and no explicit OpenAI key to override) — mirrors
+        // `resolveEnvProvider`'s `vertex_adc` precedence in managed-slot.ts. The
+        // model DOES build here (vertexModelFromAdc), so the status descriptor
+        // must agree; otherwise a working ADC deploy (Workload Identity on
+        // GKE/EKS, or ADC creds) shows "No LLM provider configured" and reviews
+        // are gated off. Location mirrors the builder default ('global').
+        const adcProject = vertexProjectFromEnv(env);
+        if (!openaiKey && adcProject) {
+            return baseDescriptor({
+                configured: true,
+                model: envMode,
+                providerId: 'google_vertex',
+                vertexLocation: vertexLocation || 'global',
+            });
+        }
     }
 
     if (isClaude && openaiKey && !viaProxy) {
@@ -129,6 +161,30 @@ export function describeEnvLLMConfig(
             providerId: 'anthropic',
             baseUrl: openaiBaseURL || undefined,
         });
+    }
+
+    // Claude-on-Vertex, mirroring managed-slot.ts precedence AFTER the native
+    // Anthropic key: an SA-JSON key (google_vertex), then keyless ADC when only
+    // a project is pinned. Without these a Claude-on-Vertex env deploy would hit
+    // the same "not configured" false-negative the Gemini ADC path did.
+    if (isClaude && vertexKey && !viaProxy) {
+        return baseDescriptor({
+            configured: true,
+            model: envMode,
+            providerId: 'google_vertex',
+            vertexLocation: vertexLocation || 'global',
+        });
+    }
+    if (isClaude && !viaProxy) {
+        const claudeAdcProject = vertexProjectFromEnv(env);
+        if (!openaiKey && claudeAdcProject) {
+            return baseDescriptor({
+                configured: true,
+                model: envMode,
+                providerId: 'google_vertex',
+                vertexLocation: vertexLocation || 'global',
+            });
+        }
     }
 
     if (openaiKey) {

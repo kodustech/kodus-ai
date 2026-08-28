@@ -32,6 +32,7 @@ jest.mock('@libs/core/log/langfuse', () => ({
 }));
 jest.mock('@libs/llm/reasoning-options', () => ({
     buildProviderOptions: jest.fn(() => ({ __providerOptions: 'reasoning' })),
+    defaultReasoningEffortFor: () => undefined,
 }));
 
 import {
@@ -112,7 +113,10 @@ describe('runTextReviewCall — plain-text half of the shared executor', () => {
     };
 
     it('returns the raw generated string and sends NO structured-output arg', async () => {
-        mockGenerate.mockResolvedValueOnce({ text: 'a prose summary', usage: {} });
+        mockGenerate.mockResolvedValueOnce({
+            text: 'a prose summary',
+            usage: {},
+        });
 
         const out = await runTextReviewCall({ ...textBase });
 
@@ -164,7 +168,7 @@ describe('runTextReviewCall — plain-text half of the shared executor', () => {
         );
     });
 
-    it('forwards the slot\'s fallback provenance (route + usedFallback) to the span', async () => {
+    it("forwards the slot's fallback provenance (route + usedFallback) to the span", async () => {
         // The failover cascade re-runs on a slot stamped usedFallback=true; the
         // executor must surface that on the span so a primary→fallback swap is
         // visible in observability (not a silent model change).
@@ -436,7 +440,9 @@ describe('runStructuredReviewCall — structured parse/validation recovery (issu
             'Return ONLY a JSON object',
         );
         // ...and the recovery is stamped on the re-ask span (not silent).
-        expect(spanCalls()[1][0].attrs.structuredRecovery).toBe('schema-mismatch');
+        expect(spanCalls()[1][0].attrs.structuredRecovery).toBe(
+            'schema-mismatch',
+        );
         // NOT a slot-level fault: the provider supports json_schema, the model
         // flubbed — so the slot is never cached as unsupported.
         expect(markJsonSchemaUnsupported).not.toHaveBeenCalled();
@@ -463,7 +469,9 @@ describe('runStructuredReviewCall — structured parse/validation recovery (issu
 
         expect(out).toEqual({ recovered: true });
         expect(mockGenerate).toHaveBeenCalledTimes(2);
-        expect(spanCalls()[1][0].attrs.structuredRecovery).toBe('schema-mismatch');
+        expect(spanCalls()[1][0].attrs.structuredRecovery).toBe(
+            'schema-mismatch',
+        );
     });
 });
 
@@ -518,7 +526,10 @@ describe('runStructuredReviewCall — retained latency guard (D-00c: one gated S
         expect(out).toEqual({ violations: ['reissued'] });
         // main fails → ONE same-model re-issue succeeds. Both attempts are `main`.
         expect(mockGenerate).toHaveBeenCalledTimes(2);
-        expect(modelsUsed()).toEqual([{ __model: 'main' }, { __model: 'main' }]);
+        expect(modelsUsed()).toEqual([
+            { __model: 'main' },
+            { __model: 'main' },
+        ]);
         assertNoSecondModelBuilt();
     });
 
@@ -533,7 +544,10 @@ describe('runStructuredReviewCall — retained latency guard (D-00c: one gated S
 
         // main + exactly one same-model re-issue = 2 attempts, then propagate.
         expect(mockGenerate).toHaveBeenCalledTimes(2);
-        expect(modelsUsed()).toEqual([{ __model: 'main' }, { __model: 'main' }]);
+        expect(modelsUsed()).toEqual([
+            { __model: 'main' },
+            { __model: 'main' },
+        ]);
         assertNoSecondModelBuilt();
     });
 
@@ -598,9 +612,7 @@ describe('runStructuredReviewCall — single retry owner (maxRetries:0 + cooldow
 
         expect(mockGenerate).toHaveBeenCalledTimes(2);
         for (const call of mockGenerate.mock.calls) {
-            expect(call[0]).toEqual(
-                expect.objectContaining({ maxRetries: 0 }),
-            );
+            expect(call[0]).toEqual(expect.objectContaining({ maxRetries: 0 }));
         }
     });
 
@@ -686,7 +698,10 @@ describe('runStructuredReviewCall — per-model tuning (RFC §4.1 model limits)'
         });
 
         expect(mockGenerate).toHaveBeenCalledWith(
-            expect.objectContaining({ temperature: 0.3, maxOutputTokens: 5000 }),
+            expect.objectContaining({
+                temperature: 0.3,
+                maxOutputTokens: 5000,
+            }),
         );
     });
 

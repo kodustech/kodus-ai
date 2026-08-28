@@ -1,6 +1,4 @@
 import { formatModelLabel } from './model-label';
-import { REGISTRY } from '../index';
-import { resolveCatalogFrom } from './catalog';
 
 describe('formatModelLabel', () => {
     it.each([
@@ -33,11 +31,11 @@ describe('formatModelLabel', () => {
     });
 });
 
-// The load-bearing guarantee behind dropping curated displayNames: for the ids
-// whose override we removed, the derived label MUST reproduce the old label — so
-// the change is invisible on screen. If a future id stops matching, this fails
-// and tells you to either keep an override or fix the id.
-describe('curated entries with no displayName derive the intended label', () => {
+// The picker no longer ships curated displayNames — every model name is derived
+// from its id by `formatModelLabel`. These are the well-known brand ids whose
+// derived label must stay faithful; if a future id stops matching, this fails and
+// tells you to fix the id (or the formatter).
+describe('well-known brand ids derive the intended label', () => {
     const DERIVED_IS_FAITHFUL: Array<[string, string]> = [
         ['kimi-k2.6', 'Kimi K2.6'],
         ['kimi-k2.7-code', 'Kimi K2.7 Code'],
@@ -51,12 +49,4 @@ describe('curated entries with no displayName derive the intended label', () => 
             expect(formatModelLabel(id)).toBe(expected);
         },
     );
-
-    it('every catalog entry resolves to a non-empty displayName (override or derived)', () => {
-        const catalog = resolveCatalogFrom(REGISTRY.all());
-        expect(catalog.length).toBeGreaterThan(0);
-        for (const m of catalog) {
-            expect(m.displayName?.length ?? 0).toBeGreaterThan(0);
-        }
-    });
 });

@@ -279,9 +279,15 @@ export const Chart = ({
     // (by-review's "#PR · shortId").
     const formatLabel = (x: string) => {
         if (filterType === "daily") {
+            // The daily key is a UTC calendar date ("YYYY-MM-DD") from the
+            // backend's $dateToString(timezone:'UTC'). Render it in UTC too —
+            // without this, new Date("2026-08-28") is parsed as UTC midnight and
+            // toLocaleDateString shifts it into the viewer's zone, so anyone west
+            // of UTC (e.g. BRT −3) sees the PREVIOUS day ("Aug 27" for Aug 28).
             return new Date(x).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
+                timeZone: "UTC",
             });
         }
         return x;

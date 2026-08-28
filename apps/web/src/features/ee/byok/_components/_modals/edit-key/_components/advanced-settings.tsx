@@ -374,9 +374,10 @@ export const ByokAdvancedSettings = ({
 
                     {temperatureUnsupported && (
                         <p className="text-text-tertiary text-xs text-pretty">
-                            Claude 4.7 and newer removed temperature — the
-                            provider rejects any request that sets it. Steer the
-                            model with the thinking level above instead.
+                            This model doesn&apos;t accept a temperature — the
+                            provider rejects any request that sets it (Claude
+                            4.7+, OpenAI GPT-5 / o-series). Steer it with the
+                            thinking level above instead.
                         </p>
                     )}
 

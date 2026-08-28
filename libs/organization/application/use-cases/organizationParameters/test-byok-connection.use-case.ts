@@ -1,6 +1,8 @@
 import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { REGISTRY } from '@libs/llm/providers';
+import { resolveByokTemperature } from '@libs/llm/sampling-params';
+import { validateModelTuning } from '@libs/llm/validate-model-tuning';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
 import { BadRequestException, Injectable } from '@nestjs/common';
@@ -115,6 +117,14 @@ type TestByokInput = {
     apiKey?: string;
     baseURL?: string;
     model?: string;
+    /** The temperature the user configured — validated against the model's
+     *  policy and sent (resolved) on the real chat probe so the Test exercises
+     *  the exact request shape the review will make. */
+    temperature?: number;
+    /** The reasoning effort the user picked ('none' = thinking off) — validated
+     *  against the model's traits so an "off" on an always-thinking model fails
+     *  the Test instead of being silently ignored at review time. */
+    reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
     vertexLocation?: string;
     awsBearerToken?: string;
     awsAccessKeyId?: string;
@@ -139,6 +149,27 @@ export class TestByokConnectionUseCase {
         }
 
         const byokProvider = provider as BYOKProvider;
+
+        // Validate the configured tuning (temperature / reasoning) against the
+        // MODEL's own rules BEFORE spending a network round-trip. The runtime
+        // silently self-corrects a mis-set value (a `fixed` temperature is sent
+        // over whatever is stored), so a mismatch never 400s at review time — it
+        // is just ignored. Surfacing it here tells the user the value won't be
+        // used before they save a config that quietly disagrees with it.
+        const tuningIssues = validateModelTuning({
+            provider,
+            model: input.model,
+            temperature: input.temperature,
+            reasoningEffort: input.reasoningEffort,
+        });
+        if (tuningIssues.length > 0) {
+            return {
+                ok: false,
+                code: 'bad_request',
+                latencyMs: 0,
+                message: tuningIssues.map((i) => i.message).join(' '),
+            };
+        }
 
         // Vertex: SA JSON (apiKey) + optional location. Validate auth via
         // google-auth-library getAccessToken() then probe the regional
@@ -204,15 +235,45 @@ export class TestByokConnectionUseCase {
         // OK" for a key whose actual reviews would fail. (Native `anthropic`, with
         // its hardcoded api.anthropic.com endpoint, is handled in buildProbeRequest.)
         if (this.isAnthropicProtocolWithBaseURL(byokProvider)) {
-            if (!baseURL?.trim()) {
+            // A key-only connect to a known brand (Kimi/GLM) carries no baseURL —
+            // fall back to the brand's canonical endpoint, the SAME value the model
+            // build resolves. Only a generic anthropic_compatible (no fixed brand
+            // endpoint) still requires the user to supply one.
+            const effectiveBaseURL =
+                baseURL?.trim() ||
+                (REGISTRY.has(byokProvider)
+                    ? REGISTRY.get(byokProvider).defaultBaseURL
+                    : undefined);
+            if (!effectiveBaseURL) {
                 throw new BadRequestException(
                     `baseURL is required for ${byokProvider}`,
                 );
             }
             return await this.testAnthropicCompatible(
                 apiKey,
-                baseURL,
+                effectiveBaseURL,
                 input.model,
+            );
+        }
+
+        // OpenAI-protocol chat endpoints (generic openai_compatible + Novita):
+        // when a model is given, exercise it with a real 1-token chat completion
+        // — the SAME call the review makes — instead of a GET /v1/models. Some
+        // upstreams gate the two differently (a Kimi on Novita lists fine while
+        // chat rejects the key/model), so the weaker list probe can report "OK"
+        // for a config whose reviews would fail. Sends the RESOLVED temperature
+        // (a `fixed`-policy model's pinned value), so the probe matches runtime.
+        if (
+            (byokProvider === BYOKProvider.OPENAI_COMPATIBLE ||
+                byokProvider === BYOKProvider.NOVITA) &&
+            input.model?.trim()
+        ) {
+            return await this.testOpenAICompatibleChat(
+                byokProvider,
+                apiKey,
+                baseURL,
+                input.model.trim(),
+                input.temperature,
             );
         }
 
@@ -288,6 +349,88 @@ export class TestByokConnectionUseCase {
                     maxRedirects: 0,
                 });
             }
+            return {
+                ok: true,
+                code: 'ok',
+                latencyMs: Date.now() - start,
+            };
+        } catch (err) {
+            return this.normalizeError(err, Date.now() - start);
+        }
+    }
+
+    /**
+     * Validate an OpenAI-protocol chat endpoint (generic openai_compatible or
+     * Novita) by POSTing a minimal 1-token /chat/completions request — the same
+     * shape the real review path issues — instead of a GET /v1/models. Carries
+     * the RESOLVED temperature (an always-thinking Kimi's pinned 1, an
+     * `unsupported` model's omitted field) so the probe exercises exactly what
+     * runtime sends. `thinking` is NOT emitted: Novita's OpenAI-protocol Kimi
+     * reasons natively and the effort wire-format over this transport is
+     * unverified, so we don't risk a param a plain upstream would reject.
+     */
+    private async testOpenAICompatibleChat(
+        provider: BYOKProvider,
+        apiKey: string,
+        baseURL: string | undefined,
+        model: string,
+        temperature: number | undefined,
+    ): Promise<TestByokResult> {
+        // Novita hardcodes its endpoint (mirrors novita module's build default);
+        // openai_compatible is user-provided and SSRF-gated below.
+        const base =
+            provider === BYOKProvider.NOVITA
+                ? baseURL?.trim() || 'https://api.novita.ai/v3/openai'
+                : baseURL!;
+
+        // Append /chat/completions. Novita's base is its full versioned root
+        // (/v3/openai) — append directly, exactly as its /models probe does. For
+        // the generic openai_compatible endpoint, mirror buildProbeRequest: add
+        // /v1 only when the user's base doesn't already carry a version segment.
+        let trimmed = base;
+        while (trimmed.endsWith('/')) {
+            trimmed = trimmed.slice(0, -1);
+        }
+        const needsV1 =
+            provider === BYOKProvider.OPENAI_COMPATIBLE &&
+            !/\/v\d+$/i.test(trimmed);
+        const url = needsV1
+            ? `${trimmed}/v1/chat/completions`
+            : `${trimmed}/chat/completions`;
+
+        // SSRF guard only for the user-provided (openai_compatible) endpoint;
+        // Novita's host is fixed, same as its models probe in buildProbeRequest.
+        if (provider === BYOKProvider.OPENAI_COMPATIBLE) {
+            await assertSafeOpenAICompatibleUrl(url);
+        }
+
+        // The temperature runtime would actually send for this slot (a `fixed`
+        // policy's pinned value over whatever was passed; omitted when unsupported).
+        const resolvedTemperature = resolveByokTemperature({
+            provider,
+            model,
+            temperature,
+        });
+
+        const body: Record<string, unknown> = {
+            model,
+            max_tokens: 1,
+            messages: [{ role: 'user', content: 'ping' }],
+        };
+        if (resolvedTemperature !== undefined) {
+            body.temperature = resolvedTemperature;
+        }
+
+        const start = Date.now();
+        try {
+            await axios.post(url, body, {
+                headers: {
+                    Authorization: `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: TEST_TIMEOUT_MS,
+                maxRedirects: 0,
+            });
             return {
                 ok: true,
                 code: 'ok',

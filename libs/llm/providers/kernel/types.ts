@@ -19,7 +19,6 @@ import type {
     TemperaturePolicy,
 } from '@libs/llm/providers/kernel/model-types';
 import type { NormalizedModel } from '@libs/llm/byok-config';
-import type { ProviderCatalogModel } from './catalog';
 import type { ModelReasoningTraits } from './reasoning-traits';
 
 /**
@@ -211,7 +210,7 @@ export interface ProviderModule {
      *  provider). Both the runtime (`resolveByokTemperature`) and the connect form
      *  read this ONE shape. Absent/undefined ⇒ the caller falls back to the static
      *  `capabilities().supportsTemperature` flag (every provider but Anthropic). */
-    temperaturePolicy?(cfg: ProviderBuildConfig): TemperaturePolicy;
+    temperaturePolicy?(cfg: ProviderBuildConfig): TemperaturePolicy | undefined;
     /** The Vercel AI SDK `providerOptions` namespace key this provider's adapter
      *  listens on, per requested id (a module may serve several ids with
      *  DIFFERENT namespaces — the openai module serves `openai` → 'openai' and
@@ -228,12 +227,12 @@ export interface ProviderModule {
      *  adds it in ONE place and the web picker shows it. Absent/undefined ⇒ the UI
      *  falls back to a generic enabled-thinking example. */
     reasoningOverrideExample?(providerId: string): string | undefined;
-    /** The curated models this brand offers — Kodus's editorial picks (score,
-     *  copy, billing variants, defaults). The single source for the web catalog;
-     *  the aggregating use-case stamps each entry with this module's identity
-     *  (`providerKey`/`providerDisplayName`) and default transport. Absent ⇒ the
-     *  provider is connectable but has no curated models (custom/self-hosted). */
-    catalog?: ProviderCatalogModel[];
+    /** The brand's canonical endpoint, when it has a fixed one (a Kimi/GLM brand
+     *  served over the Anthropic protocol). Fills baseURL on a key-only connect —
+     *  both the model build and the connection probe fall back to it so the user
+     *  never has to type the endpoint for a known brand. Absent for providers with
+     *  no fixed endpoint (native SDKs, custom/self-hosted). */
+    defaultBaseURL?: string;
     /** UI fields for the BYOK settings screen. */
     uiFields: FieldDescriptor[];
     /** How to enumerate this provider's models, per requested id (a module may
