@@ -46,7 +46,15 @@ export function rowCost(
     if (!pricing) return zero;
 
     const bucketCost = (bucket: TierUsage, bracket: number) => {
-        const uncached = Math.max(0, bucket.input - bucket.cacheRead);
+        // ai@7 normalizes inputTokens = noCache + cacheRead + cacheWrite, so the
+        // full-price (uncached) pool must exclude BOTH cacheRead and cacheWrite —
+        // otherwise the cacheWrite tokens are billed twice (once here at the input
+        // rate, once again at the cacheWrite rate below). Mirrors the backend
+        // model-cost-calculator.ts bucketCost exactly.
+        const uncached = Math.max(
+            0,
+            bucket.input - bucket.cacheRead - bucket.cacheWrite,
+        );
         const uncachedInput =
             uncached * rate(pricing.input, bracket) +
             bucket.cacheWrite * rate(pricing.cacheWrite, bracket);
