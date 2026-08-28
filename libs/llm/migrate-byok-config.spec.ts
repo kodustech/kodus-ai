@@ -282,4 +282,187 @@ describe('migrateLegacyToV2', () => {
             expect(JSON.stringify(v2)).not.toContain(plaintext);
         });
     });
+
+    // Regression: shapes measured in the production BYOK export (416 legacy
+    // rows). Before these fixes, 19 rows migrated to the empty/managed default
+    // (losing their BYOK key) and 7 dropped their OpenRouter provider-pinning.
+    describe('production edge cases', () => {
+        // Amazon Bedrock authenticates with a bearer token (or access-key pair),
+        // NOT an apiKey — the slot carries no apiKey at all.
+        const bedrockSlot = (overrides: Record<string, unknown> = {}) => ({
+            provider: 'amazon_bedrock',
+            model: 'us.anthropic.claude-sonnet-4-6',
+            awsBearerToken: encrypt('bedrock-bearer-token'),
+            awsRegion: 'us-east-1',
+            ...overrides,
+        });
+
+        it('migrates a Bedrock main (bearer token, NO apiKey) — never empties', () => {
+            const main = bedrockSlot();
+            const v2 = migrateLegacyToV2({ main });
+
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models).toHaveLength(1);
+            expect(v2.credentials[0].provider).toBe('amazon_bedrock');
+            expect(v2.credentials[0].apiKey).toBeUndefined();
+            // aws secret carried verbatim into settings (same ciphertext bytes).
+            expect(v2.credentials[0].settings?.awsBearerToken).toBe(
+                main.awsBearerToken,
+            );
+            expect(v2.credentials[0].settings?.awsRegion).toBe('us-east-1');
+            expect(v2.routing?.defaultModelId).toBe(v2.models[0].id);
+        });
+
+        it('migrates a Bedrock main + Bedrock fallback to two credentials', () => {
+            const v2 = migrateLegacyToV2({
+                main: bedrockSlot(),
+                fallback: bedrockSlot({
+                    model: 'global.anthropic.claude-opus-4-7',
+                    awsBearerToken: encrypt('bedrock-bearer-token-2'),
+                }),
+            });
+            expect(v2.credentials).toHaveLength(2);
+            expect(v2.models).toHaveLength(2);
+        });
+
+        it('accepts a Bedrock access-key pair as auth', () => {
+            const v2 = migrateLegacyToV2({
+                main: {
+                    provider: 'amazon_bedrock',
+                    model: 'us.anthropic.claude-sonnet-4-6',
+                    awsAccessKeyId: encrypt('AKIA...'),
+                    awsSecretAccessKey: encrypt('secret'),
+                },
+            });
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models).toHaveLength(1);
+        });
+
+        it('PROMOTES a fallback-only config (no usable main) instead of emptying', () => {
+            const fallback = legacySlot({
+                provider: 'openai_compatible',
+                apiKey: encrypt('sk-fallback-only'),
+                model: 'minimax-m3',
+            });
+            const v2 = migrateLegacyToV2({ fallback });
+
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models).toHaveLength(1);
+            // The promoted fallback becomes the default model.
+            expect(v2.routing?.defaultModelId).toBe(v2.models[0].id);
+            expect(v2.credentials[0].provider).toBe('openai_compatible');
+            expect(v2.credentials[0].apiKey).toBe(fallback.apiKey);
+            expect(v2.models[0].model).toBe('minimax-m3');
+        });
+
+        it('promotes the fallback when the main slot is present but UNUSABLE', () => {
+            const v2 = migrateLegacyToV2({
+                main: { provider: 'openai', apiKey: encrypt('k') }, // no model → unusable
+                fallback: legacySlot({ model: 'gpt-5.4' }),
+            });
+            expect(v2.credentials).toHaveLength(1);
+            expect(v2.models[0].model).toBe('gpt-5.4');
+        });
+
+        it('still empties a config with NO usable slot (managed default)', () => {
+            const v2 = migrateLegacyToV2({
+                main: { provider: 'openai' }, // no key, no model
+            });
+            expect(v2.credentials).toHaveLength(0);
+            expect(v2.models).toHaveLength(0);
+        });
+
+        it('carries OpenRouter provider-pinning into credential settings', () => {
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({
+                    provider: 'open_router',
+                    apiKey: encrypt('sk-or'),
+                    model: 'z-ai/glm-5.2',
+                    openrouterProviderOrder: ['novita', 'z-ai'],
+                    openrouterAllowFallbacks: false,
+                }),
+            });
+            expect(v2.credentials[0].settings?.openrouterProviderOrder).toEqual([
+                'novita',
+                'z-ai',
+            ]);
+            expect(v2.credentials[0].settings?.openrouterAllowFallbacks).toBe(
+                false,
+            );
+        });
+
+        it('does NOT dedup two OpenRouter slots that differ only in provider order', () => {
+            const key = encrypt('sk-shared-or');
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({
+                    provider: 'open_router',
+                    apiKey: key,
+                    model: 'z-ai/glm-5.2',
+                    openrouterProviderOrder: ['novita'],
+                }),
+                fallback: legacySlot({
+                    provider: 'open_router',
+                    apiKey: key,
+                    model: 'z-ai/glm-5.2',
+                    openrouterProviderOrder: ['z-ai'],
+                }),
+            });
+            // Same key, but distinct routing → two credentials, both preserved.
+            expect(v2.credentials).toHaveLength(2);
+        });
+    });
+
+    // End-to-end: the whole point of migrating is that the READ path
+    // (resolveDefaultSlot → the slot providers actually build from) resolves the
+    // migrated blob correctly. Migrate, then resolve, then assert the slot.
+    describe('post-migration read path (resolveDefaultSlot)', () => {
+        it('resolves a migrated Bedrock config to a usable slot (no apiKey)', () => {
+            const v2 = migrateLegacyToV2({
+                main: {
+                    provider: 'amazon_bedrock',
+                    model: 'us.anthropic.claude-sonnet-4-6',
+                    awsBearerToken: encrypt('bedrock-bearer'),
+                    awsRegion: 'us-east-1',
+                },
+            });
+            const slot = resolveDefaultSlot(v2);
+            expect(slot).toBeDefined();
+            expect(slot?.provider).toBe('amazon_bedrock');
+            expect(slot?.model).toBe('us.anthropic.claude-sonnet-4-6');
+            expect(slot?.apiKey).toBe(''); // aws-auth: empty apiKey, not undefined
+            expect(slot?.awsBearerToken).toBeTruthy();
+            expect(slot?.awsRegion).toBe('us-east-1');
+        });
+
+        it('resolves a migrated fallback-only config to the promoted slot', () => {
+            const v2 = migrateLegacyToV2({
+                fallback: legacySlot({
+                    provider: 'openai_compatible',
+                    apiKey: encrypt('sk-fb'),
+                    model: 'minimax-m3',
+                    baseURL: 'https://api.example.com/v1',
+                }),
+            });
+            const slot = resolveDefaultSlot(v2);
+            expect(slot).toBeDefined();
+            expect(slot?.provider).toBe('openai_compatible');
+            expect(slot?.model).toBe('minimax-m3');
+            expect(slot?.baseURL).toBe('https://api.example.com/v1');
+        });
+
+        it('surfaces OpenRouter provider-pinning onto the resolved slot', () => {
+            const v2 = migrateLegacyToV2({
+                main: legacySlot({
+                    provider: 'open_router',
+                    apiKey: encrypt('sk-or'),
+                    model: 'z-ai/glm-5.2',
+                    openrouterProviderOrder: ['novita', 'z-ai'],
+                    openrouterAllowFallbacks: false,
+                }),
+            });
+            const slot = resolveDefaultSlot(v2);
+            expect(slot?.openrouterProviderOrder).toEqual(['novita', 'z-ai']);
+            expect(slot?.openrouterAllowFallbacks).toBe(false);
+        });
+    });
 });

@@ -6,6 +6,34 @@ import {
     type BYOKConfig,
     type BYOKCredential,
 } from '@libs/llm/byok-config';
+import { resolveDefaultSlot } from '@libs/llm/resolve-model-slot';
+
+/**
+ * Whether a legacy blob CARRIED a BYOK intent — a main/fallback slot with a
+ * provider + model. Used only for the migration's own audit log: a row that had
+ * slot data but migrates to an EMPTY (managed/env) config is the exact
+ * data-loss signature we want to surface loudly in the deploy log, so a prod
+ * incident can be attributed to (or cleared of) THIS migration in one grep.
+ */
+function legacyHadSlotData(blob: unknown): boolean {
+    const cfg = (blob && typeof blob === 'object' ? blob : {}) as Record<
+        string,
+        unknown
+    >;
+    const slotHasData = (s: unknown): boolean => {
+        const slot = (s && typeof s === 'object' ? s : {}) as Record<
+            string,
+            unknown
+        >;
+        return (
+            typeof slot.provider === 'string' &&
+            slot.provider.length > 0 &&
+            typeof slot.model === 'string' &&
+            slot.model.length > 0
+        );
+    };
+    return slotHasData(cfg.main) || slotHasData(cfg.fallback);
+}
 
 /**
  * REQUIRED legacy→v2 BYOK data migration (Phase 04b, plan 04b-07).
@@ -45,14 +73,67 @@ export class ByokConfigV22026072918034700 implements MigrationInterface {
                 [BYOK_CONFIG_KEY],
             );
 
+        // Audit counters — logged as one summary line at the end (and a WARN per
+        // suspicious row) so a prod deploy can confirm at a glance that this
+        // data-path migration preserved every org's BYOK, and any post-deploy
+        // incident can be attributed to it (or cleared) with a single
+        // `[ByokConfigV2]` grep.
+        const tag = '[ByokConfigV2]';
+        let total = 0;
+        let skippedAlreadyV2 = 0;
+        let migratedWithByok = 0; // migrated → has ≥1 credential (BYOK preserved)
+        let migratedToManaged = 0; // migrated → empty (env/managed default)
+        let lostByok = 0; // had slot data but migrated to empty — the alarm
+
         for (const row of rows ?? []) {
+            total++;
             // Idempotent: already-v2 rows are left untouched (safe to re-run).
-            if (isByokConfig(row.configValue)) continue;
+            if (isByokConfig(row.configValue)) {
+                skippedAlreadyV2++;
+                continue;
+            }
 
             const migrated = migrateLegacyToV2(row.configValue);
+            const hasByok = (migrated.credentials ?? []).length > 0;
+
+            if (hasByok) {
+                migratedWithByok++;
+                // Self-check: a non-empty migrated config MUST resolve to a usable
+                // default slot. If it does not, the written blob and the resolver
+                // disagree — surface the org loudly rather than let it degrade
+                // silently to the env default at review time.
+                if (!resolveDefaultSlot(migrated)) {
+                    console.warn(
+                        `${tag} org ${row.uuid}: migrated config has credentials but does NOT resolve to a slot — verify.`,
+                    );
+                }
+            } else {
+                migratedToManaged++;
+                // Had a real BYOK slot but migrated to empty → its key is gone.
+                // After the 04b fixes this should be zero; if it ever fires, this
+                // is the line that pins a prod BYOK regression on the migration.
+                if (legacyHadSlotData(row.configValue)) {
+                    lostByok++;
+                    console.warn(
+                        `${tag} org ${row.uuid}: legacy config had slot data but migrated to EMPTY (managed/env default) — BYOK LOST.`,
+                    );
+                }
+            }
+
             await queryRunner.query(
                 `UPDATE "organization_parameters" SET "configValue" = $1::jsonb WHERE "uuid" = $2`,
                 [JSON.stringify(migrated), row.uuid],
+            );
+        }
+
+        console.log(
+            `${tag} done: ${total} row(s) — ${migratedWithByok} migrated with BYOK, ` +
+                `${migratedToManaged} to managed/env default (${lostByok} of them LOST slot data), ` +
+                `${skippedAlreadyV2} already-v2 skipped.`,
+        );
+        if (lostByok > 0) {
+            console.warn(
+                `${tag} ⚠ ${lostByok} org(s) LOST BYOK config in this migration — see the per-org WARN lines above.`,
             );
         }
     }
@@ -104,11 +185,20 @@ export class ByokConfigV22026072918034700 implements MigrationInterface {
             const model = modelId ? byId.get(modelId) : undefined;
             if (!model) return undefined;
             const cred = creds.get(model.credentialId);
-            if (!cred || cred.managed || !cred.apiKey) return undefined;
+            if (!cred || cred.managed) return undefined;
             const settings = (cred.settings ?? {}) as Record<string, unknown>;
+            // Auth material, mirroring resolve-model-slot.ts / up()'s isUsableSlot:
+            // an apiKey OR Amazon Bedrock's bearer token / IAM pair. Gating on
+            // apiKey alone dropped every Bedrock credential on rollback.
+            const hasAuth =
+                !!cred.apiKey ||
+                !!settings.awsBearerToken ||
+                (!!settings.awsAccessKeyId && !!settings.awsSecretAccessKey);
+            if (!hasAuth) return undefined;
             return {
                 provider: cred.provider,
-                apiKey: cred.apiKey, // ciphertext verbatim
+                // ciphertext verbatim; absent for aws*-authenticated Bedrock.
+                ...(cred.apiKey ? { apiKey: cred.apiKey } : {}),
                 model: model.model,
                 ...(settings.baseURL ? { baseURL: settings.baseURL } : {}),
                 ...(settings.vertexLocation
@@ -126,6 +216,21 @@ export class ByokConfigV22026072918034700 implements MigrationInterface {
                     : {}),
                 ...(settings.awsSessionToken
                     ? { awsSessionToken: settings.awsSessionToken }
+                    : {}),
+                // OpenRouter provider-pinning back at the legacy slot top-level,
+                // where the pre-v2 resolver read it.
+                ...(Array.isArray(settings.openrouterProviderOrder) &&
+                settings.openrouterProviderOrder.length
+                    ? {
+                          openrouterProviderOrder:
+                              settings.openrouterProviderOrder,
+                      }
+                    : {}),
+                ...(typeof settings.openrouterAllowFallbacks === 'boolean'
+                    ? {
+                          openrouterAllowFallbacks:
+                              settings.openrouterAllowFallbacks,
+                      }
                     : {}),
                 ...(model.reasoningEffort
                     ? { reasoningEffort: model.reasoningEffort }
