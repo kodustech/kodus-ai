@@ -287,7 +287,16 @@ export class TestByokConnectionUseCase {
                     },
                     body: JSON.stringify({
                         model: model?.trim() || 'gpt-5.6-luna',
-                        input: 'ping',
+                        // The Codex endpoint rejects a bare string here with
+                        // `{"detail":"Input must be a list"}`; it requires the
+                        // Responses message array form.
+                        input: [
+                            {
+                                type: 'message',
+                                role: 'user',
+                                content: [{ type: 'input_text', text: 'ping' }],
+                            },
+                        ],
                         stream: true,
                         store: false,
                         include: ['reasoning.encrypted_content'],

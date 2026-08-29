@@ -86,4 +86,39 @@ describe('TestByokConnectionUseCase ChatGPT subscription', () => {
             }),
         ).rejects.toBeInstanceOf(BadRequestException);
     });
+
+    it('sends the Codex input as a Responses message array', async () => {
+        // A bare string is rejected by the live endpoint with
+        // `{"detail":"Input must be a list"}`, which a mocked fetch cannot
+        // surface, so this asserts the wire shape directly.
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockResolvedValue(
+            new Response('data: [DONE]\n\n', {
+                status: 200,
+                headers: { 'Content-Type': 'text/event-stream' },
+            }),
+        ) as typeof fetch;
+        const useCase = new TestByokConnectionUseCase(
+            providerService as unknown as ProviderService,
+        );
+
+        try {
+            await useCase.execute({
+                provider: 'chatgpt_subscription',
+                codexAccessToken: 'access-token',
+                codexRefreshToken: 'refresh-token',
+                accountId: 'account-id',
+                model: 'gpt-5.6-sol',
+            });
+            const call = (global.fetch as jest.Mock).mock.calls[0];
+            const body = JSON.parse(call[1].body);
+            expect(Array.isArray(body.input)).toBe(true);
+            expect(body.input[0]).toMatchObject({
+                type: 'message',
+                role: 'user',
+            });
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
 });
