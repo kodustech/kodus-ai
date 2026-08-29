@@ -13,7 +13,7 @@
 - No new commits since last review
 - Only merge commits (no effective changes)
 - All files ignored by patterns (e.g., `.lock`, `.env`)
-- PR exceeds file limit (200 reviewable files)
+- PR exceeds file limit (2,000 reviewable files)
 - PR is in draft mode (if configured)
 
 ## 📊 Status Reactions (GitHub/GitLab)
