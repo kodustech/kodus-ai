@@ -57,6 +57,15 @@ describe('buildOutcomeFooter', () => {
 });
 
 describe('stripToolLinks', () => {
+    it('removes the whole markdown link, leaving no dangling syntax', () => {
+        const out = stripToolLinks(
+            'You can open it [here](https://app.kodus.io/settings/code-review/7/kody-rules/x?tab=memories).',
+        );
+
+        expect(out).not.toContain('[here](');
+        expect(out).not.toContain('kody-rules/x');
+    });
+
     it('removes app links the model wrote itself', () => {
         const text =
             'Done. You can view it here: https://app.kodus.io/settings/code-review/7/kody-rules/fake-999?tab=memories';
@@ -69,6 +78,23 @@ describe('stripToolLinks', () => {
             'See https://github.com/kodustech/kodus-ai/pull/1 for context.';
 
         expect(stripToolLinks(text)).toContain('github.com/kodustech');
+    });
+});
+
+describe('link extraction', () => {
+    it('stops at the envelope, not at the next whitespace', () => {
+        const footer = buildOutcomeFooter([
+            {
+                tool: 'KODUS_CREATE_MEMORY',
+                args: {},
+                result:
+                    '[{"text":"{\\"link\\":\\"http://localhost:3000/settings/code-review/670345891/kody-rules/2922a5c5?tab=memories&teamId=92ec\\"}}"}]',
+            },
+        ]);
+
+        expect(footer).toContain('kody-rules/2922a5c5?tab=memories&teamId=92ec');
+        expect(footer).not.toContain('structuredContent');
+        expect(footer).not.toMatch(/[\\"}\]]\s*$/);
     });
 });
 

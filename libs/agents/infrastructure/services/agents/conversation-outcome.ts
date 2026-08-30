@@ -10,8 +10,21 @@
  */
 import type { WriteToolEvent } from './conversation-tool-audit';
 
-/** Links into the Kody app — the ones a write tool hands back. */
-const APP_LINK = /https?:\/\/\S*\/(?:kody-rules|kody-issues|memories)\/\S*/gi;
+/**
+ * Links into the Kody app — the ones a write tool hands back. The character
+ * class stops at quotes, backslashes and brackets so a link lifted out of a
+ * JSON envelope does not drag the envelope along with it.
+ */
+const LINK_CHAR = String.raw`[^\s"'\\<>)\]}]`;
+const APP_LINK_SOURCE = `https?://${LINK_CHAR}*/(?:kody-rules|kody-issues|memories)/${LINK_CHAR}*`;
+
+/** The same link wrapped in markdown — removed whole, or `[text](` is left behind. */
+const MARKDOWN_APP_LINK = new RegExp(
+    String.raw`\[[^\]]*\]\(\s*${APP_LINK_SOURCE}\s*\)`,
+    'gi',
+);
+
+const APP_LINK = new RegExp(APP_LINK_SOURCE, 'gi');
 
 /**
  * Pull the link a Kodus MCP tool returned. Matched out of the raw result rather
@@ -24,8 +37,7 @@ function linkOf(event: WriteToolEvent): string | undefined {
         return undefined;
     }
 
-    const found = event.result.match(new RegExp(APP_LINK.source, 'i'));
-    return found?.[0]?.replace(/[\\"',)\]}]+$/, '');
+    return event.result.match(new RegExp(APP_LINK_SOURCE, 'i'))?.[0];
 }
 
 /**
@@ -51,7 +63,11 @@ export function buildOutcomeFooter(events: readonly WriteToolEvent[]): string {
 
 /** Remove app links from the model's own prose. */
 export function stripToolLinks(text: string): string {
-    return text.replace(APP_LINK, '').replace(/[ \t]+\n/g, '\n');
+    return text
+        .replace(MARKDOWN_APP_LINK, '')
+        .replace(APP_LINK, '')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/[ \t]{2,}/g, ' ');
 }
 
 /**
