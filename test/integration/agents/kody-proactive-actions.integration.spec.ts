@@ -374,6 +374,7 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             expect(executedTools).toHaveLength(0);
             expect(answer).not.toContain('fake-999');
             expect(answer).not.toContain('---');
+            expect(answer).not.toContain('KODUS_');
         });
 
         it('publishes the link the tool really returned', async () => {
@@ -389,8 +390,10 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             );
 
             expect(answer).not.toContain('invented-000');
-            expect(answer).toContain('KODUS_CREATE_MEMORY');
             expect(answer).toContain('kody-rules/real-abc');
+            // The developer reads a reply, not a tool report.
+            expect(answer).not.toContain('KODUS_');
+            expect(answer).not.toContain('---');
         });
 
         it('tells the model mid-run that it has performed nothing', async () => {

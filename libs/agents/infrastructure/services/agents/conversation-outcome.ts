@@ -1,12 +1,14 @@
 /**
- * Makes the reply's account of what happened match what actually happened.
+ * Makes the links in a reply match what the tools actually returned.
  *
  * The model narrates: told to act, it will sometimes write "Done — saved it"
- * (and quote a link) on a turn where it called nothing. The prose cannot be
- * checked — replies are written in the team's configured language — so the
- * claim is corrected structurally instead: app links are stripped from the
- * model's text and a footer built from the real tool results is appended. What
- * the developer clicks is then always something a tool returned.
+ * and quote a link on a turn where it called nothing, and the prose itself
+ * cannot be checked (replies are written in the team's configured language).
+ * The links can be. Every app link in the reply is replaced with one a tool
+ * really returned this turn, in order; any left over is removed. The reply
+ * still reads as it always did — the bot pastes a link — except the link is
+ * now guaranteed to be real. What ran is recorded in the logs, not shown to
+ * the developer.
  */
 import type { WriteToolEvent } from './conversation-tool-audit';
 
@@ -18,16 +20,11 @@ import type { WriteToolEvent } from './conversation-tool-audit';
 const LINK_CHAR = String.raw`[^\s"'\\<>)\]}]`;
 const APP_LINK_SOURCE = `https?://${LINK_CHAR}*/(?:kody-rules|kody-issues|memories)/${LINK_CHAR}*`;
 
-/**
- * The same link wrapped in markdown. Replaced by its own text rather than
- * deleted: stripping `[here](url)` whole leaves "You can open it ." mid-reply.
- */
-const MARKDOWN_APP_LINK = new RegExp(
-    String.raw`\[([^\]]*)\]\(\s*${APP_LINK_SOURCE}\s*\)`,
+/** A markdown link first, so its text can be kept when the url goes. */
+const ANY_APP_LINK = new RegExp(
+    String.raw`\[([^\]]*)\]\(\s*${APP_LINK_SOURCE}\s*\)|${APP_LINK_SOURCE}`,
     'gi',
 );
-
-const APP_LINK = new RegExp(APP_LINK_SOURCE, 'gi');
 
 /**
  * Pull the link a Kodus MCP tool returned. Matched out of the raw result rather
@@ -36,54 +33,49 @@ const APP_LINK = new RegExp(APP_LINK_SOURCE, 'gi');
  * the developer can click matters more than the shape it travelled in.
  */
 function linkOf(event: WriteToolEvent): string | undefined {
-    if (typeof event.result !== 'string') {
+    if (event.error || typeof event.result !== 'string') {
         return undefined;
     }
 
     return event.result.match(new RegExp(APP_LINK_SOURCE, 'i'))?.[0];
 }
 
-/**
- * The turn's real record: one line per write, with the link the tool returned.
- * Deliberately language-neutral (tool name + URL) — the reply is written in the
- * team's language and a translated footer would be one more thing to get wrong.
- */
-export function buildOutcomeFooter(events: readonly WriteToolEvent[]): string {
-    if (!events.length) {
-        return '';
-    }
-
-    const lines = events.map((event) => {
-        if (event.error) {
-            return `- ❌ ${event.tool} — ${event.error}`;
-        }
-        const link = linkOf(event);
-        return `- ✅ ${event.tool}${link ? ` — ${link}` : ''}`;
-    });
-
-    return ['', '---', ...lines].join('\n');
-}
-
-/** Remove app links from the model's own prose. */
+/** Remove app links from the model's own prose, keeping any link text. */
 export function stripToolLinks(text: string): string {
+    return tidy(
+        text.replace(ANY_APP_LINK, (_m, label?: string) => label ?? ''),
+    );
+}
+
+function tidy(text: string): string {
     return text
-        .replace(MARKDOWN_APP_LINK, '$1')
-        .replace(APP_LINK, '')
         .replace(/[ \t]+\n/g, '\n')
-        .replace(/[ \t]{2,}/g, ' ');
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/[ \t]+([.,;:!?])/g, '$1')
+        .trimEnd();
 }
 
 /**
- * The reply the developer sees: the model's words with its links removed, then
- * the verified footer. A fabricated link cannot survive, and a claimed action
- * with no footer under it is visibly unsupported.
+ * The reply the developer sees: the model's own words, with every app link
+ * replaced by one a tool actually returned this turn. Links beyond what ran are
+ * dropped, so a fabricated one cannot reach a developer.
  */
 export function withVerifiedOutcome(
     reply: string,
     events: readonly WriteToolEvent[],
 ): string {
-    const stripped = stripToolLinks(reply).trimEnd();
-    const footer = buildOutcomeFooter(events);
+    const links = events
+        .map(linkOf)
+        .filter((link): link is string => Boolean(link));
 
-    return footer ? `${stripped}\n${footer}` : stripped;
+    let used = 0;
+    const verified = reply.replace(ANY_APP_LINK, (_match, label?: string) => {
+        const link = links[used++];
+        if (!link) {
+            return label ?? '';
+        }
+        return label ? `[${label}](${link})` : link;
+    });
+
+    return tidy(verified);
 }

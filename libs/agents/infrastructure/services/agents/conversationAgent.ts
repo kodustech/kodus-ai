@@ -177,6 +177,9 @@ export class ConversationAgentProvider {
                         tool: event.tool,
                         failed: Boolean(event.error),
                         error: event.error,
+                        // Debugging record of what the tool handed back — the
+                        // reply shows the developer the link, not this.
+                        result: event.result,
                     },
                 })
             ),
