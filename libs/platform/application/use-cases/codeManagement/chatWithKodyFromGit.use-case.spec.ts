@@ -710,6 +710,35 @@ describe('ChatWithKodyFromGitUseCase — rule behind the finding', () => {
         );
     });
 
+    it('finds the rule ids of a PR-level finding too', async () => {
+        const { useCase, conversationAgentUseCase } = build({
+            files: [],
+            prLevelSuggestions: [
+                {
+                    id: 'sug-pr-1',
+                    label: 'kody_rules',
+                    brokenKodyRulesIds: ['rule-pr'],
+                    comment: { id: KODY_COMMENT_ID },
+                },
+            ],
+        });
+
+        await useCase.execute(buildParams());
+
+        expect(conversationAgentUseCase.execute).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prepareContext: expect.objectContaining({
+                    codeManagementContext: expect.objectContaining({
+                        originalComment: expect.objectContaining({
+                            suggestionId: 'sug-pr-1',
+                            brokenKodyRulesIds: ['rule-pr'],
+                        }),
+                    }),
+                }),
+            }),
+        );
+    });
+
     it('still answers when the suggestion cannot be resolved', async () => {
         const { useCase, conversationAgentUseCase } = build(null);
 

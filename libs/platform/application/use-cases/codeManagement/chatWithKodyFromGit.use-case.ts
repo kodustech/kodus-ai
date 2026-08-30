@@ -1859,9 +1859,14 @@ export class ChatWithKodyFromGitUseCase {
                 );
 
             const commentId = String(originalKodyCommentId);
-            const suggestion = pullRequest?.files
-                ?.flatMap((file) => file.suggestions ?? [])
-                ?.find((s) => String(s?.comment?.id) === commentId);
+            // Line-level findings hang off files[]; PR-level ones live in their
+            // own array. Both carry the rule ids, so search both.
+            const suggestion = [
+                ...(pullRequest?.files?.flatMap(
+                    (file) => file.suggestions ?? [],
+                ) ?? []),
+                ...(pullRequest?.prLevelSuggestions ?? []),
+            ].find((s) => String(s?.comment?.id) === commentId);
 
             if (!suggestion) {
                 return undefined;
