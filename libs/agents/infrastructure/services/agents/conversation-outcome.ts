@@ -18,9 +18,12 @@ import type { WriteToolEvent } from './conversation-tool-audit';
 const LINK_CHAR = String.raw`[^\s"'\\<>)\]}]`;
 const APP_LINK_SOURCE = `https?://${LINK_CHAR}*/(?:kody-rules|kody-issues|memories)/${LINK_CHAR}*`;
 
-/** The same link wrapped in markdown — removed whole, or `[text](` is left behind. */
+/**
+ * The same link wrapped in markdown. Replaced by its own text rather than
+ * deleted: stripping `[here](url)` whole leaves "You can open it ." mid-reply.
+ */
 const MARKDOWN_APP_LINK = new RegExp(
-    String.raw`\[[^\]]*\]\(\s*${APP_LINK_SOURCE}\s*\)`,
+    String.raw`\[([^\]]*)\]\(\s*${APP_LINK_SOURCE}\s*\)`,
     'gi',
 );
 
@@ -64,7 +67,7 @@ export function buildOutcomeFooter(events: readonly WriteToolEvent[]): string {
 /** Remove app links from the model's own prose. */
 export function stripToolLinks(text: string): string {
     return text
-        .replace(MARKDOWN_APP_LINK, '')
+        .replace(MARKDOWN_APP_LINK, '$1')
         .replace(APP_LINK, '')
         .replace(/[ \t]+\n/g, '\n')
         .replace(/[ \t]{2,}/g, ' ');

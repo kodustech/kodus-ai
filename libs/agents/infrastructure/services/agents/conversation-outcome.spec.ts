@@ -64,6 +64,8 @@ describe('stripToolLinks', () => {
 
         expect(out).not.toContain('[here](');
         expect(out).not.toContain('kody-rules/x');
+        // The sentence still reads: the link text stays, the URL goes.
+        expect(out).toBe('You can open it here.');
     });
 
     it('removes app links the model wrote itself', () => {
