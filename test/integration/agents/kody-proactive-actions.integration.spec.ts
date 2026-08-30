@@ -225,11 +225,12 @@ async function runTurnAnswer(
     replies: Array<
         string | { toolName: string; input: Record<string, unknown> }
     >,
+    conversationStore?: { load: jest.Mock; append: jest.Mock },
 ): Promise<string> {
     captured.length = 0;
     scriptedModel.current = recordingModel(replies);
 
-    return buildProvider().execute(scenario.userMessage, {
+    return buildProvider(conversationStore).execute(scenario.userMessage, {
         organizationAndTeamData: ORGANIZATION_AND_TEAM_DATA,
         thread: {
             id: `TR-cmc-${scenario.id}`,
@@ -238,6 +239,19 @@ async function runTurnAnswer(
         prepareContext: scenario.prepareContext,
     } as never);
 }
+
+/** A thread where Kody has already answered once — the developer has seen an
+ *  offer, so the write tools are back on the table. */
+const storeWithPriorOffer = () => ({
+    load: jest.fn().mockResolvedValue([
+        { role: 'user', content: 'earlier question' },
+        {
+            role: 'assistant',
+            content: 'Want me to record that as a memory?',
+        },
+    ]),
+    append: jest.fn().mockResolvedValue(undefined),
+});
 
 const scenarioById = (id: string) => THREAD_SCENARIOS.find((s) => s.id === id)!;
 
@@ -250,16 +264,36 @@ beforeEach(() => {
 
 describe('@kody proactive actions in PR threads (issue #1761)', () => {
     describe('the machinery is already in place', () => {
-        it('binds every org write tool into the conversation tool registry', async () => {
+        it('withholds the write tools until the developer has been offered something', async () => {
+            const first = await runTurn(
+                scenarioById('false-positive-on-kody-rule'),
+            );
+
+            for (const write of WRITE_TOOLS) {
+                expect(first.toolNames).not.toContain(write);
+            }
+
+            const afterOffer = await runTurn(
+                scenarioById('false-positive-on-kody-rule'),
+                { conversationStore: storeWithPriorOffer() },
+            );
+
+            expect(afterOffer.toolNames).toEqual(
+                expect.arrayContaining(WRITE_TOOLS),
+            );
+        });
+
+        it('tells the agent to offer while it cannot act', async () => {
             const turn = await runTurn(
                 scenarioById('false-positive-on-kody-rule'),
             );
 
-            expect(turn.toolNames).toEqual(expect.arrayContaining(WRITE_TOOLS));
+            expect(turn.conversation).toMatch(/cannot perform any action yet/i);
         });
 
         it('executes a write tool end to end when the model does call it', async () => {
             await runTurn(scenarioById('false-positive-on-kody-rule'), {
+                conversationStore: storeWithPriorOffer(),
                 replies: [
                     {
                         toolName: 'KODUS_CREATE_MEMORY',
@@ -284,6 +318,7 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
 
         it('never writes silently — the call is auditable', async () => {
             await runTurn(scenarioById('false-positive-on-kody-rule'), {
+                conversationStore: storeWithPriorOffer(),
                 replies: [
                     {
                         toolName: 'KODUS_CREATE_MEMORY',
@@ -313,7 +348,8 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             async (scenario) => {
                 const turn = await runTurn(scenario);
 
-                expect(turn.toolNames).toContain(scenario.expectedOffer);
+                // Named in the prompt so the agent can offer it by name, even
+                // on a turn where the gate keeps it from being called.
                 expect(`${turn.systemPrompt}\n${turn.userPrompt}`).toContain(
                     scenario.expectedOffer,
                 );
@@ -387,6 +423,7 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
                     },
                     'Recorded it: https://app.kodus.io/settings/code-review/7/kody-rules/invented-000?tab=memories',
                 ],
+                storeWithPriorOffer(),
             );
 
             expect(answer).not.toContain('invented-000');
