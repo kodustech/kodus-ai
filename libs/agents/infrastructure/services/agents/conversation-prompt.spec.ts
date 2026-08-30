@@ -146,6 +146,13 @@ describe('proactive actions', () => {
         expect(prompt).toMatch(/confirm/i);
     });
 
+    it('forbids restating a past action as if it just happened', () => {
+        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+
+        expect(prompt).toMatch(/earlier turns/i);
+        expect(prompt).toMatch(/THIS turn/);
+    });
+
     it('never advertises the destructive tools', () => {
         const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
 

@@ -210,6 +210,7 @@ export class ConversationAgentProvider {
                 organizationAndTeamData,
                 availableTools: Object.keys(tools),
                 hasSandbox: Boolean(sandbox && sandbox.type !== 'null'),
+                priorTurns: seedMessages,
             });
 
             // withLangfuseTrace -> TRACE level (session/user): a thread is a
@@ -235,7 +236,6 @@ export class ConversationAgentProvider {
                         spec,
                         {
                             prompt: preparedPrompt,
-                            seedMessages,
                             telemetryMetadata: {
                                 organizationId:
                                     organizationAndTeamData.organizationId?.toString(),

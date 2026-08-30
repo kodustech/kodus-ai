@@ -77,6 +77,11 @@ const PROACTIVE_ACTIONS: Array<{ tool: string; when: string }> = [
     },
 ];
 
+export interface ConversationTurn {
+    role: 'user' | 'assistant';
+    content: string;
+}
+
 export interface UserPromptInput {
     /** The developer's raw message. */
     prompt: string;
@@ -86,6 +91,8 @@ export interface UserPromptInput {
     /** Names of the tools actually bound for this run (MCP + sandbox). */
     availableTools: string[];
     hasSandbox: boolean;
+    /** Earlier turns of this thread, oldest first. */
+    priorTurns?: ConversationTurn[];
 }
 
 export function buildSystemPrompt(userLanguage: string): string {
@@ -115,6 +122,7 @@ export function buildUserPrompt(input: UserPromptInput): string {
         organizationAndTeamData,
         availableTools,
         hasSandbox,
+        priorTurns,
     } = input;
 
     const organizationId =
@@ -140,6 +148,11 @@ export function buildUserPrompt(input: UserPromptInput): string {
         buildIdentifiersBlock(prepareContext, organizationAndTeamData),
         '',
     );
+
+    const historyBlock = buildPriorTurnsBlock(priorTurns);
+    if (historyBlock) {
+        sections.push(historyBlock, '');
+    }
 
     // Tools are OPTIONAL aids, not a mandatory pipeline. This is a chat
     // agent — forcing a tool call first (especially one that may be
@@ -182,6 +195,28 @@ export function buildUserPrompt(input: UserPromptInput): string {
 }
 
 /**
+ * Earlier turns rendered as a QUOTED transcript rather than replayed as real
+ * assistant messages. Replaying them natively made the model read its own past
+ * "Done — memory created <link>" as something it had just done and repeat the
+ * claim without calling anything. As quoted reference material it still resolves
+ * a confirmation ("yes, do it") without being mistaken for the current turn.
+ */
+export function buildPriorTurnsBlock(turns?: ConversationTurn[]): string {
+    if (!turns?.length) {
+        return '';
+    }
+
+    return [
+        '### Earlier turns in this thread',
+        'Reference only — these were already sent. Anything they claim you did happened in a PREVIOUS turn, not this one. Never repeat such a claim; to act now, call the tool now.',
+        ...turns.map(
+            (t) =>
+                `${t.role === 'assistant' ? 'You' : 'Developer'}: ${t.content}`,
+        ),
+    ].join('\n');
+}
+
+/**
  * The posture that makes the agent more than reactive: after answering, weigh
  * whether the exchange produced durable signal and, if it did, offer the one
  * action that would persist it. Only tools MCP actually bound are named, and
@@ -203,6 +238,7 @@ export function buildProactiveBlock(availableTools: string[]): string {
         '- Offer at most one action per reply, as a single closing sentence.',
         "- NEVER call one of these tools on your own initiative. Call one ONLY when the developer's latest message explicitly confirms an offer you made earlier in this thread, or explicitly asks you to do it.",
         '- After acting, say what you did and pass on any link or approval note the tool returned.',
+        '- Earlier turns in this thread are HISTORY, already sent. Never restate an action from them as if you just performed it — only report what you did in THIS turn. If the developer asks for it again, call the tool again.',
         '- If you already offered and the developer moved on, drop it — do not offer again.',
     ].join('\n');
 }
