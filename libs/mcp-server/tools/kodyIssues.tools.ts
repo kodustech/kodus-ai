@@ -75,6 +75,12 @@ export class KodyIssuesTools {
 
         return {
             name: name,
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                proactiveHint:
+                    'the developer agrees the finding is real but out of scope for this PR — track it instead of losing it',
+            },
             description: 'Create a new Kody Issue manually via MCP',
             inputSchema,
             outputSchema: z.object({
@@ -234,6 +240,9 @@ export class KodyIssuesTools {
 
         return {
             name: 'KODUS_LIST_KODY_ISSUES',
+            annotations: {
+                readOnlyHint: true,
+            },
             description: 'List Kody Issues with optional filters',
             inputSchema,
             outputSchema: z.object({
@@ -260,6 +269,9 @@ export class KodyIssuesTools {
         type InputType = z.infer<typeof inputSchema>;
         return {
             name: 'KODUS_GET_KODY_ISSUE_DETAILS',
+            annotations: {
+                readOnlyHint: true,
+            },
             description: 'Get a Kody Issue by id',
             inputSchema,
             outputSchema: z.object({
@@ -287,6 +299,12 @@ export class KodyIssuesTools {
         type InputType = z.infer<typeof inputSchema>;
         return {
             name: 'KODUS_UPDATE_KODY_ISSUE_STATUS',
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                proactiveHint:
+                    'the developer says a tracked issue is already fixed or no longer relevant',
+            },
             description: 'Update issue status',
             inputSchema,
             outputSchema: z.object({
@@ -314,6 +332,12 @@ export class KodyIssuesTools {
         type InputType = z.infer<typeof inputSchema>;
         return {
             name: 'KODUS_UPDATE_KODY_ISSUE_CATEGORY',
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                proactiveHint:
+                    'the developer says a finding is filed under the wrong category',
+            },
             description: 'Update issue category/label',
             inputSchema,
             outputSchema: z.object({
@@ -338,6 +362,10 @@ export class KodyIssuesTools {
         type InputType = z.infer<typeof inputSchema>;
         return {
             name: 'KODUS_DELETE_KODY_ISSUE',
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+            },
             description: 'Close/dismiss an issue',
             inputSchema,
             outputSchema: z.object({

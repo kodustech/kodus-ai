@@ -147,6 +147,9 @@ export class KodyRulesTools {
 
         return {
             name: 'KODUS_GET_KODY_RULES',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Get all Kody Rules at organization level. Use this to see organization-wide coding standards, global rules that apply across all repositories, or when you need a complete overview of rules. Returns rules with ACTIVE and PENDING status.',
             inputSchema,
@@ -229,6 +232,9 @@ export class KodyRulesTools {
 
         return {
             name: 'KODUS_GET_KODY_RULES_REPOSITORY',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Get Kody Rules specific to a particular repository. Use this to see repository-specific coding standards, rules that only apply to one codebase, or when analyzing rules for a specific project. More focused than get_kody_rules. Returns rules with ACTIVE and PENDING status.',
             inputSchema,
@@ -405,6 +411,12 @@ export class KodyRulesTools {
 
         return {
             name: 'KODUS_CREATE_KODY_RULE',
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                proactiveHint:
+                    'the developer states a standard the team wants enforced from now on, or repeats the same explanation across threads',
+            },
             description:
                 'Create a new Kody Rule with custom scope and severity. pull_request scope: analyzes entire PR context for PR-level rules. file scope: analyzes individual files one by one for file-level rules. Rule starts in pending status and must be approved in the UI before it takes effect. After execution, ALWAYS inform the user of: (1) the rule was created and is pending approval, and (2) the provided link to open the pending Kody Rules page to review and approve it. If centralized config is enabled the rule will be published to a pull request pending to be approved instead, and a prUrl is returned.',
             inputSchema,
@@ -650,6 +662,12 @@ export class KodyRulesTools {
 
         return {
             name: 'KODUS_UPDATE_KODY_RULE',
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                proactiveHint:
+                    'the developer says an existing rule is wrong, outdated or too broad — narrow its scope or lower its severity (look the rule up first)',
+            },
             description:
                 'Update an existing Kody Rule. Only the fields provided in kodyRule will be updated. Use this to modify rule details, change severity, scope, or status of existing rules. After execution, ALWAYS inform the user of the provided link to open the rule in the Kody Rules page. If centralized config is enabled the update will be published to a pull request pending to be approved instead, and a prUrl is returned.',
             inputSchema,
@@ -801,7 +819,8 @@ export class KodyRulesTools {
                         success: true,
                         count: 1,
                         data: result,
-                        message: 'Rule updated. You can open it directly from the provided link.',
+                        message:
+                            'Rule updated. You can open it directly from the provided link.',
                         link,
                     };
                 },
@@ -833,6 +852,10 @@ export class KodyRulesTools {
 
         return {
             name: 'KODUS_DELETE_KODY_RULE',
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: true,
+            },
             description:
                 'Delete a Kody Rule permanently from the system. This action cannot be undone. Use this to remove rules that are no longer needed or relevant. If centralized config is enabled the deletion will be published to a pull request pending to be approved.',
             inputSchema,
@@ -926,6 +949,12 @@ export class KodyRulesTools {
 
         return {
             name: 'KODUS_CREATE_MEMORY',
+            annotations: {
+                readOnlyHint: false,
+                destructiveHint: false,
+                proactiveHint:
+                    'the developer explains a team convention, or why a finding is a false positive — record it so future reviews stop repeating it',
+            },
             description:
                 'Capture a memory, preference, or coding rule derived from context to influence future interactions or code generation. Invoke this tool whenever the user demonstrates an explicit or implicit intent to save a memory, establish a convention, or note a preference. Focus on capturing the user intent rather than strictly evaluating it as a permanent architectural rule. After execution, ALWAYS inform the user of: (1) final decision/action (created or updated), (2) whether approval is required in UI, and (3) the provided link to navigate in UI. If status is pending, use the returned general memories page link (without ruleId/teamId); do not claim direct memory details link will work. AVOID: Transient task instructions ("Fix this now"), debugging chatter ("I see an error"), questions ("What is the deadline?"), or vague statements without clear actionable information. If centralized config is enabled the memory rule will be published to a pull request pending to be approved.',
             inputSchema,
@@ -1063,6 +1092,9 @@ export class KodyRulesTools {
 
         return {
             name: 'KODUS_FIND_MEMORIES',
+            annotations: {
+                readOnlyHint: true,
+            },
             description:
                 'Search and retrieve saved memories for the organization. Supports filtering by repository, directory, path glob, and keywords in title/content. Returns newest matches first.',
             inputSchema,

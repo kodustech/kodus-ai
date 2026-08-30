@@ -107,21 +107,54 @@ describe('identifiers', () => {
     });
 });
 
-const ALL_WRITE_TOOLS = [
-    'KODUS_FIND_MEMORIES',
-    'KODUS_CREATE_MEMORY',
-    'KODUS_CREATE_KODY_RULE',
-    'KODUS_UPDATE_KODY_RULE',
-    'KODUS_DELETE_KODY_RULE',
-    'KODUS_CREATE_KODY_ISSUE',
-    'KODUS_UPDATE_KODY_ISSUE_STATUS',
-    'KODUS_UPDATE_KODY_ISSUE_CATEGORY',
-    'KODUS_DELETE_KODY_ISSUE',
-];
+// Shaped like what MCP reports for the Kodus tools — the guard spec in
+// libs/mcp-server/tools pins the real declarations.
+const ORG_TOOL_METADATA = {
+    KODUS_FIND_MEMORIES: { readOnlyHint: true },
+    KODUS_CREATE_MEMORY: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        proactiveHint: 'the developer explains a false positive',
+    },
+    KODUS_CREATE_KODY_RULE: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        proactiveHint: 'the developer states a standard to enforce',
+    },
+    KODUS_UPDATE_KODY_RULE: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        proactiveHint: 'the developer says a rule is too broad',
+    },
+    KODUS_DELETE_KODY_RULE: { readOnlyHint: false, destructiveHint: true },
+    KODUS_CREATE_KODY_ISSUE: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        proactiveHint: 'the finding is real but out of scope for this PR',
+    },
+    KODUS_UPDATE_KODY_ISSUE_STATUS: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        proactiveHint: 'a tracked issue is already fixed',
+    },
+    KODUS_UPDATE_KODY_ISSUE_CATEGORY: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        proactiveHint: 'a finding is filed under the wrong category',
+    },
+    KODUS_DELETE_KODY_ISSUE: { readOnlyHint: false, destructiveHint: true },
+};
+
+const ALL_WRITE_TOOLS = Object.keys(ORG_TOOL_METADATA);
+
+const withOrgTools = {
+    availableTools: ALL_WRITE_TOOLS,
+    toolMetadata: ORG_TOOL_METADATA,
+};
 
 describe('proactive actions', () => {
     it('names each bound write tool and when to offer it', () => {
-        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+        const prompt = userPrompt(withOrgTools);
 
         expect(prompt).toContain('KODUS_CREATE_MEMORY');
         expect(prompt).toContain('KODUS_UPDATE_KODY_RULE');
@@ -133,35 +166,53 @@ describe('proactive actions', () => {
     });
 
     it('tells the agent to evaluate whether the exchange is worth persisting', () => {
-        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+        const prompt = userPrompt(withOrgTools);
 
         expect(prompt).toMatch(/durable/i);
         expect(prompt).toMatch(/offer/i);
     });
 
     it('keeps the write path opt-in behind the developer confirmation', () => {
-        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+        const prompt = userPrompt(withOrgTools);
 
         expect(prompt).toMatch(/NEVER call/);
         expect(prompt).toMatch(/confirm/i);
     });
 
     it('forbids restating a past action as if it just happened', () => {
-        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+        const prompt = userPrompt(withOrgTools);
 
         expect(prompt).toMatch(/earlier turns/i);
         expect(prompt).toMatch(/THIS turn/);
     });
 
     it('never advertises the destructive tools', () => {
-        const prompt = userPrompt({ availableTools: ALL_WRITE_TOOLS });
+        const prompt = userPrompt(withOrgTools);
 
         expect(prompt).not.toContain('KODUS_DELETE_KODY_RULE');
         expect(prompt).not.toContain('KODUS_DELETE_KODY_ISSUE');
     });
 
+    it('offers a tool the org adds later without touching this code', () => {
+        const prompt = userPrompt({
+            availableTools: ['KODUS_ARCHIVE_THREAD'],
+            toolMetadata: {
+                KODUS_ARCHIVE_THREAD: {
+                    readOnlyHint: false,
+                    proactiveHint: 'the developer says the thread is settled',
+                },
+            },
+        });
+
+        expect(prompt).toContain('KODUS_ARCHIVE_THREAD');
+        expect(prompt).toContain('the developer says the thread is settled');
+    });
+
     it('says nothing about acting when MCP bound no write tool', () => {
-        const prompt = userPrompt({ availableTools: ['KODUS_FIND_MEMORIES'] });
+        const prompt = userPrompt({
+            availableTools: ['KODUS_FIND_MEMORIES'],
+            toolMetadata: { KODUS_FIND_MEMORIES: { readOnlyHint: true } },
+        });
 
         expect(prompt).not.toMatch(/PROACTIVE ACTIONS/);
         expect(prompt).not.toContain('KODUS_CREATE_MEMORY');

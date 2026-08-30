@@ -5,20 +5,15 @@
  * (memories, rules, issues). Every such call is reported before it is answered
  * for, including the destructive tools the agent is never told to offer — those
  * are exactly the ones worth seeing in a log.
+ *
+ * Which tools those are is NOT listed here: it comes from each tool's own MCP
+ * `readOnlyHint`. A tool that does not declare one is treated as a write, so a
+ * server that omits its annotations is over-logged rather than silently
+ * unaudited.
  */
 import type { Tool } from 'ai';
 
-/** Kodus MCP tools that mutate state. Matched by name, as MCP exposes them. */
-const WRITE_TOOLS = new Set([
-    'KODUS_CREATE_MEMORY',
-    'KODUS_CREATE_KODY_RULE',
-    'KODUS_UPDATE_KODY_RULE',
-    'KODUS_DELETE_KODY_RULE',
-    'KODUS_CREATE_KODY_ISSUE',
-    'KODUS_UPDATE_KODY_ISSUE_STATUS',
-    'KODUS_UPDATE_KODY_ISSUE_CATEGORY',
-    'KODUS_DELETE_KODY_ISSUE',
-]);
+import type { McpToolMetadata } from '../ai-sdk/mcp-tools';
 
 export interface WriteToolEvent {
     tool: string;
@@ -27,8 +22,10 @@ export interface WriteToolEvent {
     error?: string;
 }
 
-export function isConversationWriteTool(name: string): boolean {
-    return WRITE_TOOLS.has(name);
+export function isConversationWriteTool(
+    metadata: McpToolMetadata | undefined,
+): boolean {
+    return metadata?.readOnlyHint !== true;
 }
 
 /**
@@ -37,13 +34,14 @@ export function isConversationWriteTool(name: string): boolean {
  */
 export function auditWriteTools(
     tools: Record<string, Tool>,
+    metadata: Record<string, McpToolMetadata>,
     onWrite: (event: WriteToolEvent) => void,
 ): Record<string, Tool> {
     const audited: Record<string, Tool> = {};
 
     for (const [name, tool] of Object.entries(tools)) {
         if (
-            !isConversationWriteTool(name) ||
+            !isConversationWriteTool(metadata[name]) ||
             typeof tool.execute !== 'function'
         ) {
             audited[name] = tool;

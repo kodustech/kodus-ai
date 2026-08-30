@@ -7,6 +7,8 @@
  */
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
+import type { McpToolMetadata } from '../ai-sdk/mcp-tools';
+
 /**
  * The PR comment thread the agent is answering in, as assembled by
  * `ChatWithKodyFromGitUseCase.prepareContext`. Every field is optional — the
@@ -45,38 +47,6 @@ export interface ConversationThreadContext {
     };
 }
 
-/**
- * The actions the agent may OFFER once the thread has revealed something worth
- * keeping. Read-only and destructive tools are deliberately absent: the first
- * need no offer, the second must never be proposed by the agent itself.
- */
-const PROACTIVE_ACTIONS: Array<{ tool: string; when: string }> = [
-    {
-        tool: 'KODUS_CREATE_MEMORY',
-        when: 'the developer explains a team convention, or why a finding is a false positive — record it so future reviews stop repeating it',
-    },
-    {
-        tool: 'KODUS_CREATE_KODY_RULE',
-        when: 'the developer states a standard the team wants enforced from now on, or repeats the same explanation across threads',
-    },
-    {
-        tool: 'KODUS_UPDATE_KODY_RULE',
-        when: 'the developer says an existing rule is wrong, outdated or too broad — narrow its scope or lower its severity (look the rule up first)',
-    },
-    {
-        tool: 'KODUS_CREATE_KODY_ISSUE',
-        when: 'the developer agrees the finding is real but out of scope for this PR — track it instead of losing it',
-    },
-    {
-        tool: 'KODUS_UPDATE_KODY_ISSUE_STATUS',
-        when: 'the developer says a tracked issue is already fixed or no longer relevant',
-    },
-    {
-        tool: 'KODUS_UPDATE_KODY_ISSUE_CATEGORY',
-        when: 'the developer says a finding is filed under the wrong category',
-    },
-];
-
 export interface ConversationTurn {
     role: 'user' | 'assistant';
     content: string;
@@ -90,6 +60,8 @@ export interface UserPromptInput {
     organizationAndTeamData: OrganizationAndTeamData;
     /** Names of the tools actually bound for this run (MCP + sandbox). */
     availableTools: string[];
+    /** What each bound tool declares about itself, keyed by tool name. */
+    toolMetadata?: Record<string, McpToolMetadata>;
     hasSandbox: boolean;
     /** Earlier turns of this thread, oldest first. */
     priorTurns?: ConversationTurn[];
@@ -121,6 +93,7 @@ export function buildUserPrompt(input: UserPromptInput): string {
         prepareContext,
         organizationAndTeamData,
         availableTools,
+        toolMetadata,
         hasSandbox,
         priorTurns,
     } = input;
@@ -178,7 +151,7 @@ export function buildUserPrompt(input: UserPromptInput): string {
         );
     }
 
-    const proactiveBlock = buildProactiveBlock(availableTools);
+    const proactiveBlock = buildProactiveBlock(availableTools, toolMetadata);
     if (proactiveBlock) {
         sections.push('', proactiveBlock);
     }
@@ -222,9 +195,18 @@ export function buildPriorTurnsBlock(turns?: ConversationTurn[]): string {
  * action that would persist it. Only tools MCP actually bound are named, and
  * the write itself stays behind the developer's confirmation.
  */
-export function buildProactiveBlock(availableTools: string[]): string {
-    const bound = new Set(availableTools);
-    const offers = PROACTIVE_ACTIONS.filter((a) => bound.has(a.tool));
+export function buildProactiveBlock(
+    availableTools: string[],
+    toolMetadata: Record<string, McpToolMetadata> = {},
+): string {
+    // A tool is offerable only if it says so itself: it carries a
+    // `proactiveHint` (what reveals it) and is not flagged destructive. Nothing
+    // is listed here, so adding or removing one is a change to that tool alone.
+    const offers = availableTools
+        .map((tool) => ({ tool, meta: toolMetadata[tool] }))
+        .filter(
+            (o) => o.meta?.proactiveHint && o.meta.destructiveHint !== true,
+        );
 
     if (!offers.length) {
         return '';
@@ -233,7 +215,7 @@ export function buildProactiveBlock(availableTools: string[]): string {
     return [
         'PROACTIVE ACTIONS:',
         'After you answer, judge whether this exchange produced durable signal — something that should outlive this thread. If it did, close your reply with ONE short offer to act, naming what you would do. If it did not (a greeting, a plain question, debugging chatter), just answer and offer nothing.',
-        ...offers.map((a) => `- ${a.tool} — ${a.when}`),
+        ...offers.map((o) => `- ${o.tool} — ${o.meta!.proactiveHint}`),
         'Rules:',
         '- Offer at most one action per reply, as a single closing sentence.',
         "- NEVER call one of these tools on your own initiative. Call one ONLY when the developer's latest message explicitly confirms an offer you made earlier in this thread, or explicitly asks you to do it.",

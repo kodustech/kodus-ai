@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
     auditWriteTools,
     isConversationWriteTool,
+    type WriteToolEvent,
 } from './conversation-tool-audit';
 
 const stub = (result: string, fail = false) =>
@@ -23,6 +24,7 @@ describe('auditWriteTools', () => {
         const seen: Array<{ tool: string; args: unknown }> = [];
         const tools = auditWriteTools(
             { KODUS_CREATE_MEMORY: stub('created') },
+            { KODUS_CREATE_MEMORY: { readOnlyHint: false } },
             (e) => seen.push(e),
         );
 
@@ -38,6 +40,7 @@ describe('auditWriteTools', () => {
         const seen: Array<{ tool: string; error?: string }> = [];
         const tools = auditWriteTools(
             { KODUS_UPDATE_KODY_RULE: stub('', true) },
+            { KODUS_UPDATE_KODY_RULE: { readOnlyHint: false } },
             (e) => seen.push(e),
         );
 
@@ -49,16 +52,37 @@ describe('auditWriteTools', () => {
 
     it('leaves read tools untouched', () => {
         const read = stub('memories');
-        const tools = auditWriteTools({ KODUS_FIND_MEMORIES: read }, () => {});
+        const tools = auditWriteTools(
+            { KODUS_FIND_MEMORIES: read },
+            { KODUS_FIND_MEMORIES: { readOnlyHint: true } },
+            () => {},
+        );
 
         expect(tools.KODUS_FIND_MEMORIES).toBe(read);
     });
 
-    it('counts every mutating Kodus tool as a write, including the destructive ones', () => {
-        expect(isConversationWriteTool('KODUS_CREATE_MEMORY')).toBe(true);
-        expect(isConversationWriteTool('KODUS_DELETE_KODY_RULE')).toBe(true);
-        expect(isConversationWriteTool('KODUS_DELETE_KODY_ISSUE')).toBe(true);
-        expect(isConversationWriteTool('KODUS_FIND_MEMORIES')).toBe(false);
-        expect(isConversationWriteTool('grep')).toBe(false);
+    it('reads write-ness off the tool, destructive ones included', () => {
+        expect(isConversationWriteTool({ readOnlyHint: false })).toBe(true);
+        expect(
+            isConversationWriteTool({
+                readOnlyHint: false,
+                destructiveHint: true,
+            }),
+        ).toBe(true);
+        expect(isConversationWriteTool({ readOnlyHint: true })).toBe(false);
+    });
+
+    it('audits a tool that declares nothing rather than letting a write slip', () => {
+        const seen: WriteToolEvent[] = [];
+        const tools = auditWriteTools(
+            { SOME_THIRD_PARTY_TOOL: stub('ok') },
+            {},
+            (e) => seen.push(e),
+        );
+
+        expect(isConversationWriteTool(undefined)).toBe(true);
+        return tools.SOME_THIRD_PARTY_TOOL.execute!({}, {} as any).then(() =>
+            expect(seen).toHaveLength(1),
+        );
     });
 });

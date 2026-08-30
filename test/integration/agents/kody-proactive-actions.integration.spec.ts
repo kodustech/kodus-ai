@@ -27,9 +27,10 @@ jest.mock('@libs/mcp-server/mcp-adapter', () => ({
         connect: async () => undefined,
         disconnect: async () => undefined,
         getTools: async () =>
-            ORG_MCP_TOOLS.map((name) => ({
-                name,
-                description: `${name} (stub)`,
+            ORG_MCP_TOOLS.map((tool) => ({
+                name: tool.name,
+                description: tool.description,
+                annotations: tool.annotations,
                 inputSchema: { type: 'object', properties: {} },
             })),
         executeTool: async (name: string, args: Record<string, unknown>) => {
@@ -42,6 +43,8 @@ jest.mock('@libs/mcp-server/mcp-adapter', () => ({
 import { MockLanguageModelV3 } from 'ai/test';
 
 import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/agents/conversationAgent';
+import { KodyIssuesTools } from '@libs/mcp-server/tools/kodyIssues.tools';
+import { KodyRulesTools } from '@libs/mcp-server/tools/kodyRules.tools';
 
 import {
     CONFIRMATION_TURN,
@@ -51,26 +54,20 @@ import {
     type ThreadScenario,
 } from './__test-utils__/kody-thread-scenarios';
 
-/** Tools the auto-registered Kodus MCP exposes to every org. */
+/**
+ * The REAL Kodus MCP tool definitions — names, descriptions and annotations as
+ * the server serves them. Using the real declarations rather than a hand-kept
+ * copy is what proves the agent derives its behavior from them: re-annotate a
+ * tool at the source and these expectations move with it.
+ */
 const ORG_MCP_TOOLS = [
-    'KODUS_FIND_MEMORIES',
-    'KODUS_CREATE_MEMORY',
-    'KODUS_GET_KODY_RULES',
-    'KODUS_CREATE_KODY_RULE',
-    'KODUS_UPDATE_KODY_RULE',
-    'KODUS_DELETE_KODY_RULE',
-    'KODUS_CREATE_KODY_ISSUE',
-    'KODUS_LIST_KODY_ISSUES',
-    'KODUS_UPDATE_KODY_ISSUE_STATUS',
-    'KODUS_UPDATE_KODY_ISSUE_CATEGORY',
+    ...new KodyRulesTools({} as never, {} as never, {} as never).getAllTools(),
+    ...new KodyIssuesTools({} as never, {} as never).getAllTools(),
 ];
 
 const WRITE_TOOLS = ORG_MCP_TOOLS.filter(
-    (name) =>
-        !name.startsWith('KODUS_GET_') &&
-        !name.startsWith('KODUS_LIST_') &&
-        name !== 'KODUS_FIND_MEMORIES',
-);
+    (t) => t.annotations?.readOnlyHint === false,
+).map((t) => t.name);
 
 const scriptedModel: { current: MockLanguageModelV3 | null } = {
     current: null,

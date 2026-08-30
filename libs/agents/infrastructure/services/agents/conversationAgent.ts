@@ -28,7 +28,7 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
-import { connectMcpTools } from '../ai-sdk/mcp-tools';
+import { connectMcpTools, type ConnectedMcpTools } from '../ai-sdk/mcp-tools';
 import { buildNativeTools } from '../ai-sdk/native-tools';
 import { auditWriteTools } from './conversation-tool-audit';
 import {
@@ -150,6 +150,7 @@ export class ConversationAgentProvider {
                 ...mcp.tools,
                 ...(sandbox ? buildNativeTools(sandbox) : {}),
             },
+            mcp.metadata,
             (event) =>
                 this.logger.log({
                     message: `Conversation agent called write tool ${event.tool}`,
@@ -209,6 +210,7 @@ export class ConversationAgentProvider {
                 prepareContext,
                 organizationAndTeamData,
                 availableTools: Object.keys(tools),
+                toolMetadata: mcp.metadata,
                 hasSandbox: Boolean(sandbox && sandbox.type !== 'null'),
                 priorTurns: seedMessages,
             });
@@ -484,7 +486,7 @@ export class ConversationAgentProvider {
      */
     private async connectMcp(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<{ tools: Record<string, Tool>; close: () => Promise<void> }> {
+    ): Promise<ConnectedMcpTools> {
         const servers =
             (await this.mcpManagerService?.getConnections(
                 organizationAndTeamData,
@@ -500,7 +502,7 @@ export class ConversationAgentProvider {
                     teamId: organizationAndTeamData?.teamId,
                 },
             });
-            return { tools: {}, close: async () => undefined };
+            return { tools: {}, metadata: {}, close: async () => undefined };
         }
 
         return connectMcpTools(servers, {
