@@ -18,6 +18,8 @@ import type { McpToolMetadata } from '../ai-sdk/mcp-tools';
 export interface WriteToolEvent {
     tool: string;
     args: unknown;
+    /** What the tool returned, so the reply can quote a real link. */
+    result?: string;
     /** Present when the tool threw; the error is re-thrown either way. */
     error?: string;
 }
@@ -54,7 +56,14 @@ export function auditWriteTools(
             execute: async (args: never, options: never) => {
                 try {
                     const result = await execute(args, options);
-                    onWrite({ tool: name, args });
+                    onWrite({
+                        tool: name,
+                        args,
+                        result:
+                            typeof result === 'string'
+                                ? result
+                                : JSON.stringify(result ?? null),
+                    });
                     return result;
                 } catch (error) {
                     onWrite({

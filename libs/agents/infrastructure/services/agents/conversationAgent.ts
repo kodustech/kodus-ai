@@ -30,7 +30,13 @@ import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider
 
 import { connectMcpTools, type ConnectedMcpTools } from '../ai-sdk/mcp-tools';
 import { buildNativeTools } from '../ai-sdk/native-tools';
-import { auditWriteTools } from './conversation-tool-audit';
+import { withVerifiedOutcome } from './conversation-outcome';
+import {
+    auditWriteTools,
+    isConversationWriteTool,
+    type WriteToolEvent,
+} from './conversation-tool-audit';
+import { WriteTruthPolicy } from './write-truth.policy';
 import {
     buildSystemPrompt,
     buildUserPrompt,
@@ -145,13 +151,19 @@ export class ConversationAgentProvider {
         // readFile, listDir, exec). Both are plain AI SDK tools, carried into
         // the harness as-is by AiSdkToolRegistry (no schema round-trip).
         const mcp = await this.connectMcp(organizationAndTeamData);
+
+        // What this turn actually changed. Drives both the honesty note the
+        // model sees mid-run and the footer the developer reads at the end.
+        const writes: WriteToolEvent[] = [];
+
         const tools: Record<string, Tool> = auditWriteTools(
             {
                 ...mcp.tools,
                 ...(sandbox ? buildNativeTools(sandbox) : {}),
             },
             mcp.metadata,
-            (event) =>
+            (event) => (
+                writes.push(event),
                 this.logger.log({
                     message: `Conversation agent called write tool ${event.tool}`,
                     context: ConversationAgentProvider.name,
@@ -166,7 +178,8 @@ export class ConversationAgentProvider {
                         failed: Boolean(event.error),
                         error: event.error,
                     },
-                }),
+                })
+            ),
         );
         // Single runtime: the conversation runs as an AgentSpec on the harness
         // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
@@ -186,7 +199,11 @@ export class ConversationAgentProvider {
             spanName: 'ConversationalAgent::conversationAgent',
             systemPrompt: buildSystemPrompt(userLanguage),
             tools: new AiSdkToolRegistry(tools),
-            policies: [],
+            policies: [
+                new WriteTruthPolicy((name) =>
+                    isConversationWriteTool(mcp.metadata[name]),
+                ),
+            ],
             maxSteps: CONVERSATION_MAX_STEPS,
             // Conversation keeps its own max-output default when the slot omits one.
             maxOutputTokens: this.maxOutputTokensFallback,
@@ -300,11 +317,13 @@ export class ConversationAgentProvider {
             // usable. A run that ENDED IN ERROR (provider down/blocked — zero
             // tokens) gets the technical-issue message, not the "add more
             // context" nudge, which would blame the user for an outage.
-            const userFacing =
-                response ??
-                (finishReason === 'error'
-                    ? CONVERSATION_PROVIDER_ERROR_MESSAGE
-                    : CONVERSATION_FALLBACK_MESSAGE);
+            // The model narrates; the tools are the record. Reconcile the two
+            // before anyone reads the reply.
+            const userFacing = response
+                ? withVerifiedOutcome(response, writes)
+                : finishReason === 'error'
+                  ? CONVERSATION_PROVIDER_ERROR_MESSAGE
+                  : CONVERSATION_FALLBACK_MESSAGE;
 
             // Persist the exchange to `kodus-agent-sessions` (best-effort —
             // never blocks the reply). Records the turn even when it fell back,

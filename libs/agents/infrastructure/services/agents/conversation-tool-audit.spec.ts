@@ -32,7 +32,11 @@ describe('auditWriteTools', () => {
             tools.KODUS_CREATE_MEMORY.execute!({ title: 'x' }, {} as any),
         ).resolves.toBe('created');
         expect(seen).toEqual([
-            { tool: 'KODUS_CREATE_MEMORY', args: { title: 'x' } },
+            {
+                tool: 'KODUS_CREATE_MEMORY',
+                args: { title: 'x' },
+                result: 'created',
+            },
         ]);
     });
 

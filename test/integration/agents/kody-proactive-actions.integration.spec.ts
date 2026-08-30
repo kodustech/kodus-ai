@@ -35,7 +35,12 @@ jest.mock('@libs/mcp-server/mcp-adapter', () => ({
             })),
         executeTool: async (name: string, args: Record<string, unknown>) => {
             executedTools.push({ name, args });
-            return { success: true };
+            return {
+                success: true,
+                data: {
+                    link: 'https://app.kodus.io/settings/code-review/7/kody-rules/real-abc?tab=memories',
+                },
+            };
         },
     }),
 }));
@@ -214,6 +219,26 @@ async function runTurn(
     return captured[0];
 }
 
+/** Runs a turn and returns the text the developer would actually read. */
+async function runTurnAnswer(
+    scenario: ThreadScenario,
+    replies: Array<
+        string | { toolName: string; input: Record<string, unknown> }
+    >,
+): Promise<string> {
+    captured.length = 0;
+    scriptedModel.current = recordingModel(replies);
+
+    return buildProvider().execute(scenario.userMessage, {
+        organizationAndTeamData: ORGANIZATION_AND_TEAM_DATA,
+        thread: {
+            id: `TR-cmc-${scenario.id}`,
+            metadata: { channel: 'github' },
+        },
+        prepareContext: scenario.prepareContext,
+    } as never);
+}
+
 const scenarioById = (id: string) => THREAD_SCENARIOS.find((s) => s.id === id)!;
 
 const actionableScenarios = THREAD_SCENARIOS.filter((s) => s.expectedOffer);
@@ -334,6 +359,48 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
 
             expect(conversationStore.load).toHaveBeenCalled();
             expect(turn.conversation).toContain(CONFIRMATION_TURN.priorOffer);
+        });
+    });
+
+    describe('the reply cannot claim more than the tools did', () => {
+        it('strips a link the model invented on a turn that wrote nothing', async () => {
+            const answer = await runTurnAnswer(
+                scenarioById('false-positive-on-kody-rule'),
+                [
+                    'Done — saved it: https://app.kodus.io/settings/code-review/7/kody-rules/fake-999?tab=memories',
+                ],
+            );
+
+            expect(executedTools).toHaveLength(0);
+            expect(answer).not.toContain('fake-999');
+            expect(answer).not.toContain('---');
+        });
+
+        it('publishes the link the tool really returned', async () => {
+            const answer = await runTurnAnswer(
+                scenarioById('false-positive-on-kody-rule'),
+                [
+                    {
+                        toolName: 'KODUS_CREATE_MEMORY',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Recorded it: https://app.kodus.io/settings/code-review/7/kody-rules/invented-000?tab=memories',
+                ],
+            );
+
+            expect(answer).not.toContain('invented-000');
+            expect(answer).toContain('KODUS_CREATE_MEMORY');
+            expect(answer).toContain('kody-rules/real-abc');
+        });
+
+        it('tells the model mid-run that it has performed nothing', async () => {
+            const turn = await runTurn(
+                scenarioById('false-positive-on-kody-rule'),
+            );
+
+            expect(turn.conversation).toMatch(
+                /ACTIONS PERFORMED THIS TURN: none/,
+            );
         });
     });
 
