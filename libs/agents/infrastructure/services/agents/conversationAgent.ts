@@ -36,7 +36,6 @@ import {
     isConversationWriteTool,
     type WriteToolEvent,
 } from './conversation-tool-audit';
-import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
 import {
     buildSystemPrompt,
@@ -185,12 +184,6 @@ export class ConversationAgentProvider {
                 })
             ),
         );
-        // The PR thread strips Kody's own replies on every platform, so an offer
-        // it made last turn survives only in the conversation record. Replay it —
-        // otherwise a bare "yes, do it" resolves to nothing, and the write gate
-        // has no way to know the developer was ever offered anything.
-        const seedMessages = await this.loadThreadHistory(thread);
-
         // Single runtime: the conversation runs as an AgentSpec on the harness
         // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
         // reasoning from the slot and records the cost span; the spec carries only
@@ -210,10 +203,6 @@ export class ConversationAgentProvider {
             systemPrompt: buildSystemPrompt(userLanguage),
             tools: new AiSdkToolRegistry(tools),
             policies: [
-                new WriteGatePolicy(
-                    (name) => isConversationWriteTool(mcp.metadata[name]),
-                    seedMessages.some((m) => m.role === 'assistant'),
-                ),
                 new WriteTruthPolicy((name) =>
                     isConversationWriteTool(mcp.metadata[name]),
                 ),
@@ -230,6 +219,11 @@ export class ConversationAgentProvider {
         });
 
         try {
+            // The PR thread strips Kody's own replies on every platform, so an
+            // offer it made last turn survives only in the conversation record.
+            // Replay it — otherwise a bare "yes, do it" resolves to nothing.
+            const seedMessages = await this.loadThreadHistory(thread);
+
             const preparedPrompt = buildUserPrompt({
                 prompt,
                 userLanguage,
