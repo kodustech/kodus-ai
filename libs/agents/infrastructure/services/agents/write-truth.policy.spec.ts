@@ -30,14 +30,21 @@ const view = (toolCalls: Array<{ name: string }>): StepView =>
 
 describe('WriteTruthPolicy', () => {
     const policy = new WriteTruthPolicy(
-        (name) => name.startsWith('KODUS_CREATE') || name.startsWith('KODUS_UPDATE'),
+        (name) =>
+            name.startsWith('KODUS_CREATE') || name.startsWith('KODUS_UPDATE'),
     );
 
     it('tells the model it has done nothing when no write ran', () => {
         const note = policy.prepareStep(view([]))?.injectNote?.content ?? '';
 
         expect(note).toMatch(/none/i);
-        expect(note).toMatch(/offer/i);
+        expect(note).toMatch(/do not say you saved/i);
+    });
+
+    it('still lets a direct request be acted on', () => {
+        const note = policy.prepareStep(view([]))?.injectNote?.content ?? '';
+
+        expect(note).toMatch(/call the tool now/i);
     });
 
     it('names the writes that did run', () => {
