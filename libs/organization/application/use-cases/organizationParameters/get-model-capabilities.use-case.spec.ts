@@ -14,35 +14,47 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
     describe('OpenAI', () => {
         it('gpt-5 family: rejects temperature, supports reasoning at medium/high', () => {
             const c = useCase.execute('openai', 'gpt-5.4');
-            expect(c.supportsTemperature).toBe(false);
+            expect(c.temperature.kind).toBe('unsupported');
             expect(c.supportsReasoning).toBe(true);
             expect(c.reasoningOptions).toEqual(['medium', 'high']);
         });
 
         it('handles a gpt-5 variant id (gpt-5.6-sol) as a reasoner — no hand-coded list', () => {
             const c = useCase.execute('openai', 'gpt-5.6-sol');
-            expect(c.supportsTemperature).toBe(false);
+            expect(c.temperature.kind).toBe('unsupported');
             expect(c.supportsReasoning).toBe(true);
             expect(c.reasoningOptions).toEqual(['medium', 'high']);
         });
 
         it('non-reasoning model (gpt-4o): accepts temperature, no reasoning', () => {
             const c = useCase.execute('openai', 'gpt-4o');
-            expect(c.supportsTemperature).toBe(true);
+            expect(c.temperature.kind).toBe('adjustable');
             expect(c.supportsReasoning).toBe(false);
             expect(c.reasoningOptions).toEqual([]);
         });
     });
 
-    describe('Anthropic (temperature answer comes from supportsSamplingParams, not capabilities)', () => {
-        it('4.7+ rejects temperature', () => {
+    describe('Anthropic (temperature policy owned by the module, not capabilities)', () => {
+        it('4.7+ rejects temperature → unsupported', () => {
             const c = useCase.execute('anthropic', 'claude-opus-4-7');
-            expect(c.supportsTemperature).toBe(false);
+            expect(c.temperature.kind).toBe('unsupported');
         });
 
-        it('legacy 3.x accepts temperature', () => {
+        it('legacy 3.x accepts temperature → adjustable', () => {
             const c = useCase.execute('anthropic', 'claude-3-5-sonnet-20241022');
-            expect(c.supportsTemperature).toBe(true);
+            expect(c.temperature.kind).toBe('adjustable');
+        });
+    });
+
+    describe('Anthropic-compatible brands (temperature policy derived from reasoning traits)', () => {
+        it('Kimi k2.7-code is always-thinking → temperature FIXED at 1', () => {
+            const c = useCase.execute('moonshot', 'kimi-k2.7-code');
+            expect(c.temperature).toEqual({ kind: 'fixed', value: 1 });
+        });
+
+        it('Kimi k2.6 is disable-able → temperature adjustable', () => {
+            const c = useCase.execute('moonshot', 'kimi-k2.6');
+            expect(c.temperature.kind).toBe('adjustable');
         });
     });
 

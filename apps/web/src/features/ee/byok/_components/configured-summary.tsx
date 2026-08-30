@@ -1,32 +1,23 @@
 "use client";
 
-import { Badge } from "@components/ui/badge";
+import Link from "next/link";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
 import { Separator } from "@components/ui/separator";
+import type { ByokModelCost } from "@services/usage/byok-cost";
+import { formatUsd } from "@services/usage/format";
 import {
+    ArrowUpRightIcon,
     BrainCircuitIcon,
     CheckCircle2Icon,
     CoinsIcon,
-    ArrowUpRightIcon,
     PencilIcon,
     ThermometerIcon,
     TrashIcon,
 } from "lucide-react";
-import Link from "next/link";
 
-import type { ByokModelCost } from "@services/usage/byok-cost";
-import { formatUsd } from "@services/usage/format";
-
-import { useCatalogModel } from "../_data/catalog-context";
+import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type { BYOKConnectInput } from "../_types";
-import { PROVIDER_LABELS } from "./catalog/model-card";
-
-function formatTokens(n: number): string {
-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-    return n.toLocaleString();
-}
 
 const formatReasoning = (config: BYOKConnectInput): string | null => {
     if (!config.reasoningEffort || config.reasoningEffort === "none")
@@ -61,12 +52,8 @@ export function ConfiguredSummary({
     /** `start=..&end=..` so the Costs deep-link opens on the SAME window. */
     costRangeQuery?: string;
 }) {
-    const curated = useCatalogModel(config.model);
-    const displayName = curated?.displayName ?? config.model;
-    const providerLabel =
-        curated?.providerDisplayName ??
-        PROVIDER_LABELS[config.provider] ??
-        config.provider;
+    const displayName = config.model;
+    const providerLabel = PROVIDER_LABELS[config.provider] ?? config.provider;
     const reasoningLabel = formatReasoning(config);
 
     return (
@@ -82,14 +69,6 @@ export function ConfiguredSummary({
                         </span>
                         <span className="text-text-tertiary text-xs">
                             {providerLabel}
-                            {curated && (
-                                <>
-                                    {" · ★ "}
-                                    <span className="tabular-nums">
-                                        {curated.benchmarkScore}
-                                    </span>
-                                </>
-                            )}
                         </span>
                     </div>
                 </div>

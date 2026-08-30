@@ -139,6 +139,12 @@ export interface NormalizedModel {
     awsSecretAccessKey?: string;
     awsRegion?: string;
     awsSessionToken?: string;
+    /** OpenRouter provider-pinning, surfaced from the credential settings so the
+     *  reasoning/routing layer (reasoning-options.ts) can build the
+     *  `provider.order` / `allow_fallbacks` payload. OpenRouter-only; absent for
+     *  every other provider. */
+    openrouterProviderOrder?: string[];
+    openrouterAllowFallbacks?: boolean;
     /** Routing PROVENANCE (not a credential/tuning field), stamped by
      *  `resolveTaskSlot` so it rides ALONG the slot to whichever span records the
      *  call — no per-agent threading. Absent on the env/managed-default path (no

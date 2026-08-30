@@ -1,6 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Alert, AlertDescription } from "@components/ui/alert";
 import { Button } from "@components/ui/button";
 import { Card, CardContent, CardHeader } from "@components/ui/card";
@@ -27,27 +29,11 @@ import {
     SaveIcon,
     XCircleIcon,
 } from "lucide-react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ErrorBoundary } from "react-error-boundary";
-import { FormProvider, useForm, useFormContext } from "react-hook-form";
+import { FormProvider, useForm } from "react-hook-form";
 import { ConfirmModal } from "src/core/components/ui/confirm-modal";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
-import type { BYOKConfig, BYOKConnectInput } from "../_types";
-import { maskKey } from "../_utils";
-import {
-    buildByokBlob,
-    credentialSettingsFromConfig,
-    modelFieldsFromConfig,
-} from "../_components/byok-write";
-import {
-    providerHasCredentials,
-    providerOwnsField,
-} from "../_components/_modals/edit-key/credential-config";
-import { useCatalogModel } from "../_data/catalog-context";
-import { PROVIDER_LABELS } from "../_components/catalog/model-card";
-import { VariantSelector } from "../_components/catalog/connect-panel";
 import { ByokAdvancedSettings } from "../_components/_modals/edit-key/_components/advanced-settings";
 import { ByokBaseURLInput } from "../_components/_modals/edit-key/_components/baseurl-input";
 import { ByokCredentialsInput } from "../_components/_modals/edit-key/_components/credentials-input";
@@ -62,6 +48,20 @@ import {
     editKeySchema,
     type EditKeyForm,
 } from "../_components/_modals/edit-key/_types";
+import {
+    providerHasCredentials,
+    providerOwnsField,
+} from "../_components/_modals/edit-key/credential-config";
+import {
+    buildByokBlob,
+    credentialSettingsFromConfig,
+    modelFieldsFromConfig,
+} from "../_components/byok-write";
+import { formatModelLabel } from "../_data/model-label";
+import { PROVIDER_LABELS } from "../_data/provider-labels";
+import type { BYOKConfig, BYOKConnectInput } from "../_types";
+import { maskKey } from "../_utils";
+import { planAccountChanged } from "./plan-account";
 
 const confirmEnvOverride = (): Promise<boolean> =>
     new Promise((resolve) => {
@@ -111,6 +111,19 @@ export function ByokManualPageClient({
         string,
         unknown
     >;
+
+    // A model in use by Routing (default / fallback / a per-agent override) has
+    // its identity frozen: swapping the model id here would silently repoint
+    // Routing. We lock only the model field — tuning stays editable — and the
+    // user removes it from Routing to change the model. Routing references the
+    // model ENTRY id (BYOKModelConfig.id), which is exactly editModelId.
+    const routing = existing?.routing ?? {};
+    const modelInUse =
+        isEditing &&
+        editModelId != null &&
+        (routing.defaultModelId === editModelId ||
+            routing.fallbackModelId === editModelId ||
+            Object.values(routing.taskOverrides ?? {}).includes(editModelId));
 
     // The provider is FIXED when we know it up front — editing a model, or an
     // "Add a model to <provider>" (?provider=). We lock it (no re-picking, no
@@ -183,7 +196,9 @@ export function ByokManualPageClient({
                   const cred = existing?.credentials.find(
                       (c) => c.id === m.credentialId,
                   );
-                  return cred && !cred.managed && cred.provider === lockedProvider;
+                  return (
+                      cred && !cred.managed && cred.provider === lockedProvider
+                  );
               })
               .map((m) => m.model)
         : [];
@@ -219,7 +234,7 @@ export function ByokManualPageClient({
             maxOutputTokens: existingConfig?.maxOutputTokens ?? null,
             reasoningEffort: existingConfig?.reasoningConfigOverride
                 ? ("custom" as any)
-                : existingConfig?.reasoningEffort ?? null,
+                : (existingConfig?.reasoningEffort ?? null),
             reasoningConfigOverride:
                 existingConfig?.reasoningConfigOverride ?? null,
             openrouterProviderOrder:
@@ -245,9 +260,25 @@ export function ByokManualPageClient({
     const provider = form.watch("provider");
     const model = form.watch("model");
     const apiKey = form.watch("apiKey");
+    const watchedBaseURL = form.watch("baseURL");
+    // Title label: derive from the id — so the header reads "Edit Kimi K2.6" /
+    // "Edit Deepseek V4 Pro", never a raw id.
+    const editLabel = existingConfig?.model
+        ? formatModelLabel(existingConfig.model)
+        : "";
     const awsBearerToken = form.watch("awsBearerToken");
     const awsAccessKeyId = form.watch("awsAccessKeyId");
     const awsSecretAccessKey = form.watch("awsSecretAccessKey");
+
+    // A plan/variant whose endpoint is a DIFFERENT account than the stored one
+    // (Kimi Developer API on api.moonshot.ai vs Kimi Code Plan on api.kimi.com —
+    // separate billing, separate keys) can't reuse the stored key. Detect the
+    // account switch by endpoint host and force the plan's own key to be entered.
+    const planNeedsNewKey = planAccountChanged(
+        isEditing,
+        currentBaseURL,
+        watchedBaseURL,
+    );
 
     // Bedrock has no apiKey field; "creds entered" means either a bearer
     // token or the IAM access key + secret pair. Used to gate the "Test"
@@ -255,8 +286,9 @@ export function ByokManualPageClient({
     // because apiKey is always empty for that provider.
     const hasCredsForTest =
         // A stored key (edit, or add-to-existing-provider) is enough to save — the
-        // save reuses it and the probe is skipped when no new key is typed.
-        keyIsStored ||
+        // save reuses it and the probe is skipped when no new key is typed. But a
+        // plan switch to a different account needs a fresh key, not the stored one.
+        (keyIsStored && !planNeedsNewKey) ||
         providerHasCredentials({
             provider,
             apiKey,
@@ -274,6 +306,17 @@ export function ByokManualPageClient({
         if (!valid) return null;
 
         const data = form.getValues();
+
+        // Switched to a plan on a different account without pasting that account's
+        // key — the stored key belongs to the old account and would fail auth.
+        if (planNeedsNewKey && !data.apiKey.trim()) {
+            form.setError("apiKey", {
+                type: "manual",
+                message:
+                    "This plan uses a different account — paste its API key.",
+            });
+            return null;
+        }
         const hasNewCredentials = providerHasCredentials(data);
 
         // If the user changed the base URL on an openai_compatible config
@@ -327,6 +370,15 @@ export function ByokManualPageClient({
                 apiKey: data.apiKey,
                 baseURL: data.baseURL ?? undefined,
                 model: data.model,
+                // Send the configured tuning so the server validates it against
+                // the model's rules and exercises the real chat probe with it.
+                // Same effort mapping as save: 'custom'/empty → omit (the custom
+                // override isn't a plain effort); 'none' is a real "off" value.
+                temperature: data.temperature ?? undefined,
+                reasoningEffort:
+                    data.reasoningEffort === "custom" || !data.reasoningEffort
+                        ? undefined
+                        : data.reasoningEffort,
                 vertexLocation: data.vertexLocation ?? undefined,
                 awsBearerToken: data.awsBearerToken ?? undefined,
                 awsAccessKeyId: data.awsAccessKeyId ?? undefined,
@@ -335,7 +387,10 @@ export function ByokManualPageClient({
                 awsSessionToken: data.awsSessionToken ?? undefined,
             });
             if (result.ok) {
-                setTestState({ status: "success", latencyMs: result.latencyMs });
+                setTestState({
+                    status: "success",
+                    latencyMs: result.latencyMs,
+                });
             } else {
                 setTestState({ status: "error", result });
             }
@@ -475,7 +530,8 @@ export function ByokManualPageClient({
             toast({
                 variant: "danger",
                 title: `Couldn't save ${newConfig.model}`,
-                description: "Something went wrong. Check the model and try again.",
+                description:
+                    "Something went wrong. Check the model and try again.",
             });
         } finally {
             setIsSaving(false);
@@ -493,13 +549,13 @@ export function ByokManualPageClient({
                             <Button
                                 size="icon-xs"
                                 variant="cancel"
-                                aria-label="Back to BYOK">
+                                aria-label="Back to providers">
                                 <ArrowLeftIcon />
                             </Button>
                         </Link>
                         <Page.Title className="text-balance">
                             {isEditing
-                                ? `Edit ${existingConfig?.model}`
+                                ? `Edit ${editLabel}`
                                 : lockedProviderLabel
                                   ? `Add a ${lockedProviderLabel} model`
                                   : "Configure a model manually"}
@@ -538,10 +594,21 @@ export function ByokManualPageClient({
                                 </h3>
                             </CardHeader>
                             <CardContent className="flex flex-col gap-4">
-                                {showKeyInput ? (
+                                {/* Show the key field when the user opened it OR the
+                                    plan moved to a different account. Derived (not
+                                    sticky state) so switching back to the stored
+                                    account restores the "using stored key" view. */}
+                                {showKeyInput || planNeedsNewKey ? (
                                     <ErrorBoundary
                                         resetKeys={[provider, model]}
                                         fallbackRender={() => null}>
+                                        {planNeedsNewKey && (
+                                            <p className="text-warning border-warning/30 bg-warning/10 mb-1 rounded-md border px-3 py-2 text-xs">
+                                                This plan runs on a different
+                                                account than your stored key —
+                                                paste the key for this plan.
+                                            </p>
+                                        )}
                                         <Suspense fallback={null}>
                                             <ByokCredentialsInput />
                                         </Suspense>
@@ -672,21 +739,10 @@ export function ByokManualPageClient({
                                                     credentialStored={
                                                         keyIsStored
                                                     }
+                                                    lockedInUse={modelInUse}
                                                 />
                                             </Suspense>
                                         </ErrorBoundary>
-                                    )}
-
-                                    {/* Curated brands carry connection PLANS (Z.ai
-                                        Developer API vs Coding Plan — different
-                                        endpoints) and a default endpoint. When the
-                                        picked model is one, surface the same plan
-                                        toggle + endpoint the curated panel shows;
-                                        the toggle drives baseURL / concurrency. */}
-                                    {provider && (
-                                        <ModelPlanAndEndpoint
-                                            isEditing={isEditing}
-                                        />
                                     )}
                                 </CardContent>
                             </Card>
@@ -749,108 +805,6 @@ export function ByokManualPageClient({
                 </FormProvider>
             </Page.Content>
         </Page.Root>
-    );
-}
-
-/**
- * Plan (billing/endpoint variant) + endpoint for the picked model. Curated brands
- * (e.g. Z.ai) ship connection variants — "Developer API" vs "Coding Plan", each on
- * its own base URL / concurrency limit — plus a default endpoint. This mirrors the
- * curated connect panel inside the manual form so a brand's plan choice isn't lost
- * when connecting through it. The toggle writes baseURL (+ maxConcurrentRequests,
- * + a transport override if the variant declares one) straight into the form.
- * Renders nothing for a plain model with no curated endpoint.
- */
-function ModelPlanAndEndpoint({ isEditing }: { isEditing: boolean }) {
-    const form = useFormContext<EditKeyForm>();
-    const model = form.watch("model");
-    const baseURL = form.watch("baseURL");
-    const curated = useCatalogModel(model);
-
-    const variants = curated?.variants ?? [];
-    const hasVariants = variants.length > 0;
-
-    // Active plan = the one whose endpoint matches the form's current baseURL (so
-    // an edit prefilled with a stored URL lands on the right toggle), else the
-    // model's default variant, else the first.
-    const activeVariant = useMemo(() => {
-        if (!hasVariants) return undefined;
-        const byUrl = baseURL
-            ? variants.find((v) => v.baseURL === baseURL)
-            : undefined;
-        if (byUrl) return byUrl;
-        const byDefault = curated?.defaultVariantId
-            ? variants.find((v) => v.id === curated.defaultVariantId)
-            : undefined;
-        return byDefault ?? variants[0];
-    }, [hasVariants, variants, baseURL, curated?.defaultVariantId]);
-
-    // Seed the default plan's endpoint the first time a plan model is picked on a
-    // FRESH add — the model dropdown selects the id but knows nothing about plans,
-    // so without this the form would save with no baseURL and hit the wrong
-    // endpoint. Never seed while EDITING: a legacy plan model saved with no
-    // baseURL would otherwise be silently re-pointed to the default variant's
-    // endpoint (and its real stored setting dropped) on the next save.
-    useEffect(() => {
-        if (!isEditing && hasVariants && activeVariant && !baseURL) {
-            form.setValue("baseURL", activeVariant.baseURL, {
-                shouldDirty: true,
-            });
-            if (activeVariant.maxConcurrentRequests != null) {
-                form.setValue(
-                    "maxConcurrentRequests",
-                    activeVariant.maxConcurrentRequests,
-                    { shouldDirty: true },
-                );
-            }
-        }
-    }, [isEditing, hasVariants, activeVariant, baseURL, form]);
-
-    const applyVariant = (nextId: string) => {
-        const next = variants.find((v) => v.id === nextId);
-        if (!next || next.id === activeVariant?.id) return;
-        form.setValue("baseURL", next.baseURL, {
-            shouldValidate: true,
-            shouldDirty: true,
-        });
-        form.setValue(
-            "maxConcurrentRequests",
-            next.maxConcurrentRequests ?? null,
-            { shouldDirty: true },
-        );
-        // A variant may speak a different transport (e.g. one plan Anthropic, one
-        // OpenAI-compatible); honor it when declared, else keep the brand.
-        if (next.provider) {
-            form.setValue("provider", next.provider, {
-                shouldValidate: true,
-                shouldDirty: true,
-            });
-        }
-    };
-
-    const endpoint = activeVariant?.baseURL ?? curated?.defaults?.baseURL;
-
-    if (!hasVariants && !endpoint) return null;
-
-    return (
-        <div className="flex flex-col gap-4">
-            {hasVariants && (
-                <VariantSelector
-                    variants={variants}
-                    selectedId={activeVariant?.id}
-                    docsUrl={curated?.docsUrl}
-                    onSelect={applyVariant}
-                />
-            )}
-            {endpoint && (
-                <p className="text-text-tertiary text-xs text-pretty">
-                    Endpoint:{" "}
-                    <code className="bg-card-lv2 rounded px-1 py-0.5 font-mono text-[11px]">
-                        {endpoint}
-                    </code>
-                </p>
-            )}
-        </div>
     );
 }
 

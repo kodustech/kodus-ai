@@ -15,6 +15,11 @@ import {
     anthropicEphemeralCacheHint,
     isAnthropicModel,
 } from '../kernel/anthropic-cache';
+import { anthropicModule } from '../anthropic';
+import {
+    NON_REASONING_TRAITS,
+    type ModelReasoningTraits,
+} from '../kernel/reasoning-traits';
 import { vertexModelListing } from './listing';
 import type {
     ModelCapabilities,
@@ -52,7 +57,11 @@ export const vertexModule: ProviderModule = {
             supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
-            structuredOutput: 'json_schema',
+            // Claude-on-Vertex speaks the Anthropic protocol → structured output is
+            // forced tool-use ('none'); Gemini-on-Vertex uses responseSchema
+            // ('json_schema'). Must be model-aware or a structured Claude call is
+            // mistaken for response_format.
+            structuredOutput: isAnthropicModel(model) ? 'none' : 'json_schema',
             toolCalling: 'native',
             usageGranularity: 'reasoning_split',
             streaming: true,
@@ -75,6 +84,15 @@ export const vertexModule: ProviderModule = {
             : undefined;
     },
 
+    // Claude-on-Vertex speaks the Anthropic thinking protocol → resolve its facts
+    // through the anthropic module (native Claude branch). Gemini-on-Vertex does
+    // structured via responseSchema (no forced tool_choice) → the safe default.
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        return isAnthropicModel(cfg.model)
+            ? anthropicModule.reasoningTraits!(cfg)
+            : NON_REASONING_TRAITS;
+    },
+
     build(cfg: ProviderBuildConfig): LanguageModel {
         // apiKey is the ALREADY-DECRYPTED base64 SA JSON.
         const model = vertexModelFromSaJson(cfg.apiKey, cfg.model, cfg.vertexLocation);
@@ -88,9 +106,18 @@ export const vertexModule: ProviderModule = {
         _cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions {
+        // Claude-on-Vertex speaks the Anthropic thinking protocol (createVertexAnthropic
+        // reuses the anthropic language model), so it must resolve reasoning through
+        // the anthropic module — NOT google thinkingConfig. This makes `effort: 'none'`
+        // say `{ anthropic: { thinking: { type: 'disabled' } } }` out loud for the
+        // adaptive models that think by default (Opus/Sonnet 5) instead of omitting it
+        // — otherwise a structured (forced-tool_choice) Kody Rules / dedup call 400s
+        // with "tool_choice 'required' is incompatible with thinking enabled", the same
+        // failure class as Kimi. Gemini-on-Vertex keeps the google thinkingConfig path.
+        if (isAnthropicModel(_cfg.model)) {
+            return anthropicModule.reasoning!(_cfg, effort);
+        }
         if (effort === 'none') return {};
-        // Matches byok-to-vercel's GOOGLE_VERTEX reasoning (google thinkingConfig),
-        // which does not special-case Claude-on-Vertex today. Refined in 01-04.
         const isGemini3 = /gemini-?3/i.test(_cfg.model);
         return isGemini3
             ? { google: { thinkingConfig: { thinkingLevel: effort } } }

@@ -278,13 +278,14 @@ describe('CostEstimateUseCase', () => {
                 cacheWriteTokens: 50_000,
             });
 
-            // 14-day cost in the gt bucket only:
-            //   uncachedInput = 1M - 200K = 800K → 800K × $4/M = $3.20
+            // 14-day cost in the gt bucket only (input_tokens includes cacheRead
+            // AND cacheWrite → subtract both from the full-price pool):
+            //   uncachedInput = 1M - 200K - 50K = 750K → 750K × $4/M = $3.00
             //   cacheRead     = 200K × $0.40/M = $0.08
             //   cacheWrite    = 50K × $0 (no tier rate → 0) = $0
             //   output        = 500K × $18/M = $9.00
-            //   total         = $12.28
-            const cost14 = 3.2 + 0.08 + 0 + 9.0;
+            //   total         = $12.08
+            const cost14 = 3.0 + 0.08 + 0 + 9.0;
             const monthly = cost14 * (30 / 14);
 
             expect(result.estimatedMonthlyCost).toBe(

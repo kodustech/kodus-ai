@@ -6,7 +6,6 @@ import {
 } from "@services/parameters/types";
 import { axiosAuthorized } from "src/core/utils/axios";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
-import type { CuratedModel } from "src/features/ee/byok/_data/curated-models.types";
 
 import { ORGANIZATION_PARAMETERS_PATHS } from ".";
 
@@ -84,6 +83,11 @@ export const testBYOK = async (params: {
     apiKey?: string;
     baseURL?: string;
     model?: string;
+    // The configured tuning — validated server-side against the model's rules
+    // and exercised on the real chat probe, so a mismatch (e.g. a temperature an
+    // always-thinking model won't honor) fails the Test instead of saving quiet.
+    temperature?: number;
+    reasoningEffort?: "none" | "low" | "medium" | "high";
     vertexLocation?: string;
     awsBearerToken?: string;
     awsAccessKeyId?: string;
@@ -105,6 +109,12 @@ export const testBYOK = async (params: {
 export const testBYOKModel = async (params: {
     provider: string;
     model: string;
+    // SAFE non-secret overrides (region/location) — so editing them without
+    // re-typing the secret probes the config being saved, not the stored one.
+    // baseURL is NOT accepted: the server must not send the stored secret to a
+    // caller-supplied host. Changing the endpoint requires re-entering the key.
+    awsRegion?: string;
+    vertexLocation?: string;
 }): Promise<TestBYOKResult> => {
     const envelope = await axiosAuthorized.post<{ data: TestBYOKResult }>(
         ORGANIZATION_PARAMETERS_PATHS.TEST_BYOK_MODEL,
@@ -155,7 +165,10 @@ export const clearModelOverrides = async (
 ): Promise<{ clearedCount: number }> => {
     const envelope = await axiosAuthorized.post<{
         data: { clearedCount: number };
-    }>(ORGANIZATION_PARAMETERS_PATHS.MODEL_OVERRIDES_CLEAR, { teamId, targets });
+    }>(ORGANIZATION_PARAMETERS_PATHS.MODEL_OVERRIDES_CLEAR, {
+        teamId,
+        targets,
+    });
     return envelope.data;
 };
 
@@ -229,26 +242,15 @@ export type ByokProviderDescriptor = {
  * getLLMConfigStatus's proxy fetch. Returns [] on absence so callers can fall
  * back to the curated-derived list (never an empty picker).
  */
-export const listByokProviders = async (): Promise<ByokProviderDescriptor[]> => {
+export const listByokProviders = async (): Promise<
+    ByokProviderDescriptor[]
+> => {
     const response = await authorizedFetch<{
         providers: ByokProviderDescriptor[];
     }>(ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_PROVIDERS, {
         cache: "no-store",
     });
     return response?.providers ?? [];
-};
-
-/**
- * The curated model catalog, served from the backend (aggregated from every
- * provider module's `catalog` — the single source of truth that replaced the
- * frontend `curated-models.json`). Shape is 1:1 with the web `CuratedModel`.
- */
-export const listByokCatalog = async (): Promise<CuratedModel[]> => {
-    const response = await authorizedFetch<{ models: CuratedModel[] }>(
-        ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_CATALOG,
-        { cache: "no-store" },
-    );
-    return response?.models ?? [];
 };
 
 export type LLMProviderModel = { id: string; name: string };
@@ -283,8 +285,17 @@ export const previewLLMProviderModels = async (input: {
 /** Per-model UI capability hints, read from the provider module server-side
  *  (temperature/reasoning support). `model` is a plain id, not a secret, so a
  *  GET with query params is fine. */
+/** How the Temperature field behaves — the web-local mirror of the backend
+ *  `TemperaturePolicy` (kept as its own copy so apps/web doesn't import a value
+ *  from `@libs/*`, which breaks the isolated prod build). `adjustable` = editable,
+ *  `unsupported` = hidden, `fixed` = locked to `value`. */
+export type TemperaturePolicy =
+    | { kind: "adjustable" }
+    | { kind: "unsupported" }
+    | { kind: "fixed"; value: number };
+
 export type ModelUiCapabilities = {
-    supportsTemperature: boolean;
+    temperature: TemperaturePolicy;
     supportsReasoning: boolean;
     reasoningOptions: Array<"low" | "medium" | "high">;
     /** Provider-owned example for the "Custom" reasoning-override textarea. */
@@ -301,7 +312,7 @@ export const getModelCapabilities = async (input: {
     );
     return (
         response ?? {
-            supportsTemperature: true,
+            temperature: { kind: "adjustable" },
             supportsReasoning: false,
             reasoningOptions: [],
         }

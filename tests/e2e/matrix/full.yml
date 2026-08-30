@@ -29,6 +29,15 @@ scenarios:
     # platform, and that the review still fires. Full-tier only — it's a
     # second real review per cell, too heavy for the PR-check fast tier.
     - command-review-focus
+    # `@kody review` posted while a review ALREADY holds the PR. The
+    # inverse of command-review, which waits for the in-flight automation
+    # to settle first — that wait is right for a test and hid the fact
+    # that a colliding command was refused and never retried (#1700).
+    # Leaves auto-review ON so the collision window is minutes wide and
+    # deterministic on every provider, rather than the ~3s race that only
+    # ever fired on bitbucket (#1699). Full-tier only: a second real
+    # review per cell plus deferral backoff before it gets its turn.
+    - command-review-while-busy
     - kody-rules-create-and-apply
     # Repo-file rule sync (customer case): .kody/rules template imported
     # verbatim + multi-glob path enforced on a file matching the 2nd glob.

@@ -17,6 +17,7 @@
  * untouched (it only redacts sensitive keys), so `attributes.tu.model` is a real
  * indexable path — not a flattened dotted key.
  */
+import { canonicalModelId } from '@libs/common/utils/canonical-model';
 
 /**
  * Canonical shape mirrored onto every LLM-usage span. `isByok` / `sys` encode
@@ -206,11 +207,13 @@ export function deriveTu(
     }
 
     const rawModel = attrs['gen_ai.response.model'];
-    // Canonical name collapses `google_gemini:gemini-2.5-pro` → `gemini-2.5-pro`
-    // (last segment after ':'), identical to the read pipeline.
+    // Canonical name collapses a `provider:` prefix (`google_gemini:gemini-2.5-pro`
+    // → `gemini-2.5-pro`) while PRESERVING a Bedrock `:<version>` suffix's model
+    // (`...haiku-...-v1:0` → `...haiku-...-v1`, not `0`), identical to the read
+    // pipeline and the BYOK cost join — one shared primitive so the three agree.
     const model =
         typeof rawModel === 'string' && rawModel
-            ? rawModel.split(':').pop() || ''
+            ? canonicalModelId(rawModel)
             : '';
 
     const input = n(attrs['gen_ai.usage.input_tokens']);

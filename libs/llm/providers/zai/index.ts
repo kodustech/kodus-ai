@@ -12,59 +12,12 @@
  */
 import { anthropicBrandModule } from '../anthropic/brand';
 import { registerProvider } from '../kernel/registry';
-import type { ProviderCatalogModel } from '../kernel/catalog';
-
-// Curated Z.ai models. No `provider` override: the aggregator stamps the module id
-// `zai` as BOTH the brand and the stored transport, and the module's build()
-// resolves the Anthropic protocol.
-const catalog: ProviderCatalogModel[] = [
-    {
-        id: 'glm-5.2',
-        displayName: 'GLM 5.2',
-        tier: 'recommended',
-        benchmarkScore: 84,
-        description:
-            "Z.ai's latest. Pick Developer API or Coding Plan when you connect.",
-        speed: 'medium',
-        contextWindow: '200K',
-        costTier: '$',
-        apiKeyUrl: 'https://z.ai/manage-apikey/apikey-list',
-        defaults: {
-            temperature: 0,
-            maxOutputTokens: 16384,
-            baseURL: 'https://api.z.ai/api/anthropic',
-            reasoningEffort: 'medium',
-        },
-        docsUrl:
-            'https://docs.kodus.io/knowledge_base/en/how-to-use-z-ai-with-kodus',
-        variants: [
-            {
-                id: 'developer',
-                label: 'Developer API',
-                description:
-                    'Pay-per-token, over the native Anthropic protocol (explicit prompt caching + native tool-use).',
-                baseURL: 'https://api.z.ai/api/anthropic',
-                apiKeyUrl: 'https://z.ai/manage-apikey/apikey-list',
-            },
-            {
-                id: 'coding-plan',
-                label: 'Coding Plan',
-                description:
-                    'Flat-rate subscription (Anthropic endpoint). Lite/Pro tiers typically allow only 1 concurrent request — bump this in advanced settings if you are on Max.',
-                baseURL: 'https://api.z.ai/api/coding/paas/v4',
-                apiKeyUrl: 'https://z.ai/subscribe',
-                maxConcurrentRequests: 1,
-            },
-        ],
-        defaultVariantId: 'developer',
-    },
-];
 
 export const zaiModule = anthropicBrandModule({
     id: 'zai',
     label: 'Z.ai',
     doc: 'https://docs.z.ai',
-    catalog,
+    defaultBaseURL: 'https://api.z.ai/api/anthropic',
     uiFields: [
         {
             key: 'apiKey',

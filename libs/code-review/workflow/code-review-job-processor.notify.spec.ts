@@ -40,6 +40,10 @@ describe('CodeReviewJobProcessorService — review.failed emit', () => {
             prAuthorResolver as unknown as PrAuthorRecipientResolver,
             // rateLimitGate — not used by notifyReviewFailed
             { check: jest.fn().mockResolvedValue(undefined) } as any,
+            // prReviewDeferralService — not used by notifyReviewFailed
+            { next: jest.fn(), defer: jest.fn() } as any,
+            // codeReviewHandlerService — not used by notifyReviewFailed
+            { notifyCommandReviewRefused: jest.fn() } as any,
         );
     });
 

@@ -18,6 +18,10 @@ jest.mock('./byok-to-vercel', () => ({
 jest.mock('./reasoning-options', () => ({
     buildProviderOptions: (...args: unknown[]) =>
         buildProviderOptionsMock(...args),
+    // Default: no family override, so these tests keep asserting the slot's own
+    // effort / the caller's reasoningEffortDefault. The family-default path is
+    // covered by its own resolver spec.
+    defaultReasoningEffortFor: () => undefined,
 }));
 
 import { resolveAgentModel } from './agent-model';
@@ -90,6 +94,64 @@ describe('resolveModelConfig — the single slot → invocation composition', ()
                 modelName: 'gpt-x',
             }),
         );
+    });
+
+    describe('suppressReasoning — the executor forces thinking OFF', () => {
+        it('forces reasoning to none AND drops the override when suppressReasoning is set', () => {
+            // The structured executor sets this when planStructuredCall →
+            // 'suppress-thinking' (a disable-able model that would 400 on forced
+            // tool_choice + thinking). The slot's own 'medium' + override lose.
+            resolveModelConfig(
+                slot({
+                    provider: 'moonshot' as any,
+                    model: 'kimi-k2.6',
+                    reasoningEffort: 'medium',
+                    reasoningConfigOverride: '{"thinking":{"type":"enabled"}}',
+                }),
+                { runName: 'kody-rules', suppressReasoning: true },
+            );
+
+            expect(buildProviderOptionsMock).toHaveBeenCalledWith(
+                'kody-rules',
+                undefined,
+                expect.objectContaining({
+                    reasoningEffort: 'none', // suppressed from the slot's 'medium'
+                    reasoningConfigOverride: undefined, // override also dropped
+                }),
+            );
+        });
+
+        it('KEEPS the slot reasoning when suppressReasoning is unset (agent loop / as-is / reroute)', () => {
+            // Agent loops use tool_choice:auto and the reroute-json path has no
+            // tool_choice — both keep thinking. This primitive is provider-agnostic:
+            // no suppression unless the plan explicitly asked for it.
+            resolveModelConfig(
+                slot({
+                    provider: 'moonshot' as any,
+                    reasoningEffort: 'medium',
+                }),
+                { runName: 'finder' },
+            );
+
+            expect(buildProviderOptionsMock).toHaveBeenCalledWith(
+                'finder',
+                undefined,
+                expect.objectContaining({ reasoningEffort: 'medium' }),
+            );
+        });
+
+        it('KEEPS the slot reasoning when suppressReasoning is explicitly false', () => {
+            resolveModelConfig(
+                slot({ provider: 'openai' as any, reasoningEffort: 'high' }),
+                { runName: 'kody-rules', suppressReasoning: false },
+            );
+
+            expect(buildProviderOptionsMock).toHaveBeenCalledWith(
+                'kody-rules',
+                undefined,
+                expect.objectContaining({ reasoningEffort: 'high' }),
+            );
+        });
     });
 
     it("defaults reasoning effort to 'low' when neither the slot nor opts set it", () => {

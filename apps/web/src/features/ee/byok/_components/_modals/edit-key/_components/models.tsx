@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -23,23 +22,17 @@ import {
     useSuspenseGetLLMProviders,
 } from "@services/organizationParameters/hooks";
 import { useQueryErrorResetBoundary } from "@tanstack/react-query";
-import { ChevronsUpDownIcon, Loader2Icon } from "lucide-react";
+import { ChevronsUpDownIcon, Loader2Icon, LockIcon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { ArrayHelpers } from "src/core/utils/array";
 
 import type { EditKeyForm } from "../_types";
-import {
-    getAnnotationForModel,
-    type CuratedModelsCatalog,
-} from "../../../../_data/curated-models.types";
-
-// Annotations (per-model badges) are not part of the backend catalog and are
-// currently empty — default to none. Re-add via the catalog endpoint if needed.
-const annotations: CuratedModelsCatalog["annotations"] = {};
+import { formatModelLabel } from "../../../../_data/model-label";
 
 export const ByokModelSelect = ({
     excludeIds = [],
     credentialStored = false,
+    lockedInUse = false,
 }: {
     /** Model ids to hide from the dropdown — e.g. models already enabled on this
      *  provider, so "Add model" never offers a duplicate. */
@@ -48,6 +41,10 @@ export const ByokModelSelect = ({
      *  a connected provider). For a live-listing provider this lets the picker
      *  fetch the real list from the saved slot even before the user types a key. */
     credentialStored?: boolean;
+    /** True when the model being edited is referenced by Routing (default /
+     *  fallback / a per-agent override). Swapping its id would silently change
+     *  what runs, so the model field is read-only — tuning stays editable. */
+    lockedInUse?: boolean;
 } = {}) => {
     const form = useFormContext<EditKeyForm>();
     const provider = form.watch("provider");
@@ -57,14 +54,24 @@ export const ByokModelSelect = ({
     // Force manual model entry only when the provider's models can't be
     // auto-listed (custom endpoint whose URL isn't known yet, or a `manual`
     // listing) — driven by the registry, so a provider with a real listing +
-    // default base URL (e.g. Moonshot) shows the dropdown instead.
-    const [manual, setManual] = useState<boolean>(
-        !(foundProvider?.autoListModels ?? false),
-    );
+    // default base URL (e.g. Moonshot) shows the dropdown instead. The user can
+    // toggle it; switching provider resets to the new provider's default via a
+    // render-time reset (no effect → no cascading setState-in-effect). Hooks stay
+    // above every early return so their call order is stable across renders.
+    const autoManual = !(foundProvider?.autoListModels ?? false);
+    const [manualOverride, setManual] = useState<boolean | null>(null);
+    const [prevProvider, setPrevProvider] = useState(provider);
+    if (provider !== prevProvider) {
+        setPrevProvider(provider);
+        setManual(null);
+    }
+    const manual = manualOverride ?? autoManual;
 
-    useEffect(() => {
-        setManual(!(foundProvider?.autoListModels ?? false));
-    }, [foundProvider?.autoListModels]);
+    // In use in Routing → the model identity is frozen. Show it read-only with a
+    // hint pointing at where to change it, instead of the editable picker.
+    if (lockedInUse) {
+        return <ModelLockedField />;
+    }
 
     if (manual) {
         return (
@@ -101,6 +108,42 @@ export const ByokModelSelect = ({
 
 // Exported lightweight manual input for external fallbacks
 export const ByokManualModelInput = () => <ModelInput />;
+
+/**
+ * Read-only Model field shown when the edited model is in use in Routing.
+ * The identity is frozen (swapping it would silently repoint Routing), so we
+ * surface the current model with a lock affordance and tell the user where to
+ * change it. Tuning fields around it stay editable.
+ */
+const ModelLockedField = () => {
+    const form = useFormContext<EditKeyForm>();
+    const model = form.watch("model");
+    // Show the friendly label (derived from the id) — never the raw id — to match
+    // the dropdown and the page title.
+    const label = formatModelLabel(model);
+
+    return (
+        <FormControl.Root>
+            <FormControl.Label>Model</FormControl.Label>
+            <FormControl.Input>
+                <Button
+                    size="md"
+                    variant="helper"
+                    disabled
+                    className="w-full justify-between"
+                    rightIcon={
+                        <LockIcon className="-mr-2 size-4 opacity-70" />
+                    }>
+                    <span className="truncate font-normal">{label}</span>
+                </Button>
+            </FormControl.Input>
+            <span className="text-text-tertiary mt-1 text-xs">
+                In use in Routing — remove it there to change the model. Tuning
+                below stays editable.
+            </span>
+        </FormControl.Root>
+    );
+};
 
 const ModelInput = ({
     onBackToSelect,
@@ -165,11 +208,9 @@ const ModelInput = ({
  */
 const ModelPickerPopover = ({
     models,
-    provider,
     onUseManual,
 }: {
     models: Array<{ id: string; name: string }>;
-    provider: string;
     onUseManual?: () => void;
 }) => {
     const form = useFormContext<EditKeyForm>();
@@ -221,15 +262,15 @@ const ModelPickerPopover = ({
 
                         if (!repository) return 0;
 
-                        if (
-                            repository.name
-                                .toLowerCase()
-                                .includes(search.toLowerCase())
-                        ) {
-                            return 1;
-                        }
-
-                        return 0;
+                        // Match the human name OR the raw id, so typing either
+                        // "Kimi K2.7 Code" or "kimi-k2.7-code" finds the model
+                        // (the label is now derived, so the id no longer matches
+                        // the visible text on its own).
+                        const q = search.toLowerCase();
+                        return repository.name.toLowerCase().includes(q) ||
+                            repository.id.toLowerCase().includes(q)
+                            ? 1
+                            : 0;
                     }}>
                     <CommandInput
                         placeholder="Search models..."
@@ -241,50 +282,24 @@ const ModelPickerPopover = ({
                         <CommandEmpty>No model found.</CommandEmpty>
 
                         {ArrayHelpers.sortAlphabetically(models, "name").map(
-                            (r) => {
-                                const annotation = getAnnotationForModel(
-                                    annotations,
-                                    provider,
-                                    r.id,
-                                );
+                            (r) => (
+                                <CommandItem
+                                    key={r.id}
+                                    value={r.id}
+                                    onSelect={(v) => {
+                                        form.reset({
+                                            ...form.getValues(),
+                                            model: v,
+                                        });
 
-                                return (
-                                    <CommandItem
-                                        key={r.id}
-                                        value={r.id}
-                                        onSelect={(v) => {
-                                            form.reset({
-                                                ...form.getValues(),
-                                                model: v,
-                                            });
-
-                                            resetErrorBoundary();
-                                            setOpen(false);
-                                        }}>
-                                        <span className="flex items-center gap-2">
-                                            {r.name}
-                                            {annotation?.badge === "tested" && (
-                                                <Badge
-                                                    variant="success"
-                                                    size="xs">
-                                                    Tested
-                                                </Badge>
-                                            )}
-                                            {annotation?.badge ===
-                                                "untested" && (
-                                                <span className="text-warning text-xs">
-                                                    {annotation.note}
-                                                </span>
-                                            )}
-                                            {annotation?.badge === "legacy" && (
-                                                <span className="text-text-tertiary text-xs">
-                                                    {annotation.note}
-                                                </span>
-                                            )}
-                                        </span>
-                                    </CommandItem>
-                                );
-                            },
+                                        resetErrorBoundary();
+                                        setOpen(false);
+                                    }}>
+                                    <span className="flex items-center gap-2">
+                                        {r.name}
+                                    </span>
+                                </CommandItem>
+                            ),
                         )}
 
                         {/* Allow user to switch to manual input */}
@@ -330,13 +345,7 @@ const ModelSelect = ({
     const excludeSet = new Set(excludeIds.filter((id) => id !== selected));
     const models = allModels.filter((m) => !excludeSet.has(m.id));
 
-    return (
-        <ModelPickerPopover
-            models={models}
-            provider={provider}
-            onUseManual={onUseManual}
-        />
-    );
+    return <ModelPickerPopover models={models} onUseManual={onUseManual} />;
 };
 
 /** Debounce a value by `ms` — so the live model fetch fires after the user stops
@@ -461,11 +470,5 @@ const ModelSelectLive = ({
         );
     }
 
-    return (
-        <ModelPickerPopover
-            models={models}
-            provider={provider}
-            onUseManual={onUseManual}
-        />
-    );
+    return <ModelPickerPopover models={models} onUseManual={onUseManual} />;
 };

@@ -300,3 +300,43 @@ export function findExecutionStatus(
     }
     return hits[0];
 }
+
+/**
+ * How many execution rows a PR has accumulated.
+ *
+ * `findExecutionStatus` deliberately collapses every row into one verdict,
+ * which is the wrong lens for asserting that a SECOND review actually ran.
+ * Counting rows is also the only assertion that survives the incremental
+ * path: a command review that runs right after a successful one has no new
+ * commits to analyse, so it can legitimately post nothing while still being
+ * a real, healthy run.
+ */
+export function countExecutions(node: unknown, prNumber: number): number {
+    let count = 0;
+    const walk = (n: unknown): void => {
+        if (Array.isArray(n)) {
+            for (const item of n) walk(item);
+            return;
+        }
+        if (n && typeof n === 'object') {
+            const obj = n as Record<string, unknown>;
+            const num = obj.prNumber ?? obj.pullRequestNumber ?? obj.number;
+            if (Number(num) === prNumber) {
+                const exec = obj.automationExecution as
+                    | Record<string, unknown>
+                    | undefined;
+                if (exec && typeof exec.status === 'string' && exec.status) {
+                    count++;
+                } else if (
+                    typeof obj.status === 'string' &&
+                    EXECUTION_STATUSES.has(obj.status)
+                ) {
+                    count++;
+                }
+            }
+            for (const v of Object.values(obj)) walk(v);
+        }
+    };
+    walk(node);
+    return count;
+}

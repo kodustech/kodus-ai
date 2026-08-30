@@ -1,9 +1,9 @@
 "use client";
 
 import type { ComponentProps, ReactNode } from "react";
+import Link from "next/link";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
-import { cn } from "src/core/utils/components";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { formatUsd } from "@services/usage/format";
 import {
@@ -15,9 +15,10 @@ import {
     ThermometerIcon,
     TrashIcon,
 } from "lucide-react";
-import Link from "next/link";
+import { cn } from "src/core/utils/components";
 
-import { useCatalogModel } from "../_data/catalog-context";
+import { formatModelLabel } from "../_data/model-label";
+import { PROVIDER_LABELS } from "../_data/provider-labels";
 import type {
     BYOKConfig,
     BYOKModelConfig,
@@ -25,7 +26,6 @@ import type {
     ReasoningEffort,
 } from "../_types";
 import { TASK_LABELS } from "../_utils";
-import { PROVIDER_LABELS } from "./catalog/model-card";
 import { DeleteRejectionAlert, useDeleteModel } from "./delete-model-flow";
 import { ProviderLogo } from "./provider-logo";
 
@@ -60,7 +60,10 @@ function UsageChip({
         <Badge
             size="xs"
             variant={variant}
-            className={cn(className, onOpenRouting ? "cursor-pointer" : STATUS_CHIP)}>
+            className={cn(
+                className,
+                onOpenRouting ? "cursor-pointer" : STATUS_CHIP,
+            )}>
             {children}
         </Badge>
     );
@@ -109,17 +112,16 @@ export function ModelRow({
     /** Deep-link a "Used in" chip to its row on the Routing tab. */
     onOpenRouting?: (anchor: string) => void;
 }) {
-    const curated = useCatalogModel(model.model);
-    const displayName = curated?.displayName ?? model.model;
+    const displayName = formatModelLabel(model.model);
     const thinking = formatThinking(model.reasoningEffort);
 
     const credential = (config?.credentials ?? []).find(
         (c) => c.id === model.credentialId,
     );
     const provider = credential?.provider;
-    const providerLabel =
-        curated?.providerDisplayName ??
-        (provider ? PROVIDER_LABELS[provider] ?? provider : undefined);
+    const providerLabel = provider
+        ? (PROVIDER_LABELS[provider] ?? provider)
+        : undefined;
     const settings = (credential?.settings ?? {}) as Record<string, unknown>;
     const baseURL =
         typeof settings.baseURL === "string" ? settings.baseURL : undefined;
@@ -154,14 +156,6 @@ export function ModelRow({
                         <div className="flex min-w-0 flex-col gap-1.5">
                             <span className="text-text-primary text-sm font-semibold text-balance">
                                 {displayName}
-                                {curated && (
-                                    <span className="text-text-tertiary ml-2 text-xs font-normal">
-                                        ★{" "}
-                                        <span className="tabular-nums">
-                                            {curated.benchmarkScore}
-                                        </span>
-                                    </span>
-                                )}
                             </span>
                             {providerLabel && (
                                 <span className="text-text-tertiary text-xs">

@@ -115,7 +115,7 @@ function gtSites(uuid) {
 }
 
 // DigitalOcean-hosted models (not in the tier0 registry) — wire the env the
-// self-hosted byokToVercelModel path reads, same as real-agent.js.
+// self-hosted buildModelFromSlot path reads, same as real-agent.js.
 const DO_MODELS = {
     'deepseek-4-flash': 'deepseek-4-flash',
     'deepseek-v4-pro': 'deepseek-v4-pro',
@@ -124,7 +124,7 @@ const DO_MODELS = {
 
 async function main() {
     const { TIER0, applyModelEnv } = require('../shared/tier0-models');
-    const { byokToVercelModel } = require('../../libs/llm/byok-to-vercel.ts');
+    const { buildEvalModel } = require('../shared/build-model');
     if (TIER0[MODELKEY]) {
         applyModelEnv(MODELKEY);
     } else if (DO_MODELS[MODELKEY]) {
@@ -136,7 +136,7 @@ async function main() {
     } else {
         throw new Error(`unknown model ${MODELKEY}`);
     }
-    const model = byokToVercelModel(undefined, 'main', {});
+    const model = buildEvalModel({});
     const { generateText } = require('ai');
 
     let netErrors = 0;

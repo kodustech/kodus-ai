@@ -46,9 +46,7 @@ jest.mock(
         // resolved slot / managed default). Split out of byok-to-vercel into
         // byok-defaults and re-exported; the stage calls it before building.
         trialDefaultModel: jest.fn().mockReturnValue(undefined),
-        // Used by resolveSecondaryPassModel when platform OpenAI key is absent.
-        getInternalModel: jest.fn().mockReturnValue({ __mockModel: 'internal' }),
-        byokToVercelModel: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
+        // The model builder the stage calls to construct the LanguageModel.
         buildModelFromSlot: jest.fn().mockReturnValue({ __mockModel: 'byok' }),
         // Platform (non-BYOK) model seam used by the summary/secondary paths.
         buildPlatformModel: jest

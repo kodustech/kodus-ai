@@ -59,13 +59,17 @@ describe('anthropic_compatible BYOK provider', () => {
         });
 
         it('turns thinking off for effort "none"', () => {
+            // A compatible model that thinks BY DEFAULT and CAN disable (a
+            // non-always-thinking Kimi) must say "off" out loud: omitting the
+            // field would leave thinking ON (the PR#144-146 Kody-Rules failure),
+            // so "off" is an explicit { type: 'disabled' }, not an empty object.
             expect(
                 buildReasoningProviderOptions(
                     BYOKProvider.ANTHROPIC_COMPATIBLE,
                     'none',
                     'kimi-for-coding',
                 ),
-            ).toEqual({});
+            ).toEqual({ anthropic: { thinking: { type: 'disabled' } } });
         });
     });
 

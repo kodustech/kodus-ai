@@ -1,30 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@components/ui/badge";
 import { Button } from "@components/ui/button";
 import { Card, CardContent } from "@components/ui/card";
+import { toast } from "@components/ui/toaster/use-toast";
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from "@components/ui/tooltip";
-import { toast } from "@components/ui/toaster/use-toast";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import {
     createOrUpdateOrganizationParameter,
     type LLMConfigStatus,
 } from "@services/organizationParameters/fetch";
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
-import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import {
     ChevronsUpDownIcon,
     Layers3Icon,
     SlidersHorizontalIcon,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
-import { useCatalog } from "../../_data/catalog-context";
+import { formatModelLabel } from "../../_data/model-label";
 import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
 import { groupModelsByProvider } from "../../_utils";
 import { buildByokBlob } from "../byok-write";
@@ -35,12 +35,6 @@ import {
     TaskOverrideGrid,
     type PoolModel,
 } from "../routing/task-override-grid";
-
-const SPEED_LABEL: Record<string, string> = {
-    fast: "Fast",
-    medium: "Medium",
-    slow: "Slow",
-};
 
 type RoutingTabProps = {
     config: BYOKConfig | null | undefined;
@@ -59,7 +53,6 @@ type RoutingTabProps = {
 
 const AUTO_TOOLTIP =
     "The auto-optimizing router is on the roadmap — your pool of models is ready for it.";
-
 
 /**
  * Strip task-override entries that shouldn't persist: empty ids AND overrides
@@ -100,7 +93,6 @@ export const RoutingTab = ({
     onScrolled,
 }: RoutingTabProps) => {
     const router = useRouter();
-    const catalog = useCatalog();
 
     // Scroll to (and briefly flash) the row a "Used in" chip deep-linked to.
     // Runs on mount because the tab switch remounts this panel with the anchor
@@ -132,29 +124,20 @@ export const RoutingTab = ({
     // (already-fetched) status response, matched by BYOKModelConfig.id.
     const pool = useMemo<PoolModel[]>(() => {
         const capsById = new Map(
-            (llmConfigStatus?.models ?? []).map((m) => [m.modelId, m.capabilities]),
+            (llmConfigStatus?.models ?? []).map((m) => [
+                m.modelId,
+                m.capabilities,
+            ]),
         );
-        // Curated quality/perf, keyed by the model string a BYOKModelConfig stores
-        // (BYOKModelConfig.model === curated `id`) — backend-sourced catalog.
-        const curatedById = new Map(catalog.map((m) => [m.id, m]));
         return groupModelsByProvider(config).flatMap((group) =>
-            group.models.map((m) => {
-                const curated = curatedById.get(m.model);
-                return {
-                    id: m.id,
-                    label: curated?.displayName ?? m.model,
-                    provider: group.credential.provider,
-                    capabilities: capsById.get(m.id),
-                    score: curated?.benchmarkScore,
-                    speedLabel: curated
-                        ? SPEED_LABEL[curated.speed]
-                        : undefined,
-                    contextLabel: curated?.contextWindow,
-                    costLabel: curated?.costTier,
-                };
-            }),
+            group.models.map((m) => ({
+                id: m.id,
+                label: formatModelLabel(m.model),
+                provider: group.credential.provider,
+                capabilities: capsById.get(m.id),
+            })),
         );
-    }, [config, llmConfigStatus, catalog]);
+    }, [config, llmConfigStatus]);
 
     const routing = config?.routing ?? {};
     const [defaultModelId, setDefaultModelId] = useState<string | undefined>(
@@ -181,8 +164,7 @@ export const RoutingTab = ({
 
     const labelFor = (id?: string) =>
         pool.find((m) => m.id === id)?.label ?? id;
-    const providerOf = (id?: string) =>
-        pool.find((m) => m.id === id)?.provider;
+    const providerOf = (id?: string) => pool.find((m) => m.id === id)?.provider;
 
     // Empty state — the Routing tab stays reachable at first-run, so this shows
     // whenever no model is connected yet. Routing needs at least one model to
@@ -241,7 +223,10 @@ export const RoutingTab = ({
         defaultModelId: defaultModelId || undefined,
         fallbackModelId:
             showFallback && fallbackModelId ? fallbackModelId : undefined,
-        taskOverrides: cleanOverrides(taskOverrides, defaultModelId || undefined),
+        taskOverrides: cleanOverrides(
+            taskOverrides,
+            defaultModelId || undefined,
+        ),
     });
 
     const dirty =
@@ -261,7 +246,10 @@ export const RoutingTab = ({
         try {
             await createOrUpdateOrganizationParameter(
                 OrganizationParametersConfigKey.BYOK_CONFIG,
-                buildByokBlob(config, { kind: "routing", routing: nextRouting() }),
+                buildByokBlob(config, {
+                    kind: "routing",
+                    routing: nextRouting(),
+                }),
             );
             toast({ variant: "success", title: "Routing saved" });
             router.refresh();
@@ -296,7 +284,7 @@ export const RoutingTab = ({
                         className="bg-card-lv2 grid grid-cols-2 gap-px overflow-hidden rounded-lg p-0.5">
                         <ToggleGroup.Item
                             value="manual"
-                            className="text-text-secondary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 data-[state=on]:shadow-sm rounded-md px-3 py-2 text-xs font-medium transition-colors data-[state=on]:ring-1">
+                            className="text-text-secondary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 rounded-md px-3 py-2 text-xs font-medium transition-colors data-[state=on]:shadow-sm data-[state=on]:ring-1">
                             Manual · you choose
                         </ToggleGroup.Item>
                         <Tooltip>
@@ -336,137 +324,142 @@ export const RoutingTab = ({
                         </span>
                     </div>
                     <div className="border-card-lv3/50 bg-card-lv1 flex flex-col gap-4 rounded-xl border p-4">
-                    <div
-                        data-routing-anchor="default"
-                        className="flex flex-wrap items-center justify-between gap-3 scroll-mt-4">
-                        <div className="flex flex-col">
-                            <span className="text-text-primary text-sm font-medium">
-                                Model for all tasks
-                            </span>
-                            <span className="text-text-tertiary text-xs">
-                                Runs every task unless you set one per agent below.
-                            </span>
-                        </div>
-                        <ModelCombobox
-                            models={pool}
-                            value={defaultModelId}
-                            onSelect={(id) => {
-                                setDefaultModelId(id);
-                                // A fallback equal to the main model is a no-op —
-                                // if the new default matches the fallback, clear it.
-                                setFallbackModelId((prev) =>
-                                    prev === id ? undefined : prev,
-                                );
-                                // Drop per-task overrides that now equal the new
-                                // default — they inherit, so they must not stay
-                                // pinned (else they'd re-surface if it moves again).
-                                setTaskOverrides((prev) => {
-                                    const next = { ...prev };
-                                    (Object.keys(next) as LlmTask[]).forEach(
-                                        (task) => {
+                        <div
+                            data-routing-anchor="default"
+                            className="flex scroll-mt-4 flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-col">
+                                <span className="text-text-primary text-sm font-medium">
+                                    Model for all tasks
+                                </span>
+                                <span className="text-text-tertiary text-xs">
+                                    Runs every task unless you set one per agent
+                                    below.
+                                </span>
+                            </div>
+                            <ModelCombobox
+                                models={pool}
+                                value={defaultModelId}
+                                onSelect={(id) => {
+                                    setDefaultModelId(id);
+                                    // A fallback equal to the main model is a no-op —
+                                    // if the new default matches the fallback, clear it.
+                                    setFallbackModelId((prev) =>
+                                        prev === id ? undefined : prev,
+                                    );
+                                    // Drop per-task overrides that now equal the new
+                                    // default — they inherit, so they must not stay
+                                    // pinned (else they'd re-surface if it moves again).
+                                    setTaskOverrides((prev) => {
+                                        const next = { ...prev };
+                                        (
+                                            Object.keys(next) as LlmTask[]
+                                        ).forEach((task) => {
                                             if (next[task] === id)
                                                 delete next[task];
-                                        },
-                                    );
-                                    return next;
-                                });
-                            }}
-                            trigger={
-                                <Button
-                                    variant="helper"
-                                    size="md"
-                                    role="combobox"
-                                    className="min-w-64 justify-between gap-2"
-                                    rightIcon={
-                                        <ChevronsUpDownIcon className="-mr-2 opacity-50" />
-                                    }>
-                                    <span className="flex min-w-0 items-center gap-2">
-                                        <ProviderAvatar
-                                            provider={providerOf(defaultModelId)}
-                                        />
-                                        <span className="truncate">
-                                            {labelFor(defaultModelId) ??
-                                                "Select a model"}
-                                        </span>
-                                    </span>
-                                </Button>
-                            }
-                        />
-                    </div>
-
-                    <div
-                        data-routing-anchor="fallback"
-                        className="flex flex-wrap items-center justify-between gap-3 scroll-mt-4">
-                        <div className="flex flex-col">
-                            <span className="text-text-primary text-sm font-medium">
-                                Fallback (optional)
-                            </span>
-                            <span className="text-text-tertiary text-xs">
-                                Runs when a task&apos;s model fails — a bad or
-                                expired key, no credit, or the provider being down
-                                (after its own retries). Kody re-runs that call once
-                                on this model instead.
-                            </span>
-                        </div>
-                        {showFallback ? (
-                            <div className="flex items-center gap-2">
-                                <ModelCombobox
-                                    // The fallback only makes sense as a DIFFERENT
-                                    // model from the main one — it's what runs when
-                                    // the main is unavailable, so offering the main
-                                    // here would be a no-op. Exclude it.
-                                    models={pool.filter(
-                                        (m) => m.id !== defaultModelId,
-                                    )}
-                                    value={fallbackModelId}
-                                    onSelect={setFallbackModelId}
-                                    trigger={
-                                        <Button
-                                            variant="helper"
-                                            size="md"
-                                            role="combobox"
-                                            className="min-w-56 justify-between gap-2"
-                                            rightIcon={
-                                                <ChevronsUpDownIcon className="-mr-2 opacity-50" />
-                                            }>
-                                            <span className="flex min-w-0 items-center gap-2">
-                                                <ProviderAvatar
-                                                    provider={providerOf(
-                                                        fallbackModelId,
-                                                    )}
-                                                />
-                                                <span className="truncate">
-                                                    {labelFor(fallbackModelId) ??
-                                                        "Select a model"}
-                                                </span>
+                                        });
+                                        return next;
+                                    });
+                                }}
+                                trigger={
+                                    <Button
+                                        variant="helper"
+                                        size="md"
+                                        role="combobox"
+                                        className="min-w-64 justify-between gap-2"
+                                        rightIcon={
+                                            <ChevronsUpDownIcon className="-mr-2 opacity-50" />
+                                        }>
+                                        <span className="flex min-w-0 items-center gap-2">
+                                            <ProviderAvatar
+                                                provider={providerOf(
+                                                    defaultModelId,
+                                                )}
+                                            />
+                                            <span className="truncate">
+                                                {labelFor(defaultModelId) ??
+                                                    "Select a model"}
                                             </span>
-                                        </Button>
-                                    }
-                                />
-                                <Button
-                                    variant="tertiary"
-                                    size="xs"
-                                    onClick={() => {
-                                        setShowFallback(false);
-                                        setFallbackModelId(undefined);
-                                    }}>
-                                    Remove
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="flex items-center gap-2">
-                                <span className="text-text-tertiary text-sm">
-                                    — none —
+                                        </span>
+                                    </Button>
+                                }
+                            />
+                        </div>
+
+                        <div
+                            data-routing-anchor="fallback"
+                            className="flex scroll-mt-4 flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-col">
+                                <span className="text-text-primary text-sm font-medium">
+                                    Fallback (optional)
                                 </span>
-                                <Button
-                                    variant="helper"
-                                    size="xs"
-                                    onClick={() => setShowFallback(true)}>
-                                    Add fallback
-                                </Button>
+                                <span className="text-text-tertiary text-xs">
+                                    Runs when a task&apos;s model fails — a bad
+                                    or expired key, no credit, or the provider
+                                    being down (after its own retries). Kody
+                                    re-runs that call once on this model
+                                    instead.
+                                </span>
                             </div>
-                        )}
-                    </div>
+                            {showFallback ? (
+                                <div className="flex items-center gap-2">
+                                    <ModelCombobox
+                                        // The fallback only makes sense as a DIFFERENT
+                                        // model from the main one — it's what runs when
+                                        // the main is unavailable, so offering the main
+                                        // here would be a no-op. Exclude it.
+                                        models={pool.filter(
+                                            (m) => m.id !== defaultModelId,
+                                        )}
+                                        value={fallbackModelId}
+                                        onSelect={setFallbackModelId}
+                                        trigger={
+                                            <Button
+                                                variant="helper"
+                                                size="md"
+                                                role="combobox"
+                                                className="min-w-56 justify-between gap-2"
+                                                rightIcon={
+                                                    <ChevronsUpDownIcon className="-mr-2 opacity-50" />
+                                                }>
+                                                <span className="flex min-w-0 items-center gap-2">
+                                                    <ProviderAvatar
+                                                        provider={providerOf(
+                                                            fallbackModelId,
+                                                        )}
+                                                    />
+                                                    <span className="truncate">
+                                                        {labelFor(
+                                                            fallbackModelId,
+                                                        ) ?? "Select a model"}
+                                                    </span>
+                                                </span>
+                                            </Button>
+                                        }
+                                    />
+                                    <Button
+                                        variant="tertiary"
+                                        size="xs"
+                                        onClick={() => {
+                                            setShowFallback(false);
+                                            setFallbackModelId(undefined);
+                                        }}>
+                                        Remove
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="flex items-center gap-2">
+                                    <span className="text-text-tertiary text-sm">
+                                        — none —
+                                    </span>
+                                    <Button
+                                        variant="helper"
+                                        size="xs"
+                                        onClick={() => setShowFallback(true)}>
+                                        Add fallback
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

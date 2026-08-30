@@ -30,6 +30,13 @@ import type {
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
+import type { TemperaturePolicy } from '../kernel/model-types';
+import {
+    resolveCompatibleReasoningTraits,
+    compatibleTemperaturePolicy,
+    isCompatibleReasoner,
+    type ModelReasoningTraits,
+} from '../kernel/reasoning-traits';
 import {
     normalizeSdkResult,
     normalizeSdkUsage,
@@ -56,45 +63,6 @@ export const openaiModule: ProviderModule = {
     label: 'OpenAI',
     doc: 'https://platform.openai.com/docs/models',
 
-    // Curated OpenAI models (migrated from the web curated-models.json). Native
-    // transport ⇒ no per-model `provider` override.
-    catalog: [
-        {
-            id: 'gpt-5.4',
-            displayName: 'GPT-5.4',
-            tier: 'recommended',
-            benchmarkScore: 85,
-            description:
-                'Latest OpenAI flagship. Consistent low latency and broad knowledge.',
-            speed: 'fast',
-            contextWindow: '400K',
-            costTier: '$$$',
-            apiKeyUrl: 'https://platform.openai.com/api-keys',
-            defaults: {
-                temperature: 0,
-                maxOutputTokens: 16384,
-                reasoningEffort: 'medium',
-            },
-        },
-        {
-            id: 'gpt-5.2',
-            displayName: 'GPT-5.2',
-            tier: 'other',
-            benchmarkScore: 83.2,
-            description: 'Previous GPT generation. Superseded by GPT-5.4.',
-            speed: 'fast',
-            contextWindow: '400K',
-            costTier: '$$$',
-            strengths: [
-                'Very consistent response times',
-                'Clean — few low-value comments',
-            ],
-            weaknesses: ['Catches noticeably fewer issues than average'],
-            apiKeyUrl: 'https://platform.openai.com/api-keys',
-            defaults: { temperature: 0, maxOutputTokens: 16384 },
-        },
-    ],
-
     settingsSchema: z.object({
         baseURL: z.string().optional(),
     }),
@@ -107,7 +75,10 @@ export const openaiModule: ProviderModule = {
         return {
             // o-series / gpt-5 reject `temperature`; other OpenAI models allow it.
             supportsTemperature: !reasoner,
-            supportsReasoning: !!reasoningConfig,
+            // Native OpenAI reasoners OR a recognized compatible-family reasoner
+            // (Kimi/GLM/DeepSeek served over openai_compatible — those ids never
+            // appear on native OpenAI, so the OR is transport-safe).
+            supportsReasoning: !!reasoningConfig || isCompatibleReasoner(model),
             reasoningConfig,
             // Provider-level execution capabilities (01-04; per-model refinement
             // is a follow-up — note capabilities(model) can't see openai vs
@@ -169,13 +140,66 @@ export const openaiModule: ProviderModule = {
         cfg: ProviderBuildConfig,
         effort: ReasoningEffort,
     ): ProviderReasoningOptions {
-        if (effort === 'none') return {};
+        if (effort === 'none') {
+            // A Kimi/Moonshot model served over `openai_compatible` (a user can
+            // point openai_compatible at api.moonshot.ai) THINKS BY DEFAULT — so
+            // "off" must be said out loud here too, or the user who picked Off
+            // still pays for thinking. Gate on the never-downgrade (Kimi/Moonshot)
+            // family so we never send a `thinking` param to an unknown upstream
+            // (self-hosted Llama/vLLM) that would reject it. Note this transport
+            // does structured via response_format (not forced tool_choice), so it
+            // never hit the tool_choice+thinking 400 — this is a cost/consistency
+            // fix, not a crash fix.
+            // Only the Kimi/Moonshot family is confirmed to accept the openai-
+            // compatible `thinking` toggle; and never send `disabled` to an
+            // always-thinking variant (k2.7-code/k3) that rejects it — decide via
+            // the shared traits.
+            if (
+                (cfg.provider as string) === 'openai_compatible' &&
+                isNeverDowngradeModel(cfg.model) &&
+                resolveCompatibleReasoningTraits(cfg.model).canDisableThinking
+            ) {
+                return { openaiCompatible: { thinking: { type: 'disabled' } } };
+            }
+            return {};
+        }
         // openai_compatible upstreams (Kimi/GLM/…) take the standard
         // openai-compatible `thinking` param; native OpenAI takes reasoningEffort.
         if ((cfg.provider as string) === 'openai_compatible') {
             return { openaiCompatible: { thinking: { type: 'enabled' } } };
         }
         return { openai: { reasoningEffort: effort } };
+    },
+
+    // Per-model reasoning facts. openai_compatible thinking models (Kimi/DeepSeek)
+    // come from the shared table; native OpenAI reasons on the o-series/gpt-5 line
+    // and always does structured via response_format (no forced tool_choice), so
+    // planStructuredCall is always 'as-is' for it.
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        if ((cfg.provider as string) === 'openai_compatible') {
+            return resolveCompatibleReasoningTraits(cfg.model);
+        }
+        return {
+            thinksByDefault: isOpenAiReasoner(cfg.model),
+            canDisableThinking: true,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: false,
+        };
+    },
+
+    // Temperature is a MODEL rule, not just a transport one: a Kimi/GLM served over
+    // openai_compatible obeys the SAME always-thinking → temperature-1 pin as it
+    // does over the Anthropic protocol (shared family helper). Native OpenAI
+    // reasoners (o-series / gpt-5) reject temperature outright; other models are
+    // free — matching the `supportsTemperature` capability the UI used before.
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy | undefined {
+        if ((cfg.provider as string) === 'openai_compatible') {
+            return compatibleTemperaturePolicy(cfg.model);
+        }
+        // Native OpenAI: no opinion here — the caller derives it from the static
+        // `supportsTemperature` capability (reasoners reject temperature), exactly
+        // as before, so native behaviour is unchanged.
+        return undefined;
     },
 
     normalizeUsage: normalizeSdkUsage,

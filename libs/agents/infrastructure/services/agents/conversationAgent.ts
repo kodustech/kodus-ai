@@ -80,9 +80,11 @@ interface ConversationThread {
  *
  * Replaces the former flow-engine orchestration (createOrchestration +
  * REACT planner + createMCPAdapter + createTool + callAgent) with a thin
- * native loop: `buildModelFromSlot` resolves the BYOK model, MCP + sandbox
- * tools are exposed as AI SDK tools, and `generateText` runs the tool-calling
- * loop until it answers or hits `CONVERSATION_MAX_STEPS`.
+ * native loop: this provider resolves ONLY the BYOK slot and exposes MCP +
+ * sandbox tools as AI SDK tools, then hands them to the AiSdkAgentRunner →
+ * `LLM.run` (the one door to the model), which owns model resolution, the
+ * tool-calling loop, prompt-cache, and the cost span, until it answers or
+ * hits `CONVERSATION_MAX_STEPS`.
  */
 @Injectable()
 export class ConversationAgentProvider {

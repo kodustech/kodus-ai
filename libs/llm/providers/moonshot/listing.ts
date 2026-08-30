@@ -8,7 +8,7 @@ import { bearerHeaders, parseOpenAiIds } from '../kernel/listing-helpers';
  * hardcoded here and the stored chat baseURL is deliberately IGNORED: listing over
  * `/anthropic/models` would 404. Uses the org's stored key. This powers the "Browse
  * all Moonshot models" live list next to the curated picks; the curated catalog is
- * still the default (it carries the score/speed/cost signal a raw id list can't).
+ * still the default (it carries the editorial copy + recommendation a raw id list can't).
  *
  * (A Kimi Code Plan key at api.kimi.com may not answer this Developer-API models
  * endpoint — that's fine, the curated cards cover that path.)

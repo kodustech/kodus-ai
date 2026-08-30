@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLM } from '@libs/llm/llm';
+import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { PromptRole } from '@libs/llm/prompt-role';
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -888,78 +889,32 @@ Evidence field in ${params.languageResultPrompt}.`;
     private parseAgentResponse(text: string): any {
         if (!text?.trim()) return null;
 
-        // Try direct parse
+        // Fast path: already-clean JSON.
         try {
             return JSON.parse(text);
         } catch {
             // intentional fallback
         }
 
-        // Extract from markdown code blocks
-        const codeBlock = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (codeBlock) {
-            try {
-                return JSON.parse(codeBlock[1].trim());
-            } catch {
-                // intentional fallback
-            }
-        }
-
-        // Extract outermost JSON object
-        const objStart = text.indexOf('{');
-        if (objStart === -1) return null;
-
-        let json = text.substring(objStart);
-        let depth = 0;
-        let inStr = false;
-        let escape = false;
-        let end = -1;
-
-        for (let i = 0; i < json.length; i++) {
-            const c = json[i];
-            if (escape) {
-                escape = false;
-                continue;
-            }
-            if (c === '\\') {
-                escape = true;
-                continue;
-            }
-            if (c === '"') {
-                inStr = !inStr;
-                continue;
-            }
-            if (inStr) continue;
-            if (c === '{') depth++;
-            if (c === '}') {
-                depth--;
-                if (depth === 0) {
-                    end = i;
-                    break;
-                }
-            }
-        }
-
-        if (end > 0) json = json.substring(0, end + 1);
+        // Shared text→JSON extractor: unwraps a ```json fence, slices the
+        // outermost balanced object (string-aware), and strips trailing commas —
+        // the same primitive the review structured path uses.
+        const extracted = extractJsonFromText(text);
+        if (!extracted) return null;
 
         try {
-            return JSON.parse(json);
+            return JSON.parse(extracted);
         } catch {
             // intentional fallback
         }
 
-        // Clean trailing commas and try again
-        const cleaned = json
-            .replace(/,\s*([\]}])/g, '$1')
-            .replace(/\/\/[^\n]*/g, '');
-
+        // Last resort: some models emit JS-style `//` line comments inside the
+        // JSON — strip them and retry (the one thing the shared extractor leaves).
         try {
-            return JSON.parse(cleaned);
+            return JSON.parse(extracted.replace(/\/\/[^\n]*/g, ''));
         } catch {
-            // intentional fallback
+            return null;
         }
-
-        return null;
     }
 
     private buildDocumentationContextBlock(

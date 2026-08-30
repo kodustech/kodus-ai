@@ -45,6 +45,7 @@ import {
 // Domain helper relocated out of the legacy file (Zod validation of findings).
 import { sanitizeFindingsResult } from '@libs/code-review/infrastructure/agents/core/findings-schema';
 import { LLM } from '@libs/llm/llm';
+import { extractJsonFromText } from '@libs/llm/structured-output-repair';
 import { collapseNearDuplicates } from '@libs/code-review/infrastructure/agents/engine/dedup-prompt';
 import { createLogger } from '@libs/core/log/logger';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -272,8 +273,10 @@ function findingsFromText(state: RunState): {
 } | null {
     for (let i = state.steps.length - 1; i >= 0; i--) {
         const text = state.steps[i].message.content;
-        if (typeof text !== 'string' || !text.trim()) continue;
-        const json = extractJsonBlock(text);
+        if (typeof text !== 'string' || !text.trim()) {
+            continue;
+        }
+        const json = extractJsonFromText(text);
         if (!json) continue;
         try {
             const clean = sanitizeFindingsResult(JSON.parse(json));
@@ -294,17 +297,6 @@ function findingsFromText(state: RunState): {
     // like findings. If BOTH miss, the finder's findings are dropped with no
     // counter/log — a review can silently under-report. Accepted for now; a
     // parse-failure metric would make the drop observable.
-    return null;
-}
-
-/** Pull a JSON object out of free text: a ```json fenced block, else the
- *  widest {...} span. */
-function extractJsonBlock(text: string): string | null {
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenced?.[1]) return fenced[1].trim();
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    if (start >= 0 && end > start) return text.slice(start, end + 1);
     return null;
 }
 
@@ -349,9 +341,7 @@ const RECOVERY_SCHEMA = z.object({
 /** Injected capability: re-structure a prose `reasoning` into findings. The
  *  domain (finder/recall passes) depends only on this function; the adapter
  *  wires it to the concrete internal-model fallback. Undefined = recovery off. */
-export type ProseRecoverer = (
-    reasoning: string,
-) => Promise<FinderSuggestion[]>;
+export type ProseRecoverer = (reasoning: string) => Promise<FinderSuggestion[]>;
 
 /** Extract findings from a run, and — if the model produced NONE but wrote
  *  finding-like prose in `reasoning` (the Anthropic omission mode) — recover
@@ -628,7 +618,9 @@ export async function runFinderWithVerify(
         gate.kept.forEach((f, i) =>
             verdictByFinding.set(f, gate.keptVerdicts[i]),
         );
-        gate.dropped.forEach((d) => verdictByFinding.set(d.candidate, d.verdict));
+        gate.dropped.forEach((d) =>
+            verdictByFinding.set(d.candidate, d.verdict),
+        );
         const stillDropped = new Set(gate.dropped.map((d) => d.candidate));
         kept = kept.filter((f) => !stillDropped.has(f));
         dropped = [...dropped, ...gate.dropped];

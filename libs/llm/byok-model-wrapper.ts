@@ -131,7 +131,10 @@ export function wrapByokModel(
                         try {
                             opts.reporter?.({
                                 organizationId: opts.organizationId,
-                                provider: opts.provider ?? 'unknown',
+                                provider:
+                                    opts.provider ??
+                                    opts.byokConfig?.provider ??
+                                    'unknown',
                                 errorMessage:
                                     err instanceof Error
                                         ? err.message

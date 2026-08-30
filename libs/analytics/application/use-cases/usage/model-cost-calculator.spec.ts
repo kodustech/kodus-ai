@@ -133,20 +133,22 @@ describe('ModelCostCalculator', () => {
             },
         ]);
 
+        // input_tokens (ai@7) already INCLUDES cacheRead AND cacheWrite, so the
+        // full-price pool subtracts BOTH.
         // le bucket at default rates:
-        //   uncached 150K × $2/M = $0.30
+        //   uncached (200K−50K−20K)=130K × $2/M = $0.26
         //   cacheRead 50K × $0.20/M = $0.01
         //   cacheWrite 20K × $0 = $0
         //   output 100K × $12/M = $1.20
-        //   le subtotal = $1.51
+        //   le subtotal = $1.47
         // gt bucket at tier rates:
-        //   uncached 650K × $4/M = $2.60
+        //   uncached (800K−150K−30K)=620K × $4/M = $2.48
         //   cacheRead 150K × $0.40/M = $0.06
         //   cacheWrite 30K × $0 (no tier rate → 0) = $0
         //   output 400K × $18/M = $7.20
-        //   gt subtotal = $9.86
-        // total = $11.37
-        expect(total).toBeCloseTo(11.37, 10);
+        //   gt subtotal = $9.74
+        // total = $11.21
+        expect(total).toBeCloseTo(11.21, 10);
     });
 
     it('falls back to default rates when a tier rate is missing on a non-tiered field', async () => {
@@ -173,11 +175,44 @@ describe('ModelCostCalculator', () => {
             },
         ]);
 
-        // gt bucket:
-        //   input 300K × $4/M (tier rate) = $1.20
+        // gt bucket (input already includes the 100K cacheWrite → subtract it):
+        //   uncached (300K−100K)=200K × $4/M (tier rate) = $0.80
         //   cacheWrite 100K × $2.5/M (no tier rate → fallback to default) = $0.25
-        //   total = $1.45
-        expect(total).toBeCloseTo(1.45, 10);
+        //   total = $1.05
+        expect(total).toBeCloseTo(1.05, 10);
+    });
+
+    it('does NOT double-bill cache-creation tokens (anthropic cacheWrite premium)', async () => {
+        // Regression: ai@7 reports input_tokens INCLUSIVE of cacheRead AND
+        // cacheWrite. If the full-price pool only subtracts cacheRead, the
+        // cache-write tokens are billed once at the input rate (inside uncached)
+        // AND again at the cacheWrite rate — double billing. Anthropic prices
+        // cache creation at 1.25× input, so the premium makes the bug visible.
+        tokenPricingUseCase.execute.mockResolvedValue(
+            pricingFromMillions({
+                inputPerM: 10,
+                outputPerM: 0,
+                cacheReadPerM: 1,
+                cacheWritePerM: 12.5, // 1.25× input
+            }),
+        );
+
+        const total = await calculator.totalCost([
+            {
+                // 1M input = 400K fresh + 500K cacheRead + 100K cacheWrite
+                input: 1_000_000,
+                output: 0,
+                outputReasoning: 0,
+                cacheRead: 500_000,
+                cacheWrite: 100_000,
+                model: 'claude',
+            },
+        ]);
+
+        // Correct: uncached (1M−500K−100K)=400K×$10/M=$4.00
+        //          + cacheRead 500K×$1/M=$0.50 + cacheWrite 100K×$12.5/M=$1.25
+        //          = $5.75  (the old double-billing math gave $6.75)
+        expect(total).toBeCloseTo(5.75, 10);
     });
 
     it('prices a 3-bracket (multi-tier) model at each bracket rate', async () => {

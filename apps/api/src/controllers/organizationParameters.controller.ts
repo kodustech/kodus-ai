@@ -33,10 +33,6 @@ import {
     ByokProvidersResult,
 } from '@libs/organization/application/use-cases/organizationParameters/get-byok-providers.use-case';
 import {
-    GetByokCatalogUseCase,
-    ByokCatalogResult,
-} from '@libs/organization/application/use-cases/organizationParameters/get-byok-catalog.use-case';
-import {
     TestByokConnectionUseCase,
     TestByokResult,
 } from '@libs/organization/application/use-cases/organizationParameters/test-byok-connection.use-case';
@@ -99,7 +95,6 @@ export class OrganizationParametersController {
         private readonly deleteByokConfigUseCase: DeleteByokConfigUseCase,
         private readonly getLLMConfigStatusUseCase: GetLLMConfigStatusUseCase,
         private readonly getByokProvidersUseCase: GetByokProvidersUseCase,
-        private readonly getByokCatalogUseCase: GetByokCatalogUseCase,
         private readonly testByokConnectionUseCase: TestByokConnectionUseCase,
         private readonly testByokModelUseCase: TestByokModelUseCase,
         private readonly listModelOverridesUseCase: ListModelOverridesUseCase,
@@ -356,6 +351,8 @@ export class OrganizationParametersController {
                 apiKey: { type: 'string' },
                 baseURL: { type: 'string' },
                 model: { type: 'string' },
+                temperature: { type: 'number' },
+                reasoningEffort: { type: 'string' },
                 vertexLocation: { type: 'string' },
                 awsBearerToken: { type: 'string' },
                 awsAccessKeyId: { type: 'string' },
@@ -377,6 +374,8 @@ export class OrganizationParametersController {
             apiKey?: string;
             baseURL?: string;
             model?: string;
+            temperature?: number;
+            reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
             vertexLocation?: string;
             awsBearerToken?: string;
             awsAccessKeyId?: string;
@@ -403,6 +402,12 @@ export class OrganizationParametersController {
             properties: {
                 provider: { type: 'string' },
                 model: { type: 'string' },
+                // Optional SAFE non-secret overrides (region/location) so an edit
+                // that changed them is probed as it will be saved. baseURL is not
+                // accepted: the stored secret must not be sent to a caller-supplied
+                // host (see TestByokModelUseCase).
+                awsRegion: { type: 'string' },
+                vertexLocation: { type: 'string' },
             },
         },
     })
@@ -412,7 +417,13 @@ export class OrganizationParametersController {
             "Validate a model id against the org's SAVED BYOK provider (credentials resolved server-side). Surfaces the provider's real error (e.g. model-not-found) at config time instead of at review time.",
     })
     public async testByokModel(
-        @Body() body: { provider: string; model: string },
+        @Body()
+        body: {
+            provider: string;
+            model: string;
+            awsRegion?: string;
+            vertexLocation?: string;
+        },
     ): Promise<TestByokResult> {
         const organizationId = this.request?.user?.organization?.uuid;
         if (!organizationId) {
@@ -423,6 +434,8 @@ export class OrganizationParametersController {
         return await this.testByokModelUseCase.execute({
             provider: body.provider,
             model: body.model,
+            awsRegion: body.awsRegion,
+            vertexLocation: body.vertexLocation,
             organizationAndTeamData: { organizationId },
         });
     }
@@ -568,31 +581,6 @@ export class OrganizationParametersController {
         return await this.getByokProvidersUseCase.execute();
     }
 
-    @Get('/byok/catalog')
-    @UseGuards(PolicyGuard)
-    @CheckPolicies(
-        // The curated model catalog is static + non-sensitive (Kodus's editorial
-        // picks, aggregated from the provider modules). Same read gate as
-        // /byok/providers — the connect picker needs it to render the models.
-        checkAnyPermission([
-            {
-                action: Action.Read,
-                resource: ResourceType.OrganizationSettings,
-            },
-            {
-                action: Action.Read,
-                resource: ResourceType.CodeReviewSettings,
-            },
-        ]),
-    )
-    @ApiOperation({
-        summary: 'List the curated BYOK model catalog',
-        description:
-            "Return the curated model catalog aggregated from every provider module's `catalog` (the single source of truth; replaces the frontend curated-models.json). Static and non-sensitive.",
-    })
-    public async getByokCatalog(): Promise<ByokCatalogResult> {
-        return await this.getByokCatalogUseCase.execute();
-    }
 
     @Get('/cockpit-metrics-visibility')
     @UseGuards(PolicyGuard)

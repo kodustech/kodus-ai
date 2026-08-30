@@ -32,7 +32,6 @@ jest.mock('@libs/llm/llm-call', () => ({
 }));
 
 jest.mock('@libs/llm/byok-to-vercel', () => ({
-    byokToVercelModel: jest.fn(() => ({})),
     buildModelFromSlot: jest.fn(() => ({})),
     getModelName: jest.fn(() => 'openai_compatible:test-model'),
     // The real runTextReviewCall path (via LLM.run) resolves a per-slot limiter.

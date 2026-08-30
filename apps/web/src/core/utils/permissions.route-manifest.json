@@ -16,6 +16,14 @@
     }
   },
   {
+    "route": "/byok/provider",
+    "expected": {
+      "billing_manager": "deny",
+      "repo_admin": "deny",
+      "contributor": "deny"
+    }
+  },
+  {
     "route": "/choose-plan",
     "expected": {
       "billing_manager": "allow",

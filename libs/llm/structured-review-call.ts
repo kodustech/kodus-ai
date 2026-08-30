@@ -13,8 +13,25 @@
  * on a transient (5xx/network) blip; it never touches a 2nd model.
  * (Reliability caveat accepted 2026-07-29; resilience is re-addressed in Phase 5.)
  */
-import { Output, type LanguageModel, type Schema } from 'ai';
+import {
+    Output,
+    NoObjectGeneratedError,
+    type LanguageModel,
+    type Schema,
+} from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
+import {
+    ensureValidatingSchema,
+    readOutput,
+    repairAndValidate,
+    salvageStructuredError,
+} from '@libs/llm/structured-output-repair';
+import { REGISTRY } from '@libs/llm/providers';
+import {
+    planStructuredCall,
+    NON_REASONING_TRAITS,
+    type StructuredCallPlan,
+} from '@libs/llm/providers/kernel/reasoning-traits';
 import { z } from 'zod';
 import {
     getLimiterForSlot,
@@ -106,6 +123,17 @@ interface ReviewCallMode<T> {
     outputArgs: Record<string, unknown>;
     /** Pull the caller-facing result from the SDK response. */
     extract: (r: any) => T;
+    /** The output JSON schema, stringified. Set for structured mode so the
+     *  json_object fallback (a provider that rejects strict `json_schema`, or a
+     *  non-strict upstream) can put the contract INTO the prompt — without it the
+     *  schema never reaches the model and the model invents its own shape
+     *  (the dedup keep-all class, issue #1786). Undefined for text mode. */
+    schemaForPrompt?: string;
+    /** The validating wire schema (structured mode). Handed to the shared
+     *  `salvageStructuredError` so a JSON PARSE failure is repaired+revalidated
+     *  against the exact contract before escalating to a model re-ask. Undefined
+     *  for text mode. */
+    validatingSchema?: unknown;
 }
 
 /**
@@ -115,6 +143,33 @@ interface ReviewCallMode<T> {
  * `mode` is the only thing that differs between structured and text output — so
  * both public entry points share this exact model policy and retry contract.
  */
+/**
+ * Resolve the structured-call plan for a slot — a pure lookup over the provider's
+ * `capabilities().structuredOutput` + `reasoningTraits()`. No slot (managed/env
+ * default) → 'as-is' (the Fireworks default is a response_format model). All the
+ * per-model knowledge lives in the provider module; this is the single read.
+ */
+function resolveStructuredPlan(
+    slot: NormalizedModel | undefined,
+): StructuredCallPlan {
+    const provider = slot?.provider as string | undefined;
+    if (!provider || !slot?.model || !REGISTRY.has(provider)) {
+        return 'as-is';
+    }
+    try {
+        const mod = REGISTRY.get(provider);
+        const traits =
+            mod.reasoningTraits?.(slot as any) ?? NON_REASONING_TRAITS;
+        return planStructuredCall(
+            mod.capabilities(slot.model).structuredOutput,
+            traits,
+        );
+    } catch {
+        // Best-effort optimization — a lookup failure must never break the call.
+        return 'as-is';
+    }
+}
+
 async function runReviewCall<T>(
     params: BaseReviewCallParams,
     mode: ReviewCallMode<T>,
@@ -154,6 +209,17 @@ async function runReviewCall<T>(
     // a helper so the same invocation can be re-issued with json_schema OFF, and
     // skip json_schema up front for a slot already proven to reject it.
     const structuredMode = mode.modelOptions.structuredOutputs === true;
+
+    // The per-model structured plan (providers own the traits; this is a pure
+    // lookup). 'suppress-thinking' → force reasoning off for the forced-tool_choice
+    // call; 'reroute-json' → skip Output.object entirely and read a prompt-schema'd
+    // JSON text so thinking may stay on (always-thinking Kimi k2.7-code/k3, GLM,
+    // Claude Fable/Mythos); 'as-is' → normal. Text calls never plan.
+    const structuredPlan: StructuredCallPlan = structuredMode
+        ? resolveStructuredPlan(mainSlot)
+        : 'as-is';
+    const suppressReasoning = structuredPlan === 'suppress-thinking';
+
     const buildInvocation = (structuredOutputs: boolean) =>
         resolveModelConfig(mainSlot, {
             runName,
@@ -162,11 +228,16 @@ async function runReviewCall<T>(
             modelOptions: structuredMode
                 ? { ...mode.modelOptions, structuredOutputs }
                 : mode.modelOptions,
+            // Force reasoning off only when the plan says so (a disable-able model
+            // that would 400 on forced tool_choice + thinking). 'reroute-json' and
+            // 'as-is' keep the slot's reasoning — the reroute has no tool_choice.
+            suppressReasoning,
             defaultModelOverride,
             organizationId,
             reasoningEffortDefault: 'none',
             openrouterProviderOrder: (mainSlot as any)?.openrouterProviderOrder,
-            openrouterAllowFallbacks: (mainSlot as any)?.openrouterAllowFallbacks,
+            openrouterAllowFallbacks: (mainSlot as any)
+                ?.openrouterAllowFallbacks,
         });
 
     const sentJsonSchema = structuredMode && mayUseJsonSchema(mainSlot);
@@ -196,15 +267,27 @@ async function runReviewCall<T>(
         ...(organizationId ? { organizationId } : {}),
     };
 
-    const call = (model: LanguageModel, modelName: string): Promise<T> => {
+    const call = (
+        model: LanguageModel,
+        modelName: string,
+        systemOverride?: string,
+        extraAttrs?: Record<string, unknown>,
+        // The reroute-json path overrides the output channel: plain generateText
+        // (NO Output.object → NO forced tool_choice) + a text→object extractor, so
+        // an always-thinking model produces structured output without a 400.
+        override?: {
+            outputArgs?: Record<string, unknown>;
+            extract?: (r: any) => T | Promise<T>;
+        },
+    ): Promise<T> => {
         const exec = () =>
             tracedGenerateText({
                 model: model as any,
-                system,
+                system: systemOverride ?? system,
                 prompt: user,
                 // Output mode: structured spreads `output: Output.object`, text
                 // spreads nothing (plain generateText → r.text).
-                ...mode.outputArgs,
+                ...(override?.outputArgs ?? mode.outputArgs),
                 // Per-model tuning (temperature / max-output) from the ONE
                 // montagem above — the review path can't silently drop it again.
                 ...callOptions,
@@ -254,13 +337,68 @@ async function runReviewCall<T>(
                   // resolveTaskSlot (route = the LlmTask, not the tier).
                   route: mainSlot?.route,
                   usedFallback: mainSlot?.usedFallback,
-                  attrs: spanAttrs,
+                  attrs: extraAttrs
+                      ? { ...spanAttrs, ...extraAttrs }
+                      : spanAttrs,
                   exec,
               })
             : exec();
 
-        return run.then((r: any) => mode.extract(r));
+        return run.then((r: any) => (override?.extract ?? mode.extract)(r));
     };
+
+    // ONE re-issue in json_object mode with the schema written INTO the prompt —
+    // the shared recovery for both "provider rejected json_schema" and "model
+    // returned an unparseable/mismatched object". json_object does NOT send the
+    // schema to the provider, so without the prompt contract the model invents
+    // its own shape and the parse silently mismatches (the dedup keep-all class,
+    // issue #1786). `reason` is stamped on the re-issue span so a recovery is
+    // observable instead of silent. Skipped by the caller when schemaForPrompt is
+    // unset (a byte-identical retry would add nothing).
+    const reissueDowngraded = (reason: string): Promise<T> => {
+        const downgraded = buildInvocation(false);
+        const downgradedSystem = mode.schemaForPrompt
+            ? `${system ? `${system}\n\n` : ''}Return ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n${mode.schemaForPrompt}`
+            : system;
+        return call(downgraded.model, downgraded.modelName, downgradedSystem, {
+            structuredRecovery: reason,
+        });
+    };
+
+    // reroute-json: the model is always-thinking + forced-tool_choice (Kimi
+    // k2.7-code/k3, Claude Fable/Mythos) OR its endpoint has no forced tool_choice
+    // at all (GLM = auto-only). Either way Output.object can't be used — so issue a
+    // PLAIN generateText with the schema written into the prompt (no tool_choice)
+    // and parse+validate the text. Thinking stays ON (compatible without tool
+    // forcing). This is the universal floor that closes the whole always-thinking
+    // class, not a per-model special case.
+    if (structuredPlan === 'reroute-json') {
+        const inv = buildInvocation(false);
+        const reroutedSystem = mode.schemaForPrompt
+            ? `${system ? `${system}\n\n` : ''}Return ONLY a JSON object that conforms EXACTLY to this JSON Schema (same property names, no extra keys):\n${mode.schemaForPrompt}`
+            : system;
+        return call(
+            inv.model,
+            inv.modelName,
+            reroutedSystem,
+            { structuredReroute: 'thinking-forced-tool_choice' },
+            {
+                outputArgs: {}, // plain generateText — no Output.object, no tool_choice
+                extract: async (r: any) => {
+                    const value = await repairAndValidate<T>(
+                        mode.validatingSchema,
+                        (r?.text ?? '') as string,
+                    );
+                    if (value === undefined) {
+                        throw new Error(
+                            `[structured-output] reroute-json produced no valid object for ${runName}`,
+                        );
+                    }
+                    return value;
+                },
+            },
+        );
+    }
 
     try {
         return await call(mainModel, mainModelName);
@@ -274,9 +412,41 @@ async function runReviewCall<T>(
         // retry. Folds `withStructuredOutputFallback` into the ONE executor, so
         // every structured LLM.run caller gets this resilience, not just dedup.
         if (sentJsonSchema && isJsonSchemaUnsupportedError(err)) {
+            // The provider advertised json_schema but rejected the body at
+            // runtime — a slot-level fact: cache it so future structured calls
+            // skip json_schema, then re-issue once in json_object mode.
             markJsonSchemaUnsupported(mainSlot);
-            const downgraded = buildInvocation(false);
-            return await call(downgraded.model, downgraded.modelName);
+            return await reissueDowngraded('json-schema-unsupported');
+        }
+
+        // Structured parse/validation failure: `Output.object` threw
+        // NoObjectGeneratedError (`.text` = raw output, `.cause` = JSONParseError
+        // when it wasn't JSON, or TypeValidationError when it was valid JSON of
+        // the wrong shape — the latter only fires now that the wire schema is
+        // guaranteed to validate; see ensureValidatingSchema / #1786). Recover in
+        // two tiers: (a) free deterministic repair for a pure PARSE error (fence /
+        // prose / trailing comma), then (b) ONE model re-ask in json_object mode
+        // with the schema in the prompt. NOT a slot-level fault — never mark the
+        // slot unsupported. Bounded: the re-ask's own failure propagates.
+        if (structuredMode && NoObjectGeneratedError.isInstance(err)) {
+            // (a) free deterministic repair for a pure PARSE error — the shared
+            // salvage returns undefined for a shape mismatch (needs the model).
+            const repaired = await salvageStructuredError<T>(
+                err,
+                mode.validatingSchema,
+            );
+            if (repaired !== undefined) {
+                logger.warn({
+                    message: `[structured-output] recovered ${runName} via deterministic JSON repair (no model re-ask)`,
+                    context: 'runReviewCall',
+                    metadata: { runName, organizationId },
+                });
+                return repaired;
+            }
+            if (mode.schemaForPrompt) {
+                return await reissueDowngraded('schema-mismatch');
+            }
+            throw err;
         }
 
         // D-00c latency guard — the SINGLE app-level retry owner (the AI SDK's
@@ -363,10 +533,37 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         }
     }
 
+    // Stringify the wire JSON schema so the json_object fallback can put the
+    // contract into the prompt (the model gets no schema in json_object mode).
+    // Fail-soft: an unstringifiable schema just skips the prompt augmentation.
+    let schemaForPrompt: string | undefined;
+    try {
+        const jsonForm =
+            wireSchema && typeof wireSchema === 'object'
+                ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ??
+                  wireSchema)
+                : undefined;
+        if (jsonForm) schemaForPrompt = JSON.stringify(jsonForm);
+    } catch {
+        schemaForPrompt = undefined;
+    }
+
+    // Guarantee the schema actually VALIDATES: a raw jsonSchema() caller (dedup)
+    // has no validate fn, so Output.object would parse but never check the shape
+    // and a renamed-key object slips through (issue #1786). Zod strict-wire
+    // schemas already validate and pass through untouched.
+    const validatingSchema = ensureValidatingSchema(wireSchema);
+
     return runReviewCall(params, {
         modelOptions: { structuredOutputs: true },
-        outputArgs: { output: Output.object({ schema: wireSchema as any }) },
-        extract: (r) => (r.experimental_output ?? r.output) as any,
+        outputArgs: {
+            output: Output.object({ schema: validatingSchema as any }),
+        },
+        extract: (r) => readOutput(r),
+        schemaForPrompt,
+        // The executor's shared salvage repairs a parse failure against this exact
+        // schema before escalating to the model re-ask (never returns bad data).
+        validatingSchema,
     });
 }
 

@@ -66,7 +66,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
     };
     let parametersService: any;
     let messageProcessor: any;
-    let promptRunnerService: any;
     let permissionValidationService: any;
 
     const stubRepository = { name: 'sample', id: 'repo-id' };
@@ -89,7 +88,13 @@ describe('CommentManagerService.generateSummaryPR', () => {
         // Restore the happy-path LLM stub — the failure tests below swap it
         // for a rejection and must not leak into the prompt-shape tests.
         (tracedGenerateText as jest.Mock).mockImplementation(
-            async ({ system, prompt }: { system?: string; prompt?: string }) => {
+            async ({
+                system,
+                prompt,
+            }: {
+                system?: string;
+                prompt?: string;
+            }) => {
                 if (system) {
                     capturedPrompts.push({ prompt: system, role: 'system' });
                 }
@@ -116,7 +121,6 @@ describe('CommentManagerService.generateSummaryPR', () => {
 
         parametersService = {};
         messageProcessor = {};
-        promptRunnerService = {};
         permissionValidationService = {};
 
         service = new CommentManagerService(
@@ -434,7 +438,9 @@ describe('CommentManagerService.generateSummaryPR', () => {
         });
 
         it('preserves the author line breaks as Markdown hard breaks', async () => {
-            const result = await genErrorSummary('line one\nline two\nline three');
+            const result = await genErrorSummary(
+                'line one\nline two\nline three',
+            );
 
             // Each single newline becomes a hard break (two trailing spaces)
             // so the note renders on separate lines in the PR comment.
@@ -462,9 +468,7 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
         // suite above so the per-test call-count assertion is isolated.
         (tracedGenerateText as jest.Mock).mockClear();
         parametersService = {
-            findByKey: jest
-                .fn()
-                .mockResolvedValue({ configValue: 'en-US' }),
+            findByKey: jest.fn().mockResolvedValue({ configValue: 'en-US' }),
         };
         observabilityService = {
             runLLMInSpan: jest.fn(),

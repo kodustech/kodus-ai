@@ -51,8 +51,21 @@ describe('anthropicModule.reasoning — effort=none owns "thinking off"', () => 
         expect(off('claude-fable-5')).toEqual({});
     });
 
-    it('omits on anthropic_compatible (Kimi/Z.ai never think by default)', () => {
+    it('says `disabled` out loud on DISABLE-able compatible models (Kimi K2.6)', () => {
+        // K2.5/K2.6 enable thinking by DEFAULT and accept `{ type: 'disabled' }`.
+        // Omitting it left thinking ON, which 400s a forced-tool_choice call —
+        // the PR#144/#145/#146 Kody Rules failure. "Off" must be explicit.
+        expect(off('kimi-k2.6', 'anthropic_compatible')).toEqual({
+            anthropic: { thinking: { type: 'disabled' } },
+        });
+    });
+
+    it('OMITS the config on ALWAYS-thinking compatible models (Kimi k2.7-code, k3 — no disable)', () => {
+        // k2.7-code and k3 think permanently and expose no disable — sending
+        // `{ type: 'disabled' }` is invalid. Omitting IS the only "off"; the
+        // structured executor reroutes these to json (no forced tool_choice).
         expect(off('kimi-k2.7-code', 'anthropic_compatible')).toEqual({});
+        expect(off('kimi-k3', 'anthropic_compatible')).toEqual({});
     });
 });
 

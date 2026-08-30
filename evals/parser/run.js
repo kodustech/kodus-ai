@@ -38,7 +38,7 @@ const { recoverFindingsFromProse } = require(
 async function main() {
     // Optional: point the internal (re-structurer) model at a specific tier-0
     // model, exactly as the self-hosted path resolves it. Omit -> cloud
-    // gpt-5.4-mini (or whatever getInternalModel picks from the env).
+    // gpt-5.4-mini (or whatever buildModelFromSlot picks from the env).
     const model = process.env.RECOVERY_MODEL;
     if (model) {
         const { applyModelEnv } = require('../shared/tier0-models');
@@ -51,14 +51,14 @@ async function main() {
     // an unreachable model would masquerade as "recovered 0 findings" (a quality
     // fail) instead of an infra error. Surface it here so ERROR != 0-findings.
     {
-        const { getInternalModel } = require(
-            path.join(__dirname, '../../libs/llm/byok-to-vercel.ts'),
+        const { buildEvalModel } = require(
+            path.join(__dirname, '../shared/build-model'),
         );
         const { generateObject } = require('ai');
         const { z } = require('zod');
         try {
-            const m = getInternalModel(undefined, { structuredOutputs: true });
-            if (!m) throw new Error('getInternalModel returned null (no key)');
+            const m = buildEvalModel({ structuredOutputs: true });
+            if (!m) throw new Error('buildModelFromSlot returned null (no key)');
             await generateObject({
                 model: m,
                 schema: z.object({ ok: z.string() }),
@@ -80,7 +80,7 @@ async function main() {
     let passed = 0;
 
     for (const fx of fixtures) {
-        // byokConfig=undefined -> getInternalModel resolves the cloud/self-hosted
+        // byokConfig=undefined -> buildModelFromSlot resolves the cloud/self-hosted
         // internal model exactly as production does.
         const found = await recoverFindingsFromProse(fx.prose, undefined, org);
         const files = found.map((s) => s.relevantFile || '');

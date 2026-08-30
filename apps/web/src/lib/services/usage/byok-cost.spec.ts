@@ -29,6 +29,14 @@ describe("canonicalModelId", () => {
         );
     });
 
+    it("strips a Bedrock :<version> suffix, not the model (regression)", () => {
+        // The old split(':').pop() returned "0" for a Bedrock id — never matching
+        // the configured id and collapsing every Bedrock model onto "0".
+        expect(
+            canonicalModelId("us.anthropic.claude-3-5-haiku-20241022-v1:0"),
+        ).toBe("us.anthropic.claude-3-5-haiku-20241022-v1");
+    });
+
     it("trims and tolerates null/empty", () => {
         expect(canonicalModelId("  gpt-4o  ")).toBe("gpt-4o");
         expect(canonicalModelId(null)).toBe("");
@@ -54,6 +62,21 @@ describe("resolveByokModelCost", () => {
         const byModel = [row("kimi-k2.7-code", 4.5)];
         const res = resolveByokModelCost("kimi-k2.7-code", byModel);
         expect(res).toMatchObject({ status: "ok", total: 4.5 });
+    });
+
+    it("matches a Bedrock model whose config id carries a :version suffix (regression)", () => {
+        // Config stores `...v1:0`; the usage row may carry the version or not.
+        // Both canonicalize to `...v1`, so the cost resolves instead of showing
+        // "No usage" — the Bedrock "cost not saving" symptom.
+        const configId = "us.anthropic.claude-3-5-haiku-20241022-v1:0";
+        for (const rowModel of [
+            "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+            "us.anthropic.claude-3-5-haiku-20241022-v1",
+        ]) {
+            expect(resolveByokModelCost(configId, [row(rowModel, 2.5)])).toMatchObject(
+                { status: "ok", total: 2.5 },
+            );
+        }
     });
 
     it("does NOT match gpt-4o against gpt-4o-mini (family safety, no startsWith)", () => {

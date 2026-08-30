@@ -15,6 +15,7 @@ import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import {
     BrainCircuitIcon,
     ExternalLinkIcon,
+    LockIcon,
     Settings2Icon,
 } from "lucide-react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
@@ -134,16 +135,33 @@ export const ByokAdvancedSettings = ({
     const customPlaceholder =
         caps?.reasoningOverrideExample ?? DEFAULT_REASONING_OVERRIDE_EXAMPLE;
 
-    // Temperature: hidden (not shown-but-ignored) for models that reject sampling
-    // params (OpenAI gpt-5/o-series, Anthropic 4.7+). Clearing the stored value
-    // matters as much as hiding: a config saved before the model was switched
-    // would otherwise keep submitting a temperature the provider 400s on.
-    const temperatureUnsupported = !!caps && !caps.supportsTemperature;
+    // Temperature: one policy from the provider drives the field's three states.
+    //   - unsupported → hide it AND clear the stored value (a config saved before
+    //     the model switched would otherwise 400 — OpenAI gpt-5/o-series, Claude 4.7+).
+    //   - fixed → lock it to the one sound value AND correct any other stored value
+    //     (e.g. a legacy 0) so the saved config matches what the model runs at
+    //     (always-thinking Anthropic-protocol: Kimi k2.7-code/k3, GLM-5.3 → 1).
+    //   - adjustable → editable (the default).
+    const temperature = caps?.temperature;
+    const temperatureUnsupported = temperature?.kind === "unsupported";
+    const temperatureFixedAt =
+        temperature?.kind === "fixed" ? temperature.value : undefined;
+    const currentTemperature = useWatch({ control, name: "temperature" });
     useEffect(() => {
-        if (temperatureUnsupported) {
+        if (temperatureUnsupported && currentTemperature !== null) {
             setValue("temperature", null, { shouldDirty: true });
+        } else if (
+            temperatureFixedAt != null &&
+            currentTemperature !== temperatureFixedAt
+        ) {
+            setValue("temperature", temperatureFixedAt, { shouldDirty: true });
         }
-    }, [temperatureUnsupported, setValue]);
+    }, [
+        temperatureUnsupported,
+        temperatureFixedAt,
+        currentTemperature,
+        setValue,
+    ]);
 
     // Reasoning: the toggle mirrors what the model can actually do. When the model
     // can't reason, lock it to Off; when it can but only at certain levels (e.g.
@@ -217,9 +235,12 @@ export const ByokAdvancedSettings = ({
                                     }
                                     onValueChange={(value) => {
                                         if (!value) return;
-                                        field.onChange(
-                                            value === "none" ? null : value,
-                                        );
+                                        // "Off" MUST persist as the explicit
+                                        // 'none' effort — mapping it to null made
+                                        // it indistinguishable from "unset", which
+                                        // the read resolves to the catalog default
+                                        // (medium), so Off could never be saved.
+                                        field.onChange(value);
                                     }}>
                                     {THINKING_OPTIONS.map((opt) => {
                                         // Off is always available; every other
@@ -312,13 +333,36 @@ export const ByokAdvancedSettings = ({
 
                     {/* ── Model Parameters ──────────────────── */}
                     <div className="grid grid-cols-2 gap-4">
-                        {!temperatureUnsupported && (
-                            <NumberField
-                                name="temperature"
-                                label="Temperature"
-                                placeholder="Default"
-                                helper="0 = deterministic, 2 = creative"
-                            />
+                        {temperatureFixedAt != null ? (
+                            <FormControl.Root>
+                                <FormControl.Label htmlFor="temperature">
+                                    Temperature
+                                </FormControl.Label>
+                                <FormControl.Input>
+                                    <Input
+                                        id="temperature"
+                                        type="number"
+                                        value={temperatureFixedAt}
+                                        readOnly
+                                        disabled
+                                        leftIcon={<LockIcon />}
+                                    />
+                                </FormControl.Input>
+                                <FormControl.Helper>
+                                    This model always reasons, and the protocol
+                                    requires temperature {temperatureFixedAt}{" "}
+                                    while thinking — so it&apos;s fixed.
+                                </FormControl.Helper>
+                            </FormControl.Root>
+                        ) : (
+                            !temperatureUnsupported && (
+                                <NumberField
+                                    name="temperature"
+                                    label="Temperature"
+                                    placeholder="Default"
+                                    helper="0 = deterministic, 2 = creative"
+                                />
+                            )
                         )}
                         <NumberField
                             name="maxOutputTokens"
@@ -330,9 +374,10 @@ export const ByokAdvancedSettings = ({
 
                     {temperatureUnsupported && (
                         <p className="text-text-tertiary text-xs text-pretty">
-                            Claude 4.7 and newer removed temperature — the
-                            provider rejects any request that sets it. Steer the
-                            model with the thinking level above instead.
+                            This model doesn&apos;t accept a temperature — the
+                            provider rejects any request that sets it (Claude
+                            4.7+, OpenAI GPT-5 / o-series). Steer it with the
+                            thinking level above instead.
                         </p>
                     )}
 

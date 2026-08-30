@@ -11,8 +11,6 @@ import {
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import axios from 'axios';
 
-import { isCustomEndpoint } from '@libs/llm/providers/provider-ui-descriptor';
-
 import { resolveByokSlot } from './byok-credentials.util';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 
@@ -62,29 +60,10 @@ export class GetModelsByProviderUseCase {
             : null;
         const listing = providerModule?.modelListing?.(provider) ?? null;
 
-        // The provider module's curated catalog (the well-known models a brand
-        // ships), mapped to the response shape. It's the fallback whenever a live
-        // `/models` call can't run — no listing / a `manual` listing, no key yet,
-        // or the fetch failed — so the picker lists a curated brand's models
-        // instead of forcing hand-entry. The live list takes over once possible.
-        const curatedFallback = (): ModelResponse | null => {
-            // A `*_compatible` custom endpoint points at the USER's own proxy —
-            // it is NOT the brand, so the brand's curated catalog (reached via the
-            // module alias) must not stand in for the user's real model list.
-            if (isCustomEndpoint(provider)) return null;
-            const curated = providerModule?.catalog;
-            if (!curated?.length) return null;
-            return {
-                provider: byokProvider,
-                models: curated.map((m) => ({ id: m.id, name: m.displayName })),
-            };
-        };
-
         if (!listing || listing.kind === 'manual') {
-            // A curated brand with a manual listing (e.g. Z.ai/GLM over the
-            // Anthropic protocol) still enumerates its curated models.
-            const curated = curatedFallback();
-            if (curated) return curated;
+            // A brand with a `manual` listing and no live `/models` call (e.g.
+            // Z.ai/GLM over the Anthropic protocol) can't be enumerated — the user
+            // types the model id manually.
             throw new BadRequestException(
                 `Model listing is not available for ${provider} — enter the model ID manually.`,
             );
@@ -117,15 +96,32 @@ export class GetModelsByProviderUseCase {
                 ? process.env[listing.baseURLEnv] || undefined
                 : undefined) ??
             listing.defaultBaseURL;
+        // Amazon Bedrock authenticates the list call with a bearer token + region
+        // (never an apiKey), resolved from the org's saved credential.
+        const awsBearerToken = creds?.awsBearerToken;
+        const awsRegion = creds?.awsRegion;
 
-        // No key yet — e.g. a NEW connect where the user hasn't typed or saved a
-        // key, so nothing resolves. The live `/models` call would 401, so fall
-        // back to the curated catalog: the big providers (OpenAI, …) still list
-        // their known models keyless, and the live list takes over once a key is
-        // supplied. Skipped when the caller passed a candidate key (strict live).
-        if (!apiKey) {
-            const curated = curatedFallback();
-            if (curated) return curated;
+        // The stand-in when the live call can't run: the http listing's own
+        // fallbackModels (e.g. Bedrock's curated profiles), if the listing declares
+        // any. No catalog fallback — a brand with no declared fallback surfaces the
+        // failure and the user types the model id.
+        const listingFallback = (): ModelResponse | null => {
+            if (listing.fallbackModels?.length) {
+                return {
+                    provider: byokProvider,
+                    models: listing.fallbackModels,
+                };
+            }
+            return null;
+        };
+
+        // No usable creds yet (no api key AND no bearer token) — a NEW connect
+        // where nothing resolves. The live call would 401, so fall back to the
+        // curated list; the live list takes over once creds are supplied. Skipped
+        // when the caller passed a candidate key (strict live).
+        if (!apiKey && !awsBearerToken) {
+            const fb = listingFallback();
+            if (fb) return fb;
         }
 
         if (listing.requiresBaseURL) {
@@ -141,13 +137,23 @@ export class GetModelsByProviderUseCase {
         }
 
         try {
-            const response = await axios.get(listing.url({ apiKey, baseURL }), {
-                headers: listing.headers({ apiKey, baseURL }),
-                // baseURL-driven providers: never follow redirects (a public URL
-                // could 302 onto a private IP / metadata endpoint past the guard).
-                ...(listing.requiresBaseURL ? { maxRedirects: 0 } : {}),
-                ...(listing.timeoutMs ? { timeout: listing.timeoutMs } : {}),
-            });
+            const response = await axios.get(
+                listing.url({ apiKey, baseURL, awsBearerToken, awsRegion }),
+                {
+                    headers: listing.headers({
+                        apiKey,
+                        baseURL,
+                        awsBearerToken,
+                        awsRegion,
+                    }),
+                    // baseURL-driven providers: never follow redirects (a public URL
+                    // could 302 onto a private IP / metadata endpoint past the guard).
+                    ...(listing.requiresBaseURL ? { maxRedirects: 0 } : {}),
+                    ...(listing.timeoutMs
+                        ? { timeout: listing.timeoutMs }
+                        : {}),
+                },
+            );
 
             return {
                 provider: byokProvider,
@@ -160,8 +166,21 @@ export class GetModelsByProviderUseCase {
             // model id" fallback) rather than masking a bad key behind the curated
             // list. Only the keyless/saved path degrades to the curated catalog.
             if (!candidateKey) {
-                const curated = curatedFallback();
-                if (curated) return curated;
+                const fb = listingFallback();
+                if (fb) {
+                    // Degrading to the curated list is otherwise invisible — the
+                    // picker just shows a static set and the user reads it as
+                    // "live". Log WHY so an expired/invalid saved credential (e.g.
+                    // a lapsed Bedrock bearer token → 403 "Bearer Token has
+                    // expired") is diagnosable instead of silent.
+                    this.logger.warn({
+                        message: `Live model listing for ${provider} failed; served curated fallback`,
+                        context: GetModelsByProviderUseCase.name,
+                        error: error as Error,
+                        metadata: { provider },
+                    });
+                    return fb;
+                }
             }
             throw new BadRequestException(
                 `Error fetching ${provider} models: ${(error as Error).message}`,
