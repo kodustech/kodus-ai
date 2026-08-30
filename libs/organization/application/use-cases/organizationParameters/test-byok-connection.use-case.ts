@@ -1025,7 +1025,26 @@ export class TestByokConnectionUseCase {
         };
     }
 
+    private timeoutResult(latencyMs: number): TestByokResult {
+        return {
+            ok: false,
+            code: 'network',
+            latencyMs,
+            message: `The request timed out after ${TEST_TIMEOUT_MS}ms. The provider may be slow or unreachable from this deployment — retry or check outbound network.`,
+        };
+    }
+
     private normalizeError(err: unknown, latencyMs: number): TestByokResult {
+        // Native-fetch probes (Codex) enforce their deadline through
+        // AbortSignal.timeout, which rejects with a DOMException named
+        // TimeoutError (or AbortError on an explicit abort). Give it the
+        // same classification the axios timeout codes get below. Matched by
+        // name because the DOMException can cross JS realms (jest vm), where
+        // instanceof Error does not hold.
+        const errName = (err as { name?: unknown } | null | undefined)?.name;
+        if (errName === 'TimeoutError' || errName === 'AbortError') {
+            return this.timeoutResult(latencyMs);
+        }
         if (axios.isAxiosError(err)) {
             const status = err.response?.status;
             if (typeof status === 'number') {
@@ -1037,12 +1056,7 @@ export class TestByokConnectionUseCase {
             }
 
             if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
-                return {
-                    ok: false,
-                    code: 'network',
-                    latencyMs,
-                    message: `The request timed out after ${TEST_TIMEOUT_MS}ms. The provider may be slow or unreachable from this deployment — retry or check outbound network.`,
-                };
+                return this.timeoutResult(latencyMs);
             }
 
             if (

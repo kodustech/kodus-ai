@@ -273,6 +273,35 @@ describe('TestByokConnectionUseCase ChatGPT subscription', () => {
         }
     });
 
+    it('classifies an AbortSignal timeout as a network failure, not unknown', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockRejectedValue(
+            new DOMException(
+                'The operation was aborted due to timeout',
+                'TimeoutError',
+            ),
+        ) as typeof fetch;
+        const useCase = new TestByokConnectionUseCase(
+            providerService as unknown as ProviderService,
+        );
+
+        try {
+            await expect(
+                useCase.execute({
+                    provider: 'chatgpt_subscription',
+                    codexAccessToken: 'access-token',
+                    codexRefreshToken: 'refresh-token',
+                    accountId: 'account-id',
+                }),
+            ).resolves.toMatchObject({
+                ok: false,
+                code: 'network',
+            });
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
     it('rejects incomplete token credentials before making a request', async () => {
         const useCase = new TestByokConnectionUseCase(
             providerService as unknown as ProviderService,
