@@ -407,6 +407,43 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         });
     });
 
+    it('does not count a repo read as an action the agent performed', async () => {
+        const sandbox = {
+            type: 'e2b',
+            remoteCommands: {
+                grep: jest.fn().mockResolvedValue(''),
+                read: jest.fn().mockResolvedValue(''),
+                listDir: jest.fn().mockResolvedValue(''),
+            },
+        };
+
+        captured.length = 0;
+        scriptedModel.current = recordingModel([
+            { toolName: 'grep', input: { pattern: 'retry' } },
+            'Looked at the file.',
+        ]);
+        await buildProvider().execute('@kody what does this do?', {
+            organizationAndTeamData: ORGANIZATION_AND_TEAM_DATA,
+            thread: { id: 'TR-cmc-sandbox' },
+            prepareContext: scenarioById('no-durable-signal').prepareContext,
+            sandbox,
+        } as never);
+
+        expect(sandbox.remoteCommands.grep).toHaveBeenCalled();
+
+        // The step after the grep still has to read as "nothing performed":
+        // treating a read as an action is what lets the agent claim it acted.
+        const note = captured
+            .at(-1)!
+            .conversation.match(/ACTIONS PERFORMED THIS TURN:[^\n]*/)?.[0];
+        expect(note).toBeDefined();
+        expect(note).toContain('none');
+        expect(note).not.toContain('grep');
+        expect(
+            logged.filter((e: any) => e?.metadata?.tool === 'grep'),
+        ).toHaveLength(0);
+    });
+
     it('stays quiet when the thread reveals nothing worth persisting', async () => {
         const turn = await runTurn(scenarioById('no-durable-signal'));
 

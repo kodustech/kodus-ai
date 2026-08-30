@@ -7,9 +7,10 @@
  * are exactly the ones worth seeing in a log.
  *
  * Which tools those are is NOT listed here: it comes from each tool's own MCP
- * `readOnlyHint`. A tool that does not declare one is treated as a write, so a
- * server that omits its annotations is over-logged rather than silently
- * unaudited.
+ * `readOnlyHint`. An MCP tool that does not declare one is treated as a write,
+ * so a server that omits its annotations is over-logged rather than silently
+ * unaudited. Tools that never came from MCP at all — the sandbox's grep,
+ * readFile, listDir and exec — are not org state and stay out of this entirely.
  */
 import type { Tool } from 'ai';
 
@@ -31,6 +32,20 @@ export function isConversationWriteTool(
 }
 
 /**
+ * Whether a bound tool changes org state, by name. Presence in the metadata map
+ * is what marks a tool as MCP-served: `connectMcpTools` records an entry for
+ * every tool it connects, even an empty one, so an absent key means the tool is
+ * local (sandbox) rather than a server that forgot to annotate.
+ */
+export function writeToolPredicate(
+    metadata: Record<string, McpToolMetadata>,
+): (name: string) => boolean {
+    return (name) =>
+        Object.prototype.hasOwnProperty.call(metadata, name) &&
+        isConversationWriteTool(metadata[name]);
+}
+
+/**
  * Return the tool map with every write tool wrapped so `onWrite` sees the call.
  * Read tools are passed through by reference — nothing to audit, nothing to pay.
  */
@@ -41,11 +56,10 @@ export function auditWriteTools(
 ): Record<string, Tool> {
     const audited: Record<string, Tool> = {};
 
+    const isWrite = writeToolPredicate(metadata);
+
     for (const [name, tool] of Object.entries(tools)) {
-        if (
-            !isConversationWriteTool(metadata[name]) ||
-            typeof tool.execute !== 'function'
-        ) {
+        if (!isWrite(name) || typeof tool.execute !== 'function') {
             audited[name] = tool;
             continue;
         }

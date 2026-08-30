@@ -33,7 +33,7 @@ import { buildNativeTools } from '../ai-sdk/native-tools';
 import { withVerifiedOutcome } from './conversation-outcome';
 import {
     auditWriteTools,
-    isConversationWriteTool,
+    writeToolPredicate,
     type WriteToolEvent,
 } from './conversation-tool-audit';
 import { WriteTruthPolicy } from './write-truth.policy';
@@ -158,6 +158,8 @@ export class ConversationAgentProvider {
         // model sees mid-run and the footer the developer reads at the end.
         const writes: WriteToolEvent[] = [];
 
+        // Sandbox tools are spread in AFTER auditing: they read the checked-out
+        // repo, never org state, so a grep is not an action the agent performed.
         const tools: Record<string, Tool> = auditWriteTools(
             {
                 ...mcp.tools,
@@ -166,8 +168,10 @@ export class ConversationAgentProvider {
             mcp.metadata,
             (event) => (
                 writes.push(event),
-                this.logger.log({
-                    message: `Conversation agent called write tool ${event.tool}`,
+                this.logger[event.error ? 'error' : 'log']({
+                    message: event.error
+                        ? `Conversation agent write tool ${event.tool} failed`
+                        : `Conversation agent called write tool ${event.tool}`,
                     context: ConversationAgentProvider.name,
                     serviceName: ConversationAgentProvider.name,
                     metadata: {
@@ -204,11 +208,7 @@ export class ConversationAgentProvider {
             spanName: 'ConversationalAgent::conversationAgent',
             systemPrompt: buildSystemPrompt(userLanguage),
             tools: new AiSdkToolRegistry(tools),
-            policies: [
-                new WriteTruthPolicy((name) =>
-                    isConversationWriteTool(mcp.metadata[name]),
-                ),
-            ],
+            policies: [new WriteTruthPolicy(writeToolPredicate(mcp.metadata))],
             maxSteps: CONVERSATION_MAX_STEPS,
             // Conversation keeps its own max-output default when the slot omits one.
             maxOutputTokens: this.maxOutputTokensFallback,

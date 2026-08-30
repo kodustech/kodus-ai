@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
     auditWriteTools,
     isConversationWriteTool,
+    writeToolPredicate,
     type WriteToolEvent,
 } from './conversation-tool-audit';
 
@@ -54,6 +55,19 @@ describe('auditWriteTools', () => {
         expect(seen[0].error).toBe('boom');
     });
 
+    it('leaves the sandbox tools out of the write path entirely', async () => {
+        const seen: WriteToolEvent[] = [];
+        // grep/readFile/listDir/exec are built locally, not served over MCP, so
+        // they carry no annotations — that absence must not read as "a write".
+        const tools = auditWriteTools({ grep: stub('matches') }, {}, (e) =>
+            seen.push(e),
+        );
+
+        await tools.grep.execute!({}, {} as any);
+
+        expect(seen).toHaveLength(0);
+    });
+
     it('leaves read tools untouched', () => {
         const read = stub('memories');
         const tools = auditWriteTools(
@@ -76,17 +90,31 @@ describe('auditWriteTools', () => {
         expect(isConversationWriteTool({ readOnlyHint: true })).toBe(false);
     });
 
-    it('audits a tool that declares nothing rather than letting a write slip', () => {
+    it('still audits an MCP tool that declares nothing', async () => {
         const seen: WriteToolEvent[] = [];
+        // Present in the metadata map but with no annotations — a third-party
+        // server that told us nothing. Assume it writes.
         const tools = auditWriteTools(
             { SOME_THIRD_PARTY_TOOL: stub('ok') },
-            {},
+            { SOME_THIRD_PARTY_TOOL: {} },
             (e) => seen.push(e),
         );
 
-        expect(isConversationWriteTool(undefined)).toBe(true);
-        return tools.SOME_THIRD_PARTY_TOOL.execute!({}, {} as any).then(() =>
-            expect(seen).toHaveLength(1),
-        );
+        await tools.SOME_THIRD_PARTY_TOOL.execute!({}, {} as any);
+
+        expect(seen).toHaveLength(1);
+    });
+
+    it('names a tool a write only when MCP served it', () => {
+        const isWrite = writeToolPredicate({
+            KODUS_CREATE_MEMORY: { readOnlyHint: false },
+            KODUS_FIND_MEMORIES: { readOnlyHint: true },
+            SOME_THIRD_PARTY_TOOL: {},
+        });
+
+        expect(isWrite('KODUS_CREATE_MEMORY')).toBe(true);
+        expect(isWrite('KODUS_FIND_MEMORIES')).toBe(false);
+        expect(isWrite('SOME_THIRD_PARTY_TOOL')).toBe(true);
+        expect(isWrite('grep')).toBe(false);
     });
 });
