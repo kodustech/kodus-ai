@@ -31,7 +31,7 @@ export class WriteTruthPolicy implements AgentPolicy {
 
         const content = executed.length
             ? `ACTIONS PERFORMED THIS TURN: ${executed.join(', ')}. Report these and nothing else — do not describe any other action as done.`
-            : 'ACTIONS PERFORMED THIS TURN: none. Nothing has changed yet, so do not say you saved, created, recorded or updated anything. If the developer just asked you to act, call the tool now — you may report it only once the call has returned.';
+            : 'ACTIONS PERFORMED THIS TURN: none. Nothing has changed yet, so do not say you saved, created, recorded or updated anything — you may report an action only once its tool call has returned.';
 
         return { injectNote: { role: 'user', content } };
     }

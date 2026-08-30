@@ -1,7 +1,9 @@
 import { stripToolLinks, withVerifiedOutcome } from './conversation-outcome';
 
-const REAL = 'https://app.kodus.io/settings/code-review/7/kody-rules/real-abc?tab=memories';
-const FAKE = 'https://app.kodus.io/settings/code-review/7/kody-rules/fake-999?tab=memories';
+const REAL =
+    'https://app.kodus.io/settings/code-review/7/kody-rules/real-abc?tab=memories';
+const FAKE =
+    'https://app.kodus.io/settings/code-review/7/kody-rules/fake-999?tab=memories';
 
 const wrote = (link = REAL) => [
     {
@@ -71,7 +73,8 @@ describe('withVerifiedOutcome', () => {
 
 describe('stripToolLinks', () => {
     it('leaves unrelated links alone', () => {
-        const text = 'See https://github.com/kodustech/kodus-ai/pull/1 for context.';
+        const text =
+            'See https://github.com/kodustech/kodus-ai/pull/1 for context.';
 
         expect(stripToolLinks(text)).toContain('github.com/kodustech');
     });

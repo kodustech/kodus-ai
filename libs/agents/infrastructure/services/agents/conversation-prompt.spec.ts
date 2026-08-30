@@ -175,8 +175,15 @@ describe('proactive actions', () => {
     it('keeps the write path opt-in behind the developer confirmation', () => {
         const prompt = userPrompt(withOrgTools);
 
-        expect(prompt).toMatch(/NEVER call/);
-        expect(prompt).toMatch(/confirm/i);
+        expect(prompt).toMatch(/Default to OFFERING/);
+        expect(prompt).toMatch(/ONLY when/);
+    });
+
+    it('spells out that an explanation is not a request to act', () => {
+        const prompt = userPrompt(withOrgTools);
+
+        expect(prompt).toMatch(/is NOT a request to act/);
+        expect(prompt).toMatch(/unsure whether you were asked, you were not/i);
     });
 
     it('forbids restating a past action as if it just happened', () => {

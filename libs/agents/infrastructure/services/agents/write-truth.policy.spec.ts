@@ -41,10 +41,13 @@ describe('WriteTruthPolicy', () => {
         expect(note).toMatch(/do not say you saved/i);
     });
 
-    it('still lets a direct request be acted on', () => {
+    it('constrains the claim without nudging the model to act', () => {
         const note = policy.prepareStep(view([]))?.injectNote?.content ?? '';
 
-        expect(note).toMatch(/call the tool now/i);
+        expect(note).toMatch(/only once its tool call has returned/i);
+        // Whether to act is the prompt's rule, not this note's business —
+        // encouraging it here made the agent write without being asked.
+        expect(note).not.toMatch(/call the tool now/i);
     });
 
     it('names the writes that did run', () => {
