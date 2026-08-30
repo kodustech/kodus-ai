@@ -82,13 +82,10 @@ export function describeProviderId(
             listingRequiresUserBaseUrl(listing) ||
             requiresField('baseURL'),
         // Custom endpoints can't be pre-listed (endpoint unknown until entered).
-        // A curated BRAND (its module ships a `catalog`) is enumerable even when
-        // its live listing is `manual` — the picker offers the curated models
-        // (e.g. Z.ai/GLM, whose Anthropic-protocol module has no `/models` call).
-        autoListModels:
-            !custom &&
-            (listingIsAutoListable(listing) ||
-                (module.catalog?.length ?? 0) > 0),
+        // A brand with a `manual` listing and no live `/models` call (e.g. Z.ai/GLM
+        // over the Anthropic protocol) is NOT auto-listable — the user types the
+        // model id manually.
+        autoListModels: !custom && listingIsAutoListable(listing),
         // A LIVE `/models` call — an `http` listing whose base URL resolves
         // without the user (a native brand like OpenAI). Custom endpoints also
         // list over http but their URL is unknown until typed, so they stay on

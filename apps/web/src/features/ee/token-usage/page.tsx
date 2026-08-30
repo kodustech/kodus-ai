@@ -16,6 +16,7 @@ import {
 } from "@services/usage/types";
 import { CookieName } from "src/core/utils/cookie";
 import { getGlobalSelectedTeamId } from "src/core/utils/get-global-selected-team-id";
+import { getLLMConfigStatus } from "@services/organizationParameters/fetch";
 import { isBYOKSubscriptionPlan } from "src/features/ee/byok/_utils";
 import { getSelectedDateRange } from "src/features/ee/cockpit/_helpers/get-selected-date-range";
 import { validateOrganizationLicense } from "src/features/ee/subscription/_services/billing/fetch";
@@ -82,11 +83,27 @@ export default async function TokenUsagePage({
         getSelectedDateRange(),
     ]);
 
-    const subscription = await validateOrganizationLicense({ teamId }).catch(
-        () => null,
-    );
+    const [subscription, llmConfigStatus] = await Promise.all([
+        validateOrganizationLicense({ teamId }).catch(() => null),
+        getLLMConfigStatus().catch(() => null),
+    ]);
 
-    const isBYOK = subscription ? isBYOKSubscriptionPlan(subscription) : false;
+    // Which usage bucket the screen queries. The backend records env/managed
+    // LLM usage as isByok=false (the byok=false "managed" view) and BYOK-slot
+    // usage as isByok=true. On self-hosted the plan flag is ALWAYS true, so
+    // keying the view off the plan (isBYOKSubscriptionPlan) queries the empty
+    // BYOK view for an install that actually runs the env/managed LLM — every
+    // card reads zero even though usage IS recorded. Pick the view from the
+    // ACTUAL configured source instead; the license check stays the
+    // precondition and cloud keeps the plan-based flag unchanged.
+    const isSelfHosted =
+        subscription?.subscriptionStatus === "self-hosted" ||
+        subscription?.subscriptionStatus === "licensed-self-hosted";
+    const isBYOK = isSelfHosted
+        ? llmConfigStatus?.source === "byok"
+        : subscription
+          ? isBYOKSubscriptionPlan(subscription)
+          : false;
     const isTrial = subscription?.subscriptionStatus === "trial";
 
     const filters = {

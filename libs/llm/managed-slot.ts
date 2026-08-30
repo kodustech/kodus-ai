@@ -215,6 +215,40 @@ export function resolveEnvProvider(): EnvProviderResolution | null {
     return null;
 }
 
+/** The env kind → the BYOK provider id its model is built + reasoned under. Same
+ *  mapping `resolveManagedSlot`'s switch uses to pick the SDK/module, kept here as
+ *  the reasoning-only projection (no model build, no key). */
+const ENV_KIND_TO_PROVIDER: Record<
+    EnvProviderResolution['kind'],
+    BYOKProvider
+> = {
+    gemini_studio: BYOKProvider.GOOGLE_GEMINI,
+    gemini_vertex: BYOKProvider.GOOGLE_VERTEX,
+    claude_vertex: BYOKProvider.GOOGLE_VERTEX,
+    claude_anthropic: BYOKProvider.ANTHROPIC,
+    openai_compat: BYOKProvider.OPENAI_COMPATIBLE,
+    vertex_adc: BYOKProvider.GOOGLE_VERTEX,
+};
+
+/**
+ * The self-hosted env model as a `{ provider, model }` descriptor — the SAME
+ * provider+model `resolveManagedSlot` builds, minus the credential and the SDK
+ * build. `resolveModelConfig` uses it to compute reasoning for the env-managed
+ * path (where the routed slot is `undefined`), so an env-configured Opus/Kimi/GLM
+ * gets the identical family-default reasoning a connected BYOK slot of the same
+ * model would — the "uniform env + BYOK" the one funnel promises. `undefined` on
+ * cloud (`API_LLM_PROVIDER_MODEL` unset/auto) → the caller's own default decides.
+ */
+export function envManagedReasoningDescriptor():
+    | { provider: BYOKProvider; model: string }
+    | undefined {
+    const env = resolveEnvProvider();
+    if (!env) return undefined;
+    const model = process.env.API_LLM_PROVIDER_MODEL;
+    if (!model) return undefined;
+    return { provider: ENV_KIND_TO_PROVIDER[env.kind], model };
+}
+
 /**
  * Managed/env-default resolution result (Wave 3).
  *

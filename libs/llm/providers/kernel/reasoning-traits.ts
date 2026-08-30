@@ -99,15 +99,49 @@ export function resolveCompatibleReasoningTraits(
         };
     }
 
-    // Unknown Anthropic-compatible upstream: assume Anthropic semantics (thinks,
-    // forced tool_choice rejects thinking) but disable-able — the safe suppress
-    // path that has worked in production (matches prior behavior for k2.6).
+    // Unknown compatible upstream (a self-hosted Llama/vLLM, a generic proxy, any
+    // id we don't recognize). Two DIFFERENT safe defaults, one per consumer:
+    //   - `thinksByDefault: false` — we must NOT proactively FORCE a `thinking`
+    //     param onto a model we can't confirm reasons (it could 400 on a plain
+    //     Llama endpoint). So the reasoning-effort default stays unset and the
+    //     caller's own default (usually 'none' → no thinking) decides; a user who
+    //     DOES want thinking on their custom model sets the slot effort explicitly.
+    //   - the forced-tool_choice traits stay CONSERVATIVE (assume thinking, allow
+    //     suppress) — that path only ever SENDS a disable, never forces thinking,
+    //     so it can't break a non-reasoning upstream while it protects a reasoning
+    //     one. (`planStructuredCall` reads these, not `thinksByDefault`.)
     return {
-        thinksByDefault: true,
+        thinksByDefault: false,
         canDisableThinking: true,
         supportsForcedToolChoice: true,
         forcedToolChoiceRejectsThinking: true,
     };
+}
+
+/**
+ * The temperature policy for a compatible-protocol model, DERIVED from its family
+ * reasoning traits — a MODEL rule, transport-agnostic. An always-thinking model
+ * (Kimi k2.7-code/k3, GLM-5.3) reasons unconditionally and pins temperature to 1
+ * while thinking, so 1 is its only sound value; disable-able / non-reasoning ones
+ * keep a free temperature. Shared by every transport that can host these models
+ * (Anthropic-protocol brands, openai_compatible, Novita) so the same Kimi obeys
+ * the same rule on any endpoint. Returns `undefined` for a model with no id so a
+ * caller can fall through to its own default.
+ */
+export function compatibleTemperaturePolicy(
+    model?: string,
+): { kind: 'fixed'; value: number } | { kind: 'adjustable' } {
+    const t = resolveCompatibleReasoningTraits(model);
+    return t.thinksByDefault && !t.canDisableThinking
+        ? { kind: 'fixed', value: 1 }
+        : { kind: 'adjustable' };
+}
+
+/** Whether a compatible-protocol id is a KNOWN reasoning model (Kimi/GLM/DeepSeek)
+ *  — the gate for advertising reasoning + applying the family rules on a generic
+ *  OpenAI-protocol aggregator (Novita) that also hosts non-reasoning models. */
+export function isCompatibleReasoner(model?: string): boolean {
+    return resolveCompatibleReasoningTraits(model).thinksByDefault;
 }
 
 export type StructuredOutputMode = 'json_schema' | 'json_object' | 'none';

@@ -24,7 +24,7 @@ import {
     SlidersHorizontalIcon,
 } from "lucide-react";
 
-import { useCatalog } from "../../_data/catalog-context";
+import { formatModelLabel } from "../../_data/model-label";
 import type { BYOKConfig, BYOKRouting, LlmTask } from "../../_types";
 import { groupModelsByProvider } from "../../_utils";
 import { buildByokBlob } from "../byok-write";
@@ -93,7 +93,6 @@ export const RoutingTab = ({
     onScrolled,
 }: RoutingTabProps) => {
     const router = useRouter();
-    const catalog = useCatalog();
 
     // Scroll to (and briefly flash) the row a "Used in" chip deep-linked to.
     // Runs on mount because the tab switch remounts this panel with the anchor
@@ -130,18 +129,15 @@ export const RoutingTab = ({
                 m.capabilities,
             ]),
         );
-        // Curated label override, keyed by the model string a BYOKModelConfig
-        // stores (BYOKModelConfig.model === curated `id`) — backend-sourced catalog.
-        const curatedById = new Map(catalog.map((m) => [m.id, m]));
         return groupModelsByProvider(config).flatMap((group) =>
             group.models.map((m) => ({
                 id: m.id,
-                label: curatedById.get(m.model)?.displayName ?? m.model,
+                label: formatModelLabel(m.model),
                 provider: group.credential.provider,
                 capabilities: capsById.get(m.id),
             })),
         );
-    }, [config, llmConfigStatus, catalog]);
+    }, [config, llmConfigStatus]);
 
     const routing = config?.routing ?? {};
     const [defaultModelId, setDefaultModelId] = useState<string | undefined>(

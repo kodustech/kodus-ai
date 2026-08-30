@@ -22,12 +22,13 @@ import {
     rechartsGridProps,
 } from "../../cockpit/_components/charts/recharts-shared";
 
-// Stacked bottom→top. Input is decomposed into uncached input + cache read
-// so the (discounted) cache spend is visible, matching the KPI cards
-// (Uncached input / Cache read / Output / Reasoning).
+// Stacked bottom→top. Input is decomposed into uncached input + cache read +
+// cache write so each priced bucket is visible on its own band, matching the
+// KPI cards (Uncached input / Cache read / Cache write / Output / Reasoning).
 const SERIES = [
     { key: "input", label: "Input", color: CHART_COLORS.info },
-    { key: "cacheRead", label: "Cache", color: CHART_COLORS.purple },
+    { key: "cacheRead", label: "Cache read", color: CHART_COLORS.purple },
+    { key: "cacheWrite", label: "Cache write", color: CHART_COLORS.muted },
     { key: "output", label: "Output", color: CHART_COLORS.success },
     { key: "outputReasoning", label: "Reasoning", color: CHART_COLORS.warning },
 ] as const;
@@ -178,15 +179,20 @@ export const Chart = ({
                 return {
                     input: cost.uncachedInput,
                     cacheRead: cost.cacheRead,
+                    cacheWrite: cost.cacheWrite,
                     output: cost.output,
                     outputReasoning: cost.reasoning,
                 };
             }
             const cacheRead = d.cacheRead ?? 0;
+            const cacheWrite = d.cacheWrite ?? 0;
             const reasoning = d.outputReasoning || 0;
             return {
-                input: Math.max(0, (d.input || 0) - cacheRead),
+                // ai@7: input = noCache + cacheRead + cacheWrite; the "Input"
+                // band is the noCache remainder so the bands stay disjoint.
+                input: Math.max(0, (d.input || 0) - cacheRead - cacheWrite),
                 cacheRead,
+                cacheWrite,
                 output: Math.max(0, (d.output || 0) - reasoning),
                 outputReasoning: reasoning,
             };
@@ -279,9 +285,15 @@ export const Chart = ({
     // (by-review's "#PR · shortId").
     const formatLabel = (x: string) => {
         if (filterType === "daily") {
+            // The daily key is a UTC calendar date ("YYYY-MM-DD") from the
+            // backend's $dateToString(timezone:'UTC'). Render it in UTC too —
+            // without this, new Date("2026-08-28") is parsed as UTC midnight and
+            // toLocaleDateString shifts it into the viewer's zone, so anyone west
+            // of UTC (e.g. BRT −3) sees the PREVIOUS day ("Aug 27" for Aug 28).
             return new Date(x).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
+                timeZone: "UTC",
             });
         }
         return x;

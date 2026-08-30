@@ -11,8 +11,6 @@ import {
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import axios from 'axios';
 
-import { isCustomEndpoint } from '@libs/llm/providers/provider-ui-descriptor';
-
 import { resolveByokSlot } from './byok-credentials.util';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
 
@@ -62,29 +60,10 @@ export class GetModelsByProviderUseCase {
             : null;
         const listing = providerModule?.modelListing?.(provider) ?? null;
 
-        // The provider module's curated catalog (the well-known models a brand
-        // ships), mapped to the response shape. It's the fallback whenever a live
-        // `/models` call can't run — no listing / a `manual` listing, no key yet,
-        // or the fetch failed — so the picker lists a curated brand's models
-        // instead of forcing hand-entry. The live list takes over once possible.
-        const curatedFallback = (): ModelResponse | null => {
-            // A `*_compatible` custom endpoint points at the USER's own proxy —
-            // it is NOT the brand, so the brand's curated catalog (reached via the
-            // module alias) must not stand in for the user's real model list.
-            if (isCustomEndpoint(provider)) return null;
-            const curated = providerModule?.catalog;
-            if (!curated?.length) return null;
-            return {
-                provider: byokProvider,
-                models: curated.map((m) => ({ id: m.id, name: m.displayName })),
-            };
-        };
-
         if (!listing || listing.kind === 'manual') {
-            // A curated brand with a manual listing (e.g. Z.ai/GLM over the
-            // Anthropic protocol) still enumerates its curated models.
-            const curated = curatedFallback();
-            if (curated) return curated;
+            // A brand with a `manual` listing and no live `/models` call (e.g.
+            // Z.ai/GLM over the Anthropic protocol) can't be enumerated — the user
+            // types the model id manually.
             throw new BadRequestException(
                 `Model listing is not available for ${provider} — enter the model ID manually.`,
             );
@@ -123,8 +102,9 @@ export class GetModelsByProviderUseCase {
         const awsRegion = creds?.awsRegion;
 
         // The stand-in when the live call can't run: the http listing's own
-        // fallbackModels (e.g. Bedrock's curated profiles) if declared, else the
-        // module's curated catalog.
+        // fallbackModels (e.g. Bedrock's curated profiles), if the listing declares
+        // any. No catalog fallback — a brand with no declared fallback surfaces the
+        // failure and the user types the model id.
         const listingFallback = (): ModelResponse | null => {
             if (listing.fallbackModels?.length) {
                 return {
@@ -132,7 +112,7 @@ export class GetModelsByProviderUseCase {
                     models: listing.fallbackModels,
                 };
             }
-            return curatedFallback();
+            return null;
         };
 
         // No usable creds yet (no api key AND no bearer token) — a NEW connect
@@ -166,11 +146,14 @@ export class GetModelsByProviderUseCase {
                         awsBearerToken,
                         awsRegion,
                     }),
-                // baseURL-driven providers: never follow redirects (a public URL
-                // could 302 onto a private IP / metadata endpoint past the guard).
-                ...(listing.requiresBaseURL ? { maxRedirects: 0 } : {}),
-                ...(listing.timeoutMs ? { timeout: listing.timeoutMs } : {}),
-            });
+                    // baseURL-driven providers: never follow redirects (a public URL
+                    // could 302 onto a private IP / metadata endpoint past the guard).
+                    ...(listing.requiresBaseURL ? { maxRedirects: 0 } : {}),
+                    ...(listing.timeoutMs
+                        ? { timeout: listing.timeoutMs }
+                        : {}),
+                },
+            );
 
             return {
                 provider: byokProvider,

@@ -34,6 +34,7 @@ export async function formatSuggestionContent(
         customWritingGuidelines?: string;
         byokConfig?: NormalizedModel;
         languageResultPrompt?: string;
+        organizationId?: string;
     },
 ): Promise<Map<number, FormattedSuggestion>> {
     if (suggestions.length === 0) {
@@ -60,6 +61,9 @@ export async function formatSuggestionContent(
             }),
             runName: 'suggestion-formatter',
             timeoutMs: FORMAT_TIMEOUT_MS,
+            // Stamp the org so this pass's usage/cost lands in the org's
+            // token-usage view instead of being recorded org-less (dropped).
+            organizationId: options?.organizationId,
         });
 
         const { formatted, parseOk } = parseFormatResponse(text || '');

@@ -44,9 +44,44 @@ interface LegacyUsageFallbacks {
 // the reader chains defensively with `?.` — so accept any subset. A real ai@7
 // `LanguageModelUsage` is still assignable (more specific → deep-partial).
 export type AiSdkUsageInput =
-    | (DeepPartial<LanguageModelUsage> & LegacyUsageFallbacks)
-    | null
-    | undefined;
+    (DeepPartial<LanguageModelUsage> & LegacyUsageFallbacks) | null | undefined;
+
+/** Shape of the AI SDK errors that carry the usage of a call the provider
+ *  already answered (and billed) — `NoObjectGeneratedError` and its wrappers. */
+interface UsageCarryingError {
+    usage?: AiSdkUsageInput;
+    finishReason?: string;
+    cause?: unknown;
+}
+
+/**
+ * Usage hanging off a FAILED AI SDK call. A structured call that dies in the
+ * output parse (`AI_NoObjectGeneratedError`: schema mismatch, unparseable
+ * object) was still answered by the provider and still billed — the SDK hands
+ * the usage back on the error. Dropping it is spend that exists in Langfuse and
+ * nowhere in the cost pipeline (the `structuredRecovery` leak).
+ *
+ * Returns undefined when the error carries no usage or an all-zero one, so a
+ * transport failure (timeout, 429, connection reset — nothing was generated)
+ * never writes a zero-token cost span.
+ */
+export function readAiSdkUsageFromError(
+    err: unknown,
+): { usage: AiSdkUsage; finishReason?: string } | undefined {
+    const e = (err ?? {}) as UsageCarryingError;
+    const cause = (e.cause ?? {}) as UsageCarryingError;
+    const raw = e.usage ?? cause.usage;
+    if (!raw) return undefined;
+
+    const usage = readAiSdkUsage(raw);
+    const billed =
+        (usage.inputTokens ?? 0) +
+        (usage.outputTokens ?? 0) +
+        (usage.totalTokens ?? 0);
+    if (billed <= 0) return undefined;
+
+    return { usage, finishReason: e.finishReason ?? cause.finishReason };
+}
 
 /** Map an AI SDK usage object onto {@link AiSdkUsage}. Null/undefined-safe. */
 export function readAiSdkUsage(usage: AiSdkUsageInput): AiSdkUsage {

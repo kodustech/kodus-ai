@@ -27,12 +27,10 @@ import type {
 import type { TemperaturePolicy } from '../kernel/model-types';
 import {
     resolveCompatibleReasoningTraits,
+    compatibleTemperaturePolicy,
     type ModelReasoningTraits,
 } from '../kernel/reasoning-traits';
-import {
-    normalizeSdkResult,
-    normalizeSdkUsage,
-} from '../kernel/usage';
+import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 
 const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
     none: 0,
@@ -54,83 +52,6 @@ export const anthropicModule: ProviderModule = {
     doc: 'https://docs.anthropic.com/en/docs/about-claude/models',
 
     settingsSchema: z.object({ baseURL: z.string().optional() }),
-
-    // Curated Anthropic models — the brand owns its own catalog (migrated from the
-    // web `curated-models.json`). Native transport, so no per-model `provider`
-    // override; the aggregator stamps providerKey/providerDisplayName = anthropic.
-    catalog: [
-        {
-            id: 'claude-sonnet-4-6',
-            displayName: 'Claude Sonnet 4.6',
-            tier: 'recommended',
-            recommendationLabel: 'Best balance',
-            benchmarkScore: 88,
-            description:
-                'Latest Anthropic Sonnet. Strong balance of quality and cost for day-to-day code review.',
-            speed: 'medium',
-            contextWindow: '200K',
-            costTier: '$$$',
-            apiKeyUrl: 'https://console.anthropic.com/settings/keys',
-            defaults: {
-                temperature: 0,
-                maxOutputTokens: 16384,
-                reasoningEffort: 'medium',
-            },
-        },
-        {
-            id: 'claude-opus-4-7',
-            displayName: 'Claude Opus 4.7',
-            tier: 'recommended',
-            recommendationLabel: 'Highest quality',
-            benchmarkScore: 91,
-            description:
-                'Anthropic flagship. Highest quality for the hardest reviews — at premium cost.',
-            speed: 'slow',
-            contextWindow: '1M',
-            costTier: '$$$',
-            apiKeyUrl: 'https://console.anthropic.com/settings/keys',
-            defaults: {
-                temperature: 0,
-                maxOutputTokens: 32768,
-                reasoningEffort: 'medium',
-            },
-        },
-        {
-            id: 'claude-sonnet-4-5-20250929',
-            displayName: 'Claude Sonnet 4.5',
-            tier: 'other',
-            benchmarkScore: 87.1,
-            description:
-                'Previous Sonnet generation. Still solid, but superseded by Sonnet 4.6.',
-            speed: 'medium',
-            contextWindow: '200K',
-            costTier: '$$$',
-            strengths: [
-                'Catches ~5% more cross-file issues than average',
-                'Broader coverage than most models',
-            ],
-            weaknesses: ['Slightly noisier — a few more low-value comments'],
-            apiKeyUrl: 'https://console.anthropic.com/settings/keys',
-            defaults: { temperature: 0, maxOutputTokens: 16384 },
-        },
-        {
-            id: 'claude-haiku-4-5-20251001',
-            displayName: 'Claude Haiku 4.5',
-            tier: 'bestValue',
-            benchmarkScore: 85.0,
-            description: 'Fastest Claude with highest coverage. Good cheap fallback.',
-            speed: 'fast',
-            contextWindow: '200K',
-            costTier: '$',
-            strengths: [
-                'Catches the most issues of any model',
-                'Fast — replies in ~17s',
-            ],
-            weaknesses: ['Noisier — more low-value comments'],
-            apiKeyUrl: 'https://console.anthropic.com/settings/keys',
-            defaults: { temperature: 0, maxOutputTokens: 8192 },
-        },
-    ],
 
     capabilities(model: string): ModelCapabilities {
         const reasoningConfig = anthropicReasoningConfig(model);
@@ -201,14 +122,18 @@ export const anthropicModule: ProviderModule = {
             // AND accepts `disabled`; legacy models don't think unasked and
             // Fable/Mythos reject `disabled` (400) — for those, omitting IS "off".
             const traits = resolveAnthropicModelTraits(cfg.model);
-            return traits.thinkingShape === 'adaptive' && traits.canDisableThinking
+            return traits.thinkingShape === 'adaptive' &&
+                traits.canDisableThinking
                 ? { anthropic: { thinking: { type: 'disabled' } } }
                 : {};
         }
 
         const budget: ProviderReasoningOptions = {
             anthropic: {
-                thinking: { type: 'enabled', budgetTokens: EFFORT_TO_BUDGET[effort] },
+                thinking: {
+                    type: 'enabled',
+                    budgetTokens: EFFORT_TO_BUDGET[effort],
+                },
             },
         };
 
@@ -234,7 +159,9 @@ export const anthropicModule: ProviderModule = {
         // config rather than gamble on budget and 400 the entire review.
         switch (resolveAnthropicModelTraits(cfg.model).thinkingShape) {
             case 'adaptive':
-                return { anthropic: { thinking: { type: 'adaptive' }, effort } };
+                return {
+                    anthropic: { thinking: { type: 'adaptive' }, effort },
+                };
             case 'budget':
                 return budget;
             default:
@@ -285,10 +212,7 @@ export const anthropicModule: ProviderModule = {
         // pins temperature to 1 while thinking, so 1 is their only sound value.
         // Disable-able ones (Kimi k2.6, DeepSeek) keep a free temperature.
         if ((cfg.provider as string) === 'anthropic_compatible') {
-            const traits = resolveCompatibleReasoningTraits(cfg.model);
-            return traits.thinksByDefault && !traits.canDisableThinking
-                ? { kind: 'fixed', value: 1 }
-                : { kind: 'adjustable' };
+            return compatibleTemperaturePolicy(cfg.model);
         }
         // Real Anthropic: 4.7+ REJECT temperature (a 400); older accept it. Native
         // thinking models don't need a pin — they withhold temperature outright.
@@ -301,8 +225,20 @@ export const anthropicModule: ProviderModule = {
     normalize: normalizeSdkResult,
 
     uiFields: [
-        { key: 'apiKey', label: 'API key', type: 'password', required: true, scope: 'top' },
-        { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top' },
+        {
+            key: 'apiKey',
+            label: 'API key',
+            type: 'password',
+            required: true,
+            scope: 'top',
+        },
+        {
+            key: 'baseURL',
+            label: 'Base URL',
+            type: 'url',
+            required: false,
+            scope: 'top',
+        },
     ],
     providerOptionsNamespace: () => 'anthropic',
     // Native Anthropic accepts the adaptive thinking shape (the form every Claude

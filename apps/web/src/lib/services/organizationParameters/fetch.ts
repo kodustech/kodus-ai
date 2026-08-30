@@ -6,7 +6,6 @@ import {
 } from "@services/parameters/types";
 import { axiosAuthorized } from "src/core/utils/axios";
 import type { BYOKConfig } from "src/features/ee/byok/_types";
-import type { CuratedModel } from "src/features/ee/byok/_data/curated-models.types";
 
 import { ORGANIZATION_PARAMETERS_PATHS } from ".";
 
@@ -84,6 +83,11 @@ export const testBYOK = async (params: {
     apiKey?: string;
     baseURL?: string;
     model?: string;
+    // The configured tuning — validated server-side against the model's rules
+    // and exercised on the real chat probe, so a mismatch (e.g. a temperature an
+    // always-thinking model won't honor) fails the Test instead of saving quiet.
+    temperature?: number;
+    reasoningEffort?: "none" | "low" | "medium" | "high";
     vertexLocation?: string;
     awsBearerToken?: string;
     awsAccessKeyId?: string;
@@ -161,7 +165,10 @@ export const clearModelOverrides = async (
 ): Promise<{ clearedCount: number }> => {
     const envelope = await axiosAuthorized.post<{
         data: { clearedCount: number };
-    }>(ORGANIZATION_PARAMETERS_PATHS.MODEL_OVERRIDES_CLEAR, { teamId, targets });
+    }>(ORGANIZATION_PARAMETERS_PATHS.MODEL_OVERRIDES_CLEAR, {
+        teamId,
+        targets,
+    });
     return envelope.data;
 };
 
@@ -235,26 +242,15 @@ export type ByokProviderDescriptor = {
  * getLLMConfigStatus's proxy fetch. Returns [] on absence so callers can fall
  * back to the curated-derived list (never an empty picker).
  */
-export const listByokProviders = async (): Promise<ByokProviderDescriptor[]> => {
+export const listByokProviders = async (): Promise<
+    ByokProviderDescriptor[]
+> => {
     const response = await authorizedFetch<{
         providers: ByokProviderDescriptor[];
     }>(ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_PROVIDERS, {
         cache: "no-store",
     });
     return response?.providers ?? [];
-};
-
-/**
- * The curated model catalog, served from the backend (aggregated from every
- * provider module's `catalog` — the single source of truth that replaced the
- * frontend `curated-models.json`). Shape is 1:1 with the web `CuratedModel`.
- */
-export const listByokCatalog = async (): Promise<CuratedModel[]> => {
-    const response = await authorizedFetch<{ models: CuratedModel[] }>(
-        ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_CATALOG,
-        { cache: "no-store" },
-    );
-    return response?.models ?? [];
 };
 
 export type LLMProviderModel = { id: string; name: string };

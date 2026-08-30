@@ -3,29 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@components/ui/button";
-import { toast } from "@components/ui/toaster/use-toast";
-import {
-    createOrUpdateOrganizationParameter,
-    type LLMConfigStatus,
-} from "@services/organizationParameters/fetch";
-import { OrganizationParametersConfigKey } from "@services/parameters/types";
+import { type LLMConfigStatus } from "@services/organizationParameters/fetch";
 import type { ByokModelCost } from "@services/usage/byok-cost";
 import { PlusIcon } from "lucide-react";
 import { revalidateServerSidePath } from "src/core/utils/revalidate-server-side";
 
-import { useCatalog } from "../../_data/catalog-context";
-import type {
-    BYOKConfig,
-    BYOKConnectInput,
-    BYOKCredential,
-    BYOKModelConfig,
-} from "../../_types";
+import type { BYOKConfig, BYOKCredential, BYOKModelConfig } from "../../_types";
 import { groupModelsByProvider, hasVisibleModels } from "../../_utils";
-import {
-    buildByokBlob,
-    credentialSettingsFromConfig,
-    modelFieldsFromConfig,
-} from "../byok-write";
 import { ConnectProviderFlow } from "../connect-provider-flow";
 import { FirstRunCard } from "../first-run-card";
 import { ModelRow } from "../model-row";
@@ -58,7 +42,6 @@ type View =
 export const ModelsTab = ({
     config,
     costByModelId,
-    teamId,
     periodLabel,
     costRangeQuery,
     onOpenRouting,
@@ -66,33 +49,10 @@ export const ModelsTab = ({
     const router = useRouter();
     const [view, setView] = useState<View>({ mode: "list" });
 
-    const catalog = useCatalog();
-    const displayNameFor = (modelId: string): string =>
-        catalog.find((m) => m.id === modelId)?.displayName ?? modelId;
-
     const groups = groupModelsByProvider(config).filter(
         (g) => g.models.length > 0,
     );
     const firstRun = !hasVisibleModels(config);
-
-    const persist = async (blob: BYOKConfig, successTitle: string) => {
-        try {
-            await createOrUpdateOrganizationParameter(
-                OrganizationParametersConfigKey.BYOK_CONFIG,
-                blob,
-            );
-            toast({ variant: "success", title: successTitle });
-            await revalidateServerSidePath("/byok");
-            setView({ mode: "list" });
-            router.refresh();
-        } catch {
-            toast({
-                variant: "danger",
-                title: "Couldn't save",
-                description: "Something went wrong. Try again.",
-            });
-        }
-    };
 
     // ── add model / add provider (dedup key by provider) ──────────────────────
     const connectedKeyByProvider: Record<string, string> = {};
@@ -106,29 +66,6 @@ export const ModelsTab = ({
             (connectedModelCountByProvider[group.credential.provider] ?? 0) +
             group.models.length;
     }
-
-    const saveAdd = async (cfg: BYOKConnectInput) => {
-        const existingCred = (config?.credentials ?? []).find(
-            (c) => !c.managed && c.provider === cfg.provider,
-        );
-        const name = displayNameFor(cfg.model);
-        const blob = existingCred
-            ? buildByokBlob(config, {
-                kind: "add-existing-provider",
-                credentialId: existingCred.id,
-                model: modelFieldsFromConfig(cfg),
-            })
-            : buildByokBlob(config, {
-                kind: "add-new-provider",
-                newCredential: {
-                    provider: cfg.provider,
-                    apiKey: cfg.apiKey,
-                    settings: credentialSettingsFromConfig(cfg),
-                },
-                model: modelFieldsFromConfig(cfg),
-            });
-        await persist(blob, `${name} added`);
-    };
 
     // ── per-model edit ────────────────────────────────────────────────────────
     // ONE editor for every model, curated or not: the unified manual form (it
@@ -155,7 +92,6 @@ export const ModelsTab = ({
                 existingKeyByProvider={connectedKeyByProvider}
                 connectedModelCountByProvider={connectedModelCountByProvider}
                 lockedProvider={view.provider}
-                onSave={saveAdd}
                 onCancel={() => setView({ mode: "list" })}
             />
         );
@@ -163,7 +99,7 @@ export const ModelsTab = ({
 
     // ── view: first-run ───────────────────────────────────────────────────────
     if (firstRun) {
-        return <FirstRunCard existing={config} />;
+        return <FirstRunCard />;
     }
 
     // ── view: steady-state provider-grouped pool ──────────────────────────────

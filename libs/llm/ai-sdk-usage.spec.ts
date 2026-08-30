@@ -1,4 +1,4 @@
-import { readAiSdkUsage } from './ai-sdk-usage';
+import { readAiSdkUsage, readAiSdkUsageFromError } from './ai-sdk-usage';
 
 /**
  * The single AI SDK usage reader (shared by the agent harness and
@@ -97,6 +97,37 @@ describe('readAiSdkUsage', () => {
         expect(readAiSdkUsage(usage).cacheWriteTokens).toBeUndefined();
     });
 
+    it('captures Gemini implicit-cache read from inputTokenDetails.cacheReadTokens (#1799)', () => {
+        // Shape ai@7 produces from @ai-sdk/google's convertGoogleUsage:
+        //   inputTokens (total, INCLUDING cached) = promptTokenCount
+        //   inputTokenDetails.cacheReadTokens      = cachedContentTokenCount
+        //   outputTokenDetails.reasoningTokens     = thoughtsTokenCount
+        //   (no cacheWrite — Gemini reports no cache CREATION count)
+        // Older @ai-sdk/google (≈4.0.8) did NOT surface cachedContentTokenCount
+        // into this normalized field, so Kody recorded cache-read = 0 even when
+        // Gemini's implicit cache hit — the root cause of #1799. Current adapters
+        // (4.0.49) map it to `inputTokens.cacheRead`; this pins that the reader
+        // captures it, so a future adapter regression can't silently zero it again.
+        const usage = {
+            inputTokens: 68660, // total, includes the 32,740 cached
+            outputTokens: 1200,
+            totalTokens: 69860,
+            inputTokenDetails: {
+                noCacheTokens: 35920,
+                cacheReadTokens: 32740,
+            },
+            outputTokenDetails: { textTokens: 200, reasoningTokens: 1000 },
+        };
+
+        const r = readAiSdkUsage(usage);
+        expect(r.cacheReadTokens).toBe(32740);
+        expect(r.cacheWriteTokens).toBeUndefined();
+        expect(r.reasoningTokens).toBe(1000);
+        // The full input count is preserved un-reduced (the cost calculator
+        // subtracts cacheRead from the full-price pool downstream).
+        expect(r.inputTokens).toBe(68660);
+    });
+
     it('returns undefined fields (not throws) for a bare/empty usage object', () => {
         expect(readAiSdkUsage({})).toEqual({
             inputTokens: undefined,
@@ -118,5 +149,73 @@ describe('readAiSdkUsage', () => {
             reasoningTokens: undefined,
         });
         expect(readAiSdkUsage(null)).toEqual(readAiSdkUsage(undefined));
+    });
+});
+
+/**
+ * A structured call that dies in the output parse (AI_NoObjectGeneratedError)
+ * was answered — and billed — by the provider. Before this reader the wrapper
+ * span recorded the error and zero tokens, so the spend showed up in Langfuse
+ * and never in `observability_telemetry` (the `structuredRecovery` leak).
+ */
+describe('readAiSdkUsageFromError', () => {
+    const noObjectGenerated = (usage: unknown) =>
+        Object.assign(
+            new Error('No object generated: response did not match schema.'),
+            {
+                name: 'AI_NoObjectGeneratedError',
+                finishReason: 'stop',
+                usage,
+            },
+        );
+
+    it('recovers the billed usage from a NoObjectGeneratedError', () => {
+        const got = readAiSdkUsageFromError(
+            noObjectGenerated({
+                inputTokens: 766,
+                outputTokens: 2503,
+                totalTokens: 3269,
+                outputTokenDetails: { reasoningTokens: 2100 },
+            }),
+        );
+
+        expect(got?.finishReason).toBe('stop');
+        expect(got?.usage).toMatchObject({
+            inputTokens: 766,
+            outputTokens: 2503,
+            totalTokens: 3269,
+            reasoningTokens: 2100,
+        });
+    });
+
+    it('unwraps usage carried on the error cause', () => {
+        const err = Object.assign(new Error('wrapped'), {
+            cause: noObjectGenerated({
+                inputTokens: 10,
+                outputTokens: 5,
+                totalTokens: 15,
+            }),
+        });
+
+        expect(readAiSdkUsageFromError(err)?.usage.totalTokens).toBe(15);
+    });
+
+    it('returns undefined when nothing was billed', () => {
+        // Transport failures (timeout, 429, reset): no response, no usage — must
+        // not write a zero-token cost span.
+        expect(
+            readAiSdkUsageFromError(new Error('fetch failed')),
+        ).toBeUndefined();
+        expect(
+            readAiSdkUsageFromError(
+                noObjectGenerated({
+                    inputTokens: 0,
+                    outputTokens: 0,
+                    totalTokens: 0,
+                }),
+            ),
+        ).toBeUndefined();
+        expect(readAiSdkUsageFromError(undefined)).toBeUndefined();
+        expect(readAiSdkUsageFromError(null)).toBeUndefined();
     });
 });

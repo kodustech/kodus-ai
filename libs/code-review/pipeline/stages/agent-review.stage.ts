@@ -1098,6 +1098,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     })),
                     context.codeReviewConfig?.v2PromptOverrides,
                     context.codeReviewConfig?.byokConfig,
+                    context.organizationAndTeamData?.organizationId,
                 );
                 for (let i = 0; i < deduped.length; i++) {
                     const classified = severityMap.get(i);
@@ -1196,6 +1197,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                         byokConfig: context.codeReviewConfig?.byokConfig,
                         languageResultPrompt:
                             context.codeReviewConfig?.languageResultPrompt,
+                        organizationId:
+                            context.organizationAndTeamData?.organizationId,
                     },
                 );
                 for (const [i, fmt] of formatted) {
