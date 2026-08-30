@@ -13,31 +13,19 @@ import type { WriteToolEvent } from './conversation-tool-audit';
 /** Links into the Kody app — the ones a write tool hands back. */
 const APP_LINK = /https?:\/\/\S*\/(?:kody-rules|kody-issues|memories)\/\S*/gi;
 
-/** Pull the `link` a Kodus MCP tool returns, whatever envelope it used. */
+/**
+ * Pull the link a Kodus MCP tool returned. Matched out of the raw result rather
+ * than read from a known field: MCP results arrive in whatever envelope the
+ * server used (`{data:{link}}`, a `content[].text` blob, a PR url), and a link
+ * the developer can click matters more than the shape it travelled in.
+ */
 function linkOf(event: WriteToolEvent): string | undefined {
     if (typeof event.result !== 'string') {
         return undefined;
     }
 
-    try {
-        const parsed = JSON.parse(event.result) as {
-            link?: unknown;
-            prUrl?: unknown;
-            data?: { link?: unknown };
-        };
-        for (const candidate of [
-            parsed?.data?.link,
-            parsed?.link,
-            parsed?.prUrl,
-        ]) {
-            if (typeof candidate === 'string' && candidate) {
-                return candidate;
-            }
-        }
-    } catch {
-        return undefined;
-    }
-    return undefined;
+    const found = event.result.match(new RegExp(APP_LINK.source, 'i'));
+    return found?.[0]?.replace(/[\\"',)\]}]+$/, '');
 }
 
 /**

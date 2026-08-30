@@ -15,7 +15,26 @@ const created = {
     }),
 };
 
+const createdInMcpEnvelope = {
+    tool: 'KODUS_CREATE_MEMORY',
+    args: {},
+    result: JSON.stringify({
+        content: [
+            {
+                type: 'text',
+                text: '{"success":true,"data":{"link":"https://app.kodus.io/settings/code-review/7/kody-rules/env-777?tab=memories"}}',
+            },
+        ],
+    }),
+};
+
 describe('buildOutcomeFooter', () => {
+    it('finds the link whatever envelope the server wrapped it in', () => {
+        expect(buildOutcomeFooter([createdInMcpEnvelope])).toContain(
+            'kody-rules/env-777',
+        );
+    });
+
     it('reports what actually ran, with the link the tool returned', () => {
         const footer = buildOutcomeFooter([created]);
 
@@ -46,7 +65,8 @@ describe('stripToolLinks', () => {
     });
 
     it('leaves unrelated links alone', () => {
-        const text = 'See https://github.com/kodustech/kodus-ai/pull/1 for context.';
+        const text =
+            'See https://github.com/kodustech/kodus-ai/pull/1 for context.';
 
         expect(stripToolLinks(text)).toContain('github.com/kodustech');
     });
