@@ -124,6 +124,16 @@ function getCandidateValuesForParam(
         return enumCandidates;
     }
 
+    // A parameter fixed to a closed non-string value set (e.g. { const: 3 },
+    // { enum: [1,2,3] }, { const: true }) yields no parseable string candidate
+    // from extractEnumValues and would otherwise fall through to free-string
+    // handling here — letting an issue key / query token be stuffed into it
+    // (the -32602 / false-finding class the guard exists to prevent). Treat it
+    // as "don't fill" instead of "free text".
+    if (hasOnlyNonStringClosedConstraint(paramSchema)) {
+        return [];
+    }
+
     if (!supportsStringParam(paramSchema)) {
         return [];
     }
@@ -335,15 +345,78 @@ function extractEnumValues(
         }
     }
 
-    // 2. `const` / `anyOf` / `oneOf` are only closed when no branch is an
-    //    open string. An open string branch means the param accepts
-    //    free-form values, so don't narrow it.
-    if (!hasOpenStringBranch(paramSchema)) {
-        // Lone `const: 'a'`.
-        pushConc(paramSchema.const);
+    const openStringBranch = hasOpenStringBranch(paramSchema);
 
-        // `anyOf` / `oneOf` branches — each branch may declare `const` or a
-        // nested `enum`.
+    // 2. A lone `const: 'a'` is only a closed value set when the param has no
+    //    open string branch; next to an open string it is a suggested default,
+    //    not a restriction, so it must not narrow the free-form param.
+    if (!openStringBranch) {
+        pushConc(paramSchema.const);
+    }
+
+    // 3. `anyOf` / `oneOf` branches — each branch may declare `const` or a
+    //    nested `enum`.
+    for (const key of ['anyOf', 'oneOf'] as const) {
+        const variants = paramSchema[key];
+        if (!Array.isArray(variants)) {
+            continue;
+        }
+        for (const variant of variants) {
+            if (!variant || typeof variant !== 'object') {
+                continue;
+            }
+            const branch = variant as Record<string, unknown>;
+            if ('const' in branch) {
+                // A const branch next to an open string sibling is just a
+                // default suggestion — keep it out of the closed set so the
+                // param stays free-form (e.g. anyOf:[{type:'string'},{const:'default'}]).
+                if (!openStringBranch) {
+                    pushConc(branch.const);
+                }
+                continue;
+            }
+            // An enum branch is ALWAYS a closed set, even when the param also
+            // carries an open string branch. Collecting it keeps the
+            // closed-enum guard active, so an issue key can't leak into a
+            // format param like anyOf:[{enum:['markdown','adf']},{type:'string'}]
+            // (#1760).
+            if (Array.isArray(branch.enum)) {
+                for (const value of branch.enum) {
+                    pushConc(value);
+                }
+            }
+        }
+    }
+
+    return [...new Set(collected)];
+}
+
+/**
+ * Collect every value a schema fixes via `enum` / `const`, regardless of type,
+ * using the same "closed" rules as extractEnumValues but WITHOUT the string
+ * filter. This lets a closed non-string set (e.g. { const: 3 }) be detected
+ * even though it yields no parseable string candidate.
+ */
+function collectClosedSchemaValues(
+    paramSchema: Record<string, unknown> | undefined,
+): unknown[] {
+    if (!paramSchema) {
+        return [];
+    }
+
+    const collected: unknown[] = [];
+
+    const rawEnum = paramSchema.enum;
+    if (Array.isArray(rawEnum)) {
+        for (const value of rawEnum) {
+            collected.push(value);
+        }
+    }
+
+    if (!hasOpenStringBranch(paramSchema)) {
+        if ('const' in paramSchema) {
+            collected.push(paramSchema.const);
+        }
         for (const key of ['anyOf', 'oneOf'] as const) {
             const variants = paramSchema[key];
             if (!Array.isArray(variants)) {
@@ -355,19 +428,36 @@ function extractEnumValues(
                 }
                 const branch = variant as Record<string, unknown>;
                 if ('const' in branch) {
-                    pushConc(branch.const);
+                    collected.push(branch.const);
                     continue;
                 }
                 if (Array.isArray(branch.enum)) {
                     for (const value of branch.enum) {
-                        pushConc(value);
+                        collected.push(value);
                     }
                 }
             }
         }
     }
 
-    return [...new Set(collected)];
+    return collected;
+}
+
+/**
+ * True when the parameter is fixed to a closed `const`/`enum` set whose values
+ * are all non-string (e.g. { const: 3 }, { enum: [1,2,3] }, { const: true }).
+ * Such a parameter must never be treated as a free-form string via
+ * supportsStringParam — stuffing an issue key into it is exactly the -32602
+ * class of bug — so it should yield no candidates instead.
+ */
+function hasOnlyNonStringClosedConstraint(
+    paramSchema: Record<string, unknown> | undefined,
+): boolean {
+    const closedValues = collectClosedSchemaValues(paramSchema);
+    if (!closedValues.length) {
+        return false;
+    }
+    return closedValues.every((value) => typeof value !== 'string');
 }
 
 type ParamIntent = 'issue' | 'query' | 'context' | 'url' | 'ari' | 'generic';

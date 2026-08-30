@@ -271,5 +271,84 @@ describe('buildTaskContextArgsCandidates (characterization)', () => {
                 expect(args.format).toBe('FMT-7');
             }
         });
+
+        it('still excludes issue keys from enum branches when a sibling anyOf is an open string (regression #1760)', () => {
+            // A format param surfaced as `anyOf: [{enum:['markdown','adf']},
+            // {type:'string'}]` has ONE open branch. The guard must not be
+            // disabled for the whole param: the issue key must never leak into
+            // responseContentFormat (the call would be rejected with -32602 and
+            // become a false medium finding).
+            const sig: TaskContextToolSignature = {
+                requiredParams: ['issueIdOrKey'],
+                properties: {
+                    issueIdOrKey: { type: 'string' },
+                    responseContentFormat: {
+                        anyOf: [
+                            { enum: ['markdown', 'adf'] },
+                            { type: 'string' },
+                        ],
+                    },
+                },
+                normalizedProperties: {
+                    issueidorkey: { type: 'string' },
+                    responsecontentformat: {
+                        anyOf: [
+                            { enum: ['markdown', 'adf'] },
+                            { type: 'string' },
+                        ],
+                    },
+                },
+            };
+
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({ issueKeys: ['DEV-5400'] }),
+                sig,
+            );
+
+            expect(out.length).toBeGreaterThan(0);
+            for (const args of out) {
+                expect(args.issueIdOrKey).toBe('DEV-5400');
+                if ('responseContentFormat' in args) {
+                    expect(['markdown', 'adf']).toContain(
+                        args.responseContentFormat,
+                    );
+                }
+            }
+        });
+
+        it('never stuffs the issue key into a closed non-string const/enum param (regression #1760)', () => {
+            // maxDepth: { const: 3 } and maxItems: { enum: [1,5,10] } fix the
+            // param to a non-string set with no parseable string candidate.
+            // Without the guard they'd fall through to free-string handling
+            // and be filled with the issue key (`maxDepth: 'DEV-5400'`), which
+            // the tool rejects. They must be omitted instead.
+            const sig: TaskContextToolSignature = {
+                requiredParams: ['issueIdOrKey'],
+                properties: {
+                    issueIdOrKey: { type: 'string' },
+                    maxDepth: { const: 3 },
+                    maxItems: { enum: [1, 5, 10] },
+                },
+                normalizedProperties: {
+                    issueidorkey: { type: 'string' },
+                    maxdepth: { const: 3 },
+                    maxitems: { enum: [1, 5, 10] },
+                },
+            };
+
+            const out = buildTaskContextArgsCandidates(
+                params(),
+                hints({ issueKeys: ['DEV-5400'] }),
+                sig,
+            );
+
+            expect(out.length).toBeGreaterThan(0);
+            for (const args of out) {
+                expect(args.issueIdOrKey).toBe('DEV-5400');
+                expect('maxDepth' in args).toBe(false);
+                expect('maxItems' in args).toBe(false);
+            }
+        });
     });
 });
