@@ -239,15 +239,26 @@ export function withGenerateFromStream(model: CodexSdkModel): LanguageModel {
         options: CodexCallOptions,
     ): Promise<CodexGenerateResult> => {
         const { stream, request } = await doStream(options);
-        const passthroughContent: CodexGenerateResult['content'] = [];
         const textByFragment = new Map<string, string>();
         const metadataByFragment = new Map<string, CodexProviderMetadata>();
+        // Fragments and passthrough parts interleave: the Responses stream can
+        // emit text, a tool call, then more text, and the replayed transcript
+        // must preserve that order — emitting all fragments first would reorder
+        // the conversation for agent loops.
+        const orderedParts: Array<
+            | { kind: 'fragment'; key: string }
+            | {
+                  kind: 'passthrough';
+                  part: CodexGenerateResult['content'][number];
+              }
+        > = [];
         let finishReason: CodexGenerateResult['finishReason'] = {
             unified: 'stop',
             raw: undefined,
         };
         let usage = emptyUsage();
         let responseMetadata: NonNullable<CodexGenerateResult['response']> = {};
+        let finishMetadata: CodexProviderMetadata | undefined;
         const warnings: CodexGenerateResult['warnings'] = [];
 
         const fragmentKey = (kind: 'text' | 'reasoning', id: string): string =>
@@ -255,6 +266,7 @@ export function withGenerateFromStream(model: CodexSdkModel): LanguageModel {
         const ensureFragment = (key: string): void => {
             if (!textByFragment.has(key)) {
                 textByFragment.set(key, '');
+                orderedParts.push({ kind: 'fragment', key });
             }
         };
         const appendFragment = (key: string, delta: string): void => {
@@ -285,12 +297,21 @@ export function withGenerateFromStream(model: CodexSdkModel): LanguageModel {
             if (done) break;
             switch (value.type) {
                 case 'text-start': {
-                    ensureFragment(fragmentKey('text', value.id));
+                    const key = fragmentKey('text', value.id);
+                    ensureFragment(key);
+                    mergeMetadata(key, value.providerMetadata);
                     break;
                 }
                 case 'text-delta': {
                     const key = fragmentKey('text', value.id);
                     appendFragment(key, value.delta);
+                    mergeMetadata(key, value.providerMetadata);
+                    break;
+                }
+                case 'text-end': {
+                    const key = fragmentKey('text', value.id);
+                    ensureFragment(key);
+                    mergeMetadata(key, value.providerMetadata);
                     break;
                 }
                 case 'reasoning-start':
@@ -313,11 +334,15 @@ export function withGenerateFromStream(model: CodexSdkModel): LanguageModel {
                 case 'file':
                 case 'reasoning-file':
                 case 'source':
-                    passthroughContent.push(value);
+                    orderedParts.push({
+                        kind: 'passthrough',
+                        part: value,
+                    });
                     break;
                 case 'finish':
                     finishReason = value.finishReason;
                     usage = value.usage;
+                    finishMetadata = value.providerMetadata;
                     break;
                 case 'response-metadata':
                     responseMetadata = {
@@ -342,20 +367,29 @@ export function withGenerateFromStream(model: CodexSdkModel): LanguageModel {
         }
 
         const content: CodexGenerateResult['content'] = [];
-        for (const [key, text] of textByFragment) {
+        for (const entry of orderedParts) {
+            if (entry.kind === 'passthrough') {
+                content.push(entry.part);
+                continue;
+            }
+            const key = entry.key;
+            const text = textByFragment.get(key) ?? '';
+            const providerMetadata = metadataByFragment.get(key);
             if (key.startsWith('reasoning:')) {
-                const providerMetadata = metadataByFragment.get(key);
                 if (!text && !providerMetadata) continue;
                 content.push({
                     type: 'reasoning',
                     text,
                     ...(providerMetadata ? { providerMetadata } : {}),
                 });
-            } else if (text) {
-                content.push({ type: 'text', text });
+            } else if (text || providerMetadata) {
+                content.push({
+                    type: 'text',
+                    text,
+                    ...(providerMetadata ? { providerMetadata } : {}),
+                });
             }
         }
-        content.push(...passthroughContent);
 
         return {
             content,
@@ -364,6 +398,7 @@ export function withGenerateFromStream(model: CodexSdkModel): LanguageModel {
             warnings,
             request,
             response: responseMetadata,
+            ...(finishMetadata ? { providerMetadata: finishMetadata } : {}),
         };
     };
 
@@ -496,6 +531,7 @@ function validateRotatedAuthPersistence(auth: CodexAuth): void {
 async function persistRotatedAuth(
     auth: CodexAuth,
     refreshed: { accessToken: string; refreshToken: string },
+    store: CodexCredentialStore | undefined,
 ): Promise<RotatedCodexAuth> {
     if (!auth.refreshToken) {
         throw new Error('Codex token refresh requires a refresh token.');
@@ -506,12 +542,12 @@ async function persistRotatedAuth(
                 'Codex credential persistence requires an organization scope.',
             );
         }
-        if (!credentialStore) {
+        if (!store) {
             throw new Error(
                 'Codex credential persistence is not available in this process.',
             );
         }
-        return credentialStore.rotateCodexTokens({
+        return store.rotateCodexTokens({
             credentialId: auth.credentialId,
             organizationId: auth.organizationId,
             expectedRefreshToken: auth.refreshToken,
@@ -526,11 +562,12 @@ async function persistRotatedAuth(
 async function persistRotatedAuthWithRetry(
     auth: CodexAuth,
     refreshed: { accessToken: string; refreshToken: string },
+    store: CodexCredentialStore | undefined,
 ): Promise<RotatedCodexAuth> {
     let lastError: unknown;
     for (let attempt = 0; attempt < CODEX_PERSIST_ATTEMPTS; attempt++) {
         try {
-            return await persistRotatedAuth(auth, refreshed);
+            return await persistRotatedAuth(auth, refreshed, store);
         } catch (error) {
             lastError = error;
             if (attempt < CODEX_PERSIST_ATTEMPTS - 1) {
@@ -562,6 +599,16 @@ export function buildCodexSubscriptionModel(
     });
     let currentAuth = configuredAuth;
     let refreshInFlight: Promise<CodexAuth> | undefined;
+    // A rotation whose OAuth leg succeeded but whose persistence failed leaves
+    // the ONLY valid refresh token in this field. The stale token was already
+    // consumed server-side, so the next call must retry persistence — never the
+    // exchange, which would burn the replacement and destroy the credential.
+    let pendingRotation:
+        | {
+              stale: CodexAuth;
+              refreshed: { accessToken: string; refreshToken: string };
+          }
+        | undefined;
 
     const auth = (): CodexAuth => {
         currentAuth ??= readCodexAuth();
@@ -570,16 +617,30 @@ export function buildCodexSubscriptionModel(
 
     const refresh = async (stale: CodexAuth): Promise<CodexAuth> => {
         validateRotatedAuthPersistence(stale);
-        const refreshed = await requestCodexRefresh(stale.refreshToken ?? '');
-        const persisted = await persistRotatedAuthWithRetry(stale, refreshed);
+        // Captured at rotation start: module teardown can null the global store
+        // mid-rotation, and the server-issued replacement must still reach the
+        // store instance that validated the rotation.
+        const store = credentialStore;
+        if (!pendingRotation) {
+            const refreshed = await requestCodexRefresh(
+                stale.refreshToken ?? '',
+            );
+            pendingRotation = { stale, refreshed };
+        }
+        const persisted = await persistRotatedAuthWithRetry(
+            pendingRotation.stale,
+            pendingRotation.refreshed,
+            store,
+        );
         currentAuth = {
             accessToken: persisted.accessToken,
             refreshToken: persisted.refreshToken,
             accountId: persisted.accountId,
-            credentialId: stale.credentialId,
-            organizationId: stale.organizationId,
-            authPath: stale.authPath,
+            credentialId: pendingRotation.stale.credentialId,
+            organizationId: pendingRotation.stale.organizationId,
+            authPath: pendingRotation.stale.authPath,
         };
+        pendingRotation = undefined;
         return currentAuth;
     };
 
