@@ -280,3 +280,7 @@ evals/kody-rules/prod-rules.json
 .kodus/evidence/
 runo
 test1.json
+
+# Stryker mutation testing (run artifacts, never committed)
+reports/mutation/
+.stryker-tmp/

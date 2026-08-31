@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Incremental mutation gate. Scope with --mutate on the CLI (changed files in a PR). testRunner runs only tests related to each mutated file.",
+  "packageManager": "pnpm",
+  "testRunner": "jest",
+  "jest": {
+    "configFile": "jest.stryker.config.ts",
+    "enableFindRelatedTests": true
+  },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "libs/llm/resolve-model-slot.ts"
+  ],
+  "concurrency": 2,
+  "timeoutMS": 60000,
+  "reporters": [
+    "clear-text",
+    "json"
+  ],
+  "inPlace": true,
+  "disableTypeChecks": true,
+  "dryRunTimeoutMinutes": 12,
+  "ignorePatterns": [
+    ".pnpm-store",
+    ".stryker-tmp",
+    "dist",
+    ".worktrees",
+    "coverage"
+  ],
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true
+}
