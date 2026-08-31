@@ -191,10 +191,6 @@ scripts/benchmark/node_modules/
 scripts/benchmark/*-trace-metrics.json
 evals/investigation/evals/
 
-# kodus-flow workspace package build artifacts
-packages/kodus-flow/node_modules/
-packages/kodus-flow/dist/
-
 # ESLint Cache
 .eslintcache
 
