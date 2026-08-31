@@ -454,9 +454,9 @@ export const PrListItem = ({ group }: PrListItemProps) => {
     const prUrl = buildPullRequestUrl(latest);
     // The review screen already deep-links to a finding via
     // `?file=<path>&suggestion=<id>` (scrolls to it and lights it up). The list
-    // only knows counts, so the backend tags each row with the first delivered
-    // suggestion; pass it through so the count click lands on the comments
-    // instead of the top of a large diff.
+    // only knows counts, so the backend tags each row with the delivered
+    // finding that most wants attention; pass it through so the count click
+    // lands on that comment instead of the top of a large diff.
     const reviewHref = buildReviewDeepLinkUrl(
         latest.repositoryId,
         latest.prNumber,
@@ -645,6 +645,9 @@ export const PrListItem = ({ group }: PrListItemProps) => {
                     as missing data. */}
                 <NextLink
                     href={reviewHref}
+                    // Icons and bare numbers give this link no accessible name
+                    // of its own; spell out where it goes.
+                    aria-label="Open review at the delivered suggestions"
                     onClick={(e) => e.stopPropagation()}
                     onMouseEnter={prefetchThisReview}
                     onFocus={prefetchThisReview}

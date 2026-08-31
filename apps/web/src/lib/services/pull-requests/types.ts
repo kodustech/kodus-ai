@@ -169,9 +169,9 @@ export interface PullRequestExecution {
         bySeverity?: Record<"critical" | "high" | "medium" | "low", number>;
         categories?: string[];
     };
-    // First DELIVERED (sent) suggestion — deep-link target when the PR-list
-    // count is clicked (?file=...&suggestion=... on the review screen).
-    // null when the PR has no delivered suggestion to land on.
+    // Deep-link target when the PR-list count is clicked: the delivered
+    // finding that most wants attention (unresolved first, then severity),
+    // picked by the backend. null when the PR has none.
     firstSentSuggestion?: { id: string; filePath: string } | null;
     reviewedCommitSha?: string | null;
     reviewedCommitUrl?: string | null;
