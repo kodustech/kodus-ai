@@ -613,6 +613,11 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             codeReviewTimeline,
                             enrichedData,
                             suggestionsCount,
+                            // First delivered suggestion — deep-link target for
+                            // the PR-list count (?file=...&suggestion=...).
+                            // Undefined when the aggregation/fallback found none.
+                            firstSentSuggestion:
+                                suggestionsCount.firstSentSuggestion ?? null,
                             // Adaptive-fit fidelity warnings (small
                             // context window forced a degraded path).
                             // Persisted by automationCodeReview's
@@ -956,6 +961,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         let failed = 0;
         let replaced = 0;
         let unresolved = 0;
+        let firstSentSuggestion: { id: string; filePath: string } | null =
+            null;
 
         // Optimized: check if we have pre-computed counts
         if ((pullRequest as any).suggestionsCount) {
@@ -981,6 +988,8 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 categories: Array.isArray(precomputed.categories)
                     ? precomputed.categories
                     : [],
+                firstSentSuggestion:
+                    precomputed.firstSentSuggestion ?? null,
             };
         }
 
@@ -996,6 +1005,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 unresolvedBySeverity,
                 bySeverity,
                 categories: [],
+                firstSentSuggestion: null,
             };
         }
 
@@ -1008,6 +1018,12 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 const status = suggestion.deliveryStatus;
                 if (status === DeliveryStatus.SENT) {
                     sent++;
+                    if (!firstSentSuggestion && suggestion.id) {
+                        firstSentSuggestion = {
+                            id: suggestion.id,
+                            filePath: files[i].path,
+                        };
+                    }
                     const severity = String(
                         (suggestion as any).severity ?? '',
                     ).toLowerCase();
@@ -1051,6 +1067,7 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
             unresolvedBySeverity,
             bySeverity,
             categories: Array.from(categorySet),
+            firstSentSuggestion,
         };
     }
 }

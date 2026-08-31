@@ -1,6 +1,28 @@
 import type { PullRequestExecution } from "./types";
 
 /**
+ * Review-screen deep link from the PR list. The review page already
+ * deep-links to a finding via `?file=<path>&suggestion=<id>` (scrolls to it
+ * and lights it up). The list only knows counts, so the backend tags each
+ * row with the first delivered suggestion; pass it through so clicking the
+ * count lands on the comments instead of the top of a large diff. Without a
+ * known suggestion the plain review URL is returned.
+ */
+export const buildReviewDeepLinkUrl = (
+    repositoryId: string,
+    prNumber: number,
+    firstSentSuggestion?: { id: string; filePath: string } | null,
+): string => {
+    const base = `/pull-requests/${repositoryId}/${prNumber}`;
+    if (!firstSentSuggestion?.id || !firstSentSuggestion.filePath) {
+        return base;
+    }
+    return `${base}?file=${encodeURIComponent(
+        firstSentSuggestion.filePath,
+    )}&suggestion=${encodeURIComponent(firstSentSuggestion.id)}`;
+};
+
+/**
  * Constrói a URL real do Pull Request baseado no provider e dados do repositório
  */
 export const buildPullRequestUrl = (pr: PullRequestExecution): string => {

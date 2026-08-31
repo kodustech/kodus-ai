@@ -503,6 +503,48 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                                 ],
                             },
                         },
+                        // First DELIVERED (sent) suggestion — deep-link target for
+                        // the PR-list count (?file=...&suggestion=...). $unwind
+                        // preserves arrival order through the $push, so we keep
+                        // every sent row and pick the earliest one in the mapper
+                        // below; $REMOVE would store a null (not skip) in a $group
+                        // $push accumulator, so non-sent rows are pushed as null
+                        // and filtered out instead.
+                        firstSent: {
+                            $push: {
+                                $cond: [
+                                    {
+                                        $and: [
+                                            {
+                                                $eq: [
+                                                    '$files.suggestions.deliveryStatus',
+                                                    DeliveryStatus.SENT,
+                                                ],
+                                            },
+                                            // Legacy docs may lack the explicit
+                                            // id — a deep link without an id is
+                                            // useless, so skip those rows.
+                                            {
+                                                $ne: [
+                                                    {
+                                                        $ifNull: [
+                                                            '$files.suggestions.id',
+                                                            '',
+                                                        ],
+                                                    },
+                                                    '',
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                    {
+                                        id: '$files.suggestions.id',
+                                        filePath: '$files.path',
+                                    },
+                                    null,
+                                ],
+                            },
+                        },
                     },
                 },
                 // Project to clean output
@@ -525,6 +567,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                         umedium: 1,
                         ulow: 1,
                         categories: 1,
+                        firstSent: { $slice: ['$firstSent', 1] },
                     },
                 },
             ])
@@ -557,6 +600,10 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                               typeof c === 'string' && c.length > 0,
                       )
                     : [],
+                firstSentSuggestion:
+                    Array.isArray(row.firstSent)
+                        ? (row.firstSent.filter(Boolean)[0] ?? null)
+                        : null,
             });
         }
 
