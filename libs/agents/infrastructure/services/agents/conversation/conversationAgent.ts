@@ -29,8 +29,11 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
-import { connectMcpTools, type ConnectedMcpTools } from '../ai-sdk/mcp-tools';
-import { buildNativeTools } from '../ai-sdk/native-tools';
+import {
+    connectMcpTools,
+    type ConnectedMcpTools,
+} from '../../ai-sdk/mcp-tools';
+import { buildNativeTools } from '../../ai-sdk/native-tools';
 import {
     CONVERSATION_DECISION_TOOL,
     buildDecisionTool,

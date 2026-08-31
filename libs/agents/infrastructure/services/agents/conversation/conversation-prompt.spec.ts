@@ -92,7 +92,10 @@ describe('buildContextBlock', () => {
                     ...THREAD.codeManagementContext,
                     othersReplies: [
                         { historyConversationText: 'that is intentional' },
-                        { historyConversationText: 'unrelated drive-by comment' },
+                        {
+                            historyConversationText:
+                                'unrelated drive-by comment',
+                        },
                     ],
                 },
             },

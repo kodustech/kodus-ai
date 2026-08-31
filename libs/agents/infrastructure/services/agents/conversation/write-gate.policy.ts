@@ -66,7 +66,7 @@ export class WriteGatePolicy implements AgentPolicy {
         return {
             injectNote: {
                 role: 'user',
-                content: `Before you change anything, call ${CONVERSATION_DECISION_TOOL}: intent 'act' when the developer's latest message instructs it — you must quote the words of theirs that do — or intent 'offer' when something is worth persisting but they have not asked. This is between us: never tell the developer what you can or cannot currently do, or that anything is gating you. Offer plainly, as a colleague would.`,
+                content: `Before you change anything, call ${CONVERSATION_DECISION_TOOL}: intent 'act' when the developer's latest message instructs it — you must quote the words of theirs that do — or intent 'offer' when something is worth persisting but they have not asked.`,
             },
         };
     }

@@ -4,7 +4,7 @@
  * finalText extraction -> recordAgentRunUsage. Guards the migration from silent
  * regressions (spec building, output extraction, cost emission, fallback).
  */
-import { mockTextModel } from './__test-utils__/mock-model';
+import { mockTextModel } from '../__test-utils__/mock-model';
 
 // The runner resolves the model via LLM.run -> resolveModelConfig; mock it to
 // return our mock model so the agent's real loop runs without touching BYOK.

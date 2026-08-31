@@ -10,9 +10,7 @@ const call = (input: unknown) => ({
     message: {
         role: 'assistant' as const,
         content: '',
-        toolCalls: [
-            { id: 'c1', name: CONVERSATION_DECISION_TOOL, input },
-        ],
+        toolCalls: [{ id: 'c1', name: CONVERSATION_DECISION_TOOL, input }],
     },
 });
 
@@ -39,7 +37,10 @@ describe('readDecision', () => {
     it('takes the last decision when the agent revised it', () => {
         const decision = readDecision([
             call({ intent: 'offer' }),
-            { ...call({ intent: 'act', tool: 'X', why: 'confirmed' }), index: 1 },
+            {
+                ...call({ intent: 'act', tool: 'X', why: 'confirmed' }),
+                index: 1,
+            },
         ]);
 
         expect(decision?.intent).toBe('act');

@@ -7,7 +7,7 @@
  */
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
-import type { McpToolMetadata } from '../ai-sdk/mcp-tools';
+import type { McpToolMetadata } from '../../ai-sdk/mcp-tools';
 import { CONVERSATION_DECISION_TOOL } from './conversation-decision';
 
 /**

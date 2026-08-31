@@ -47,7 +47,7 @@ jest.mock('@libs/mcp-server/mcp-adapter', () => ({
 
 import { MockLanguageModelV3 } from 'ai/test';
 
-import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/agents/conversationAgent';
+import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/agents/conversation/conversationAgent';
 import { KodyIssuesTools } from '@libs/mcp-server/tools/kodyIssues.tools';
 import { KodyRulesTools } from '@libs/mcp-server/tools/kodyRules.tools';
 
