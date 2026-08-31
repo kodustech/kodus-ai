@@ -8,6 +8,7 @@
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
 import type { McpToolMetadata } from '../ai-sdk/mcp-tools';
+import { CONVERSATION_DECISION_TOOL } from './conversation-decision';
 
 /**
  * The PR comment thread the agent is answering in, as assembled by
@@ -216,6 +217,7 @@ export function buildProactiveBlock(
         'PROACTIVE ACTIONS:',
         'After you answer, judge whether this exchange produced durable signal — something that should outlive this thread. If it did, close your reply with ONE short offer to act, naming what you would do. If it did not (a greeting, a plain question, debugging chatter), just answer and offer nothing.',
         ...offers.map((o) => `- ${o.tool} — ${o.meta!.proactiveHint}`),
+        `Before you finish, call ${CONVERSATION_DECISION_TOOL} exactly once to record what you intend: 'answer' when nothing here needs persisting, 'offer' when something does but the developer has not asked you to do it, or 'act' when their latest message tells you to. The tools above only become available after you declare 'act', and to declare it you must quote the developer's own words that instruct it — so you cannot act on your own reading of the exchange.`,
         'Rules:',
         '- Offer at most one action per reply, as a single closing sentence.',
         '- Default to OFFERING. Explaining a convention, disputing a finding, giving context or agreeing with you is NOT a request to act — say what you would do and stop there.',

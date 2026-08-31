@@ -193,6 +193,16 @@ describe('proactive actions', () => {
         expect(prompt).toMatch(/THIS turn/);
     });
 
+    it('tells the agent how to declare what it intends', () => {
+        const prompt = userPrompt(withOrgTools);
+
+        expect(prompt).toContain('kodusDecideAction');
+        expect(prompt).toMatch(/exactly once/i);
+        expect(prompt).toMatch(/'offer'/);
+        expect(prompt).toMatch(/'act'/);
+        expect(prompt).toMatch(/quote/i);
+    });
+
     it('never advertises the destructive tools', () => {
         const prompt = userPrompt(withOrgTools);
 

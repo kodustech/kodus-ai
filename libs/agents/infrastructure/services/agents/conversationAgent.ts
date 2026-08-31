@@ -11,6 +11,7 @@ import { CONVERSATION_STORE_TOKEN } from '@libs/agents/infrastructure/persistenc
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { AiSdkToolRegistry } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-tool-registry';
 import { finalText } from '@libs/agent-harness/domain/run-state.util';
+import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -30,12 +31,18 @@ import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider
 
 import { connectMcpTools, type ConnectedMcpTools } from '../ai-sdk/mcp-tools';
 import { buildNativeTools } from '../ai-sdk/native-tools';
+import {
+    CONVERSATION_DECISION_TOOL,
+    buildDecisionTool,
+    readDecision,
+} from './conversation-decision';
 import { withVerifiedOutcome } from './conversation-outcome';
 import {
     auditWriteTools,
     writeToolPredicate,
     type WriteToolEvent,
 } from './conversation-tool-audit';
+import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
 import {
     buildSystemPrompt,
@@ -164,6 +171,7 @@ export class ConversationAgentProvider {
             {
                 ...mcp.tools,
                 ...(sandbox ? buildNativeTools(sandbox) : {}),
+                ...buildDecisionTool(),
             },
             mcp.metadata,
             (event) => (
@@ -208,7 +216,11 @@ export class ConversationAgentProvider {
             spanName: 'ConversationalAgent::conversationAgent',
             systemPrompt: buildSystemPrompt(userLanguage),
             tools: new AiSdkToolRegistry(tools),
-            policies: [new WriteTruthPolicy(writeToolPredicate(mcp.metadata))],
+            resultToolName: CONVERSATION_DECISION_TOOL,
+            policies: [
+                new WriteGatePolicy(writeToolPredicate(mcp.metadata), prompt),
+                new WriteTruthPolicy(writeToolPredicate(mcp.metadata)),
+            ],
             maxSteps: CONVERSATION_MAX_STEPS,
             // Conversation keeps its own max-output default when the slot omits one.
             maxOutputTokens: this.maxOutputTokensFallback,
@@ -278,6 +290,17 @@ export class ConversationAgentProvider {
             const finishReason = state.stopReason ?? state.status;
 
             const answer = finalText(state);
+
+            // What the agent said it would do, against what the tools did. A
+            // gap here is the failure this whole mechanism exists to catch, and
+            // it is invisible to the developer by design — the reply carries no
+            // tool report — so it has to be visible to us.
+            this.reportDecisionDivergence(
+                state.steps,
+                writes,
+                organizationAndTeamData,
+                thread,
+            );
 
             this.logger.log({
                 message: 'Finish conversation agent execution',
@@ -403,6 +426,51 @@ export class ConversationAgentProvider {
                 error,
             });
             return null;
+        }
+    }
+
+    /**
+     * Compare the turn's declared intent with the writes that actually ran.
+     * `act` with nothing executed means the agent told the developer it did
+     * something it did not do.
+     */
+    private reportDecisionDivergence(
+        steps: RunState['steps'],
+        writes: readonly WriteToolEvent[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        thread: ConversationThread,
+    ): void {
+        const decision = readDecision(steps);
+        const executed = writes.filter((w) => !w.error);
+
+        if (decision?.intent === 'act' && executed.length === 0) {
+            this.logger.error({
+                message:
+                    'Conversation agent declared an action it never performed',
+                context: ConversationAgentProvider.name,
+                serviceName: ConversationAgentProvider.name,
+                metadata: {
+                    organizationAndTeamData,
+                    threadId: thread?.id?.toString(),
+                    intendedTool: decision.tool,
+                    authorizingQuote: decision.authorizingQuote,
+                },
+            });
+            return;
+        }
+
+        if (decision?.intent !== 'act' && executed.length > 0) {
+            this.logger.error({
+                message: 'Conversation agent wrote without declaring an action',
+                context: ConversationAgentProvider.name,
+                serviceName: ConversationAgentProvider.name,
+                metadata: {
+                    organizationAndTeamData,
+                    threadId: thread?.id?.toString(),
+                    intent: decision?.intent ?? 'none',
+                    tools: executed.map((w) => w.tool),
+                },
+            });
         }
     }
 

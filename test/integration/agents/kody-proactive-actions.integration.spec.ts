@@ -243,6 +243,22 @@ const scenarioById = (id: string) => THREAD_SCENARIOS.find((s) => s.id === id)!;
 
 const actionableScenarios = THREAD_SCENARIOS.filter((s) => s.expectedOffer);
 
+/** A developer message that plainly instructs the action, and the decision the
+ *  agent must commit to before the write tools become available to it. */
+const ASKED_TO_SAVE = {
+    ...THREAD_SCENARIOS[0],
+    userMessage: '@kody yes, save that as a memory please',
+};
+
+const DECIDE_TO_ACT = {
+    toolName: 'kodusDecideAction',
+    input: {
+        intent: 'act',
+        tool: 'KODUS_CREATE_MEMORY',
+        authorizingQuote: 'save that as a memory',
+    },
+};
+
 beforeEach(() => {
     executedTools = [];
     logged = [];
@@ -250,17 +266,23 @@ beforeEach(() => {
 
 describe('@kody proactive actions in PR threads (issue #1761)', () => {
     describe('the machinery is already in place', () => {
-        it('binds every org write tool into the conversation tool registry', async () => {
+        it('binds every org write tool, and withholds them until asked', async () => {
             const turn = await runTurn(
                 scenarioById('false-positive-on-kody-rule'),
             );
 
-            expect(turn.toolNames).toEqual(expect.arrayContaining(WRITE_TOOLS));
+            // Bound in the registry (the read siblings prove MCP connected),
+            // but not offered to the model on a turn nobody asked for anything.
+            expect(turn.toolNames).toContain('KODUS_FIND_MEMORIES');
+            for (const write of WRITE_TOOLS) {
+                expect(turn.toolNames).not.toContain(write);
+            }
         });
 
         it('executes a write tool end to end when the model does call it', async () => {
-            await runTurn(scenarioById('false-positive-on-kody-rule'), {
+            await runTurn(ASKED_TO_SAVE, {
                 replies: [
+                    DECIDE_TO_ACT,
                     {
                         toolName: 'KODUS_CREATE_MEMORY',
                         input: {
@@ -283,8 +305,9 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         });
 
         it('never writes silently — the call is auditable', async () => {
-            await runTurn(scenarioById('false-positive-on-kody-rule'), {
+            await runTurn(ASKED_TO_SAVE, {
                 replies: [
+                    DECIDE_TO_ACT,
                     {
                         toolName: 'KODUS_CREATE_MEMORY',
                         input: { organizationId: 'org-11111111' },
@@ -313,7 +336,9 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             async (scenario) => {
                 const turn = await runTurn(scenario);
 
-                expect(turn.toolNames).toContain(scenario.expectedOffer);
+                // Named in the prompt so it can be offered by name — but not
+                // callable until the developer asks for it.
+                expect(turn.toolNames).not.toContain(scenario.expectedOffer);
                 expect(`${turn.systemPrompt}\n${turn.userPrompt}`).toContain(
                     scenario.expectedOffer,
                 );
@@ -378,16 +403,14 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         });
 
         it('publishes the link the tool really returned', async () => {
-            const answer = await runTurnAnswer(
-                scenarioById('false-positive-on-kody-rule'),
-                [
-                    {
-                        toolName: 'KODUS_CREATE_MEMORY',
-                        input: { organizationId: 'org-11111111' },
-                    },
-                    'Recorded it: https://app.kodus.io/settings/code-review/7/kody-rules/invented-000?tab=memories',
-                ],
-            );
+            const answer = await runTurnAnswer(ASKED_TO_SAVE, [
+                DECIDE_TO_ACT,
+                {
+                    toolName: 'KODUS_CREATE_MEMORY',
+                    input: { organizationId: 'org-11111111' },
+                },
+                'Recorded it: https://app.kodus.io/settings/code-review/7/kody-rules/invented-000?tab=memories',
+            ]);
 
             expect(answer).not.toContain('invented-000');
             expect(answer).toContain('kody-rules/real-abc');
@@ -442,6 +465,63 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         expect(
             logged.filter((e: any) => e?.metadata?.tool === 'grep'),
         ).toHaveLength(0);
+    });
+
+    describe('the write gate', () => {
+        it('does not even offer the write tools until an action is declared', async () => {
+            const turn = await runTurn(
+                scenarioById('false-positive-on-kody-rule'),
+            );
+
+            for (const write of WRITE_TOOLS) {
+                expect(turn.toolNames).not.toContain(write);
+            }
+            expect(turn.toolNames).toContain('kodusDecideAction');
+        });
+
+        it('hands them over once the agent quotes the developer asking', async () => {
+            await runTurn(
+                {
+                    ...scenarioById('false-positive-on-kody-rule'),
+                    userMessage: '@kody yes, save that as a memory please',
+                },
+                {
+                    replies: [
+                        {
+                            toolName: 'kodusDecideAction',
+                            input: {
+                                intent: 'act',
+                                tool: 'KODUS_CREATE_MEMORY',
+                                authorizingQuote: 'save that as a memory',
+                            },
+                        },
+                        'Saved.',
+                    ],
+                },
+            );
+
+            expect(captured.at(-1)!.toolNames).toContain('KODUS_CREATE_MEMORY');
+        });
+
+        it("keeps them back when the quote is not the developer's", async () => {
+            await runTurn(scenarioById('false-positive-on-kody-rule'), {
+                replies: [
+                    {
+                        toolName: 'kodusDecideAction',
+                        input: {
+                            intent: 'act',
+                            tool: 'KODUS_CREATE_MEMORY',
+                            authorizingQuote: 'go ahead and save it',
+                        },
+                    },
+                    'Done.',
+                ],
+            });
+
+            expect(captured.at(-1)!.toolNames).not.toContain(
+                'KODUS_CREATE_MEMORY',
+            );
+        });
     });
 
     it('stays quiet when the thread reveals nothing worth persisting', async () => {
