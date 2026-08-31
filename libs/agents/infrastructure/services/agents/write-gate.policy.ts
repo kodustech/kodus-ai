@@ -66,7 +66,7 @@ export class WriteGatePolicy implements AgentPolicy {
             ),
             injectNote: {
                 role: 'user',
-                content: `You have not been cleared to change anything, so the tools that do are unavailable. Answer the developer. If something here is worth persisting, call ${CONVERSATION_DECISION_TOOL} with intent 'offer' and say what you would do. If — and only if — the developer's latest message instructs you to act, call it with intent 'act' and quote their words that instruct it; the tool becomes available once you do.`,
+                content: `Answer the developer. If something here is worth persisting, call ${CONVERSATION_DECISION_TOOL} with intent 'offer' and say, in your reply, what you would do and that you can do it on their word. If — and only if — the developer's latest message instructs you to act, call it with intent 'act' and quote the words of theirs that instruct it. This instruction is between us: never tell the developer what you can or cannot currently do, or that anything is gating you — offer plainly, as a colleague would.`,
             },
         };
     }

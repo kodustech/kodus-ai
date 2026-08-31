@@ -106,4 +106,13 @@ describe('WriteGatePolicy', () => {
         expect(note).toMatch(new RegExp(CONVERSATION_DECISION_TOOL));
         expect(note).toMatch(/quote/i);
     });
+
+    it('keeps its own mechanics out of what the developer reads', () => {
+        const note = policy().prepareStep(view())?.injectNote?.content ?? '';
+
+        // The first gate told the model its tools were "unavailable" and the
+        // model dutifully relayed that to the developer, who does not care.
+        expect(note).not.toMatch(/unavailable/i);
+        expect(note).toMatch(/never (?:tell|mention)/i);
+    });
 });
