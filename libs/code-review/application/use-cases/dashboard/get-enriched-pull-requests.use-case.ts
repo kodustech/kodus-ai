@@ -18,6 +18,7 @@ import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/del
 import {
     authorMatchesExact,
     isOpenPullRequest,
+    deepLinkTargetRank,
     isUnresolvedDeliveredSuggestion,
 } from './utils/pull-request-metrics';
 import {
@@ -613,9 +614,10 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                             codeReviewTimeline,
                             enrichedData,
                             suggestionsCount,
-                            // First delivered suggestion — deep-link target for
-                            // the PR-list count (?file=...&suggestion=...).
-                            // Undefined when the aggregation/fallback found none.
+                            // Deep-link target for the PR-list count
+                            // (?file=...&suggestion=...): the delivered finding
+                            // that most wants attention (unresolved first, then
+                            // severity). null when there is none.
                             firstSentSuggestion:
                                 suggestionsCount.firstSentSuggestion ?? null,
                             // Adaptive-fit fidelity warnings (small
@@ -961,8 +963,11 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
         let failed = 0;
         let replaced = 0;
         let unresolved = 0;
-        let firstSentSuggestion: { id: string; filePath: string } | null =
-            null;
+        // Best deep-link target so far, plus the rank that won it — see
+        // deepLinkTargetRank: unresolved beats resolved, then severity, and
+        // document order only breaks ties.
+        let firstSentSuggestion: { id: string; filePath: string } | null = null;
+        let firstSentRank = -1;
 
         // Optimized: check if we have pre-computed counts
         if ((pullRequest as any).suggestionsCount) {
@@ -1018,11 +1023,18 @@ export class GetEnrichedPullRequestsUseCase implements IUseCase {
                 const status = suggestion.deliveryStatus;
                 if (status === DeliveryStatus.SENT) {
                     sent++;
-                    if (!firstSentSuggestion && suggestion.id) {
-                        firstSentSuggestion = {
-                            id: suggestion.id,
-                            filePath: files[i].path,
-                        };
+                    // Legacy docs may lack an id — a deep link without one
+                    // is useless, so those can't be the target.
+                    if (suggestion.id) {
+                        const rank = deepLinkTargetRank(suggestion as any);
+                        // Strictly greater: a tie keeps the earlier finding.
+                        if (rank > firstSentRank) {
+                            firstSentRank = rank;
+                            firstSentSuggestion = {
+                                id: suggestion.id,
+                                filePath: files[i].path,
+                            };
+                        }
                     }
                     const severity = String(
                         (suggestion as any).severity ?? '',
