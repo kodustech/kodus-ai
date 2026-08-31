@@ -79,6 +79,36 @@ describe('buildContextBlock', () => {
         expect(block).toContain('sug-9');
     });
 
+    it('does not repeat a turn that the conversation record already carries', () => {
+        const prompt = buildUserPrompt({
+            prompt: '@kody why?',
+            userLanguage: 'en-US',
+            organizationAndTeamData: ORG,
+            availableTools: [],
+            hasSandbox: false,
+            prepareContext: {
+                ...THREAD,
+                codeManagementContext: {
+                    ...THREAD.codeManagementContext,
+                    othersReplies: [
+                        { historyConversationText: 'that is intentional' },
+                        { historyConversationText: 'unrelated drive-by comment' },
+                    ],
+                },
+            },
+            priorTurns: [
+                { role: 'user', content: 'that is intentional' },
+                { role: 'assistant', content: 'Understood.' },
+            ],
+        });
+
+        // Present once, in the record that knows who said it.
+        expect(prompt.match(/that is intentional/g)).toHaveLength(1);
+        expect(prompt).toContain('Developer: that is intentional');
+        // A comment nobody replayed is still context worth keeping.
+        expect(prompt).toContain('unrelated drive-by comment');
+    });
+
     it('renders nothing without a context', () => {
         expect(buildContextBlock(undefined)).toBe('');
     });

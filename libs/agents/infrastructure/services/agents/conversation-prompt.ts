@@ -113,7 +113,7 @@ export function buildUserPrompt(input: UserPromptInput): string {
 
     const sections: string[] = [];
 
-    const contextBlock = buildContextBlock(prepareContext);
+    const contextBlock = buildContextBlock(prepareContext, priorTurns);
     if (contextBlock) {
         sections.push(contextBlock, '');
     }
@@ -228,6 +228,11 @@ export function buildProactiveBlock(
     ].join('\n');
 }
 
+/** Same text, ignoring the whitespace and case a round trip may have changed. */
+function normalize(text: string): string {
+    return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 /**
  * The concrete ids the tools need as arguments. Without them the agent can
  * describe an action but not perform it: `KODUS_CREATE_KODY_ISSUE` alone needs
@@ -281,6 +286,7 @@ export function buildIdentifiersBlock(
  */
 export function buildContextBlock(
     prepareContext?: ConversationThreadContext,
+    priorTurns?: ConversationTurn[],
 ): string {
     if (!prepareContext) {
         return '';
@@ -328,10 +334,15 @@ export function buildContextBlock(
         );
     }
 
+    // The PR thread and the conversation record overlap: every turn addressed to
+    // Kody appears in both. Render each one once, and leave it to the record —
+    // it knows who said what, which the raw thread does not.
+    const replayed = (priorTurns ?? []).map((t) => normalize(t.content));
     const replies = cmc?.othersReplies ?? [];
     const history = replies
         .map((r) => r?.historyConversationText)
-        .filter((t): t is string => typeof t === 'string' && t.length > 0);
+        .filter((t): t is string => typeof t === 'string' && t.length > 0)
+        .filter((t) => !replayed.includes(normalize(t)));
     if (history.length) {
         lines.push(
             '',
