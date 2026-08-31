@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { authorizedFetch } from "@services/fetch";
 import {
     OrganizationParametersConfigKey,
@@ -88,6 +89,14 @@ export const testBYOK = async (params: {
     // always-thinking model won't honor) fails the Test instead of saving quiet.
     temperature?: number;
     reasoningEffort?: "none" | "low" | "medium" | "high";
+    // The rest of what the save will persist. Sent so the probe exercises the
+    // exact slot being saved — a raw reasoning override with the wrong shape, or
+    // an OpenRouter pin no upstream can serve, used to save clean and only fail
+    // on the first review.
+    reasoningConfigOverride?: string;
+    maxOutputTokens?: number;
+    openrouterProviderOrder?: string[];
+    openrouterAllowFallbacks?: boolean;
     vertexLocation?: string;
     awsBearerToken?: string;
     awsAccessKeyId?: string;

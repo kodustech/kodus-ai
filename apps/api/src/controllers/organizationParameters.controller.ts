@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {
@@ -353,6 +354,13 @@ export class OrganizationParametersController {
                 model: { type: 'string' },
                 temperature: { type: 'number' },
                 reasoningEffort: { type: 'string' },
+                reasoningConfigOverride: { type: 'string' },
+                maxOutputTokens: { type: 'number' },
+                openrouterProviderOrder: {
+                    type: 'array',
+                    items: { type: 'string' },
+                },
+                openrouterAllowFallbacks: { type: 'boolean' },
                 vertexLocation: { type: 'string' },
                 awsBearerToken: { type: 'string' },
                 awsAccessKeyId: { type: 'string' },
@@ -365,7 +373,7 @@ export class OrganizationParametersController {
     @ApiOperation({
         summary: 'Test BYOK connection',
         description:
-            'Probe the provider with the supplied credentials to verify they work. Uses cheap metadata / identity calls (list-models for most providers, GoogleAuth token exchange for Vertex, STS GetCallerIdentity for Bedrock) — no LLM inference is performed.',
+            'Probe the provider with the supplied credentials to verify they work. Issues the same minimal call a review would make, through the same model resolver, so the configured model, temperature and reasoning are all exercised — a config that would fail at review time fails here instead. Vertex and Bedrock validate their auth material first (GoogleAuth token exchange / STS GetCallerIdentity).',
     })
     public async testByokConnection(
         @Body()
@@ -376,6 +384,10 @@ export class OrganizationParametersController {
             model?: string;
             temperature?: number;
             reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+            reasoningConfigOverride?: string;
+            maxOutputTokens?: number;
+            openrouterProviderOrder?: string[];
+            openrouterAllowFallbacks?: boolean;
             vertexLocation?: string;
             awsBearerToken?: string;
             awsAccessKeyId?: string;

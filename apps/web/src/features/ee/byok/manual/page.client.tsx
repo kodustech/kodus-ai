@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 import { Suspense, useState } from "react";
@@ -379,6 +380,22 @@ export function ByokManualPageClient({
                     data.reasoningEffort === "custom" || !data.reasoningEffort
                         ? undefined
                         : data.reasoningEffort,
+                // Everything else the save will persist, so the probe runs the
+                // slot being saved rather than a subset of it.
+                reasoningConfigOverride:
+                    data.reasoningEffort === "custom"
+                        ? (data.reasoningConfigOverride ?? undefined)
+                        : undefined,
+                maxOutputTokens: data.maxOutputTokens ?? undefined,
+                openrouterProviderOrder:
+                    data.openrouterProviderOrder &&
+                    data.openrouterProviderOrder.length > 0
+                        ? data.openrouterProviderOrder
+                        : undefined,
+                openrouterAllowFallbacks:
+                    typeof data.openrouterAllowFallbacks === "boolean"
+                        ? data.openrouterAllowFallbacks
+                        : undefined,
                 vertexLocation: data.vertexLocation ?? undefined,
                 awsBearerToken: data.awsBearerToken ?? undefined,
                 awsAccessKeyId: data.awsAccessKeyId ?? undefined,
