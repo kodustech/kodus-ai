@@ -304,6 +304,9 @@ export function withGenerateFromStream(model: CodexSdkModel): LanguageModel {
                 }
                 case 'text-delta': {
                     const key = fragmentKey('text', value.id);
+                    // A delta can arrive without a start part; register so
+                    // ordered emission keeps it instead of dropping it.
+                    ensureFragment(key);
                     appendFragment(key, value.delta);
                     mergeMetadata(key, value.providerMetadata);
                     break;
@@ -323,6 +326,7 @@ export function withGenerateFromStream(model: CodexSdkModel): LanguageModel {
                 }
                 case 'reasoning-delta': {
                     const key = fragmentKey('reasoning', value.id);
+                    ensureFragment(key);
                     appendFragment(key, value.delta);
                     mergeMetadata(key, value.providerMetadata);
                     break;

@@ -118,6 +118,30 @@ describe('Codex subscription transport', () => {
         expect(result.response).not.toHaveProperty('type');
     });
 
+    it('emits text and reasoning deltas that arrive without a start part', async () => {
+        const model = withGenerateFromStream(
+            streamModel([
+                { type: 'text-delta', id: 't1', delta: 'orphan text' },
+                { type: 'reasoning-delta', id: 'r1', delta: 'orphan thinking' },
+                {
+                    type: 'finish',
+                    usage,
+                    finishReason: { unified: 'stop', raw: 'completed' },
+                },
+            ]),
+        );
+
+        if (typeof model === 'string' || model.specificationVersion !== 'v4') {
+            throw new Error('Expected a v4 language model');
+        }
+        const result = await model.doGenerate(promptOptions());
+
+        expect(result.content).toEqual([
+            { type: 'text', text: 'orphan text' },
+            { type: 'reasoning', text: 'orphan thinking' },
+        ]);
+    });
+
     it('round-trips encrypted_content into the second request body', async () => {
         const requests: Array<Record<string, unknown>> = [];
         const originalFetch = global.fetch;
