@@ -1,11 +1,30 @@
-import { createMCPAdapter, type MCPServerConfig } from '@libs/mcp-server/mcp-adapter';
+import {
+    createMCPAdapter,
+    type MCPServerConfig,
+} from '@libs/mcp-server/mcp-adapter';
 import { jsonSchema, tool, type Tool } from 'ai';
 
 export type { MCPServerConfig };
 
+/**
+ * What a tool declares about itself (MCP tool annotations). Carried beside the
+ * tool map rather than inside it: the AI SDK `Tool` type has no slot for this,
+ * and consumers (audit, proactive offers) need it without the model seeing it.
+ */
+export interface McpToolMetadata {
+    /** False when the tool mutates state. Absent when the server omits it. */
+    readOnlyHint?: boolean;
+    /** True when the effect is irreversible. */
+    destructiveHint?: boolean;
+    /** When an agent should offer this action, if it may offer it at all. */
+    proactiveHint?: string;
+}
+
 export interface ConnectedMcpTools {
     /** Tool map ready to spread into `generateText({ tools })`. */
     tools: Record<string, Tool>;
+    /** Per-tool annotations, keyed by the same names as `tools`. */
+    metadata: Record<string, McpToolMetadata>;
     /** Disconnects the underlying local MCP adapter. Always call in a finally. */
     close: () => Promise<void>;
 }
@@ -54,15 +73,17 @@ export async function connectMcpTools(
             error instanceof Error ? error : new Error(String(error)),
             'mcp-adapter',
         );
-        return { tools: {}, close: async () => undefined };
+        return { tools: {}, metadata: {}, close: async () => undefined };
     }
 
     const tools: Record<string, Tool> = {};
+    const metadata: Record<string, McpToolMetadata> = {};
 
     try {
         const mcpTools = await adapter.getTools();
 
         for (const mcpTool of mcpTools) {
+            metadata[mcpTool.name] = readAnnotations(mcpTool.annotations);
             tools[mcpTool.name] = tool({
                 description: mcpTool.description ?? '',
                 inputSchema: jsonSchema(
@@ -89,9 +110,34 @@ export async function connectMcpTools(
 
     return {
         tools,
+        metadata,
         close: async () => {
             await adapter.disconnect().catch(() => undefined);
         },
+    };
+}
+
+/**
+ * Read the annotation keys we act on, ignoring anything else a server sends.
+ * Every field stays optional — a server that omits them is normal, and the
+ * consumer decides what an unknown tool defaults to.
+ */
+function readAnnotations(raw: unknown): McpToolMetadata {
+    if (!raw || typeof raw !== 'object') {
+        return {};
+    }
+
+    const a = raw as Record<string, unknown>;
+    return {
+        ...(typeof a.readOnlyHint === 'boolean'
+            ? { readOnlyHint: a.readOnlyHint }
+            : {}),
+        ...(typeof a.destructiveHint === 'boolean'
+            ? { destructiveHint: a.destructiveHint }
+            : {}),
+        ...(typeof a.proactiveHint === 'string' && a.proactiveHint
+            ? { proactiveHint: a.proactiveHint }
+            : {}),
     };
 }
 

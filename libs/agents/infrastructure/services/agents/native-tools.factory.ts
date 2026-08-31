@@ -26,9 +26,7 @@ type ToolConfig = {
  * agent then falls back to MCP-only tools (memory) — same shape as before
  * the runtime sandbox integration.
  */
-export function buildNativeToolConfigs(
-    sandbox: SandboxInstance,
-): ToolConfig[] {
+export function buildNativeToolConfigs(sandbox: SandboxInstance): ToolConfig[] {
     if (sandbox.type === 'null') {
         return [];
     }
@@ -72,9 +70,7 @@ export function buildNativeToolConfigs(
         description:
             'Read a file from the repository between two line numbers (1-indexed, inclusive). Use to inspect implementation details after grep.',
         inputSchema: z.object({
-            path: z
-                .string()
-                .describe('Repo-relative path to the file.'),
+            path: z.string().describe('Repo-relative path to the file.'),
             start: z
                 .number()
                 .int()
@@ -102,9 +98,7 @@ export function buildNativeToolConfigs(
         description:
             'List files and folders under a directory in the repository, up to a maximum depth. Use to explore unfamiliar projects.',
         inputSchema: z.object({
-            path: z
-                .string()
-                .describe('Repo-relative directory path.'),
+            path: z.string().describe('Repo-relative directory path.'),
             maxDepth: z
                 .number()
                 .int()

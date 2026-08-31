@@ -21,9 +21,9 @@ describe('normalizeConversationResponse', () => {
     });
 
     it('unwraps a JSON-string { content } envelope', () => {
-        expect(
-            normalizeConversationResponse('{"content":"real answer"}'),
-        ).toBe('real answer');
+        expect(normalizeConversationResponse('{"content":"real answer"}')).toBe(
+            'real answer',
+        );
     });
 
     it('unwraps nested { content } envelopes', () => {

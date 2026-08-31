@@ -28,8 +28,20 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
-import { connectMcpTools } from '../ai-sdk/mcp-tools';
+import { connectMcpTools, type ConnectedMcpTools } from '../ai-sdk/mcp-tools';
 import { buildNativeTools } from '../ai-sdk/native-tools';
+import { withVerifiedOutcome } from './conversation-outcome';
+import {
+    auditWriteTools,
+    writeToolPredicate,
+    type WriteToolEvent,
+} from './conversation-tool-audit';
+import { WriteTruthPolicy } from './write-truth.policy';
+import {
+    buildSystemPrompt,
+    buildUserPrompt,
+    type ConversationThreadContext,
+} from './conversation-prompt';
 import {
     CONVERSATION_FALLBACK_MESSAGE,
     CONVERSATION_PROVIDER_ERROR_MESSAGE,
@@ -43,6 +55,13 @@ import {
  * exploration, bounded so a stuck loop can't run away.
  */
 const CONVERSATION_MAX_STEPS = 12;
+
+/**
+ * How many prior messages of the thread travel back into the prompt. Enough to
+ * carry an offer and its confirmation without dragging a long thread into every
+ * turn.
+ */
+const CONVERSATION_HISTORY_TURNS = 10;
 
 /**
  * Thread identifier passed by the caller. Structurally compatible with the
@@ -96,7 +115,7 @@ export class ConversationAgentProvider {
         prompt: string,
         context?: {
             organizationAndTeamData: OrganizationAndTeamData;
-            prepareContext?: any;
+            prepareContext?: ConversationThreadContext;
             thread?: ConversationThread;
             sandbox?: SandboxInstance;
         },
@@ -134,15 +153,43 @@ export class ConversationAgentProvider {
         // readFile, listDir, exec). Both are plain AI SDK tools, carried into
         // the harness as-is by AiSdkToolRegistry (no schema round-trip).
         const mcp = await this.connectMcp(organizationAndTeamData);
-        const tools: Record<string, Tool> = {
-            ...mcp.tools,
-            ...(sandbox ? buildNativeTools(sandbox) : {}),
-        };
-        // Whether the memory tool is actually available — gates the mandatory
-        // memory bootstrap in the prompt (see buildUserPrompt). MCP offline ->
-        // no tool -> don't command the model to call something that isn't there.
-        const hasMemoryTool = 'KODUS_FIND_MEMORIES' in mcp.tools;
 
+        // What this turn actually changed. Drives both the honesty note the
+        // model sees mid-run and the footer the developer reads at the end.
+        const writes: WriteToolEvent[] = [];
+
+        // Sandbox tools are spread in AFTER auditing: they read the checked-out
+        // repo, never org state, so a grep is not an action the agent performed.
+        const tools: Record<string, Tool> = auditWriteTools(
+            {
+                ...mcp.tools,
+                ...(sandbox ? buildNativeTools(sandbox) : {}),
+            },
+            mcp.metadata,
+            (event) => (
+                writes.push(event),
+                this.logger[event.error ? 'error' : 'log']({
+                    message: event.error
+                        ? `Conversation agent write tool ${event.tool} failed`
+                        : `Conversation agent called write tool ${event.tool}`,
+                    context: ConversationAgentProvider.name,
+                    serviceName: ConversationAgentProvider.name,
+                    metadata: {
+                        organizationAndTeamData,
+                        threadId: thread.id?.toString(),
+                        repositoryId:
+                            prepareContext?.repository?.id?.toString(),
+                        developer: prepareContext?.gitUser?.username,
+                        tool: event.tool,
+                        failed: Boolean(event.error),
+                        error: event.error,
+                        // Debugging record of what the tool handed back — the
+                        // reply shows the developer the link, not this.
+                        result: event.result,
+                    },
+                })
+            ),
+        );
         // Single runtime: the conversation runs as an AgentSpec on the harness
         // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
         // reasoning from the slot and records the cost span; the spec carries only
@@ -159,9 +206,9 @@ export class ConversationAgentProvider {
             runName: 'conversationAgent',
             phase: 'conversation',
             spanName: 'ConversationalAgent::conversationAgent',
-            systemPrompt: this.buildSystemPrompt(userLanguage),
+            systemPrompt: buildSystemPrompt(userLanguage),
             tools: new AiSdkToolRegistry(tools),
-            policies: [],
+            policies: [new WriteTruthPolicy(writeToolPredicate(mcp.metadata))],
             maxSteps: CONVERSATION_MAX_STEPS,
             // Conversation keeps its own max-output default when the slot omits one.
             maxOutputTokens: this.maxOutputTokensFallback,
@@ -174,14 +221,21 @@ export class ConversationAgentProvider {
         });
 
         try {
-            const preparedPrompt = this.buildUserPrompt(
+            // The PR thread strips Kody's own replies on every platform, so an
+            // offer it made last turn survives only in the conversation record.
+            // Replay it — otherwise a bare "yes, do it" resolves to nothing.
+            const seedMessages = await this.loadThreadHistory(thread);
+
+            const preparedPrompt = buildUserPrompt({
                 prompt,
                 userLanguage,
                 prepareContext,
                 organizationAndTeamData,
-                hasMemoryTool,
-                sandbox,
-            );
+                availableTools: Object.keys(tools),
+                toolMetadata: mcp.metadata,
+                hasSandbox: Boolean(sandbox && sandbox.type !== 'null'),
+                priorTurns: seedMessages,
+            });
 
             // withLangfuseTrace -> TRACE level (session/user): a thread is a
             // session, so every turn of the same conversation reads as one unit.
@@ -197,7 +251,8 @@ export class ConversationAgentProvider {
                             organizationAndTeamData.organizationId?.toString(),
                         teamId: organizationAndTeamData.teamId?.toString(),
                         threadId: thread.id?.toString(),
-                        repositoryId: prepareContext?.repository?.id?.toString(),
+                        repositoryId:
+                            prepareContext?.repository?.id?.toString(),
                     },
                 },
                 () =>
@@ -267,11 +322,13 @@ export class ConversationAgentProvider {
             // usable. A run that ENDED IN ERROR (provider down/blocked — zero
             // tokens) gets the technical-issue message, not the "add more
             // context" nudge, which would blame the user for an outage.
-            const userFacing =
-                response ??
-                (finishReason === 'error'
-                    ? CONVERSATION_PROVIDER_ERROR_MESSAGE
-                    : CONVERSATION_FALLBACK_MESSAGE);
+            // The model narrates; the tools are the record. Reconcile the two
+            // before anyone reads the reply.
+            const userFacing = response
+                ? withVerifiedOutcome(response, writes)
+                : finishReason === 'error'
+                  ? CONVERSATION_PROVIDER_ERROR_MESSAGE
+                  : CONVERSATION_FALLBACK_MESSAGE;
 
             // Persist the exchange to `kodus-agent-sessions` (best-effort —
             // never blocks the reply). Records the turn even when it fell back,
@@ -321,7 +378,7 @@ export class ConversationAgentProvider {
                 runName: 'conversationAgent',
                 phase: 'conversation-retry',
                 spanName: 'ConversationalAgent::conversationAgent',
-                systemPrompt: this.buildSystemPrompt(userLanguage),
+                systemPrompt: buildSystemPrompt(userLanguage),
                 tools: new AiSdkToolRegistry({}),
                 policies: [],
                 maxSteps: 1,
@@ -350,6 +407,45 @@ export class ConversationAgentProvider {
     }
 
     /**
+     * The tail of this thread's conversation record, oldest first. Best-effort:
+     * the store swallows its own errors and a miss just means the agent answers
+     * without prior turns.
+     */
+    private async loadThreadHistory(
+        thread: ConversationThread,
+    ): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+        const threadId = thread?.id != null ? String(thread.id) : '';
+        if (!this.conversationStore || !threadId) {
+            return [];
+        }
+
+        try {
+            const messages = await this.conversationStore.load(threadId);
+            return messages
+                .filter(
+                    (m) =>
+                        (m.role === 'user' || m.role === 'assistant') &&
+                        typeof m.content === 'string' &&
+                        m.content.length > 0,
+                )
+                .slice(-CONVERSATION_HISTORY_TURNS)
+                .map((m) => ({
+                    role: m.role as 'user' | 'assistant',
+                    content: m.content,
+                }));
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    'Failed to load conversation history; answering without it',
+                context: ConversationAgentProvider.name,
+                metadata: { threadId },
+                error,
+            });
+            return [];
+        }
+    }
+
+    /**
      * Append the user/assistant exchange to the conversation record
      * (`kodus-agent-sessions`) keyed by the thread id. Best-effort and fully
      * isolated: the store swallows its own errors, and this wrapper guards the
@@ -361,14 +457,13 @@ export class ConversationAgentProvider {
         userPrompt: string,
         assistantResponse: string,
         organizationAndTeamData: OrganizationAndTeamData,
-        prepareContext: any,
+        prepareContext?: ConversationThreadContext,
     ): Promise<void> {
         if (!this.conversationStore) {
             return;
         }
 
-        const threadId =
-            thread?.id != null ? String(thread.id) : '';
+        const threadId = thread?.id != null ? String(thread.id) : '';
         if (!threadId) {
             return;
         }
@@ -415,7 +510,7 @@ export class ConversationAgentProvider {
      */
     private async connectMcp(
         organizationAndTeamData: OrganizationAndTeamData,
-    ): Promise<{ tools: Record<string, Tool>; close: () => Promise<void> }> {
+    ): Promise<ConnectedMcpTools> {
         const servers =
             (await this.mcpManagerService?.getConnections(
                 organizationAndTeamData,
@@ -431,7 +526,7 @@ export class ConversationAgentProvider {
                     teamId: organizationAndTeamData?.teamId,
                 },
             });
-            return { tools: {}, close: async () => undefined };
+            return { tools: {}, metadata: {}, close: async () => undefined };
         }
 
         return connectMcpTools(servers, {
@@ -443,155 +538,6 @@ export class ConversationAgentProvider {
                 });
             },
         });
-    }
-
-    private buildSystemPrompt(userLanguage: string): string {
-        return [
-            'You are Kodus, an intelligent conversation agent for user interactions.',
-            'Goal: engage in natural, helpful conversations while respecting the user language preference.',
-            '',
-            'LANGUAGE REQUIREMENTS (NON-NEGOTIABLE):',
-            `- Write your ENTIRE response in ${userLanguage}. This is the team's configured system language.`,
-            `- ALWAYS reply in ${userLanguage} EVEN WHEN the user writes in a different language. NEVER mirror or switch to the language of the user's message.`,
-            '- Keep the whole reply in one language; do not mix languages.',
-            '- Use terminology and formatting natural to that language.',
-        ].join('\n');
-    }
-
-    /**
-     * Assemble the user turn: the conversation context (rebuilt from the PR
-     * comment thread), an OPTIONAL list of available tools (memory + repo), and
-     * finally the user's message. Tools are offered, never mandated — a chat
-     * agent must be free to just answer.
-     */
-    private buildUserPrompt(
-        prompt: string,
-        userLanguage: string,
-        prepareContext: any,
-        organizationAndTeamData: OrganizationAndTeamData,
-        hasMemoryTool: boolean,
-        sandbox?: SandboxInstance,
-    ): string {
-        const organizationId =
-            organizationAndTeamData?.organizationId?.toString() || '';
-        const teamId = organizationAndTeamData?.teamId?.toString() || '';
-        const repositoryId = prepareContext?.repository?.id?.toString() || '';
-
-        const memoryPayload = {
-            organizationId,
-            teamId,
-            ...(repositoryId ? { repositoryId } : {}),
-            limit: 20,
-        };
-
-        const sections: string[] = [];
-
-        const contextBlock = this.buildContextBlock(prepareContext);
-        if (contextBlock) {
-            sections.push(contextBlock, '');
-        }
-
-        // Tools are OPTIONAL aids, not a mandatory pipeline. This is a chat
-        // agent — forcing a tool call first (especially one that may be
-        // unavailable) made the model freeze and answer nothing on trivial
-        // messages like a greeting. List what's available and let it decide.
-        const toolLines: string[] = [];
-        if (hasMemoryTool) {
-            toolLines.push(
-                `- KODUS_FIND_MEMORIES — look up the user's prior context/preferences when the question would benefit from it. Payload: ${JSON.stringify(memoryPayload)}`,
-            );
-        }
-        if (sandbox && sandbox.type !== 'null') {
-            toolLines.push(
-                '- grep / readFile / listDir / exec — search and read the repository when the user asks about code, config, or behavior. Cite file paths and line numbers when you do.',
-            );
-        }
-
-        if (toolLines.length) {
-            sections.push(
-                '',
-                'TOOLS (optional — use them only when they help you answer; for greetings or simple questions, just reply directly):',
-                ...toolLines,
-            );
-        }
-
-        sections.push(
-            '',
-            `Answer the user's message below directly. Write your entire answer in ${userLanguage} (the team's configured language) — do NOT switch to the language the user wrote in.`,
-            '',
-            'USER MESSAGE:',
-            prompt,
-        );
-
-        return sections.join('\n');
-    }
-
-    /**
-     * Render the conversation context carried in `prepareContext` (the PR
-     * comment thread) into the prompt. In the legacy flow this travelled as
-     * `userContext.additional_information`; the AI SDK is stateless, so we make
-     * it explicit here. Every field is optional — only present ones render.
-     */
-    private buildContextBlock(prepareContext: any): string {
-        if (!prepareContext) {
-            return '';
-        }
-
-        const lines: string[] = [];
-        const pr = prepareContext.pullRequest;
-        const repo = prepareContext.repository;
-        const cmc = prepareContext.codeManagementContext;
-
-        if (pr?.pullRequestNumber || repo?.name) {
-            const head = pr?.headRef ? ` (${pr.headRef} → ${pr?.baseRef})` : '';
-            lines.push(
-                `## Conversation context`,
-                `Pull request #${pr?.pullRequestNumber ?? '?'}${head}` +
-                    (repo?.name ? ` in ${repo.name}` : ''),
-            );
-        }
-
-        if (prepareContext.pullRequestDescription) {
-            lines.push('', String(prepareContext.pullRequestDescription));
-        }
-
-        const original = cmc?.originalComment;
-        if (original?.suggestionText) {
-            lines.push(
-                '',
-                '### Original Kody suggestion (under discussion)',
-                ...(original.suggestionFilePath
-                    ? [`File: ${original.suggestionFilePath}`]
-                    : []),
-                String(original.suggestionText),
-                ...(original.diffHunk
-                    ? ['Diff:', '```', String(original.diffHunk), '```']
-                    : []),
-            );
-        }
-
-        const replies: Array<{ historyConversationText?: string }> =
-            cmc?.othersReplies ?? [];
-        const history = replies
-            .map((r) => r?.historyConversationText)
-            .filter((t): t is string => typeof t === 'string' && t.length > 0);
-        if (history.length) {
-            lines.push(
-                '',
-                '### Conversation so far',
-                ...history.map((t) => `- ${t}`),
-            );
-        }
-
-        if (prepareContext.customInstructions) {
-            lines.push(
-                '',
-                '### Custom instructions',
-                String(prepareContext.customInstructions),
-            );
-        }
-
-        return lines.join('\n');
     }
 
     private async getLanguage(
