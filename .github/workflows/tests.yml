@@ -148,7 +148,24 @@ jobs:
               run: SKIP_MONGO_MIGRATIONS=true pnpm run migration:run
 
             - name: Run tests
-              run: API_NODE_ENV=test pnpm run test
+              # TEST_MONGODB_URI un-skips test/integration/platformData/* —
+              # those suites gate themselves on it and were silently skipped in
+              # every CI run (nothing loads .env into the jest process, so their
+              # API_MG_DB_HOST fallback never gets set, and a green run said
+              # nothing about the Mongo aggregations). docker-compose.test.yml
+              # publishes mongo on 27017, so localhost reaches it from this host
+              # step even though the `db_mongodb` service hostname doesn't
+              # resolve here. Credentials are pulled from .env (not the whole
+              # file sourced — that would leak unrelated vars into every spec)
+              # and percent-encoded, so a secret containing @ or : can't corrupt
+              # the connection string.
+              run: |
+                  MG_USER=$(grep -m1 '^API_MG_DB_USERNAME=' .env | cut -d= -f2-)
+                  MG_PASS=$(grep -m1 '^API_MG_DB_PASSWORD=' .env | cut -d= -f2-)
+                  enc() { node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$1"; }
+                  API_NODE_ENV=test \
+                  TEST_MONGODB_URI="mongodb://$(enc "$MG_USER"):$(enc "$MG_PASS")@localhost:27017/kodus_test_integration?authSource=admin" \
+                  pnpm run test
 
             - name: Docker Compose Action Cleanup
               uses: hoverkraft-tech/compose-action@v2.6.0
