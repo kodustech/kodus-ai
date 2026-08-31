@@ -138,6 +138,28 @@ describe('buildDecisionTool', () => {
         ]);
     });
 
+    it('grants before it yields, which the write gate depends on', () => {
+        const auth = createWriteAuthorization();
+        const tools = buildDecisionTool((d) =>
+            grantIfAuthorized(d, '@kody save that as a memory', auth),
+        );
+
+        // Deliberately NOT awaited. A write emitted alongside this call reads
+        // the authorization one microtask later, so the grant has to land in
+        // the synchronous part of execute. Put an `await` above onDecision and
+        // this fails — which is the point.
+        void tools[CONVERSATION_DECISION_TOOL].execute!(
+            {
+                intent: 'act',
+                tool: 'KODUS_CREATE_MEMORY',
+                authorizingQuote: 'save that as a memory',
+            },
+            {} as never,
+        );
+
+        expect(auth.allows('KODUS_CREATE_MEMORY')).toBe(true);
+    });
+
     it('reports the decision as soon as it runs, not a step later', async () => {
         const seen: unknown[] = [];
         const tools = buildDecisionTool((d) => seen.push(d));

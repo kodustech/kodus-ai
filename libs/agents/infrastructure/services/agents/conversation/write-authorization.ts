@@ -58,8 +58,18 @@ export function requireDeclaredAction(
         const execute = tool.execute.bind(tool);
         guarded[name] = {
             ...tool,
-            execute: async (args: never, options: never) =>
-                authorization.allows(name) ? execute(args, options) : REFUSAL,
+            execute: async (args: never, options: never) => {
+                // A message's tool calls are STARTED in the order the model
+                // wrote them, so a write listed before its own declaration
+                // would read the authorization before the decision tool had
+                // run. Yielding once lets every call in the batch begin — the
+                // declaration among them — before the answer is decided.
+                await Promise.resolve();
+
+                return authorization.allows(name)
+                    ? execute(args, options)
+                    : REFUSAL;
+            },
         } as Tool;
     }
 

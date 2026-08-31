@@ -534,6 +534,28 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             ]);
         });
 
+        it('runs a write emitted BEFORE the decision in the same message', async () => {
+            // The SDK starts a message's tool calls in array order, so a write
+            // listed first would check authorization before the decision tool
+            // has run. Order within the batch must not decide the outcome.
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    [
+                        {
+                            toolName: 'KODUS_CREATE_MEMORY',
+                            input: { organizationId: 'org-11111111' },
+                        },
+                        DECIDE_TO_ACT,
+                    ] as never,
+                    'Saved.',
+                ],
+            });
+
+            expect(executedTools.map((t) => t.name)).toEqual([
+                'KODUS_CREATE_MEMORY',
+            ]);
+        });
+
         it('refuses an act that names no tool rather than granting them all', async () => {
             await runTurn(ASKED_TO_SAVE, {
                 replies: [

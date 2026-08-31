@@ -66,6 +66,11 @@ export function buildDecisionTool(
             // steps that have finished, so a model that emits the decision and
             // the write in a single message would otherwise have the write
             // refused and be told to declare something it just declared.
+            //
+            // This must stay synchronous up to `onDecision`: a write in the
+            // same message reads the authorization one microtask later, so an
+            // `await` above this line would put the grant after that read. A
+            // spec pins it.
             execute: async (input: unknown) => {
                 const decision = parse(input);
                 if (decision) {
