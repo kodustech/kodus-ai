@@ -68,7 +68,7 @@ Revisa esta lista de verificación rápida:
 
 1. ¿El PR contiene cambios de código revisables (no solo documentación o imágenes)? Kody puede omitir si no hay nada relevante para analizar.
 2. ¿La rama está en alcance? Por defecto, solo se revisan los PRs que apuntan a la rama predeterminada, a menos que se configuren ramas base adicionales.
-3. **PRs Grandes:** Kody revisa PRs con hasta 200 **archivos revisables** (después de aplicar los patrones de ignorado). Ejemplo: PR con 250 archivos totales pero 60 son archivos `.lock` → Kody revisa los 190 archivos restantes ✅
+3. **PRs Grandes:** Kody revisa PRs con hasta 2.000 **archivos revisables** (después de aplicar los patrones de ignorado). Ejemplo: PR con 2.500 archivos totales pero 600 son archivos `.lock` → Kody revisa los 1.900 archivos restantes ✅
 4. Modo: Si las revisiones automatizadas están deshabilitadas, actívalas manualmente con `@kody start-review`.
 5. Cadencia de push: Si usas auto-pausa, espera el tiempo de enfriamiento o solicita una revisión manual.
 6. Overrides del repositorio: Los ajustes específicos del repositorio pueden anular los globales. Límpialos o alinealos según sea necesario.
