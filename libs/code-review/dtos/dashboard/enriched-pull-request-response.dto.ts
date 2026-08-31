@@ -47,6 +47,10 @@ export interface EnrichedPullRequestResponse {
         // Distinct categories (labels) among SENT suggestions.
         categories?: string[];
     };
+    // First DELIVERED (sent) suggestion — deep-link target when the PR-list
+    // count is clicked (?file=...&suggestion=... on the review screen).
+    // null when the PR has no delivered suggestion to land on.
+    firstSentSuggestion?: { id: string; filePath: string } | null;
     reviewedCommitSha?: string;
     reviewedCommitUrl?: string;
     compareUrl?: string;

@@ -469,5 +469,67 @@ const shouldSkip = !MONGODB_URI;
                 expect(result.size).toBe(0);
             });
         });
+
+        describe('Deep-link target (firstSentSuggestion)', () => {
+            it('should expose the first DELIVERED suggestion with its file path', async () => {
+                await createTestPR({
+                    number: 601,
+                    repositoryId: 'repo-deeplink',
+                    files: [
+                        {
+                            // First file: NOT_SENT first, then SENT — the deep
+                            // link must point at the earliest sent finding
+                            // (sugg-0-1), not the one in the second file.
+                            suggestions: [
+                                { deliveryStatus: DeliveryStatus.NOT_SENT },
+                                { deliveryStatus: DeliveryStatus.SENT },
+                                { deliveryStatus: DeliveryStatus.SENT },
+                            ],
+                        },
+                        {
+                            suggestions: [
+                                { deliveryStatus: DeliveryStatus.SENT },
+                            ],
+                        },
+                    ],
+                });
+
+                const result =
+                    await repository.findSuggestionCountsByNumbersAndRepositoryIds(
+                        [{ number: 601, repositoryId: 'repo-deeplink' }],
+                        TEST_ORG_ID,
+                    );
+
+                const counts = result.get('repo-deeplink_601');
+                expect(counts?.firstSentSuggestion).toEqual({
+                    id: 'sugg-0-1',
+                    filePath: 'src/file0.ts',
+                });
+            });
+
+            it('should be null when there is no delivered suggestion', async () => {
+                await createTestPR({
+                    number: 602,
+                    repositoryId: 'repo-deeplink',
+                    files: [
+                        {
+                            suggestions: [
+                                { deliveryStatus: DeliveryStatus.NOT_SENT },
+                                { deliveryStatus: DeliveryStatus.FAILED },
+                            ],
+                        },
+                    ],
+                });
+
+                const result =
+                    await repository.findSuggestionCountsByNumbersAndRepositoryIds(
+                        [{ number: 602, repositoryId: 'repo-deeplink' }],
+                        TEST_ORG_ID,
+                    );
+
+                const counts = result.get('repo-deeplink_602');
+                expect(counts?.firstSentSuggestion).toBeNull();
+            });
+        });
     },
 );
