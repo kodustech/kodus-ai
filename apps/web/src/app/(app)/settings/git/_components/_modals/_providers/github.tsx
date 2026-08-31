@@ -23,7 +23,7 @@ import { magicModal } from "@components/ui/magic-modal";
 import { Switch } from "@components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@components/ui/tabs";
 import { useAsyncAction } from "@hooks/use-async-action";
-import { AxiosError } from "axios";
+import { setIntegrationError } from "src/core/utils/extract-error-message";
 import { Info, Save } from "lucide-react";
 
 type Props = {
@@ -63,10 +63,7 @@ export const GithubModal = (props: Props) => {
                 magicModal.hide();
             } catch (error) {
                 magicModal.unlock();
-
-                if (error instanceof AxiosError && error.status === 400) {
-                    setError({ message: "Invalid Token" });
-                }
+                setIntegrationError(error, setError);
             }
         },
     );

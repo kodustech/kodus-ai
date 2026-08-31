@@ -6,10 +6,10 @@ import { OrganizationAndTeamData } from '@/config/types/general/organizationAndT
 import { PullRequestHandlerService } from '@/core/infrastructure/adapters/services/codeBase/pullRequestManager.service';
 import { PinoLoggerService } from '@/core/infrastructure/adapters/services/logger/pino.service';
 import { CacheService } from '@/shared/utils/cache/cache.service';
-import { getDefaultKodusConfigFile } from '@/shared/utils/validateCodeReviewConfigFile';
+import * as globalPathsJsonFile from '@/shared/utils/codeBase/ignorePaths/generated/paths.json';
 
 describe('pullRequestManager', () => {
-    const globalFilePaths = getDefaultKodusConfigFile().ignorePaths;
+    const globalFilePaths = globalPathsJsonFile.paths;
 
     let pullRequestManagerService: PullRequestHandlerService;
 
