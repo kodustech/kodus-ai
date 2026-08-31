@@ -10,24 +10,43 @@
  * The endpoint now lives on the provider module (`defaultBaseURL`); this sweeps
  * EVERY brand that declares one, so a new brand is covered automatically and this
  * whole class of regression can't come back silently.
+ *
+ * The probe no longer builds requests itself — it hands a slot to
+ * `probeSlotCall`, which runs the review's own montagem. So these assert what
+ * this use-case is actually responsible for: the SLOT it assembles. That the
+ * slot then produces the right request is `probe-slot-call.spec` plus the
+ * provider modules' own specs.
  */
-import axios from 'axios';
+// @ts-nocheck
+
+// 
 import { REGISTRY } from '@libs/llm/providers';
 import { TestByokConnectionUseCase } from './test-byok-connection.use-case';
 
-jest.mock('axios');
-// SSRF guard resolves the host via dns/promises — stub it to a public IP so the
-// probe doesn't depend on real DNS.
 jest.mock('dns/promises', () => ({
-    lookup: jest.fn().mockResolvedValue([{ address: '203.0.113.10', family: 4 }]),
+    lookup: jest
+        .fn()
+        .mockResolvedValue([{ address: '203.0.113.10', family: 4 }]),
 }));
 
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+const probeSlotCall = jest.fn();
+jest.mock('@libs/llm/probe-slot-call', () => ({
+    probeSlotCall: (...args: any[]) => probeSlotCall(...args),
+}));
+
+// The slot carries ciphertext by contract; decryption happens in the model
+// build. Stub the crypto so a test doesn't need a real key configured.
+jest.mock('@libs/common/utils/crypto', () => ({
+    encrypt: (v: string) => `enc(${v})`,
+    decrypt: (v: string) => v,
+}));
 
 function useCase() {
     const providerService = { isProviderSupported: () => true } as any;
     return new TestByokConnectionUseCase(providerService);
 }
+
+const probedSlot = () => probeSlotCall.mock.calls[0][0];
 
 // Every brand that declares a canonical endpoint — the exact set whose key-only
 // connect depends on the module supplying baseURL. Derived from the registry, so
@@ -35,6 +54,11 @@ function useCase() {
 const BRANDS_WITH_ENDPOINT = REGISTRY.all()
     .filter((m) => typeof m.defaultBaseURL === 'string' && m.defaultBaseURL)
     .map((m) => [m.id, m.defaultBaseURL as string] as const);
+
+beforeEach(() => {
+    probeSlotCall.mockReset();
+    probeSlotCall.mockResolvedValue({ latencyMs: 12 });
+});
 
 describe('brands expose their canonical endpoint on the module', () => {
     it('at least the two Anthropic-protocol brands are present', () => {
@@ -52,13 +76,6 @@ describe('brands expose their canonical endpoint on the module', () => {
 });
 
 describe('TestByokConnectionUseCase — key-only brand connect resolves the endpoint', () => {
-    beforeEach(() => {
-        mockedAxios.post.mockReset();
-        mockedAxios.get.mockReset();
-        mockedAxios.post.mockResolvedValue({ status: 200, data: {} } as any);
-        mockedAxios.get.mockResolvedValue({ status: 200, data: {} } as any);
-    });
-
     // The regression itself, swept over every brand: a key + NO baseURL must probe
     // the brand's own host, never throw "baseURL is required".
     it.each(BRANDS_WITH_ENDPOINT)(
@@ -71,9 +88,7 @@ describe('TestByokConnectionUseCase — key-only brand connect resolves the endp
             });
 
             expect(res.ok).toBe(true);
-            const calledUrl = (mockedAxios.post.mock.calls[0]?.[0] ??
-                mockedAxios.get.mock.calls[0]?.[0]) as string;
-            expect(calledUrl).toContain(new URL(baseURL).host);
+            expect(probedSlot().baseURL).toBe(baseURL);
         },
     );
 
@@ -82,6 +97,7 @@ describe('TestByokConnectionUseCase — key-only brand connect resolves the endp
             useCase().execute({
                 provider: 'anthropic_compatible',
                 apiKey: 'sk-test',
+                model: 'some-model',
             }),
         ).rejects.toThrow(/baseURL is required/i);
     });
@@ -92,14 +108,7 @@ describe('TestByokConnectionUseCase — key-only brand connect resolves the endp
 // would silently drop (an always-thinking Kimi ignores a non-1 temperature) fails
 // the Test instead of saving quiet.
 describe('TestByokConnectionUseCase — tuning validation short-circuits the probe', () => {
-    beforeEach(() => {
-        mockedAxios.post.mockReset();
-        mockedAxios.get.mockReset();
-        mockedAxios.post.mockResolvedValue({ status: 200, data: {} } as any);
-        mockedAxios.get.mockResolvedValue({ status: 200, data: {} } as any);
-    });
-
-    it('kimi-k2.7-code + temperature 0.2 → bad_request, no HTTP call', async () => {
+    it('kimi-k2.7-code + temperature 0.2 → bad_request, no call', async () => {
         const res = await useCase().execute({
             provider: 'novita',
             apiKey: 'sk-test',
@@ -109,11 +118,10 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         expect(res.ok).toBe(false);
         expect(res.code).toBe('bad_request');
         expect(res.message).toContain('1');
-        expect(mockedAxios.post).not.toHaveBeenCalled();
-        expect(mockedAxios.get).not.toHaveBeenCalled();
+        expect(probeSlotCall).not.toHaveBeenCalled();
     });
 
-    it('kimi-k2.7-code + reasoningEffort "none" → bad_request, no HTTP call', async () => {
+    it('kimi-k2.7-code + reasoningEffort "none" → bad_request, no call', async () => {
         const res = await useCase().execute({
             provider: 'anthropic_compatible',
             apiKey: 'sk-test',
@@ -123,7 +131,7 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         });
         expect(res.ok).toBe(false);
         expect(res.code).toBe('bad_request');
-        expect(mockedAxios.post).not.toHaveBeenCalled();
+        expect(probeSlotCall).not.toHaveBeenCalled();
     });
 
     it('kimi-k2.7-code + temperature 1 (matches the pin) → proceeds to probe', async () => {
@@ -134,80 +142,63 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
             temperature: 1,
         });
         expect(res.ok).toBe(true);
-        expect(mockedAxios.post).toHaveBeenCalled();
+        expect(probeSlotCall).toHaveBeenCalled();
     });
 });
 
-// Fix 3 — the OpenAI-protocol chat providers (generic openai_compatible + Novita)
-// exercise the model with a real 1-token chat completion carrying the RESOLVED
-// temperature, instead of a GET /v1/models that some upstreams gate differently.
-describe('TestByokConnectionUseCase — openai_compatible / novita real chat probe', () => {
-    beforeEach(() => {
-        mockedAxios.post.mockReset();
-        mockedAxios.get.mockReset();
-        mockedAxios.post.mockResolvedValue({ status: 200, data: {} } as any);
-        mockedAxios.get.mockResolvedValue({ status: 200, data: {} } as any);
-    });
-
-    it('openai_compatible + model → POST /v1/chat/completions with a ping, not GET /models', async () => {
-        const res = await useCase().execute({
-            provider: 'openai_compatible',
-            apiKey: 'sk-test',
-            baseURL: 'https://llm.example.com',
-            model: 'some-model',
-        });
-        expect(res.ok).toBe(true);
-        expect(mockedAxios.get).not.toHaveBeenCalled();
-        const [url, body] = mockedAxios.post.mock.calls[0] as [string, any];
-        expect(url).toBe('https://llm.example.com/v1/chat/completions');
-        expect(body.model).toBe('some-model');
-        expect(body.messages[0].content).toBe('ping');
-    });
-
-    it('novita + model → POST to novita chat endpoint (no baseURL needed)', async () => {
-        const res = await useCase().execute({
-            provider: 'novita',
-            apiKey: 'sk-test',
-            model: 'meta-llama/llama-3-70b',
-        });
-        expect(res.ok).toBe(true);
-        const [url] = mockedAxios.post.mock.calls[0] as [string];
-        expect(url).toBe(
-            'https://api.novita.ai/v3/openai/chat/completions',
-        );
-    });
-
-    it('always-thinking kimi on novita sends the resolved fixed temperature (1)', async () => {
-        // No temperature configured → passes validation → runtime resolves the
-        // family pin (1) → the probe sends exactly what a review would.
+/**
+ * The point of the refactor: the Test proves the config being SAVED. Every
+ * field the save persists rides the probed slot, so a value the provider will
+ * reject fails here rather than on the first review.
+ */
+describe('TestByokConnectionUseCase — the probe runs the config being saved', () => {
+    it('carries the advanced settings, not just the key and model', async () => {
         await useCase().execute({
-            provider: 'novita',
+            provider: 'open_router',
             apiKey: 'sk-test',
-            model: 'kimi-k2.7-code',
+            model: 'anthropic/claude-x',
+            temperature: 0.3,
+            reasoningEffort: 'high',
+            reasoningConfigOverride: '{"reasoning":{"effort":"high"}}',
+            maxOutputTokens: 2048,
+            openrouterProviderOrder: ['anthropic'],
+            openrouterAllowFallbacks: false,
         });
-        const [, body] = mockedAxios.post.mock.calls[0] as [string, any];
-        expect(body.temperature).toBe(1);
+
+        expect(probedSlot()).toMatchObject({
+            provider: 'open_router',
+            model: 'anthropic/claude-x',
+            temperature: 0.3,
+            reasoningEffort: 'high',
+            reasoningConfigOverride: '{"reasoning":{"effort":"high"}}',
+            maxOutputTokens: 2048,
+            openrouterProviderOrder: ['anthropic'],
+            openrouterAllowFallbacks: false,
+        });
     });
 
-    it('a base URL already carrying /v1 is not double-suffixed', async () => {
+    it('hands the builder ciphertext, keeping the slot contract intact', async () => {
         await useCase().execute({
-            provider: 'openai_compatible',
-            apiKey: 'sk-test',
-            baseURL: 'https://llm.example.com/v1',
-            model: 'some-model',
+            provider: 'openai',
+            apiKey: 'sk-plaintext',
+            model: 'gpt-x',
         });
-        const [url] = mockedAxios.post.mock.calls[0] as [string];
-        expect(url).toBe('https://llm.example.com/v1/chat/completions');
+
+        expect(probedSlot().apiKey).toBe('enc(sk-plaintext)');
+        expect(probedSlot().apiKey).not.toBe('sk-plaintext');
     });
 
-    it('openai_compatible with NO model still falls back to GET /models', async () => {
+    // A probe without a model could only answer "is the key valid?" — the weaker
+    // question this refactor exists to stop answering.
+    it('refuses to run without a model instead of testing something else', async () => {
         const res = await useCase().execute({
-            provider: 'openai_compatible',
+            provider: 'openai',
             apiKey: 'sk-test',
-            baseURL: 'https://llm.example.com',
         });
-        expect(res.ok).toBe(true);
-        expect(mockedAxios.get).toHaveBeenCalled();
-        expect(mockedAxios.post).not.toHaveBeenCalled();
+
+        expect(res.ok).toBe(false);
+        expect(res.code).toBe('bad_request');
+        expect(res.message).toMatch(/model/i);
+        expect(probeSlotCall).not.toHaveBeenCalled();
     });
 });
