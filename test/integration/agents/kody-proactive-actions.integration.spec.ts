@@ -476,6 +476,14 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
 
             // Reached the wrapper, never the MCP server.
             expect(executedTools).toHaveLength(0);
+            // And a refusal is not an action: it must not be audited as one,
+            // or the log and the divergence check both count a write that
+            // never happened.
+            expect(
+                logged.filter(
+                    (e: any) => e?.metadata?.tool === 'KODUS_CREATE_MEMORY',
+                ),
+            ).toHaveLength(0);
             expect(captured.at(-1)!.conversation).toContain(
                 'has NOT been performed',
             );

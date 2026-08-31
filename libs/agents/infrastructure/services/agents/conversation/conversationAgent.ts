@@ -172,46 +172,49 @@ export class ConversationAgentProvider {
         // model sees mid-run and the footer the developer reads at the end.
         const writes: WriteToolEvent[] = [];
 
-        // Sandbox tools are spread in AFTER auditing: they read the checked-out
-        // repo, never org state, so a grep is not an action the agent performed.
         // Writes run only once the agent has declared the action and quoted the
-        // developer asking for it; the policy below grants that.
+        // developer asking for it; the policy below grants that. Sandbox tools
+        // pass through both layers untouched — they read the checked-out repo,
+        // never org state, so a grep is not an action the agent performed.
         const writeAuthorization = createWriteAuthorization();
 
-        const tools: Record<string, Tool> = auditWriteTools(
-            {
-                ...requireDeclaredAction(
-                    mcp.tools,
-                    writeToolPredicate(mcp.metadata),
-                    writeAuthorization,
+        // The guard sits OUTSIDE the audit: a refused call must never reach the
+        // audited execute, or a write that was stopped gets logged — and
+        // counted by the divergence check — as one that happened.
+        const tools: Record<string, Tool> = requireDeclaredAction(
+            auditWriteTools(
+                {
+                    ...mcp.tools,
+                    ...(sandbox ? buildNativeTools(sandbox) : {}),
+                    ...buildDecisionTool(),
+                },
+                mcp.metadata,
+                (event) => (
+                    writes.push(event),
+                    this.logger[event.error ? 'error' : 'log']({
+                        message: event.error
+                            ? `Conversation agent write tool ${event.tool} failed`
+                            : `Conversation agent called write tool ${event.tool}`,
+                        context: ConversationAgentProvider.name,
+                        serviceName: ConversationAgentProvider.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            threadId: thread.id?.toString(),
+                            repositoryId:
+                                prepareContext?.repository?.id?.toString(),
+                            developer: prepareContext?.gitUser?.username,
+                            tool: event.tool,
+                            failed: Boolean(event.error),
+                            error: event.error,
+                            // Debugging record of what the tool handed back — the
+                            // reply shows the developer the link, not this.
+                            result: event.result,
+                        },
+                    })
                 ),
-                ...(sandbox ? buildNativeTools(sandbox) : {}),
-                ...buildDecisionTool(),
-            },
-            mcp.metadata,
-            (event) => (
-                writes.push(event),
-                this.logger[event.error ? 'error' : 'log']({
-                    message: event.error
-                        ? `Conversation agent write tool ${event.tool} failed`
-                        : `Conversation agent called write tool ${event.tool}`,
-                    context: ConversationAgentProvider.name,
-                    serviceName: ConversationAgentProvider.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        threadId: thread.id?.toString(),
-                        repositoryId:
-                            prepareContext?.repository?.id?.toString(),
-                        developer: prepareContext?.gitUser?.username,
-                        tool: event.tool,
-                        failed: Boolean(event.error),
-                        error: event.error,
-                        // Debugging record of what the tool handed back — the
-                        // reply shows the developer the link, not this.
-                        result: event.result,
-                    },
-                })
             ),
+            writeToolPredicate(mcp.metadata),
+            writeAuthorization,
         );
         // Single runtime: the conversation runs as an AgentSpec on the harness
         // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
