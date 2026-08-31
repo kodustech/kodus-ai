@@ -2,8 +2,10 @@ import {
     CONVERSATION_DECISION_TOOL,
     authorizedByDeveloper,
     buildDecisionTool,
+    grantIfAuthorized,
     readDecision,
 } from './conversation-decision';
+import { createWriteAuthorization } from './write-authorization';
 
 const call = (input: unknown) => ({
     index: 0,
@@ -74,12 +76,89 @@ describe('authorizedByDeveloper', () => {
         expect(authorizedByDeveloper('', message)).toBe(false);
         expect(authorizedByDeveloper(undefined, message)).toBe(false);
     });
+
+    it('still accepts the plain confirmations a developer actually writes', () => {
+        expect(
+            authorizedByDeveloper('yes please', '@kody yes please, save it'),
+        ).toBe(true);
+        expect(authorizedByDeveloper('go ahead', '@kody go ahead')).toBe(true);
+    });
+});
+
+describe('grantIfAuthorized', () => {
+    const message = '@kody yes, please save that as a memory.';
+
+    it('grants the tool the agent declared', () => {
+        const auth = createWriteAuthorization();
+
+        expect(
+            grantIfAuthorized(
+                {
+                    intent: 'act',
+                    tool: 'KODUS_CREATE_MEMORY',
+                    authorizingQuote: 'save that as a memory',
+                },
+                message,
+                auth,
+            ),
+        ).toBe(true);
+        expect(auth.allows('KODUS_CREATE_MEMORY')).toBe(true);
+    });
+
+    it('refuses an act that names no tool, rather than granting them all', () => {
+        const auth = createWriteAuthorization();
+
+        expect(
+            grantIfAuthorized(
+                { intent: 'act', authorizingQuote: 'save that as a memory' },
+                message,
+                auth,
+            ),
+        ).toBe(false);
+        expect(auth.allows('KODUS_DELETE_KODY_RULE')).toBe(false);
+    });
+
+    it('grants nothing for an offer', () => {
+        const auth = createWriteAuthorization();
+
+        grantIfAuthorized(
+            { intent: 'offer', tool: 'KODUS_CREATE_MEMORY' },
+            message,
+            auth,
+        );
+
+        expect(auth.allows('KODUS_CREATE_MEMORY')).toBe(false);
+    });
 });
 
 describe('buildDecisionTool', () => {
     it('is exposed under the name the runner collects as the result', () => {
         expect(Object.keys(buildDecisionTool())).toEqual([
             CONVERSATION_DECISION_TOOL,
+        ]);
+    });
+
+    it('reports the decision as soon as it runs, not a step later', async () => {
+        const seen: unknown[] = [];
+        const tools = buildDecisionTool((d) => seen.push(d));
+
+        await tools[CONVERSATION_DECISION_TOOL].execute!(
+            {
+                intent: 'act',
+                tool: 'KODUS_CREATE_MEMORY',
+                authorizingQuote: 'x',
+            },
+            {} as never,
+        );
+
+        // A model that emits the decision and the write in ONE message would
+        // otherwise be refused: the policy only sees completed steps.
+        expect(seen).toEqual([
+            {
+                intent: 'act',
+                tool: 'KODUS_CREATE_MEMORY',
+                authorizingQuote: 'x',
+            },
         ]);
     });
 });

@@ -135,17 +135,20 @@ function recordingModel(
 
             const reply = replies[Math.min(call++, replies.length - 1)];
             const isToolCall = typeof reply !== 'string';
+            const calls = isToolCall
+                ? Array.isArray(reply)
+                    ? reply
+                    : [reply]
+                : [];
 
             return {
                 content: isToolCall
-                    ? [
-                          {
-                              type: 'tool-call',
-                              toolCallId: `call-${call}`,
-                              toolName: reply.toolName,
-                              input: JSON.stringify(reply.input),
-                          },
-                      ]
+                    ? calls.map((c, i) => ({
+                          type: 'tool-call',
+                          toolCallId: `call-${call}-${i}`,
+                          toolName: c.toolName,
+                          input: JSON.stringify(c.input),
+                      }))
                     : [{ type: 'text', text: reply }],
                 finishReason: isToolCall
                     ? { unified: 'tool-calls', raw: 'tool_calls' }
@@ -507,6 +510,49 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             expect(executedTools.map((t) => t.name)).toEqual([
                 'KODUS_CREATE_MEMORY',
             ]);
+        });
+
+        it('runs a write declared in the same message as the decision', async () => {
+            // The policy only sees completed steps, so a model that emits both
+            // at once would be refused if the decision tool did not authorize
+            // as it runs.
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    [
+                        DECIDE_TO_ACT,
+                        {
+                            toolName: 'KODUS_CREATE_MEMORY',
+                            input: { organizationId: 'org-11111111' },
+                        },
+                    ] as never,
+                    'Saved.',
+                ],
+            });
+
+            expect(executedTools.map((t) => t.name)).toEqual([
+                'KODUS_CREATE_MEMORY',
+            ]);
+        });
+
+        it('refuses an act that names no tool rather than granting them all', async () => {
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    {
+                        toolName: 'kodusDecideAction',
+                        input: {
+                            intent: 'act',
+                            authorizingQuote: 'save that as a memory',
+                        },
+                    },
+                    {
+                        toolName: 'KODUS_DELETE_KODY_RULE',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Done.',
+                ],
+            });
+
+            expect(executedTools).toHaveLength(0);
         });
 
         it("refuses when the quote is not the developer's", async () => {

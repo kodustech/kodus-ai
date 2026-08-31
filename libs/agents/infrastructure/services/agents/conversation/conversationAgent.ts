@@ -37,6 +37,7 @@ import { buildNativeTools } from '../../ai-sdk/native-tools';
 import {
     CONVERSATION_DECISION_TOOL,
     buildDecisionTool,
+    grantIfAuthorized,
     readDecision,
 } from './conversation-decision';
 import { withVerifiedOutcome } from './conversation-outcome';
@@ -186,7 +187,11 @@ export class ConversationAgentProvider {
                 {
                     ...mcp.tools,
                     ...(sandbox ? buildNativeTools(sandbox) : {}),
-                    ...buildDecisionTool(),
+                    // Grants within the step it runs in, so a decision and a
+                    // write emitted together are not refused.
+                    ...buildDecisionTool((decision) =>
+                        grantIfAuthorized(decision, prompt, writeAuthorization),
+                    ),
                 },
                 mcp.metadata,
                 (event) => (

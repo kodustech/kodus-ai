@@ -17,6 +17,8 @@ import { jsonSchema, tool, type Tool } from 'ai';
 
 import type { RunStep } from '@libs/agent-harness/domain/contracts/run-state.contract';
 
+import type { WriteAuthorization } from './write-authorization';
+
 export const CONVERSATION_DECISION_TOOL = 'kodusDecideAction';
 
 export type ConversationIntent = 'answer' | 'offer' | 'act';
@@ -32,7 +34,9 @@ export interface ConversationDecision {
 
 const INTENTS: readonly ConversationIntent[] = ['answer', 'offer', 'act'];
 
-export function buildDecisionTool(): Record<string, Tool> {
+export function buildDecisionTool(
+    onDecision?: (decision: ConversationDecision) => void,
+): Record<string, Tool> {
     return {
         [CONVERSATION_DECISION_TOOL]: tool({
             description:
@@ -58,7 +62,17 @@ export function buildDecisionTool(): Record<string, Tool> {
                 },
                 required: ['intent'],
             }),
-            execute: async () => 'noted',
+            // Reports the decision the moment it runs. The policy only sees
+            // steps that have finished, so a model that emits the decision and
+            // the write in a single message would otherwise have the write
+            // refused and be told to declare something it just declared.
+            execute: async (input: unknown) => {
+                const decision = parse(input);
+                if (decision) {
+                    onDecision?.(decision);
+                }
+                return 'noted';
+            },
         }),
     };
 }
@@ -131,4 +145,31 @@ export function authorizedByDeveloper(
     }
 
     return developerMessage.toLowerCase().includes(needle);
+}
+
+/**
+ * Authorize the write the agent declared, if the developer really asked for it.
+ * The single place that decides — used both by the policy (between steps) and
+ * by the decision tool itself (within a step), so the two cannot drift.
+ */
+export function grantIfAuthorized(
+    decision: ConversationDecision | undefined,
+    developerMessage: string,
+    authorization: WriteAuthorization,
+): boolean {
+    if (decision?.intent !== 'act') {
+        return false;
+    }
+
+    // An act that names no tool would otherwise grant every write on the run.
+    if (!decision.tool) {
+        return false;
+    }
+
+    if (!authorizedByDeveloper(decision.authorizingQuote, developerMessage)) {
+        return false;
+    }
+
+    authorization.grant(decision.tool);
+    return true;
 }

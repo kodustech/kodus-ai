@@ -15,7 +15,7 @@ import type {
 
 import {
     CONVERSATION_DECISION_TOOL,
-    authorizedByDeveloper,
+    grantIfAuthorized,
     readDecision,
 } from './conversation-decision';
 import type { WriteAuthorization } from './write-authorization';
@@ -35,12 +35,12 @@ export class WriteGatePolicy implements AgentPolicy {
 
         if (decision?.intent === 'act') {
             if (
-                authorizedByDeveloper(
-                    decision.authorizingQuote,
+                grantIfAuthorized(
+                    decision,
                     this.developerMessage,
+                    this.authorization,
                 )
             ) {
-                this.authorization.grant(decision.tool);
                 return {};
             }
 
