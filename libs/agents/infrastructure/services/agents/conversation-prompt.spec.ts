@@ -102,11 +102,15 @@ describe('buildContextBlock', () => {
             ],
         });
 
-        // Present once, in the record that knows who said it.
+        // Present once, attributed, in the one place the thread is rendered.
         expect(prompt.match(/that is intentional/g)).toHaveLength(1);
         expect(prompt).toContain('Developer: that is intentional');
+        expect(prompt).toContain('You: Understood.');
         // A comment nobody replayed is still context worth keeping.
         expect(prompt).toContain('unrelated drive-by comment');
+        // One heading for the conversation, not one per source.
+        expect(prompt.match(/### Conversation so far/g)).toHaveLength(1);
+        expect(prompt).not.toContain('Earlier turns');
     });
 
     it('renders nothing without a context', () => {

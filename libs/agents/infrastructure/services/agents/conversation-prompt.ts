@@ -123,11 +123,6 @@ export function buildUserPrompt(input: UserPromptInput): string {
         '',
     );
 
-    const historyBlock = buildPriorTurnsBlock(priorTurns);
-    if (historyBlock) {
-        sections.push(historyBlock, '');
-    }
-
     // Tools are OPTIONAL aids, not a mandatory pipeline. This is a chat
     // agent — forcing a tool call first (especially one that may be
     // unavailable) made the model freeze and answer nothing on trivial
@@ -166,28 +161,6 @@ export function buildUserPrompt(input: UserPromptInput): string {
     );
 
     return sections.join('\n');
-}
-
-/**
- * Earlier turns rendered as a QUOTED transcript rather than replayed as real
- * assistant messages. Replaying them natively made the model read its own past
- * "Done — memory created <link>" as something it had just done and repeat the
- * claim without calling anything. As quoted reference material it still resolves
- * a confirmation ("yes, do it") without being mistaken for the current turn.
- */
-export function buildPriorTurnsBlock(turns?: ConversationTurn[]): string {
-    if (!turns?.length) {
-        return '';
-    }
-
-    return [
-        '### Earlier turns in this thread',
-        'Reference only — these were already sent. Anything they claim you did happened in a PREVIOUS turn, not this one. Never repeat such a claim; to act now, call the tool now.',
-        ...turns.map(
-            (t) =>
-                `${t.role === 'assistant' ? 'You' : 'Developer'}: ${t.content}`,
-        ),
-    ].join('\n');
 }
 
 /**
@@ -334,21 +307,35 @@ export function buildContextBlock(
         );
     }
 
-    // The PR thread and the conversation record overlap: every turn addressed to
-    // Kody appears in both. Render each one once, and leave it to the record —
-    // it knows who said what, which the raw thread does not.
+    // One rendering of the thread, from two sources that overlap. The record is
+    // authoritative: it alone carries Kody's own replies (the PR thread strips
+    // them on every platform, so an offer it made last turn survives nowhere
+    // else) and it knows who said what. The thread then contributes only what
+    // the record never saw — comments never addressed to Kody.
     const replayed = (priorTurns ?? []).map((t) => normalize(t.content));
-    const replies = cmc?.othersReplies ?? [];
-    const history = replies
+    const unaddressed = (cmc?.othersReplies ?? [])
         .map((r) => r?.historyConversationText)
         .filter((t): t is string => typeof t === 'string' && t.length > 0)
         .filter((t) => !replayed.includes(normalize(t)));
-    if (history.length) {
-        lines.push(
-            '',
-            '### Conversation so far',
-            ...history.map((t) => `- ${t}`),
-        );
+
+    if (priorTurns?.length || unaddressed.length) {
+        lines.push('', '### Conversation so far');
+
+        if (priorTurns?.length) {
+            // Quoted, not replayed as real assistant messages: replaying them
+            // natively made the model read its own past "Done — memory created"
+            // as something it had just done and repeat the claim without
+            // calling anything.
+            lines.push(
+                'Reference only — these were already sent. Anything they claim you did happened in a PREVIOUS turn, not this one. Never repeat such a claim; to act now, call the tool now.',
+                ...priorTurns.map(
+                    (t) =>
+                        `${t.role === 'assistant' ? 'You' : 'Developer'}: ${t.content}`,
+                ),
+            );
+        }
+
+        lines.push(...unaddressed.map((t) => `- ${t}`));
     }
 
     if (prepareContext.customInstructions) {
