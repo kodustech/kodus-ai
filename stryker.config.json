@@ -13,6 +13,8 @@
   ],
   "concurrency": 2,
   "timeoutMS": 60000,
+  "_thresholds_comment": "Advisory rollout: break=null never fails the process, so the CI job reports the score without blocking a PR. Once the team is comfortable, set break (e.g. 60) to make the gate enforce.",
+  "thresholds": { "high": 80, "low": 60, "break": null },
   "reporters": [
     "clear-text",
     "json"

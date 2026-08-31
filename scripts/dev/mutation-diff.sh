@@ -47,6 +47,29 @@ fi
 echo "[mutation:diff] Mutating ${#FILES[@]} changed file(s) vs ${MERGE_BASE}:"
 printf '  - %s\n' "${FILES[@]}"
 
+# Scope the dry run to the co-located specs of the changed files. Stryker's dry
+# run runs the whole configured testMatch; without this it would run the manual
+# default list (jest.stryker.config.ts) instead of the tests that actually cover
+# THESE files. jest.stryker.config.ts reads STRYKER_JEST_TESTMATCH when set.
+SPECS=()
+for f in "${FILES[@]}"; do
+    b="${f%.ts}"
+    for cand in "${b}.spec.ts" "${b}.test.ts" "${b}.input-contract.spec.ts"; do
+        [ -f "$cand" ] && SPECS+=("<rootDir>/${cand}")
+    done
+done
+
+if [ "${#SPECS[@]}" -eq 0 ]; then
+    echo "[mutation:diff] None of the changed files have a co-located spec — nothing to validate."
+    echo "                (That is itself a signal: this change added/edited untested production code.)"
+    exit 0
+fi
+
+# Emit the spec list as a JSON array for jest.stryker.config.ts (node does the
+# quoting so a path with odd characters can't corrupt it).
+export STRYKER_JEST_TESTMATCH="$(node -e 'process.stdout.write(JSON.stringify(process.argv.slice(1)))' "${SPECS[@]}")"
+echo "[mutation:diff] Scoping tests to ${#SPECS[@]} co-located spec(s)."
+
 # Comma-join for Stryker's --mutate (overrides the config's mutate list).
 MUTATE="$(IFS=,; echo "${FILES[*]}")"
 
