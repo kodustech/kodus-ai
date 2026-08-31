@@ -122,8 +122,8 @@ export default function ChooseWorkspacePage() {
                     Select one to join or create a new organization.
                 </p>
             </div>
-            <div className="max-h-[30vh] w-full overflow-y-auto">
-                <div className="flex h-full w-full flex-col gap-2">
+            <div className="kodus-scroll max-h-[400px] min-h-0 w-full overflow-y-auto pr-2">
+                <div className="flex w-full flex-col gap-3">
                     {matchedOrganizations.map((org) => (
                         <Card key={org.uuid}>
                             <CardHeader className="flex flex-row items-center gap-3 px-5 py-4">
@@ -192,7 +192,7 @@ export default function ChooseWorkspacePage() {
                 </div>
             </div>
 
-            <div className="flex flex-14 flex-col justify-center gap-20 p-10">
+            <div className="flex flex-14 flex-col justify-start gap-20 px-10 pt-50 pb-10">
                 <div className="flex flex-col items-center gap-10">
                     <div className="flex max-w-96 flex-col gap-10">
                         <StepIndicators.Auto />
