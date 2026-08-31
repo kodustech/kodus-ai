@@ -83,7 +83,8 @@ export class TestByokModelUseCase {
         // chosen host. baseURL is intentionally NOT overridable here (see the input
         // type) — the stored secret must never travel to a caller-supplied URL.
         const awsRegion = input.awsRegion?.trim() || slot.awsRegion;
-        const vertexLocation = input.vertexLocation?.trim() || slot.vertexLocation;
+        const vertexLocation =
+            input.vertexLocation?.trim() || slot.vertexLocation;
         const changedSetting =
             (!!input.awsRegion?.trim() &&
                 input.awsRegion.trim() !== slot.awsRegion) ||
@@ -153,6 +154,9 @@ export class TestByokModelUseCase {
             awsSecretAccessKey: slot.awsSecretAccessKey,
             awsRegion,
             awsSessionToken: slot.awsSessionToken,
+            codexAccessToken: slot.codexAccessToken,
+            codexRefreshToken: slot.codexRefreshToken,
+            accountId: slot.accountId,
         });
     }
 }

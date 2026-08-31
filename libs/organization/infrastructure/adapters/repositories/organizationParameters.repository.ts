@@ -232,6 +232,25 @@ export class OrganizationParametersRepository implements IOrganizationParameters
             console.log(error);
         }
     }
+
+    async compareAndSwapConfigValue(
+        uuid: string,
+        expected: IOrganizationParameters['configValue'],
+        replacement: IOrganizationParameters['configValue'],
+    ): Promise<boolean> {
+        const result = await this.organizationParametersRepository
+            .createQueryBuilder('organizationParameters')
+            .update(OrganizationParametersModel)
+            .set({ configValue: replacement })
+            .where('"uuid" = :uuid', { uuid })
+            .andWhere('"configValue" = :expected::jsonb', {
+                expected: JSON.stringify(expected),
+            })
+            .execute();
+
+        return result.affected === 1;
+    }
+
     async delete(uuid: string): Promise<void> {
         try {
             await this.organizationParametersRepository.delete(uuid);
@@ -273,60 +292,53 @@ export class OrganizationParametersRepository implements IOrganizationParameters
         organizationAndTeamData?: OrganizationAndTeamData;
         fuzzy?: boolean;
     }): Promise<OrganizationParametersEntity[]> {
-        try {
-            const { configKey, configValue, organizationAndTeamData, fuzzy } =
-                filter;
+        const { configKey, configValue, organizationAndTeamData, fuzzy } =
+            filter;
 
-            const queryBuilder =
-                this.organizationParametersRepository.createQueryBuilder(
-                    'organizationParameters',
-                );
-
-            queryBuilder.leftJoinAndSelect(
-                'organizationParameters.organization',
-                'organization',
+        const queryBuilder =
+            this.organizationParametersRepository.createQueryBuilder(
+                'organizationParameters',
             );
 
-            queryBuilder.where(
-                'organizationParameters.configKey = :configKey',
+        queryBuilder.leftJoinAndSelect(
+            'organizationParameters.organization',
+            'organization',
+        );
+
+        queryBuilder.where('organizationParameters.configKey = :configKey', {
+            configKey,
+        });
+
+        if (organizationAndTeamData) {
+            queryBuilder.andWhere(
+                'organizationParameters.organization_id = :organizationId',
                 {
-                    configKey,
+                    organizationId: organizationAndTeamData.organizationId,
                 },
             );
-
-            if (organizationAndTeamData) {
-                queryBuilder.andWhere(
-                    'organizationParameters.organization_id = :organizationId',
-                    {
-                        organizationId: organizationAndTeamData.organizationId,
-                    },
-                );
-            }
-
-            if (fuzzy) {
-                queryBuilder.andWhere(
-                    'organizationParameters.configValue @> :configValue',
-                    { configValue: JSON.stringify(configValue) },
-                );
-            } else {
-                queryBuilder.andWhere(
-                    'organizationParameters.configValue = :configValue::jsonb',
-                    { configValue: JSON.stringify(configValue) },
-                );
-            }
-
-            const retrievedParameters = await queryBuilder.getMany();
-
-            if (!retrievedParameters || retrievedParameters.length === 0) {
-                return [];
-            }
-
-            return mapSimpleModelsToEntities(
-                retrievedParameters,
-                OrganizationParametersEntity,
-            );
-        } catch (error) {
-            console.log(error);
         }
+
+        if (fuzzy) {
+            queryBuilder.andWhere(
+                'organizationParameters.configValue @> :configValue',
+                { configValue: JSON.stringify(configValue) },
+            );
+        } else {
+            queryBuilder.andWhere(
+                'organizationParameters.configValue = :configValue::jsonb',
+                { configValue: JSON.stringify(configValue) },
+            );
+        }
+
+        const retrievedParameters = await queryBuilder.getMany();
+
+        if (!retrievedParameters || retrievedParameters.length === 0) {
+            return [];
+        }
+
+        return mapSimpleModelsToEntities(
+            retrievedParameters,
+            OrganizationParametersEntity,
+        );
     }
 }

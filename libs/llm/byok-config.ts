@@ -113,6 +113,9 @@ export interface NormalizedModel {
     /** The credential id the resolved model draws from — the per-key attribution
      *  dimension the usage store otherwise lacks. Absent on env/managed slots. */
     credentialId?: string;
+    /** Organization scope stamped when the slot is built for a request. Required
+     *  by mutable credential stores so token rotation cannot cross tenants. */
+    organizationId?: string;
     baseURL?: string;
     reasoningEffort?: ReasoningEffort;
     reasoningConfigOverride?: string;
@@ -139,6 +142,10 @@ export interface NormalizedModel {
     awsSecretAccessKey?: string;
     awsRegion?: string;
     awsSessionToken?: string;
+    codexAccessToken?: string;
+    codexRefreshToken?: string;
+    accountId?: string;
+    codexNoRetainedReasoning?: boolean;
     /** OpenRouter provider-pinning, surfaced from the credential settings so the
      *  reasoning/routing layer (reasoning-options.ts) can build the
      *  `provider.order` / `allow_fallbacks` payload. OpenRouter-only; absent for
@@ -209,4 +216,6 @@ export const BYOK_SECRET_SETTINGS = [
     'awsAccessKeyId',
     'awsSecretAccessKey',
     'awsSessionToken',
+    'codexAccessToken',
+    'codexRefreshToken',
 ] as const;

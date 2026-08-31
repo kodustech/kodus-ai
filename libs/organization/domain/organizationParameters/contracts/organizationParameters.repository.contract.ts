@@ -25,6 +25,11 @@ export interface IOrganizationParametersRepository {
         filter: Partial<IOrganizationParameters>,
         data: Partial<IOrganizationParameters>,
     ): Promise<OrganizationParametersEntity | undefined>;
+    compareAndSwapConfigValue(
+        uuid: string,
+        expected: IOrganizationParameters['configValue'],
+        replacement: IOrganizationParameters['configValue'],
+    ): Promise<boolean>;
     delete(uuid: string): Promise<void>;
     findByKey(
         configKey: OrganizationParametersKey,

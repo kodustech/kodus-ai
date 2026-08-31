@@ -31,13 +31,12 @@ const asString = (value: unknown): string | undefined =>
  *
  * Most providers authenticate with a single `apiKey` — Google Vertex stores its
  * base64-encoded service-account JSON in that same field, so it is covered too.
- * Amazon Bedrock is the exception: it has no `apiKey` and authenticates with
- * either a bearer token (`awsBearerToken`) or static IAM credentials
- * (`awsAccessKeyId` + `awsSecretAccessKey`).
+ * Amazon Bedrock and ChatGPT subscriptions are exceptions: Bedrock uses a
+ * bearer token or IAM pair, while a subscription uses access/refresh tokens
+ * plus the ChatGPT account id.
  *
- * Keep in sync with the auth paths in `bedrockModelFromCredentials`
- * (byok-to-vercel.ts) and the save-time validation in `encryptSlot`
- * (create-or-update.use-case.ts).
+ * Keep this in sync with `resolve-model-slot.ts` and save-time credential
+ * validation in `create-or-update.use-case.ts`.
  */
 export function isByokSlotConfigured(
     slot: Partial<NormalizedModel> | null | undefined,
@@ -49,7 +48,13 @@ export function isByokSlotConfigured(
     if (slot.provider === BYOKProvider.AMAZON_BEDROCK) {
         return Boolean(
             slot.awsBearerToken ||
-                (slot.awsAccessKeyId && slot.awsSecretAccessKey),
+            (slot.awsAccessKeyId && slot.awsSecretAccessKey),
+        );
+    }
+
+    if (slot.provider === BYOKProvider.CHATGPT_SUBSCRIPTION) {
+        return Boolean(
+            slot.codexAccessToken && slot.codexRefreshToken && slot.accountId,
         );
     }
 
@@ -65,7 +70,7 @@ export function isByokSlotConfigured(
  *    normalizes to the env path and carries no BYOK material of its own;
  *  - a real BYOK credential → resolves iff the provider is set, the model names
  *    a model, and the credential carries usable material for its provider
- *    (`isByokSlotConfigured`, including Bedrock's aws* auth).
+ *    (`isByokSlotConfigured`, including non-apiKey auth shapes).
  *
  * Only credential MATERIAL is inspected here to build the boolean — the caller
  * must never surface the reconstructed slot's secret fields. Nothing secret is
@@ -99,6 +104,9 @@ export function isV2ModelResolvable(
         awsBearerToken: asString(settings.awsBearerToken),
         awsAccessKeyId: asString(settings.awsAccessKeyId),
         awsSecretAccessKey: asString(settings.awsSecretAccessKey),
+        codexAccessToken: asString(settings.codexAccessToken),
+        codexRefreshToken: asString(settings.codexRefreshToken),
+        accountId: asString(settings.accountId),
     };
 
     return isByokSlotConfigured(slot);
@@ -213,8 +221,15 @@ function enumerateModels(
                 model: model.model,
                 providerId: credential?.provider,
                 baseUrl,
-                resolvable: isV2ModelResolvable(model, credential, envReachable),
-                capabilities: modelCapabilities(credential?.provider, model.model),
+                resolvable: isV2ModelResolvable(
+                    model,
+                    credential,
+                    envReachable,
+                ),
+                capabilities: modelCapabilities(
+                    credential?.provider,
+                    model.model,
+                ),
             };
         });
 }

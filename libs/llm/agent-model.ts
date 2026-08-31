@@ -41,11 +41,20 @@ export function resolveAgentModel(
     slot: NormalizedModel | undefined,
     opts: ResolveAgentModelOptions = {},
 ): LanguageModel {
+    const scopedSlot =
+        slot && opts.organizationId
+            ? { ...slot, organizationId: opts.organizationId }
+            : slot;
+
     // Build the model from the ONE resolved slot; the limiter keys off that slot.
     return wrapByokModel(
-        buildModelFromSlot(slot, opts.modelOptions, opts.defaultModelOverride),
+        buildModelFromSlot(
+            scopedSlot,
+            opts.modelOptions,
+            opts.defaultModelOverride,
+        ),
         {
-            byokConfig: slot,
+            byokConfig: scopedSlot,
             organizationId: opts.organizationId,
             provider: opts.provider ?? slot?.provider,
             ...(opts.queueTimeoutMs != null

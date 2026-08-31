@@ -1,17 +1,6 @@
-/**
- * Regression + contract: a key-only connect to an Anthropic-protocol BRAND
- * (Kimi/GLM, and any future one) must resolve the brand's canonical endpoint on
- * its own — the connect form carries no baseURL for a curated brand.
- *
- * Why this file exists: removing the curated catalog dropped `defaults.baseURL`,
- * and the connection probe — which had NO test — started throwing "baseURL is
- * required for moonshot". The coupling was indirect (catalog → web form → request
- * baseURL → probe), so a grep for direct `defaults.baseURL` readers missed it.
- * The endpoint now lives on the provider module (`defaultBaseURL`); this sweeps
- * EVERY brand that declares one, so a new brand is covered automatically and this
- * whole class of regression can't come back silently.
- */
+import { BadRequestException } from '@nestjs/common';
 import axios from 'axios';
+import type { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { REGISTRY } from '@libs/llm/providers';
 import { TestByokConnectionUseCase } from './test-byok-connection.use-case';
 
@@ -209,5 +198,155 @@ describe('TestByokConnectionUseCase — openai_compatible / novita real chat pro
         expect(res.ok).toBe(true);
         expect(mockedAxios.get).toHaveBeenCalled();
         expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+});
+
+describe('TestByokConnectionUseCase ChatGPT subscription', () => {
+    const providerService = {
+        isProviderSupported: jest.fn().mockReturnValue(true),
+    };
+
+    it('tests token credentials without requiring apiKey', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockResolvedValue(
+            new Response('data: [DONE]\n\n', {
+                status: 200,
+                headers: { 'Content-Type': 'text/event-stream' },
+            }),
+        ) as typeof fetch;
+        const useCase = new TestByokConnectionUseCase(
+            providerService as unknown as ProviderService,
+        );
+
+        try {
+            await expect(
+                useCase.execute({
+                    provider: 'chatgpt_subscription',
+                    codexAccessToken: 'access-token',
+                    codexRefreshToken: 'refresh-token',
+                    accountId: 'account-id',
+                    model: 'gpt-5.6-luna',
+                }),
+            ).resolves.toMatchObject({ ok: true, code: 'ok', httpStatus: 200 });
+            expect(global.fetch).toHaveBeenCalledWith(
+                'https://chatgpt.com/backend-api/codex/responses',
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: expect.objectContaining({
+                        'Authorization': 'Bearer access-token',
+                        'chatgpt-account-id': 'account-id',
+                    }),
+                }),
+            );
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
+    it('classifies a 401 response as an authentication failure', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockResolvedValue(
+            new Response('{"error":{"message":"expired token"}}', {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' },
+            }),
+        ) as typeof fetch;
+        const useCase = new TestByokConnectionUseCase(
+            providerService as unknown as ProviderService,
+        );
+
+        try {
+            await expect(
+                useCase.execute({
+                    provider: 'chatgpt_subscription',
+                    codexAccessToken: 'expired-access-token',
+                    codexRefreshToken: 'refresh-token',
+                    accountId: 'account-id',
+                }),
+            ).resolves.toMatchObject({
+                ok: false,
+                code: 'auth',
+                httpStatus: 401,
+            });
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
+    it('classifies an AbortSignal timeout as a network failure, not unknown', async () => {
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockRejectedValue(
+            new DOMException(
+                'The operation was aborted due to timeout',
+                'TimeoutError',
+            ),
+        ) as typeof fetch;
+        const useCase = new TestByokConnectionUseCase(
+            providerService as unknown as ProviderService,
+        );
+
+        try {
+            await expect(
+                useCase.execute({
+                    provider: 'chatgpt_subscription',
+                    codexAccessToken: 'access-token',
+                    codexRefreshToken: 'refresh-token',
+                    accountId: 'account-id',
+                }),
+            ).resolves.toMatchObject({
+                ok: false,
+                code: 'network',
+            });
+        } finally {
+            global.fetch = originalFetch;
+        }
+    });
+
+    it('rejects incomplete token credentials before making a request', async () => {
+        const useCase = new TestByokConnectionUseCase(
+            providerService as unknown as ProviderService,
+        );
+        await expect(
+            useCase.execute({
+                provider: 'chatgpt_subscription',
+                codexAccessToken: 'access-token',
+                accountId: 'account-id',
+            }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('sends the Codex input as a Responses message array', async () => {
+        // A bare string is rejected by the live endpoint with
+        // `{"detail":"Input must be a list"}`, which a mocked fetch cannot
+        // surface, so this asserts the wire shape directly.
+        const originalFetch = global.fetch;
+        global.fetch = jest.fn().mockResolvedValue(
+            new Response('data: [DONE]\n\n', {
+                status: 200,
+                headers: { 'Content-Type': 'text/event-stream' },
+            }),
+        ) as typeof fetch;
+        const useCase = new TestByokConnectionUseCase(
+            providerService as unknown as ProviderService,
+        );
+
+        try {
+            await useCase.execute({
+                provider: 'chatgpt_subscription',
+                codexAccessToken: 'access-token',
+                codexRefreshToken: 'refresh-token',
+                accountId: 'account-id',
+                model: 'gpt-5.6-sol',
+            });
+            const call = (global.fetch as jest.Mock).mock.calls[0];
+            const body = JSON.parse(call[1].body);
+            expect(Array.isArray(body.input)).toBe(true);
+            expect(body.input[0]).toMatchObject({
+                type: 'message',
+                role: 'user',
+            });
+        } finally {
+            global.fetch = originalFetch;
+        }
     });
 });

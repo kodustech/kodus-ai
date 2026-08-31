@@ -18,6 +18,7 @@
  *  - Throttled: sleeps between batches to leave replication/WT-cache headroom.
  */
 import { Db, ObjectId } from 'mongodb';
+import { CHATGPT_SUBSCRIPTION_PREFIX } from '@libs/core/log/token-usage-tu';
 
 const COLLECTION = 'observability_telemetry';
 
@@ -54,11 +55,29 @@ export const BACKFILL_ROUTING_TASKS = [
 
 const gf = (f: string) => ({ $getField: { field: f, input: '$attributes' } });
 
-// Canonical model = last ':'-segment of gen_ai.response.model (mirrors deriveTu).
+export const BACKFILL_CHATGPT_SUBSCRIPTION_PREFIX = CHATGPT_SUBSCRIPTION_PREFIX;
+
+const rawModelExpr = { $ifNull: [gf('gen_ai.response.model'), ''] };
+
+// Canonical model = last ':'-segment for ordinary provider prefixes. Preserve
+// the subscription prefix so included ChatGPT usage is never API-priced.
 const modelExpr = {
-    $arrayElemAt: [
-        { $split: [{ $ifNull: [gf('gen_ai.response.model'), ''] }, ':'] },
-        -1,
+    $cond: [
+        {
+            $eq: [
+                {
+                    $indexOfCP: [
+                        rawModelExpr,
+                        BACKFILL_CHATGPT_SUBSCRIPTION_PREFIX,
+                    ],
+                },
+                0,
+            ],
+        },
+        rawModelExpr,
+        {
+            $arrayElemAt: [{ $split: [rawModelExpr, ':'] }, -1],
+        },
     ],
 };
 
@@ -181,7 +200,9 @@ const SET_TU = {
                                             then: 'codeReview',
                                         },
                                         {
-                                            case: { $eq: ['$$a', 'kody_rules'] },
+                                            case: {
+                                                $eq: ['$$a', 'kody_rules'],
+                                            },
                                             then: 'kodyRulesReview',
                                         },
                                         {

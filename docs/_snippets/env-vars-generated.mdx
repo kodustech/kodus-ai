@@ -109,6 +109,7 @@
 | Variable | Required | Type | Scope | Description |
 | --- | --- | --- | --- | --- |
 | `API_OPEN_AI_API_KEY` | – | secret | ⚙️ Both | OpenAI API key. Required when API_LLM_PROVIDER_MODEL targets an OpenAI model. |
+| `API_CODEX_AUTH_FILE` | – | string | ⚙️ Both | Explicit path to a Codex CLI auth.json file for local development only. Container deployments must bind-mount the file and set this path in a compose override. Production credentials should use encrypted BYOK settings instead. |
 | `API_OPENAI_FORCE_BASE_URL` | – | url | ⚙️ Both | OpenAI-compatible endpoint override (e.g. point to a local model proxy). |
 | `API_TRUST_JSON_SCHEMA_BASE_URLS` | – | string | ⚙️ Both | Comma-separated baseURL substrings trusted for native json_schema structured output on BYOK openai_compatible providers. A capability allowlist: when a BYOK baseURL contains one of these, the code review agent sends response_format=json_schema instead of the slower json_object fallback. Leave empty unless you run a non-vLLM but schema-capable proxy. |
 | `API_LLM_PROVIDER_MODEL` | – | string | ⚙️ Both | Force a specific model. "auto" = router picks per task. |

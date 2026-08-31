@@ -1,4 +1,5 @@
 import {
+    CHATGPT_SUBSCRIPTION_PREFIX,
     deriveArea,
     deriveTu,
     ROUTING_TASKS,
@@ -6,6 +7,7 @@ import {
     SYSTEM_RUN_NAMES,
 } from './token-usage-tu';
 import {
+    BACKFILL_CHATGPT_SUBSCRIPTION_PREFIX,
     BACKFILL_ROUTING_TASKS,
     BACKFILL_SUGGESTION_RUN_NAMES,
     BACKFILL_SYSTEM_RUN_NAMES,
@@ -34,9 +36,7 @@ describe('deriveTu', () => {
         expect(deriveTu(null)).toBeNull();
         expect(deriveTu({})).toBeNull();
         expect(deriveTu({ 'gen_ai.usage.total_tokens': 0 })).toBeNull();
-        expect(
-            deriveTu({ 'gen_ai.response.model': 'x' } as any),
-        ).toBeNull();
+        expect(deriveTu({ 'gen_ai.response.model': 'x' } as any)).toBeNull();
     });
 
     it('mirrors token counts verbatim, defaulting missing fields to 0', () => {
@@ -65,14 +65,23 @@ describe('deriveTu', () => {
         });
     });
 
-    it('canonicalizes the model to the last ":"-segment', () => {
+    it('canonicalizes model ids while retaining subscription access identity', () => {
         expect(
-            deriveTu({ ...usage, 'gen_ai.response.model': 'google_gemini:gemini-2.5-pro' })!
-                .model,
+            deriveTu({
+                ...usage,
+                'gen_ai.response.model': 'google_gemini:gemini-2.5-pro',
+            })!.model,
         ).toBe('gemini-2.5-pro');
         expect(
-            deriveTu({ ...usage, 'gen_ai.response.model': 'openai:gpt-5' })!.model,
+            deriveTu({ ...usage, 'gen_ai.response.model': 'openai:gpt-5' })!
+                .model,
         ).toBe('gpt-5');
+        expect(
+            deriveTu({
+                ...usage,
+                'gen_ai.response.model': 'chatgpt_subscription:gpt-5.6-luna',
+            })!.model,
+        ).toBe('chatgpt_subscription:gpt-5.6-luna');
         // bare name (no provider prefix) is unchanged
         expect(deriveTu(usage)!.model).toBe('claude-sonnet-5');
         // Bedrock `:<version>` suffix is stripped to the model, NOT stored as "0"
@@ -95,8 +104,10 @@ describe('deriveTu', () => {
 
         it('stamps the process area from the run name', () => {
             expect(
-                deriveTu({ ...usage, 'gen_ai.run.name': 'code-review-security' })!
-                    .area,
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'code-review-security',
+                })!.area,
             ).toBe('review');
             expect(deriveTu(usage)!.area).toBe('other');
         });
@@ -113,7 +124,7 @@ describe('deriveTu', () => {
                 deriveTu({
                     ...usage,
                     'gen_ai.run.name': 'code-review-security',
-                    route: 'kodyRulesReview',
+                    'route': 'kodyRulesReview',
                 })!.route,
             ).toBe('kodyRulesReview');
         });
@@ -126,14 +137,14 @@ describe('deriveTu', () => {
                 deriveTu({
                     ...usage,
                     'gen_ai.run.name': 'code-review-security',
-                    route: 'default',
+                    'route': 'default',
                 })!.route,
             ).toBe('codeReview');
             expect(
                 deriveTu({
                     ...usage,
                     'gen_ai.run.name': 'generateSummaryPR',
-                    route: 'taskOverride',
+                    'route': 'taskOverride',
                 })!.route,
             ).toBe('prSummary');
         });
@@ -141,8 +152,10 @@ describe('deriveTu', () => {
         it('BACK-COMPAT: infers the task from area when `route` is absent', () => {
             // Pre-launch spans have no `route` attr → de-para from the area.
             expect(
-                deriveTu({ ...usage, 'gen_ai.run.name': 'code-review-security' })!
-                    .route,
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'code-review-security',
+                })!.route,
             ).toBe('codeReview');
             expect(
                 deriveTu({ ...usage, 'gen_ai.run.name': 'generateSummaryPR' })!
@@ -165,8 +178,10 @@ describe('deriveTu', () => {
                 ).toBe(true);
             }
             expect(
-                deriveTu({ ...usage, 'gen_ai.run.name': 'code-review-security' })!
-                    .sys,
+                deriveTu({
+                    ...usage,
+                    'gen_ai.run.name': 'code-review-security',
+                })!.sys,
             ).toBe(false);
             expect(deriveTu(usage)!.sys).toBe(false);
         });
@@ -240,6 +255,20 @@ describe('deriveArea', () => {
     it('handles non-string input', () => {
         expect(deriveArea(undefined)).toBe('other');
         expect(deriveArea(42 as any)).toBe('other');
+    });
+
+    it('preserves the ChatGPT subscription prefix in write and backfill paths', () => {
+        const model = 'chatgpt_subscription:gpt-5.6-luna';
+
+        expect(
+            deriveTu({
+                'gen_ai.usage.total_tokens': 1,
+                'gen_ai.response.model': model,
+            })?.model,
+        ).toBe(model);
+        expect(BACKFILL_CHATGPT_SUBSCRIPTION_PREFIX).toBe(
+            CHATGPT_SUBSCRIPTION_PREFIX,
+        );
     });
 
     // The Mongo backfill mirrors deriveArea as an aggregation $switch with its

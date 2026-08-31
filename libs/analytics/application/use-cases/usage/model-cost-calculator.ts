@@ -14,6 +14,11 @@ import {
 import { PricingResolver } from './pricing-resolver';
 
 const UNKNOWN_MODEL = '(unknown)';
+const CHATGPT_SUBSCRIPTION_PREFIX = 'chatgpt_subscription:';
+
+export function isChatGptSubscriptionUsage(model: string): boolean {
+    return model.startsWith(CHATGPT_SUBSCRIPTION_PREFIX);
+}
 
 /**
  * A usage row carrying token counts and (optionally) the model that produced
@@ -112,7 +117,8 @@ export class ModelCostCalculator {
         agg: ModelUsageAgg,
         overrides?: ManualPricingOverrides,
     ): Promise<number> {
-        if (model === UNKNOWN_MODEL) return 0;
+        if (model === UNKNOWN_MODEL || isChatGptSubscriptionUsage(model))
+            return 0;
 
         const { rates } = await this.pricingResolver.resolve(model, overrides);
 

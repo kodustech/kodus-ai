@@ -82,7 +82,21 @@ export function buildModelFromSlot(
     // switch's silent openai-compatible default) — unreachable for the closed
     // BYOKProvider enum, but fail-loud.
     const apiKey = decrypt(slot.apiKey);
-    return REGISTRY.get(slot.provider).build({ ...slot, apiKey }, options);
+    const codexAccessToken = slot.codexAccessToken
+        ? decrypt(slot.codexAccessToken)
+        : undefined;
+    const codexRefreshToken = slot.codexRefreshToken
+        ? decrypt(slot.codexRefreshToken)
+        : undefined;
+    return REGISTRY.get(slot.provider).build(
+        {
+            ...slot,
+            apiKey,
+            codexAccessToken,
+            codexRefreshToken,
+        },
+        options,
+    );
 }
 
 // ─── Structured-output retry-on-error ────────────────────────────────
