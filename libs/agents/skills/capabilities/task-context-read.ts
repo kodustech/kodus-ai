@@ -193,7 +193,7 @@ export async function fetchTaskContext(
             discovery.cachedTools,
         );
 
-        if (agenticFirst.value) {
+        if (agenticFirst.value && isUsableTaskContext(agenticFirst.value)) {
             return {
                 normalized: agenticFirst.value,
                 raw: agenticFirst.value.description ?? '',
@@ -260,9 +260,19 @@ export async function fetchTaskContext(
         discovery.cachedTools,
     );
 
+    // Last resort: surface whatever the agent produced, but only if it is a
+    // usable task context. Propagating an unusable value (a fetch failure
+    // string, serialized card metadata, blank description) would feed a
+    // bogus context to the downstream analyzer and generate a false
+    // 'Need Task Information' finding — treat it as empty instead.
+    const fallbackValue =
+        agenticFallback.value && isUsableTaskContext(agenticFallback.value)
+            ? agenticFallback.value
+            : undefined;
+
     return {
-        normalized: agenticFallback.value,
-        raw: agenticFallback.value?.description ?? '',
+        normalized: fallbackValue,
+        raw: fallbackValue?.description ?? '',
         traces,
     };
 }

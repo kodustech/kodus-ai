@@ -220,6 +220,114 @@ describe('fetchTaskContext capability', () => {
         ).toBe(true);
     });
 
+    it('ignores an unusable agent-first result and falls through to deterministic', async () => {
+        // The agent returned a fetch-failure string as taskContext — the same
+        // class isUsableTaskContext already filters on the deterministic path.
+        // It must not be propagated as resolved context; we fall through to the
+        // deterministic path instead.
+        const callAgent: CallAgentMock = jest.fn().mockResolvedValue({
+            result: JSON.stringify({
+                taskContext: 'Failed to fetch (status 404)',
+                title: 'Agent title',
+                id: 'AG-1',
+                toolsUsed: ['search'],
+            }),
+        });
+
+        const callTool: CallToolMock = jest.fn().mockResolvedValue({
+            result: {
+                data: {
+                    key: 'TASK-1',
+                    fields: {
+                        summary: 'Task title',
+                        description: 'Real deterministic description',
+                    },
+                },
+            },
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool,
+            callAgent,
+            getRegisteredTools: () => [{ name: 'searchTasks' }],
+            getToolsForLLM: () => [
+                {
+                    name: 'searchTasks',
+                    parameters: {
+                        required: ['query'],
+                        properties: { query: { type: 'string' } },
+                    },
+                },
+            ],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => ['searchTasks']),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        const result = await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('jira'),
+            {
+                ...createBaseParams(),
+                taskContextResolutionMode: 'agent_first',
+            },
+            hooks,
+        );
+
+        expect(result.normalized).toMatchObject({
+            id: 'TASK-1',
+            title: 'Task title',
+            description: 'Real deterministic description',
+            sourceProvider: 'jira',
+        });
+        expect(callTool).toHaveBeenCalled();
+        expect(callAgent).toHaveBeenCalled();
+    });
+
+    it('treats an unusable agent fallback result as empty instead of propagating it', async () => {
+        // Last-resort agent fallback also goes through isUsableTaskContext: a
+        // fetch-failure string must not become the surfaced task context.
+        const callAgent: CallAgentMock = jest.fn().mockResolvedValue({
+            result: JSON.stringify({
+                taskContext: 'Failed to fetch (status 404)',
+                title: 'Agent title',
+                id: 'AG-1',
+                toolsUsed: ['search'],
+            }),
+        });
+
+        const toolCaller: ToolCaller = {
+            callTool: jest.fn(),
+            callAgent,
+            getRegisteredTools: () => [{ name: 'searchTasks' }],
+            getToolsForLLM: () => [],
+        };
+
+        const hooks = {
+            getSeedTaskContextTools: jest.fn(async () => []),
+            getCachedTaskContextTools: jest.fn(async () => []),
+            saveCachedTaskContextTools: jest.fn(async () => undefined),
+            resolvePreferredTool: jest.fn(async () => undefined),
+            recordExecution: jest.fn(async () => undefined),
+        };
+
+        const result = await fetchTaskContext(
+            toolCaller,
+            createCapabilityRuntime('notion'),
+            createBaseParams(),
+            hooks,
+        );
+
+        expect(result.normalized).toBeUndefined();
+        expect(result.raw).toBe('');
+        expect(callAgent).toHaveBeenCalled();
+    });
+
     it('explores registered deterministic tools when no seed boundary is available', async () => {
         const callTool: CallToolMock = jest.fn().mockResolvedValue({
             result: {
