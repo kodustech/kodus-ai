@@ -13,6 +13,7 @@ import { novitaModelListing } from './listing';
 import type {
     ModelCapabilities,
     ProviderBuildConfig,
+    ProviderBuildOptions,
     ProviderModule,
 } from '../kernel/types';
 import type { TemperaturePolicy } from '../kernel/model-types';
@@ -67,11 +68,15 @@ export const novitaModule: ProviderModule = {
         return compatibleTemperaturePolicy(cfg.model);
     },
 
-    build(cfg: ProviderBuildConfig): LanguageModel {
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
         return createOpenAICompatible({
             name: 'novita',
             apiKey: cfg.apiKey,
             baseURL: cfg.baseURL || 'https://api.novita.ai/v3/openai',
+            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
             // Novita varies too wildly by upstream to trust strict json_schema;
             // it always falls back to json_object (the removed
             // shouldEnableJsonSchema('novita', …) was a constant false).

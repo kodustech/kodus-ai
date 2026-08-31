@@ -116,6 +116,7 @@ export const openaiModule: ProviderModule = {
                 name: 'openai-compatible',
                 apiKey,
                 baseURL,
+                ...(opts?.fetch ? { fetch: opts.fetch } : {}),
                 // Never-downgrade family wins over the baseURL heuristic: a
                 // direct-Moonshot upstream (api.moonshot.ai) keeps json_schema
                 // ON even though shouldEnableJsonSchema alone would reject it
@@ -133,6 +134,7 @@ export const openaiModule: ProviderModule = {
         return createOpenAI({
             apiKey,
             ...(baseURL ? { baseURL } : {}),
+            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
         })(cfg.model);
     },
 

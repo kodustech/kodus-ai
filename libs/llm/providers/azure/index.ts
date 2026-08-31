@@ -24,6 +24,7 @@ import type {
     ModelCapabilities,
     ModelListing,
     ProviderBuildConfig,
+    ProviderBuildOptions,
     ProviderModule,
 } from '../kernel/types';
 import {
@@ -68,12 +69,16 @@ export const azureModule: ProviderModule = {
         };
     },
 
-    build(cfg: ProviderBuildConfig): LanguageModel {
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
         // apiKey is already DECRYPTED by the caller (byok-to-vercel). The slot's
         // `model` is the Azure DEPLOYMENT name; `baseURL` is the resource endpoint.
         return createAzure({
             apiKey: cfg.apiKey,
             ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
+            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
             // Classic deployment routing (matches `model` = deployment name).
             useDeploymentBasedUrls: true,
         })(cfg.model);

@@ -51,6 +51,15 @@ export type ProviderBuildConfig = NormalizedModel;
 /** Mirrors byok-to-vercel's `ByokModelOptions` — per-call structured-output opt-in. */
 export interface ProviderBuildOptions {
     structuredOutputs?: boolean;
+    /**
+     * Replacement transport for the built client. The connection probe uses it
+     * to refuse HTTP redirects: the SSRF gate resolves the endpoint the user
+     * typed and rejects private targets, but a hostile endpoint answering 30x
+     * could still bounce the request to link-local space (the cloud metadata
+     * service) after the check passed. Only providers whose baseURL comes from
+     * the user need to honor it; fixed-endpoint providers may ignore it.
+     */
+    fetch?: typeof fetch;
 }
 
 /**

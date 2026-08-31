@@ -20,6 +20,7 @@ import { anthropicModelListing } from './listing';
 import type {
     ModelCapabilities,
     ProviderBuildConfig,
+    ProviderBuildOptions,
     ProviderModule,
     ProviderReasoningOptions,
     ReasoningEffort,
@@ -76,7 +77,10 @@ export const anthropicModule: ProviderModule = {
         };
     },
 
-    build(cfg: ProviderBuildConfig): LanguageModel {
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
         if ((cfg.provider as string) === 'anthropic_compatible') {
             // @ai-sdk/anthropic appends /messages to the base, so the base must
             // carry the /v1 suffix — normalize whatever the user pasted.
@@ -87,12 +91,16 @@ export const anthropicModule: ProviderModule = {
             return createAnthropic({
                 apiKey: cfg.apiKey,
                 baseURL: `${anthropicCompatibleRootURL(cfg.baseURL || '')}/v1`,
-                fetch: withThinkingSignatureRepair(fetch),
+                // Compose, don't replace: a caller-supplied transport (the
+                // probe's redirect-refusing fetch) still needs the signature
+                // repair, and the repair still needs the caller's guard.
+                fetch: withThinkingSignatureRepair(opts?.fetch ?? fetch),
             })(cfg.model);
         }
         return createAnthropic({
             apiKey: cfg.apiKey,
             ...(cfg.baseURL ? { baseURL: cfg.baseURL } : {}),
+            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
         })(cfg.model);
     },
 
