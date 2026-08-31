@@ -15,7 +15,6 @@ export function useGetRepositories(
         CODE_MANAGEMENT_API_PATHS.GET_REPOSITORIES_ORG,
         {
             params: { teamId, organizationSelected, ...(filters || {}) },
-            timeout: 15000,
         },
     );
 }

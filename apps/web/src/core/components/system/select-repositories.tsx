@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@components/ui/button";
 import {
     Command,
@@ -13,11 +13,14 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@components/ui/popover";
+import { Spinner } from "@components/ui/spinner";
 import { useGetRepositories } from "@services/codeManagement/hooks";
 import type { Repository } from "@services/codeManagement/types";
 import { formatDistanceToNow } from "date-fns";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { pluralize } from "src/core/utils/string";
+
+const ITEMS_PER_BATCH = 30;
 
 export const SelectRepositories = (props: {
     id?: string;
@@ -72,10 +75,14 @@ export const SelectRepositories = (props: {
     } = props;
 
     const [search, setSearch] = useState("");
+    const [displayedCount, setDisplayedCount] = useState(ITEMS_PER_BATCH);
+    const commandListRef = useRef<HTMLDivElement | null>(null);
+    const isLoadingMoreRef = useRef(false);
 
     useEffect(() => {
-        if (!open) setSearch("");
-    }, [open]);
+        setDisplayedCount(ITEMS_PER_BATCH);
+        isLoadingMoreRef.current = false;
+    }, [search]);
 
     const sortedRepositories = useMemo(() => {
         return [...repositories].sort((a, b) => {
@@ -114,6 +121,58 @@ export const SelectRepositories = (props: {
         () => selectedRepositories.filter(matchesSearch),
         [selectedRepositories, search],
     );
+
+    const visibleSelected = filteredSelected.slice(0, displayedCount);
+    const visibleUnselected = filteredUnselected.slice(
+        0,
+        Math.max(0, displayedCount - filteredSelected.length),
+    );
+    const total = filteredSelected.length + filteredUnselected.length;
+    const hasMore = displayedCount < total;
+
+    useEffect(() => {
+        if (!open) return;
+
+        const timer = setTimeout(() => {
+            const listElement = commandListRef.current;
+            if (!listElement || !hasMore) return;
+
+            const handleScroll = () => {
+                if (isLoadingMoreRef.current) return;
+
+                const { scrollTop, scrollHeight, clientHeight } = listElement;
+                const distanceFromBottom =
+                    scrollHeight - scrollTop - clientHeight;
+
+                if (distanceFromBottom < 100) {
+                    isLoadingMoreRef.current = true;
+
+                    requestAnimationFrame(() => {
+                        setDisplayedCount((prev) => {
+                            const next = Math.min(
+                                prev + ITEMS_PER_BATCH,
+                                total,
+                            );
+                            setTimeout(() => {
+                                isLoadingMoreRef.current = false;
+                            }, 100);
+                            return next;
+                        });
+                    });
+                }
+            };
+
+            listElement.addEventListener("scroll", handleScroll, {
+                passive: true,
+            });
+
+            return () => {
+                listElement.removeEventListener("scroll", handleScroll);
+            };
+        }, 100);
+
+        return () => clearTimeout(timer);
+    }, [open, displayedCount, total]);
 
     const formatLastActivity = (date?: string) => {
         if (!date) return null;
@@ -217,7 +276,12 @@ export const SelectRepositories = (props: {
                         </div>
                     )}
 
-                    <CommandList className="max-h-56 overflow-y-auto">
+                    <CommandList
+                        ref={(node) => {
+                            commandListRef.current =
+                                node as HTMLDivElement | null;
+                        }}
+                        className="max-h-56 overflow-y-auto">
                         <CommandEmpty>No repository found.</CommandEmpty>
 
                         {isError && (
@@ -237,7 +301,7 @@ export const SelectRepositories = (props: {
 
                         {selectedRepositories.length > 0 && (
                             <CommandGroup heading="Selected">
-                                {selectedRepositories.map((r) => (
+                                {visibleSelected.map((r) => (
                                     <CommandItem
                                         key={r.id}
                                         value={r.id}
@@ -276,7 +340,7 @@ export const SelectRepositories = (props: {
                         )}
                         {unselectedRepositories.length > 0 && (
                             <CommandGroup heading="Not selected">
-                                {unselectedRepositories.map((r) => (
+                                {visibleUnselected.map((r) => (
                                     <CommandItem
                                         key={r.id}
                                         value={r.id}
@@ -311,6 +375,12 @@ export const SelectRepositories = (props: {
                                     </CommandItem>
                                 ))}
                             </CommandGroup>
+                        )}
+
+                        {hasMore && (
+                            <div className="flex items-center justify-center py-2">
+                                <Spinner className="size-4" />
+                            </div>
                         )}
                     </CommandList>
                 </Command>
