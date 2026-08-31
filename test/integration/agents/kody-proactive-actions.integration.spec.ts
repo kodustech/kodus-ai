@@ -266,17 +266,14 @@ beforeEach(() => {
 
 describe('@kody proactive actions in PR threads (issue #1761)', () => {
     describe('the machinery is already in place', () => {
-        it('binds every org write tool, and withholds them until asked', async () => {
+        it('keeps every org write tool in front of the agent', async () => {
             const turn = await runTurn(
                 scenarioById('false-positive-on-kody-rule'),
             );
 
-            // Bound in the registry (the read siblings prove MCP connected),
-            // but not offered to the model on a turn nobody asked for anything.
-            expect(turn.toolNames).toContain('KODUS_FIND_MEMORIES');
-            for (const write of WRITE_TOOLS) {
-                expect(turn.toolNames).not.toContain(write);
-            }
+            // Visible even when unauthorized: hiding them taught the model it
+            // was incapable, and it told developers so instead of offering.
+            expect(turn.toolNames).toEqual(expect.arrayContaining(WRITE_TOOLS));
         });
 
         it('executes a write tool end to end when the model does call it', async () => {
@@ -336,9 +333,7 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
             async (scenario) => {
                 const turn = await runTurn(scenario);
 
-                // Named in the prompt so it can be offered by name — but not
-                // callable until the developer asks for it.
-                expect(turn.toolNames).not.toContain(scenario.expectedOffer);
+                expect(turn.toolNames).toContain(scenario.expectedOffer);
                 expect(`${turn.systemPrompt}\n${turn.userPrompt}`).toContain(
                     scenario.expectedOffer,
                 );
@@ -468,59 +463,64 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
     });
 
     describe('the write gate', () => {
-        it('does not even offer the write tools until an action is declared', async () => {
-            const turn = await runTurn(
-                scenarioById('false-positive-on-kody-rule'),
-            );
-
-            for (const write of WRITE_TOOLS) {
-                expect(turn.toolNames).not.toContain(write);
-            }
-            expect(turn.toolNames).toContain('kodusDecideAction');
-        });
-
-        it('hands them over once the agent quotes the developer asking', async () => {
-            await runTurn(
-                {
-                    ...scenarioById('false-positive-on-kody-rule'),
-                    userMessage: '@kody yes, save that as a memory please',
-                },
-                {
-                    replies: [
-                        {
-                            toolName: 'kodusDecideAction',
-                            input: {
-                                intent: 'act',
-                                tool: 'KODUS_CREATE_MEMORY',
-                                authorizingQuote: 'save that as a memory',
-                            },
-                        },
-                        'Saved.',
-                    ],
-                },
-            );
-
-            expect(captured.at(-1)!.toolNames).toContain('KODUS_CREATE_MEMORY');
-        });
-
-        it("keeps them back when the quote is not the developer's", async () => {
+        it('refuses a write nobody declared, and says how to proceed', async () => {
             await runTurn(scenarioById('false-positive-on-kody-rule'), {
+                replies: [
+                    {
+                        toolName: 'KODUS_CREATE_MEMORY',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Done.',
+                ],
+            });
+
+            // Reached the wrapper, never the MCP server.
+            expect(executedTools).toHaveLength(0);
+            expect(captured.at(-1)!.conversation).toContain(
+                'has NOT been performed',
+            );
+            expect(captured.at(-1)!.conversation).toContain(
+                'kodusDecideAction',
+            );
+        });
+
+        it('runs the write once the agent quotes the developer asking', async () => {
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    DECIDE_TO_ACT,
+                    {
+                        toolName: 'KODUS_CREATE_MEMORY',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Saved.',
+                ],
+            });
+
+            expect(executedTools.map((t) => t.name)).toEqual([
+                'KODUS_CREATE_MEMORY',
+            ]);
+        });
+
+        it("refuses when the quote is not the developer's", async () => {
+            await runTurn(ASKED_TO_SAVE, {
                 replies: [
                     {
                         toolName: 'kodusDecideAction',
                         input: {
                             intent: 'act',
                             tool: 'KODUS_CREATE_MEMORY',
-                            authorizingQuote: 'go ahead and save it',
+                            authorizingQuote: 'delete the whole rule set',
                         },
+                    },
+                    {
+                        toolName: 'KODUS_CREATE_MEMORY',
+                        input: { organizationId: 'org-11111111' },
                     },
                     'Done.',
                 ],
             });
 
-            expect(captured.at(-1)!.toolNames).not.toContain(
-                'KODUS_CREATE_MEMORY',
-            );
+            expect(executedTools).toHaveLength(0);
         });
     });
 

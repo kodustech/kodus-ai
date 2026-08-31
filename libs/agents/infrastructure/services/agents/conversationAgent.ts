@@ -42,6 +42,10 @@ import {
     writeToolPredicate,
     type WriteToolEvent,
 } from './conversation-tool-audit';
+import {
+    createWriteAuthorization,
+    requireDeclaredAction,
+} from './write-authorization';
 import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
 import {
@@ -167,9 +171,17 @@ export class ConversationAgentProvider {
 
         // Sandbox tools are spread in AFTER auditing: they read the checked-out
         // repo, never org state, so a grep is not an action the agent performed.
+        // Writes run only once the agent has declared the action and quoted the
+        // developer asking for it; the policy below grants that.
+        const writeAuthorization = createWriteAuthorization();
+
         const tools: Record<string, Tool> = auditWriteTools(
             {
-                ...mcp.tools,
+                ...requireDeclaredAction(
+                    mcp.tools,
+                    writeToolPredicate(mcp.metadata),
+                    writeAuthorization,
+                ),
                 ...(sandbox ? buildNativeTools(sandbox) : {}),
                 ...buildDecisionTool(),
             },
@@ -218,7 +230,7 @@ export class ConversationAgentProvider {
             tools: new AiSdkToolRegistry(tools),
             resultToolName: CONVERSATION_DECISION_TOOL,
             policies: [
-                new WriteGatePolicy(writeToolPredicate(mcp.metadata), prompt),
+                new WriteGatePolicy(prompt, writeAuthorization),
                 new WriteTruthPolicy(writeToolPredicate(mcp.metadata)),
             ],
             maxSteps: CONVERSATION_MAX_STEPS,

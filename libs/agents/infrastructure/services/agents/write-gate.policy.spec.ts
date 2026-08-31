@@ -1,6 +1,7 @@
 import type { StepView } from '@libs/agent-harness/domain/contracts/policy.contract';
 
 import { CONVERSATION_DECISION_TOOL } from './conversation-decision';
+import { createWriteAuthorization } from './write-authorization';
 import { WriteGatePolicy } from './write-gate.policy';
 
 const DEVELOPER_MESSAGE = '@kody yes, please save that as a memory.';
@@ -38,29 +39,25 @@ const view = (decision?: Record<string, unknown>): StepView =>
         ],
     }) as StepView;
 
-const policy = () =>
-    new WriteGatePolicy(
-        (name) => name === 'KODUS_CREATE_MEMORY',
-        DEVELOPER_MESSAGE,
-    );
+const build = () => {
+    const authorization = createWriteAuthorization();
+    return {
+        authorization,
+        policy: new WriteGatePolicy(DEVELOPER_MESSAGE, authorization),
+    };
+};
+
+const policy = () => build().policy;
 
 describe('WriteGatePolicy', () => {
-    it('keeps the write tools out until the agent commits to acting', () => {
-        const active = policy().prepareStep(view())?.activeTools;
-
-        expect(active).not.toContain('KODUS_CREATE_MEMORY');
-        // Everything else stays — it must still answer, read and decide.
-        expect(active).toEqual(
-            expect.arrayContaining([
-                'KODUS_FIND_MEMORIES',
-                CONVERSATION_DECISION_TOOL,
-                'grep',
-            ]),
-        );
+    it('leaves the tools in front of the agent — it never hides them', () => {
+        expect(policy().prepareStep(view())?.activeTools).toBeUndefined();
     });
 
-    it('opens the gate for an act the developer authorized', () => {
-        const directives = policy().prepareStep(
+    it('authorizes an act the developer asked for', () => {
+        const { policy, authorization } = build();
+
+        policy.prepareStep(
             view({
                 intent: 'act',
                 tool: 'KODUS_CREATE_MEMORY',
@@ -68,19 +65,23 @@ describe('WriteGatePolicy', () => {
             }),
         );
 
-        expect(directives.activeTools).toBeUndefined();
+        expect(authorization.allows('KODUS_CREATE_MEMORY')).toBe(true);
     });
 
-    it('keeps it shut when the agent only means to offer', () => {
-        const active = policy().prepareStep(
-            view({ intent: 'offer', tool: 'KODUS_CREATE_MEMORY' }),
-        )?.activeTools;
+    it('authorizes nothing when the agent only means to offer', () => {
+        const { policy, authorization } = build();
 
-        expect(active).not.toContain('KODUS_CREATE_MEMORY');
+        policy.prepareStep(
+            view({ intent: 'offer', tool: 'KODUS_CREATE_MEMORY' }),
+        );
+
+        expect(authorization.allows('KODUS_CREATE_MEMORY')).toBe(false);
     });
 
     it('refuses an act whose quote the developer never wrote', () => {
-        const directives = policy().prepareStep(
+        const { policy, authorization } = build();
+
+        const directives = policy.prepareStep(
             view({
                 intent: 'act',
                 tool: 'KODUS_CREATE_MEMORY',
@@ -88,16 +89,18 @@ describe('WriteGatePolicy', () => {
             }),
         );
 
-        expect(directives.activeTools).not.toContain('KODUS_CREATE_MEMORY');
+        expect(authorization.allows('KODUS_CREATE_MEMORY')).toBe(false);
         expect(directives.emit?.[0]?.kind).toBe('write-gate.unauthorized');
     });
 
     it('refuses an act with no quote at all', () => {
-        const active = policy().prepareStep(
-            view({ intent: 'act', tool: 'KODUS_CREATE_MEMORY' }),
-        )?.activeTools;
+        const { policy, authorization } = build();
 
-        expect(active).not.toContain('KODUS_CREATE_MEMORY');
+        policy.prepareStep(
+            view({ intent: 'act', tool: 'KODUS_CREATE_MEMORY' }),
+        );
+
+        expect(authorization.allows('KODUS_CREATE_MEMORY')).toBe(false);
     });
 
     it('says what it wants while the gate is shut, so the reply still offers', () => {
@@ -113,6 +116,6 @@ describe('WriteGatePolicy', () => {
         // The first gate told the model its tools were "unavailable" and the
         // model dutifully relayed that to the developer, who does not care.
         expect(note).not.toMatch(/unavailable/i);
-        expect(note).toMatch(/never (?:tell|mention)/i);
+        expect(note).toMatch(/never tell/i);
     });
 });
