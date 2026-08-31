@@ -18,10 +18,17 @@ import { PullRequestsRepository } from '@libs/platformData/infrastructure/adapte
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { IPullRequests } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
+import { resolveMongoTestGate } from '../mongo-test-uri';
 
 /**
  * In-memory counting function (the OLD way)
  * This is the exact logic from GetEnrichedPullRequestsUseCase
+ *
+ * It only tracks sent/filtered — the pair this suite exists to keep in sync.
+ * The aggregation has since grown richer (failed/replaced/unresolved,
+ * bySeverity, categories, firstSentSuggestion), so aggregation results are
+ * asserted with toMatchObject against this reference: toEqual would fail on
+ * the extra keys and say nothing about the sent/filtered parity under test.
  */
 function extractSuggestionsCountInMemory(pullRequest: IPullRequests): {
     sent: number;
@@ -52,9 +59,9 @@ function extractSuggestionsCountInMemory(pullRequest: IPullRequests): {
     return { sent, filtered };
 }
 
-// Skip if no MongoDB connection available
-const MONGODB_URI = process.env.TEST_MONGODB_URI || process.env.API_MG_DB_HOST;
-const shouldSkip = !MONGODB_URI;
+// Skipped locally without Mongo; a CI run without it fails loudly
+// instead — see resolveMongoTestGate.
+const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test');
 
 (shouldSkip ? describe.skip : describe)(
     'PullRequests Aggregation vs In-Memory Counting',
@@ -67,9 +74,7 @@ const shouldSkip = !MONGODB_URI;
 
         beforeAll(async () => {
             // Build connection string
-            const mongoUri = MONGODB_URI?.includes('://')
-                ? MONGODB_URI
-                : `mongodb://${MONGODB_URI}:27017/kodus_test`;
+
 
             module = await Test.createTestingModule({
                 imports: [
@@ -111,7 +116,13 @@ const shouldSkip = !MONGODB_URI;
             number: number;
             repositoryId: string;
             files: Array<{
-                suggestions: Array<{ deliveryStatus: DeliveryStatus }>;
+                suggestions: Array<{
+                    deliveryStatus: DeliveryStatus;
+                    // Optional overrides so a case can exercise the deep-link
+                    // ranking (unresolved first, then severity).
+                    severity?: string;
+                    implementationStatus?: string;
+                }>;
             }>;
         }): Promise<IPullRequests> {
             const pr: Partial<IPullRequests> = {
@@ -158,6 +169,8 @@ const shouldSkip = !MONGODB_URI;
                         deliveryStatus: s.deliveryStatus,
                         createdAt: new Date().toISOString(),
                         updatedAt: new Date().toISOString(),
+                        // Case-specific overrides win over the defaults above.
+                        ...s,
                     })),
                 })),
                 createdAt: new Date().toISOString(),
@@ -210,7 +223,7 @@ const shouldSkip = !MONGODB_URI;
                 const aggregationCounts = aggregationResult.get('repo-1_1');
 
                 expect(aggregationCounts).toBeDefined();
-                expect(aggregationCounts).toEqual(inMemoryResult);
+                expect(aggregationCounts).toMatchObject(inMemoryResult);
 
                 // Verify the actual values
                 expect(inMemoryResult).toEqual({ sent: 3, filtered: 2 });
@@ -232,7 +245,7 @@ const shouldSkip = !MONGODB_URI;
                 const aggregationCounts = aggregationResult.get('repo-1_2');
 
                 // Both should be zero
-                expect(aggregationCounts).toEqual({ sent: 0, filtered: 0 });
+                expect(aggregationCounts).toMatchObject({ sent: 0, filtered: 0 });
             });
 
             it('should return identical results for PR with only SENT', async () => {
@@ -257,7 +270,7 @@ const shouldSkip = !MONGODB_URI;
                     );
                 const inMemoryResult = extractSuggestionsCountInMemory(pr);
 
-                expect(aggregationResult.get('repo-1_3')).toEqual(
+                expect(aggregationResult.get('repo-1_3')).toMatchObject(
                     inMemoryResult,
                 );
                 expect(inMemoryResult).toEqual({ sent: 3, filtered: 0 });
@@ -284,7 +297,7 @@ const shouldSkip = !MONGODB_URI;
                     );
                 const inMemoryResult = extractSuggestionsCountInMemory(pr);
 
-                expect(aggregationResult.get('repo-1_4')).toEqual(
+                expect(aggregationResult.get('repo-1_4')).toMatchObject(
                     inMemoryResult,
                 );
                 expect(inMemoryResult).toEqual({ sent: 0, filtered: 2 });
@@ -344,26 +357,26 @@ const shouldSkip = !MONGODB_URI;
                     );
 
                 // Compare each
-                expect(aggregationResult.get('repo-A_10')).toEqual(
+                expect(aggregationResult.get('repo-A_10')).toMatchObject(
                     extractSuggestionsCountInMemory(pr1),
                 );
-                expect(aggregationResult.get('repo-A_20')).toEqual(
+                expect(aggregationResult.get('repo-A_20')).toMatchObject(
                     extractSuggestionsCountInMemory(pr2),
                 );
-                expect(aggregationResult.get('repo-B_30')).toEqual(
+                expect(aggregationResult.get('repo-B_30')).toMatchObject(
                     extractSuggestionsCountInMemory(pr3),
                 );
 
                 // Verify actual values
-                expect(aggregationResult.get('repo-A_10')).toEqual({
+                expect(aggregationResult.get('repo-A_10')).toMatchObject({
                     sent: 1,
                     filtered: 1,
                 });
-                expect(aggregationResult.get('repo-A_20')).toEqual({
+                expect(aggregationResult.get('repo-A_20')).toMatchObject({
                     sent: 3,
                     filtered: 0,
                 });
-                expect(aggregationResult.get('repo-B_30')).toEqual({
+                expect(aggregationResult.get('repo-B_30')).toMatchObject({
                     sent: 0,
                     filtered: 1,
                 });
@@ -396,7 +409,7 @@ const shouldSkip = !MONGODB_URI;
                     );
                 const inMemoryResult = extractSuggestionsCountInMemory(pr);
 
-                expect(aggregationResult.get('repo-large_100')).toEqual(
+                expect(aggregationResult.get('repo-large_100')).toMatchObject(
                     inMemoryResult,
                 );
 
@@ -443,7 +456,7 @@ const shouldSkip = !MONGODB_URI;
                         TEST_ORG_ID,
                     );
 
-                expect(result.get('repo-empty_999')).toEqual({
+                expect(result.get('repo-empty_999')).toMatchObject({
                     sent: 0,
                     filtered: 0,
                 });
@@ -505,6 +518,99 @@ const shouldSkip = !MONGODB_URI;
                     id: 'sugg-0-1',
                     filePath: 'src/file0.ts',
                 });
+            });
+
+            it('should prefer an unresolved critical over a low that comes first', async () => {
+                await createTestPR({
+                    number: 603,
+                    repositoryId: 'repo-deeplink',
+                    files: [
+                        {
+                            suggestions: [
+                                {
+                                    deliveryStatus: DeliveryStatus.SENT,
+                                    severity: 'low',
+                                },
+                            ],
+                        },
+                        {
+                            suggestions: [
+                                {
+                                    deliveryStatus: DeliveryStatus.SENT,
+                                    severity: 'critical',
+                                },
+                            ],
+                        },
+                    ],
+                });
+
+                const result =
+                    await repository.findSuggestionCountsByNumbersAndRepositoryIds(
+                        [{ number: 603, repositoryId: 'repo-deeplink' }],
+                        TEST_ORG_ID,
+                    );
+
+                expect(
+                    result.get('repo-deeplink_603')?.firstSentSuggestion,
+                ).toEqual({ id: 'sugg-1-0', filePath: 'src/file1.ts' });
+            });
+
+            it('should prefer any open finding over an applied one, however severe', async () => {
+                await createTestPR({
+                    number: 604,
+                    repositoryId: 'repo-deeplink',
+                    files: [
+                        {
+                            suggestions: [
+                                {
+                                    deliveryStatus: DeliveryStatus.SENT,
+                                    severity: 'critical',
+                                    implementationStatus: 'implemented',
+                                },
+                                {
+                                    deliveryStatus: DeliveryStatus.SENT,
+                                    severity: 'low',
+                                },
+                            ],
+                        },
+                    ],
+                });
+
+                const result =
+                    await repository.findSuggestionCountsByNumbersAndRepositoryIds(
+                        [{ number: 604, repositoryId: 'repo-deeplink' }],
+                        TEST_ORG_ID,
+                    );
+
+                expect(
+                    result.get('repo-deeplink_604')?.firstSentSuggestion?.id,
+                ).toBe('sugg-0-1');
+            });
+
+            it('should not leak the internal rank past the repository boundary', async () => {
+                await createTestPR({
+                    number: 605,
+                    repositoryId: 'repo-deeplink',
+                    files: [
+                        {
+                            suggestions: [
+                                { deliveryStatus: DeliveryStatus.SENT },
+                            ],
+                        },
+                    ],
+                });
+
+                const result =
+                    await repository.findSuggestionCountsByNumbersAndRepositoryIds(
+                        [{ number: 605, repositoryId: 'repo-deeplink' }],
+                        TEST_ORG_ID,
+                    );
+
+                expect(
+                    Object.keys(
+                        result.get('repo-deeplink_605')!.firstSentSuggestion!,
+                    ).sort(),
+                ).toEqual(['filePath', 'id']);
             });
 
             it('should be null when there is no delivered suggestion', async () => {
