@@ -2,6 +2,9 @@ import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { REGISTRY } from '@libs/llm/providers';
 import { resolveByokTemperature } from '@libs/llm/sampling-params';
+import { probeSlotCall } from '@libs/llm/probe-slot-call';
+import type { NormalizedModel } from '@libs/llm/byok-config';
+import { encrypt } from '@libs/common/utils/crypto';
 import { validateModelTuning } from '@libs/llm/validate-model-tuning';
 import { ProviderService } from '@libs/core/infrastructure/services/providers/provider.service';
 import { createLogger } from '@libs/core/log/logger';
@@ -125,6 +128,16 @@ type TestByokInput = {
      *  against the model's traits so an "off" on an always-thinking model fails
      *  the Test instead of being silently ignored at review time. */
     reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+    /** Raw provider-options JSON the user pasted. It becomes `providerOptions`
+     *  at review time, so the probe sends it too — a malformed or wrong-shaped
+     *  override used to save clean and only surface on the first review. */
+    reasoningConfigOverride?: string;
+    /** Completion cap the slot will carry. */
+    maxOutputTokens?: number;
+    /** OpenRouter upstream pinning — a pin that no upstream can serve fails the
+     *  Test now instead of every review afterwards. */
+    openrouterProviderOrder?: string[];
+    openrouterAllowFallbacks?: boolean;
     vertexLocation?: string;
     awsBearerToken?: string;
     awsAccessKeyId?: string;
@@ -228,228 +241,112 @@ export class TestByokConnectionUseCase {
             );
         }
 
-        // Anthropic-protocol brands + the generic compatible endpoint: probe the
-        // real /v1/messages endpoint with a 1-token request instead of /v1/models.
-        // Some vendors gate the two differently — Kimi Code's models list is open
-        // while chat is restricted — so a models-list probe can report "connection
-        // OK" for a key whose actual reviews would fail. (Native `anthropic`, with
-        // its hardcoded api.anthropic.com endpoint, is handled in buildProbeRequest.)
-        if (this.isAnthropicProtocolWithBaseURL(byokProvider)) {
-            // A key-only connect to a known brand (Kimi/GLM) carries no baseURL —
-            // fall back to the brand's canonical endpoint, the SAME value the model
-            // build resolves. Only a generic anthropic_compatible (no fixed brand
-            // endpoint) still requires the user to supply one.
-            const effectiveBaseURL =
-                baseURL?.trim() ||
-                (REGISTRY.has(byokProvider)
-                    ? REGISTRY.get(byokProvider).defaultBaseURL
-                    : undefined);
-            if (!effectiveBaseURL) {
-                throw new BadRequestException(
-                    `baseURL is required for ${byokProvider}`,
-                );
-            }
-            return await this.testAnthropicCompatible(
-                apiKey,
-                effectiveBaseURL,
-                input.model,
-            );
-        }
+        // ONE probe for every provider: build the model through the runtime
+        // resolver and issue a minimal real call. The per-provider switch that
+        // used to live here rebuilt each request by hand, which is why it drifted
+        // — it never emitted reasoning, sent temperature on only one transport,
+        // and had no case for Azure at all (which threw "Unsupported provider"
+        // and made the provider impossible to connect). Going through
+        // `resolveModelConfig` means every per-model fact the provider modules
+        // own applies here automatically, and keeps applying when they change.
+        //
+        // Brands with a canonical endpoint (Kimi/GLM) resolve it from the module,
+        // exactly as the model build does, so a key-only connect carries no
+        // baseURL and still probes the right host.
+        const effectiveBaseURL =
+            baseURL?.trim() ||
+            (REGISTRY.has(byokProvider)
+                ? REGISTRY.get(byokProvider).defaultBaseURL
+                : undefined);
 
-        // OpenAI-protocol chat endpoints (generic openai_compatible + Novita):
-        // when a model is given, exercise it with a real 1-token chat completion
-        // — the SAME call the review makes — instead of a GET /v1/models. Some
-        // upstreams gate the two differently (a Kimi on Novita lists fine while
-        // chat rejects the key/model), so the weaker list probe can report "OK"
-        // for a config whose reviews would fail. Sends the RESOLVED temperature
-        // (a `fixed`-policy model's pinned value), so the probe matches runtime.
         if (
-            (byokProvider === BYOKProvider.OPENAI_COMPATIBLE ||
-                byokProvider === BYOKProvider.NOVITA) &&
-            input.model?.trim()
+            byokProvider === BYOKProvider.ANTHROPIC_COMPATIBLE &&
+            !effectiveBaseURL
         ) {
-            return await this.testOpenAICompatibleChat(
-                byokProvider,
-                apiKey,
-                baseURL,
-                input.model.trim(),
-                input.temperature,
+            throw new BadRequestException(
+                `baseURL is required for ${byokProvider}`,
             );
         }
 
-        const { url, headers } = this.buildProbeRequest(byokProvider, apiKey, baseURL);
-
-        // SSRF guard: only openai_compatible consumes a user-provided
-        // base URL here; the other providers hardcode their endpoints.
-        if (byokProvider === BYOKProvider.OPENAI_COMPATIBLE) {
-            await assertSafeOpenAICompatibleUrl(url);
-        }
-
-        const start = Date.now();
-
-        try {
-            await axios.get(url, {
-                headers,
-                timeout: TEST_TIMEOUT_MS,
-                maxRedirects: 0, // don't follow redirects: could lead back to a private IP
-            });
+        // A probe now PROVES the model, so it needs one. Previously a
+        // model-less Test fell back to listing models, which answered a
+        // different question ("is the key valid?") while the button claimed the
+        // config works — the weaker signal this refactor exists to remove.
+        if (!input.model?.trim()) {
             return {
-                ok: true,
-                code: 'ok',
-                latencyMs: Date.now() - start,
+                ok: false,
+                code: 'bad_request',
+                latencyMs: 0,
+                message:
+                    'Pick the model first — the connection test runs a real request with it, so it can tell you the model works and not just that the key is valid.',
             };
-        } catch (err) {
-            const latencyMs = Date.now() - start;
-            return this.normalizeError(err, latencyMs);
         }
+
+        // SSRF guard: only a user-supplied endpoint is attacker-controlled. Runs
+        // BEFORE the model is built so a private/reserved target never receives
+        // the credential.
+        if (
+            byokProvider === BYOKProvider.OPENAI_COMPATIBLE ||
+            byokProvider === BYOKProvider.ANTHROPIC_COMPATIBLE
+        ) {
+            await assertSafeOpenAICompatibleUrl(effectiveBaseURL!);
+        }
+
+        return await this.probeViaRuntime(input, effectiveBaseURL);
     }
 
     /**
-     * Validate an Anthropic-compatible endpoint (Kimi Code, Z.ai, DeepSeek)
-     * by sending a minimal 1-token /v1/messages request — the same call the
-     * real review path makes. Falls back to GET /v1/models when no model is
-     * provided, accepting the weaker signal.
+     * Build the slot the SAVE would persist and issue the review's own call
+     * against it. This is what makes "Test" mean "this exact config works":
+     * temperature, reasoning effort, a raw reasoning override and the OpenRouter
+     * pins all ride the slot, so a value that the provider will reject fails here
+     * instead of at the first review.
      */
-    private async testAnthropicCompatible(
-        apiKey: string,
-        baseURL: string,
-        model?: string,
+    private async probeViaRuntime(
+        input: TestByokInput,
+        baseURL?: string,
     ): Promise<TestByokResult> {
-        const root = anthropicCompatibleRootURL(baseURL);
-
-        // SSRF guard: user-provided base URL, same rules as openai_compatible.
-        await assertSafeOpenAICompatibleUrl(root);
-
-        const headers = {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
-        };
-
         const start = Date.now();
         try {
-            if (model?.trim()) {
-                await axios.post(
-                    `${root}/v1/messages`,
-                    {
-                        model: model.trim(),
-                        max_tokens: 1,
-                        messages: [{ role: 'user', content: 'ping' }],
-                    },
-                    {
-                        headers,
-                        timeout: TEST_TIMEOUT_MS,
-                        maxRedirects: 0,
-                    },
-                );
-            } else {
-                await axios.get(`${root}/v1/models`, {
-                    headers,
-                    timeout: TEST_TIMEOUT_MS,
-                    maxRedirects: 0,
-                });
-            }
-            return {
-                ok: true,
-                code: 'ok',
-                latencyMs: Date.now() - start,
-            };
+            await probeSlotCall(this.slotFromInput(input, baseURL), {
+                timeoutMs: TEST_TIMEOUT_MS,
+            });
+            return { ok: true, code: 'ok', latencyMs: Date.now() - start };
         } catch (err) {
             return this.normalizeError(err, Date.now() - start);
         }
     }
 
     /**
-     * Validate an OpenAI-protocol chat endpoint (generic openai_compatible or
-     * Novita) by POSTing a minimal 1-token /chat/completions request — the same
-     * shape the real review path issues — instead of a GET /v1/models. Carries
-     * the RESOLVED temperature (an always-thinking Kimi's pinned 1, an
-     * `unsupported` model's omitted field) so the probe exercises exactly what
-     * runtime sends. `thinking` is NOT emitted: Novita's OpenAI-protocol Kimi
-     * reasons natively and the effort wire-format over this transport is
-     * unverified, so we don't risk a param a plain upstream would reject.
+     * The form's values as the runtime slot they will become. `apiKey` is
+     * re-encrypted because a slot carries ciphertext by contract (the model build
+     * decrypts it downstream) — the probe must not be the one path that hands the
+     * builder a raw secret and quietly changes that invariant.
      */
-    private async testOpenAICompatibleChat(
-        provider: BYOKProvider,
-        apiKey: string,
-        baseURL: string | undefined,
-        model: string,
-        temperature: number | undefined,
-    ): Promise<TestByokResult> {
-        // Novita hardcodes its endpoint (mirrors novita module's build default);
-        // openai_compatible is user-provided and SSRF-gated below.
-        const base =
-            provider === BYOKProvider.NOVITA
-                ? baseURL?.trim() || 'https://api.novita.ai/v3/openai'
-                : baseURL!;
-
-        // Append /chat/completions. Novita's base is its full versioned root
-        // (/v3/openai) — append directly, exactly as its /models probe does. For
-        // the generic openai_compatible endpoint, mirror buildProbeRequest: add
-        // /v1 only when the user's base doesn't already carry a version segment.
-        let trimmed = base;
-        while (trimmed.endsWith('/')) {
-            trimmed = trimmed.slice(0, -1);
-        }
-        const needsV1 =
-            provider === BYOKProvider.OPENAI_COMPATIBLE &&
-            !/\/v\d+$/i.test(trimmed);
-        const url = needsV1
-            ? `${trimmed}/v1/chat/completions`
-            : `${trimmed}/chat/completions`;
-
-        // SSRF guard only for the user-provided (openai_compatible) endpoint;
-        // Novita's host is fixed, same as its models probe in buildProbeRequest.
-        if (provider === BYOKProvider.OPENAI_COMPATIBLE) {
-            await assertSafeOpenAICompatibleUrl(url);
-        }
-
-        // The temperature runtime would actually send for this slot (a `fixed`
-        // policy's pinned value over whatever was passed; omitted when unsupported).
-        const resolvedTemperature = resolveByokTemperature({
-            provider,
-            model,
-            temperature,
-        });
-
-        const body: Record<string, unknown> = {
-            model,
-            max_tokens: 1,
-            messages: [{ role: 'user', content: 'ping' }],
-        };
-        if (resolvedTemperature !== undefined) {
-            body.temperature = resolvedTemperature;
-        }
-
-        const start = Date.now();
-        try {
-            await axios.post(url, body, {
-                headers: {
-                    Authorization: `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                timeout: TEST_TIMEOUT_MS,
-                maxRedirects: 0,
-            });
-            return {
-                ok: true,
-                code: 'ok',
-                latencyMs: Date.now() - start,
-            };
-        } catch (err) {
-            return this.normalizeError(err, Date.now() - start);
-        }
+    private slotFromInput(
+        input: TestByokInput,
+        baseURL?: string,
+    ): NormalizedModel {
+        return {
+            provider: input.provider as BYOKProvider,
+            apiKey: encrypt(input.apiKey ?? ''),
+            model: input.model?.trim() ?? '',
+            baseURL: baseURL?.trim() || undefined,
+            temperature: input.temperature,
+            reasoningEffort: input.reasoningEffort,
+            reasoningConfigOverride: input.reasoningConfigOverride,
+            maxOutputTokens: input.maxOutputTokens,
+            openrouterProviderOrder: input.openrouterProviderOrder,
+            openrouterAllowFallbacks: input.openrouterAllowFallbacks,
+            vertexLocation: input.vertexLocation,
+            awsBearerToken: input.awsBearerToken,
+            awsAccessKeyId: input.awsAccessKeyId,
+            awsSecretAccessKey: input.awsSecretAccessKey,
+            awsRegion: input.awsRegion,
+            awsSessionToken: input.awsSessionToken,
+        } as NormalizedModel;
     }
 
-    /**
-     * Validate a Google Vertex BYOK config end-to-end: parse the SA JSON,
-     * exchange it for an access token, and — crucially — probe the *actual
-     * configured model* with a 1-token call on the same endpoint the review
-     * uses (claude-* → publishers/anthropic :rawPredict; otherwise
-     * publishers/google :generateContent). This surfaces "model not
-     * available in this region" at Test time instead of mid-review, which
-     * is the whole point of the Test button.
-     */
     private async testVertex(
         saJsonOrBase64: string,
         location?: string,
@@ -775,167 +672,29 @@ export class TestByokConnectionUseCase {
     }
 
     /**
-     * True for an Anthropic-protocol provider that carries a user/curated baseURL:
-     * the generic `anthropic_compatible` custom endpoint and every first-class
-     * brand built from the anthropicBrandModule factory (Moonshot/Kimi, Z.ai/GLM).
-     * Derived from the registry (namespace === 'anthropic') so a new Anthropic brand
-     * routes here automatically — no per-brand edit. Native `anthropic` is excluded
-     * (hardcoded endpoint + x-api-key, handled in buildProbeRequest); Vertex/Bedrock
-     * are intercepted earlier in execute() before this ever runs.
+     * Any probe failure → a verdict the connect form can show. Two transports
+     * reach here: the AI SDK (the unified model probe) and axios (the Vertex /
+     * Bedrock auth preflights), so both are normalized onto the same
+     * status-driven mapping and produce identical wording for identical
+     * failures. Transport-level faults (timeout, DNS, refused) keep their own
+     * messages — there is no HTTP status to map.
      */
-    private isAnthropicProtocolWithBaseURL(provider: BYOKProvider): boolean {
-        if (provider === BYOKProvider.ANTHROPIC) return false;
-        return (
-            REGISTRY.has(provider) &&
-            REGISTRY.get(provider).providerOptionsNamespace?.(provider) ===
-                'anthropic'
-        );
-    }
-
-    private buildProbeRequest(
-        provider: BYOKProvider,
-        apiKey: string,
-        baseURL?: string,
-    ): { url: string; headers: Record<string, string> } {
-        switch (provider) {
-            case BYOKProvider.OPENAI:
-                return {
-                    url: 'https://api.openai.com/v1/models',
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                };
-
-            case BYOKProvider.ANTHROPIC:
-                return {
-                    url: 'https://api.anthropic.com/v1/models',
-                    headers: {
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01',
-                        'Content-Type': 'application/json',
-                    },
-                };
-
-            case BYOKProvider.GOOGLE_GEMINI:
-                return {
-                    url: 'https://generativelanguage.googleapis.com/v1beta/models',
-                    headers: {
-                        'x-goog-api-key': apiKey,
-                    },
-                };
-
-            case BYOKProvider.OPEN_ROUTER:
-                return {
-                    url: 'https://openrouter.ai/api/v1/models',
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                };
-
-            case BYOKProvider.NOVITA:
-                return {
-                    url: 'https://api.novita.ai/v3/openai/models',
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                };
-
-            case BYOKProvider.OPENAI_COMPATIBLE: {
-                // Trim trailing slashes without a `/+$` regex (polynomial
-                // backtracking risk on user input). endsWith+slice is O(n).
-                let trimmed = baseURL!;
-                while (trimmed.endsWith('/')) {
-                    trimmed = trimmed.slice(0, -1);
-                }
-                const needsV1 = !/\/v\d+$/i.test(trimmed);
-                const url = needsV1
-                    ? `${trimmed}/v1/models`
-                    : `${trimmed}/models`;
-                return {
-                    url,
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json',
-                    },
-                };
-            }
-
-            default:
-                throw new BadRequestException(
-                    `Unsupported provider: ${provider}`,
-                );
-        }
-    }
-
     private normalizeError(err: unknown, latencyMs: number): TestByokResult {
+        const sdk = this.sdkErrorFacts(err);
+        if (sdk) {
+            const providerMessage =
+                this.extractProviderMessage(sdk.body) ?? sdk.message;
+            return this.fromHttpStatus(sdk.status, providerMessage, latencyMs);
+        }
+
         if (axios.isAxiosError(err)) {
             const status = err.response?.status;
             const providerMessage = this.extractProviderMessage(
                 err.response?.data,
             );
 
-            const base = { latencyMs, httpStatus: status, providerMessage };
-
-            if (status === 401 || status === 403) {
-                return {
-                    ok: false,
-                    code: 'auth',
-                    ...base,
-                    message:
-                        'The provider rejected this API key. Double-check it was copied in full, billing is active, and the key matches the endpoint you selected.',
-                };
-            }
-
-            if (status === 404) {
-                return {
-                    ok: false,
-                    code: 'not_found',
-                    ...base,
-                    message:
-                        "The provider returned 404. Either the base URL is wrong for this provider, or the API path isn't exposed on your plan.",
-                };
-            }
-
-            if (status === 400) {
-                return {
-                    ok: false,
-                    code: 'bad_request',
-                    ...base,
-                    message:
-                        'The provider rejected the request format. The key may be valid but the model ID or request shape is off — check the exact model name in the provider catalog.',
-                };
-            }
-
-            if (status === 402) {
-                return {
-                    ok: false,
-                    code: 'payment',
-                    ...base,
-                    message:
-                        'The provider account has insufficient credits or a blocked billing status. Top up on the provider dashboard and retry.',
-                };
-            }
-
-            if (status === 429) {
-                return {
-                    ok: true,
-                    code: 'rate_limit',
-                    ...base,
-                    message:
-                        "Rate-limited — the key works but the provider is throttling right now. Wait a moment and save again, or lower Max Concurrent Requests in Advanced settings.",
-                };
-            }
-
-            if (typeof status === 'number' && status >= 500) {
-                return {
-                    ok: false,
-                    code: 'server_error',
-                    ...base,
-                    message: `The provider returned HTTP ${status}. This is a provider-side error — wait a moment and retry. If it persists, check the provider status page.`,
-                };
+            if (typeof status === 'number') {
+                return this.fromHttpStatus(status, providerMessage, latencyMs);
             }
 
             if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
@@ -960,13 +719,17 @@ export class TestByokConnectionUseCase {
                 };
             }
 
+            return this.fromHttpStatus(status, providerMessage, latencyMs);
+        }
+
+        // An aborted probe is our own timeout, not a provider fault — say so
+        // instead of surfacing the SDK's terse "aborted".
+        if ((err as { name?: string })?.name === 'AbortError') {
             return {
                 ok: false,
-                code: 'unknown',
-                ...base,
-                message: status
-                    ? `The provider returned HTTP ${status} and Kodus couldn't classify the error. See the provider message below for details.`
-                    : 'Kodus reached the provider but couldn\'t classify the response. See the provider message below.',
+                code: 'network',
+                latencyMs,
+                message: `The request timed out after ${TEST_TIMEOUT_MS}ms. The provider may be slow or unreachable from this deployment — retry or check outbound network.`,
             };
         }
 
@@ -987,9 +750,117 @@ export class TestByokConnectionUseCase {
     }
 
     /**
-     * Extract the provider's own error message from the response body.
-     * Covers OpenAI/Anthropic/Google/OpenRouter/OpenAI-compatible shapes.
+     * HTTP status → user-facing verdict. Extracted verbatim from the axios
+     * branch so both transports (axios for the auth preflights, the AI SDK for
+     * the unified probe) hand back the same wording for the same failure.
      */
+    private fromHttpStatus(
+        status: number | undefined,
+        providerMessage: string | undefined,
+        latencyMs: number,
+    ): TestByokResult {
+        const base = { latencyMs, httpStatus: status, providerMessage };
+
+        if (status === 401 || status === 403) {
+            return {
+                ok: false,
+                code: 'auth',
+                ...base,
+                message:
+                    'The provider rejected this API key. Double-check it was copied in full, billing is active, and the key matches the endpoint you selected.',
+            };
+        }
+        if (status === 404) {
+            return {
+                ok: false,
+                code: 'not_found',
+                ...base,
+                message:
+                    "The provider returned 404. Either the base URL is wrong for this provider, or the API path isn't exposed on your plan.",
+            };
+        }
+        if (status === 400) {
+            return {
+                ok: false,
+                code: 'bad_request',
+                ...base,
+                message:
+                    'The provider rejected the request format. The key may be valid but the model ID or request shape is off — check the exact model name in the provider catalog.',
+            };
+        }
+        if (status === 402) {
+            return {
+                ok: false,
+                code: 'payment',
+                ...base,
+                message:
+                    'The provider account has insufficient credits or a blocked billing status. Top up on the provider dashboard and retry.',
+            };
+        }
+        if (status === 429) {
+            return {
+                ok: true,
+                code: 'rate_limit',
+                ...base,
+                message:
+                    'Rate-limited — the key works but the provider is throttling right now. Wait a moment and save again, or lower Max Concurrent Requests in Advanced settings.',
+            };
+        }
+        if (typeof status === 'number' && status >= 500) {
+            return {
+                ok: false,
+                code: 'server_error',
+                ...base,
+                message: `The provider returned HTTP ${status}. This is a provider-side error — wait a moment and retry. If it persists, check the provider status page.`,
+            };
+        }
+        return {
+            ok: false,
+            code: 'unknown',
+            ...base,
+            message: status
+                ? `The provider returned HTTP ${status} and Kodus couldn't classify the error. See the provider message below for details.`
+                : "Kodus reached the provider but couldn't classify the response. See the provider message below.",
+        };
+    }
+
+    /**
+     * HTTP facts out of an AI SDK failure. `APICallError` carries the status and
+     * the raw provider body, but under different names than axios and sometimes
+     * one level down in `cause` (a provider adapter re-wrapping its transport).
+     * Returns undefined for anything that isn't an SDK call failure so the axios
+     * branch keeps handling the paths that still use it.
+     */
+    private sdkErrorFacts(
+        err: unknown,
+    ): { status?: number; body?: unknown; message?: string } | undefined {
+        if (!err || typeof err !== 'object') return undefined;
+        if (axios.isAxiosError(err)) return undefined;
+
+        const e = err as {
+            name?: string;
+            message?: string;
+            statusCode?: number;
+            responseBody?: unknown;
+            data?: unknown;
+            cause?: {
+                statusCode?: number;
+                responseBody?: unknown;
+                message?: string;
+            };
+        };
+
+        const status = e.statusCode ?? e.cause?.statusCode;
+        const body = e.responseBody ?? e.data ?? e.cause?.responseBody;
+        const isApiCallError =
+            e.name === 'AI_APICallError' || e.name === 'APICallError';
+
+        if (status === undefined && !isApiCallError && body === undefined) {
+            return undefined;
+        }
+        return { status, body, message: e.message ?? e.cause?.message };
+    }
+
     private extractProviderMessage(data: unknown): string | undefined {
         if (!data) return undefined;
 
