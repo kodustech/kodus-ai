@@ -80,6 +80,14 @@ export const SelectRepositories = (props: {
     const isLoadingMoreRef = useRef(false);
 
     useEffect(() => {
+        if (!open) {
+            setSearch("");
+            setDisplayedCount(ITEMS_PER_BATCH);
+            isLoadingMoreRef.current = false;
+        }
+    }, [open]);
+
+    useEffect(() => {
         setDisplayedCount(ITEMS_PER_BATCH);
         isLoadingMoreRef.current = false;
     }, [search]);
@@ -133,14 +141,18 @@ export const SelectRepositories = (props: {
     useEffect(() => {
         if (!open) return;
 
-        const timer = setTimeout(() => {
-            const listElement = commandListRef.current;
-            if (!listElement || !hasMore) return;
+        let listElement: HTMLDivElement | null = null;
+        let handleScroll: (() => void) | null = null;
 
-            const handleScroll = () => {
+        const timer = setTimeout(() => {
+            const el = commandListRef.current;
+            if (!el || !hasMore) return;
+
+            listElement = el;
+            handleScroll = () => {
                 if (isLoadingMoreRef.current) return;
 
-                const { scrollTop, scrollHeight, clientHeight } = listElement;
+                const { scrollTop, scrollHeight, clientHeight } = el;
                 const distanceFromBottom =
                     scrollHeight - scrollTop - clientHeight;
 
@@ -162,16 +174,15 @@ export const SelectRepositories = (props: {
                 }
             };
 
-            listElement.addEventListener("scroll", handleScroll, {
-                passive: true,
-            });
-
-            return () => {
-                listElement.removeEventListener("scroll", handleScroll);
-            };
+            el.addEventListener("scroll", handleScroll, { passive: true });
         }, 100);
 
-        return () => clearTimeout(timer);
+        return () => {
+            clearTimeout(timer);
+            if (listElement && handleScroll) {
+                listElement.removeEventListener("scroll", handleScroll);
+            }
+        };
     }, [open, displayedCount, total]);
 
     const formatLastActivity = (date?: string) => {
