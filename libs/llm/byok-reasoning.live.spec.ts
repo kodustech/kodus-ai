@@ -137,6 +137,9 @@ const LIVE = [
     {
         brand: 'google_gemini',
         why: 'thinkingBudget must land INSIDE the model ceiling (2.5-flash tops out at 24,576)',
+        // The clamped ceiling IS what this row tests, so the cap clears it
+        // rather than lowering the effort and testing nothing.
+        maxOutputTokens: 26_000,
         slot: {
             provider: 'google_gemini',
             model: 'gemini-2.5-flash',
@@ -212,6 +215,8 @@ const LIVE = [
             model: 'claude-sonnet-4-5-20250929',
             reasoningEffort: 'low',
         },
+        // `low` emits budget_tokens 5_000; the cap has to clear it.
+        maxOutputTokens: 6_144,
         apiKey: () => key('anthropic'),
         reasons: true,
     },
@@ -245,8 +250,14 @@ const LIVE = [
             provider: 'anthropic_compatible',
             model: 'k3',
             baseURL: 'https://api.kimi.com/coding',
-            reasoningEffort: 'high',
+            // `low`, not `high`, ON PURPOSE: what this row tests is the SHAPE
+            // this transport emits, and `high` would authorise a 40,000-token
+            // thinking budget for a prompt asking for one word. The effort VALUE
+            // is tested where it is the subject (deepseek's low/high/max
+            // mapping, GLM's medium fold).
+            reasoningEffort: 'low',
         },
+        maxOutputTokens: 6_144,
         apiKey: () => key('anthropic_compatible'),
         reasons: true,
     },
@@ -367,6 +378,12 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                     ],
                     loop: { tools: {}, maxSteps: 1 },
                     runName: 'byok-live-contract',
+                    // A CAP on what one probe can cost. Without it most rows
+                    // went out with no `max_tokens` at all and the vendor's own
+                    // ceiling applied — for a prompt that asks for one word.
+                    // A row that emits a thinking BUDGET needs a cap above it
+                    // (the request is rejected otherwise), so it states its own.
+                    maxOutputTokens: (c as any).maxOutputTokens ?? 4_096,
                 });
 
                 expect(typeof result.text).toBe('string');
@@ -511,6 +528,7 @@ describe('BYOK structured output — LIVE, through LLM.run (the one door)', () =
                     user: 'Reply with ok=true and word="ok".',
                     runName: 'byok-live-structured',
                     schema,
+                    maxOutputTokens: 4_096,
                 });
 
                 // Getting a parsed object back means the whole composition held:

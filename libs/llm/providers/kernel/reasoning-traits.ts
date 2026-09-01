@@ -70,6 +70,16 @@ export interface ModelReasoningTraits {
      *  low/high/max and do NOT accept "medium"; our 4-value scale is mapped into
      *  it by {@link compatibleEffortValue}. Absent ⇒ our own vocabulary. */
     effortScale?: 'low-high-max';
+    /** The endpoint FIXES temperature to 1 while thinking, so 1 is the model's
+     *  only sound value. This is a PROTOCOL fact, declared rather than inferred:
+     *  it used to be derived from `thinksByDefault && !canDisableThinking`, and
+     *  that proxy is wrong. "Cannot turn thinking off" and "temperature is
+     *  pinned" are different claims — MiniMax M2 is the counterexample, an
+     *  always-reasoning model on the OpenAI protocol with no documented
+     *  temperature constraint. Deriving the pin from the proxy silently
+     *  overrode the configured temperature on 18 production slots.
+     *  Absent ⇒ no pin. */
+    pinsTemperatureWhileThinking?: boolean;
     /** The endpoint does not SUPPORT sampling params (temperature, top_p,
      *  presence/frequency_penalty) while thinking is active, so they must be
      *  OMITTED. DeepSeek: "Thinking mode does not support the temperature,
@@ -167,6 +177,9 @@ export function resolveCompatibleReasoningTraits(
             canDisableThinking: !alwaysThinking,
             supportsForcedToolChoice: false,
             forcedToolChoiceRejectsThinking: true,
+            // Unchanged from before this fact was declared: an always-thinking
+            // GLM keeps its temperature-1 pin.
+            pinsTemperatureWhileThinking: alwaysThinking,
             // docs.z.ai: reasoning_effort accepted (5.3 -> low/high/max; 5.2 folds
             // low/medium into high itself); temperature/top_p keep working while
             // thinking, unlike DeepSeek and Kimi.
@@ -190,6 +203,8 @@ export function resolveCompatibleReasoningTraits(
             canDisableThinking: !alwaysThinking,
             supportsForcedToolChoice: true,
             forcedToolChoiceRejectsThinking: true,
+            // Unchanged: k3 / k2.7-code keep their temperature-1 pin.
+            pinsTemperatureWhileThinking: alwaysThinking,
             // Moonshot 400s on `thinking` + `reasoning_effort` together
             // ("cannot specify both") - reproduced against the live API in
             // HKUDS/nanobot#3939. `thinking` alone is the ONLY accepted shape.
@@ -337,10 +352,15 @@ export function compatibleTemperaturePolicy(
         return { kind: 'unsupported' };
     }
 
-    // The always-thinking pin is NOT effort-scoped: k3 / k2.7-code / GLM-5.3
-    // expose no off switch, so picking "none" does not actually stop them
-    // thinking and 1 remains their only sound temperature.
-    return t.thinksByDefault && !t.canDisableThinking
+    // The pin is NOT effort-scoped: k3 / k2.7-code / GLM-5.3 expose no off
+    // switch, so picking "none" does not actually stop them thinking and 1
+    // remains their only sound temperature.
+    //
+    // Read from the DECLARED fact, not from `!canDisableThinking`. The proxy
+    // conflated two different claims and pinned MiniMax M2 — always-reasoning,
+    // but on the OpenAI protocol with no documented temperature constraint —
+    // overriding the configured value on 18 production slots.
+    return t.pinsTemperatureWhileThinking
         ? { kind: 'fixed', value: 1 }
         : { kind: 'adjustable' };
 }
