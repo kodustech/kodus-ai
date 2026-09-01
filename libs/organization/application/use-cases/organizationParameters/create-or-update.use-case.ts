@@ -149,14 +149,7 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
                 });
             }
 
-            // SSRF guard: a credential's baseURL is user-controlled and the
-            // server makes outbound LLM calls to it at review time. The
-            // test-connection probe validates it, but a save can set/change it
-            // WITHOUT probing (or via a direct API call), so the runtime target
-            // would otherwise never be checked. Reject non-https or
-            // private/reserved targets here too, with the same rule the probe
-            // enforces — closing the tenant→infra SSRF the probe alone left open.
-            await this.assertSafeByokBaseURLs(configValue);
+            this.assertParsableReasoningOverrides(configValue);
         }
 
         const getConfigValue =
@@ -166,8 +159,28 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             );
 
         const existingConfig = getConfigValue?.configValue as
-            | BYOKConfig
-            | undefined;
+            BYOKConfig | undefined;
+
+        if (isByokConfig(configValue)) {
+            // SSRF guard: a credential's baseURL is user-controlled and the
+            // server makes outbound LLM calls to it at review time. The
+            // test-connection probe validates it, but a save can set/change it
+            // WITHOUT probing (or via a direct API call), so the runtime target
+            // would otherwise never be checked.
+            //
+            // Runs AFTER the existing config is loaded so it can validate only
+            // what CHANGED. Validating every stored credential on every write
+            // meant an org whose baseURL predates this rule (a real one still
+            // points at http://localhost:11434) could no longer save ANY BYOK
+            // change at all — not even switching model — because an untouched
+            // field failed a rule it was saved before. An unchanged value is
+            // already-persisted state, not a new outbound target; a changed or
+            // new one is still validated in full, so nothing can slip in.
+            await this.assertSafeByokBaseURLs(
+                configValue,
+                isByokConfig(existingConfig) ? existingConfig : undefined,
+            );
+        }
 
         const processedConfigValue = this.encryptByokConfigApiKey(
             configValue,
@@ -213,20 +226,85 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
     }
 
     /**
-     * SSRF guard for the SAVE path: validate every credential's user-provided
-     * `settings.baseURL` the same way the test-connection probe does (https +
-     * publicly-resolvable host, no private/reserved IP). Only openai/anthropic-
-     * compatible credentials carry a baseURL; providers that hardcode their
-     * endpoint (vertex, bedrock) have none and are skipped. An empty baseURL
-     * (a key-only connect that resolves the brand's curated default at runtime)
-     * has nothing to check.
+     * SSRF guard for the SAVE path: validate each NEW or CHANGED credential's
+     * user-provided `settings.baseURL` the same way the test-connection probe
+     * does (https + publicly-resolvable host, no private/reserved IP, and no
+     * endpoint path baked into the base). Only openai/anthropic-compatible
+     * credentials carry a baseURL; providers that hardcode their endpoint
+     * (vertex, bedrock) have none and are skipped. An empty baseURL (a key-only
+     * connect that resolves the brand's curated default at runtime) has nothing
+     * to check.
+     *
+     * A value identical to the stored one is skipped ON PURPOSE. It cannot be
+     * used to introduce anything: the only value that skips is one already
+     * persisted, so the escape hatch admits no new outbound target — it only
+     * stops a legacy value from bricking every future write for that org.
      */
-    private async assertSafeByokBaseURLs(config: BYOKConfig): Promise<void> {
+    private async assertSafeByokBaseURLs(
+        config: BYOKConfig,
+        existing?: BYOKConfig,
+    ): Promise<void> {
+        const previous = new Map<string, string>();
+        for (const cred of existing?.credentials ?? []) {
+            const url = cred?.settings?.baseURL;
+            if (typeof url === 'string' && url.trim()) {
+                // Keyed by credential id when there is one, else by provider —
+                // the same matching `encryptV2ByokConfig` uses to carry a kept
+                // secret forward, so "unchanged" means the same thing in both.
+                previous.set(
+                    String(cred?.id ?? cred?.provider ?? ''),
+                    url.trim(),
+                );
+            }
+        }
+
         for (const cred of config.credentials ?? []) {
             const baseURL = cred?.settings?.baseURL;
-            if (typeof baseURL === 'string' && baseURL.trim()) {
-                await assertSafeOpenAICompatibleUrl(baseURL.trim());
+            if (typeof baseURL !== 'string' || !baseURL.trim()) continue;
+            const key = String(cred?.id ?? cred?.provider ?? '');
+            if (previous.get(key) === baseURL.trim()) continue; // untouched
+            await assertSafeOpenAICompatibleUrl(baseURL.trim());
+        }
+    }
+
+    /**
+     * A per-model `reasoningConfigOverride` is free-form JSON the user pastes in
+     * the Advanced panel. `buildProviderOptions` parses it inside a try/catch and
+     * FALLS BACK to the effort preset when it doesn't parse — which is the right
+     * runtime posture (a typo must not break every review) but makes a typo
+     * invisible: two production orgs are running with a trailing comma in theirs,
+     * convinced they enabled `reasoning_effort: max`, and have never been told.
+     *
+     * Save time is where the user is looking, so reject it here.
+     */
+    private assertParsableReasoningOverrides(config: BYOKConfig): void {
+        const errors: string[] = [];
+        for (const model of config.models ?? []) {
+            const override = (model as any)?.reasoningConfigOverride;
+            if (typeof override !== 'string' || !override.trim()) continue;
+            try {
+                const parsed = JSON.parse(override);
+                if (
+                    !parsed ||
+                    typeof parsed !== 'object' ||
+                    Array.isArray(parsed)
+                ) {
+                    errors.push(
+                        `Model "${(model as any)?.model ?? (model as any)?.id}": the reasoning override must be a JSON object.`,
+                    );
+                }
+            } catch (err) {
+                errors.push(
+                    `Model "${(model as any)?.model ?? (model as any)?.id}": the reasoning override is not valid JSON (${(err as Error).message}).`,
+                );
             }
+        }
+        if (errors.length) {
+            throw new BadRequestException({
+                message:
+                    'Invalid BYOK configuration: unparsable reasoning override',
+                errors,
+            });
         }
     }
 
@@ -343,7 +421,9 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
         const nextSettings = next.settings;
         const existingSettings = existing?.settings;
         if (nextSettings || existingSettings) {
-            const settings: Record<string, unknown> = { ...(nextSettings ?? {}) };
+            const settings: Record<string, unknown> = {
+                ...(nextSettings ?? {}),
+            };
             for (const field of BYOK_SECRET_SETTINGS) {
                 const kept = this.encryptOrKeep(
                     typeof nextSettings?.[field] === 'string'

@@ -5,6 +5,7 @@
  * ANTHROPIC / ANTHROPIC_COMPATIBLE cases.
  */
 import type { LanguageModel } from 'ai';
+import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
@@ -33,12 +34,7 @@ import {
 } from '../kernel/reasoning-traits';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 
-const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
-    none: 0,
-    low: 5_000,
-    medium: 15_000,
-    high: 40_000,
-};
+
 
 /** Claude families that support the newer adaptive thinking (type:'adaptive'
  *  + effort); older families use enabled + budgetTokens. Delegates to the
@@ -57,7 +53,6 @@ export const anthropicModule: ProviderModule = {
     capabilities(model: string): ModelCapabilities {
         const reasoningConfig = anthropicReasoningConfig(model);
         return {
-            supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
             // Anthropic does structured output via tool use, not a native
@@ -145,8 +140,10 @@ export const anthropicModule: ProviderModule = {
             },
         };
 
-        // Compatible endpoints (Kimi/Z.ai/DeepSeek) never implement adaptive
-        // thinking → always budget, whatever the id looks like.
+        // Compatible endpoints hosting a NON-Claude brand (Kimi/Z.ai/DeepSeek)
+        // never implement adaptive thinking → budget. The id is what decides,
+        // NOT the transport: a real Claude proxied over this endpoint is handled
+        // just below, because 4.7+ reject the budget shape outright.
         //
         // KNOWN CAVEAT (k3 / GLM-5.3): the newest generations control reasoning
         // with a TOP-LEVEL `reasoning_effort` (low/high/max), NOT a thinking
@@ -155,9 +152,23 @@ export const anthropicModule: ProviderModule = {
         // models ALWAYS reason (canDisableThinking=false), a structured call on
         // them REROUTES to json (no reasoning param sent to force a tool), and a
         // finder call gets a budget hint they simply ignore. A faithful
-        // reasoning_effort needs the /v1 (OpenAI) transport — deferred until a k3
-        // slot exists to verify against.
+        // reasoning_effort needs the /v1 (OpenAI) transport, where the openai
+        // module now emits it from the same trait table (`effortScale`). Three
+        // production slots run a bare `k3` id, so this caveat is live, not
+        // hypothetical.
         if ((cfg.provider as string) === 'anthropic_compatible') {
+            // A REAL Claude id proxied over a compatible endpoint is still a
+            // Claude, and the id says so. Claude 4.7 / 4.8 / Opus 5 / Sonnet 5 /
+            // Fable / Mythos REJECT `thinking:{type:'enabled'}` with a 400 - so
+            // the blanket budget shape below is a guaranteed failure for them.
+            // The generation resolver is anchored on `^claude-`, so a Kimi/GLM/
+            // DeepSeek id can never reach this branch and still gets `budget`.
+            const claude = resolveAnthropicModelTraits(cfg.model);
+            if (claude.thinkingShape === 'adaptive') {
+                return {
+                    anthropic: { thinking: { type: 'adaptive' }, effort },
+                };
+            }
             return budget;
         }
 
@@ -220,7 +231,7 @@ export const anthropicModule: ProviderModule = {
         // pins temperature to 1 while thinking, so 1 is their only sound value.
         // Disable-able ones (Kimi k2.6, DeepSeek) keep a free temperature.
         if ((cfg.provider as string) === 'anthropic_compatible') {
-            return compatibleTemperaturePolicy(cfg.model);
+            return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
         }
         // Real Anthropic: 4.7+ REJECT temperature (a 400); older accept it. Native
         // thinking models don't need a pin — they withhold temperature outright.

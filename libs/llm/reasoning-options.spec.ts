@@ -602,14 +602,49 @@ describe('buildProviderOptions', () => {
         expect(result.anthropic).toEqual({ thinking: { type: 'disabled' } });
     });
 
-    it('passes a flat override through unwrapped for a provider with no namespace', () => {
-        // azure/bedrock declare no namespace → unwrapped (preserved).
-        const result = buildProviderOptions('main-loop', undefined, {
-            byokProvider: 'azure',
-            modelName: 'gpt-4o',
-            reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
-        });
-        expect(result).toEqual({ foo: 'bar' });
+    it('wraps a flat override for azure and bedrock, which used to drop it', () => {
+        // This test used to assert the opposite, with the reason written in:
+        // "azure/bedrock declare no namespace → unwrapped (preserved)".
+        // "Preserved" was wrong — an unwrapped override reaches the SDK under no
+        // key at all and is discarded without a word. Both modules now declare
+        // the namespace their built model actually reads.
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'azure',
+                modelName: 'gpt-4o',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            }),
+        ).toEqual({ azure: { foo: 'bar' } });
+
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'amazon_bedrock',
+                modelName: 'anthropic.claude-sonnet-4-6',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            }),
+        ).toEqual({ 'amazon-bedrock': { foo: 'bar' } });
+    });
+
+    it('wraps a Vertex override by MODEL, because one id builds two SDK models', () => {
+        // Gemini-on-Vertex is `google.vertex.chat` (reads `google`);
+        // Claude-on-Vertex is an Anthropic language model (reads `anthropic`).
+        // Answering `google` for both put a Claude user's override under a key
+        // nothing reads.
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'google_vertex',
+                modelName: 'gemini-3.7-flash',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            }),
+        ).toEqual({ google: { foo: 'bar' } });
+
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'google_vertex',
+                modelName: 'claude-opus-4-7',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            }),
+        ).toEqual({ anthropic: { foo: 'bar' } });
     });
 
     it('wraps a flat override under anthropic for the Anthropic-protocol brands', () => {

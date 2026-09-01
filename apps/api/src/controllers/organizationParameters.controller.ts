@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { UserRequest } from '@libs/core/infrastructure/config/types/http/user-request.type';
 import {

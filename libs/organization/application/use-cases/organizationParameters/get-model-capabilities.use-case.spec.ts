@@ -41,7 +41,10 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
         });
 
         it('legacy 3.x accepts temperature → adjustable', () => {
-            const c = useCase.execute('anthropic', 'claude-3-5-sonnet-20241022');
+            const c = useCase.execute(
+                'anthropic',
+                'claude-3-5-sonnet-20241022',
+            );
             expect(c.temperature.kind).toBe('adjustable');
         });
     });
@@ -55,6 +58,66 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
         it('Kimi k2.6 is disable-able → temperature adjustable', () => {
             const c = useCase.execute('moonshot', 'kimi-k2.6');
             expect(c.temperature.kind).toBe('adjustable');
+        });
+    });
+
+    describe('a capability that varies with the reasoning state', () => {
+        // DeepSeek documents the constraint against thinking MODE, not the model:
+        // "Thinking mode does not support the temperature, top_p, presence_penalty,
+        // or frequency_penalty parameters". So the honest answer differs by state.
+        //
+        // Both answers travel in ONE response instead of the caller passing the
+        // state in: that keeps this endpoint a pure function of (provider, model),
+        // so it stays cacheable and flipping the toggle in the form costs nothing.
+        it('sends BOTH answers for a model whose constraint is scoped to thinking', () => {
+            const c = useCase.execute('openai_compatible', 'deepseek-v4-pro');
+            expect(c.temperature).toEqual({ kind: 'unsupported' });
+            expect(c.temperatureWhenReasoningOff).toEqual({ kind: 'adjustable' });
+        });
+
+        it('omits the second answer when it does not differ', () => {
+            // Every other model — the response shape is unchanged for them, so
+            // this costs nothing to the 99% case.
+            const c = useCase.execute('openai_compatible', 'glm-5.2');
+            expect(c.temperatureWhenReasoningOff).toBeUndefined();
+        });
+
+        it('does not offer an escape for an always-thinking model', () => {
+            // k2.7-code has no off switch, so "reasoning off" never actually
+            // stops it thinking and 1 stays its only sound temperature — the
+            // second answer must NOT appear and unlock the field.
+            const c = useCase.execute('moonshot', 'kimi-k2.7-code');
+            expect(c.temperature).toEqual({ kind: 'fixed', value: 1 });
+            expect(c.temperatureWhenReasoningOff).toBeUndefined();
+        });
+
+        it('stays a pure function of (provider, model)', () => {
+            // The regression guard for the shape itself: two identical calls must
+            // be identical, with no hidden third input.
+            expect(useCase.execute('openai_compatible', 'deepseek-v4-pro')).toEqual(
+                useCase.execute('openai_compatible', 'deepseek-v4-pro'),
+            );
+        });
+    });
+
+    describe('the Custom-override example follows the MODEL, not the provider', () => {
+        // Gemini 3 takes thinkingLevel and 2.5 takes thinkingBudget; Google
+        // documents the two as completely incompatible. One example per provider
+        // handed the 2.5 shape to every Gemini 3 user — 68 of the 91 production
+        // Gemini slots.
+        it('suggests thinkingLevel for a Gemini 3 model', () => {
+            const c = useCase.execute(
+                'google_gemini',
+                'gemini-3-flash-preview',
+            );
+            expect(c.reasoningOverrideExample).toContain('thinkingLevel');
+            expect(c.reasoningOverrideExample).not.toContain('thinkingBudget');
+        });
+
+        it('suggests thinkingBudget for a Gemini 2.5 model', () => {
+            const c = useCase.execute('google_gemini', 'gemini-2.5-pro');
+            expect(c.reasoningOverrideExample).toContain('thinkingBudget');
+            expect(c.reasoningOverrideExample).not.toContain('thinkingLevel');
         });
     });
 

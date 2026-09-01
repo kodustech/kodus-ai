@@ -21,6 +21,9 @@
  * takes that as its first input.
  */
 
+import type { ReasoningConfig } from './model-types';
+import { detectModelFamily } from './model-family';
+
 export interface ModelReasoningTraits {
     /** Sends thinking/reasoning unless explicitly told not to. Drives the UI
      *  `supportsReasoning` flag and whether an omitted config means "off". */
@@ -37,6 +40,77 @@ export interface ModelReasoningTraits {
      *  protocol rule — native Claude and Kimi enforce it; DeepSeek does NOT). Only
      *  meaningful when the call would use forced tool-use. */
     forcedToolChoiceRejectsThinking: boolean;
+    /** The brand accepts a top-level `reasoning_effort` ALONGSIDE its `thinking`
+     *  toggle. The brands disagree HARD here and it is NOT inferable from the
+     *  transport, which is why this is a per-model fact and not an
+     *  `if (provider === 'openai_compatible')`:
+     *    - DeepSeek REQUIRES both together (api-docs.deepseek.com/guides/thinking_mode)
+     *    - Z.ai/GLM accepts both (docs.z.ai/api-reference/llm/chat-completion)
+     *    - Moonshot/Kimi REJECTS the pair outright:
+     *      "cannot specify both 'thinking' and 'reasoning_effort'"
+     *  Absent ⇒ false ⇒ send the thinking toggle only, the shape every brand takes. */
+    acceptsEffortWithThinking?: boolean;
+    /** The effort vocabulary the brand actually implements. DeepSeek and GLM use
+     *  low/high/max and do NOT accept "medium"; our 4-value scale is mapped into
+     *  it by {@link compatibleEffortValue}. Absent ⇒ our own vocabulary. */
+    effortScale?: 'low-high-max';
+    /** The endpoint does not SUPPORT sampling params (temperature, top_p,
+     *  presence/frequency_penalty) while thinking is active, so they must be
+     *  OMITTED. DeepSeek: "Thinking mode does not support the temperature,
+     *  top_p, presence_penalty, or frequency_penalty parameters".
+     *
+     *  Distinct from a brand that accepts only its DEFAULT value (Kimi) — that is
+     *  a pin, expressed through the temperature policy, and it keeps the UI able
+     *  to tell the user their value won't apply. Z.ai explicitly still supports
+     *  sampling params while thinking. Absent ⇒ false ⇒ temperature is forwarded. */
+    rejectsSamplingWhileThinking?: boolean;
+    /**
+     * Would sending NO reasoning parameter at all turn reasoning OFF on this
+     * model? This is the ONE question `defaultReasoningEffortFor` needs, and it
+     * is a per-model FACT that cannot be derived:
+     *
+     *   - Gemini: each model carries a documented default thinking level, so
+     *     omitting leaves the model's own (often better) default in force. FALSE.
+     *   - Native OpenAI: `reasoning.effort` defaults to medium on gpt-5.5/5.6 but
+     *     to NONE on gpt-5.1 — omitting there silently disables reasoning. TRUE.
+     *   - Any transport where our own `reasoning(cfg, 'none')` emits an explicit
+     *     disable (the openai-compatible brands): omitting means the caller's
+     *     'none' default reaches the wire as a disable. TRUE.
+     *
+     * Absent ⇒ treated as TRUE, the safe side: we impose a family default, which
+     * can only cost tokens — never silently switch off reasoning on a model the
+     * user picked FOR its reasoning.
+     */
+    omittingDisablesReasoning?: boolean;
+}
+
+/**
+ * Translate our `none|low|medium|high` effort into the vocabulary a brand
+ * actually implements. Monotone and intent-preserving: the user who picked the
+ * top of OUR scale gets the top of THEIRS. `medium` has no counterpart on the
+ * low/high/max scale — the vendors fold it into `high` themselves, so we do the
+ * same explicitly instead of shipping a value the API rejects.
+ */
+export function compatibleEffortValue(
+    effort: string,
+    traits: ModelReasoningTraits,
+): string | undefined {
+    if (effort === 'none') {
+        return undefined;
+    }
+    if (traits.effortScale !== 'low-high-max') {
+        return effort;
+    }
+    switch (effort) {
+        case 'low':
+            return 'low';
+        case 'medium':
+            return 'high';
+        case 'high':
+            return 'max';
+        default:
+            return undefined;
+    }
 }
 
 /** Safe default for a non-reasoning / unknown model: no thinking, no constraints.
@@ -62,40 +136,68 @@ export function resolveCompatibleReasoningTraits(
     model?: string,
 ): ModelReasoningTraits {
     const m = (model ?? '').toLowerCase();
+    const family = detectModelFamily(m);
 
     // GLM (Z.ai): the API supports tool_choice `auto` ONLY — a forced tool_choice
     // is never accepted, so structured output must reroute to response_format /
     // prompt-schema regardless of thinking. GLM-5.3 also forces thinking on.
-    if (m.includes('glm')) {
-        const alwaysThinking = m.includes('5.3') || m.includes('5-3');
+    if (family === 'glm') {
+        // Bounded to the GLM version token. `includes('5.3')` matched the digits
+        // anywhere in the id, so any model whose name happened to carry them was
+        // pinned as always-thinking and denied a `thinking: disabled` it accepts.
+        const alwaysThinking = /glm-?5[.\-_]?3/.test(m);
         return {
             thinksByDefault: true,
             canDisableThinking: !alwaysThinking,
             supportsForcedToolChoice: false,
             forcedToolChoiceRejectsThinking: true,
+            // docs.z.ai: reasoning_effort accepted (5.3 -> low/high/max; 5.2 folds
+            // low/medium into high itself); temperature/top_p keep working while
+            // thinking, unlike DeepSeek and Kimi.
+            acceptsEffortWithThinking: true,
+            effortScale: 'low-high-max',
+            rejectsSamplingWhileThinking: false,
         };
     }
 
     // Kimi (Moonshot): k2.7-code and k3 think ALWAYS and expose no disable; k2.5 /
     // k2.6 default-on but can be disabled with `thinking:{type:'disabled'}`.
-    if (m.includes('kimi') || m.includes('moonshot')) {
+    // `^k<digit>` catches the BARE Moonshot ids (`k3`, `k3-256k`, `k2.6`) that
+    // api.kimi.com serves — without it they fell through to the unknown-upstream
+    // default below, so an always-thinking k3 was reported as canDisableThinking
+    // and got sent a `thinking:{type:'disabled'}` it rejects. The branch already
+    // INTENDED to cover k3 (see alwaysThinking); it was just unreachable.
+    if (family === 'kimi') {
         const alwaysThinking = m.includes('code') || m.includes('k3');
         return {
             thinksByDefault: true,
             canDisableThinking: !alwaysThinking,
             supportsForcedToolChoice: true,
             forcedToolChoiceRejectsThinking: true,
+            // Moonshot 400s on `thinking` + `reasoning_effort` together
+            // ("cannot specify both") - reproduced against the live API in
+            // HKUDS/nanobot#3939. `thinking` alone is the ONLY accepted shape.
+            // Deliberately NOT `rejectsSamplingWhileThinking`: Kimi rejects
+            // non-DEFAULT sampling values, which the always-thinking pin to 1
+            // already satisfies while keeping the UI warning intact.
+            acceptsEffortWithThinking: false,
         };
     }
 
     // DeepSeek: thinks by default, can disable (effort 'none'), and — unlike Kimi/
     // Claude — its Anthropic endpoint ACCEPTS a forced tool_choice WITH thinking.
-    if (m.includes('deepseek')) {
+    if (family === 'deepseek') {
         return {
             thinksByDefault: true,
             canDisableThinking: true,
             supportsForcedToolChoice: true,
             forcedToolChoiceRejectsThinking: false,
+            // api-docs.deepseek.com: `thinking` is passed together WITH
+            // `reasoning_effort` (low/high/max - "medium" is not accepted), and
+            // thinking mode does not support temperature / top_p / penalties.
+            acceptsEffortWithThinking: true,
+            effortScale: 'low-high-max',
+            rejectsSamplingWhileThinking: true,
         };
     }
 
@@ -119,6 +221,36 @@ export function resolveCompatibleReasoningTraits(
 }
 
 /**
+ * The reasoning CONFIG for a compatible-protocol family — the same answer the
+ * anthropic / gemini / openai owners give for theirs, so `reasoningConfigForModel`
+ * can dispatch every family instead of three of them.
+ *
+ * Expressed in OUR effort vocabulary, not the vendor's: `compatibleEffortValue`
+ * already translates low/medium/high into a brand's own scale (GLM and DeepSeek
+ * run low/high/max), so the picker must offer what the user can choose here.
+ *
+ * Kimi is the honest outlier — it has no effort scale at all, only a `thinking`
+ * toggle, so it offers ONE level. Anything above 'none' means the same request.
+ *
+ * Sources: docs.z.ai (reasoning_effort), api-docs.deepseek.com (thinking_mode),
+ * platform.kimi.ai (thinking-models), platform.minimaxi.com (reasoning_effort).
+ */
+export function compatibleReasoningConfig(
+    model?: string,
+): ReasoningConfig | undefined {
+    switch (detectModelFamily(model)) {
+        case 'glm':
+        case 'deepseek':
+        case 'minimax':
+            return { type: 'level', options: ['low', 'medium', 'high'] };
+        case 'kimi':
+            return { type: 'level', options: ['high'] };
+        default:
+            return undefined;
+    }
+}
+
+/**
  * The temperature policy for a compatible-protocol model, DERIVED from its family
  * reasoning traits — a MODEL rule, transport-agnostic. An always-thinking model
  * (Kimi k2.7-code/k3, GLM-5.3) reasons unconditionally and pins temperature to 1
@@ -130,8 +262,37 @@ export function resolveCompatibleReasoningTraits(
  */
 export function compatibleTemperaturePolicy(
     model?: string,
-): { kind: 'fixed'; value: number } | { kind: 'adjustable' } {
+    effort?: string,
+):
+    | { kind: 'fixed'; value: number }
+    | { kind: 'adjustable' }
+    | { kind: 'unsupported' } {
     const t = resolveCompatibleReasoningTraits(model);
+
+    // A brand that does not SUPPORT sampling params WHILE REASONING (DeepSeek)
+    // must have the field omitted rather than pinned: an ignored temperature is
+    // worse than none, because the value the user set in the UI silently does
+    // nothing. But the constraint is scoped to thinking being ON — with thinking
+    // explicitly disabled the same endpoint accepts a temperature normally, so
+    // withholding it there would take away a setting that does work.
+    //
+    // `none` is the ONLY state where thinking is definitively off. An UNSET
+    // effort falls through to the family default, which is on for a
+    // thinks-by-default brand, and a caller that cannot supply an effort at all
+    // (the connect form asking what a model supports before anything is picked)
+    // must get the conservative answer. So: omit unless we were told 'none'.
+    const thinkingExplicitlyOff = effort === 'none';
+    if (
+        t.rejectsSamplingWhileThinking &&
+        t.thinksByDefault &&
+        !thinkingExplicitlyOff
+    ) {
+        return { kind: 'unsupported' };
+    }
+
+    // The always-thinking pin is NOT effort-scoped: k3 / k2.7-code / GLM-5.3
+    // expose no off switch, so picking "none" does not actually stop them
+    // thinking and 1 remains their only sound temperature.
     return t.thinksByDefault && !t.canDisableThinking
         ? { kind: 'fixed', value: 1 }
         : { kind: 'adjustable' };

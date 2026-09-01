@@ -135,6 +135,41 @@ describe('validateModelTuning — native Anthropic that rejects temperature', ()
     });
 });
 
+describe('validateModelTuning — a constraint scoped to thinking, not to the model', () => {
+    // DeepSeek: "Thinking mode does not support the temperature, top_p,
+    // presence_penalty, or frequency_penalty parameters". The form must warn
+    // while reasoning is on and stay quiet once it is off — warning either way
+    // would be wrong in one of the two states.
+    it('warns about a temperature on DeepSeek while reasoning is on', () => {
+        const issues = validateModelTuning({
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-pro',
+            temperature: 0.2,
+            reasoningEffort: 'high',
+        });
+        expect(issues.map((i) => i.field)).toContain('temperature');
+    });
+
+    it('does NOT warn once reasoning is explicitly off', () => {
+        const issues = validateModelTuning({
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-pro',
+            temperature: 0.2,
+            reasoningEffort: 'none',
+        });
+        expect(issues.map((i) => i.field)).not.toContain('temperature');
+    });
+
+    it('warns when no effort is given — the family default is thinking ON', () => {
+        const issues = validateModelTuning({
+            provider: 'openai_compatible',
+            model: 'deepseek-v4-pro',
+            temperature: 0.2,
+        });
+        expect(issues.map((i) => i.field)).toContain('temperature');
+    });
+});
+
 describe('validateModelTuning — free models and safe fallbacks', () => {
     it('kimi-k2.6 (adjustable) + temperature 0.2 → no issue', () => {
         expect(

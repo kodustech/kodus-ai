@@ -1,7 +1,6 @@
-import { anthropicCompatibleRootURL } from '@libs/llm/model-builders';
+import { describeBaseUrlProblem } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { REGISTRY } from '@libs/llm/providers';
-import { resolveByokTemperature } from '@libs/llm/sampling-params';
 import { probeSlotCall } from '@libs/llm/probe-slot-call';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
@@ -54,6 +53,18 @@ export async function assertSafeOpenAICompatibleUrl(
         throw new BadRequestException(
             'baseURL must use https:// for security.',
         );
+    }
+
+    // Not a security rule, but the same seam: a base URL that already carries the
+    // provider's own endpoint path (…/chat/completions) is appended to a SECOND
+    // time and 404s on every call. Every caller of this guard — the save path,
+    // the connection probe and the model-listing fetcher — wants to reject it, so
+    // it lives here rather than in three places. Checked BEFORE the DNS lookup:
+    // it is pure string work, and a wrong path should report the wrong path, not
+    // whatever the resolver happens to say about the host.
+    const hygiene = describeBaseUrlProblem(rawUrl);
+    if (hygiene) {
+        throw new BadRequestException(hygiene);
     }
     let addresses: Array<{ address: string; family: number }>;
     try {
@@ -399,7 +410,9 @@ export class TestByokConnectionUseCase {
             assertSafeRegion(region);
             // GCP project IDs: 6-30 chars, lowercase letters/digits/hyphens,
             // must start with a letter. Sanity-check the SA key's project.
-            if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(credentials.project_id)) {
+            if (
+                !/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(credentials.project_id)
+            ) {
                 return {
                     ok: false,
                     code: 'bad_request',
@@ -564,7 +577,9 @@ export class TestByokConnectionUseCase {
                 'https://sts.amazonaws.com/?Action=GetCallerIdentity&Version=2011-06-15';
             const res = await client.fetch(stsUrl, {
                 method: 'POST',
-                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                headers: {
+                    'content-type': 'application/x-www-form-urlencoded',
+                },
             });
 
             if (!res.ok) {

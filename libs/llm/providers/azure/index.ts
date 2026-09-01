@@ -20,6 +20,7 @@ import type { LanguageModel } from 'ai';
 import { createAzure } from '@ai-sdk/azure';
 import { z } from 'zod';
 import { registerProvider } from '../kernel/registry';
+import type { TemperaturePolicy } from '../kernel/model-types';
 import type {
     ModelCapabilities,
     ModelListing,
@@ -27,6 +28,8 @@ import type {
     ProviderBuildOptions,
     ProviderModule,
 } from '../kernel/types';
+import type { ModelReasoningTraits } from '../kernel/reasoning-traits';
+import { NON_REASONING_TRAITS } from '../kernel/reasoning-traits';
 import {
     normalizeSdkResult,
     normalizeSdkUsage,
@@ -38,6 +41,15 @@ function looksLikeReasoner(deployment: string): boolean {
         /^o[134](\b|[-_@])/i.test(deployment) ||
         /gpt-5(\b|[-_@])/i.test(deployment)
     );
+}
+
+/** The o-series / gpt-5 families do not accept `temperature`; everything else
+ *  does. One statement, read by both `capabilities()` and `temperaturePolicy()`
+ *  below, so the flag and the policy cannot answer differently. */
+function azureTemperaturePolicy(deployment: string): TemperaturePolicy {
+    return looksLikeReasoner(deployment)
+        ? { kind: 'unsupported' }
+        : { kind: 'adjustable' };
 }
 
 export const azureModule: ProviderModule = {
@@ -54,7 +66,6 @@ export const azureModule: ProviderModule = {
         // Deployment names are arbitrary, so this is a heuristic, not a contract.
         const reasoner = looksLikeReasoner(model);
         return {
-            supportsTemperature: !reasoner,
             supportsReasoning: false, // opt-in reasoning per-deployment is a follow-up
             reasoningConfig: undefined,
             // Azure = OpenAI models → native strict json_schema; the shared
@@ -83,6 +94,37 @@ export const azureModule: ProviderModule = {
             useDeploymentBasedUrls: true,
         })(cfg.model);
     },
+
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        return azureTemperaturePolicy(cfg.model);
+    },
+
+    /**
+     * Declared rather than inherited. A module with no `reasoningTraits` falls
+     * back to `NON_REASONING_TRAITS`, which is not "we don't know" — it is a set
+     * of ASSERTIONS (this model does not think; a forced tool_choice is safe)
+     * that nobody checked. For an o-series or gpt-5 deployment the first of them
+     * is simply false: the model reasons whether or not we ask.
+     *
+     * What stays true either way is the rest of the OpenAI protocol — a forced
+     * tool_choice is accepted alongside reasoning (this is the Anthropic rule,
+     * not OpenAI's), and reasoning cannot be turned off on the o-series. Azure
+     * exposes no `reasoning()` yet, so nothing here reaches the wire; the point
+     * is that the facts are now stated and testable instead of assumed.
+     */
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits {
+        if (!looksLikeReasoner(cfg.model)) return NON_REASONING_TRAITS;
+        return {
+            thinksByDefault: true,
+            canDisableThinking: false,
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: false,
+        };
+    },
+
+    // `@ai-sdk/azure` builds models whose provider id is `azure.responses`
+    // (verified against the built model), so `azure` is the key the SDK reads.
+    providerOptionsNamespace: () => 'azure',
 
     // Same high-level LanguageModelUsage shape every other module reads, so cost
     // projection stays one source of truth. Azure reports OpenAI-style usage.

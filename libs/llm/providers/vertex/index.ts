@@ -6,6 +6,7 @@
  * provider id). Falls back to AI Studio if the value isn't a valid SA JSON.
  */
 import type { LanguageModel } from 'ai';
+import { EFFORT_TO_BUDGET } from '../kernel/effort-budget';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { vertexModelFromSaJson } from '@libs/llm/model-builders';
@@ -21,6 +22,7 @@ import {
     type ModelReasoningTraits,
 } from '../kernel/reasoning-traits';
 import { vertexModelListing } from './listing';
+import type { TemperaturePolicy } from '../kernel/model-types';
 import type {
     ModelCapabilities,
     ProviderBuildConfig,
@@ -28,17 +30,24 @@ import type {
     ProviderReasoningOptions,
     ReasoningEffort,
 } from '../kernel/types';
-import {
-    normalizeSdkResult,
-    normalizeSdkUsage,
-} from '../kernel/usage';
+import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
 
-const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
-    none: 0,
-    low: 5_000,
-    medium: 15_000,
-    high: 40_000,
-};
+
+
+/**
+ * Same rule as Bedrock, same reason: Claude-on-Vertex is the same Claude, and
+ * the 4.7+ line rejects temperature outright. Vertex answered
+ * `supportsTemperature: true` for every family, so a Claude-on-Vertex slot got
+ * the Gemini answer. Gemini-on-Vertex takes temperature freely.
+ */
+function vertexTemperaturePolicy(model: string): TemperaturePolicy {
+    return isAnthropicModel(model)
+        ? anthropicModule.temperaturePolicy!({
+              provider: 'google_vertex',
+              model,
+          } as ProviderBuildConfig)
+        : { kind: 'adjustable' };
+}
 
 export const vertexModule: ProviderModule = {
     id: 'google_vertex',
@@ -54,7 +63,6 @@ export const vertexModule: ProviderModule = {
         // adaptive-only Claude 4.7+/5 line).
         const reasoningConfig = reasoningConfigForModel(model);
         return {
-            supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
             // Claude-on-Vertex speaks the Anthropic protocol → structured output is
@@ -78,7 +86,9 @@ export const vertexModule: ProviderModule = {
     // Claude-on-Vertex (`@ai-sdk/google-vertex/anthropic`) honors the same inline
     // `anthropic.cacheControl` marker as native Anthropic; Gemini-on-Vertex caches
     // IMPLICITLY (no marker), so only Claude ids get the hint.
-    systemCacheControl(cfg: ProviderBuildConfig): Record<string, unknown> | undefined {
+    systemCacheControl(
+        cfg: ProviderBuildConfig,
+    ): Record<string, unknown> | undefined {
         return isAnthropicModel(cfg.model)
             ? anthropicEphemeralCacheHint()
             : undefined;
@@ -93,9 +103,17 @@ export const vertexModule: ProviderModule = {
             : NON_REASONING_TRAITS;
     },
 
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        return vertexTemperaturePolicy(cfg.model);
+    },
+
     build(cfg: ProviderBuildConfig): LanguageModel {
         // apiKey is the ALREADY-DECRYPTED base64 SA JSON.
-        const model = vertexModelFromSaJson(cfg.apiKey, cfg.model, cfg.vertexLocation);
+        const model = vertexModelFromSaJson(
+            cfg.apiKey,
+            cfg.model,
+            cfg.vertexLocation,
+        );
         if (model) return model;
         // Degraded fallback: not a valid SA JSON (e.g. a plain AIzaSy… key typed
         // into the Vertex slot) → treat as AI Studio.
@@ -121,7 +139,13 @@ export const vertexModule: ProviderModule = {
         const isGemini3 = /gemini-?3/i.test(_cfg.model);
         return isGemini3
             ? { google: { thinkingConfig: { thinkingLevel: effort } } }
-            : { google: { thinkingConfig: { thinkingBudget: EFFORT_TO_BUDGET[effort] } } };
+            : {
+                  google: {
+                      thinkingConfig: {
+                          thinkingBudget: EFFORT_TO_BUDGET[effort],
+                      },
+                  },
+              };
     },
 
     // ── Phase 3: real usage extraction (D-01 / Q4) ──────────────────────────
@@ -137,12 +161,39 @@ export const vertexModule: ProviderModule = {
     normalize: normalizeSdkResult,
 
     uiFields: [
-        { key: 'apiKey', label: 'Service Account JSON', type: 'password', required: true, scope: 'top' },
-        { key: 'vertexLocation', label: 'Location', type: 'text', required: false, scope: 'settings', placeholder: 'global' },
+        {
+            key: 'apiKey',
+            label: 'Service Account JSON',
+            type: 'password',
+            required: true,
+            scope: 'top',
+        },
+        {
+            key: 'vertexLocation',
+            label: 'Location',
+            type: 'text',
+            required: false,
+            scope: 'settings',
+            placeholder: 'global',
+        },
     ],
-    providerOptionsNamespace: () => 'google',
-    reasoningOverrideExample: () =>
-        '{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}',
+    // Vertex builds TWO different SDK models from one provider id, and they read
+    // different keys: Gemini-on-Vertex reports `google.vertex.chat` (reads
+    // `google`), Claude-on-Vertex reports `googleVertex.anthropic.messages` and,
+    // being an Anthropic language model, always reads the canonical `anthropic`
+    // key. Answering `google` for both wrapped a Claude user's Custom override
+    // under a key nothing reads. Model-aware, like `reasoningOverrideExample`
+    // below — and like this module's own `reasoning()`, which already emits
+    // `{ anthropic: … }` for a Claude id.
+    providerOptionsNamespace: (_id: string, model?: string) =>
+        isAnthropicModel(model ?? '') ? 'anthropic' : 'google',
+    // Same rule as the direct Gemini module — Vertex serves the same models, so
+    // the example must follow the model's generation (level vs budget), not the
+    // transport. The one production Vertex slot runs gemini-3.7-flash.
+    reasoningOverrideExample: (_id, model) =>
+        /gemini-3/i.test(model ?? '')
+            ? '{\n  "thinkingConfig": { "thinkingLevel": "high" }\n}'
+            : '{\n  "thinkingConfig": { "thinkingBudget": 16000 }\n}',
     modelListing: vertexModelListing,
 };
 

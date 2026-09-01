@@ -197,9 +197,12 @@ export interface ProviderModule {
      *  tool_choice support + thinking rejection). The SINGLE source a model's
      *  reasoning behavior is declared; generic code turns it into a structured
      *  plan via `planStructuredCall` and derives `supportsReasoning` from it.
-     *  Absent ⇒ `NON_REASONING_TRAITS` (a non-thinking provider, unchanged
-     *  behavior). Sibling to `reasoning()` — the module owns both. */
-    reasoningTraits?(cfg: ProviderBuildConfig): ModelReasoningTraits;
+     *  REQUIRED. `NON_REASONING_TRAITS` is still the right ANSWER for a provider
+     *  that hosts no thinking model — but it has to be given as an answer. As a
+     *  fallback it asserted, unverifiably and invisibly, that a model does not
+     *  think and that a forced tool_choice is safe on it. Sibling to
+     *  `reasoning()` — the module owns both. */
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits;
     /** Optional system-prompt cache hint: the `providerOptions` to attach to the
      *  system message so a multi-step loop reads the (static) system prompt from
      *  cache instead of re-billing it. Provider-specific SHAPE lives here (only the
@@ -217,17 +220,29 @@ export interface ProviderModule {
      *  k3, GLM-5.3 — where the protocol fixes it to 1 while thinking), or is free
      *  (`anthropic_compatible` Kimi k2.6 / DeepSeek, and every non-Anthropic
      *  provider). Both the runtime (`resolveByokTemperature`) and the connect form
-     *  read this ONE shape. Absent/undefined ⇒ the caller falls back to the static
-     *  `capabilities().supportsTemperature` flag (every provider but Anthropic). */
-    temperaturePolicy?(cfg: ProviderBuildConfig): TemperaturePolicy | undefined;
+     *  read this ONE shape, through `kernel/temperature.ts`.
+     *
+     *  REQUIRED. It was optional, backed by a static `supportsTemperature`
+     *  capability — two statements of one rule, and they disagreed in production.
+     *  The capability is gone; a module now answers, or it does not ship. */
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy;
     /** The Vercel AI SDK `providerOptions` namespace key this provider's adapter
      *  listens on, per requested id (a module may serve several ids with
      *  DIFFERENT namespaces — the openai module serves `openai` → 'openai' and
      *  `openai_compatible` → 'openaiCompatible'). Used to auto-wrap a user-pasted
      *  reasoning override under the right key and to enumerate the known
      *  namespaces. Absent/undefined ⇒ no known namespace (the override passes
-     *  through unwrapped). */
-    providerOptionsNamespace?(providerId: string): string | undefined;
+     *  through unwrapped).
+     *
+     *  `model` is optional and only matters where ONE provider id builds more
+     *  than one SDK model: Vertex serves Gemini (`google`) and Claude
+     *  (`anthropic`) from the same id, and answering for the wrong one wraps the
+     *  user's override under a key nothing reads. Same (providerId, model) input
+     *  as `reasoningOverrideExample` below, on purpose. */
+    providerOptionsNamespace?(
+        providerId: string,
+        model?: string,
+    ): string | undefined;
     /** Example JSON for the connect form's "Custom" reasoning-override textarea —
      *  the exact shape THIS provider accepts under its reasoning namespace, per
      *  requested id (a module serving several ids may differ, e.g. openai's native
@@ -235,7 +250,10 @@ export interface ProviderModule {
      *  module (it already owns `reasoning()` + the namespace), so a contributor
      *  adds it in ONE place and the web picker shows it. Absent/undefined ⇒ the UI
      *  falls back to a generic enabled-thinking example. */
-    reasoningOverrideExample?(providerId: string): string | undefined;
+    reasoningOverrideExample?(
+        providerId: string,
+        model?: string,
+    ): string | undefined;
     /** The brand's canonical endpoint, when it has a fixed one (a Kimi/GLM brand
      *  served over the Anthropic protocol). Fills baseURL on a key-only connect —
      *  both the model build and the connection probe fall back to it so the user

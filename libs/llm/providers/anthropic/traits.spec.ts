@@ -13,8 +13,32 @@ describe('normalizeAnthropicModelName', () => {
         ['claude-sonnet-4-5-20250929', 'claude-sonnet-4-5'],
         ['  Claude-Opus-5  ', 'claude-opus-5'],
         [undefined, ''],
+        // Bedrock decorations, verbatim from production slots. Each one used to
+        // fall through to `unknown`, which withholds temperature and omits the
+        // thinking config — silently, on the models that need both.
+        ['global.anthropic.claude-opus-4-7', 'claude-opus-4-7'],
+        ['eu.anthropic.claude-opus-4-8', 'claude-opus-4-8'],
+        ['us.anthropic.claude-sonnet-4-5-20250929-v1:0', 'claude-sonnet-4-5'],
     ])('%s → %s', (input, expected) => {
         expect(normalizeAnthropicModelName(input)).toBe(expected);
+    });
+
+    it('a Bedrock-hosted Claude resolves to the SAME generation as the bare id', () => {
+        // The host does not change the model. Anything else means the same
+        // Claude answers one way on Anthropic and another way on Bedrock — the
+        // divergence this whole layer exists to prevent.
+        const pairs: Array<[string, string]> = [
+            ['global.anthropic.claude-opus-4-7', 'claude-opus-4-7'],
+            ['eu.anthropic.claude-opus-4-8', 'claude-opus-4-8'],
+            ['us.anthropic.claude-sonnet-4-5-20250929-v1:0', 'claude-sonnet-4-5'],
+            ['anthropic.claude-sonnet-4-6', 'claude-sonnet-4-6'],
+        ];
+        for (const [hosted, bare] of pairs) {
+            expect({
+                id: hosted,
+                traits: resolveAnthropicModelTraits(hosted),
+            }).toEqual({ id: hosted, traits: resolveAnthropicModelTraits(bare) });
+        }
     });
 });
 

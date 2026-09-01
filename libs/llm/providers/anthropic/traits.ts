@@ -67,16 +67,32 @@ export interface AnthropicModelTraits {
  * Strip the decorations different hosts add around the bare model id:
  *   - our own `provider:model` pairs (`anthropic:claude-opus-5`)
  *   - Amazon Bedrock's provider prefix (`anthropic.claude-opus-5`)
+ *   - Bedrock's cross-region inference profiles (`global.anthropic.claude-opus-4-7`)
+ *   - Bedrock's version suffix (`…claude-sonnet-4-5-20250929-v1:0`)
  *   - Vertex's `@`-versioned snapshots (`claude-opus-4-5@20251101`)
  *   - dated snapshots (`claude-sonnet-4-5-20250929`)
+ *
+ * A decoration this misses is not a cosmetic miss: the id falls through to
+ * `unknown`, and `unknown` withholds temperature and omits thinking config
+ * entirely. Every Bedrock-hosted Claude in production carries one of the two
+ * Bedrock decorations, which is exactly how they all resolved to `unknown`.
  */
 export function normalizeAnthropicModelName(modelName?: string): string {
     if (!modelName) return '';
 
     let name = modelName.trim().toLowerCase();
 
+    // Bedrock stamps a version onto the id (`…-v1:0`). It has to go BEFORE the
+    // `provider:model` rule below, which otherwise keeps only what follows the
+    // colon — the string "0".
+    name = name.replace(/-v\d+:\d+$/, '');
+
     const colon = name.indexOf(':');
     if (colon > -1) name = name.slice(colon + 1);
+
+    // Cross-region inference profiles scope the id by region; the model behind
+    // `us.` / `eu.` / `global.` is the same model, with the same request shape.
+    name = name.replace(/^(us|eu|apac|us-gov|global)\./, '');
 
     if (name.startsWith('anthropic.')) name = name.slice('anthropic.'.length);
 

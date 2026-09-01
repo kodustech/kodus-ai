@@ -14,7 +14,9 @@ import {
     anthropicEphemeralCacheHint,
     isAnthropicModel,
 } from '../kernel/anthropic-cache';
+import { anthropicModule } from '../anthropic';
 import { bedrockModelListing } from './listing';
+import type { TemperaturePolicy } from '../kernel/model-types';
 import type {
     ModelCapabilities,
     ProviderBuildConfig,
@@ -25,6 +27,25 @@ import {
     type ModelReasoningTraits,
 } from '../kernel/reasoning-traits';
 import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
+
+/**
+ * Claude-on-Bedrock is the SAME model as native Claude, so it obeys the same
+ * temperature rule — and that rule is not "reasoning models don't take it": the
+ * 4.7+ line REJECTS temperature outright, a 400 on the whole request. Bedrock
+ * used to answer `supportsTemperature: true` for every family at once, which
+ * covered `global.anthropic.claude-opus-4-7` and `eu.anthropic.claude-opus-4-8`
+ * (both live in production) with the wrong answer. Delegating means the answer
+ * is written once, by the module that owns Claude. Non-Claude families here
+ * (Nova, MiniMax, Kimi) take temperature freely.
+ */
+function bedrockTemperaturePolicy(model: string): TemperaturePolicy {
+    return isAnthropicModel(model)
+        ? anthropicModule.temperaturePolicy!({
+              provider: 'amazon_bedrock',
+              model,
+          } as ProviderBuildConfig)
+        : { kind: 'adjustable' };
+}
 
 export const bedrockModule: ProviderModule = {
     id: 'amazon_bedrock',
@@ -45,7 +66,6 @@ export const bedrockModule: ProviderModule = {
         // config as native Anthropic (was hardcoded `false`, losing it entirely).
         const reasoningConfig = reasoningConfigForModel(model);
         return {
-            supportsTemperature: true,
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,
             structuredOutput: 'none',
@@ -64,6 +84,17 @@ export const bedrockModule: ProviderModule = {
     },
 
     // No reasoning() — Bedrock has no native thinking mapping here (default: off).
+
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        return bedrockTemperaturePolicy(cfg.model);
+    },
+
+    // `@ai-sdk/amazon-bedrock` builds models whose provider id is `amazon-bedrock`
+    // (verified against the built model, not the docs), so that — or its camelCase
+    // form — is the only key the SDK reads. Declaring it is what lets a user's
+    // Custom reasoning override be wrapped under a key that exists; undeclared, it
+    // went out unwrapped and was dropped without a word (the Novita failure).
+    providerOptionsNamespace: () => 'amazon-bedrock',
 
     // Claude-on-Bedrock honors the SAME `anthropic.cacheControl` marker as native
     // Anthropic (per the AI SDK Bedrock docs). Non-Anthropic Bedrock models cache

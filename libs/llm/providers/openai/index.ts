@@ -35,6 +35,7 @@ import {
     resolveCompatibleReasoningTraits,
     compatibleTemperaturePolicy,
     isCompatibleReasoner,
+    compatibleEffortValue,
     type ModelReasoningTraits,
 } from '../kernel/reasoning-traits';
 import {
@@ -73,8 +74,6 @@ export const openaiModule: ProviderModule = {
         const reasoner = isOpenAiReasoner(model);
         const reasoningConfig = openaiReasoningConfig(model);
         return {
-            // o-series / gpt-5 reject `temperature`; other OpenAI models allow it.
-            supportsTemperature: !reasoner,
             // Native OpenAI reasoners OR a recognized compatible-family reasoner
             // (Kimi/GLM/DeepSeek served over openai_compatible — those ids never
             // appear on native OpenAI, so the OR is transport-safe).
@@ -143,32 +142,69 @@ export const openaiModule: ProviderModule = {
         effort: ReasoningEffort,
     ): ProviderReasoningOptions {
         if (effort === 'none') {
-            // A Kimi/Moonshot model served over `openai_compatible` (a user can
-            // point openai_compatible at api.moonshot.ai) THINKS BY DEFAULT — so
-            // "off" must be said out loud here too, or the user who picked Off
-            // still pays for thinking. Gate on the never-downgrade (Kimi/Moonshot)
-            // family so we never send a `thinking` param to an unknown upstream
-            // (self-hosted Llama/vLLM) that would reject it. Note this transport
-            // does structured via response_format (not forced tool_choice), so it
-            // never hit the tool_choice+thinking 400 — this is a cost/consistency
-            // fix, not a crash fix.
-            // Only the Kimi/Moonshot family is confirmed to accept the openai-
-            // compatible `thinking` toggle; and never send `disabled` to an
-            // always-thinking variant (k2.7-code/k3) that rejects it — decide via
-            // the shared traits.
-            if (
-                (cfg.provider as string) === 'openai_compatible' &&
-                isNeverDowngradeModel(cfg.model) &&
-                resolveCompatibleReasoningTraits(cfg.model).canDisableThinking
-            ) {
-                return { openaiCompatible: { thinking: { type: 'disabled' } } };
+            // A Kimi/GLM/DeepSeek model served over `openai_compatible` (a user
+            // can point it at api.moonshot.ai, api.z.ai or api.deepseek.com)
+            // THINKS BY DEFAULT — so "off" must be said out loud here too, or the
+            // user who picked Off still pays for thinking. The gate is the trait
+            // table's `thinksByDefault`, so we never send a `thinking` param to an
+            // unknown upstream (self-hosted Llama/vLLM) that would reject it, and
+            // never send `disabled` to an always-thinking variant (k2.7-code / k3
+            // / GLM-5.3) that rejects the field. Note this transport does
+            // structured via response_format (not forced tool_choice), so it never
+            // hit the tool_choice+thinking 400 — this is a cost/consistency fix,
+            // not a crash fix.
+            if ((cfg.provider as string) === 'openai_compatible') {
+                const traits = resolveCompatibleReasoningTraits(cfg.model);
+                // Say "off" out loud on every brand we RECOGNIZE as thinking by
+                // default (Kimi, GLM, DeepSeek) - not just Kimi. Omitting it left
+                // GLM and DeepSeek reasoning (and billing) while the user had
+                // picked Off. Still never sent to an unknown upstream, and never
+                // to an always-thinking variant that rejects the field.
+                if (traits.thinksByDefault && traits.canDisableThinking) {
+                    return {
+                        openaiCompatible: { thinking: { type: 'disabled' } },
+                    };
+                }
             }
             return {};
         }
-        // openai_compatible upstreams (Kimi/GLM/…) take the standard
-        // openai-compatible `thinking` param; native OpenAI takes reasoningEffort.
+        // Turning reasoning ON is decided per MODEL, exactly like turning it off
+        // above — the transport the user chose is honored either way, we just
+        // never invent a param for an upstream we can't confirm understands it.
+        //   - a recognized compatible reasoner (Kimi/GLM/DeepSeek) takes the
+        //     openai-compatible `thinking` toggle;
+        //   - a native-OpenAI-shaped id proxied over this transport takes the
+        //     OpenAI wire param `reasoning_effort` (sending `thinking` to it was
+        //     a no-op at best: the user picked High and got no reasoning);
+        //   - anything else (self-hosted Llama/vLLM, NVIDIA NIM, MiniMax, a
+        //     generic proxy) gets NOTHING — a strict server 400s on an unknown
+        //     body field, and a lenient one silently ignores it.
         if ((cfg.provider as string) === 'openai_compatible') {
-            return { openaiCompatible: { thinking: { type: 'enabled' } } };
+            const traits = resolveCompatibleReasoningTraits(cfg.model);
+            if (traits.thinksByDefault) {
+                const payload: Record<string, any> = {
+                    thinking: { type: 'enabled' },
+                };
+                // Only brands documented to accept the PAIR get an effort.
+                // DeepSeek REQUIRES `thinking` + `reasoning_effort` together and
+                // Z.ai accepts both, but Moonshot 400s on the pair ("cannot
+                // specify both") — so Kimi's granularity genuinely stops at the
+                // toggle. The trait table owns that difference, per model.
+                if (traits.acceptsEffortWithThinking) {
+                    const value = compatibleEffortValue(effort, traits);
+                    if (value) payload.reasoningEffort = value;
+                }
+                return { openaiCompatible: payload };
+            }
+            if (isNativeOpenAiModel(cfg.model)) {
+                // `reasoningEffort` (camelCase) is the SDK's OWN option name; it
+                // renders the `reasoning_effort` body field itself. Passing the
+                // snake_case name here does NOT work: the SDK spreads unknown
+                // provider options first and then assigns `reasoning_effort`
+                // explicitly, so a snake_case key is overwritten with undefined.
+                return { openaiCompatible: { reasoningEffort: effort } };
+            }
+            return {};
         }
         return { openai: { reasoningEffort: effort } };
     },
@@ -193,15 +229,19 @@ export const openaiModule: ProviderModule = {
     // openai_compatible obeys the SAME always-thinking → temperature-1 pin as it
     // does over the Anthropic protocol (shared family helper). Native OpenAI
     // reasoners (o-series / gpt-5) reject temperature outright; other models are
-    // free — matching the `supportsTemperature` capability the UI used before.
-    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy | undefined {
+    // free.
+    //
+    // This used to return `undefined` for native OpenAI and let the caller read a
+    // static capability flag instead — which is how the connect form and the
+    // runtime came to disagree on 26 production slots. A module that has the
+    // answer states it.
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
         if ((cfg.provider as string) === 'openai_compatible') {
-            return compatibleTemperaturePolicy(cfg.model);
+            return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
         }
-        // Native OpenAI: no opinion here — the caller derives it from the static
-        // `supportsTemperature` capability (reasoners reject temperature), exactly
-        // as before, so native behaviour is unchanged.
-        return undefined;
+        return isOpenAiReasoner(cfg.model)
+            ? { kind: 'unsupported' }
+            : { kind: 'adjustable' };
     },
 
     normalizeUsage: normalizeSdkUsage,
