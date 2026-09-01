@@ -285,3 +285,210 @@ describe('salvageStructuredError', () => {
         ).toBeUndefined();
     });
 });
+
+// ---------------------------------------------------------------------------
+// Mutation-killing edge cases: pin branch boundaries, exact literals, `??` vs
+// `||` defaults, fail-soft reference identity, and string-aware slicing that
+// the happy-path tests above do not distinguish.
+// ---------------------------------------------------------------------------
+describe('structured-output-repair — mutation killers', () => {
+    describe('ajvValidator', () => {
+        const schema = {
+            type: 'object',
+            properties: { keep: { type: 'number' } },
+            required: ['keep'],
+            additionalProperties: false,
+        };
+
+        it('returns the exact input value on success (not a copy/other)', () => {
+            const validate = ajvValidator(schema)!;
+            const input = { keep: 42 };
+            const r = validate(input);
+            expect(r).toEqual({ success: true, value: input });
+            // Pins that `value` is the validated object itself, byte-for-byte.
+            if (r.success) expect(r.value).toBe(input);
+        });
+
+        it('encodes the detail with the "/" instancePath default for a missing required key', () => {
+            // Kills `instancePath || "/"` → the empty instancePath must render as
+            // "/", and the "schema validation failed: " literal prefix must survive.
+            const validate = ajvValidator(schema)!;
+            const r = validate({});
+            expect(r.success).toBe(false);
+            if (!r.success) {
+                expect((r.error as any).cause.message).toBe(
+                    "schema validation failed: / must have required property 'keep'",
+                );
+            }
+        });
+
+        it('encodes a non-empty instancePath for a nested type mismatch', () => {
+            // The complement of the "/" case: a property-level error keeps its
+            // real instancePath ("/keep"), so the `|| "/"` default does NOT apply.
+            const validate = ajvValidator(schema)!;
+            const r = validate({ keep: 'not-a-number' });
+            expect(r.success).toBe(false);
+            if (!r.success) {
+                expect((r.error as any).cause.message).toBe(
+                    'schema validation failed: /keep must be number',
+                );
+            }
+        });
+    });
+
+    describe('ensureValidatingSchema', () => {
+        it('returns a primitive input unchanged (typeof object guard)', () => {
+            // Kills the `!wire || typeof wire !== "object"` guard both ways.
+            expect(ensureValidatingSchema('not-an-object')).toBe('not-an-object');
+            expect(ensureValidatingSchema(42)).toBe(42);
+            expect(ensureValidatingSchema(0)).toBe(0);
+        });
+
+        it('returns an object with NO jsonSchema body untouched (same reference)', () => {
+            const o = { foo: 1 };
+            expect(ensureValidatingSchema(o)).toBe(o);
+        });
+
+        it('returns an object whose jsonSchema is not an object untouched (same reference)', () => {
+            // Kills the `typeof s.jsonSchema !== "object"` branch: a string body
+            // must NOT be handed to ajv.
+            const o = { jsonSchema: 'nope' };
+            expect(ensureValidatingSchema(o)).toBe(o);
+        });
+
+        it('returns the wire untouched (same reference) when ajv cannot compile the body', () => {
+            // Kills the `if (!validate) return wire` fail-soft: an uncompilable
+            // body must yield the ORIGINAL object, never a freshly-wrapped one.
+            const o = { jsonSchema: { type: 'not-a-real-type' } };
+            expect(ensureValidatingSchema(o)).toBe(o);
+        });
+    });
+
+    describe('extractJsonFromText', () => {
+        it('returns null for non-string inputs (typeof guard)', () => {
+            expect(extractJsonFromText(null as any)).toBeNull();
+            expect(extractJsonFromText(123 as any)).toBeNull();
+            expect(extractJsonFromText({} as any)).toBeNull();
+        });
+
+        it('passes through an UNBALANCED object as-is (slice returns null, delimiter test still true)', () => {
+            // slice cannot balance `{"a":1`, so the trimmed text survives and the
+            // final /^[{[]/ test keeps it. Pins that extraction is NOT a parse.
+            expect(extractJsonFromText('{"a":1')).toBe('{"a":1');
+        });
+
+        it('trims surrounding whitespace off already-clean JSON', () => {
+            // Kills a dropped `.trim()`: the returned substring must be tight.
+            expect(extractJsonFromText('  {"a":1}  ')).toBe('{"a":1}');
+        });
+
+        it('unwraps an UPPERCASE ```JSON fence (case-insensitive flag)', () => {
+            expect(extractJsonFromText('```JSON\n{"a":1}\n```')).toBe('{"a":1}');
+        });
+
+        it('slices a top-level array whose string values contain the object close-brace', () => {
+            // Exercises open/close derived from the FIRST delimiter ("[" → "]"),
+            // ignoring the inner "{"/"}" and the "}" living inside a string.
+            expect(extractJsonFromText('pre [{"x":"}"}] post')).toBe(
+                '[{"x":"}"}]',
+            );
+        });
+
+        it('is escape-aware: an escaped quote inside a string does not end the string early', () => {
+            // Without escape handling the slice would fail and the prose-wrapped
+            // input would be rejected. Correct handling returns the tight object.
+            expect(extractJsonFromText('noise {"msg":"a \\" b"} tail')).toBe(
+                '{"msg":"a \\" b"}',
+            );
+        });
+    });
+
+    describe('repairJsonText', () => {
+        it('repairs whitespace-padded clean JSON (differs from input → not the null-on-unchanged case)', () => {
+            // The trimmed candidate `{"a":1}` !== `  {"a":1}  `, so unlike the
+            // already-clean case it is returned. Pins the `=== text` comparison.
+            expect(repairJsonText('  {"a":1}  ')).toBe('{"a":1}');
+        });
+
+        it('returns null when the extracted candidate is non-null but does not parse', () => {
+            // `{"a":1` survives extraction (delimiter present) but JSON.parse
+            // throws → the try/catch must yield null, not the raw substring.
+            expect(repairJsonText('{"a":1')).toBeNull();
+        });
+    });
+
+    describe('repairAndValidate', () => {
+        it('returns the parsed value UNVALIDATED when the wire has no validate fn', async () => {
+            // Kills the `typeof schema.validate !== "function"` branch: a raw
+            // jsonSchema() (no validator) must let a wrong-shape object through.
+            const raw = jsonSchema({
+                type: 'object',
+                properties: { keep: { type: 'number' } },
+                required: ['keep'],
+            } as any);
+            expect(typeof (raw as any).validate).not.toBe('function');
+            expect(await repairAndValidate(raw, '{"wrong":1}')).toEqual({
+                wrong: 1,
+            });
+        });
+
+        it('returns undefined when a non-null candidate fails to parse', async () => {
+            // `{"a":1` extracts non-null then throws in JSON.parse → the
+            // try/catch must return undefined (distinct from the null-candidate path).
+            const guarded = ensureValidatingSchema(
+                jsonSchema({
+                    type: 'object',
+                    properties: { keep: { type: 'number' } },
+                    required: ['keep'],
+                    additionalProperties: false,
+                } as any),
+            );
+            expect(await repairAndValidate(guarded, '{"a":1')).toBeUndefined();
+        });
+    });
+
+    describe('readOutput', () => {
+        it('returns a falsy-but-defined experimental_output (?? not ||)', () => {
+            // `0 ?? 5` is 0; a `||` mutant would wrongly return 5.
+            expect(readOutput({ experimental_output: 0, output: 5 })).toBe(0);
+            expect(
+                readOutput({ experimental_output: false, output: { a: 1 } }),
+            ).toBe(false);
+        });
+
+        it('falls through to output when experimental_output is null/undefined', () => {
+            expect(readOutput({ experimental_output: null, output: 9 })).toBe(9);
+            expect(readOutput({ output: 0 })).toBe(0);
+        });
+    });
+
+    describe('salvageStructuredError', () => {
+        const wire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: { keep: { type: 'number' } },
+                required: ['keep'],
+                additionalProperties: false,
+            } as any),
+        );
+        const noObjectError = (cause: Error, text: unknown) =>
+            new NoObjectGeneratedError({
+                message: 'No object generated (test)',
+                cause,
+                text: text as any,
+                response: {} as any,
+                usage: {} as any,
+                finishReason: 'stop',
+            });
+
+        it('does NOT salvage when the parse-error text is not a string', async () => {
+            // Kills the `typeof text !== "string"` guard: a JSONParseError cause
+            // with a non-string text must short-circuit to undefined.
+            const err = noObjectError(
+                new JSONParseError({ text: 'x', cause: new Error('parse') }),
+                undefined,
+            );
+            expect(await salvageStructuredError(err, wire)).toBeUndefined();
+        });
+    });
+});

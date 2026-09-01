@@ -1,4 +1,5 @@
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
+import { LanguageValue } from '@libs/core/domain/enums/language-parameter.enum';
 import {
     BehaviourForExistingDescription,
     ClusteringType,
@@ -560,5 +561,122 @@ describe('CommentManagerService.repeatedCodeReviewSuggestionClustering — struc
         );
 
         expect(result).toEqual(codeSuggestions);
+    });
+});
+
+/**
+ * Deterministic helpers in this 2.5k-line service that never touch the LLM or a
+ * platform client — pure string/markdown/token math. The behaviour suites above
+ * exercise the summary and clustering paths but never these, so their branches
+ * were entirely unkilled. Built with inert deps and driven directly.
+ */
+describe('CommentManagerService — pure helpers', () => {
+    const svc = () =>
+        new CommentManagerService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+        ) as any;
+
+    describe('sanitizeBitbucketMarkdown', () => {
+        it('leaves markdown untouched on a non-Bitbucket platform', () => {
+            const md = '<details><summary>x</summary>body</details>';
+            expect(
+                svc().sanitizeBitbucketMarkdown(md, PlatformType.GITHUB),
+            ).toBe(md);
+        });
+
+        it('strips <details>/<summary> tags and trims on Bitbucket', () => {
+            const md = '<details><summary>Title</summary>\nbody\n</details>';
+            const out = svc().sanitizeBitbucketMarkdown(
+                md,
+                PlatformType.BITBUCKET,
+            );
+            expect(out).not.toMatch(/<\/?details>|<\/?summary>/);
+            expect(out).toContain('body');
+            expect(out).toBe(out.trim());
+        });
+
+        it('strips the kody-codereview marker+zero-width-space on Bitbucket', () => {
+            const md = '<!-- kody-codereview -->\n&#8203;real content';
+            const out = svc().sanitizeBitbucketMarkdown(
+                md,
+                PlatformType.BITBUCKET,
+            );
+            expect(out).toBe('real content');
+        });
+    });
+
+    describe('resolvePartialErrorsNotice', () => {
+        const KEY = 'API_USER_INVITE_BASE_URL';
+        let saved: string | undefined;
+        beforeEach(() => {
+            saved = process.env[KEY];
+        });
+        afterEach(() => {
+            if (saved === undefined) delete process.env[KEY];
+            else process.env[KEY] = saved;
+        });
+
+        it('substitutes the dashboard placeholder with the public fallback when no env is set', () => {
+            delete process.env[KEY];
+            const out = svc().resolvePartialErrorsNotice(LanguageValue.ENGLISH);
+            expect(out).toContain('https://app.kodus.io/pull-requests');
+            expect(out).not.toContain('{{dashboardUrl}}');
+        });
+
+        it('uses the configured base URL and strips its trailing slashes', () => {
+            process.env[KEY] = 'https://custom.dev//';
+            const out = svc().resolvePartialErrorsNotice(LanguageValue.ENGLISH);
+            expect(out).toContain('https://custom.dev/pull-requests');
+            expect(out).not.toContain('custom.dev//');
+        });
+    });
+
+    describe('chunkChangedFilesForSummary', () => {
+        const files = (n: number, size = 0) =>
+            Array.from({ length: n }, (_, i) => ({
+                filename: `f${i}.ts`,
+                // large payload forces one file per chunk when a budget is set
+                fileContent: 'x'.repeat(size),
+            }));
+        const chunk = (fs: any[], max?: number) =>
+            svc().chunkChangedFilesForSummary(fs, '', '', max);
+
+        it('returns a single chunk (all files) when no token budget is configured', () => {
+            const fs = files(3);
+            expect(chunk(fs, undefined)).toEqual([fs]);
+        });
+
+        it('returns a single chunk when the budget is zero or negative', () => {
+            const fs = files(3);
+            expect(chunk(fs, 0)).toEqual([fs]);
+        });
+
+        it('keeps everything in one chunk when it all fits the budget', () => {
+            const fs = files(2);
+            const out = chunk(fs, 100000);
+            expect(out).toHaveLength(1);
+            expect(out[0]).toHaveLength(2);
+        });
+
+        it('splits into multiple chunks when files exceed the per-chunk budget', () => {
+            const out = chunk(files(3, 50000), 1000);
+            expect(out).not.toBeNull();
+            expect(out.length).toBeGreaterThan(1);
+        });
+
+        it('still returns chunks at exactly the max chunk count (boundary is strictly greater-than)', () => {
+            // 4 oversized files → 4 chunks == MAX_CHUNKS: must NOT be null.
+            const out = chunk(files(4, 50000), 1000);
+            expect(out).not.toBeNull();
+            expect(out).toHaveLength(4);
+        });
+
+        it('bails out with null when the split would exceed the max chunk count', () => {
+            expect(chunk(files(6, 50000), 1000)).toBeNull();
+        });
     });
 });

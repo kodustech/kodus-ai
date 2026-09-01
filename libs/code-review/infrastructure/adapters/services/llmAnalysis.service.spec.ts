@@ -21,6 +21,7 @@
  * model double (Phase 0 + 03-01). Parity here targets the codeSuggestions mapping,
  * which is exactly the migration's behavior-change risk.
  */
+
 const MODEL_SUGGESTIONS = {
     codeSuggestions: [
         {
@@ -68,9 +69,17 @@ jest.mock('@libs/core/log/langfuse', () => ({
     toAiSdkTelemetryArgs: jest.fn(() => ({ telemetry: { isEnabled: false } })),
 }));
 
-import { LLMAnalysisService } from './llmAnalysis.service';
+import {
+    LLMAnalysisService,
+    severityAnalysisSchema,
+    validateImplementedSchema,
+} from './llmAnalysis.service';
 import { setLlmObservability } from '@libs/llm/llm-observability';
 import { tracedGenerateText } from '@libs/llm/llm-call';
+import { LLM } from '@libs/llm/llm';
+import { ReviewModeResponse } from '@libs/core/infrastructure/config/types/general/codeReview.type';
+import { prompt_severity_analysis_user } from '@libs/common/utils/prompts/severityAnalysis';
+import { prompt_validateImplementedSuggestions } from '@libs/common/utils/prompts';
 
 const mockGenerate = tracedGenerateText as unknown as jest.Mock;
 
@@ -127,7 +136,9 @@ describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK p
         // LLM.run records its span through the observability port — register the mock.
         setLlmObservability(observability);
         observability.runLLMInSpan.mockClear();
-        mockGenerate.mockResolvedValue({ experimental_output: MODEL_SUGGESTIONS });
+        mockGenerate.mockResolvedValue({
+            experimental_output: MODEL_SUGGESTIONS,
+        });
     });
 
     it('maps the model codeSuggestions[] byte-for-byte into AIAnalysisResult', async () => {
@@ -192,5 +203,272 @@ describe('LLMAnalysisService.analyzeCodeWithAI_v2 — migration parity (AI SDK p
         expect(result?.codeSuggestions).toEqual(
             MODEL_SUGGESTIONS.codeSuggestions,
         );
+    });
+});
+
+/**
+ * The secondary analysis methods — severity, implemented-check, safeguard and
+ * review-mode. The parity block above only covers analyzeCodeWithAI_v2; these
+ * four each own a fail-safe contract (a provider failure must degrade to the
+ * INPUT suggestions, never drop them) and a distinct request shape (severity
+ * carries the org's BYOK slot; the implemented-check deliberately runs on the
+ * managed default with byokConfig undefined). A regression that swallows the
+ * fallback or crosses the wires is invisible to the parity spec.
+ *
+ * We spy on LLM.run directly (restored after each test so the parity block keeps
+ * using the real span path) and, for the success paths, stub the internal
+ * response processor.
+ */
+describe('LLMAnalysisService — secondary analysis methods', () => {
+    const org = organizationAndTeamData;
+    const suggestions = [
+        { id: 's1', severity: 'low' },
+        { id: 's2', severity: 'low' },
+    ] as any[];
+
+    let runSpy: jest.SpyInstance;
+    beforeEach(() => {
+        setLlmObservability(observability);
+        runSpy = jest.spyOn(LLM, 'run');
+    });
+    afterEach(() => runSpy.mockRestore());
+
+    describe('severityAnalysisAssignment', () => {
+        it('assembles the severity request with the schema, prompt and BYOK slot', async () => {
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockReturnValue({ codeSuggestions: [{ id: 's1' }] });
+
+            await service.severityAnalysisAssignment(
+                org,
+                77,
+                'openai' as any,
+                suggestions,
+                byokConfig,
+            );
+
+            const arg = runSpy.mock.calls[0][0];
+            expect(arg.schema).toBe(severityAnalysisSchema);
+            expect(arg.user).toBe(prompt_severity_analysis_user(suggestions));
+            expect(arg.runName).toBe('severityAnalysis');
+            expect(arg.byokConfig).toBe(byokConfig); // the org's slot, not undefined
+        });
+
+        it('returns the parsed suggestions on success', async () => {
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            const processed = [{ id: 's1', severity: 'high' }];
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockReturnValue({ codeSuggestions: processed });
+
+            const out = await service.severityAnalysisAssignment(
+                org,
+                77,
+                'openai' as any,
+                suggestions,
+                byokConfig,
+            );
+            expect(out).toEqual(processed);
+        });
+
+        it('falls back to the ORIGINAL suggestions when the call throws', async () => {
+            runSpy.mockRejectedValue(new Error('provider down'));
+            const service = buildService();
+
+            const out = await service.severityAnalysisAssignment(
+                org,
+                77,
+                'openai' as any,
+                suggestions,
+                byokConfig,
+            );
+            expect(out).toBe(suggestions);
+        });
+
+        it('falls back to the ORIGINAL suggestions when the model returns nothing', async () => {
+            runSpy.mockResolvedValue(null as any);
+            const service = buildService();
+
+            const out = await service.severityAnalysisAssignment(
+                org,
+                77,
+                'openai' as any,
+                suggestions,
+                byokConfig,
+            );
+            expect(out).toBe(suggestions);
+        });
+    });
+
+    describe('validateImplementedSuggestions', () => {
+        it('runs on the managed default (byokConfig undefined) with the implemented schema', async () => {
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockReturnValue({ codeSuggestions: [] });
+
+            await service.validateImplementedSuggestions(
+                org,
+                77,
+                'openai' as any,
+                'diff',
+                suggestions,
+            );
+
+            const arg = runSpy.mock.calls[0][0];
+            expect(arg.schema).toBe(validateImplementedSchema);
+            expect(arg.user).toBe(
+                prompt_validateImplementedSuggestions({
+                    codePatch: 'diff',
+                    codeSuggestions: suggestions,
+                }),
+            );
+            expect(arg.runName).toBe('validateImplementedSuggestions');
+            // Deliberate: this check runs on the managed default, never a slot.
+            expect(arg.byokConfig).toBeUndefined();
+        });
+
+        it('returns the parsed implemented-status suggestions on success', async () => {
+            runSpy.mockResolvedValue({ codeSuggestions: [] });
+            const service = buildService();
+            const processed = [
+                { id: 's1', implementationStatus: 'implemented' },
+            ];
+            jest.spyOn(
+                (service as any).llmResponseProcessor,
+                'processResponse',
+            ).mockReturnValue({ codeSuggestions: processed });
+
+            const out = await service.validateImplementedSuggestions(
+                org,
+                77,
+                'openai' as any,
+                'diff',
+                suggestions,
+            );
+            expect(out).toEqual(processed);
+        });
+
+        it('falls back to the ORIGINAL suggestions on failure', async () => {
+            runSpy.mockRejectedValue(new Error('boom'));
+            const service = buildService();
+
+            const out = await service.validateImplementedSuggestions(
+                org,
+                77,
+                'openai' as any,
+                'diff',
+                suggestions,
+            );
+            expect(out).toBe(suggestions);
+        });
+
+        it('falls back to the ORIGINAL suggestions when the model returns nothing', async () => {
+            runSpy.mockResolvedValue(null as any);
+            const service = buildService();
+
+            const out = await service.validateImplementedSuggestions(
+                org,
+                77,
+                'openai' as any,
+                'diff',
+                suggestions,
+            );
+            expect(out).toBe(suggestions);
+        });
+    });
+
+    describe('filterSuggestionsSafeGuard', () => {
+        const buildWithPipeline = (execute: jest.Mock) =>
+            new LLMAnalysisService(observability, { execute } as any);
+
+        it('strips suggestionEmbedded before delegating, leaving other suggestions intact', async () => {
+            const execute = jest.fn().mockResolvedValue({ suggestions: 'ok' });
+            const service = buildWithPipeline(execute);
+            const input = [
+                { id: 'a', suggestionEmbedded: { vec: [1] }, keep: 1 },
+                { id: 'b' },
+            ] as any[];
+
+            await service.filterSuggestionsSafeGuard(
+                org,
+                77,
+                { filename: 'f.ts' },
+                'content',
+                'diff',
+                input,
+                'en-US',
+                ReviewModeResponse.HEAVY_MODE,
+                byokConfig,
+            );
+
+            const payload = execute.mock.calls[0][0];
+            expect(payload.suggestions[0]).not.toHaveProperty(
+                'suggestionEmbedded',
+            );
+            expect(payload.suggestions[0].keep).toBe(1);
+            expect(payload.suggestions[1]).toEqual({ id: 'b' });
+        });
+
+        it('does not throw on a null suggestion entry', async () => {
+            const execute = jest.fn().mockResolvedValue({ suggestions: [] });
+            const service = buildWithPipeline(execute);
+
+            await expect(
+                service.filterSuggestionsSafeGuard(
+                    org,
+                    77,
+                    { filename: 'f.ts' },
+                    'content',
+                    'diff',
+                    [null, { id: 'x', suggestionEmbedded: 1 }] as any[],
+                    'en-US',
+                    ReviewModeResponse.HEAVY_MODE,
+                    byokConfig,
+                ),
+            ).resolves.toBeDefined();
+        });
+
+        it('is fail-safe: a pipeline failure returns the (stripped) suggestions instead of dropping them', async () => {
+            const execute = jest.fn().mockRejectedValue(new Error('pipeline'));
+            const service = buildWithPipeline(execute);
+            const input = [{ id: 'a', suggestionEmbedded: 1 }] as any[];
+
+            const out = await service.filterSuggestionsSafeGuard(
+                org,
+                77,
+                { filename: 'f.ts' },
+                'content',
+                'diff',
+                input,
+                'en-US',
+                ReviewModeResponse.HEAVY_MODE,
+                byokConfig,
+            );
+
+            expect(out).toEqual({ suggestions: input });
+            expect(input[0]).not.toHaveProperty('suggestionEmbedded');
+        });
+    });
+
+    describe('selectReviewMode', () => {
+        it('always resolves to HEAVY_MODE', async () => {
+            const service = buildService();
+            const out = await service.selectReviewMode(
+                org,
+                77,
+                'openai' as any,
+                { filename: 'f.ts' } as any,
+                'diff',
+            );
+            expect(out).toBe(ReviewModeResponse.HEAVY_MODE);
+        });
     });
 });
