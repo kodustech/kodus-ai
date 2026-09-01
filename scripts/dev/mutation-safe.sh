@@ -44,6 +44,14 @@ node -e '
   const cfg = JSON.parse(fs.readFileSync("stryker.config.json", "utf8"));
   cfg.inPlace = false;               // NEVER edit the real working tree
   cfg.cleanTempDir = true;
+  // Keep the sandbox copy tiny: skip heavy non-source trees so the copy is fast
+  // and never fills the disk (docs dossiers, worktrees, build output, caches).
+  cfg.ignorePatterns = [
+    ...(cfg.ignorePatterns || []),
+    "docs-internal", "docs", ".worktrees", "dist", ".agents",
+    "coverage", "reports", ".next", "apps/*/.next", ".planning",
+    "**/*.hot-update.*",
+  ];
   fs.writeFileSync(process.argv[1], JSON.stringify(cfg, null, 2));
 ' "$SAFE_CONFIG"
 
