@@ -402,8 +402,8 @@ const CASES = [
         wire: { hasNot: ['thinking', 'reasoning_effort'] },
     },
     {
-        id: 'GAP minimax M3 — a toggle we will not guess at',
-        why: 'M3 uses thinking.type rather than M2 reasoning_effort, but the docs we verified do not say whether it accepts an explicit disabled. Claiming the fact would risk a 400 on the OFF path, so M3 stays unmapped and this case pins that on purpose — it goes red the day M3 is verified, which is the signal to come map it',
+        id: 'minimax M3 — VERIFIED unmappable: the vendor documents no off switch',
+        why: 'Checked platform.minimax.io directly. M3 reasons intrinsically, and the only documented reasoning field, reasoning_split, controls how thinking is FORMATTED in the response (split out vs inline think tags) — it does not turn thinking on or off. A vendor blog mentions thinking:{type:enabled}, but no official page documents the disabled counterpart, and sending an undocumented value on the OFF path is a 400. So nothing is sent, by decision rather than by omission',
         slot: {
             provider: 'openai_compatible',
             model: 'MiniMax-M3',
@@ -413,8 +413,8 @@ const CASES = [
         wire: { hasNot: ['thinking', 'reasoning_effort'] },
     },
     {
-        id: 'GAP novita — no reasoning mapping, so a chosen effort is dropped',
-        why: 'The module has no reasoning(). All 4 production novita slots are DeepSeek on effort=high; DeepSeek thinks by default so they still reason, just never at the level asked for',
+        id: 'novita — VERIFIED: the vendor exposes no reasoning parameter at all',
+        why: 'This was carried as "not mapped yet". Checked novita.ai/docs/guides/llm-api: the documented chat-completions fields are temperature, top_p, top_k, presence_penalty, frequency_penalty, repetition_penalty, max_tokens, stream and stop — there is no reasoning_effort, thinking or enable_thinking to send. The 4 production slots are DeepSeek, which reasons by default, so they DO reason; the level simply is not expressible on this endpoint. Nothing to fix on our side',
         slot: {
             provider: 'novita',
             model: 'deepseek/deepseek-v4-pro',
@@ -472,8 +472,8 @@ const CASES = [
         wire: { hasNot: ['thinking', 'additionalModelRequestFields'] },
     },
     {
-        id: 'GAP bedrock non-Claude — no verified param for Nova/Kimi/MiniMax',
-        why: 'Those families would need their own fields under additionalModelRequestFields and we have not verified what Converse accepts for them, so nothing is sent rather than an invented field',
+        id: 'bedrock non-Claude — VERIFIED: MiniMax and Kimi take no reasoning field',
+        why: 'MiniMax M2 and Kimi K2 on Converse reason INTRINSICALLY — they emit a think block without being asked, and no request parameter turns that on or off. Both are live Bedrock slots and both correctly receive nothing. Amazon Nova does document a reasoningConfig under additionalModelRequestFields.inferenceConfig, but no production slot runs Nova, so mapping it would be surface built for a model nobody here uses',
         slot: {
             provider: 'amazon_bedrock',
             awsRegion: 'us-east-1',

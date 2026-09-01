@@ -73,6 +73,23 @@ describe('model families are known to the WHOLE system, or to none of it', () =>
         });
     }
 
+    it('minimax M3 stays unmapped ON PURPOSE, and it is not an oversight', () => {
+        // Verified against platform.minimax.io: M3 reasons intrinsically and the
+        // vendor documents no parameter that turns it off — `reasoning_split`
+        // only chooses how thinking is formatted in the RESPONSE. So the family
+        // detector knows M3 (it is a MiniMax), the reasoning config knows its
+        // scale, and the behavior facts stay at the conservative default, which
+        // is what makes every transport send nothing for it.
+        expect(detectModelFamily('MiniMax-M3')).toBe('minimax');
+        expect(resolveCompatibleReasoningTraits('MiniMax-M3').thinksByDefault).toBe(
+            false,
+        );
+        // The verified sibling is unaffected — the split is on the VERSION.
+        expect(
+            resolveCompatibleReasoningTraits('MiniMax-M2').reasoningControl,
+        ).toBe('effort-only');
+    });
+
     it('a renamed proxy is `unknown`, and unknown never forces a parameter', () => {
         // The model id is a free-text field. A proxy serving a Kimi under its own
         // name cannot be recognised, so the whole design has to be safe when it
