@@ -40,9 +40,14 @@ jest.mock('@libs/common/utils/crypto', () => ({
     encrypt: (v: string) => v,
 }));
 
-import { generateText } from 'ai';
+// `tracedGenerateText`, NOT the raw `generateText` export — this is the wrapper
+// every production review call goes through (llm-call.ts).
+import { tracedGenerateText as generateText } from './llm-call';
+
+import { z } from 'zod';
 
 import { resolveModelConfig } from './model-invocation';
+import { runStructuredReviewCall } from './structured-review-call';
 import type { NormalizedModel } from './byok-config';
 
 function liveKeys(): Record<string, string> {
@@ -427,6 +432,89 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                         reasoned: tokens > 0 || text > 0,
                     }).toMatchObject({ reasoned: false });
                 }
+            },
+            120_000,
+        );
+    }
+});
+
+/**
+ * The rows above prove the reasoning parameter reaches the vendor. They do NOT
+ * prove the thing production actually does, because they call the model the way
+ * no production code does: a plain message list with no schema.
+ *
+ * Every review call goes through `runStructuredReviewCall`, which chooses an
+ * OUTPUT CHANNEL from `planStructuredCall` before it ever touches the SDK:
+ *
+ *   as-is              issue the structured call unchanged
+ *   suppress-thinking  turn reasoning OFF first, THEN force the tool — because
+ *                      the Anthropic protocol rejects a forced tool_choice while
+ *                      thinking with "tool_choice 'required' is incompatible
+ *                      with thinking enabled"
+ *   reroute-json       never force a tool at all; put the schema in the prompt —
+ *                      for models that cannot stop thinking AND cannot take a
+ *                      forced tool_choice
+ *
+ * Those two non-trivial plans are the 400s this whole layer exists to prevent,
+ * and no amount of plain-generateText coverage can see them: the failure needs a
+ * schema, a forced tool call and a thinking model in the same request. So these
+ * go through the REAL entry point, with the real schema machinery, and assert
+ * the parsed object comes back.
+ */
+const STRUCTURED_LIVE = [
+    {
+        brand: 'anthropic',
+        plan: 'suppress-thinking',
+        why: 'Claude adaptive thinks by default; forcing a tool while it thinks is a 400. The plan must disable thinking FIRST',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-6',
+            reasoningEffort: 'high',
+        },
+    },
+    {
+        brand: 'anthropic_compatible',
+        plan: 'reroute-json',
+        why: 'k3 cannot stop thinking and its endpoint cannot take a forced tool_choice — the only sound path is schema-in-prompt. If the plan ever says otherwise this 400s live',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'k3',
+            baseURL: 'https://api.kimi.com/coding',
+            reasoningEffort: 'high',
+        },
+    },
+] as const;
+
+describe('BYOK structured output — LIVE, through the production entry point', () => {
+    for (const c of STRUCTURED_LIVE) {
+        const apiKey = key(c.brand);
+        const run = apiKey ? it : it.skip;
+
+        run(
+            `${c.brand} (${c.plan}) — ${c.why}`,
+            async () => {
+                // The schema is deliberately trivial: the subject under test is
+                // the CHANNEL, not the model's ability to fill a rich object.
+                const schema = z.object({
+                    ok: z.boolean(),
+                    word: z.string(),
+                });
+
+                const result = await runStructuredReviewCall({
+                    byokConfig: {
+                        ...c.slot,
+                        ...slotExtras(c.brand),
+                        apiKey,
+                    } as unknown as NormalizedModel,
+                    user: 'Reply with ok=true and word="ok".',
+                    runName: 'byok-live-structured',
+                    schema,
+                });
+
+                // Getting a parsed object back means the whole composition held:
+                // the plan picked a channel the model accepts, the schema
+                // survived the wire, and the envelope parsed.
+                expect(schema.safeParse(result).success).toBe(true);
             },
             120_000,
         );

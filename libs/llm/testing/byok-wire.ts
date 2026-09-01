@@ -28,7 +28,12 @@
  * appear on the wire. See that file's header.
  */
 
-import { generateText } from 'ai';
+// `tracedGenerateText`, NOT the raw `generateText` export — this is the wrapper
+// every production review call goes through (llm-call.ts). It forwards its args
+// untouched and adds a hard-timeout race, so the request shape is identical;
+// using it anyway is the point. A harness that proves the stack works through a
+// door production does not use proves less than it claims.
+import { tracedGenerateText as generateText } from '../llm-call';
 
 import { resolveModelConfig } from '../model-invocation';
 import type { NormalizedModel } from '../byok-config';
