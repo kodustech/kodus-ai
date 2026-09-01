@@ -72,6 +72,12 @@ _*
 # can't load the offline conformance specs).
 !libs/llm/providers/**/__fixtures__/
 !libs/llm/providers/**/__fixtures__/**
+# The BYOK config matrix replays every distinct config shape stored in
+# production (anonymized: no org ids, no credentials). Same committed-artifact
+# rule — without this the corpus exists only on the author's disk and the
+# production-shape invariants quietly assert over an empty array in CI.
+!libs/llm/testing/__fixtures__/
+!libs/llm/testing/__fixtures__/**
 !**/__tests__/
 !scripts/selfhosted/_*.sh
 
