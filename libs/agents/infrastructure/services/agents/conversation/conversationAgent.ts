@@ -11,6 +11,7 @@ import { CONVERSATION_STORE_TOKEN } from '@libs/agents/infrastructure/persistenc
 import { AiSdkAgentRunner } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-agent-runner';
 import { AiSdkToolRegistry } from '@libs/agent-harness/infrastructure/ai-sdk/ai-sdk-tool-registry';
 import { finalText } from '@libs/agent-harness/domain/run-state.util';
+import type { RunState } from '@libs/agent-harness/domain/contracts/run-state.contract';
 
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -28,14 +29,28 @@ import { ByokErrorCounter } from '@libs/notifications/application/byok-error-cou
 import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service';
 import { SandboxInstance } from '@libs/sandbox/domain/contracts/sandbox.provider';
 
-import { connectMcpTools, type ConnectedMcpTools } from '../ai-sdk/mcp-tools';
-import { buildNativeTools } from '../ai-sdk/native-tools';
+import {
+    connectMcpTools,
+    type ConnectedMcpTools,
+} from '../../ai-sdk/mcp-tools';
+import { buildNativeTools } from '../../ai-sdk/native-tools';
+import {
+    CONVERSATION_DECISION_TOOL,
+    buildDecisionTool,
+    grantIfAuthorized,
+    readDecision,
+} from './conversation-decision';
 import { withVerifiedOutcome } from './conversation-outcome';
 import {
     auditWriteTools,
     writeToolPredicate,
     type WriteToolEvent,
 } from './conversation-tool-audit';
+import {
+    createWriteAuthorization,
+    requireDeclaredAction,
+} from './write-authorization';
+import { WriteGatePolicy } from './write-gate.policy';
 import { WriteTruthPolicy } from './write-truth.policy';
 import {
     buildSystemPrompt,
@@ -158,37 +173,53 @@ export class ConversationAgentProvider {
         // model sees mid-run and the footer the developer reads at the end.
         const writes: WriteToolEvent[] = [];
 
-        // Sandbox tools are spread in AFTER auditing: they read the checked-out
-        // repo, never org state, so a grep is not an action the agent performed.
-        const tools: Record<string, Tool> = auditWriteTools(
-            {
-                ...mcp.tools,
-                ...(sandbox ? buildNativeTools(sandbox) : {}),
-            },
-            mcp.metadata,
-            (event) => (
-                writes.push(event),
-                this.logger[event.error ? 'error' : 'log']({
-                    message: event.error
-                        ? `Conversation agent write tool ${event.tool} failed`
-                        : `Conversation agent called write tool ${event.tool}`,
-                    context: ConversationAgentProvider.name,
-                    serviceName: ConversationAgentProvider.name,
-                    metadata: {
-                        organizationAndTeamData,
-                        threadId: thread.id?.toString(),
-                        repositoryId:
-                            prepareContext?.repository?.id?.toString(),
-                        developer: prepareContext?.gitUser?.username,
-                        tool: event.tool,
-                        failed: Boolean(event.error),
-                        error: event.error,
-                        // Debugging record of what the tool handed back — the
-                        // reply shows the developer the link, not this.
-                        result: event.result,
-                    },
-                })
+        // Writes run only once the agent has declared the action and quoted the
+        // developer asking for it; the policy below grants that. Sandbox tools
+        // pass through both layers untouched — they read the checked-out repo,
+        // never org state, so a grep is not an action the agent performed.
+        const writeAuthorization = createWriteAuthorization();
+
+        // The guard sits OUTSIDE the audit: a refused call must never reach the
+        // audited execute, or a write that was stopped gets logged — and
+        // counted by the divergence check — as one that happened.
+        const tools: Record<string, Tool> = requireDeclaredAction(
+            auditWriteTools(
+                {
+                    ...mcp.tools,
+                    ...(sandbox ? buildNativeTools(sandbox) : {}),
+                    // Grants within the step it runs in, so a decision and a
+                    // write emitted together are not refused.
+                    ...buildDecisionTool((decision) =>
+                        grantIfAuthorized(decision, prompt, writeAuthorization),
+                    ),
+                },
+                mcp.metadata,
+                (event) => (
+                    writes.push(event),
+                    this.logger[event.error ? 'error' : 'log']({
+                        message: event.error
+                            ? `Conversation agent write tool ${event.tool} failed`
+                            : `Conversation agent called write tool ${event.tool}`,
+                        context: ConversationAgentProvider.name,
+                        serviceName: ConversationAgentProvider.name,
+                        metadata: {
+                            organizationAndTeamData,
+                            threadId: thread.id?.toString(),
+                            repositoryId:
+                                prepareContext?.repository?.id?.toString(),
+                            developer: prepareContext?.gitUser?.username,
+                            tool: event.tool,
+                            failed: Boolean(event.error),
+                            error: event.error,
+                            // Debugging record of what the tool handed back — the
+                            // reply shows the developer the link, not this.
+                            result: event.result,
+                        },
+                    })
+                ),
             ),
+            writeToolPredicate(mcp.metadata),
+            writeAuthorization,
         );
         // Single runtime: the conversation runs as an AgentSpec on the harness
         // AiSdkAgentRunner. LLM.run (inside) resolves the model + prompt-cache +
@@ -208,7 +239,11 @@ export class ConversationAgentProvider {
             spanName: 'ConversationalAgent::conversationAgent',
             systemPrompt: buildSystemPrompt(userLanguage),
             tools: new AiSdkToolRegistry(tools),
-            policies: [new WriteTruthPolicy(writeToolPredicate(mcp.metadata))],
+            resultToolName: CONVERSATION_DECISION_TOOL,
+            policies: [
+                new WriteGatePolicy(prompt, writeAuthorization),
+                new WriteTruthPolicy(writeToolPredicate(mcp.metadata)),
+            ],
             maxSteps: CONVERSATION_MAX_STEPS,
             // Conversation keeps its own max-output default when the slot omits one.
             maxOutputTokens: this.maxOutputTokensFallback,
@@ -278,6 +313,17 @@ export class ConversationAgentProvider {
             const finishReason = state.stopReason ?? state.status;
 
             const answer = finalText(state);
+
+            // What the agent said it would do, against what the tools did. A
+            // gap here is the failure this whole mechanism exists to catch, and
+            // it is invisible to the developer by design — the reply carries no
+            // tool report — so it has to be visible to us.
+            this.reportDecisionDivergence(
+                state.steps,
+                writes,
+                organizationAndTeamData,
+                thread,
+            );
 
             this.logger.log({
                 message: 'Finish conversation agent execution',
@@ -403,6 +449,51 @@ export class ConversationAgentProvider {
                 error,
             });
             return null;
+        }
+    }
+
+    /**
+     * Compare the turn's declared intent with the writes that actually ran.
+     * `act` with nothing executed means the agent told the developer it did
+     * something it did not do.
+     */
+    private reportDecisionDivergence(
+        steps: RunState['steps'],
+        writes: readonly WriteToolEvent[],
+        organizationAndTeamData: OrganizationAndTeamData,
+        thread: ConversationThread,
+    ): void {
+        const decision = readDecision(steps);
+        const executed = writes.filter((w) => !w.error);
+
+        if (decision?.intent === 'act' && executed.length === 0) {
+            this.logger.error({
+                message:
+                    'Conversation agent declared an action it never performed',
+                context: ConversationAgentProvider.name,
+                serviceName: ConversationAgentProvider.name,
+                metadata: {
+                    organizationAndTeamData,
+                    threadId: thread?.id?.toString(),
+                    intendedTool: decision.tool,
+                    authorizingQuote: decision.authorizingQuote,
+                },
+            });
+            return;
+        }
+
+        if (decision?.intent !== 'act' && executed.length > 0) {
+            this.logger.error({
+                message: 'Conversation agent wrote without declaring an action',
+                context: ConversationAgentProvider.name,
+                serviceName: ConversationAgentProvider.name,
+                metadata: {
+                    organizationAndTeamData,
+                    threadId: thread?.id?.toString(),
+                    intent: decision?.intent ?? 'none',
+                    tools: executed.map((w) => w.tool),
+                },
+            });
         }
     }
 
