@@ -221,6 +221,17 @@ jobs:
                   export const environment = devEnvironment;
                   EOF
 
+            # The context-window mirror is a snapshot, and a snapshot with no
+            # scheduled check is a snapshot that rots — it had already rotted by
+            # a full model generation, so models holding 1M tokens were chunked
+            # at 128k. This fails ONLY when a model the production corpus
+            # actually runs disagrees with upstream; the hundreds of models
+            # upstream adds every month are ignored on purpose, because a noisy
+            # weekly job gets muted and that is how the mirror rotted the first
+            # time. Needs no secret, so it reports even on a fork PR.
+            - name: Context-window mirror is current for production models
+              run: node scripts/refresh-model-context-windows.mjs --check
+
             - name: BYOK reasoning live contract
               id: byok
               env:

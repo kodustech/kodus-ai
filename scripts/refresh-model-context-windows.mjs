@@ -93,7 +93,46 @@ try {
 }
 
 if (checkOnly) {
-    process.exit(added.length || changed.length ? 1 : 0);
+    // Fail on what MATTERS, not on churn. Upstream adds hundreds of models a
+    // month and none of them concern us; what concerns us is a model customers
+    // actually run whose window we would get wrong. Failing on every addition
+    // would make this job noise, and a noisy weekly job gets muted, which is how
+    // the mirror rotted the first time.
+    const problems = [];
+    try {
+        const corpus = JSON.parse(readFileSync(CORPUS, 'utf8'));
+        const shapes = Array.isArray(corpus) ? corpus : (corpus.shapes ?? []);
+        const models = [
+            ...new Set(
+                shapes
+                    .map((s) => (s.slot ?? s).model)
+                    .filter((m) => typeof m === 'string' && m),
+            ),
+        ];
+        for (const m of models) {
+            const now = current[m]?.max_input_tokens;
+            const then = next[m]?.max_input_tokens;
+            if (then === undefined) continue; // upstream does not know it either
+            if (now === undefined) {
+                problems.push(`${m}: missing here, upstream says ${then}`);
+            } else if (now !== then) {
+                problems.push(`${m}: ${now} here, upstream says ${then}`);
+            }
+        }
+    } catch {
+        problems.push('production corpus unreadable — cannot judge staleness');
+    }
+
+    if (problems.length) {
+        console.error(
+            `\n${problems.length} production model(s) out of date. ` +
+                `Run this script without --check and commit the result:\n`,
+        );
+        for (const p of problems) console.error(`  - ${p}`);
+        process.exit(1);
+    }
+    console.log('production models are up to date with upstream');
+    process.exit(0);
 }
 
 // Single-line JSON, matching the committed format: this file is data, never
