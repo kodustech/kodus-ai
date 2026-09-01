@@ -33,6 +33,11 @@ on:
         # Daily 06:00 UTC (03:00 BRT) — after the nightly crons, before the
         # workday starts in BRT.
         - cron: "0 6 * * *"
+        # Weekly Monday 07:00 UTC — the BYOK reasoning LIVE tier only. Weekly,
+        # not daily, because unlike the near-free REST pings above this one
+        # spends real tokens on seven providers; the drift it catches (a model
+        # changing how it is configured) moves on a scale of weeks, not hours.
+        - cron: "0 7 * * 1"
     workflow_dispatch:
     # Deliberately NOT every PR (an external API flaking must not block an
     # unrelated merge) — only PRs that touch the contract tests themselves
@@ -47,6 +52,7 @@ on:
             - "tests/e2e/contract/**"
             - "**/*.contract.spec.ts"
             - "**/*.contract.test.ts"
+            - "libs/llm/byok-reasoning.live.spec.ts"
 
 concurrency:
     group: contract-tests
@@ -55,6 +61,10 @@ concurrency:
 jobs:
     contract:
         name: Contract tests (GitLab / Bitbucket / Azure / Fireworks)
+        # Skipped on the weekly BYOK cron below — that schedule exists only to
+        # drive `byok-live`, and re-running the daily tier there would just be
+        # noise in the Actions tab.
+        if: github.event.schedule != '0 7 * * 1'
         runs-on: ubuntu-latest
         timeout-minutes: 20
         # `BB_TEST_APP_PASSWORD` exists BOTH repo-level (older) and in the `ci`
@@ -152,4 +162,83 @@ jobs:
                   description: |
                       Provider API-shape: ${{ steps.providers.outcome }} · LLM provider: ${{ steps.llm.outcome }}
                       A real GitLab/Bitbucket/Azure DevOps/Fireworks API no longer matches what our code assumes. This is NOT a release-gate failure — see the per-test assertion message for which assumption broke.
+                      Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    # ── Weekly: does the reasoning shape we emit still WORK upstream? ─────────
+    # `byok-config-matrix.spec.ts` (per PR, offline) proves a stored config
+    # produces the request body we intend. It cannot prove that body is still
+    # correct, because that fact lives on the provider's side. This job closes
+    # that gap by issuing one real minimal call per brand.
+    #
+    # It asserts the EFFECT, not the absence of an error: a vendor that renames
+    # `thinking` or stops honouring `reasoning_effort` still returns 200 and just
+    # stops reasoning, so the spec checks that the response actually billed
+    # reasoning tokens. A test that only looked for a 400 would stay green
+    # through precisely the regression it exists to catch.
+    #
+    # Credentials: one repo secret `BYOK_LIVE_KEYS`, a JSON map of brand → key.
+    # Every brand without a key SKIPS, so a partial-secret run reports partial
+    # coverage instead of a false red, and fork PRs stay green.
+    byok-live:
+        name: BYOK reasoning live contract (weekly)
+        if: >-
+            github.event.schedule == '0 7 * * 1' ||
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        environment: ci
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v6.0.2
+
+            - name: Setup Node
+              uses: actions/setup-node@v6.4.0
+              with:
+                  node-version: "22"
+
+            - name: Install pnpm
+              run: npm i -g pnpm@11.9.0
+
+            - name: Cache pnpm store
+              uses: actions/cache@v5.0.5
+              with:
+                  path: ~/.local/share/pnpm/store
+                  key: ${{ runner.os }}-node22-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node22-pnpm-
+
+            - name: Install root deps
+              run: pnpm install --frozen-lockfile
+
+            # libs/ee's environment.ts is gitignored and some @libs imports reach
+            # it transitively — same shim tests.yml creates.
+            - name: Create environment.ts
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+
+            - name: BYOK reasoning live contract
+              id: byok
+              env:
+                  API_NODE_ENV: test
+                  BYOK_LIVE_KEYS: ${{ secrets.BYOK_LIVE_KEYS }}
+                  API_DEEPSEEK_API_KEY: ${{ secrets.API_DEEPSEEK_API_KEY }}
+                  API_MOONSHOT_API_KEY: ${{ secrets.API_MOONSHOT_API_KEY }}
+                  API_GOOGLE_AI_API_KEY: ${{ secrets.API_GOOGLE_AI_API_KEY }}
+                  API_OPEN_AI_API_KEY: ${{ secrets.API_OPEN_AI_API_KEY }}
+              run: pnpm exec jest --config jest.config.ts libs/llm/byok-reasoning.live.spec.ts --no-coverage --forceExit
+
+            - name: Notify Discord on failure
+              if: failure()
+              uses: ./.github/actions/discord-notify
+              with:
+                  webhook: ${{ secrets.DISCORD_WEBHOOK_INTERNAL || secrets.DISCORD_WEBHOOK }}
+                  status: failure
+                  title: "❌ BYOK reasoning drifted — a provider changed how a model is configured"
+                  description: |
+                      A brand no longer accepts (or no longer honours) the reasoning shape we send. The failing test names the brand and shows the request we built. This is NOT a release gate — it means customer reviews on that provider are silently degrading.
                       Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
