@@ -35,36 +35,39 @@ describe('model-context-window', () => {
         });
     });
 
-    describe('getModelContextWindow — manual overrides (highest priority)', () => {
-        it('resolves an exact normalized override key', () => {
-            // 'gpt-5' -> normalize 'gpt5' -> MANUAL_OVERRIDES exact hit
-            expect(getModelContextWindow('gpt-5')).toBe(400_000);
+    describe('getModelContextWindow — manual overrides are a LAST resort', () => {
+        // These used to run first and match by substring, so a hand-typed number
+        // for an older model silently overruled real data for a newer sibling
+        // that merely shared its prefix. Precision decides precedence now.
+
+        it('real data beats a hand-typed number for the same model', () => {
+            // 'gpt-5' had an override of 400k. The mirror says 272k, and the
+            // mirror is the sourced answer.
+            expect(getModelContextWindow('gpt-5')).toBe(272_000);
         });
 
-        it('pins the specific override value for gpt54 (1M)', () => {
-            expect(getModelContextWindow('gpt-5-4')).toBe(1_000_000);
+        it('a prefix sibling no longer inherits the older model\'s window', () => {
+            // THE BUG: 'claudeopus47'.includes('claudeopus4') was true, so
+            // claude-opus-4-7 and -4-8 — both live in production, both rated at
+            // 1M upstream — were pinned to the 4.x override of 200k. An
+            // eightfold under-chunk that never raised an error.
+            expect(getModelContextWindow('claude-opus-4-7')).toBe(1_000_000);
+            expect(getModelContextWindow('deepseek-v4-flash')).toBe(1_000_000);
+            expect(getModelContextWindow('gpt-5-4')).toBe(1_050_000);
         });
 
-        it('resolves an override after provider prefix stripping', () => {
-            // 'openai/gpt-5-mini' -> normalize 'gpt5mini' -> override 272k? no: gpt5mini=400k
-            expect(getModelContextWindow('openai/gpt-5-mini')).toBe(400_000);
-        });
-
-        it('resolves an override via substring match on the normalized name', () => {
-            // 'gpt-5-turbo-preview' -> 'gpt5turbopreview' includes 'gpt5' -> 400k
-            expect(getModelContextWindow('gpt-5-turbo-preview')).toBe(400_000);
-        });
-
-        it('pins the anthropic override literal', () => {
-            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(200_000);
-        });
-
-        it('pins the moonshot override literal', () => {
+        it('an override still answers for a model the mirror does not carry', () => {
+            // This is the only job left for the table: Moonshot and Z.ai ids are
+            // genuinely absent upstream, so the stopgap still applies — just
+            // after the mirror has been asked.
             expect(getModelContextWindow('moonshot/kimi-k2')).toBe(262_144);
+            expect(getModelContextWindow('glm-4-7')).toBe(202_752);
         });
 
-        it('pins the glm47 override literal (distinct from siblings)', () => {
-            expect(getModelContextWindow('glm-4-7')).toBe(202_752);
+        it('an override that agrees with the mirror is simply redundant', () => {
+            // claude-sonnet-4-5 was in both, with the same number. Deleting the
+            // duplicate changes nothing, which is the point of deleting it.
+            expect(getModelContextWindow('claude-sonnet-4-5')).toBe(200_000);
         });
     });
 
@@ -104,13 +107,13 @@ describe('model-context-window', () => {
 
     describe('getModelContextWindow — normalize behavior (observable)', () => {
         it('lowercases and strips dash separators before matching', () => {
-            // 'GPT-5' must normalize to 'gpt5' to hit the override. If either
+            // 'GPT-5' must normalize to 'gpt5' to hit the mirror. If either
             // lowercasing or separator removal is dropped, this falls to default.
-            expect(getModelContextWindow('GPT-5')).toBe(400_000);
+            expect(getModelContextWindow('GPT-5')).toBe(272_000);
         });
 
         it('strips underscore separators before matching', () => {
-            expect(getModelContextWindow('GPT_5')).toBe(400_000);
+            expect(getModelContextWindow('GPT_5')).toBe(272_000);
         });
 
         it('falls back to default for a genuinely unknown model', () => {
@@ -146,7 +149,7 @@ describe('model-context-window', () => {
                     byokMaxInputTokens: 0,
                     modelName: 'gpt-5',
                 }),
-            ).toBe(400_000);
+            ).toBe(272_000);
         });
 
         it('falls through model lookup when BYOK is negative', () => {
@@ -155,11 +158,11 @@ describe('model-context-window', () => {
                     byokMaxInputTokens: -5,
                     modelName: 'gpt-5',
                 }),
-            ).toBe(400_000);
+            ).toBe(272_000);
         });
 
         it('falls through model lookup when BYOK is undefined', () => {
-            expect(resolveContextWindow({ modelName: 'gpt-5' })).toBe(400_000);
+            expect(resolveContextWindow({ modelName: 'gpt-5' })).toBe(272_000);
         });
 
         it('falls through when BYOK is NaN (not > 0)', () => {
@@ -168,7 +171,7 @@ describe('model-context-window', () => {
                     byokMaxInputTokens: NaN,
                     modelName: 'gpt-5',
                 }),
-            ).toBe(400_000);
+            ).toBe(272_000);
         });
 
         it('ignores a non-number BYOK value (typeof guard) and uses the model', () => {
@@ -177,7 +180,7 @@ describe('model-context-window', () => {
                     byokMaxInputTokens: '999' as any,
                     modelName: 'gpt-5',
                 }),
-            ).toBe(400_000);
+            ).toBe(272_000);
         });
 
         it('returns the default when both BYOK and model are absent', () => {
