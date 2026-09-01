@@ -411,9 +411,13 @@ describe('StaticTaskStrategy — I/O contract matrix (deterministic boundary)', 
 
         it('A13: extra unknown keys on routing/model/credential are tolerated (no crash)', () => {
             const c = cfg({ defaultModelId: 'm-A' });
-            (c.routing as Record<string, unknown>).mode = 'manual';
-            (c.routing as Record<string, unknown>).experimentalFoo = 42;
-            (c.models[0] as Record<string, unknown>).unknownField = 'x';
+            // The case is precisely that UNKNOWN keys are tolerated, so the
+            // writes are off-schema on purpose and need the double cast.
+            const routing = c.routing as unknown as Record<string, unknown>;
+            routing.mode = 'manual';
+            routing.experimentalFoo = 42;
+            (c.models[0] as unknown as Record<string, unknown>).unknownField =
+                'x';
             const v = strategy.resolve('codeReview', NO_CTX, c);
             expect(v.modelId).toBe('m-A');
         });

@@ -333,7 +333,12 @@ describe('A. result/usage shape zoo', () => {
         const { svc, captured } = makeSvc();
         await svc.runAiSdkLLMInSpan({
             spanName: 'a::b',
-            exec: async () => ({ text: 'no usage key' }),
+            // Deliberately off-contract: the point of the case is a result
+            // with no `usage` key at all, which the declared exec type forbids.
+            exec: async () =>
+                ({ text: 'no usage key' }) as unknown as Awaited<
+                    ReturnType<Parameters<typeof svc.runAiSdkLLMInSpan>[0]['exec']>
+                >,
         });
         expect(usageAttrs(captured)['gen_ai.usage.total_tokens']).toBe(0);
     });

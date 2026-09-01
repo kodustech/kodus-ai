@@ -16,6 +16,7 @@
  * A failing assertion is a REAL finding (a residual double-count), NOT a test to relax.
  */
 import { REGISTRY } from '../index';
+import { BYOKProvider } from '@libs/llm/model-providers';
 import type { ProviderFixture } from './conformance';
 import { buildMockFromFixture, runConformance } from './conformance';
 import { normalizeSdkResult, normalizeSdkUsage } from './usage';
@@ -646,7 +647,11 @@ describe('contract: harness request-assembly & return shape (conformance.ts)', (
     it('runConformance always returns the declared shape; result mirrors usage', async () => {
         const run = await runConformance(
             anthropicModule,
-            cfg({ provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', apiKey: 'sk-a' }),
+            cfg({
+                provider: BYOKProvider.ANTHROPIC,
+                model: 'claude-sonnet-4-5-20250929',
+                apiKey: 'sk-a',
+            }),
             fx({ usage: { inputTokens: 3, outputTokens: 4 } }),
         );
         assertNormalizedShape(run.usage);
