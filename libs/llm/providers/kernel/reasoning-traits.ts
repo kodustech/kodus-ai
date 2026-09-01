@@ -50,6 +50,22 @@ export interface ModelReasoningTraits {
      *      "cannot specify both 'thinking' and 'reasoning_effort'"
      *  Absent ⇒ false ⇒ send the thinking toggle only, the shape every brand takes. */
     acceptsEffortWithThinking?: boolean;
+    /**
+     * WHICH parameter expresses reasoning on this brand. The two are not
+     * interchangeable and the difference is not inferable from the transport:
+     *
+     *   'thinking-toggle' → a `thinking` object turns it on/off (Kimi, GLM,
+     *                       DeepSeek, Claude). `acceptsEffortWithThinking` then
+     *                       says whether an effort may ride ALONGSIDE it.
+     *   'effort-only'     → there is NO thinking parameter; the brand takes a
+     *                       `reasoning_effort` and nothing else (MiniMax M2).
+     *                       Sending a `thinking` object to one of these is a
+     *                       field it does not have.
+     *
+     * Absent ⇒ 'thinking-toggle', which is what every brand in the table did
+     * before this existed, so nothing changes for them.
+     */
+    reasoningControl?: 'thinking-toggle' | 'effort-only';
     /** The effort vocabulary the brand actually implements. DeepSeek and GLM use
      *  low/high/max and do NOT accept "medium"; our 4-value scale is mapped into
      *  it by {@link compatibleEffortValue}. Absent ⇒ our own vocabulary. */
@@ -198,6 +214,37 @@ export function resolveCompatibleReasoningTraits(
             acceptsEffortWithThinking: true,
             effortScale: 'low-high-max',
             rejectsSamplingWhileThinking: true,
+        };
+    }
+
+    // MiniMax: an `reasoning_effort` brand with NO thinking toggle at all. It
+    // defaults to medium and REJECTS 'none' — so reasoning cannot be turned off
+    // here, and "off" has to mean omitting the parameter and living with the
+    // brand's own default. Its scale is ours (low/medium/high), so no mapping.
+    //
+    // Until `reasoningControl` existed this model could not be described: saying
+    // `thinksByDefault: true` made every compatible transport emit a `thinking`
+    // object MiniMax does not have, so the honest move was to say nothing and let
+    // 18 production slots ignore the effort the customer picked.
+    // Source: platform.minimaxi.com — chat completion `reasoning_effort`.
+    // Split on the VERSION, not on the brand: M2 takes `reasoning_effort`, while
+    // M3 announces a `thinking.type` toggle instead. M3 stays at the conservative
+    // default below because the one fact we have about it (that it uses a toggle)
+    // does not say whether it accepts `disabled` — and guessing that wrong sends
+    // a 400 to turn reasoning OFF. A verified fact for M2 does not license an
+    // invented one for M3.
+    if (family === 'minimax' && /minimax[-_.]?m2/.test(m)) {
+        return {
+            thinksByDefault: true,
+            canDisableThinking: false,
+            // OpenAI protocol: a forced tool_choice is accepted, and reasoning
+            // does not make it invalid (that rule is Anthropic's).
+            supportsForcedToolChoice: true,
+            forcedToolChoiceRejectsThinking: false,
+            reasoningControl: 'effort-only',
+            // Omitting leaves MiniMax's own default (medium) in force — it does
+            // NOT turn reasoning off — so no family default is imposed.
+            omittingDisablesReasoning: false,
         };
     }
 

@@ -35,15 +35,11 @@ const ROWS: Row[] = [
     { family: 'glm', model: 'z-ai/glm-5.3', config: 'level', ownedByCompatibleTable: true },
     { family: 'kimi', model: 'moonshotai.kimi-k2.5', config: 'level', ownedByCompatibleTable: true },
     { family: 'deepseek', model: 'deepseek-v4-pro', config: 'level', ownedByCompatibleTable: true },
-    // KNOWN GAP, stated rather than hidden — and this test is what surfaced it.
-    // MiniMax M2 documents `reasoning_effort` low/medium/high (default medium,
-    // 'none' rejected), so the CONFIG is known and the picker now works. Its
-    // behavior facts are deliberately NOT claimed yet: `thinksByDefault: true`
-    // would make the openai_compatible `reasoning()` emit a `thinking:{enabled}`
-    // toggle, and MiniMax has no such parameter — it takes the effort alone.
-    // Claiming the fact requires a trait for WHICH parameter expresses reasoning
-    // (toggle vs effort-only), which does not exist yet. 18 production slots.
-    { family: 'minimax', model: 'minimax.minimax-m2', config: 'level', ownedByCompatibleTable: false },
+    // Was the gap this file first caught: config known, facts not, because
+    // claiming `thinksByDefault` would have made every compatible transport emit
+    // a `thinking` toggle MiniMax does not have. `reasoningControl: 'effort-only'`
+    // is what let the facts be stated. 18 production slots.
+    { family: 'minimax', model: 'minimax.minimax-m2', config: 'level', ownedByCompatibleTable: true },
     { family: 'unknown', model: 'prod-model-1', config: 'none', ownedByCompatibleTable: false },
 ];
 

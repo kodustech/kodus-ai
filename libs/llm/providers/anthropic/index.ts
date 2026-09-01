@@ -157,6 +157,19 @@ export const anthropicModule: ProviderModule = {
         // production slots run a bare `k3` id, so this caveat is live, not
         // hypothetical.
         if ((cfg.provider as string) === 'anthropic_compatible') {
+            // An 'effort-only' brand (MiniMax) has no `thinking` object, and its
+            // `reasoning_effort` is a TOP-LEVEL field this transport's
+            // providerOptions namespace cannot express — the same limit as the
+            // k3 / GLM-5.3 caveat above. So send nothing rather than a field the
+            // model does not have: it keeps the brand's own default (medium)
+            // instead of risking a rejected body. The faithful effort needs the
+            // OpenAI transport, where the openai module now emits it.
+            if (
+                resolveCompatibleReasoningTraits(cfg.model)
+                    .reasoningControl === 'effort-only'
+            ) {
+                return {};
+            }
             // A REAL Claude id proxied over a compatible endpoint is still a
             // Claude, and the id says so. Claude 4.7 / 4.8 / Opus 5 / Sonnet 5 /
             // Fable / Mythos REJECT `thinking:{type:'enabled'}` with a 400 - so

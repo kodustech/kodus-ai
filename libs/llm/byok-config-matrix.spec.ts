@@ -376,8 +376,34 @@ const CASES = [
     // regression. None of them is a crash; all of them are a silently ignored
     // user choice, which is the failure mode this whole file was written after.
     {
-        id: 'GAP minimax — effort dropped on the biggest unmapped family',
-        why: 'MiniMax M2 documents reasoning_effort as low/medium/high (default medium, "none" rejected) and M3 uses thinking.type. We send neither, so 18 production slots reason at the vendor default and the level the user picked is ignored',
+        id: 'minimax M2 — the chosen effort reaches the wire, with no invented toggle',
+        why: 'M2 documents reasoning_effort low/medium/high (default medium, "none" rejected) and has NO thinking object. It used to get neither param, so the level the user picked was dropped; emitting the toggle instead would invent a field the model does not have',
+        doc: 'platform.minimaxi.com — chat completion reasoning_effort',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'MiniMax-M2',
+            baseURL: 'https://api.minimax.io/v1',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: { reasoning_effort: 'high' },
+            hasNot: ['thinking'],
+        },
+    },
+    {
+        id: 'minimax M2 — "off" omits, because M2 rejects an explicit none',
+        why: 'M2 cannot be turned off: it rejects reasoning_effort="none" and defaults to medium. Omitting is the only sound "off", and it must not emit a thinking:disabled the model has no field for',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'MiniMax-M2',
+            baseURL: 'https://api.minimax.io/v1',
+            reasoningEffort: 'none',
+        },
+        wire: { hasNot: ['thinking', 'reasoning_effort'] },
+    },
+    {
+        id: 'GAP minimax M3 — a toggle we will not guess at',
+        why: 'M3 uses thinking.type rather than M2 reasoning_effort, but the docs we verified do not say whether it accepts an explicit disabled. Claiming the fact would risk a 400 on the OFF path, so M3 stays unmapped and this case pins that on purpose — it goes red the day M3 is verified, which is the signal to come map it',
         slot: {
             provider: 'openai_compatible',
             model: 'MiniMax-M3',
@@ -400,12 +426,58 @@ const CASES = [
         },
     },
     {
-        id: 'GAP amazon_bedrock — no reasoning mapping on the Converse API',
-        why: 'Bedrock Claude supports thinking via additionalModelRequestFields but the module sends none, so two production slots (claude-opus-4-7 and 4-8, both effort=high) get NO reasoning at all. Unverified against a live AWS account, so pinned rather than guessed',
+        id: 'bedrock claude 4.8 — the adaptive shape, in Converse\'s envelope',
+        why: 'Bedrock sent NO reasoning at all, so two production slots (claude-opus-4-7 and 4-8, both on effort=high) got none. The shape is the Anthropic family\'s — 4.7+ take adaptive + effort and reject a budget — and only the envelope is Bedrock\'s',
         slot: {
             provider: 'amazon_bedrock',
             awsRegion: 'us-east-1',
             model: 'anthropic.claude-opus-4-8',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: {
+                additionalModelRequestFields: {
+                    thinking: { type: 'adaptive' },
+                    output_config: { effort: 'high' },
+                },
+            },
+        },
+    },
+    {
+        id: 'bedrock claude 4.5 (fully decorated id) — the BUDGET shape',
+        why: 'The same request that 4.8 rejects is what 4.5 requires. This id also carries both Bedrock decorations (region prefix + -v1:0), which used to collapse it to the string "0" and left it unidentified — so it got no reasoning and no temperature',
+        slot: {
+            provider: 'amazon_bedrock',
+            awsRegion: 'us-east-1',
+            model: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: {
+                additionalModelRequestFields: {
+                    thinking: { type: 'enabled', budget_tokens: 40000 },
+                },
+            },
+        },
+    },
+    {
+        id: 'bedrock — "off" omits, because Converse has no explicit disable',
+        why: 'The AI SDK treats only enabled/adaptive as thinking and DROPS a `disabled` reasoningConfig, verified by capturing the request. Omitting is the only off this transport can express, which is also why an adaptive Claude here reports canDisableThinking:false and reroutes a structured call instead of suppressing',
+        slot: {
+            provider: 'amazon_bedrock',
+            awsRegion: 'us-east-1',
+            model: 'anthropic.claude-opus-4-8',
+            reasoningEffort: 'none',
+        },
+        wire: { hasNot: ['thinking', 'additionalModelRequestFields'] },
+    },
+    {
+        id: 'GAP bedrock non-Claude — no verified param for Nova/Kimi/MiniMax',
+        why: 'Those families would need their own fields under additionalModelRequestFields and we have not verified what Converse accepts for them, so nothing is sent rather than an invented field',
+        slot: {
+            provider: 'amazon_bedrock',
+            awsRegion: 'us-east-1',
+            model: 'minimax.minimax-m2',
             reasoningEffort: 'high',
         },
         wire: { hasNot: ['thinking', 'additionalModelRequestFields'] },

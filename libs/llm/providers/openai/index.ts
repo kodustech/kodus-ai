@@ -182,6 +182,16 @@ export const openaiModule: ProviderModule = {
         if ((cfg.provider as string) === 'openai_compatible') {
             const traits = resolveCompatibleReasoningTraits(cfg.model);
             if (traits.thinksByDefault) {
+                // An 'effort-only' brand (MiniMax) has no `thinking` object at
+                // all — it takes `reasoning_effort` and nothing else. Emitting
+                // the toggle for it would be inventing a field, which is the
+                // failure this whole branch is careful about everywhere else.
+                if (traits.reasoningControl === 'effort-only') {
+                    const value = compatibleEffortValue(effort, traits);
+                    return value
+                        ? { openaiCompatible: { reasoningEffort: value } }
+                        : {};
+                }
                 const payload: Record<string, any> = {
                     thinking: { type: 'enabled' },
                 };
