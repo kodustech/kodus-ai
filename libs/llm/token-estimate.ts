@@ -61,15 +61,51 @@ function getEncoder(): Tiktoken | null {
     }
 }
 
+/**
+ * Memo for repeated measurements of the SAME text.
+ *
+ * Tokenizing is not free: ~15ms for a 92k-char file. The review planner walks
+ * the same diffs several times — estimate, then chunk, then re-estimate per
+ * chunk, then recurse — so without this, moving off a flat ratio would add
+ * seconds to every review to answer a question whose input never changed.
+ *
+ * Bounded on both axes: at most MEMO_MAX_ENTRIES strings, and nothing above
+ * MEMO_MAX_CHARS is cached at all (a huge string is both the least likely to
+ * repeat and the most expensive to hold in a long-running worker). Insertion
+ * order eviction — the planner's access pattern is a sweep, not a hot subset,
+ * so LRU bookkeeping would cost more than it saves.
+ */
+const MEMO_MAX_ENTRIES = 512;
+const MEMO_MAX_CHARS = 200_000;
+const memo = new Map<string, number>();
+
+function remember(text: string, tokens: number): number {
+    if (text.length > MEMO_MAX_CHARS) {
+        return tokens;
+    }
+    if (memo.size >= MEMO_MAX_ENTRIES) {
+        const oldest = memo.keys().next().value;
+        if (oldest !== undefined) {
+            memo.delete(oldest);
+        }
+    }
+    memo.set(text, tokens);
+    return tokens;
+}
+
 /** Token count of a single string, tokenizer-backed with a safe fallback. */
 export function estimateTextTokens(text: string): number {
     if (!text) {
         return 0;
     }
+    const hit = memo.get(text);
+    if (hit !== undefined) {
+        return hit;
+    }
     const enc = getEncoder();
     if (enc) {
         try {
-            return enc.encode_ordinary(text).length;
+            return remember(text, enc.encode_ordinary(text).length);
         } catch {
             // fall through to the char estimate
         }

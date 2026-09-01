@@ -5,19 +5,28 @@
  * private helpers countTokensForItem, serializeItem, isOpenAIModel,
  * getOpenAIModelName and getCircularReplacer, reached via `(svc as any)`.
  *
- * `tiktoken` is mocked so the OpenAI counting branch is deterministic and we
- * can prove it is actually taken (and that its inner catch falls back to
- * estimation). Everything else uses the real estimation path, whose token
- * count for ASCII text is `Math.floor(byteLength / 4)`.
+ * `tiktoken`'s `encoding_for_model` is mocked so the OpenAI counting branch is
+ * deterministic and we can prove it is actually taken (and that its inner catch
+ * falls back to estimation). Everything else uses the real estimation path,
+ * which MEASURES with the tokenizer rather than dividing byte length — so the
+ * expectations below are derived from that same function instead of restating
+ * an arithmetic rule that is no longer the implementation.
  */
 
+// Only `encoding_for_model` is mocked — that is the OpenAI branch this file
+// drives deterministically. `get_encoding` is kept REAL, because the estimation
+// branch now measures with it; mocking it away silently degraded the estimator
+// to its char fallback and made every expectation below about the fallback
+// ratio instead of about the behaviour under test.
 jest.mock('tiktoken', () => ({
+    ...jest.requireActual('tiktoken'),
     encoding_for_model: jest.fn(),
 }));
 
 import { encoding_for_model } from 'tiktoken';
 import { TokenChunkingService } from './tokenChunking.service';
 import { LLMModelProvider } from '@libs/llm/model-providers';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 
 describe('TokenChunkingService', () => {
     let svc: TokenChunkingService;
@@ -27,8 +36,12 @@ describe('TokenChunkingService', () => {
         svc = new TokenChunkingService();
     });
 
-    // Helper: an ASCII string of exactly `n` bytes → floor(n/4) estimated tokens.
     const strOf = (bytes: number) => 'a'.repeat(bytes);
+    /** What the service will actually count for a string. Derived, never
+     *  restated: a hardcoded number here would pin an arithmetic rule rather
+     *  than the behaviour, which is how these cases came to describe
+     *  `floor(bytes/4)` — a formula the service had stopped using. */
+    const tokensOf = (text: string) => estimateTextTokens(text);
 
     describe('isOpenAIModel', () => {
         it('returns true for exactly the four listed OpenAI models', () => {
@@ -142,25 +155,31 @@ describe('TokenChunkingService', () => {
     });
 
     describe('countTokensForItem', () => {
-        it('estimates via floor(bytes/4) for non-OpenAI models', () => {
-            // 8 ASCII bytes → floor(8/4) = 2. tiktoken must NOT be consulted.
+        it('measures a non-OpenAI model without consulting encoding_for_model', () => {
+            // The point of the case is the BRANCH, not the arithmetic: this path
+            // estimates and must not reach for the OpenAI encoder.
             expect(
                 (svc as any).countTokensForItem(
                     strOf(8),
                     LLMModelProvider.GEMINI_2_5_PRO,
                 ),
-            ).toBe(2);
+            ).toBe(tokensOf(strOf(8)));
             expect(encoding_for_model).not.toHaveBeenCalled();
         });
 
         it('estimates when no model is provided', () => {
-            expect((svc as any).countTokensForItem(strOf(12))).toBe(3);
+            expect((svc as any).countTokensForItem(strOf(12))).toBe(
+                tokensOf(strOf(12)),
+            );
             expect(encoding_for_model).not.toHaveBeenCalled();
         });
 
         it('serializes objects before estimating', () => {
-            // JSON.stringify({a:"bb"}) === '{"a":"bb"}' → 10 bytes → floor = 2.
-            expect((svc as any).countTokensForItem({ a: 'bb' })).toBe(2);
+            // The behaviour under test is that an object is serialized first —
+            // so the expectation is the count of its serialization.
+            expect((svc as any).countTokensForItem({ a: 'bb' })).toBe(
+                tokensOf(JSON.stringify({ a: 'bb' })),
+            );
         });
 
         it('uses tiktoken for OpenAI models and passes the tail model name', () => {
@@ -171,7 +190,7 @@ describe('TokenChunkingService', () => {
                 strOf(400),
                 LLMModelProvider.OPENAI_GPT_4O,
             );
-            // 42 comes from tiktoken, NOT floor(400/4)=100 → branch proven.
+            // 42 comes from tiktoken, not from the estimator → branch proven.
             expect(result).toBe(42);
             expect(encoding_for_model).toHaveBeenCalledWith('gpt-4o');
         });
@@ -180,13 +199,13 @@ describe('TokenChunkingService', () => {
             (encoding_for_model as jest.Mock).mockImplementation(() => {
                 throw new Error('no encoder');
             });
-            // 8 bytes → floor(8/4) = 2 (the estimation fallback).
+            // Falls back to the estimation path, whatever that path counts.
             expect(
                 (svc as any).countTokensForItem(
                     strOf(8),
                     LLMModelProvider.OPENAI_GPT_4O,
                 ),
-            ).toBe(2);
+            ).toBe(tokensOf(strOf(8)));
             expect(encoding_for_model).toHaveBeenCalled();
         });
     });
@@ -269,22 +288,18 @@ describe('TokenChunkingService', () => {
 
     describe('chunkDataByTokens - splitting', () => {
         it('packs items up to the limit and honours the strict > boundary', () => {
-            // tokenLimit = floor(20 * 100/100) = 20; each item = floor(40/4)=10.
-            // Two 10-token items fit exactly (10+10=20, not > 20); a third
-            // starts a new chunk. If the boundary were >= it would split earlier.
-            const items = [
-                strOf(40),
-                strOf(40),
-                strOf(40),
-                strOf(40),
-                strOf(40),
-            ];
+            // The rule, not the arithmetic: a budget of exactly TWO items means
+            // two fit (sum == limit, not > limit) and a third starts a new
+            // chunk. If the boundary were >= it would split one item earlier.
+            const one = strOf(40);
+            const per = tokensOf(one);
+            const items = [one, one, one, one, one];
             const res = svc.chunkDataByTokens({
                 data: items,
-                defaultMaxTokens: 20,
+                defaultMaxTokens: per * 2,
                 usagePercentage: 100,
             });
-            expect(res.tokenLimit).toBe(20);
+            expect(res.tokenLimit).toBe(per * 2);
             expect(res.totalItems).toBe(5);
             expect(res.totalChunks).toBe(3);
             expect(res.chunks).toEqual([
@@ -292,56 +307,63 @@ describe('TokenChunkingService', () => {
                 [items[2], items[3]],
                 [items[4]],
             ]);
-            expect(res.tokensPerChunk).toEqual([20, 20, 10]);
+            expect(res.tokensPerChunk).toEqual([per * 2, per * 2, per]);
         });
 
         it('emits an oversized item as its own chunk after flushing the current one', () => {
-            // limit = 20. item0 = 10 tokens, item1 = 30 tokens (> 20), item2 = 10.
-            const items = [strOf(40), strOf(120), strOf(40)];
+            const small = strOf(40);
+            const big = strOf(4_000);
+            const per = tokensOf(small);
+            const items = [small, big, small];
             const res = svc.chunkDataByTokens({
                 data: items,
-                defaultMaxTokens: 20,
+                defaultMaxTokens: per * 2,
                 usagePercentage: 100,
             });
             expect(res.chunks).toEqual([[items[0]], [items[1]], [items[2]]]);
-            expect(res.tokensPerChunk).toEqual([10, 30, 10]);
+            expect(res.tokensPerChunk).toEqual([per, tokensOf(big), per]);
             expect(res.totalChunks).toBe(3);
         });
 
         it('emits a leading oversized item without an empty preceding chunk', () => {
             // First item already exceeds the limit and currentChunk is empty.
-            const items = [strOf(120), strOf(40)];
+            const small = strOf(40);
+            const big = strOf(4_000);
+            const items = [big, small];
             const res = svc.chunkDataByTokens({
                 data: items,
-                defaultMaxTokens: 20,
+                defaultMaxTokens: tokensOf(small) * 2,
                 usagePercentage: 100,
             });
             expect(res.chunks).toEqual([[items[0]], [items[1]]]);
-            expect(res.tokensPerChunk).toEqual([30, 10]);
+            expect(res.tokensPerChunk).toEqual([
+                tokensOf(big),
+                tokensOf(small),
+            ]);
         });
 
         it('skips null/undefined items but still counts them in totalItems', () => {
-            const valid = strOf(40); // 10 tokens
+            const valid = strOf(40);
             const res = svc.chunkDataByTokens({
                 data: [null, valid, undefined],
-                defaultMaxTokens: 20,
+                defaultMaxTokens: tokensOf(valid) * 2,
                 usagePercentage: 100,
             });
             expect(res.totalItems).toBe(3); // data.length, includes the holes
             expect(res.totalChunks).toBe(1);
             expect(res.chunks).toEqual([[valid]]);
-            expect(res.tokensPerChunk).toEqual([10]);
+            expect(res.tokensPerChunk).toEqual([tokensOf(valid)]);
         });
 
         it('keeps a single small item in one chunk', () => {
             const res = svc.chunkDataByTokens({
                 data: [strOf(40)],
-                defaultMaxTokens: 20,
+                defaultMaxTokens: tokensOf(strOf(40)) * 2,
                 usagePercentage: 100,
             });
             expect(res.totalChunks).toBe(1);
             expect(res.chunks).toEqual([[strOf(40)]]);
-            expect(res.tokensPerChunk).toEqual([10]);
+            expect(res.tokensPerChunk).toEqual([tokensOf(strOf(40))]);
             expect(res.totalItems).toBe(1);
         });
     });
