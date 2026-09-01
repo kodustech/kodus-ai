@@ -40,16 +40,13 @@ fi
 # Jest transpiles with SWC and never type-checks, so nothing else would catch
 # them.
 #
-# So libs/llm is a ZERO-ERROR zone. It is small, it is where BYOK correctness
-# lives, and it is already clean apart from the files listed below — each a
-# pre-existing spec, not load-bearing for the provider contract. Fix one and
-# delete its line; do not add lines.
+# So libs/llm is a ZERO-ERROR zone. It is small, and it is where BYOK correctness
+# lives. There is no allowlist: the four pre-existing specs this gate started
+# with have been fixed, so the rule is simply that libs/ have no type errors.
 CLEAN_PATH='^libs/llm/'
-PREEXISTING='libs/llm/providers/provider-ui-descriptor\.spec\.ts|libs/llm/model-builders\.spec\.ts|libs/llm/structured-output-repair\.spec\.ts|libs/llm/token-estimate\.spec\.ts'
 
 clean_zone="$(printf '%s\n' "$output" \
-    | grep -E "${CLEAN_PATH}.*\): error TS" \
-    | grep -vE "${PREEXISTING}" || true)"
+    | grep -E "${CLEAN_PATH}.*\): error TS" || true)"
 
 if [ -n "$clean_zone" ]; then
     count="$(printf '%s\n' "$clean_zone" | grep -c .)"
