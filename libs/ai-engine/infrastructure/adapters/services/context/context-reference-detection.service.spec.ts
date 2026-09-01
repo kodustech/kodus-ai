@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 
 import { ContextReferenceDetectionService } from './context-reference-detection.service';
-import type { ContextDependency, ContextDetectionField } from './context-pack';
+import type { ContextDependency } from './context-pack';
 
 /**
  * Deterministic core of context-reference detection: the pieces that turn a
@@ -67,7 +67,7 @@ describe('ContextReferenceDetectionService — deterministic logic', () => {
             const field = {
                 fieldId: '  my-field  ',
                 path: ['ignored', 'path'],
-            } as ContextDetectionField;
+            } as any;
             expect(svc.resolveFieldKey(field)).toBe('my-field');
         });
 
@@ -76,19 +76,19 @@ describe('ContextReferenceDetectionService — deterministic logic', () => {
             const field = {
                 fieldId: '',
                 path: ['a', 'b'],
-            } as ContextDetectionField;
+            } as any;
             expect(svc.resolveFieldKey(field)).toBe('');
         });
 
         it('falls back to the joined path when fieldId is undefined', () => {
             const field = {
                 path: ['x', 'y', 'z'],
-            } as ContextDetectionField;
+            } as any;
             expect(svc.resolveFieldKey(field)).toBe('x.y.z');
         });
 
         it('falls back to empty string when fieldId undefined and path empty', () => {
-            const field = { path: [] } as ContextDetectionField;
+            const field = { path: [] } as any;
             expect(svc.resolveFieldKey(field)).toBe('');
         });
     });

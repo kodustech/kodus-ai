@@ -316,7 +316,7 @@ describe('structured-output-repair — mutation killers', () => {
             const r = validate({});
             expect(r.success).toBe(false);
             if (!r.success) {
-                expect((r.error as any).cause.message).toBe(
+                expect((r as any).error.cause.message).toBe(
                     "schema validation failed: / must have required property 'keep'",
                 );
             }
@@ -329,7 +329,7 @@ describe('structured-output-repair — mutation killers', () => {
             const r = validate({ keep: 'not-a-number' });
             expect(r.success).toBe(false);
             if (!r.success) {
-                expect((r.error as any).cause.message).toBe(
+                expect((r as any).error.cause.message).toBe(
                     'schema validation failed: /keep must be number',
                 );
             }

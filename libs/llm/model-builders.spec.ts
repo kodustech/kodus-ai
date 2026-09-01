@@ -1,4 +1,3 @@
-//
 // Mutation-killing tests for the deterministic model builders. The AI SDK
 // factories are mocked so each returns a tagged inner factory, letting us
 // assert exactly which SDK a model id routes to and with which settings.
@@ -365,6 +364,6 @@ describe('bedrockModelFromCredentials', () => {
             { awsBearerToken: 'B' },
             'anthropic.claude-3',
         );
-        expect(model.modelId).toBe('anthropic.claude-3');
+        expect((model as any).modelId).toBe('anthropic.claude-3');
     });
 });

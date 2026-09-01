@@ -1,5 +1,3 @@
-//
-
 /**
  * Mutation-killing spec for estimateTextTokens + FALLBACK_CHARS_PER_TOKEN.
  *
@@ -36,7 +34,7 @@ function withFreshModule(configure, body) {
 }
 
 /** Encoder stub whose encode_ordinary always returns an array of `len`. */
-function fixedLengthEncoder(len, spy) {
+function fixedLengthEncoder(len, spy?) {
     return {
         encode_ordinary: (text) => {
             if (spy) {

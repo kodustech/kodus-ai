@@ -172,7 +172,7 @@ describe('TeamMemberService — deterministic logic', () => {
 
             const { members } = await service.findTeamMembersFormated(orgTeam);
 
-            expect(members.map((m) => m.userExists)).toEqual([
+            expect(members.map((m: any) => m.userExists)).toEqual([
                 true,
                 false,
                 undefined,
@@ -194,7 +194,7 @@ describe('TeamMemberService — deterministic logic', () => {
 
             expect(mapped.email).toBeUndefined();
             expect(mapped.userId).toBeUndefined();
-            expect(mapped.userStatus).toBeUndefined();
+            expect((mapped as any).userStatus).toBeUndefined();
         });
 
         it('falls back to empty members when the repository throws (catch path)', async () => {

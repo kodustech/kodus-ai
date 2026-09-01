@@ -121,7 +121,8 @@ function findTrace(
 ): CapabilityExecutionTrace | undefined {
     return traces.find((trace) =>
         Object.entries(predicate).every(
-            ([key, value]) => (trace as Record<string, unknown>)[key] === value,
+            ([key, value]) =>
+                (trace as unknown as Record<string, unknown>)[key] === value,
         ),
     );
 }
@@ -489,10 +490,10 @@ describe('fetchTaskContext', () => {
             );
 
             const seededProviders = getSeedTaskContextTools.mock.calls.map(
-                (call) => call[0],
+                (call: any[]) => call[0],
             );
             expect(seededProviders).toEqual(['jira', 'notion']);
-            getSeedTaskContextTools.mock.calls.forEach((call) => {
+            getSeedTaskContextTools.mock.calls.forEach((call: any[]) => {
                 expect(call[1]).toBe(CAPABILITY);
             });
         });
@@ -509,7 +510,7 @@ describe('fetchTaskContext', () => {
             );
 
             const seededProviders = getSeedTaskContextTools.mock.calls.map(
-                (call) => call[0],
+                (call: any[]) => call[0],
             );
             expect(seededProviders).toEqual(['jira']);
         });

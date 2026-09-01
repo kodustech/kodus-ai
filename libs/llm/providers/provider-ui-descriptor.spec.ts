@@ -1,4 +1,3 @@
-//
 import {
     isCustomEndpoint,
     describeProviderId,
@@ -16,7 +15,7 @@ import {
 
 // A minimal ProviderModule stub. Only the fields the target methods read are
 // populated; the rest are inert.
-const makeModule = (overrides = {}) => ({
+const makeModule = (overrides = {}): any => ({
     id: 'openai',
     label: 'OpenAI',
     doc: 'https://docs.example/openai',
