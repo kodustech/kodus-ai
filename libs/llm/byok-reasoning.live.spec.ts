@@ -10,7 +10,7 @@
  * customer's reviews get worse.
  *
  * So this tier issues a REAL, minimal call per brand, through the production
- * path (`resolveModelConfig` → the provider module → the AI SDK).
+ * path: `LLM.run` → slot resolution → failover → executor → the vendor.
  *
  * ─── IT ASSERTS THE EFFECT, NOT JUST THE ABSENCE OF AN ERROR ────────────────
  * The dangerous drift is SILENT. If a vendor renames `thinking` or stops
@@ -40,14 +40,10 @@ jest.mock('@libs/common/utils/crypto', () => ({
     encrypt: (v: string) => v,
 }));
 
-// `tracedGenerateText`, NOT the raw `generateText` export — this is the wrapper
-// every production review call goes through (llm-call.ts).
-import { tracedGenerateText as generateText } from './llm-call';
 
 import { z } from 'zod';
 
-import { resolveModelConfig } from './model-invocation';
-import { runStructuredReviewCall } from './structured-review-call';
+import { LLM } from './llm';
 import type { NormalizedModel } from './byok-config';
 
 function liveKeys(): Record<string, string> {
@@ -340,43 +336,37 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         run(
             `${c.brand} — ${c.why}`,
             async () => {
-                const { model, callOptions, providerOptions } =
-                    resolveModelConfig(
-                        {
-                            ...c.slot,
-                            ...slotExtras(c.brand),
-                            apiKey: c.apiKey(),
-                            // Bedrock reads a bearer token rather than apiKey.
-                            ...((c as any).credentialField
-                                ? { [(c as any).credentialField]: c.apiKey() }
-                                : {}),
-                        } as unknown as NormalizedModel,
-                        {
-                            runName: 'byok-live-contract',
-                            reasoningEffortDefault: 'none',
-                            openrouterProviderOrder: (c.slot as any)
-                                .openrouterProviderOrder,
-                            openrouterAllowFallbacks: (c.slot as any)
-                                .openrouterAllowFallbacks,
-                        },
-                    );
-
-                const result = await generateText({
-                    model,
-                    maxRetries: 0,
-                    ...callOptions,
-                    providerOptions: providerOptions as Parameters<
-                        typeof generateText
-                    >[0]['providerOptions'],
-                    // Cheap on purpose: the subject under test is the REQUEST
-                    // shape, not the answer. Reasoning models still spend
-                    // thinking tokens here — that is the signal we assert on.
+                // `LLM.run` — the ONE door, in its agent-loop mode. The first
+                // version of this called `resolveModelConfig` + the SDK
+                // directly, which skipped everything LLM.run owns: slot
+                // resolution, the observability span, and the
+                // primary->fallback cascade. The loop mode is used (with no
+                // tools and a single step) because it is the only mode that
+                // hands back the raw SDK result — and usage is what the
+                // reasoning assertion below reads. It is also a real production
+                // path: the review agent runs through exactly this door.
+                const result = await LLM.run({
+                    byokConfig: {
+                        ...c.slot,
+                        ...slotExtras(c.brand),
+                        apiKey: c.apiKey(),
+                        // Bedrock reads a bearer token rather than apiKey.
+                        ...((c as any).credentialField
+                            ? { [(c as any).credentialField]: c.apiKey() }
+                            : {}),
+                    } as unknown as NormalizedModel,
                     messages: [
                         {
                             role: 'user',
+                            // Cheap on purpose: the subject under test is the
+                            // REQUEST shape, not the answer. Reasoning models
+                            // still spend thinking tokens here — that is the
+                            // signal we assert on.
                             content: 'Reply with the single word: ok',
                         },
                     ],
+                    loop: { tools: {}, maxSteps: 1 },
+                    runName: 'byok-live-contract',
                 });
 
                 expect(typeof result.text).toBe('string');
@@ -441,10 +431,18 @@ describe('BYOK reasoning — LIVE provider contract', () => {
 /**
  * The rows above prove the reasoning parameter reaches the vendor. They do NOT
  * prove the thing production actually does, because they call the model the way
- * no production code does: a plain message list with no schema.
+ * no production code does: a plain message list with no schema, through the SDK
+ * rather than through the one door.
  *
- * Every review call goes through `runStructuredReviewCall`, which chooses an
- * OUTPUT CHANNEL from `planStructuredCall` before it ever touches the SDK:
+ * There IS one door — `LLM.run` — and it owns three things before any executor
+ * runs: the slot resolution (task -> model + key), the observability span, and
+ * the primary->fallback cascade (`runWithModelFailover`). Underneath it picks an
+ * executor: agent loop, structured, or text. So these go through `LLM.run`
+ * itself; reaching for `runStructuredReviewCall` beneath it would skip the
+ * routing and the failover, which is the same mistake one level down.
+ *
+ * The structured executor chooses an OUTPUT CHANNEL from `planStructuredCall`
+ * before it ever touches the SDK:
  *
  *   as-is              issue the structured call unchanged
  *   suppress-thinking  turn reasoning OFF first, THEN force the tool — because
@@ -485,7 +483,7 @@ const STRUCTURED_LIVE = [
     },
 ] as const;
 
-describe('BYOK structured output — LIVE, through the production entry point', () => {
+describe('BYOK structured output — LIVE, through LLM.run (the one door)', () => {
     for (const c of STRUCTURED_LIVE) {
         const apiKey = key(c.brand);
         const run = apiKey ? it : it.skip;
@@ -500,7 +498,11 @@ describe('BYOK structured output — LIVE, through the production entry point', 
                     word: z.string(),
                 });
 
-                const result = await runStructuredReviewCall({
+                // `LLM.run` — THE one door, not the executor beneath it.
+                // Calling `runStructuredReviewCall` directly (the first version
+                // of this block) skipped what LLM.run owns: slot resolution and
+                // the primary->fallback cascade in `runWithModelFailover`.
+                const result = await LLM.run({
                     byokConfig: {
                         ...c.slot,
                         ...slotExtras(c.brand),
