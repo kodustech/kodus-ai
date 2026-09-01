@@ -792,6 +792,17 @@ USER_LANGUAGE: ${userLanguage}
 
 When calling tools that require repository data, prioritize KNOWN_REPOSITORY_OWNER and KNOWN_REPOSITORY_NAME.
 When a tool requires a tenant/site/cloud identifier, use a value from KNOWN_SITE_IDS. Never invent one; if it is (none), prefer a tool that does not require it.
+${
+    hints.issueNumbers.length > 0
+        ? 'MANDATORY: resolve ONLY the issue(s) listed in KNOWN_ISSUE_NUMBERS. ' +
+          'Use them directly as the issue ID/key argument of the fetch tool. ' +
+          'Do NOT call issue-list/search tools to "discover" an issue, and do ' +
+          'NOT return a different issue from the ones listed. If you cannot ' +
+          'fetch those exact numbers, return an empty taskContext.'
+        : 'When a tool lets you discover issues by query, prefer the issue ' +
+          'referenced by KNOWN_TOKENS / KNOWN_ISSUE_NUMBERS over an arbitrary ' +
+          'result from a list/search.'
+}
 
 Return ONLY JSON:
 {

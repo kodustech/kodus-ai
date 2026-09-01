@@ -1040,6 +1040,12 @@ describe('fetchTaskContext capability', () => {
         expect(prompt).toContain('KNOWN_ISSUE_NUMBERS: 37');
         expect(prompt).toContain('KNOWN_REPOSITORY_OWNER: kodustech');
         expect(prompt).toContain('KNOWN_REPOSITORY_NAME: kodus-ai');
+
+        // #1770 regression: with a known issue number the agent MUST resolve
+        // exactly that issue — never a list/search "discovery" that picks an
+        // unrelated one.
+        expect(prompt).toContain('MANDATORY: resolve ONLY the issue(s)');
+        expect(prompt).toContain('Do NOT call issue-list/search tools');
     });
 
     it('uses typed candidates for optional-only tool parameters', async () => {
