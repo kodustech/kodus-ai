@@ -98,6 +98,22 @@ async function hit(
     return res.status;
 }
 
+// Guards run before handlers. With a definitely-invalid bearer token the
+// JwtAuthGuard answers 401 when a route EXISTS (it is found and rejects the
+// token) and the router answers 404 when it is ABSENT. Either way no handler
+// runs, so this probe has zero side effects — it is the mutation analogue of
+// the GET branch's owner canary, used to attribute a deny-role 404 to a
+// release gap only when the route is genuinely missing (#1696, rbac:146).
+const UNAUTHENTICATED_PROBE_TOKEN = "orca-rbac-probe-invalid-token";
+
+async function routeExists(
+    target: TargetContext,
+    entry: ManifestEntry,
+): Promise<boolean> {
+    const status = await hit(target, entry, UNAUTHENTICATED_PROBE_TOKEN);
+    return status !== 404;
+}
+
 export const rbacAuthorization: Scenario = {
     id: "rbac-authorization",
     title: "RBAC: every gated endpoint enforces the manifest verdict per role",
@@ -121,6 +137,9 @@ export const rbacAuthorization: Scenario = {
 
         const failures: string[] = [];
         const tierSkipped: string[] = [];
+        // Distinct missing endpoints (deduped — a mutation can add a 404 per
+        // deny-role, up to 3x, which must not inflate the gap ratio below).
+        const missingEndpoints = new Set<string>();
         const releaseGapSkipped: string[] = [];
         let asserted = 0;
         let mutationAllowDeferred = 0;
@@ -139,8 +158,19 @@ export const rbacAuthorization: Scenario = {
                     if (status === 404 && ALLOW_MISSING_ROUTE) {
                         // Endpoint added on main but not yet in the released
                         // image (scheduled-matrix-only narrow case #1696).
+                        // Confirm the route is genuinely absent first — a route
+                        // that EXISTS but denied a deny-role 404 instead of 403
+                        // must stay a real failure (rbac:146).
+                        if (await routeExists(ctx.target, entry)) {
+                            failures.push(
+                                `${role} should be DENIED on ${entry.httpMethod} ${entry.urlPath} (expected 403, got ${status} — route exists, this is not a release gap)`,
+                            );
+                            continue;
+                        }
+                        const key = `${entry.httpMethod} ${entry.urlPath}`;
+                        missingEndpoints.add(key);
                         releaseGapSkipped.push(
-                            `${role} DENIED ${entry.httpMethod} ${entry.urlPath} (404 — route not in tested release image)`,
+                            `${role} DENIED ${key} (404 — route not in tested release image)`,
                         );
                         continue;
                     }
@@ -160,6 +190,7 @@ export const rbacAuthorization: Scenario = {
             if (ownerStatus === 404 && ALLOW_MISSING_ROUTE) {
                 // Route added on main but absent from the released image
                 // (scheduled-matrix-only narrow case #1696).
+                missingEndpoints.add(`GET ${entry.urlPath}`);
                 releaseGapSkipped.push(
                     `GET ${entry.urlPath} (404 — route not in tested release image)`,
                 );
@@ -212,10 +243,13 @@ export const rbacAuthorization: Scenario = {
         // Safety: the release-gap tolerance exists for the NARROW case of a
         // handful of endpoints added since the last release. If most endpoints
         // 404, that's a misprovisioned image (wrong tag), not a gap — fail so
-        // the cron can't report green against a broken target (#1696).
+        // the cron can't report green against a broken target (#1696). The
+        // guard counts DISTINCT missing endpoints (one per route), not the
+        // per-deny-role 404s, so the ratio can't be inflated (rbac:170).
         ctx.assert(
-            !ALLOW_MISSING_ROUTE || releaseGapSkipped.length <= manifest.length / 2,
-            `RBAC_ALLOW_MISSING_ROUTE=1 was set but ${releaseGapSkipped.length}/${manifest.length} endpoints 404 — the tested image is likely the wrong tag, not a release gap.`,
+            !ALLOW_MISSING_ROUTE ||
+                missingEndpoints.size <= manifest.length / 2,
+            `RBAC_ALLOW_MISSING_ROUTE=1 was set but ${missingEndpoints.size}/${manifest.length} endpoints 404 — the tested image is likely the wrong tag, not a release gap.`,
         );
         ctx.assert(
             getCount > 0 && tierSkipped.length < getCount / 2,
