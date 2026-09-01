@@ -56,8 +56,39 @@ function liveKeys(): Record<string, string> {
 }
 
 const KEYS = liveKeys();
-const key = (brand: string, ...envFallbacks: string[]): string | undefined =>
-    KEYS[brand] || envFallbacks.map((e) => process.env[e]).find(Boolean);
+
+/**
+ * A brand's entry is either the key itself, or an object carrying the key plus
+ * the slot fields that brand needs beyond one — Azure cannot be reached without
+ * its resource endpoint and deployment name, and Bedrock wants a region.
+ *
+ *   { "deepseek": "sk-…",
+ *     "azure": { "apiKey": "…", "baseURL": "https://r.openai.azure.com/openai",
+ *                "model": "o3-mini" } }
+ *
+ * Kept inside the ONE secret on purpose. The alternative was a new
+ * `process.env.*` per brand, and five of the six names that would have taken do
+ * not exist anywhere in this repo — inventing env vars to make a test runnable
+ * is how a config surface grows without anyone deciding to grow it.
+ */
+type LiveEntry = string | { apiKey?: string; [slotField: string]: unknown };
+
+const key = (brand: string, ...envFallbacks: string[]): string | undefined => {
+    const entry = KEYS[brand] as LiveEntry | undefined;
+    const fromSecret = typeof entry === 'string' ? entry : entry?.apiKey;
+    return (
+        (fromSecret as string | undefined) ||
+        envFallbacks.map((e) => process.env[e]).find(Boolean)
+    );
+};
+
+/** The extra slot fields an object-form entry carries (everything but apiKey). */
+const slotExtras = (brand: string): Record<string, unknown> => {
+    const entry = KEYS[brand] as LiveEntry | undefined;
+    if (!entry || typeof entry === 'string') return {};
+    const { apiKey: _ignored, ...rest } = entry;
+    return rest;
+};
 
 /**
  * One row per brand whose reasoning shape we make a claim about. `reasons: true`
@@ -162,6 +193,53 @@ const LIVE = [
         apiKey: () => key('anthropic'),
         reasons: true,
     },
+    // ── mappings added after this tier was written, and unmonitored until now ──
+    // Each is a shape we now emit in production and nothing live was checking.
+    {
+        brand: 'minimax',
+        why: 'effort-only: MiniMax M2 takes `reasoning_effort` and has NO thinking toggle — sending one would invent a field it does not have (18 production slots)',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'MiniMax-M2',
+            baseURL: 'https://api.minimax.io/v1',
+            reasoningEffort: 'high',
+        },
+        apiKey: () => key('minimax'),
+        reasons: true,
+    },
+    {
+        brand: 'amazon_bedrock',
+        why: 'Claude on Converse takes the adaptive shape inside additionalModelRequestFields, and this transport cannot express an explicit disable (5 production slots)',
+        slot: {
+            provider: 'amazon_bedrock',
+            model: 'anthropic.claude-sonnet-4-6',
+            // API_AWS_REGION is the one name here that already exists in
+            // this repo's env schema; a per-run override rides in the secret.
+            awsRegion: process.env.API_AWS_REGION || 'us-east-1',
+            reasoningEffort: 'high',
+        },
+        // Bedrock authenticates with a bearer token, not `apiKey`; the slot
+        // field is filled from the same value below.
+        apiKey: () => key('amazon_bedrock'),
+        credentialField: 'awsBearerToken' as const,
+        reasons: true,
+    },
+    {
+        brand: 'azure',
+        why: 'an o-series deployment takes OpenAI reasoning.effort under the azure namespace — the module had no reasoning() at all until recently',
+        slot: {
+            provider: 'azure',
+            // Both are deployment-specific and come from the secret's object
+            // form; without an endpoint there is nothing to call, so the row
+            // skips rather than failing on an empty URL.
+            model: 'o3-mini',
+            baseURL: '',
+            reasoningEffort: 'high',
+        },
+        apiKey: () =>
+            slotExtras('azure').baseURL ? key('azure') : undefined,
+        reasons: true,
+    },
 ];
 
 /** Reasoning tokens, wherever the SDK put them (ai@7 nests, ai@6 was flat). */
@@ -200,7 +278,12 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                     resolveModelConfig(
                         {
                             ...c.slot,
+                            ...slotExtras(c.brand),
                             apiKey: c.apiKey(),
+                            // Bedrock reads a bearer token rather than apiKey.
+                            ...((c as any).credentialField
+                                ? { [(c as any).credentialField]: c.apiKey() }
+                                : {}),
                         } as unknown as NormalizedModel,
                         {
                             runName: 'byok-live-contract',
@@ -235,16 +318,38 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                 if (c.reasons) {
                     // THE drift detector. A vendor that renames or stops
                     // honouring our reasoning parameter still returns 200 — it
-                    // just stops thinking. Asserting the billed reasoning
-                    // tokens is what makes that visible.
-                    expect({
+                    // just stops thinking. Something has to prove it thought.
+                    //
+                    // It CANNOT be the billed reasoning tokens alone, which is
+                    // what this asserted before ever running against a real
+                    // vendor: five of the eight brands below declare
+                    // `usageGranularity: 'output_only'`, meaning the SDK reports
+                    // no separate thinking-token count for them — Anthropic bills
+                    // thinking INTO output_tokens, and the openai-compatible
+                    // brands do the same. Those five would have gone red on the
+                    // first run with a real key, for a reporting style rather
+                    // than a regression. A weekly job that cries wolf on its
+                    // first run gets muted, and a muted job catches nothing.
+                    //
+                    // So the assertion is "reasoning is OBSERVABLE", by either
+                    // signal, and the run prints which one it saw. Both absent is
+                    // the real regression: the model stopped thinking. Declaring
+                    // the expected signal per brand would be tighter, but nobody
+                    // has run this against these vendors yet — so it would be
+                    // guessing, which is the mistake being fixed here.
+                    const evidence = {
                         brand: c.brand,
-                        reasoningTokens: reasoningTokens(result.usage),
-                        usage: result.usage,
-                    }).toMatchObject({
-                        reasoningTokens: expect.any(Number),
-                    });
-                    expect(reasoningTokens(result.usage)).toBeGreaterThan(0);
+                        tokens: reasoningTokens(result.usage),
+                        text: (result.reasoningText ?? '').length,
+                    };
+                    // eslint-disable-next-line no-console
+                    console.log(
+                        `[byok-live] ${c.brand}: reasoningTokens=${evidence.tokens} reasoningTextChars=${evidence.text}`,
+                    );
+                    expect({
+                        ...evidence,
+                        reasoned: evidence.tokens > 0 || evidence.text > 0,
+                    }).toMatchObject({ reasoned: true });
                 }
             },
             120_000,
