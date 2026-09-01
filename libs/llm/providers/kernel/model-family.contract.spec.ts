@@ -15,6 +15,7 @@
 import { detectModelFamily, type ModelFamily } from './model-family';
 import { reasoningConfigForModel } from './model-reasoning';
 import { resolveCompatibleReasoningTraits } from './reasoning-traits';
+import { isAnthropicModel } from './anthropic-cache';
 
 type Row = {
     family: ModelFamily;
@@ -88,6 +89,40 @@ describe('model families are known to the WHOLE system, or to none of it', () =>
         expect(
             resolveCompatibleReasoningTraits('MiniMax-M2').reasoningControl,
         ).toBe('effort-only');
+    });
+
+    it('"is this a Claude" has ONE answer', () => {
+        // Seventh instance of the pattern. `isAnthropicModel` was
+        // `/claude|anthropic/i`, which matched none of the spellings its own doc
+        // lists that the family detector misses — every one contains "claude" —
+        // while matching ids that are not Claude at all. Model ids are free
+        // text, so these are reachable, and a false positive makes Bedrock
+        // resolve temperature and reasoning through the ANTHROPIC module and
+        // attach a cacheControl marker meant only for Claude.
+        for (const id of [
+            'claude-opus-5',
+            'anthropic.claude-sonnet-4-6',
+            'us.anthropic.claude-sonnet-4-5-20250929-v1:0',
+            'claude-opus-4-5@20251101',
+            'anthropic/claude-opus-5',
+        ]) {
+            expect({ id, claude: isAnthropicModel(id) }).toEqual({
+                id,
+                claude: detectModelFamily(id) === 'anthropic',
+            });
+            expect(isAnthropicModel(id)).toBe(true);
+        }
+
+        for (const notClaude of [
+            'anthropic/nemotron',
+            'anthropic-proxy/llama-3',
+            'my-anthropic-gateway/qwen',
+            'us.anthropic.nova-pro',
+        ]) {
+            expect({ id: notClaude, claude: isAnthropicModel(notClaude) }).toEqual(
+                { id: notClaude, claude: false },
+            );
+        }
     });
 
     it('a renamed proxy is `unknown`, and unknown never forces a parameter', () => {

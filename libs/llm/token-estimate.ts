@@ -25,9 +25,19 @@
 import { get_encoding, type Tiktoken } from 'tiktoken';
 
 /**
- * Conservative fallback ratio when the tokenizer is unavailable. Dense code is
- * closer to ~3 chars/token than 4, so the fallback still doesn't systematically
- * under-count the way the old flat-4 estimate did.
+ * Fallback ratio for when the tokenizer cannot load. DELIBERATELY conservative,
+ * which is not what this comment used to claim.
+ *
+ * It said "dense code is closer to ~3 chars/token than 4". Measured against
+ * `get_encoding('o200k_base')` on this repo's own TypeScript, that is false —
+ * dense code runs about 4.2 chars/token, so the flat-4 estimates this constant
+ * was written to correct land within ~5% while 3 OVER-counts by 28-40%.
+ *
+ * The value stays at 3 anyway, because a fallback guards a decision (does this
+ * prompt fit?) where over-counting costs a needless split and under-counting
+ * costs a failed run. What changes is the justification: this is a safety
+ * margin, not an accurate ratio, and nobody should "correct" another estimator
+ * to 3 on the strength of the old sentence.
  */
 export const FALLBACK_CHARS_PER_TOKEN = 3;
 
