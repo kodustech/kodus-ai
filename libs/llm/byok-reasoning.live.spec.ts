@@ -193,6 +193,23 @@ const LIVE = [
         apiKey: () => key('anthropic'),
         reasons: true,
     },
+    {
+        brand: 'anthropic_compatible',
+        why: 'the SAME Kimi over the ANTHROPIC protocol, where the emitted shape differs from the openai_compatible row above — and k3 is always-thinking, so the rule is "omit the disable, pin temperature to 1" rather than "send one"',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'k3',
+            baseURL: 'https://api.kimi.com/coding',
+            reasoningEffort: 'high',
+        },
+        apiKey: () => key('anthropic_compatible'),
+        reasons: true,
+    },
+    // NOT covered, deliberately: `novita` (3 production shapes). Verified against
+    // novita.ai/docs — the vendor exposes no reasoning parameter at all, so there
+    // is no shape of ours that could drift. Its DeepSeek models reason by
+    // default; the level simply is not expressible on that endpoint.
+
     // ── mappings added after this tier was written, and unmonitored until now ──
     // Each is a shape we now emit in production and nothing live was checking.
     {
