@@ -79,6 +79,43 @@ describe('buildContextBlock', () => {
         expect(block).toContain('sug-9');
     });
 
+    it('does not repeat a turn that the conversation record already carries', () => {
+        const prompt = buildUserPrompt({
+            prompt: '@kody why?',
+            userLanguage: 'en-US',
+            organizationAndTeamData: ORG,
+            availableTools: [],
+            hasSandbox: false,
+            prepareContext: {
+                ...THREAD,
+                codeManagementContext: {
+                    ...THREAD.codeManagementContext,
+                    othersReplies: [
+                        { historyConversationText: 'that is intentional' },
+                        {
+                            historyConversationText:
+                                'unrelated drive-by comment',
+                        },
+                    ],
+                },
+            },
+            priorTurns: [
+                { role: 'user', content: 'that is intentional' },
+                { role: 'assistant', content: 'Understood.' },
+            ],
+        });
+
+        // Present once, attributed, in the one place the thread is rendered.
+        expect(prompt.match(/that is intentional/g)).toHaveLength(1);
+        expect(prompt).toContain('Developer: that is intentional');
+        expect(prompt).toContain('You: Understood.');
+        // A comment nobody replayed is still context worth keeping.
+        expect(prompt).toContain('unrelated drive-by comment');
+        // One heading for the conversation, not one per source.
+        expect(prompt.match(/### Conversation so far/g)).toHaveLength(1);
+        expect(prompt).not.toContain('Earlier turns');
+    });
+
     it('renders nothing without a context', () => {
         expect(buildContextBlock(undefined)).toBe('');
     });
@@ -191,6 +228,16 @@ describe('proactive actions', () => {
 
         expect(prompt).toMatch(/earlier turns/i);
         expect(prompt).toMatch(/THIS turn/);
+    });
+
+    it('tells the agent how to declare what it intends', () => {
+        const prompt = userPrompt(withOrgTools);
+
+        expect(prompt).toContain('kodusDecideAction');
+        expect(prompt).toMatch(/exactly once/i);
+        expect(prompt).toMatch(/'offer'/);
+        expect(prompt).toMatch(/'act'/);
+        expect(prompt).toMatch(/quote/i);
     });
 
     it('never advertises the destructive tools', () => {

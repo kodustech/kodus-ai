@@ -7,7 +7,8 @@
  */
 import type { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
 
-import type { McpToolMetadata } from '../ai-sdk/mcp-tools';
+import type { McpToolMetadata } from '../../ai-sdk/mcp-tools';
+import { CONVERSATION_DECISION_TOOL } from './conversation-decision';
 
 /**
  * The PR comment thread the agent is answering in, as assembled by
@@ -112,7 +113,7 @@ export function buildUserPrompt(input: UserPromptInput): string {
 
     const sections: string[] = [];
 
-    const contextBlock = buildContextBlock(prepareContext);
+    const contextBlock = buildContextBlock(prepareContext, priorTurns);
     if (contextBlock) {
         sections.push(contextBlock, '');
     }
@@ -121,11 +122,6 @@ export function buildUserPrompt(input: UserPromptInput): string {
         buildIdentifiersBlock(prepareContext, organizationAndTeamData),
         '',
     );
-
-    const historyBlock = buildPriorTurnsBlock(priorTurns);
-    if (historyBlock) {
-        sections.push(historyBlock, '');
-    }
 
     // Tools are OPTIONAL aids, not a mandatory pipeline. This is a chat
     // agent — forcing a tool call first (especially one that may be
@@ -168,28 +164,6 @@ export function buildUserPrompt(input: UserPromptInput): string {
 }
 
 /**
- * Earlier turns rendered as a QUOTED transcript rather than replayed as real
- * assistant messages. Replaying them natively made the model read its own past
- * "Done — memory created <link>" as something it had just done and repeat the
- * claim without calling anything. As quoted reference material it still resolves
- * a confirmation ("yes, do it") without being mistaken for the current turn.
- */
-export function buildPriorTurnsBlock(turns?: ConversationTurn[]): string {
-    if (!turns?.length) {
-        return '';
-    }
-
-    return [
-        '### Earlier turns in this thread',
-        'Reference only — these were already sent. Anything they claim you did happened in a PREVIOUS turn, not this one. Never repeat such a claim; to act now, call the tool now.',
-        ...turns.map(
-            (t) =>
-                `${t.role === 'assistant' ? 'You' : 'Developer'}: ${t.content}`,
-        ),
-    ].join('\n');
-}
-
-/**
  * The posture that makes the agent more than reactive: after answering, weigh
  * whether the exchange produced durable signal and, if it did, offer the one
  * action that would persist it. Only tools MCP actually bound are named, and
@@ -216,6 +190,7 @@ export function buildProactiveBlock(
         'PROACTIVE ACTIONS:',
         'After you answer, judge whether this exchange produced durable signal — something that should outlive this thread. If it did, close your reply with ONE short offer to act, naming what you would do. If it did not (a greeting, a plain question, debugging chatter), just answer and offer nothing.',
         ...offers.map((o) => `- ${o.tool} — ${o.meta!.proactiveHint}`),
+        `Before you finish, call ${CONVERSATION_DECISION_TOOL} exactly once to record what you intend: 'answer' when nothing here needs persisting, 'offer' when something does but the developer has not asked you to do it, or 'act' when their latest message tells you to. The tools above only become available after you declare 'act', and to declare it you must quote the developer's own words that instruct it — so you cannot act on your own reading of the exchange.`,
         'Rules:',
         '- Offer at most one action per reply, as a single closing sentence.',
         '- Default to OFFERING. Explaining a convention, disputing a finding, giving context or agreeing with you is NOT a request to act — say what you would do and stop there.',
@@ -224,6 +199,11 @@ export function buildProactiveBlock(
         '- Earlier turns in this thread are HISTORY, already sent. Never restate an action from them as if you just performed it — only report what you did in THIS turn. If the developer asks for it again, call the tool again.',
         '- If you already offered and the developer moved on, drop it — do not offer again.',
     ].join('\n');
+}
+
+/** Same text, ignoring the whitespace and case a round trip may have changed. */
+function normalize(text: string): string {
+    return text.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 /**
@@ -279,6 +259,7 @@ export function buildIdentifiersBlock(
  */
 export function buildContextBlock(
     prepareContext?: ConversationThreadContext,
+    priorTurns?: ConversationTurn[],
 ): string {
     if (!prepareContext) {
         return '';
@@ -326,16 +307,35 @@ export function buildContextBlock(
         );
     }
 
-    const replies = cmc?.othersReplies ?? [];
-    const history = replies
+    // One rendering of the thread, from two sources that overlap. The record is
+    // authoritative: it alone carries Kody's own replies (the PR thread strips
+    // them on every platform, so an offer it made last turn survives nowhere
+    // else) and it knows who said what. The thread then contributes only what
+    // the record never saw — comments never addressed to Kody.
+    const replayed = (priorTurns ?? []).map((t) => normalize(t.content));
+    const unaddressed = (cmc?.othersReplies ?? [])
         .map((r) => r?.historyConversationText)
-        .filter((t): t is string => typeof t === 'string' && t.length > 0);
-    if (history.length) {
-        lines.push(
-            '',
-            '### Conversation so far',
-            ...history.map((t) => `- ${t}`),
-        );
+        .filter((t): t is string => typeof t === 'string' && t.length > 0)
+        .filter((t) => !replayed.includes(normalize(t)));
+
+    if (priorTurns?.length || unaddressed.length) {
+        lines.push('', '### Conversation so far');
+
+        if (priorTurns?.length) {
+            // Quoted, not replayed as real assistant messages: replaying them
+            // natively made the model read its own past "Done — memory created"
+            // as something it had just done and repeat the claim without
+            // calling anything.
+            lines.push(
+                'Reference only — these were already sent. Anything they claim you did happened in a PREVIOUS turn, not this one. Never repeat such a claim; to act now, call the tool now.',
+                ...priorTurns.map(
+                    (t) =>
+                        `${t.role === 'assistant' ? 'You' : 'Developer'}: ${t.content}`,
+                ),
+            );
+        }
+
+        lines.push(...unaddressed.map((t) => `- ${t}`));
     }
 
     if (prepareContext.customInstructions) {

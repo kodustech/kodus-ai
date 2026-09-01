@@ -14,7 +14,7 @@
  */
 import type { Tool } from 'ai';
 
-import type { McpToolMetadata } from '../ai-sdk/mcp-tools';
+import type { McpToolMetadata } from '../../ai-sdk/mcp-tools';
 
 export interface WriteToolEvent {
     tool: string;

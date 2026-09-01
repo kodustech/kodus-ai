@@ -47,7 +47,7 @@ jest.mock('@libs/mcp-server/mcp-adapter', () => ({
 
 import { MockLanguageModelV3 } from 'ai/test';
 
-import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/agents/conversationAgent';
+import { ConversationAgentProvider } from '@libs/agents/infrastructure/services/agents/conversation/conversationAgent';
 import { KodyIssuesTools } from '@libs/mcp-server/tools/kodyIssues.tools';
 import { KodyRulesTools } from '@libs/mcp-server/tools/kodyRules.tools';
 
@@ -135,17 +135,20 @@ function recordingModel(
 
             const reply = replies[Math.min(call++, replies.length - 1)];
             const isToolCall = typeof reply !== 'string';
+            const calls = isToolCall
+                ? Array.isArray(reply)
+                    ? reply
+                    : [reply]
+                : [];
 
             return {
                 content: isToolCall
-                    ? [
-                          {
-                              type: 'tool-call',
-                              toolCallId: `call-${call}`,
-                              toolName: reply.toolName,
-                              input: JSON.stringify(reply.input),
-                          },
-                      ]
+                    ? calls.map((c, i) => ({
+                          type: 'tool-call',
+                          toolCallId: `call-${call}-${i}`,
+                          toolName: c.toolName,
+                          input: JSON.stringify(c.input),
+                      }))
                     : [{ type: 'text', text: reply }],
                 finishReason: isToolCall
                     ? { unified: 'tool-calls', raw: 'tool_calls' }
@@ -243,6 +246,22 @@ const scenarioById = (id: string) => THREAD_SCENARIOS.find((s) => s.id === id)!;
 
 const actionableScenarios = THREAD_SCENARIOS.filter((s) => s.expectedOffer);
 
+/** A developer message that plainly instructs the action, and the decision the
+ *  agent must commit to before the write tools become available to it. */
+const ASKED_TO_SAVE = {
+    ...THREAD_SCENARIOS[0],
+    userMessage: '@kody yes, save that as a memory please',
+};
+
+const DECIDE_TO_ACT = {
+    toolName: 'kodusDecideAction',
+    input: {
+        intent: 'act',
+        tool: 'KODUS_CREATE_MEMORY',
+        authorizingQuote: 'save that as a memory',
+    },
+};
+
 beforeEach(() => {
     executedTools = [];
     logged = [];
@@ -250,17 +269,20 @@ beforeEach(() => {
 
 describe('@kody proactive actions in PR threads (issue #1761)', () => {
     describe('the machinery is already in place', () => {
-        it('binds every org write tool into the conversation tool registry', async () => {
+        it('keeps every org write tool in front of the agent', async () => {
             const turn = await runTurn(
                 scenarioById('false-positive-on-kody-rule'),
             );
 
+            // Visible even when unauthorized: hiding them taught the model it
+            // was incapable, and it told developers so instead of offering.
             expect(turn.toolNames).toEqual(expect.arrayContaining(WRITE_TOOLS));
         });
 
         it('executes a write tool end to end when the model does call it', async () => {
-            await runTurn(scenarioById('false-positive-on-kody-rule'), {
+            await runTurn(ASKED_TO_SAVE, {
                 replies: [
+                    DECIDE_TO_ACT,
                     {
                         toolName: 'KODUS_CREATE_MEMORY',
                         input: {
@@ -283,8 +305,9 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         });
 
         it('never writes silently — the call is auditable', async () => {
-            await runTurn(scenarioById('false-positive-on-kody-rule'), {
+            await runTurn(ASKED_TO_SAVE, {
                 replies: [
+                    DECIDE_TO_ACT,
                     {
                         toolName: 'KODUS_CREATE_MEMORY',
                         input: { organizationId: 'org-11111111' },
@@ -378,16 +401,14 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         });
 
         it('publishes the link the tool really returned', async () => {
-            const answer = await runTurnAnswer(
-                scenarioById('false-positive-on-kody-rule'),
-                [
-                    {
-                        toolName: 'KODUS_CREATE_MEMORY',
-                        input: { organizationId: 'org-11111111' },
-                    },
-                    'Recorded it: https://app.kodus.io/settings/code-review/7/kody-rules/invented-000?tab=memories',
-                ],
-            );
+            const answer = await runTurnAnswer(ASKED_TO_SAVE, [
+                DECIDE_TO_ACT,
+                {
+                    toolName: 'KODUS_CREATE_MEMORY',
+                    input: { organizationId: 'org-11111111' },
+                },
+                'Recorded it: https://app.kodus.io/settings/code-review/7/kody-rules/invented-000?tab=memories',
+            ]);
 
             expect(answer).not.toContain('invented-000');
             expect(answer).toContain('kody-rules/real-abc');
@@ -442,6 +463,141 @@ describe('@kody proactive actions in PR threads (issue #1761)', () => {
         expect(
             logged.filter((e: any) => e?.metadata?.tool === 'grep'),
         ).toHaveLength(0);
+    });
+
+    describe('the write gate', () => {
+        it('refuses a write nobody declared, and says how to proceed', async () => {
+            await runTurn(scenarioById('false-positive-on-kody-rule'), {
+                replies: [
+                    {
+                        toolName: 'KODUS_CREATE_MEMORY',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Done.',
+                ],
+            });
+
+            // Reached the wrapper, never the MCP server.
+            expect(executedTools).toHaveLength(0);
+            // And a refusal is not an action: it must not be audited as one,
+            // or the log and the divergence check both count a write that
+            // never happened.
+            expect(
+                logged.filter(
+                    (e: any) => e?.metadata?.tool === 'KODUS_CREATE_MEMORY',
+                ),
+            ).toHaveLength(0);
+            expect(captured.at(-1)!.conversation).toContain(
+                'has NOT been performed',
+            );
+            expect(captured.at(-1)!.conversation).toContain(
+                'kodusDecideAction',
+            );
+        });
+
+        it('runs the write once the agent quotes the developer asking', async () => {
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    DECIDE_TO_ACT,
+                    {
+                        toolName: 'KODUS_CREATE_MEMORY',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Saved.',
+                ],
+            });
+
+            expect(executedTools.map((t) => t.name)).toEqual([
+                'KODUS_CREATE_MEMORY',
+            ]);
+        });
+
+        it('runs a write declared in the same message as the decision', async () => {
+            // The policy only sees completed steps, so a model that emits both
+            // at once would be refused if the decision tool did not authorize
+            // as it runs.
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    [
+                        DECIDE_TO_ACT,
+                        {
+                            toolName: 'KODUS_CREATE_MEMORY',
+                            input: { organizationId: 'org-11111111' },
+                        },
+                    ] as never,
+                    'Saved.',
+                ],
+            });
+
+            expect(executedTools.map((t) => t.name)).toEqual([
+                'KODUS_CREATE_MEMORY',
+            ]);
+        });
+
+        it('runs a write emitted BEFORE the decision in the same message', async () => {
+            // The SDK starts a message's tool calls in array order, so a write
+            // listed first would check authorization before the decision tool
+            // has run. Order within the batch must not decide the outcome.
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    [
+                        {
+                            toolName: 'KODUS_CREATE_MEMORY',
+                            input: { organizationId: 'org-11111111' },
+                        },
+                        DECIDE_TO_ACT,
+                    ] as never,
+                    'Saved.',
+                ],
+            });
+
+            expect(executedTools.map((t) => t.name)).toEqual([
+                'KODUS_CREATE_MEMORY',
+            ]);
+        });
+
+        it('refuses an act that names no tool rather than granting them all', async () => {
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    {
+                        toolName: 'kodusDecideAction',
+                        input: {
+                            intent: 'act',
+                            authorizingQuote: 'save that as a memory',
+                        },
+                    },
+                    {
+                        toolName: 'KODUS_DELETE_KODY_RULE',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Done.',
+                ],
+            });
+
+            expect(executedTools).toHaveLength(0);
+        });
+
+        it("refuses when the quote is not the developer's", async () => {
+            await runTurn(ASKED_TO_SAVE, {
+                replies: [
+                    {
+                        toolName: 'kodusDecideAction',
+                        input: {
+                            intent: 'act',
+                            tool: 'KODUS_CREATE_MEMORY',
+                            authorizingQuote: 'delete the whole rule set',
+                        },
+                    },
+                    {
+                        toolName: 'KODUS_CREATE_MEMORY',
+                        input: { organizationId: 'org-11111111' },
+                    },
+                    'Done.',
+                ],
+            });
+
+            expect(executedTools).toHaveLength(0);
+        });
     });
 
     it('stays quiet when the thread reveals nothing worth persisting', async () => {
