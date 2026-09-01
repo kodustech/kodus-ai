@@ -332,6 +332,77 @@ describe('CommentManagerService.generateSummaryPR', () => {
         });
     });
 
+    // REGRESSION (issue #1750): the USER turn for PR-summary generation must
+    // carry an explicit, imperative request (and the custom instructions), not
+    // a bare diff JSON. Agent- and coding-tuned models weight the last user
+    // turn heavily — with only `<changedFilesContext>...</changedFilesContext>`
+    // (no ask) they replied conversationally ("What would you like me to do…?")
+    // and ignored instructions that lived solely in the system prompt.
+    describe('user prompt carries the request and custom instructions (#1750)', () => {
+        beforeEach(() => {
+            codeManagementService.getPullRequestByNumber.mockResolvedValue({
+                body: 'irrelevant for prompt-shape tests',
+            });
+        });
+
+        it('prefixes a bare diff with an explicit instruction in the user turn', async () => {
+            await service.generateSummaryPR(
+                stubPR,
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                summaryConfig,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            const userPrompt = capturedPrompts.find(
+                (p) => p.role === 'user',
+            )?.prompt;
+            expect(userPrompt).toBeDefined();
+
+            // The user turn now ASKS for the description instead of dumping a
+            // bare JSON body.
+            expect(userPrompt).toMatch(
+                /generate the pull request description/i,
+            );
+            // The diff is still supplied.
+            expect(userPrompt).toContain('<changedFilesContext>');
+            // It must NOT be a conversational/open-ended reply trigger.
+            expect(userPrompt).toContain('output only the description');
+        });
+
+        it('surfaces customInstructions in the user turn, not only the system prompt', async () => {
+            const withCustom: SummaryConfig = {
+                ...summaryConfig,
+                customInstructions:
+                    'Never ask questions. Output only the final description.',
+            } as any;
+
+            await service.generateSummaryPR(
+                stubPR,
+                stubRepository,
+                [{ filename: 'a.ts', patch: '+ x', status: 'modified' }],
+                stubOrg,
+                'en-US',
+                withCustom,
+                false,
+                false,
+                undefined,
+                PlatformType.GITHUB,
+            );
+
+            const userPrompt = capturedPrompts.find(
+                (p) => p.role === 'user',
+            )?.prompt;
+            expect(userPrompt).toBeDefined();
+            expect(userPrompt).toContain('Never ask questions.');
+        });
+    });
+
     // A provider failure and a deliberate skip must not share a return value.
     // `null` means "we chose not to generate one" (summary disabled, license
     // denied, diff too large) — callers treat it as a non-event. When the LLM
