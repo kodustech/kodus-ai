@@ -85,8 +85,25 @@ for (const [name, info] of Object.entries(MODELS)) {
  * @returns Max input tokens for the model.
  */
 export function getModelContextWindow(modelName?: string): number {
+    return lookupModelContextWindow(modelName) ?? DEFAULT_CONTEXT_WINDOW_TOKENS;
+}
+
+/**
+ * The same resolution, WITHOUT the default — `undefined` means "this model is
+ * unknown to us", which is a different answer from "this model holds 128k".
+ *
+ * Both callers need the distinction and they resolve it differently: the BYOK
+ * review path substitutes its own conservative 128k, while the managed chunker
+ * substitutes the budget ITS caller passed in. Collapsing the two answers into
+ * one number is what let a second source grow — the managed path could not use
+ * this function, so it grew its own table in the provider registry, and the two
+ * drifted apart.
+ */
+export function lookupModelContextWindow(
+    modelName?: string,
+): number | undefined {
     if (!modelName || typeof modelName !== 'string') {
-        return DEFAULT_CONTEXT_WINDOW_TOKENS;
+        return undefined;
     }
 
     const normalized = normalize(modelName);
@@ -125,8 +142,8 @@ export function getModelContextWindow(modelName?: string): number {
         return bestMatch;
     }
 
-    // 5. Default
-    return DEFAULT_CONTEXT_WINDOW_TOKENS;
+    // 5. Unknown — the caller decides what to substitute.
+    return undefined;
 }
 
 /**

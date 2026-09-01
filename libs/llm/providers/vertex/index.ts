@@ -74,12 +74,6 @@ export const vertexModule: ProviderModule = {
             usageGranularity: 'reasoning_split',
             streaming: true,
             promptCaching: true,
-            // Managed-catalog window (moved off the old MODEL_INPUT_MAX_TOKENS
-            // table). The legacy Claude-3.5-on-Vertex id is the only Vertex model
-            // that pinned a window; others fall to the chunking default.
-            maxInputTokens: /^claude-3-5-sonnet/.test(model)
-                ? 200_000
-                : undefined,
         };
     },
 

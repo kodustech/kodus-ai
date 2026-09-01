@@ -28,11 +28,6 @@ import { normalizeSdkResult, normalizeSdkUsage } from '../kernel/usage';
  *  models whose window differs from the chunking default need an entry). Moved
  *  here from the old MODEL_INPUT_MAX_TOKENS table so the window lives with the
  *  provider. Keyed by the bare model id (no `google:` prefix). */
-const GEMINI_MAX_INPUT_TOKENS: Record<string, number> = {
-    'gemini-2.5-pro': 1_000_000,
-    'gemini-3.1-flash-lite-preview': 1_048_576,
-};
-
 export const googleGeminiModule: ProviderModule = {
     id: 'google_gemini',
     label: 'Google Gemini',
@@ -54,7 +49,6 @@ export const googleGeminiModule: ProviderModule = {
             // materially from the chunking default (the single home for it, read
             // by tokenChunking via managedModelMaxInputTokens). Other Gemini
             // models fall to the caller default.
-            maxInputTokens: GEMINI_MAX_INPUT_TOKENS[model],
         };
     },
 

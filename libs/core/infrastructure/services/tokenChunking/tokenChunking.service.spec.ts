@@ -233,13 +233,14 @@ describe('TokenChunkingService', () => {
         });
 
         it('derives the limit from a managed model window', () => {
-            // GEMINI_2_5_PRO window is 1_000_000; 1% → floor(10000) = 10000.
+            // GEMINI_2_5_PRO window is 1_048_576; 1% → floor(10485.76) = 10485.
+            // It was 1_000_000 while this read a hand-typed registry entry.
             const res = svc.chunkDataByTokens({
                 data: [strOf(4)],
                 model: LLMModelProvider.GEMINI_2_5_PRO,
                 usagePercentage: 1,
             });
-            expect(res.tokenLimit).toBe(10000);
+            expect(res.tokenLimit).toBe(10485);
             expect(res.modelUsed).toBe('google:gemini-2.5-pro');
         });
 

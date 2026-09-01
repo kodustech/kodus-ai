@@ -1,10 +1,15 @@
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
 import { LLMModelProvider } from '@libs/llm/model-providers';
+import { managedModelMaxInputTokens } from '@libs/llm/managed-model-window';
 
-// GEMINI_2_5_PRO's managed input window — moved off MODEL_INPUT_MAX_TOKENS into
-// the Gemini provider's capabilities().maxInputTokens, resolved via
-// managedModelMaxInputTokens. This spec pins the value tokenChunking sizes to.
-const GEMINI_2_5_PRO_MAX_INPUT = 1_000_000;
+// GEMINI_2_5_PRO's managed input window. Derived, never restated: this used to be a hardcoded 1_000_000 — a third copy
+// of a number that already had a home — and it went stale the moment the model
+// layer got the vendor's real figure. Reading it from the same source the
+// service reads keeps the test about the RULE (limit = window x usage) instead
+// of about a literal.
+const GEMINI_2_5_PRO_MAX_INPUT = managedModelMaxInputTokens(
+    LLMModelProvider.GEMINI_2_5_PRO,
+)!;
 
 // Mock logger
 jest.mock('@libs/core/log/logger', () => ({

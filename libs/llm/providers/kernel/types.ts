@@ -27,8 +27,13 @@ import type { ModelReasoningTraits } from './reasoning-traits';
  * fields are optional so existing base callers are unaffected.
  */
 export interface ModelCapabilities extends BaseModelCapabilities {
-    /** Max input/context window in tokens, when known. */
-    maxInputTokens?: number;
+    /** NOTE: the context window is NOT here. It is a fact about the MODEL, and
+     *  a provider module describes TRANSPORT — it does not get to define what a
+     *  model is. Two modules were restating windows the model layer already
+     *  knew (one of them staler than the mirror), while the BYOK path read the
+     *  mirror instead, so the same model had two windows depending on the path.
+     *  `lookupModelContextWindow` (libs/llm/model-context-window) is the one
+     *  source, for managed and BYOK alike. */
     /** Native structured-output mode the provider honors. */
     structuredOutput?: 'json_schema' | 'json_object' | 'none';
     /** Native tool/function calling support. */
