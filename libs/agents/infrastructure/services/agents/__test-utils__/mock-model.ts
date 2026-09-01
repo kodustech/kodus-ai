@@ -1,7 +1,7 @@
 import { MockLanguageModelV3 } from 'ai/test';
 
 /**
- * Shared mock-model factory for the agent wiring specs (post kodus-flow removal:
+ * Shared mock-model factory for the agent wiring specs (post removal:
  * the agents now drive the AI SDK directly, so the tests mock at the model seam).
  *
  * Two things this centralises:
@@ -26,7 +26,10 @@ type V3GenerateResult = Awaited<
  *  'stop'), or an empty turn when `text` is falsy. */
 export function mockTextModel(
     text: string,
-    { inputTokens, outputTokens }: { inputTokens: number; outputTokens: number } = {
+    {
+        inputTokens,
+        outputTokens,
+    }: { inputTokens: number; outputTokens: number } = {
         inputTokens: 10,
         outputTokens: 5,
     },
