@@ -33,9 +33,8 @@
 // untouched and adds a hard-timeout race, so the request shape is identical;
 // using it anyway is the point. A harness that proves the stack works through a
 // door production does not use proves less than it claims.
-import { tracedGenerateText as generateText } from '../llm-call';
+import { LLM } from '../llm';
 
-import { resolveModelConfig } from '../model-invocation';
 import type { NormalizedModel } from '../byok-config';
 import type { ReasoningEffort } from '../providers/kernel/types';
 
@@ -96,19 +95,25 @@ function cannedBodyFor(url: string): unknown {
 }
 
 /**
- * Run one BYOK slot through the real resolve→build→call path and return the
- * HTTP request it produced. Never touches the network.
+ * Run one BYOK slot through `LLM.run` — the ONE door the product calls — and
+ * return the HTTP request it produced. Never touches the network.
  *
- * `opts` mirrors the review call-sites: they pass `reasoningEffortDefault:
- * 'none'` (an unset slot means "no extra thinking"), so that is the default
- * here too — a case that wants the agent-loop default states it.
+ * It used to call `resolveModelConfig` and the SDK by hand, which was a harness
+ * reimplementing what the executors already do: both of them pass
+ * `reasoningEffortDefault: 'none'` and read the OpenRouter routing off the slot,
+ * exactly as the hand-rolled version did. So the copy was invisible — it agreed
+ * — and a harness that agrees today is a harness that can drift tomorrow while
+ * still reporting green. Going through the door removes the copy AND covers the
+ * slot resolution and failover the door owns.
+ *
+ * Loop mode (no tools, one step) is the executor used, because it is the one
+ * that runs a plain message turn; a schema would route to the structured
+ * executor and change the request under test. `opts` are merged ONTO the slot,
+ * since that is where the executors read them from.
  */
 export async function captureByokWire(
     slot: NormalizedModel,
     opts: {
-        // The contract's own vocabulary, not `string`: spreading a widened
-        // literal into resolveModelConfig's options is a type error, and the
-        // harness should reject an effort the runtime cannot mean.
         reasoningEffortDefault?: ReasoningEffort;
         openrouterProviderOrder?: string[];
         openrouterAllowFallbacks?: boolean;
@@ -138,32 +143,29 @@ export async function captureByokWire(
     }) as typeof fetch;
 
     try {
-        const { model, callOptions, providerOptions } = resolveModelConfig(
-            slot,
-            {
-                runName: 'byok-wire-harness',
-                reasoningEffortDefault: 'none',
-                // Mirror the review call-sites: they read OpenRouter routing off the
-                // slot and hand it to resolveModelConfig as options. A case may still
-                // override explicitly.
-                openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
-                openrouterAllowFallbacks: (slot as any)
-                    ?.openrouterAllowFallbacks,
-                ...opts,
-            },
-        );
-
-        await generateText({
-            model,
-            maxRetries: 0,
-            ...callOptions,
-            // resolveModelConfig hands back the open provider-namespace record
-            // the SDK ultimately indexes by key; the SDK's own parameter type is
-            // narrower than what a provider namespace can legally hold.
-            providerOptions: providerOptions as Parameters<
-                typeof generateText
-            >[0]['providerOptions'],
+        await LLM.run({
+            byokConfig: {
+                ...slot,
+                // The executors read routing and effort off the SLOT, so a
+                // per-case override belongs there rather than in a parallel
+                // options bag the door does not accept.
+                ...(opts.openrouterProviderOrder !== undefined
+                    ? { openrouterProviderOrder: opts.openrouterProviderOrder }
+                    : {}),
+                ...(opts.openrouterAllowFallbacks !== undefined
+                    ? {
+                          openrouterAllowFallbacks:
+                              opts.openrouterAllowFallbacks,
+                      }
+                    : {}),
+                ...(opts.reasoningEffortDefault !== undefined &&
+                (slot as any)?.reasoningEffort === undefined
+                    ? { reasoningEffort: opts.reasoningEffortDefault }
+                    : {}),
+            } as NormalizedModel,
             messages: [{ role: 'user', content: 'ping' }],
+            loop: { tools: {}, maxSteps: 1 },
+            runName: 'byok-wire-harness',
         });
     } catch (err) {
         // The REQUEST is the subject under test. A canned response the provider's
@@ -180,5 +182,10 @@ export async function captureByokWire(
         );
     }
     // The LAST request is the model call (a provider may fetch a token first).
-    return captured[captured.length - 1];
+    // The FIRST request, not the last. Going through the door means a retry or
+    // a primary->fallback cascade can issue more than one, and every case here
+    // is a claim about the request the stored config produces — the primary. The
+    // hand-rolled version could only ever make one, so this distinction did not
+    // exist before and would have silently changed what the matrix asserts.
+    return captured[0];
 }
