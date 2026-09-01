@@ -151,4 +151,33 @@ describe('searchDocs — distinguishes "backend unavailable" from "no docs"', ()
             'Do NOT conclude the package has no documentation',
         );
     });
+
+    it('says the search ran but returned nothing when a configured backend yields empty docs', async () => {
+        // #1762 cause (b): the backend has a key (isSearchAvailable => true)
+        // but every query fails at runtime, so searchByFilePlan returns empty.
+        // A successful Exa search always returns a doc item, so empty docs here
+        // means "backend failing", not "no docs" — the tool must not fabricate
+        // a definitive "No documentation found".
+        const failingDocs: any = {
+            isSearchAvailable: () => true,
+            searchByFilePlan: async () => ({}),
+        };
+        const tools = buildAgentTools(
+            makeRemote(),
+            undefined,
+            undefined,
+            failingDocs,
+        );
+
+        const out = await tools.searchDocs.execute({
+            packageName: 'jest',
+            query: 'v30 renamed --testPathPattern to --testPathPatterns',
+        });
+
+        expect(out).toContain('search ran but returned no documentation');
+        expect(out).not.toContain('No documentation found');
+        expect(out).toContain(
+            'Do NOT conclude the package has no documentation',
+        );
+    });
 });

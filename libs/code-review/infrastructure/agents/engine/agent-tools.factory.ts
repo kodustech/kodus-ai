@@ -1509,7 +1509,13 @@ fi
 
                     const docs = results['agent'] || [];
                     if (docs.length === 0) {
-                        return `No documentation found for "${packageName}" with query "${query}".`;
+                        // A successful Exa search always returns a doc item
+                        // (even a 0-result query yields url:"unknown" + a
+                        // fallback snippet), so empty docs with a configured
+                        // backend means every query failed at runtime (#1762
+                        // cause b) — NOT "the library has no docs". Say so,
+                        // matching the unconfigured-backend branch above.
+                        return `Documentation search ran but returned no documentation for "${packageName}" with query "${query}" (the search backend answered nothing). Do NOT conclude the package has no documentation: this usually means the backend is failing at runtime. If the finding depends on framework documentation, state that verification is unavailable.`;
                     }
 
                     const formatted = docs
