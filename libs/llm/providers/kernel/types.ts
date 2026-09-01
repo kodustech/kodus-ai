@@ -34,7 +34,24 @@ export interface ModelCapabilities extends BaseModelCapabilities {
      *  mirror instead, so the same model had two windows depending on the path.
      *  `lookupModelContextWindow` (libs/llm/model-context-window) is the one
      *  source, for managed and BYOK alike. */
-    /** Native structured-output mode the provider honors. */
+    /**
+     * How structured output is issued for this model.
+     *
+     * Only `'none'` is load-bearing, and only `'none'` is trustworthy. It means
+     * "through forced tool-use" (the Anthropic protocol), which the model id
+     * does determine, and it is what `planStructuredCall` and both capability
+     * gates read.
+     *
+     * The `json_schema` vs `json_object` half is INDICATIVE, not authoritative:
+     * for `openai_compatible` the real answer depends on the baseURL, and this
+     * method's signature cannot see it — nor can it tell `openai` from
+     * `openai_compatible`, since one module serves both ids. `build()` decides
+     * (`supportsStructuredOutputs`), and the two measurably disagree in both
+     * directions; `structured-output.contract.spec.ts` pins that and keeps the
+     * distinction from being branched on. Answering it properly means a
+     * `structuredOutputPolicy(cfg)` sibling to `temperaturePolicy(cfg)`, which
+     * takes the whole config for exactly this reason.
+     */
     structuredOutput?: 'json_schema' | 'json_object' | 'none';
     /** Native tool/function calling support. */
     toolCalling?: 'native' | 'none';
