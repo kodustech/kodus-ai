@@ -80,10 +80,21 @@ export function detectModelFamily(model?: string): ModelFamily {
     return 'unknown';
 }
 
-/** o-series / gpt-5 / deep-research — OpenAI's reasoning ids. Kept here (not in
- *  openai/reasoning.ts) so the family detector has no import into a provider
- *  folder; the openai module re-exports its own predicate over the same rule. */
-export function isOpenAiReasonerId(model: string): boolean {
+/**
+ * o-series / gpt-5 / deep-research — OpenAI's reasoning ids. THE predicate; the
+ * openai and azure modules both call this one.
+ *
+ * The comment here used to claim the openai module "re-exports its own predicate
+ * over the same rule". It did not — there were three near-copies that disagreed:
+ * azure matched `gpt-5` unanchored and knew nothing of deep-research, openai
+ * anchored it and also missed deep-research. Same question, three answers,
+ * which is how this layer keeps producing the same defect.
+ */
+export function isOpenAiReasonerId(model?: string): boolean {
+    // Callers legitimately pass an unset model (a slot with no id yet). The
+    // regexes the three copies used coerced `undefined` to the string
+    // "undefined" and answered false by accident; this says so on purpose.
+    if (!model) return false;
     const m = model.toLowerCase();
     return (
         /^o[134](\b|[-_@])/.test(m) ||

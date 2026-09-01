@@ -27,20 +27,27 @@ import type {
     ProviderBuildConfig,
     ProviderBuildOptions,
     ProviderModule,
+    ProviderReasoningOptions,
+    ReasoningEffort,
 } from '../kernel/types';
 import type { ModelReasoningTraits } from '../kernel/reasoning-traits';
 import { NON_REASONING_TRAITS } from '../kernel/reasoning-traits';
+import { isOpenAiReasonerId } from '../kernel/model-family';
 import {
     normalizeSdkResult,
     normalizeSdkUsage,
 } from '../kernel/usage';
 
-/** Best-effort: an Azure deployment named after an OpenAI reasoning family. */
+/**
+ * Best-effort: an Azure deployment named after an OpenAI reasoning family.
+ * Azure serves OpenAI models, so the rule is OpenAI's and comes from the model
+ * layer — this module had its own near-copy that matched `gpt-5` unanchored and
+ * did not know the deep-research line, so the same id was a reasoner here and
+ * not one in the openai module. Deployment names are arbitrary, so this stays a
+ * heuristic; what changed is that it is the SAME heuristic everywhere.
+ */
 function looksLikeReasoner(deployment: string): boolean {
-    return (
-        /^o[134](\b|[-_@])/i.test(deployment) ||
-        /gpt-5(\b|[-_@])/i.test(deployment)
-    );
+    return isOpenAiReasonerId(deployment);
 }
 
 /** The o-series / gpt-5 families do not accept `temperature`; everything else
@@ -66,8 +73,14 @@ export const azureModule: ProviderModule = {
         // Deployment names are arbitrary, so this is a heuristic, not a contract.
         const reasoner = looksLikeReasoner(model);
         return {
-            supportsReasoning: false, // opt-in reasoning per-deployment is a follow-up
-            reasoningConfig: undefined,
+            // Derived from the same predicate the policy and the traits use, so
+            // the UI cannot offer an effort the module will not send, or hide
+            // one it would. It was hardcoded `false` while `reasoning()` did not
+            // exist; both halves move together.
+            supportsReasoning: reasoner,
+            reasoningConfig: reasoner
+                ? { type: 'level', options: ['low', 'medium', 'high'] }
+                : undefined,
             // Azure = OpenAI models → native strict json_schema; the shared
             // structured-output retry catches a deployment that rejects it.
             structuredOutput: 'json_schema',
@@ -97,6 +110,29 @@ export const azureModule: ProviderModule = {
 
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
         return azureTemperaturePolicy(cfg.model);
+    },
+
+    /**
+     * Azure serves the OpenAI families over the SAME Responses API the native
+     * module uses — the built client reports `azure.responses` — so the reasoning
+     * parameter is OpenAI's `reasoning.effort`, only under Azure's own
+     * providerOptions namespace. Having no `reasoning()` meant an o-series or
+     * gpt-5 deployment silently ignored whatever effort the customer picked.
+     *
+     * 'none' emits nothing, matching the native module: the o-series cannot be
+     * turned off, and on the gpt-5 line omitting IS the off (its documented
+     * default effort is none).
+     */
+    reasoning(
+        cfg: ProviderBuildConfig,
+        effort: ReasoningEffort,
+    ): ProviderReasoningOptions {
+        if (effort === 'none' || !looksLikeReasoner(cfg.model)) {
+            return {};
+        }
+        // camelCase is the SDK's own option name; it renders `reasoning.effort`
+        // itself. The snake_case form is spread and then overwritten.
+        return { azure: { reasoningEffort: effort } };
     },
 
     /**

@@ -483,6 +483,41 @@ const CASES = [
         wire: { hasNot: ['thinking', 'additionalModelRequestFields'] },
     },
 
+    // ─── azure ──────────────────────────────────────────────────────────────
+    {
+        id: 'azure o-series — the effort reaches the Responses API',
+        why: 'Azure serves the OpenAI families over the SAME Responses API the native module uses (the built client reports azure.responses), so the parameter is OpenAI reasoning.effort under Azure own namespace. The module had no reasoning() at all, so a deployment named for an o-series or gpt-5 model silently ignored the effort the customer picked',
+        slot: {
+            provider: 'azure',
+            model: 'o3-mini',
+            baseURL: 'https://r.openai.azure.com/openai',
+            reasoningEffort: 'high',
+        },
+        wire: { has: { reasoning: { effort: 'high' } } },
+    },
+    {
+        id: 'azure — "off" omits, matching the native module',
+        why: 'The o-series cannot be turned off and the gpt-5 line documents none as its default effort, so omitting IS the off on both',
+        slot: {
+            provider: 'azure',
+            model: 'o3-mini',
+            baseURL: 'https://r.openai.azure.com/openai',
+            reasoningEffort: 'none',
+        },
+        wire: { hasNot: ['reasoning'] },
+    },
+    {
+        id: 'azure non-reasoning deployment — no parameter invented',
+        why: 'A gpt-4o deployment takes no reasoning field; sending one to a deployment that does not reason is the same class of bug as sending `thinking` to a plain Llama endpoint',
+        slot: {
+            provider: 'azure',
+            model: 'gpt-4o',
+            baseURL: 'https://r.openai.azure.com/openai',
+            reasoningEffort: 'high',
+        },
+        wire: { hasNot: ['reasoning'] },
+    },
+
     // ─── native OpenAI ──────────────────────────────────────────────────────
     {
         id: 'openai native — reasoning effort on the Responses API',
