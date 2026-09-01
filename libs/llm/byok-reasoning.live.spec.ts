@@ -182,9 +182,19 @@ const LIVE = [
         apiKey: () => key('google_vertex', 'API_VERTEX_AI_API_KEY'),
         reasons: true,
     },
+    // ── Anthropic is THREE generations with mutually exclusive request shapes,
+    // and one row only ever covered the middle one. Every model below mirrors a
+    // real production shape.
+    //
+    // WHAT THESE PROVE, precisely — checked on the wire before claiming it:
+    // the AI SDK strips `temperature` by itself whenever thinking is ON, for
+    // every Anthropic model. So while thinking is enabled these rows prove the
+    // THINKING SHAPE only, not the temperature policy. Temperature becomes ours
+    // to get right exactly when thinking is OFF — the SDK forwards it then, and
+    // on the 4.7+/5 line it is a 400. That is the last row.
     {
         brand: 'anthropic',
-        why: 'adaptive thinking + output_config.effort is the only shape 4.7+ accepts',
+        why: 'adaptive-4-6: thinking {type:adaptive} + output_config.effort',
         slot: {
             provider: 'anthropic',
             model: 'claude-sonnet-4-6',
@@ -192,6 +202,40 @@ const LIVE = [
         },
         apiKey: () => key('anthropic'),
         reasons: true,
+    },
+    {
+        brand: 'anthropic-legacy',
+        why: 'legacy (3.x-4.5): budgetTokens is REQUIRED and `adaptive` is rejected — the opposite shape from the row above, on the same provider and the same key',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-4-5-20250929',
+            reasoningEffort: 'low',
+        },
+        apiKey: () => key('anthropic'),
+        reasons: true,
+    },
+    {
+        brand: 'anthropic-modern',
+        why: 'THE 4.6->4.7 boundary: 4.7+ REJECTS budgetTokens outright, so sending the legacy shape here is a hard 400. Three production shapes run claude-opus-4-7',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-4-7',
+            reasoningEffort: 'high',
+        },
+        apiKey: () => key('anthropic'),
+        reasons: true,
+    },
+    {
+        brand: 'anthropic-off-modern',
+        why: 'the row that carries the most: reasoning OFF on a 4.7+/5 model WITH a stored temperature. Two things can only be checked here — the disable must be said OUT LOUD (an adaptive Claude thinks unless told not to, so silence means the user who picked Off keeps paying), and temperature must be WITHHELD by our policy, because with thinking off the SDK forwards it and this line 400s on it. `claude-sonnet-5` with a stored temperature is a real production shape',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-sonnet-5',
+            reasoningEffort: 'none',
+            temperature: 0.3,
+        },
+        apiKey: () => key('anthropic'),
+        reasons: false as const,
     },
     {
         brand: 'anthropic_compatible',
@@ -367,6 +411,21 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                         ...evidence,
                         reasoned: evidence.tokens > 0 || evidence.text > 0,
                     }).toMatchObject({ reasoned: true });
+                } else if (c.reasons === false) {
+                    // The mirror image, and the only way to catch "Off stopped
+                    // meaning off". Omitting the disable on an adaptive model
+                    // still returns 200 — it just bills thinking the user
+                    // declined.
+                    const tokens = reasoningTokens(result.usage);
+                    const text = (result.reasoningText ?? '').length;
+                    // eslint-disable-next-line no-console
+                    console.log(
+                        `[byok-live] ${c.brand}: OFF path — reasoningTokens=${tokens} reasoningTextChars=${text}`,
+                    );
+                    expect({
+                        brand: c.brand,
+                        reasoned: tokens > 0 || text > 0,
+                    }).toMatchObject({ reasoned: false });
                 }
             },
             120_000,
