@@ -937,3 +937,61 @@ describe('slotFromInput — the persisted slot shape', () => {
         });
     });
 });
+
+// The warning the button shows the user ("connected, but your reasoning
+// override was dropped") is a real degradation, and until now it lived only in
+// the HTTP response — the success log line carried latency and nothing else, so
+// a config that silently ignored a pasted override was indistinguishable in the
+// logs from a clean one. Failures are greppable by [LLM-ERROR]; this makes the
+// degraded-success greppable too, on the same [LLM-SUCCESS] tag it already flies
+// under, so `[LLM-SUCCESS].*warning=` sweeps exactly these.
+describe('logs the degraded-success warning, not just the failures', () => {
+    function useCaseWithLogSpy() {
+        const uc = useCase();
+        const log = jest
+            .spyOn((uc as any).logger, 'log')
+            .mockImplementation(() => undefined);
+        return { uc, log };
+    }
+
+    it('a passing test that DROPPED an override logs [LLM-SUCCESS] with warning=', async () => {
+        probeSlotCall.mockResolvedValue({
+            latencyMs: 12,
+            unreachedOverrideKeys: [
+                { namespace: 'anthropic', key: 'output_config' },
+            ],
+        });
+        const { uc, log } = useCaseWithLogSpy();
+        const res = await uc.execute({
+            provider: 'anthropic',
+            apiKey: 'sk-test',
+            model: 'claude-sonnet-5',
+            reasoningConfigOverride: '{"output_config":{"effort":"high"}}',
+        } as any);
+
+        expect(res.ok).toBe(true);
+        expect(res.warning).toContain('"output_config"');
+
+        const msg = log.mock.calls.map((c) => c[0]?.message).join('\n');
+        expect(msg).toContain('[LLM-SUCCESS]');
+        expect(msg).toContain('warning=');
+        expect(msg).toContain('output_config');
+    });
+
+    it('a clean pass logs [LLM-SUCCESS] with NO warning= (no false noise)', async () => {
+        probeSlotCall.mockResolvedValue({ latencyMs: 12 });
+        const { uc, log } = useCaseWithLogSpy();
+        const res = await uc.execute({
+            provider: 'anthropic',
+            apiKey: 'sk-test',
+            model: 'claude-sonnet-5',
+        } as any);
+
+        expect(res.ok).toBe(true);
+        expect(res.warning).toBeUndefined();
+
+        const msg = log.mock.calls.map((c) => c[0]?.message).join('\n');
+        expect(msg).toContain('[LLM-SUCCESS]');
+        expect(msg).not.toContain('warning=');
+    });
+});

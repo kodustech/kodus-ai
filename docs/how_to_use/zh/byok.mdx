@@ -417,7 +417,7 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
 
 #### 手动指定命名空间(进阶用户)
 
-如果您的 JSON 顶层已经包含一个已知的命名空间键(`anthropic`、`google`、`openai`、`openrouter`、`openaiCompatible`),Kodus 会保持原样不动。当您想混合多个提供商命名空间或希望显式书写时很有用:
+如果您的 JSON 顶层已经以一个已知的命名空间键开头(即下方映射表中的任意键),Kodus 会保持原样不动。当您想混合多个提供商命名空间或希望显式书写时很有用:
 
 ```json
 {
@@ -433,10 +433,14 @@ Moonshot 和 Z.ai 都在按 token 付费的开发者 API 之外,各自提供一�
 | BYOK 提供商 | 命名空间键 |
 | --- | --- |
 | `anthropic` / `anthropic_compatible` | `anthropic` |
-| `google_gemini` / `google_vertex` | `google` |
+| `google_gemini` | `google` |
+| `google_vertex` | Gemini 用 `google`，Vertex 上的 Claude 用 `anthropic` |
 | `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock`（也接受 `bedrock`） |
+| `novita` | `novita` |
 | `open_router` | `openrouter` |
-| `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### 注意事项
 

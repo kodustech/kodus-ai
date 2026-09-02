@@ -390,20 +390,31 @@ jobs:
                   fi
                   echo "All eval jobs passed (or were skipped)."
 
-    # Model matrix: the pinned model (dispatch) or the full tier-0 set.
+    # Model matrix: the pinned model (dispatch) or the tier-0 set.
+    #
+    # The set is NOT written here. It is `tier0: true` in evals/shared/tier0-models.js
+    # and read out below, because this list used to be a copy of one that lived
+    # there and the two drifted — the seam grew to 23 routes while this stayed at
+    # six, and nothing said which one was tier-0. One question, one source.
     prepare:
         if: github.event_name != 'pull_request'
         runs-on: ubuntu-latest
         outputs:
             models: ${{ steps.pick.outputs.models }}
         steps:
+            - uses: actions/checkout@v6.0.2
             - id: pick
+              # No install: tier0-models.js is dependency-free CJS on purpose, so
+              # the matrix can be read before the workspace is built.
               run: |
                   if [ -n "${{ github.event.inputs.only_model }}" ]; then
                       echo "models=[\"${{ github.event.inputs.only_model }}\"]" >> "$GITHUB_OUTPUT"
                   else
-                      echo 'models=["gpt-5.4","claude-sonnet-4-6","gemini-3.1-pro-preview-customtools","gemini-3-flash-preview","kimi-k2.7-code","glm-5.2"]' >> "$GITHUB_OUTPUT"
+                      models=$(node -e 'console.log(JSON.stringify(require("./evals/shared/tier0-models").tier0()))')
+                      test "$models" != "[]" || { echo "::error::no model is marked tier0 in evals/shared/tier0-models.js"; exit 1; }
+                      echo "models=$models" >> "$GITHUB_OUTPUT"
                   fi
+                  echo "matrix: $(grep '^models=' "$GITHUB_OUTPUT" | tail -1)"
 
     suite:
         if: github.event_name != 'pull_request'

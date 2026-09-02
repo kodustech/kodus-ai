@@ -291,4 +291,3 @@ reports/mutation/
 # it is the template and IS tracked; this one holds real vendor keys and must
 # never be committed — it exists so the JSON can be validated locally before it
 # is pasted into the GitHub secret.
-libs/llm/testing/byok-live-keys.json

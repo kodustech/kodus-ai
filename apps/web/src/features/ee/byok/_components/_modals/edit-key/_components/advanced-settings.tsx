@@ -32,8 +32,11 @@ const THINKING_OPTIONS = [
     { value: "custom", label: "Custom" },
 ] as const;
 
-// Generic fallback when the provider module ships no example of its own.
-const DEFAULT_REASONING_OVERRIDE_EXAMPLE = `{\n  "thinking": { "type": "enabled" }\n}`;
+// Last-resort fallback only — every registered provider now ships its own
+// model-correct example (caps.reasoningOverrideExample), so this shows solely
+// while capabilities are still loading or for an unrecognized provider. Kept
+// shape-neutral so it never suggests a provider-specific block that would 400.
+const DEFAULT_REASONING_OVERRIDE_EXAMPLE = `{\n  "reasoning": { "effort": "high" }\n}`;
 
 const NumberField = ({
     name,

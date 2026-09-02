@@ -417,7 +417,7 @@ Thinking トグルで **Custom** を選択すると JSON テキストエリア�
 
 #### 名前空間を手動で指定する（上級者向け）
 
-JSON にすでに既知の名前空間キー（`anthropic`、`google`、`openai`、`openrouter`、`openaiCompatible`）がトップレベルに含まれている場合、Kodus はそれをそのまま残します。複数のプロバイダー名前空間を混在させたい場合や、明示的に記述したい場合に便利です：
+JSON がすでに既知の名前空間キー（下記のマッピング表のいずれかのキー）でトップレベルから始まっている場合、Kodus はそれをそのまま残します。複数のプロバイダー名前空間を混在させたい場合や、明示的に記述したい場合に便利です：
 
 ```json
 {
@@ -433,10 +433,14 @@ JSON にすでに既知の名前空間キー（`anthropic`、`google`、`openai`
 | BYOK プロバイダー | 名前空間キー |
 | --- | --- |
 | `anthropic` / `anthropic_compatible` | `anthropic` |
-| `google_gemini` / `google_vertex` | `google` |
+| `google_gemini` | `google` |
+| `google_vertex` | Gemini は `google`、Vertex 上の Claude は `anthropic` |
 | `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock`（`bedrock` も可） |
+| `novita` | `novita` |
 | `open_router` | `openrouter` |
-| `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### 注意点
 

@@ -315,7 +315,11 @@ export const anthropicModule: ProviderModule = {
     // back to the generic enabled-thinking example (undefined here).
     reasoningOverrideExample: (id) =>
         id === 'anthropic_compatible'
-            ? undefined
+            ? // Kimi/Z.ai/DeepSeek over the Anthropic protocol implement the
+              // LEGACY thinking shape (type:enabled + a token budget), never the
+              // native adaptive+effort — so the example must carry budgetTokens or
+              // it 400s ("thinking.budget_tokens: required"). See `reasoning()`.
+              '{\n  "thinking": { "type": "enabled", "budgetTokens": 20000 }\n}'
             : '{\n  "thinking": { "type": "adaptive" },\n  "effort": "high"\n}',
     modelListing: anthropicModelListing,
 };

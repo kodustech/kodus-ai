@@ -428,7 +428,7 @@ Use this when:
 
 #### Going manual with namespaces (power users)
 
-If your JSON already contains a known namespace key at the top level (`anthropic`, `google`, `openai`, `openrouter`, `openaiCompatible`), Kodus leaves it untouched. Useful if you want to mix multiple provider namespaces or be explicit:
+If your JSON already starts with a known namespace key at the top level — any key from the mapping table below — Kodus leaves it untouched. Useful if you want to mix multiple provider namespaces or be explicit:
 
 ```json
 {
@@ -444,10 +444,14 @@ Under the hood, these are the namespace mappings Kodus uses:
 | BYOK provider | Namespace key |
 | --- | --- |
 | `anthropic` / `anthropic_compatible` | `anthropic` |
-| `google_gemini` / `google_vertex` | `google` |
+| `google_gemini` | `google` |
+| `google_vertex` | `google` for Gemini, `anthropic` for Claude on Vertex |
 | `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock` (also accepts `bedrock`) |
+| `novita` | `novita` |
 | `open_router` | `openrouter` |
-| `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### Gotchas
 

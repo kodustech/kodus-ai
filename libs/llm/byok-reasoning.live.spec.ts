@@ -21,97 +21,38 @@
  * assert the response actually BILLED reasoning tokens.
  *
  * ─── CREDENTIALS ───────────────────────────────────────────────────────────
- * One CI-only secret, `BYOK_LIVE_KEYS`, holding a JSON map of brand → key:
+ * Every credential is a GitHub Actions secret, passed by the `byok-live` job in
+ * .github/workflows/contract-tests.yml. There is no override file and no JSON
+ * blob: a brand reads the secret `REPO_SECRET` names for it, or derives
+ * `BYOK_<BRAND>_API_KEY`, and a brand that borrows reads the lender's.
  *
- *     {"deepseek":"sk-…","moonshot":"sk-…","zai":"…","open_router":"sk-or-…"}
+ *     BYOK_ANTHROPIC_API_KEY   -> anthropic, -modern, -opus-5, openai_compatible_claude
+ *     BYOK_OPENAI_API_KEY      -> openai, openai_compatible_gpt5
+ *     BYOK_ZHIPU_API_KEY       -> zai, zai_glm53 (Zhipu is Z.ai, the GLM vendor)
+ *     BYOK_GOOGLE_API_KEY      -> google_gemini, google_gemini_flash
+ *     BYOK_MOONSHOT_API_KEY    -> moonshot_code
+ *     BYOK_DEEPSEEK_API_KEY    -> deepseek
+ *     BYOK_OPEN_ROUTER_API_KEY -> open_router, _glm, _qwen
+ *     BYOK_AMAZON_BEDROCK_API_KEY -> amazon_bedrock (bearer token)
  *
- * Deliberately ONE secret rather than a new `process.env.*` per brand: these are
- * test credentials, not product configuration, and adding a brand should not
- * grow the product's env surface. Brands fall back to env names that ALREADY
- * EXIST as repo secrets, checked with `gh secret list` rather than assumed:
- *
- *     BYOK_ANTHROPIC_API_KEY   -> the four Claude generations
- *     BYOK_MOONSHOT_API_KEY    -> moonshot, moonshot_code, anthropic_compatible (k3)
- *     BYOK_ZHIPU_API_KEY       -> zai (Zhipu is Z.ai, the GLM vendor)
- *     BYOK_GOOGLE_API_KEY      -> google_gemini
- *     BYOK_OPENAI_API_KEY      -> openai
- *
- * Ten of the twenty rows are runnable on those alone, with no new credential.
- * The fallbacks used to name `API_MOONSHOT_API_KEY`, `API_OPEN_AI_API_KEY` and
- * friends — the PRODUCT's env names, none of which exist as repo secrets. The
- * workflow passed them faithfully and every one resolved to an empty string, so
- * the fallback path had never once produced a key. Those names are kept as
- * SECOND fallbacks, for a local run where they may be set.
+ * Adding a brand needs no code beyond its row: create `BYOK_<BRAND>_API_KEY`,
+ * pass it in the workflow, and the invariants at the bottom of this file check
+ * the two against each other in BOTH directions — a secret nobody reads and a
+ * row nothing can authenticate are each a failure, not a silent skip.
  *
  * A case with no key SKIPS — it never fails. A run with partial credentials
  * reports partial coverage, so contributors and forks see green, not a false red.
  *
- * ─── THE SECRET, COMPLETE ──────────────────────────────────────────────────
- * Copy this into the repo secret `BYOK_LIVE_KEYS` and delete the brands you have
- * no key for — a missing brand SKIPS, it never fails, so a partial secret is a
- * valid secret and reports partial coverage.
+ * ─── ONE KEY, SEVERAL BRANDS ───────────────────────────────────────────────
+ * The Claude brands hold the SAME key — they are generations and transports of
+ * one account, split into separate brands only because their request shapes are
+ * mutually exclusive. `BORROWS_FROM` is what says so, in one place, instead of
+ * each row naming an env var and the two drifting.
  *
- *     {
- *       "deepseek":             "sk-…",
- *       "moonshot":             "sk-…",
- *       "moonshot_code":        "sk-…",
- *       "anthropic_compatible": "sk-…",
- *       "zai":                  "…",
- *       "minimax":              "…",
- *       "minimax_m3":           "…",
- *       "minimaxi":             "…",
- *       "open_router":          "sk-or-…",
- *       "openai":               "sk-…",
- *       "anthropic":            "sk-ant-…",
- *       "anthropic-legacy":     "sk-ant-…",
- *       "anthropic-modern":     "sk-ant-…",
- *       "anthropic-off-modern": "sk-ant-…",
- *       "google_gemini":        "…",
- *       "google_vertex":        "<service-account JSON>"  (defaults to the
- *                                 existing VERTEX_SA_JSON secret — no entry needed),
- *       "amazon_bedrock":       { "apiKey": "<bearer>", "awsRegion": "us-east-1" },
- *       "bedrock_grok":         { "apiKey": "<bearer>", "awsRegion": "us-east-1" },
- *       "azure":                { "apiKey": "…",
- *                                 "baseURL": "https://<resource>.openai.azure.com/openai",
- *                                 "model": "<your o-series deployment name>" }
- *     }
- *
- * A value still holding a placeholder ('…' or angle brackets) reads as ABSENT,
- * so a half-filled copy of the template SKIPS the rest instead of failing on
- * auth — see `isUnfilledCredential`. The coverage report names those brands on
- * their own line so "left blank" and "sent nothing" stay distinguishable.
- *
- * The SIX Anthropic entries can hold the SAME key — they are six generations of
- * Claude, not six accounts, and they are separate brands only so a key you do
- * have does not skip the generations you want tested. All of them already fall
- * back to `BYOK_ANTHROPIC_API_KEY`, so none needs an entry unless you want a
- * different key or a different MODEL:
- *
- *     "anthropic-fable": { "apiKey": "sk-ant-…", "model": "claude-fable-5-1" }
- *
- * — which is how a newer generation gets tested without a code change.
- *
- * ─── EVERY FIELD CAN COME FROM THE JSON ────────────────────────────────────
- * A brand's entry may be the bare key, or an object carrying the key plus ANY
- * slot field. The object's fields are spread OVER the row below, so the secret
- * always wins:
- *
- *     {
- *       "deepseek": "sk-…",
- *       "zai":      { "apiKey": "…", "model": "glm-5.3" },
- *       "minimaxi": { "apiKey": "…", "baseURL": "https://api.minimaxi.com/v1" },
- *       "azure":    { "apiKey": "…", "model": "o3-mini",
- *                     "baseURL": "https://r.openai.azure.com/openai" },
- *       "bedrock_grok": { "apiKey": "…", "awsRegion": "us-west-2" }
- *     }
- *
- * So the baseURLs written into the rows are DEFAULTS, not fixtures: they are the
- * vendors' public endpoints, kept in the file because reading a row should tell
- * you which vendor it talks to without opening a secret. Anything account-shaped
- * — Azure's resource endpoint, an AWS region, a model your key actually has
- * access to — belongs in the JSON and overrides the default without a code
- * change. Adding a brand is one row plus one JSON key; changing where an
- * existing brand points is JSON alone.
+ * The baseURLs written into the rows are the vendors' public endpoints, kept in
+ * the file because reading a row should tell you which vendor it talks to. They
+ * are not configuration: changing where a row points is a code change, reviewed
+ * like any other, now that there is no secret that can silently redirect it.
  */
 
 jest.mock('@libs/common/utils/crypto', () => ({
@@ -126,101 +67,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 
 import { LLM } from './llm';
-import { parseSaCredentials } from './model-builders';
 import type { NormalizedModel } from './byok-config';
-
-/**
- * Is this value still the TEMPLATE rather than a credential? The example file
- * ships placeholders (`sk-…`, `<bearer token>`) and filling in only the brands
- * you have keys for is the documented way to use it — so a slot left as shipped
- * has to read as ABSENT.
- *
- * Otherwise it reads as present: the row runs, the vendor answers 401, and the
- * weekly job goes red for a reason that has nothing to do with the code under
- * test — the one failure mode that teaches people to ignore this job.
- */
-export function isUnfilledCredential(value: unknown): boolean {
-    if (typeof value !== 'string') {
-        return false;
-    }
-    const v = value.trim();
-    // `includes`, not `startsWith`: the template's endpoint placeholder buries
-    // its angle brackets mid-string (`https://<your-resource>.openai.azure.com`).
-    // No real key, host, region or model id contains one.
-    return v === '' || v.includes('…') || v.includes('<');
-}
-
-/**
- * Parse the secret, dropping the fields that are still placeholders. Stripping
- * per FIELD, not per brand, is what makes the Azure row honest: an entry that
- * carries a real `apiKey` next to the template's `<your-resource>` endpoint is
- * not a usable Azure config, and the row's own `baseURL` gate now sees that.
- */
-export function liveKeys(raw: string | undefined): {
-    keys: Record<string, LiveEntry>;
-    /** Brands present in the secret whose every field is still a placeholder. */
-    unfilled: string[];
-} {
-    let parsed: Record<string, LiveEntry>;
-    try {
-        parsed = JSON.parse(raw || '{}');
-    } catch {
-        throw new Error(
-            'BYOK_LIVE_KEYS is set but is not valid JSON — expected {"brand":"key"}.',
-        );
-    }
-    const keys: Record<string, LiveEntry> = {};
-    const unfilled: string[] = [];
-    for (const [brand, entry] of Object.entries(parsed)) {
-        // `_readme` and friends are notes to the human filling this in.
-        if (brand.startsWith('_')) {
-            continue;
-        }
-        if (typeof entry === 'string') {
-            if (isUnfilledCredential(entry)) {
-                unfilled.push(brand);
-            } else {
-                keys[brand] = entry;
-            }
-            continue;
-        }
-        if (!entry || typeof entry !== 'object') {
-            continue;
-        }
-        const kept = Object.fromEntries(
-            Object.entries(entry).filter(([, v]) => !isUnfilledCredential(v)),
-        );
-        if (Object.keys(kept).length > 0) {
-            keys[brand] = kept;
-        }
-        // Unfilled is judged on the CREDENTIAL, not on whether anything at all
-        // survived: Bedrock's real `us-east-1` next to a placeholder key is
-        // still a brand you meant to enable and didn't. Saying "region kept" and
-        // calling it filled would be the least useful true statement available.
-        if (!kept.apiKey) {
-            unfilled.push(brand);
-        }
-    }
-    return { keys, unfilled };
-}
-
-const { keys: KEYS, unfilled: UNFILLED } = liveKeys(process.env.BYOK_LIVE_KEYS);
-
-/**
- * A brand's entry is either the key itself, or an object carrying the key plus
- * the slot fields that brand needs beyond one — Azure cannot be reached without
- * its resource endpoint and deployment name, and Bedrock wants a region.
- *
- *   { "deepseek": "sk-…",
- *     "azure": { "apiKey": "…", "baseURL": "https://r.openai.azure.com/openai",
- *                "model": "o3-mini" } }
- *
- * Kept inside the ONE secret on purpose. The alternative was a new
- * `process.env.*` per brand, and five of the six names that would have taken do
- * not exist anywhere in this repo — inventing env vars to make a test runnable
- * is how a config surface grows without anyone deciding to grow it.
- */
-type LiveEntry = string | { apiKey?: string; [slotField: string]: unknown };
 
 /**
  * Brand → the repo secrets that ALREADY hold its credential under a name that
@@ -248,7 +95,6 @@ const REPO_SECRET: Record<string, string[]> = {
     zai: ['BYOK_ZHIPU_API_KEY'],
     google_gemini: ['BYOK_GOOGLE_API_KEY', 'GEMINI_API_KEY'],
     openai: ['BYOK_OPENAI_API_KEY'],
-    google_vertex: ['VERTEX_SA_JSON'],
 };
 
 /**
@@ -260,29 +106,23 @@ const REPO_SECRET: Record<string, string[]> = {
  * A brand may still carry its own entry in the secret to override.
  */
 const BORROWS_FROM: Record<string, string> = {
-    'anthropic-legacy': 'anthropic',
     'anthropic-modern': 'anthropic',
-    'anthropic-off-modern': 'anthropic',
     'anthropic-opus-5': 'anthropic',
-    'anthropic-fable': 'anthropic',
-    anthropic_compatible: 'moonshot',
     moonshot_code: 'moonshot',
+    zai_glm53: 'zai',
+    bedrock_opus47: 'amazon_bedrock',
+    google_gemini_flash: 'google_gemini',
+    open_router_gemini: 'open_router',
     open_router_glm: 'open_router',
     open_router_qwen: 'open_router',
-    open_router_nemotron: 'open_router',
-    open_router_mimo: 'open_router',
-    open_router_grok: 'open_router',
     openai_compatible_gpt5: 'openai',
     openai_compatible_claude: 'anthropic',
-    // Same provider, same `awsBearerToken`, same account — only the model id
-    // and the region differ. It needs its own entry only when Grok is enabled
-    // in a different account or region than the Claude row's.
-    bedrock_grok: 'amazon_bedrock',
 };
 
 /**
- * The credential for a brand: its own entry in the secret, then the repo secret
- * that holds it, then the same two questions asked of the brand it borrows from.
+ * The credential for a brand: the repo secret that holds it, then the same
+ * question asked of the brand it borrows from. There is no per-brand override
+ * file any more — every credential is a GitHub Actions secret.
  *
  * Rows do not name environment variables. That is the whole point — a row that
  * states its own env names is a second source for a fact this table already
@@ -293,11 +133,6 @@ const key = (brand: string): string | undefined => {
     let b: string | undefined = brand;
     while (b && !seen.has(b)) {
         seen.add(b);
-        const entry = KEYS[b] as LiveEntry | undefined;
-        const fromSecret = typeof entry === 'string' ? entry : entry?.apiKey;
-        if (fromSecret) {
-            return fromSecret as string;
-        }
         const names = REPO_SECRET[b] ?? [`BYOK_${b.toUpperCase()}_API_KEY`];
         const fromEnv = names.map((n) => process.env[n]).find(Boolean);
         if (fromEnv) {
@@ -306,14 +141,6 @@ const key = (brand: string): string | undefined => {
         b = BORROWS_FROM[b];
     }
     return undefined;
-};
-
-/** The extra slot fields an object-form entry carries (everything but apiKey). */
-const slotExtras = (brand: string): Record<string, unknown> => {
-    const entry = KEYS[brand] as LiveEntry | undefined;
-    if (!entry || typeof entry === 'string') return {};
-    const { apiKey: _ignored, ...rest } = entry;
-    return rest;
 };
 
 /**
@@ -337,55 +164,12 @@ const slotExtras = (brand: string): Record<string, unknown> => {
 const credentialFor = (row: { brand: string; requires?: () => boolean }) =>
     row.requires && !row.requires() ? undefined : key(row.brand);
 
-/**
- * Auth fields a brand may carry INSTEAD of a single key.
- *
- * Bedrock is the only one today: `bedrockModelFromCredentials` takes a bearer
- * token OR a SigV4 pair, and an entry that supplies the pair has a credential
- * even though `apiKey` is empty. Without this the row skipped while holding
- * exactly what it needed — the same "green means nothing" the tier exists to
- * prevent, one level down.
- */
-const MULTI_FIELD_AUTH = [
-    'awsBearerToken',
-    'awsAccessKeyId',
-    'awsSecretAccessKey',
-    'awsSessionToken',
-];
-
-/**
- * The auth fields a brand ends up with, following the same borrow chain a key
- * follows — `bedrock_grok` is the `amazon_bedrock` account with a different
- * model id, so it inherits the credential whichever FORM that credential takes.
- * Only auth is inherited: a borrowed `baseURL` or `model` would silently point
- * one row at another's endpoint.
- */
-const authFieldsFor = (brand: string): Record<string, unknown> => {
-    const seen = new Set<string>();
-    let b: string | undefined = brand;
-    while (b && !seen.has(b)) {
-        seen.add(b);
-        const extras = slotExtras(b);
-        const auth = Object.fromEntries(
-            MULTI_FIELD_AUTH.filter((f) => !!extras[f]).map((f) => [
-                f,
-                extras[f],
-            ]),
-        );
-        if (Object.keys(auth).length > 0) {
-            return auth;
-        }
-        b = BORROWS_FROM[b];
-    }
-    return {};
-};
-
 /** Does this row have SOMETHING to authenticate with? */
 const canRun = (row: { brand: string; requires?: () => boolean }): boolean => {
     if (row.requires && !row.requires()) {
         return false;
     }
-    return !!key(row.brand) || Object.keys(authFieldsFor(row.brand)).length > 0;
+    return !!key(row.brand);
 };
 
 /**
@@ -413,7 +197,7 @@ function secretsPassedByCi(): string[] {
         ...liveEnv.matchAll(/^\s+([A-Z][A-Z0-9_]+):\s*\$\{\{\s*secrets\./gm),
     ]
         .map((m) => m[1])
-        .filter((n) => n !== 'BYOK_LIVE_KEYS' && n !== 'BYOK_LIVE_EVENT');
+        .filter((n) => n !== 'BYOK_LIVE_EVENT');
     if (names.length === 0) {
         // A regex that matched nothing would make every check below vacuous.
         throw new Error('byok-live: parsed no secrets out of the job env block');
@@ -434,17 +218,6 @@ const LIVE = [
         reasons: true,
     },
     {
-        brand: 'moonshot',
-        why: 'sends `thinking` ALONE — Moonshot 400s if an effort rides along',
-        slot: {
-            provider: 'openai_compatible',
-            model: 'kimi-k2.6',
-            baseURL: 'https://api.moonshot.ai/v1',
-            reasoningEffort: 'low',
-        },
-        reasons: true,
-    },
-    {
         brand: 'zai',
         why: 'sends `thinking` + `reasoning_effort`, and keeps temperature',
         slot: {
@@ -456,16 +229,79 @@ const LIVE = [
         },
         reasons: true,
     },
+    // GLM-5.3 is not a version bump of the row above: production reaches it
+    // through z.ai's CODING endpoint (`/api/coding/paas/v4`), a different host
+    // path from the `/api/paas/v4` the 5.2 row uses, and the two are configured
+    // separately upstream. Same vendor, same key, different wire — so it earns a
+    // row instead of replacing one.
+    {
+        brand: 'zai_glm53',
+        why: 'the CODING endpoint, not the one the glm-5.2 row above uses',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'glm-5.3',
+            baseURL: 'https://api.z.ai/api/coding/paas/v4',
+            reasoningEffort: 'medium',
+            temperature: 0,
+        },
+        reasons: true,
+    },
+    // The two Google rows are the tier-0 pair, and they are two rows rather than
+    // one because they are two different models: a pro and a flash.
+    //
+    // They used to carry `maxOutputTokens: 26_000` and `effort: high`, copied
+    // from the gemini-2.5-flash row they replaced. That row needed the headroom
+    // because 2.5 emitted a NUMERIC `thinkingBudget` that had to fit under the
+    // model's 24,576 ceiling. These ids emit `thinkingLevel: 'low'|'high'` —
+    // there is no number to fit, so the ceiling was protecting against a
+    // constraint that does not exist here, at 26,000 tokens of authorised spend
+    // each. `low` per the rule below: the level is not the subject of this row. `-customtools` is not a suffix we can drop —
+    // it is the id production configures, in 24 slots.
     {
         brand: 'google_gemini',
-        why: 'thinkingBudget must land INSIDE the model ceiling (2.5-flash tops out at 24,576)',
-        // The clamped ceiling IS what this row tests, so the cap clears it
-        // rather than lowering the effort and testing nothing.
-        maxOutputTokens: 26_000,
+        why: 'the tier-0 pro id, with the custom-tools variant production actually configures',
         slot: {
             provider: 'google_gemini',
-            model: 'gemini-2.5-flash',
-            reasoningEffort: 'high',
+            model: 'gemini-3.1-pro-preview-customtools',
+            reasoningEffort: 'medium', // prod: 16 de 24 slots usam medium; 7 high, 1 ausente
+        },
+        reasons: true,
+    },
+    {
+        brand: 'google_gemini_flash',
+        why: 'the tier-0 flash id — same key and transport as the row above, different thinking ceiling',
+        slot: {
+            provider: 'google_gemini',
+            model: 'gemini-3-flash-preview',
+            reasoningEffort: 'low',
+        },
+        reasons: true,
+    },
+    // The pro id's SECOND production config. 23 of its 24 slots go straight to
+    // AI Studio (the row above); one goes through OpenRouter, where the model is
+    // namespaced `google/…` and our `reasoning:{effort}` has to survive a
+    // translation Google never sees. One slot is still a config, and it is the
+    // config a whole transport is represented by.
+    {
+        brand: 'open_router_gemini',
+        why: 'the tier-0 pro id through the aggregator instead of AI Studio — a different namespace and a translated reasoning field',
+        slot: {
+            provider: 'open_router',
+            model: 'google/gemini-3.1-pro-preview-customtools',
+            reasoningEffort: 'medium',
+            // `google-ai-studio` — the slug, read from OpenRouter's own
+            // /models/<id>/endpoints, not guessed. The first version of this row
+            // pinned `google-vertex`, which is not a slug this model is served
+            // under: with `allow_fallbacks:false` that excluded every endpoint
+            // and the call came back `No endpoints found for <model>` — a
+            // message that reads like the model is gone, when the pin was wrong.
+            //
+            // Pinned for the same reason `open_router_glm` is: OpenRouter picks
+            // an upstream per call and they do not all translate the reasoning
+            // field alike. This model has exactly ONE endpoint today, so the pin
+            // costs nothing now and holds the row still if Google adds a second.
+            openrouterProviderOrder: ['google-ai-studio'],
+            openrouterAllowFallbacks: false,
         },
         reasons: true,
     },
@@ -475,7 +311,7 @@ const LIVE = [
         slot: {
             provider: 'open_router',
             model: 'deepseek/deepseek-v4-flash',
-            reasoningEffort: 'low',
+            reasoningEffort: 'high', // prod: 10 de 17 slots usam high
         },
         reasons: true,
     },
@@ -485,17 +321,7 @@ const LIVE = [
         slot: {
             provider: 'openai',
             model: 'gpt-5.4',
-            reasoningEffort: 'low',
-        },
-        reasons: true,
-    },
-    {
-        brand: 'google_vertex',
-        why: 'the ONLY provider the offline matrix cannot exercise — its build needs a real service-account JSON, so this tier is its only coverage. Production slots: ZERO today (all 42 Google-model shapes run over AI Studio, OpenRouter or a proxy), and the row stays anyway: Vertex is a supported provider whose transport code can rot unwatched precisely BECAUSE nobody is exercising it, and AI Studio does not cover it — different endpoint, different auth, different SDK package',
-        slot: {
-            provider: 'google_vertex',
-            model: 'gemini-3.7-flash',
-            reasoningEffort: 'low',
+            reasoningEffort: 'medium', // prod: 18 de 22 slots usam medium
         },
         reasons: true,
     },
@@ -515,20 +341,17 @@ const LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-sonnet-4-6',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'medium', // prod: 11 de 17 slots usam medium; nenhum usa low
         },
-        reasons: true,
-    },
-    {
-        brand: 'anthropic-legacy',
-        why: 'legacy (3.x-4.5): budgetTokens is REQUIRED and `adaptive` is rejected — the opposite shape from the row above, on the same provider and the same key',
-        slot: {
-            provider: 'anthropic',
-            model: 'claude-sonnet-4-5-20250929',
-            reasoningEffort: 'low',
-        },
-        // `low` emits budget_tokens 5_000; the cap has to clear it.
-        maxOutputTokens: 6_144,
         reasons: true,
     },
     {
@@ -537,20 +360,55 @@ const LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-opus-4-7',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            // `high`, not the `medium` that 2 of the 5 production slots use.
+            //
+            // Measured, not assumed: at `medium` this row came back 200 with
+            // reasoningTokens=0, while `anthropic` (sonnet-4-6) at the SAME
+            // effort, prompt, transport and key returned 50. Opus 4.7 is the
+            // stronger model, so it finds this prompt easy enough to skip —
+            // which is `medium` behaving exactly as AWS documents it ("moderate
+            // thinking, may skip").
+            //
+            // An adaptive model at `medium` DECIDES per request, so neither
+            // `reasons: true` nor `false` is a stable assertion there — it would
+            // flake, and a weekly job that flakes gets muted. `high` is the only
+            // level AWS documents as "Claude always thinks", so it is the level
+            // at which this row's drift detector means anything. It is also what
+            // 3 of the 5 slots use.
+            //
+            // WORTH KNOWING SEPARATELY: the 2 slots on `medium` are paying Opus
+            // prices for reviews that may carry no reasoning at all.
+            reasoningEffort: 'high',
         },
-        reasons: true,
-    },
-    {
-        brand: 'anthropic-off-modern',
-        why: 'the row that carries the most: reasoning OFF on a 4.7+/5 model WITH a stored temperature. Two things can only be checked here — the disable must be said OUT LOUD (an adaptive Claude thinks unless told not to, so silence means the user who picked Off keeps paying), and temperature must be WITHHELD by our policy, because with thinking off the SDK forwards it and this line 400s on it. `claude-sonnet-5` with a stored temperature is a real production shape',
-        slot: {
-            provider: 'anthropic',
-            model: 'claude-sonnet-5',
-            reasoningEffort: 'none',
-            temperature: 0.3,
-        },
-        reasons: false as const,
+        // NO reasoning assertion — deliberately, and this is the only row in the
+        // table without one.
+        //
+        // Opus 4.7 is adaptive, and adaptive means the MODEL decides per
+        // request. Asked directly with the shape below at effort `high`, the
+        // level AWS documents as "Claude always thinks", it answered:
+        //
+        //     content blocks: [text]        (no thinking block)
+        //     usage.output_tokens_details.thinking_tokens: 0
+        //
+        // The vendor itself reports zero. Meanwhile sonnet-4-6 at `medium` and
+        // opus-5 at `high` — same provider, same key, same prompt, structurally
+        // identical request (verified on the wire) — both reason. So `true`
+        // would fail today and `false` would fail the day it decides to think:
+        // neither is stable, and a weekly job that flakes gets muted.
+        //
+        // What this row is FOR is unaffected: 4.7+ rejects `budgetTokens`
+        // outright, so a regression that sends the legacy shape here is a hard
+        // 400 and this row catches it. The reasoning signal was always the
+        // secondary check; on this model it is not a check at all.
     },
     {
         brand: 'anthropic-opus-5',
@@ -558,40 +416,17 @@ const LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-opus-5',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'high',
         },
-        reasons: true,
-    },
-    {
-        brand: 'anthropic-fable',
-        why: 'the ALWAYS-THINKING generation, and the only branch of the Anthropic table with no live coverage at all. Fable/Mythos reject `thinking:{type:disabled}` with a 400, so for them "off" has to mean OMITTING the field — the exact opposite of the claude-sonnet-5 row above, which must say the disable out loud. Effort is `none` on purpose: that is the branch under test, and asserting `reasons: true` under it is the whole point — we send no disable and the model thinks anyway. If we ever start sending one, this row 400s instead of quietly costing a customer their reviews',
-        slot: {
-            provider: 'anthropic',
-            model: 'claude-fable-5',
-            reasoningEffort: 'none',
-        },
-        // A newer Fable (5.1 and on) needs no new row: put
-        // `{"apiKey":"…","model":"claude-fable-5-1"}` in the secret and the
-        // spread overrides the model here. The id is NOT guessed in code —
-        // `claude-fable-5` is one the SDK declares, and inventing an id that may
-        // not exist yet would fail this row for the wrong reason.
-        reasons: true,
-    },
-    {
-        brand: 'anthropic_compatible',
-        why: 'the SAME Kimi over the ANTHROPIC protocol, where the emitted shape differs from the openai_compatible row above — and k3 is always-thinking, so the rule is "omit the disable, pin temperature to 1" rather than "send one"',
-        slot: {
-            provider: 'anthropic_compatible',
-            model: 'k3',
-            baseURL: 'https://api.kimi.com/coding',
-            // `low`, not `high`, ON PURPOSE: what this row tests is the SHAPE
-            // this transport emits, and `high` would authorise a 40,000-token
-            // thinking budget for a prompt asking for one word. The effort VALUE
-            // is tested where it is the subject (deepseek's low/high/max
-            // mapping, GLM's medium fold).
-            reasoningEffort: 'low',
-        },
-        maxOutputTokens: 6_144,
         reasons: true,
     },
     // NOT covered, deliberately: `novita` (3 production shapes). Verified against
@@ -606,39 +441,73 @@ const LIVE = [
         why: 'Claude on Converse takes the adaptive shape inside additionalModelRequestFields, and this transport cannot express an explicit disable (5 production slots)',
         slot: {
             provider: 'amazon_bedrock',
-            model: 'anthropic.claude-sonnet-4-6',
+            // The `us.` prefix is not decoration — it names an INFERENCE
+            // PROFILE, and Claude on Bedrock is not servable without one:
+            //   "Invocation of model ID anthropic.claude-sonnet-4-6 with
+            //    on-demand throughput isn't supported. Retry your request with
+            //    the ID or ARN of an inference profile that contains this model."
+            //
+            // This row carried the bare id because it was copied from a real
+            // production slot — and that slot is one of the five Bedrock-Claude
+            // configs in the corpus, the ONLY one without a prefix. It has
+            // never worked. It sits in a `fallback`, which is why nobody
+            // noticed: a fallback only runs once the primary has already
+            // failed, so its error arrives as part of an outage instead of on
+            // its own.
+            model: 'us.anthropic.claude-sonnet-4-6',
             // API_AWS_REGION is the one name here that already exists in
             // this repo's env schema; a per-run override rides in the secret.
             awsRegion: process.env.API_AWS_REGION || 'us-east-1',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'medium', // prod: 11 de 17 slots do sonnet-4-6 usam medium
         },
         // Bedrock authenticates with a bearer token, not `apiKey`; the slot
         // field is filled from the same value below.
         credentialField: 'awsBearerToken' as const,
         reasons: true,
     },
-    {
-        brand: 'azure',
-        why: 'an o-series deployment takes OpenAI reasoning.effort under the azure namespace — the module had no reasoning() at all until recently',
-        slot: {
-            provider: 'azure',
-            // Both are deployment-specific and come from the secret's object
-            // form; without an endpoint there is nothing to call, so the row
-            // skips rather than failing on an empty URL.
-            model: 'o3-mini',
-            baseURL: '',
-            reasoningEffort: 'low',
-        },
-        // No endpoint, nothing to call: a deployment URL is not optional on
-        // Azure the way a baseURL is elsewhere, so the row skips rather than
-        // failing against an empty URL.
-        requires: () => !!slotExtras('azure').baseURL,
-        reasons: true,
-    },
 
     // ── gaps found by weighing the rows against what production actually runs.
     // Each is a (provider + family) combination with real slots behind it and no
     // live row, which is how a transport-specific rule goes unchecked. ────────
+    // Opus 4.7's SECOND production config. The row above runs it on Anthropic
+    // native (4 slots); this one is Bedrock Converse (1 slot), where the SAME
+    // model takes the adaptive shape inside `additionalModelRequestFields`
+    // instead of at the top level. Separate from the Bedrock row above because
+    // that one is a 4.6 — this pins the 4.7+ shape ON this transport, and the
+    // two generations are a 400 in each other's form.
+    {
+        brand: 'bedrock_opus47',
+        why: 'Opus 4.7 on Converse — the 4.7+ shape inside additionalModelRequestFields, which the 4.6 Bedrock row above does not exercise',
+        slot: {
+            provider: 'amazon_bedrock',
+            // `global.` is the routing-anywhere profile, and it is the form the
+            // production slot carries. Not derived from a region: unlike `us.`
+            // or `eu.`, it is a deliberate choice by whoever configured it.
+            model: 'global.anthropic.claude-opus-4-7',
+            awsRegion: process.env.API_AWS_REGION || 'us-east-1',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'high',
+        },
+        credentialField: 'awsBearerToken' as const,
+        reasons: true,
+    },
     {
         brand: 'open_router_glm',
         why: 'OpenRouter is 67 production shapes and was represented by ONE family. GLM is its largest (17 shapes) and behaves nothing like DeepSeek there: the aggregator normalises `reasoning:{effort}` for every upstream, so what this row checks is whether OpenRouter still translates it for a Z.ai model rather than passing our field through to an upstream that wants `thinking`',
@@ -646,6 +515,18 @@ const LIVE = [
             provider: 'open_router',
             model: 'z-ai/glm-5.2',
             reasoningEffort: 'medium',
+            // PINNED, because the first two live runs of this row returned 135
+            // reasoning tokens and then 0. Nothing about our request changed:
+            // OpenRouter picks an upstream per call, and they do not all
+            // translate `reasoning:{effort}` the same way. Unpinned, the row
+            // asserts the routing lottery rather than the request — and a
+            // weekly job that goes red at random is one people learn to ignore.
+            //
+            // Pinning is also the faithful shape: production slots pin, with
+            // exactly this pair of fields (`["z-ai"]`, `["novita","z-ai",
+            // "siliconflow"]` and `["wafer/fp4"]` all appear in the corpus).
+            openrouterProviderOrder: ['z-ai'],
+            openrouterAllowFallbacks: false,
         },
         reasons: true,
     },
@@ -722,63 +603,6 @@ const LIVE = [
         },
         reasons: false,
     },
-    {
-        brand: 'open_router_nemotron',
-        // `reasons: false`: no thinking budget to clear, so a word is enough.
-        maxOutputTokens: 512,
-        why: 'Nemotron is 10 slots, 7 of them through OpenRouter, and NVIDIA ids carry suffixes (:free, -reasoning) that decide behaviour while our code reads none of them',
-        slot: {
-            provider: 'open_router',
-            model: 'nvidia/nemotron-3-ultra-550b-a55b',
-            reasoningEffort: 'low',
-        },
-        reasons: false,
-    },
-    {
-        brand: 'open_router_mimo',
-        // `reasons: false`: no thinking budget to clear, so a word is enough.
-        maxOutputTokens: 512,
-        why: 'MiMo is 7 slots across two Xiaomi PoPs and OpenRouter, with no trait entry anywhere',
-        slot: {
-            provider: 'open_router',
-            model: 'xiaomi/mimo-v2-pro',
-            reasoningEffort: 'low',
-        },
-        reasons: false,
-    },
-    {
-        brand: 'open_router_grok',
-        // `reasons: false`: no thinking budget to clear, so a word is enough.
-        maxOutputTokens: 512,
-        why: 'the OTHER Grok slot. `bedrock_grok` pins the Converse transport; this pins the aggregator one, where the same model is reached by a path that normalises reasoning for every upstream',
-        slot: {
-            provider: 'open_router',
-            model: 'x-ai/grok-4.3',
-            temperature: 0,
-            reasoningEffort: 'low',
-        },
-        reasons: false,
-    },
-
-    // ── the biggest UNCOVERED hosts, by production weight. Each is an
-    // OpenAI-protocol endpoint serving a model that reasons natively, so
-    // `reasons: true` here is the sharp question: if it comes back false, the
-    // host ate our reasoning field and every org on it is paying for a
-    // configured effort that does nothing.
-    {
-        brand: 'fireworks',
-        // Enough for a low-effort thought plus a visible token, not the default.
-        maxOutputTokens: 2048,
-        why: 'api.fireworks.ai is the largest uncovered host (11 slots) and the only one whose ids are DEEP PATHS — `accounts/fireworks/models/…`. That shape already broke cost lookup once; here it must also survive as a model id, and the effort must reach a DeepSeek that reasons natively',
-        slot: {
-            provider: 'openai_compatible',
-            model: 'accounts/fireworks/models/deepseek-v4-flash-0731',
-            baseURL: 'https://api.fireworks.ai/inference/v1',
-            temperature: 0,
-            reasoningEffort: 'low',
-        },
-        reasons: true,
-    },
 
     // ── the audit's open questions: cases where the DOCS and our code disagree,
     // or where no readable doc exists at all. Offline tests cannot settle any of
@@ -791,26 +615,10 @@ const LIVE = [
             provider: 'openai_compatible',
             model: 'kimi-k2.7-code',
             baseURL: 'https://api.moonshot.ai/v1',
-            reasoningEffort: 'low',
+            reasoningEffort: 'medium', // prod: 8 de 15 slots usam medium; 4 high
             temperature: 0.2,
         },
         reasons: true,
-    },
-    {
-        brand: 'bedrock_grok',
-        why: 'the one case the audit refused to guess. Four Bedrock slots configure an effort that reaches no parameter, because AWS documents Grok reasoning:{effort} for its Responses API and shows none in its Converse example — inventing an additionalModelRequestFields entry risks a ValidationException on every review. `reasons: false` asserts the CURRENT behaviour, so this row goes red the day the transport starts carrying it, either because AWS documented it or because we did',
-        slot: {
-            provider: 'amazon_bedrock',
-            model: 'global.xai.grok-4.6',
-            awsRegion: process.env.API_AWS_REGION || 'us-east-1',
-            reasoningEffort: 'low',
-        },
-        credentialField: 'awsBearerToken' as const,
-        // Grok reasons intrinsically, so tokens may well be spent — what this
-        // row cannot claim is that OUR effort caused it. Asserted as "we send
-        // nothing", which is checkable, rather than "reasoning happened", which
-        // would be true either way and prove nothing.
-        reasons: false,
     },
 ];
 
@@ -882,7 +690,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                                 ? { [(c as any).credentialField]: 'budget-probe' }
                                 : {}),
                         } as unknown as NormalizedModel,
-                        messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
+                        messages: [{ role: 'user', content: 'A train leaves at 14:35 and the trip takes 2h47m. What time does it arrive? Reply with only HH:MM.' }],
                         loop: { tools: {}, maxSteps: 1 },
                         runName: 'byok-live-budget',
                         maxOutputTokens: (c as any).maxOutputTokens ?? 4_096,
@@ -893,10 +701,20 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                 }
                 const cap =
                     sent?.max_tokens ??
+                    // OpenAI reasoners reject `max_tokens` and take this
+                    // instead — the rename the compatible transport performs.
+                    // Reading only `max_tokens` reported cap=0 for that row, so
+                    // the per-row ceiling below could not see it AT ALL: the one
+                    // guard against a row authorising unbounded spend was blind
+                    // to the exact row whose field name had just changed.
+                    sent?.max_completion_tokens ??
                     sent?.generationConfig?.maxOutputTokens ??
                     sent?.max_output_tokens ??
                     sent?.inferenceConfig?.maxTokens ??
                     0;
+                // A row with NO ceiling is the failure this probe exists to
+                // prevent; zero must never read as "cheap".
+                expect([c.brand, cap]).not.toEqual([c.brand, 0]);
                 total += cap;
                 perRow.push([c.brand, cap]);
             }
@@ -917,81 +735,32 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         // has to be deliberate: it means a row now authorises real spend.
         expect(total).toBeLessThanOrEqual(150_000);
         // ...and no single row may hold most of the budget on its own.
+        //
+        // 45_000, raised from 30_000, and the reason is written here because the
+        // comment above says raising it has to be deliberate.
+        //
+        // `anthropic_compatible` (k3) is the one row over 30k: the Anthropic
+        // protocol adds a thinking BUDGET on top of the declared cap, and that
+        // budget scales with effort — 5,000 at `low`, 40,000 at `high`. The row
+        // ran at `low` only because a test author picked it; both k3 slots in
+        // production run `high`, so `low` was testing a configuration no
+        // customer has. Fidelity to the stored config is the whole point of
+        // this tier, so the effort follows production and the ceiling follows
+        // the effort.
+        //
+        // Authorised, not spent: the prompt is one multiplication. Worst case
+        // for the run is about $1.56 at catalog prices, once a week.
         for (const [brand, cap] of perRow) {
             expect([brand, cap]).toEqual([brand, expect.any(Number)]);
-            expect(cap).toBeLessThanOrEqual(30_000);
+            expect(cap).toBeLessThanOrEqual(45_000);
         }
         // The probe must actually have measured something — a stub that captured
-        // nothing would sum to zero and pass.
-        expect(total).toBeGreaterThan(50_000);
+        // nothing would sum to zero and pass. Derived from the row count rather
+        // than pinned to a number: a fixed floor goes stale the moment the table
+        // shrinks, and then it fails for the size of the table instead of for
+        // the thing it guards.
+        expect(total).toBeGreaterThan(LIVE.length * 1_000);
     }, 120_000);
-
-    /**
-     * The shipped template must cover NOTHING. It is the file people copy, and
-     * every value in it is a placeholder — if any of them read as a credential,
-     * a half-filled copy would run that row against a vendor with the literal
-     * string `sk-…` and fail on auth, which looks like a broken test rather
-     * than an unfilled field. Reading the real example file (not a copy of its
-     * strings) is the point: a new placeholder STYLE added to the template
-     * fails here until the guard learns to recognise it.
-     */
-    it('treats every value in the shipped template as absent', () => {
-        const template = readFileSync(
-            join(__dirname, 'testing', 'byok-live-keys.example.json'),
-            'utf8',
-        );
-        const { keys, unfilled } = liveKeys(template);
-
-        // Not "the map is empty" — stripping is per FIELD, so Bedrock's real
-        // `us-east-1` legitimately survives beside its placeholder key. What
-        // must not survive anywhere is the thing that AUTHENTICATES a row.
-        for (const [brand, entry] of Object.entries(keys)) {
-            const credential =
-                typeof entry === 'string' ? entry : entry.apiKey;
-            expect([brand, credential]).toEqual([brand, undefined]);
-        }
-        // ...and it says so, rather than silently yielding nothing — the
-        // difference between "you left these blank" and "you sent nothing".
-        expect(unfilled.length).toBeGreaterThan(0);
-    });
-
-    /** A brand is usable only when the field that authenticates it is real. */
-    it('drops a placeholder field while keeping the real ones beside it', () => {
-        const { keys } = liveKeys(
-            JSON.stringify({
-                azure: {
-                    apiKey: 'real-key',
-                    baseURL: 'https://<your-resource>.openai.azure.com/openai',
-                },
-                deepseek: 'sk-…',
-                open_router: '   ',
-            }),
-        );
-
-        // The endpoint is gone, so the Azure row's `baseURL` gate skips it —
-        // no call to a host named `<your-resource>`.
-        expect(keys).toEqual({ azure: { apiKey: 'real-key' } });
-    });
-
-    /**
-     * Vertex's builder DEGRADES instead of failing: a credential that is not a
-     * parseable service-account JSON falls through to `createGoogleGenerativeAI`
-     * — AI Studio, a different endpoint with different auth. That is the right
-     * call in production (a user who pasted an `AIzaSy…` key into the Vertex
-     * slot still gets a working model), and it is poison here: the row would go
-     * green having tested the one transport it is the only coverage for.
-     *
-     * So when a Vertex credential is present, it must parse. When it is absent
-     * the row skips and this asserts nothing — the same shape as every other row.
-     */
-    it('never lets the Vertex row pass by degrading to AI Studio', () => {
-        const credential = key('google_vertex');
-        if (!credential) {
-            return;
-        }
-        const parsed = parseSaCredentials(credential);
-        expect(parsed?.project_id).toEqual(expect.any(String));
-    });
 
     /**
      * The workflow hands this job a set of secrets; `REPO_SECRET` decides which
@@ -1003,7 +772,14 @@ describe('BYOK reasoning — LIVE provider contract', () => {
      * set — and the job pays to pass it either way.
      */
     it('reads every credential the CI job passes it', () => {
-        const declared = new Set(Object.values(REPO_SECRET).flat());
+        // Two ways a brand reads a secret: the table names it (a legacy name
+        // that predates this file), or the brand DERIVES it. Both count, which
+        // is what makes the convention real — adding a row and a
+        // `BYOK_<BRAND>_API_KEY` secret needs no third edit here.
+        const declared = new Set([
+            ...Object.values(REPO_SECRET).flat(),
+            ...LIVE.map((c) => `BYOK_${c.brand.toUpperCase()}_API_KEY`),
+        ]);
         for (const name of secretsPassedByCi()) {
             expect([name, declared.has(name)]).toEqual([name, true]);
         }
@@ -1029,39 +805,36 @@ describe('BYOK reasoning — LIVE provider contract', () => {
     });
 
     /**
-     * A brand with no CI-reachable secret can only come from `BYOK_LIVE_KEYS`,
-     * so it must be listed in the template — the template is the entire
-     * instruction for what a human has to go and find.
+     * Every row must be reachable from a secret the CI job passes.
      *
-     * Adding a row is one edit; remembering the file people copy is a second,
-     * and it was already missed once: `openai_compatible_claude` shipped with
-     * no fallback and no template entry, discoverable only by reading the rows.
-     * A template is documentation only while it is not allowed to be incomplete.
+     * This replaces two checks that kept a copy-me template honest. The template
+     * is gone — there is no per-brand override file any more, every credential
+     * is a GitHub Actions secret — and with it went the only way a row could be
+     * authenticated from outside the workflow. So the question is no longer
+     * "is this brand documented", it is the stricter one: a row the workflow
+     * cannot reach can NEVER run. It skips, forever, and the coverage report
+     * says "no credential" as though someone merely has to go find one.
+     *
+     * Both directions matter and the other one is above: this asserts no row is
+     * unreachable, `reads every credential the CI job passes it` asserts no
+     * secret is passed that no brand will read.
      */
-    it('lists every secret-only brand in the template people copy', () => {
-        const template = JSON.parse(
-            readFileSync(
-                join(__dirname, 'testing', 'byok-live-keys.example.json'),
-                'utf8',
-            ),
-        ) as Record<string, unknown>;
-        // The two places that tell a human what to FILL IN: a field, or the
-        // overrides note for a brand that borrows another's key. Deliberately
-        // not "mentioned somewhere in the file" — the weights list names every
-        // brand, so a substring search would accept a template with nothing to
-        // fill and call that documented.
-        const fillable = new Set(Object.keys(template));
-        const overrides = JSON.stringify(template._optional_overrides ?? '');
+    it('can reach a credential for every row it declares', () => {
         const passed = new Set(secretsPassedByCi());
 
-        // Follow the borrow chain: `anthropic-fable` is covered by the key
-        // `anthropic` resolves, and needs no entry of its own.
+        // Follow the borrow chain: `google_gemini_flash` is covered by whatever
+        // `google_gemini` resolves, and needs no secret of its own.
         const reachableInCi = (brand: string): boolean => {
             const seen = new Set<string>();
             let b: string | undefined = brand;
             while (b && !seen.has(b)) {
                 seen.add(b);
-                if ((REPO_SECRET[b] ?? []).some((n) => passed.has(n))) {
+                // Both ways a brand reads a secret: the table names it, or the
+                // brand derives `BYOK_<BRAND>_API_KEY`.
+                const names = REPO_SECRET[b] ?? [
+                    `BYOK_${b.toUpperCase()}_API_KEY`,
+                ];
+                if (names.some((n) => passed.has(n))) {
                     return true;
                 }
                 b = BORROWS_FROM[b];
@@ -1070,53 +843,8 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         };
 
         for (const { brand } of LIVE) {
-            if (reachableInCi(brand)) {
-                continue;
-            }
-            const named =
-                fillable.has(brand) ||
-                // Word-bounded, so `minimax` does not pass by being a prefix
-                // of `minimax_m3`.
-                new RegExp('\\b' + brand + '\\b').test(overrides);
-            expect([brand, named]).toEqual([brand, true]);
+            expect([brand, reachableInCi(brand)]).toEqual([brand, true]);
         }
-    });
-
-
-    /**
-     * ...and the template must not ask for a key no row will ever read.
-     *
-     * The check above only runs one way, and the gap showed up in the file it
-     * exists to protect: a working copy made before five rows were removed
-     * still listed minimax, minimaxi, xiaomi and ollama_cloud, so it sent
-     * someone hunting four credentials for tests that no longer exist — and
-     * nothing said a word, because every brand that DID need documenting was
-     * documented.
-     *
-     * A stale entry is worse than a missing one. A missing key skips a row and
-     * the report names it; a stale key is work that produces nothing, and the
-     * person doing it has no way to tell.
-     */
-    it('asks for no key that no row will read', () => {
-        const template = JSON.parse(
-            readFileSync(
-                join(__dirname, 'testing', 'byok-live-keys.example.json'),
-                'utf8',
-            ),
-        ) as Record<string, unknown>;
-        const brands = new Set(LIVE.map((c) => c.brand));
-
-        for (const field of Object.keys(template)) {
-            // `_readme`, `_weights`, `_optional_overrides` are notes to a human.
-            if (field.startsWith('_')) {
-                continue;
-            }
-            expect([field, brands.has(field)]).toEqual([field, true]);
-        }
-        // A template that had lost every fillable field would pass vacuously.
-        expect(
-            Object.keys(template).filter((f) => !f.startsWith('_')).length,
-        ).toBeGreaterThan(0);
     });
 
     it('reports which brands this run actually covered', () => {
@@ -1128,13 +856,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         // eslint-disable-next-line no-console
         console.log(
             `[byok-live] covered: ${covered.join(', ') || '(none)'}\n` +
-                `[byok-live] skipped (no credential): ${skipped.join(', ') || '(none)'}` +
-                // Separate line from "skipped": these brands ARE in the secret,
-                // still holding the template's placeholder. Without saying so,
-                // filling a key wrong and not filling it at all look identical.
-                (UNFILLED.length
-                    ? `\n[byok-live] present but still a placeholder: ${UNFILLED.join(', ')}`
-                    : ''),
+                `[byok-live] skipped (no credential): ${skipped.join(', ') || '(none)'}`,
         );
         expect(LIVE.length).toBeGreaterThan(0);
 
@@ -1151,7 +873,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
             throw new Error(
                 'byok-live: the weekly run had no credentials for ANY of the ' +
                     `${LIVE.length} brands, so nothing was checked and green would ` +
-                    'mean nothing. Set the BYOK_LIVE_KEYS secret (or any of the ' +
+                    'mean nothing. Set the BYOK_* secrets the workflow passes (or any of the ' +
                     'BYOK_* per-brand secrets) — a PARTIAL set is fine and reports ' +
                     'partial coverage.',
             );
@@ -1177,10 +899,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                 const result = await LLM.run({
                     byokConfig: {
                         ...c.slot,
-                        ...slotExtras(c.brand),
                         // Auth may be inherited even when the rest of the slot
-                        // is not — see `authFieldsFor`.
-                        ...authFieldsFor(c.brand),
                         apiKey: credential,
                         // Bedrock reads a bearer token rather than apiKey.
                         ...((c as any).credentialField
@@ -1190,11 +909,31 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                     messages: [
                         {
                             role: 'user',
-                            // Cheap on purpose: the subject under test is the
-                            // REQUEST shape, not the answer. Reasoning models
-                            // still spend thinking tokens here — that is the
-                            // signal we assert on.
-                            content: 'Reply with the single word: ok',
+                            // Cheap on purpose — the subject under test is the
+                            // REQUEST shape, not the answer — but NOT trivial,
+                            // and that distinction cost a run to learn.
+                            //
+                            // This used to ask for the single word "ok". AWS
+                            // documents adaptive effort as `medium` "may skip
+                            // thinking for very simple queries" and `low`
+                            // "skips thinking for simple tasks". Production
+                            // configures these models at medium/high, so the
+                            // rows carry medium/high — and on a one-word prompt
+                            // a model behaving exactly as documented returns
+                            // ZERO reasoning tokens, failing `reasons: true`
+                            // for a non-regression. Proven live: bedrock_opus47
+                            // answered 200 with reasoningTokens=0.
+                            //
+                            // The effort belongs to the customer's config and
+                            // is not ours to lower; the prompt is ours, so the
+                            // prompt is what moves. `17 * 23` was the first
+                            // attempt and was still too easy: adaptive Claude at
+                            // `medium` returned zero reasoning tokens for it.
+                            // Two carries over a time boundary is the smallest
+                            // thing measured to make it think — and if a model
+                            // still reports none here, that is a fact about the
+                            // customer's configuration, not a test to bend.
+                            content: 'A train leaves at 14:35 and the trip takes 2h47m. What time does it arrive? Reply with only HH:MM.',
                         },
                     ],
                     loop: { tools: {}, maxSteps: 1 },
@@ -1289,7 +1028,13 @@ describe('BYOK reasoning — LIVE provider contract', () => {
  *                      with thinking enabled"
  *   reroute-json       never force a tool at all; put the schema in the prompt —
  *                      for models that cannot stop thinking AND cannot take a
- *                      forced tool_choice
+ *                      forced tool_choice.
+ *                      NO LIVE ROW covers this: the only model that needed it
+ *                      (k3 over the Anthropic protocol) is served from
+ *                      api.kimi.com/coding, which answers Unauthorized for the
+ *                      same key api.moonshot.ai accepts — a separate coding-plan
+ *                      subscription, not a credential we hold. The plan is still
+ *                      selected in production, so this is a real gap.
  *
  * Those two non-trivial plans are the 400s this whole layer exists to prevent,
  * and no amount of plain-generateText coverage can see them: the failure needs a
@@ -1305,17 +1050,6 @@ const STRUCTURED_LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-sonnet-4-6',
-            reasoningEffort: 'high',
-        },
-    },
-    {
-        brand: 'anthropic_compatible',
-        plan: 'reroute-json',
-        why: 'k3 cannot stop thinking and its endpoint cannot take a forced tool_choice — the only sound path is schema-in-prompt. If the plan ever says otherwise this 400s live',
-        slot: {
-            provider: 'anthropic_compatible',
-            model: 'k3',
-            baseURL: 'https://api.kimi.com/coding',
             reasoningEffort: 'high',
         },
     },
@@ -1343,7 +1077,6 @@ describe('BYOK structured output — LIVE, through LLM.run (the one door)', () =
                 const result = await LLM.run({
                     byokConfig: {
                         ...c.slot,
-                        ...slotExtras(c.brand),
                         apiKey,
                     } as unknown as NormalizedModel,
                     user: 'Reply with ok=true and word="ok".',

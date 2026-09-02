@@ -717,13 +717,19 @@ describe('mutation-killing: OpenRouter routing merge + boundary guards', () => {
             // (routing.openrouter). A shallow overwrite would drop reasoning.
             const result = buildProviderOptions('run', undefined, {
                 byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'z-ai/glm-5.2',
                 reasoningEffort: 'medium',
                 openrouterProviderOrder: ['openai', 'anthropic'],
             });
             expect(result).toEqual({
                 openrouter: {
                     reasoning: { effort: 'medium' },
-                    provider: { order: ['openai', 'anthropic'] },
+                    provider: {
+                        order: ['openai', 'anthropic'],
+                        // GLM is a confirmed reasoner, so the effort is made
+                        // binding — see the `require_parameters` case below.
+                        require_parameters: true,
+                    },
                 },
             });
         });
@@ -733,6 +739,9 @@ describe('mutation-killing: OpenRouter routing merge + boundary guards', () => {
             // check) and on array ordering.
             const result = buildProviderOptions('run', undefined, {
                 byokProvider: BYOKProvider.OPEN_ROUTER,
+                // An id the family table does not claim reasons, so the case
+                // stays about the ORDER FILTER and nothing else rides along.
+                modelName: 'qwen/qwen3-coder',
                 reasoningEffort: 'low',
                 openrouterProviderOrder: ['', '   ', 'groq', 'openai'],
             });
@@ -746,6 +755,7 @@ describe('mutation-killing: OpenRouter routing merge + boundary guards', () => {
             // would silently drop the user's explicit opt-out.
             const result = buildProviderOptions('run', undefined, {
                 byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'qwen/qwen3-coder',
                 reasoningEffort: 'low',
                 openrouterAllowFallbacks: false,
             });
@@ -760,6 +770,7 @@ describe('mutation-killing: OpenRouter routing merge + boundary guards', () => {
         it('emits allow_fallbacks=true alongside order when both are set', () => {
             const result = buildProviderOptions('run', undefined, {
                 byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'qwen/qwen3-coder',
                 reasoningEffort: 'high',
                 openrouterProviderOrder: ['deepinfra'],
                 openrouterAllowFallbacks: true,
@@ -775,11 +786,112 @@ describe('mutation-killing: OpenRouter routing merge + boundary guards', () => {
             });
         });
 
+        // ── require_parameters: the routing lottery, and why it is gated ────
+        //
+        // OpenRouter picks an upstream PER REQUEST, weighted by price, and the
+        // parameters it routes on are `tools`, `response_format` and
+        // `verbosity` — reasoning is not among them. So the same request can
+        // land somewhere that implements the effort and somewhere that ignores
+        // it, silently. Measured, not inferred: one z-ai/glm-5.2 call returned
+        // 135 reasoning tokens and the next returned 0.
+        it('makes the effort binding for a model the table confirms reasons', () => {
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'z-ai/glm-5.2',
+                reasoningEffort: 'high',
+            });
+
+            expect(result.openrouter.provider).toEqual({
+                require_parameters: true,
+            });
+        });
+
+        // ...and the other half, which is the one with teeth. Applied to every
+        // slot carrying an effort, a live run answered:
+        //
+        //   qwen/qwen3-coder — No endpoints found that can handle the
+        //   requested parameters.
+        //
+        // Not a degraded answer: no answer. There is no reasoning-capable
+        // upstream for that model, so a hard preference removes every
+        // candidate and the review fails outright. A silently ignored
+        // parameter costs the user a setting; this costs them the review.
+        it('never makes it binding for a model the table does not claim', () => {
+            for (const modelName of [
+                'qwen/qwen3-coder',
+                'nvidia/nemotron-3-ultra-550b-a55b',
+                'x-ai/grok-4.3',
+                'some/self-hosted-thing',
+            ]) {
+                const result = buildProviderOptions('run', undefined, {
+                    byokProvider: BYOKProvider.OPEN_ROUTER,
+                    modelName,
+                    reasoningEffort: 'high',
+                });
+
+                expect([modelName, result.openrouter.provider]).toEqual([
+                    modelName,
+                    undefined,
+                ]);
+            }
+        });
+
+        // The override branch had the fix and could not deliver it: an
+        // OpenRouter override carries a top-level `openrouter` key, and the
+        // spread that placed it replaced the routing's whole object. An
+        // override naming only `reasoning` therefore came out with NO provider
+        // block — on the routing lottery, which is the thing being fixed.
+        it('keeps require_parameters when an override names only reasoning', () => {
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'z-ai/glm-5.2',
+                reasoningEffort: 'high',
+                reasoningConfigOverride:
+                    '{"openrouter":{"reasoning":{"effort":"max"}}}',
+            });
+
+            expect(result.openrouter).toEqual({
+                reasoning: { effort: 'max' },
+                provider: { require_parameters: true },
+            });
+        });
+
+        it("lets an override's own provider block win outright", () => {
+            // Someone who pins their own routing has already solved the
+            // problem — and the two production overrides that do this set
+            // `require_parameters` by hand. Merging ours in would silently
+            // rewrite a block they wrote deliberately.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'z-ai/glm-5.2',
+                reasoningEffort: 'high',
+                reasoningConfigOverride:
+                    '{"openrouter":{"provider":{"order":["fireworks"]},"reasoning":{"effort":"max"}}}',
+            });
+
+            expect(result.openrouter.provider).toEqual({
+                order: ['fireworks'],
+            });
+        });
+
+        it('leaves routing alone when no effort was configured', () => {
+            // `require_parameters` answers a question nobody asked here: with
+            // no effort there is nothing that could be silently dropped.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'z-ai/glm-5.2',
+                reasoningEffort: 'none',
+            });
+
+            expect(result.openrouter?.provider).toBeUndefined();
+        });
+
         it('omits the provider payload when order is all-empty and no fallbacks flag', () => {
             // hasOrder=false && hasFallbacksOverride=false → routing {}; only the
             // reasoning payload survives (no empty provider key leaks through).
             const result = buildProviderOptions('run', undefined, {
                 byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'qwen/qwen3-coder',
                 reasoningEffort: 'medium',
                 openrouterProviderOrder: ['', '  '],
             });
