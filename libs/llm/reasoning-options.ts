@@ -11,7 +11,10 @@ import { createLogger } from '@libs/core/log/logger';
 import type { LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 import { REGISTRY } from '@libs/llm/providers';
 import type { ProviderBuildConfig } from '@libs/llm/providers/kernel/types';
-import { NON_REASONING_TRAITS } from '@libs/llm/providers/kernel/reasoning-traits';
+import {
+    NON_REASONING_TRAITS,
+    resolveCompatibleReasoningTraits,
+} from '@libs/llm/providers/kernel/reasoning-traits';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 
 const logger = createLogger('ReasoningOptions');
@@ -91,7 +94,18 @@ export function buildProviderOptions(
                 input?.modelName,
             );
             return {
-                ...buildOpenRouterRouting(input),
+                ...buildOpenRouterRouting({
+                    ...input,
+                    // A hand-written override IS a request for reasoning when
+                    // it names reasoning at all — gated the same way as the
+                    // effort path below. The spread lets a routing block the
+                    // user wrote themselves win.
+                    wantsReasoning:
+                        JSON.stringify(parsed).includes('reasoning') &&
+                        !!resolveCompatibleReasoningTraits(
+                            input?.modelName ?? '',
+                        )?.thinksByDefault,
+                }),
                 ...override,
             };
         } catch {
@@ -104,7 +118,17 @@ export function buildProviderOptions(
         input?.reasoningEffort,
         input?.modelName,
     );
-    const routing = buildOpenRouterRouting(input);
+    const routing = buildOpenRouterRouting({
+        ...input,
+        // An effort above 'none' is a request for reasoning — but only a model
+        // the table CONFIRMS reasons may have that request made binding, or
+        // the routing has nowhere left to send it.
+        wantsReasoning:
+            !!input?.reasoningEffort &&
+            input.reasoningEffort !== 'none' &&
+            !!resolveCompatibleReasoningTraits(input?.modelName ?? '')
+                ?.thinksByDefault,
+    });
     const merged = mergeOpenRouterOptions(reasoning, routing);
     logger.log({
         message: '[thinking] providerOptions resolved',
@@ -132,6 +156,8 @@ function buildOpenRouterRouting(input?: {
     byokProvider?: BYOKProvider | string;
     openrouterProviderOrder?: string[];
     openrouterAllowFallbacks?: boolean;
+    /** The slot asked for reasoning AND the model is a confirmed reasoner. */
+    wantsReasoning?: boolean;
 }): Record<string, any> {
     if (!input || input.byokProvider !== BYOKProvider.OPEN_ROUTER) return {};
 
@@ -142,12 +168,47 @@ function buildOpenRouterRouting(input?: {
     const hasFallbacksOverride =
         typeof input.openrouterAllowFallbacks === 'boolean';
 
-    if (!hasOrder && !hasFallbacksOverride) return {};
+    if (!hasOrder && !hasFallbacksOverride && !input.wantsReasoning) {
+        return {};
+    }
 
     const providerPayload: Record<string, any> = {};
     if (hasOrder) providerPayload.order = order;
     if (hasFallbacksOverride) {
         providerPayload.allow_fallbacks = input.openrouterAllowFallbacks;
+    }
+    // A reasoning effort the routing can silently discard is not a setting, it
+    // is a coin flip — but forcing the point breaks the models that have no
+    // reasoning-capable upstream at all, so it is gated.
+    //
+    // OpenRouter picks an upstream PER REQUEST, weighted by price, and the
+    // parameters it routes on are `tools`, `response_format` and `verbosity`.
+    // Reasoning is not among them, and the docs say what happens then: "the
+    // request is still routed to that model and the parameter is ignored". No
+    // error, no warning, a normal answer that simply did not think. Measured,
+    // not inferred: the same z-ai/glm-5.2 request returned 135 reasoning
+    // tokens on one call and 0 on the next, minutes apart.
+    //
+    // `require_parameters` turns that soft preference into a hard one. It is
+    // sent ONLY for a model the family table confirms reasons, and that limit
+    // is measured too — applied to every slot with an effort, a live run came
+    // back with:
+    //
+    //     qwen/qwen3-coder — No endpoints found that can handle the requested
+    //     parameters.
+    //
+    // Not a degraded answer: no answer. There is no reasoning-capable upstream
+    // for that model, so the hard preference removed every candidate and the
+    // review would have failed outright. A silently ignored parameter costs
+    // the user a setting; a dead request costs them the review.
+    //
+    // Models that reason WITHOUT being declared (nemotron, grok and mimo all
+    // did on the same run) stay on the soft preference. They lose the
+    // guarantee; they never lose the call.
+    //
+    // https://openrouter.ai/docs/features/provider-routing
+    if (input.wantsReasoning) {
+        providerPayload.require_parameters = true;
     }
     return { openrouter: { provider: providerPayload } };
 }
