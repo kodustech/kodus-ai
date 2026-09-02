@@ -690,11 +690,12 @@ describe('production config shapes — invariants', () => {
         expect(broken).toEqual([]);
     }, 180000);
 
-    it('every stored baseURL that would double the endpoint path is caught by the save guard', async () => {
-        // This does NOT assert that no such config exists — one does, in
-        // production, on both slots of a live org. It asserts that the guard
-        // recognises every one of them, so the org is told what to fix instead of
-        // 404ing on every review forever.
+    it('no stored baseURL doubles the endpoint path on the wire', async () => {
+        // This used to assert only that the guard RECOGNISES the bad shape, which
+        // was true and useless: the guard runs at save, the config was saved
+        // before it existed, and two live slots have 404ed on every review since.
+        // The read path now repairs the URL, so the assertion is the one that
+        // matters — what is dialled.
         const doubled: any[] = [];
         for (const shape of runnable) {
             const { orgs, ...slot } = shape as any;
@@ -707,11 +708,19 @@ describe('production config shapes — invariants', () => {
                 (path.match(/\/chat\/completions/g) || []).length > 1 ||
                 (path.match(/\/v1\/messages/g) || []).length > 1
             ) {
-                doubled.push(slot.baseURL);
+                doubled.push({ stored: slot.baseURL, dialled: w.url });
             }
         }
-        const unguarded = doubled.filter((b) => !describeBaseUrlProblem(b));
-        expect(unguarded).toEqual([]);
+        expect(doubled).toEqual([]);
+
+        // ...and the corpus still CONTAINS the broken shape, so the test above is
+        // proving a repair rather than passing on an empty set. If someone fixes
+        // those two configs in production and regenerates the corpus, this line
+        // is the one that says the fixture no longer covers the case.
+        const stillStored = runnable.filter((s: any) =>
+            describeBaseUrlProblem(String((s as any).baseURL ?? '')),
+        );
+        expect(stillStored.length).toBeGreaterThan(0);
     }, 180000);
 
     it('every stored reasoning override reaches the request', async () => {

@@ -9,6 +9,7 @@
 import type { LanguageModel } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { decrypt } from '@libs/common/utils/crypto';
+import { repairBaseUrl } from '@libs/llm/base-url-hygiene';
 // Provider registry (Phase 1): every BYOK provider resolves through REGISTRY.
 // Importing the barrel registers all provider modules via side effect.
 import { REGISTRY } from '@libs/llm/providers';
@@ -78,11 +79,27 @@ export function buildModelFromSlot(
 
     // BYOK slot: `slot` carries the ENCRYPTED key; the module contract expects a
     // DECRYPTED apiKey, so pass the already-decrypted `apiKey` over the spread.
+    //
+    // `baseURL` is repaired at the same spread, and HERE rather than in the slot
+    // resolver, because this is the one place every slot becomes a model — a slot
+    // resolved from stored config, a managed one, and a slot handed straight in
+    // by the probe or a test. Repairing in the resolver looked right and covered
+    // only the first of those.
+    //
+    // What it repairs: a base URL carrying the endpoint path (`.../v1/chat/
+    // completions`), which makes the SDK append the endpoint a SECOND time and
+    // 404 on every call. Save time rejects that shape, but nothing re-validates
+    // a config already in the database — two live slots have been failing this
+    // way since before the guard was written. The suffix is all that is removed;
+    // the origin is untouched, so the credential goes exactly where it went.
     // An unknown provider id throws a clear per-provider error (replacing the old
     // switch's silent openai-compatible default) — unreachable for the closed
     // BYOKProvider enum, but fail-loud.
     const apiKey = decrypt(slot.apiKey);
-    return REGISTRY.get(slot.provider).build({ ...slot, apiKey }, options);
+    return REGISTRY.get(slot.provider).build(
+        { ...slot, apiKey, baseURL: repairBaseUrl(slot.baseURL) },
+        options,
+    );
 }
 
 // ─── Structured-output retry-on-error ────────────────────────────────

@@ -398,6 +398,12 @@ export class TestByokConnectionUseCase {
                 // override the adapter rejected, or a preset effort no parameter
                 // could carry. They are mutually exclusive by construction — the
                 // override REPLACES the preset — so one field says either.
+                // A doubled base URL is deliberately NOT reported here: the
+                // hygiene gate above rejects it outright, with the corrected URL
+                // in the message. Telling the user to fix the stored value beats
+                // telling them it worked anyway, so that path never reaches a
+                // warning — the runtime repair exists for the reviews already
+                // running, not for the person standing at the form.
                 warning:
                     describeUnreachedKeys(probe.unreachedOverrideKeys) ??
                     (probe.droppedReasoningEffort

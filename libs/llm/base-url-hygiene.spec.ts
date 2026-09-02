@@ -1,4 +1,4 @@
-import { describeBaseUrlProblem } from './base-url-hygiene';
+import { describeBaseUrlProblem, repairBaseUrl } from './base-url-hygiene';
 
 describe('describeBaseUrlProblem', () => {
     it('catches the real production config that 404s on every review', () => {
@@ -38,5 +38,54 @@ describe('describeBaseUrlProblem', () => {
 
     it("leaves malformed input to the caller's own URL validation", () => {
         expect(describeBaseUrlProblem('not a url')).toBeUndefined();
+    });
+});
+
+describe('repairBaseUrl — the read path, where the save guard cannot reach', () => {
+    it('strips the endpoint the provider appends itself', () => {
+        // The exact value two live slots have stored. Every review they ran hit
+        // .../chat/completions/chat/completions and 404ed.
+        expect(repairBaseUrl('https://api.groq.com/openai/v1/chat/completions')).toBe(
+            'https://api.groq.com/openai/v1',
+        );
+        expect(repairBaseUrl('https://x.example.com/v1/messages')).toBe(
+            'https://x.example.com',
+        );
+    });
+
+    it('never changes the ORIGIN — which is what makes repairing safe here', () => {
+        // The objection this file was written around: a base URL is where
+        // guessing could send a credential somewhere unintended. Only a suffix of
+        // the PATH is removed, so the host is always the one already configured.
+        for (const url of [
+            'https://api.groq.com/openai/v1/chat/completions',
+            'https://proxy.internal:8443/deep/path/v1/messages',
+        ]) {
+            expect(new URL(repairBaseUrl(url)).origin).toBe(new URL(url).origin);
+        }
+    });
+
+    it('leaves a healthy URL exactly as stored', () => {
+        for (const url of [
+            'https://api.deepseek.com/v1',
+            'https://api.deepseek.com',
+            'https://proxy.internal/completions/v1', // endpoint word, not a suffix
+        ]) {
+            expect(repairBaseUrl(url)).toBe(url);
+        }
+    });
+
+    it('passes through what it cannot parse, and absence', () => {
+        // Shape validation belongs to the caller; this must not invent a URL.
+        expect(repairBaseUrl('not a url')).toBe('not a url');
+        expect(repairBaseUrl(undefined)).toBeUndefined();
+        expect(repairBaseUrl('')).toBe('');
+    });
+
+    it('agrees with what the save guard TELLS the user to type', () => {
+        // One rule, two answers. If these ever disagreed, the runtime would dial
+        // something other than the URL the error message asked for.
+        const url = 'https://api.groq.com/openai/v1/chat/completions';
+        expect(describeBaseUrlProblem(url)).toContain(`"${repairBaseUrl(url)}"`);
     });
 });

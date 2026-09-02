@@ -174,6 +174,22 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         expect(res.warning).toContain('"output_config"');
     });
 
+    it('REJECTS a doubled base URL instead of quietly making it work', async () => {
+        // The runtime repairs this shape so reviews already scheduled stop
+        // 404ing. The person standing at the form gets the opposite treatment on
+        // purpose: a hard error carrying the corrected URL, so the stored value
+        // gets fixed rather than propped up.
+        await expect(
+            useCase().execute({
+                provider: 'openai_compatible',
+                apiKey: 'sk-test',
+                baseURL: 'https://api.groq.com/openai/v1/chat/completions',
+                model: 'openai/gpt-oss-120b',
+            } as any),
+        ).rejects.toThrow('https://api.groq.com/openai/v1');
+        expect(probeSlotCall).not.toHaveBeenCalled();
+    });
+
     it('warns when the effort the user picked reaches no parameter', async () => {
         // 24 production slots are in this state, for three different reasons —
         // a model that cannot reason, a proxy alias we cannot name, and a
