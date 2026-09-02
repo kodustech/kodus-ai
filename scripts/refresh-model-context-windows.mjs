@@ -38,6 +38,22 @@ const CORPUS = join(
 );
 const DEFAULT_WINDOW = 128_000;
 
+/**
+ * Resolve a stored model name against the upstream table.
+ *
+ * Corpus shapes hold whatever the customer typed; upstream keys are litellm ids,
+ * some bare (`claude-sonnet-5`) and some vendor-prefixed with a slash
+ * (`deepseek/deepseek-v4-pro`, `google/gemini-3.1-pro-preview`). Trying the last
+ * path segment is what bridges those.
+ *
+ * It lives here because the coverage REPORT already did this and the --check
+ * GATE did not, so the two disagreed about the same corpus: nine production
+ * models were counted as covered and then skipped by the gate, which is the
+ * silent rot this script exists to catch. One rule, both readers.
+ */
+const lookup = (table, model) =>
+    table[model] ?? table[model.split('/').pop()];
+
 const checkOnly = process.argv.includes('--check');
 
 const res = await fetch(UPSTREAM);
@@ -81,7 +97,7 @@ try {
         .filter((m) => typeof m === 'string' && m);
     const covered = (table) =>
         models.filter((m) => {
-            const hit = table[m] ?? table[m.split('/').pop()];
+            const hit = lookup(table, m);
             return hit && hit.max_input_tokens !== DEFAULT_WINDOW;
         }).length;
     console.log(
@@ -110,8 +126,8 @@ if (checkOnly) {
             ),
         ];
         for (const m of models) {
-            const now = current[m]?.max_input_tokens;
-            const then = next[m]?.max_input_tokens;
+            const now = lookup(current, m)?.max_input_tokens;
+            const then = lookup(next, m)?.max_input_tokens;
             if (then === undefined) continue; // upstream does not know it either
             if (now === undefined) {
                 problems.push(`${m}: missing here, upstream says ${then}`);

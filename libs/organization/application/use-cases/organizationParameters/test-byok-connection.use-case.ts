@@ -358,9 +358,30 @@ export class TestByokConnectionUseCase {
         // SSRF guard: only a user-supplied endpoint is attacker-controlled. Runs
         // BEFORE the model is built so a private/reserved target never receives
         // the credential.
+        //
+        // Gated on the NAMESPACE, not on two literal provider ids. The literals
+        // were a regression: the guard this replaced asked the registry which
+        // providers speak the Anthropic protocol, which also covers the branded
+        // ones (Moonshot, Z.ai, and any brand added later). Those declare
+        // `baseURL` in their settings schema — the canonical endpoint is only a
+        // DEFAULT — so a request naming `moonshot` with an arbitrary baseURL
+        // reached probeSlotCall and made a server-side call to it, ungated.
+        //
+        // Narrower than it looks, and worth stating so the next reader does not
+        // over- or under-rate it: the SAVE path validates every provider's
+        // baseURL, so such a URL was never persisted and never reached a review.
+        // The window was this endpoint alone — which is still an outbound request
+        // to a host the caller chose, i.e. the whole SSRF primitive.
+        const speaksAnthropicProtocol =
+            REGISTRY.has(byokProvider) &&
+            REGISTRY.get(byokProvider).providerOptionsNamespace?.(
+                byokProvider,
+            ) === 'anthropic' &&
+            byokProvider !== BYOKProvider.ANTHROPIC;
         if (
             byokProvider === BYOKProvider.OPENAI_COMPATIBLE ||
-            byokProvider === BYOKProvider.ANTHROPIC_COMPATIBLE
+            byokProvider === BYOKProvider.ANTHROPIC_COMPATIBLE ||
+            speaksAnthropicProtocol
         ) {
             await assertSafeOpenAICompatibleUrl(effectiveBaseURL!);
         }

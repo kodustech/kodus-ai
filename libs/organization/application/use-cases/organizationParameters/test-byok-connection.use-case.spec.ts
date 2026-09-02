@@ -174,6 +174,27 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         expect(res.warning).toContain('"output_config"');
     });
 
+    it.each(['moonshot', 'zai'])(
+        'SSRF-guards a user baseURL on the anthropic-protocol brand %s',
+        async (provider) => {
+            // These brands have a CANONICAL endpoint, which reads like "the URL
+            // is ours" — but it is only a default: their settings schema accepts
+            // a baseURL, so the caller picks the host. The guard that covered
+            // them asked the registry for the protocol; a refactor replaced it
+            // with two literal provider ids and silently dropped both, leaving an
+            // outbound server-side call to an address the caller chose.
+            await expect(
+                useCase().execute({
+                    provider,
+                    apiKey: 'sk-test',
+                    baseURL: 'http://169.254.169.254/latest/meta-data',
+                    model: 'kimi-k2.6',
+                } as any),
+            ).rejects.toThrow();
+            expect(probeSlotCall).not.toHaveBeenCalled();
+        },
+    );
+
     it('REJECTS a doubled base URL instead of quietly making it work', async () => {
         // The runtime repairs this shape so reviews already scheduled stop
         // 404ing. The person standing at the form gets the opposite treatment on

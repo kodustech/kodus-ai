@@ -98,8 +98,17 @@ function anonymiseUrl(raw) {
         u.hostname.endsWith(`.${v}`),
     );
     if (scoped) {
-        if (!redactedHosts.has(u.host) && !scoped) {
-            redactedHosts.set(u.host, `redacted-resource-${redactedHosts.size + 1}.${scoped}`);
+        // `&& !scoped` used to be here, inside a branch `scoped` already proved
+        // truthy — so the body never ran and every customer-subdomain host fell
+        // through to the generic redaction below, losing the vendor suffix the
+        // matrix's baseURL heuristics key on. Two distinct vendor shapes then
+        // anonymized to the same `redacted-N.example.test` and merged into one
+        // corpus entry: the precise loss this scoping exists to prevent.
+        if (!redactedHosts.has(u.host)) {
+            redactedHosts.set(
+                u.host,
+                `redacted-resource-${redactedHosts.size + 1}.${scoped}`,
+            );
         }
     } else if (isPublicVendor(u.hostname)) {
         keptHosts.add(u.host);
