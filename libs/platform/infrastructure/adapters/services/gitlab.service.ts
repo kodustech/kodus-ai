@@ -4607,6 +4607,7 @@ export class GitlabService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        signal?: AbortSignal;
     }): Promise<PullRequest | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -4619,11 +4620,18 @@ export class GitlabService implements Omit<
                 return null;
             }
 
-            const gitlabAPI = this.instanceGitlabApi(gitlabAuthDetail);
-
-            const mergeRequest = await gitlabAPI.MergeRequests.show(
-                repository.id,
-                prNumber,
+            const accessToken =
+                gitlabAuthDetail.authMode === AuthMode.OAUTH
+                    ? gitlabAuthDetail.accessToken
+                    : decrypt(gitlabAuthDetail.accessToken);
+            const projectId = encodeURIComponent(String(repository.id));
+            const { data: mergeRequest } = await axios.get(
+                `${this.getGitlabWebBaseUrl(gitlabAuthDetail.host)}/api/v4/projects/${projectId}/merge_requests/${prNumber}`,
+                {
+                    headers: { Authorization: `Bearer ${accessToken}` },
+                    signal: params.signal,
+                    timeout: INTEGRATION_REQUEST_TIMEOUT_MS,
+                },
             );
 
             if (!mergeRequest) {
@@ -4636,6 +4644,10 @@ export class GitlabService implements Omit<
                 organizationAndTeamData,
             );
         } catch (error) {
+            if (params.signal?.aborted) {
+                throw error;
+            }
+
             this.logger.error({
                 message: `Error retrieving pull request details for #${params.prNumber}`,
                 context: GitlabService.name,

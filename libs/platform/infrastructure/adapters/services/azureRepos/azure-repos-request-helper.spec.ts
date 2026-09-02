@@ -137,6 +137,33 @@ describe('AzureReposRequestHelper.mapAzureStatusToFileChangeStatus', () => {
     });
 });
 
+describe('AzureReposRequestHelper.getPullRequestDetails — reconciliation cancellation', () => {
+    it('passes the parent abort signal to Axios', async () => {
+        const helper = new AzureReposRequestHelper();
+        const axiosInstance = {
+            get: jest.fn().mockResolvedValue({ data: { pullRequestId: 42 } }),
+        };
+        jest.spyOn(helper as any, 'azureRequest').mockResolvedValue(
+            axiosInstance,
+        );
+        const controller = new AbortController();
+
+        await helper.getPullRequestDetails({
+            orgName: 'org',
+            token: 'enc-token',
+            projectId: 'project',
+            repositoryId: 'repo',
+            prId: 42,
+            signal: controller.signal,
+        });
+
+        expect(axiosInstance.get).toHaveBeenCalledWith(
+            expect.stringContaining('/pullrequests/42'),
+            { signal: controller.signal },
+        );
+    });
+});
+
 describe('AzureReposRequestHelper.getFileContent — 404 wrapper preserves status', () => {
     let helper: AzureReposRequestHelper;
     let axiosInstance: { get: jest.Mock };

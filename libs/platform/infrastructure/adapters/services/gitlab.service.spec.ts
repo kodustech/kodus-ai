@@ -431,11 +431,7 @@ describe('GitlabService', () => {
                 }),
             });
 
-            mockedGitlab.mockReturnValue({
-                MergeRequests: {
-                    show: jest.fn().mockResolvedValue(mergeRequest),
-                },
-            });
+            mockedAxios.get.mockResolvedValue({ data: mergeRequest });
 
             return service.getPullRequest({
                 organizationAndTeamData,
@@ -474,6 +470,31 @@ describe('GitlabService', () => {
             });
 
             expect(result?.isDraft).toBe(false);
+        });
+
+        it('passes the reconciliation abort signal to the GitLab request', async () => {
+            const controller = new AbortController();
+            Object.defineProperty(service, 'getAuthDetails', {
+                value: jest.fn().mockResolvedValue({
+                    accessToken: 'oauth-token',
+                    authMode: AuthMode.OAUTH,
+                }),
+            });
+            mockedAxios.get.mockResolvedValue({
+                data: { id: 1, iid: 1, draft: false },
+            });
+
+            await service.getPullRequest({
+                organizationAndTeamData,
+                repository,
+                prNumber: 1,
+                signal: controller.signal,
+            });
+
+            expect(mockedAxios.get).toHaveBeenCalledWith(
+                expect.stringContaining('/merge_requests/1'),
+                expect.objectContaining({ signal: controller.signal }),
+            );
         });
     });
 });

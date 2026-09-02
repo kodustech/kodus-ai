@@ -4513,6 +4513,7 @@ ${copyPrompt}
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        signal?: AbortSignal;
     }): Promise<PullRequest | null> {
         const { organizationAndTeamData, repository, prNumber } = params;
 
@@ -4538,6 +4539,7 @@ ${copyPrompt}
                     projectId,
                     repositoryId: repository.id,
                     prId: prNumber,
+                    signal: params.signal,
                 });
 
             if (!pullRequest) {
@@ -4560,6 +4562,10 @@ ${copyPrompt}
 
             return pr;
         } catch (error) {
+            if (params.signal?.aborted) {
+                throw error;
+            }
+
             this.logger.error({
                 message: `Error getting pull request details for #${prNumber} in repository ${repository.name}`,
                 context: this.getPullRequest.name,

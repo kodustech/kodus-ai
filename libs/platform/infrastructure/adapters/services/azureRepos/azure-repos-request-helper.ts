@@ -72,10 +72,12 @@ export class AzureReposRequestHelper {
         projectId: string;
         repositoryId: string;
         prId: number | string;
+        signal?: AbortSignal;
     }): Promise<AzureRepoPullRequest> {
         const instance = await this.azureRequest(params);
         const { data } = await instance.get(
             `/${params.projectId}/_apis/git/repositories/${params.repositoryId}/pullrequests/${params.prId}?api-version=7.1`,
+            { signal: params.signal },
         );
         return data;
     }

@@ -591,6 +591,7 @@ export class BitbucketDataCenterService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        signal?: AbortSignal;
     }): Promise<PullRequest | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -618,6 +619,7 @@ export class BitbucketDataCenterService implements Omit<
 
             const response = await axiosClient.get(
                 `/projects/${projectKey}/repos/${repoSlug}/pull-requests/${prNumber}`,
+                { signal: params.signal },
             );
 
             return this.transformDataCenterPR(
@@ -626,6 +628,10 @@ export class BitbucketDataCenterService implements Omit<
                 repoConfig,
             );
         } catch (error) {
+            if (params.signal?.aborted) {
+                throw error;
+            }
+
             this.logger.error({
                 message: `Error getting pull request #${params.prNumber} from Data Center`,
                 context: BitbucketDataCenterService.name,

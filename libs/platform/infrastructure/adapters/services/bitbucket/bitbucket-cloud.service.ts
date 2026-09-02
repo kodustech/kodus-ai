@@ -1,6 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 
 import { fitPRDescription } from '@libs/code-review/utils/fit-pr-description';
+import { composeAbortSignal } from '@libs/common/utils/parent-signal-compose';
 import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
 import {
     is429Error,
@@ -1160,6 +1161,7 @@ export class BitbucketCloudService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        signal?: AbortSignal;
     }): Promise<PullRequest | null> {
         try {
             const { organizationAndTeamData, repository, prNumber } = params;
@@ -1180,7 +1182,10 @@ export class BitbucketCloudService implements Omit<
                 return null;
             }
 
-            const bitbucketAPI = this.instanceBitbucketApi(bitbucketAuthDetail);
+            const bitbucketAPI = this.instanceBitbucketApi(
+                bitbucketAuthDetail,
+                params.signal,
+            );
 
             const workspace = await this.getWorkspaceFromRepository(
                 organizationAndTeamData,
@@ -1205,6 +1210,10 @@ export class BitbucketCloudService implements Omit<
                 organizationAndTeamData,
             );
         } catch (error) {
+            if (params.signal?.aborted) {
+                throw error;
+            }
+
             this.logger.error({
                 message: 'Error to get pull request details',
                 context: BitbucketCloudService.name,
@@ -3514,6 +3523,10 @@ export class BitbucketCloudService implements Omit<
             // without this one unresponsive call hangs the worker for the
             // whole drain window. 30s covers the 99p of real calls.
             const controller = new AbortController();
+            const detachParentSignal = composeAbortSignal(
+                options?.signal,
+                controller,
+            );
             const timer = setTimeout(
                 () => controller.abort(),
                 INTEGRATION_REQUEST_TIMEOUT_MS,
@@ -3527,6 +3540,7 @@ export class BitbucketCloudService implements Omit<
                 });
             } finally {
                 clearTimeout(timer);
+                detachParentSignal();
             }
 
             if (response.status === 429) {
@@ -3635,7 +3649,10 @@ export class BitbucketCloudService implements Omit<
         return workspaces;
     }
 
-    private instanceBitbucketApi(bitbucketAuthDetail: BitbucketAuthDetail) {
+    private instanceBitbucketApi(
+        bitbucketAuthDetail: BitbucketAuthDetail,
+        signal?: AbortSignal,
+    ) {
         try {
             const bitbucketAPI = new Bitbucket({
                 auth: {
@@ -3645,7 +3662,11 @@ export class BitbucketCloudService implements Omit<
                     password: decrypt(bitbucketAuthDetail.appPassword),
                 },
                 request: {
-                    fetch: this.safeFetch.bind(this),
+                    fetch: (url, options) =>
+                        this.safeFetch(url, {
+                            ...options,
+                            signal: signal ?? options?.signal,
+                        }),
                 },
             });
 

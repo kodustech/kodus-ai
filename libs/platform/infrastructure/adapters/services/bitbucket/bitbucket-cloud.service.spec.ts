@@ -75,3 +75,48 @@ describe('BitbucketCloudService.getCommitsForPullRequestForCodeReview — transi
         ).resolves.toBeNull();
     });
 });
+
+describe('BitbucketCloudService.getPullRequest — reconciliation cancellation', () => {
+    it('threads the abort signal into the client and does not swallow cancellation', async () => {
+        const service = new BitbucketCloudService(
+            {} as any,
+            {} as any,
+            {} as any,
+            {} as any,
+            undefined,
+        );
+        const controller = new AbortController();
+        controller.abort();
+        const aborted = new Error('aborted');
+        const instanceBitbucketApi = jest
+            .spyOn(service as any, 'instanceBitbucketApi')
+            .mockReturnValue({
+                pullrequests: {
+                    get: jest.fn().mockRejectedValue(aborted),
+                },
+            });
+        jest.spyOn(service as any, 'getAuthDetails').mockResolvedValue({
+            token: 'fake-token',
+        });
+        jest.spyOn(
+            service as any,
+            'getWorkspaceFromRepository',
+        ).mockResolvedValue('workspace-1');
+
+        await expect(
+            service.getPullRequest({
+                organizationAndTeamData: {
+                    organizationId: 'org-1',
+                    teamId: 'team-1',
+                },
+                repository: { id: 'repo-1', name: 'repo' },
+                prNumber: 42,
+                signal: controller.signal,
+            }),
+        ).rejects.toBe(aborted);
+        expect(instanceBitbucketApi).toHaveBeenCalledWith(
+            expect.anything(),
+            controller.signal,
+        );
+    });
+});

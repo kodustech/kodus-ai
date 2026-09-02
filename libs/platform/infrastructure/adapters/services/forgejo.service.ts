@@ -1694,6 +1694,7 @@ export class ForgejoService implements Omit<
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        signal?: AbortSignal;
     }): Promise<PullRequest | null> {
         try {
             const authDetail = await this.getAuthDetails(
@@ -1735,6 +1736,7 @@ export class ForgejoService implements Omit<
                     repo: repoInfo.repo,
                     index: params.prNumber,
                 },
+                signal: params.signal,
             });
 
             if (result.error) {
@@ -1757,6 +1759,10 @@ export class ForgejoService implements Omit<
                 name: params.repository.name!,
             });
         } catch (error) {
+            if (params.signal?.aborted) {
+                throw error;
+            }
+
             if ((error as any)?.status === 404) {
                 return null;
             }

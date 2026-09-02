@@ -5422,6 +5422,10 @@ This is an experimental feature that generates committable changes. Review the d
                 organizationAndTeamData,
             );
         } catch (error) {
+            if (params.signal?.aborted) {
+                throw error;
+            }
+
             this.logger.error({
                 message: `Error retrieving pull request details for PR#${prNumber}`,
                 context: GithubService.name,
