@@ -182,6 +182,26 @@ export const anthropicModule: ProviderModule = {
                     anthropic: { thinking: { type: 'adaptive' }, effort },
                 };
             }
+            // `budget` is for the compatible brands that DO implement the legacy
+            // Anthropic thinking shape — Kimi, GLM, DeepSeek all declare it. An
+            // id we cannot confirm reasons must not receive it: MiniMax M3 was
+            // reaching here (its table validates a toggle for M2 and explicitly
+            // declines to for M3) and going out with a fabricated
+            // `thinking:{type:'enabled',budgetTokens:40000}` — a field invented
+            // for a brand, on the transport four production slots use, and a
+            // 400 waiting to happen. Same rule the native branch below already
+            // applies to an unidentified id: omit rather than gamble.
+            // `budget` is right when SOMETHING confirms the model reasons in
+            // this shape: either the id is a Claude generation that takes the
+            // budget form (a real Claude proxied over a compatible endpoint is
+            // still a Claude), or the compatible family table declares the
+            // brand a thinker — Kimi, GLM and DeepSeek all do.
+            if (
+                claude.thinkingShape === 'none' &&
+                !resolveCompatibleReasoningTraits(cfg.model).thinksByDefault
+            ) {
+                return {};
+            }
             return budget;
         }
 

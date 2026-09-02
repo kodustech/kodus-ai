@@ -318,6 +318,21 @@ export function resolveCompatibleReasoningTraits(
 export function compatibleReasoningConfig(
     model?: string,
 ): ReasoningConfig | undefined {
+    // A family advertises a scale only for the VERSIONS its traits confirm
+    // reason. The brand alone is not enough: the MiniMax table validates
+    // `reasoning_effort` for M2 and deliberately declines to for M3, and reading
+    // only the family put low/medium/high in front of an M3 user while the
+    // emitter — which reads the same traits — treated it as a non-thinker and
+    // sent nothing. The picker and the request were answering the same question
+    // from two places.
+    //
+    // `thinksByDefault` IS that answer, so it is asked rather than re-derived.
+    // Everything already advertised keeps advertising (glm, deepseek, kimi and
+    // MiniMax M2/M2.5 all carry it); llama, mimo and qwen already returned
+    // undefined and still do.
+    if (!resolveCompatibleReasoningTraits(model ?? '')?.thinksByDefault) {
+        return undefined;
+    }
     switch (detectModelFamily(model)) {
         case 'glm':
         case 'deepseek':

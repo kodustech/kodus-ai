@@ -68,7 +68,23 @@ export const bedrockModule: ProviderModule = {
         // Bedrock hosts many families; reasoning is a model-family property, so
         // it is resolved centrally — a Claude on Bedrock gets the same reasoning
         // config as native Anthropic (was hardcoded `false`, losing it entirely).
-        const reasoningConfig = reasoningConfigForModel(model);
+        //
+        // ...but only for the families this TRANSPORT can express. `reasoning()`
+        // below emits `additionalModelRequestFields` for Anthropic ids and
+        // nothing for the rest, so advertising a Kimi or MiniMax on Bedrock as
+        // reasoning-capable would put low/medium/high in the picker and drop
+        // whatever the user chose — the saved-config-disagrees-with-the-request
+        // failure this module exists to prevent. Verified on the wire:
+        // `moonshotai.kimi-k2.5` with effort high sent no reasoning field at
+        // all, and three production slots configure exactly that.
+        //
+        // The central answer stays central: it is right for the OpenAI-protocol
+        // transports, where those same families DO take a reasoning parameter.
+        // What is transport-specific is whether we can SEND it, and that is
+        // this module's to say.
+        const reasoningConfig = isAnthropicModel(model)
+            ? reasoningConfigForModel(model)
+            : undefined;
         return {
             supportsReasoning: !!reasoningConfig,
             reasoningConfig,

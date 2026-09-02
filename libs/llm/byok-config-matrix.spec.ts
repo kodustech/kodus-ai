@@ -430,8 +430,8 @@ const CASES = [
     // is the body itself, which is the half we control and the half that
     // regresses. Every one was READ OFF THE WIRE before being written down.
     {
-        id: 'minimax M3 — the transport, not the id, decides whether we ask for thinking',
-        why: 'The SAME model over the two endpoints MiniMax publishes gets two different reasoning stories: nothing on the OpenAI-protocol one (the verified-unmappable case above), and an explicit budget on the Anthropic-protocol one, which is the shape that transport speaks. Four production slots run M3 at /anthropic. Written down because the divergence is deliberate and would otherwise look like a bug to whoever finds it next — and because the audit could not confirm M3 documents ANY thinking toggle, so if this one turns out to be wrong, it is wrong HERE and nowhere else',
+        id: 'minimax M3 — the Anthropic transport does not fabricate a budget for it',
+        why: 'This case was first written the other way round, asserting the budget as a deliberate transport difference. It was not: M3 was reaching the compatible branch\'s `return budget` fall-through and going out with thinking:{type:enabled,budgetTokens:40000} — a field invented for a brand whose own table validates a toggle for M2 and explicitly declines to for M3, on the transport four production slots use. `budget` belongs to the compatible brands that DO implement the legacy Anthropic thinking shape (Kimi, GLM, DeepSeek all declare it); an id we cannot confirm reasons gets the same treatment the native branch already gives an unidentified one — omit rather than gamble on a 400',
         doc: 'platform.minimax.io — Anthropic SDK endpoint https://api.minimax.io/anthropic',
         slot: {
             provider: 'anthropic_compatible',
@@ -439,9 +439,18 @@ const CASES = [
             baseURL: 'https://api.minimax.io/anthropic',
             reasoningEffort: 'high',
         },
-        wire: {
-            has: { thinking: { type: 'enabled', budget_tokens: 40_000 } },
+        wire: { hasNot: ['thinking', 'reasoning_effort'] },
+    },
+    {
+        id: 'the compatible brands that DO declare the legacy shape still get it',
+        why: 'The counterweight to the case above. Narrowing the fall-through must not cost Kimi, GLM and DeepSeek the thinking budget they actually implement over this transport — three families, and the largest of them is 24 production slots',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'kimi-k2.6',
+            baseURL: 'https://api.kimi.com/coding',
+            reasoningEffort: 'high',
         },
+        wire: { has: { thinking: { type: 'enabled', budget_tokens: 40_000 } } },
     },
     {
         id: 'minimax M2.5 on the OTHER platform gets the M2 family rule',
@@ -1036,6 +1045,13 @@ describe('production config shapes — invariants', () => {
             'amazon_bedrock | global.xai.grok-4.6 | high',
             'amazon_bedrock | minimax.minimax-m2 | medium',
             'amazon_bedrock | moonshotai.kimi-k2.5 | medium',
+            // M3 over the Anthropic protocol joined this list DELIBERATELY. It
+            // used to go out with a fabricated thinking budget, which kept it
+            // off the pin while telling four production orgs nothing was wrong.
+            // Reaching nothing and SAYING so is the better of the two — the
+            // effort is still unexpressible on that transport, but the connect
+            // test now reports it instead of a body the vendor never documented.
+            'anthropic_compatible | MiniMax-M3 | high',
             // Models that do not reason — dropping is right; telling the user is
             // what was missing.
             'google_gemini | gemini-2.0-flash | medium',
