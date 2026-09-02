@@ -206,6 +206,15 @@ export class KodyRulesAgentProvider extends BaseCodeReviewAgentProvider {
                     // reintroduce the OpenAI-strict 400. See the
                     // shardViolationsWireSchema doc.
                     schema: shardViolationsWireSchema,
+                    // The shard model (managed kimi-k2.7) answers a bare `[]` for
+                    // "no violations" or `[{…}]` when it found some, instead of the
+                    // `{violations:…}` envelope — valid JSON of the wrong shape that
+                    // fails the wire schema. Opt into deterministic re-shape so `[]`
+                    // becomes a clean `{violations:[]}` (no false "rules not
+                    // applied", no wasted re-ask) and a bare array with real
+                    // violations is recovered rather than dropped (#1786 / prod
+                    // audit 2026-09).
+                    recoverEnvelopeShape: true,
                     system,
                     user,
                     runName: 'kodus-rules-review-agent.shard',

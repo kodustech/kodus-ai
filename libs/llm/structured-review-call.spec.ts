@@ -475,6 +475,145 @@ describe('runStructuredReviewCall — structured parse/validation recovery (issu
     });
 });
 
+describe('runStructuredReviewCall — bare-array shape recovery (kody-rules shard #1786)', () => {
+    // Evidence from prod (26/08–02/09): the KodyRulesShardedAgent's model
+    // (kimi-k2.7 managed default) answers a BARE array — `[]` for "no
+    // violations", `[{…}]` when it found some — instead of the wire envelope
+    // `{violations:[…]}`. That is valid JSON of the wrong shape →
+    // TypeValidationError. Today tier-(a) salvage bails (it only repairs PARSE
+    // errors) and tier-(b) spends a full model re-ask that the same model flubs
+    // the same way → the shard errors → shardsErrored++. When EVERY file is
+    // clean the provider then throws "rules not applied" on a review that was
+    // actually clean (Defeito A, 3961 events); a bare array that carried real
+    // violations is dropped when a sibling shard posts (Defeito B'). The fix:
+    // deterministically lift the bare array into the schema's envelope and
+    // re-validate BEFORE the re-ask — free, and it stops the false failure.
+    const noObjectError = (cause: Error, text: string) =>
+        new NoObjectGeneratedError({
+            message: 'No object generated (test)',
+            cause,
+            text,
+            response: {} as any,
+            usage: {} as any,
+            finishReason: 'stop',
+        });
+
+    // A raw jsonSchema() envelope, exactly like shardViolationsWireSchema: a
+    // bare `[]`/`[{…}]` fails it, `{violations:[…]}` passes.
+    const envelopeSchema = jsonSchema({
+        type: 'object',
+        properties: { violations: { type: 'array', items: {} } },
+        required: ['violations'],
+        additionalProperties: false,
+    } as any);
+
+    it('recovers a bare EMPTY array [] into {violations:[]} WITHOUT a re-ask (a clean review is not a failure)', async () => {
+        const typeErr = new TypeValidationError({
+            value: [],
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate.mockRejectedValueOnce(noObjectError(typeErr, '[]'));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1); // recovered locally, no re-ask
+        assertNoSecondModelBuilt();
+    });
+
+    it('recovers a bare array WITH violations into {violations:[…]} WITHOUT a re-ask (no silent loss)', async () => {
+        const vs = [{ ruleId: 1, violation: 'x' }];
+        const typeErr = new TypeValidationError({
+            value: vs,
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate.mockRejectedValueOnce(
+            noObjectError(typeErr, JSON.stringify(vs)),
+        );
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: vs });
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('still escalates to the model re-ask for a genuine shape mismatch (no over-recovery)', async () => {
+        // A wrong-shape OBJECT with neither the envelope key nor a bare array is
+        // not deterministically recoverable — it must still cost the one re-ask,
+        // exactly as before. This guards against the fix over-reaching.
+        const typeErr = new TypeValidationError({
+            value: { wrong: 1 },
+            cause: new Error('did not match schema'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '{"wrong":1}'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('recovers a bare array that arrived as PARSE-error text ([] + prose) WITHOUT a re-ask', async () => {
+        // Prod group "array vazio como texto" (231): the model prints `[]` then
+        // trailing prose, so the SDK raises a JSONParseError (not a
+        // TypeValidationError). tier-(a) extracts `[]` but it fails the wire
+        // schema; the shape recovery must still fire off the extracted value.
+        const badText = '[]  No violations found in the provided diff.';
+        const parseErr = new JSONParseError({
+            text: badText,
+            cause: new Error('Unexpected token'),
+        });
+        mockGenerate.mockRejectedValueOnce(noObjectError(parseErr, badText));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('WITHOUT recoverEnvelopeShape, a bare array still re-asks (default contract preserved)', async () => {
+        // Recovery is opt-in: a caller that did NOT opt in keeps the plain
+        // "wrong shape → re-ask (signal, not silent)" behavior, so this generic
+        // primitive never silently changes any other structured caller's contract.
+        const typeErr = new TypeValidationError({
+            value: [],
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '[]'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            // no recoverEnvelopeShape
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2); // re-ask fired, not re-shaped
+    });
+});
+
 describe('runStructuredReviewCall — typed output contract (compile-time inference)', () => {
     // These assignments are the real test: they only compile if the primitive
     // infers the caller's output type from the schema. A regression that widens

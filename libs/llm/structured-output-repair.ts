@@ -54,7 +54,9 @@ export function ajvValidator<T = unknown>(
         return null;
     }
     return (value: unknown): ValidationResult<T> => {
-        if (validateFn(value)) return { success: true, value: value as T };
+        if (validateFn(value)) {
+            return { success: true, value: value as T };
+        }
         const detail = (validateFn.errors ?? [])
             .map((e) => `${e.instancePath || '/'} ${e.message ?? ''}`.trim())
             .join('; ');
@@ -283,12 +285,22 @@ function locateKey(
  * `opts.onRecover` — observability hook, called ONCE with a short reason
  * whenever a real off-schema recovery happened (parse / unwrap / lift / alias),
  * so callers can log which model shape #1786 fired on. Not called on a no-op.
+ *
+ * `opts.liftEmptyArray` — by default a bare EMPTY array is a no-op (it carries
+ * no data, so the finder path lets the caller's empty outcome stand). Set this
+ * for a schema-envelope target where `{ [key]: [] }` is a VALID answer — e.g.
+ * the kody-rules shard's `[]` means "no violations", which must become
+ * `{violations:[]}` (a clean pass) rather than fail the wire schema.
  */
 export function normalizeEnvelope(
     value: unknown,
     key: string,
     aliases: string[] = [],
-    opts: { scalar?: boolean; onRecover?: (reason: string) => void } = {},
+    opts: {
+        scalar?: boolean;
+        liftEmptyArray?: boolean;
+        onRecover?: (reason: string) => void;
+    } = {},
 ): unknown {
     let v: unknown = value;
     let reason = '';
@@ -312,9 +324,13 @@ export function normalizeEnvelope(
     //    {"0":D}) — but only while the target key/alias is NOT already present,
     //    so `{ suggestions, meta }` is left intact.
     for (let depth = 0; depth < 5; depth++) {
-        if (!v || typeof v !== 'object' || Array.isArray(v)) break;
+        if (!v || typeof v !== 'object' || Array.isArray(v)) {
+            break;
+        }
         const obj = v as Record<string, unknown>;
-        if (locateKey(obj, key, aliases)) break; // already canonical-ish.
+        if (locateKey(obj, key, aliases)) {
+            break;
+        } // already canonical-ish.
         // Only descend into a KNOWN, named wrapper key — never guess by "the
         // object has a single key", which would falsely unwrap real payloads
         // (e.g. a provider envelope `{choices:[{message:{content}}]}` is NOT the
@@ -346,7 +362,10 @@ export function normalizeEnvelope(
             } else {
                 return value;
             }
-        } else if (v.length > 0) {
+        } else if (v.length > 0 || opts.liftEmptyArray) {
+            // A non-empty array carries data → lift. An empty one lifts only for
+            // a schema-envelope caller (liftEmptyArray) where `{key:[]}` is the
+            // canonical "nothing found" answer; the finder path leaves `[]` alone.
             opts.onRecover?.(reason || 'lifted-bare-array');
             return { [key]: v };
         } else {
