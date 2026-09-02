@@ -92,5 +92,18 @@
         "model without a code change:",
         "",
         "  \"anthropic-fable\": { \"apiKey\": \"sk-ant-…\", \"model\": \"claude-fable-5-1\" }"
+    ],
+    "_bedrock_note": [
+        "amazon_bedrock takes EITHER form — the builder prefers the bearer token and",
+        "falls back to SigV4, so an IAM pair works just as well:",
+        "",
+        "  \"amazon_bedrock\": { \"awsAccessKeyId\": \"AKIA…\",",
+        "                      \"awsSecretAccessKey\": \"…\",",
+        "                      \"awsSessionToken\": \"…\",      (optional)",
+        "                      \"awsRegion\": \"us-east-1\" }",
+        "",
+        "Whichever form you use, bedrock_grok inherits it — same account, same",
+        "credential, different model id. Both need the model enabled under Bedrock",
+        "Model access in that region, or the call returns AccessDeniedException."
     ]
 }

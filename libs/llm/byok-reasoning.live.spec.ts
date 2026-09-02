@@ -339,6 +339,57 @@ const credentialFor = (row: { brand: string; requires?: () => boolean }) =>
     row.requires && !row.requires() ? undefined : key(row.brand);
 
 /**
+ * Auth fields a brand may carry INSTEAD of a single key.
+ *
+ * Bedrock is the only one today: `bedrockModelFromCredentials` takes a bearer
+ * token OR a SigV4 pair, and an entry that supplies the pair has a credential
+ * even though `apiKey` is empty. Without this the row skipped while holding
+ * exactly what it needed — the same "green means nothing" the tier exists to
+ * prevent, one level down.
+ */
+const MULTI_FIELD_AUTH = [
+    'awsBearerToken',
+    'awsAccessKeyId',
+    'awsSecretAccessKey',
+    'awsSessionToken',
+];
+
+/**
+ * The auth fields a brand ends up with, following the same borrow chain a key
+ * follows — `bedrock_grok` is the `amazon_bedrock` account with a different
+ * model id, so it inherits the credential whichever FORM that credential takes.
+ * Only auth is inherited: a borrowed `baseURL` or `model` would silently point
+ * one row at another's endpoint.
+ */
+const authFieldsFor = (brand: string): Record<string, unknown> => {
+    const seen = new Set<string>();
+    let b: string | undefined = brand;
+    while (b && !seen.has(b)) {
+        seen.add(b);
+        const extras = slotExtras(b);
+        const auth = Object.fromEntries(
+            MULTI_FIELD_AUTH.filter((f) => !!extras[f]).map((f) => [
+                f,
+                extras[f],
+            ]),
+        );
+        if (Object.keys(auth).length > 0) {
+            return auth;
+        }
+        b = BORROWS_FROM[b];
+    }
+    return {};
+};
+
+/** Does this row have SOMETHING to authenticate with? */
+const canRun = (row: { brand: string; requires?: () => boolean }): boolean => {
+    if (row.requires && !row.requires()) {
+        return false;
+    }
+    return !!key(row.brand) || Object.keys(authFieldsFor(row.brand)).length > 0;
+};
+
+/**
  * The secret names the CI job actually sets for this spec — read out of the
  * workflow, from the env block of the one step that runs this file. Two control
  * names are dropped: the harness reads them itself, no brand does.
@@ -859,7 +910,7 @@ function reasoningTokens(usage: any): number {
 }
 
 describe('BYOK reasoning — LIVE provider contract', () => {
-    const configured = LIVE.filter((c) => credentialFor(c));
+    const configured = LIVE.filter((c) => canRun(c));
 
     // Runs OFFLINE and with no credentials, on purpose: it is arithmetic about
     // what WOULD be sent, and the budget must be guarded on the PR that changes
@@ -1120,7 +1171,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
 
     it('reports which brands this run actually covered', () => {
         const covered = configured.map((c) => c.brand);
-        const skipped = LIVE.filter((c) => !credentialFor(c)).map((c) => c.brand);
+        const skipped = LIVE.filter((c) => !canRun(c)).map((c) => c.brand);
         // Coverage is DATA, not a failure: a PARTIAL secret is a legitimate
         // green, and so is a fork PR with none. Printing it stops "green" from
         // being mistaken for "everything was checked".
@@ -1159,7 +1210,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
 
     for (const c of LIVE) {
         const credential = credentialFor(c);
-        const run = credential ? it : it.skip;
+        const run = canRun(c) ? it : it.skip;
 
         run(
             `${c.brand} — ${c.why}`,
@@ -1177,6 +1228,9 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                     byokConfig: {
                         ...c.slot,
                         ...slotExtras(c.brand),
+                        // Auth may be inherited even when the rest of the slot
+                        // is not — see `authFieldsFor`.
+                        ...authFieldsFor(c.brand),
                         apiKey: credential,
                         // Bedrock reads a bearer token rather than apiKey.
                         ...((c as any).credentialField
