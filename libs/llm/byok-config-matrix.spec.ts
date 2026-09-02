@@ -48,7 +48,11 @@ import {
     captureByokWire,
     resolveProviderOptions,
 } from './testing/byok-wire';
-import { unreachedOverrideKeys } from './override-reachability';
+import {
+    reasoningEffortWasDropped,
+    unreachedOverrideKeys,
+} from './override-reachability';
+import { buildReasoningProviderOptions } from './reasoning-options';
 import type { NormalizedModel } from './byok-config';
 import { REGISTRY } from './providers/kernel/registry';
 import './providers';
@@ -900,6 +904,80 @@ describe('production config shapes — invariants', () => {
                 model: 'deepseek-v4-flash',
                 keys: ['reasoning_effort'],
             },
+        ]);
+    }, 180000);
+
+    it('pins every slot whose configured reasoning effort reaches nothing', async () => {
+        // The other silent drop, from the opposite side: not a key the adapter
+        // rejected, one we never sent. The user picks High, saves, and no
+        // parameter carries it — for three different reasons, none of which were
+        // ever surfaced.
+        //
+        // The list is pinned rather than emptied because most of it is CORRECT
+        // and always will be: a `gemini-2.0-flash` has no reasoning to ask for,
+        // and a model named `kodus-review` behind a proxy is deliberately left
+        // alone (the family resolver's stated limit — an unknown name withholds a
+        // parameter rather than forcing one). Emptying it would mean inventing
+        // fields for models we cannot identify, which is the opposite of the
+        // rule. What the pin buys is that a NEW silent drop cannot hide among
+        // the correct ones, and the connect test now says so out loud either way.
+        const dropped: string[] = [];
+        for (const shape of runnable) {
+            const { orgs, ...slot } = shape as any;
+            const effort = slot.reasoningEffort;
+            if (!effort || effort === 'none') continue;
+            if (slot.reasoningConfigOverride) continue;
+            const w = await captureByokWire({ ...slot, apiKey: 'k' }).catch(
+                () => null,
+            );
+            if (!w) continue;
+            if (
+                reasoningEffortWasDropped(
+                    buildReasoningProviderOptions(
+                        slot.provider,
+                        effort,
+                        slot.model,
+                    ),
+                    typeof w.body === 'string' ? w.body : w.body,
+                )
+            ) {
+                dropped.push(`${slot.provider} | ${slot.model} | ${effort}`);
+            }
+        }
+
+        // Sorted and de-duplicated so the pin reads as a set, not as an artifact
+        // of corpus ordering.
+        expect([...new Set(dropped)].sort()).toEqual([
+            // The only three that are a gap in OUR code rather than a property
+            // of the model: all live Bedrock slots, all known reasoners, all
+            // getting nothing because Converse has no mapping we can verify.
+            'amazon_bedrock | global.xai.grok-4.6 | high',
+            'amazon_bedrock | minimax.minimax-m2 | medium',
+            'amazon_bedrock | moonshotai.kimi-k2.5 | medium',
+            // Models that do not reason — dropping is right; telling the user is
+            // what was missing.
+            'google_gemini | gemini-2.0-flash | medium',
+            'google_gemini | gemini-pro-latest | medium',
+            'novita | deepseek/deepseek-v3-0324 | high',
+            'novita | deepseek/deepseek-v4-flash | high',
+            'novita | deepseek/deepseek-v4-pro | high',
+            'openai | gpt-4o-mini | high',
+            // Proxy aliases and custom names: the family resolver cannot name
+            // the model, so it withholds rather than guesses.
+            'openai_compatible | MiniMax-M3 | high',
+            'openai_compatible | auto | medium',
+            'openai_compatible | cc/claude-opus-5 | high',
+            'openai_compatible | claude-opus-4.8 | high',
+            'openai_compatible | code-review | high',
+            'openai_compatible | kodus-review | high',
+            'openai_compatible | kodus-review-fallback | high',
+            'openai_compatible | mimo-v2.5 | high',
+            'openai_compatible | mimo-v2.5-pro | high',
+            'openai_compatible | mimo-v2.5-pro | medium',
+            'openai_compatible | mistral-large-3:675b | medium',
+            'openai_compatible | nemotron-3-ultra-550b-a55b | medium',
+            'openai_compatible | qwen3.8-max | low',
+            'openai_compatible | tencent/hy3:free | high',
         ]);
     }, 180000);
 

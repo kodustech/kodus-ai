@@ -20,9 +20,11 @@ import { generateText } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 import {
+    reasoningEffortWasDropped,
     unreachedOverrideKeys,
     type UnreachedKey,
 } from '@libs/llm/override-reachability';
+import { buildReasoningProviderOptions } from '@libs/llm/reasoning-options';
 
 /** A probe must answer fast or not at all — the connect form is waiting. */
 export const PROBE_TIMEOUT_MS = 15_000;
@@ -122,6 +124,12 @@ export interface ProbeSlotResult {
      * resolved `providerOptions` are the user's own words.
      */
     unreachedOverrideKeys: UnreachedKey[];
+    /**
+     * The effort the slot configured, when it produced nothing the provider will
+     * see. Undefined when the effort landed, when none was set, or when a Custom
+     * override is in play (that path reports per key above instead).
+     */
+    droppedReasoningEffort?: string;
 }
 
 /**
@@ -179,6 +187,20 @@ export async function probeSlotCall(
                 ? { providerOptions: inv.providerOptions as any }
                 : {}),
         });
+        const effort = slot.reasoningEffort;
+        const effortDropped =
+            !slot.reasoningConfigOverride &&
+            !!effort &&
+            effort !== 'none' &&
+            reasoningEffortWasDropped(
+                // The reasoning payload ALONE, asked of the same builder the
+                // resolver uses. Reading it off `inv.providerOptions` would fold
+                // in OpenRouter routing, and routing that lands would read as
+                // reasoning that landed.
+                buildReasoningProviderOptions(slot.provider, effort, slot.model),
+                result.request?.body,
+            );
+
         return {
             latencyMs: Date.now() - start,
             unreachedOverrideKeys: slot.reasoningConfigOverride
@@ -187,6 +209,7 @@ export async function probeSlotCall(
                       result.request?.body,
                   )
                 : [],
+            droppedReasoningEffort: effortDropped ? effort : undefined,
         };
     } finally {
         clearTimeout(timer);

@@ -123,6 +123,53 @@ export function unreachedOverrideKeys(
     return unreached;
 }
 
+/**
+ * "The effort the user picked produced nothing the provider will see."
+ *
+ * A SECOND silent drop, same shape as the first but from the opposite side: not
+ * a key the adapter rejected, one we never sent. Across production, 24 slots
+ * carry a reasoning effort that leaves no trace in the request, for three
+ * different reasons — and the user was told about none of them:
+ *
+ *   - the model does not reason at all (`gemini-2.0-flash`, `gpt-4o-mini`);
+ *   - the model reasons but is behind a proxy alias we cannot name
+ *     (`kodus-review`, `auto`, `cc/claude-opus-5`), where withholding is the
+ *     deliberately safe answer;
+ *   - the model reasons, we know exactly which it is, and the transport has no
+ *     mapping — Grok / MiniMax / Kimi on Bedrock Converse.
+ *
+ * Only the third is a gap in our code, and it is NOT closed by guessing a field
+ * name: AWS documents Grok's `reasoning.effort` for its Responses API and shows
+ * no reasoning parameter in its Converse example, so an invented
+ * `additionalModelRequestFields` entry risks a ValidationException on every
+ * review — trading a setting that does nothing for a provider that answers
+ * nothing. Worse, not better.
+ *
+ * From the user's chair all three are one thing: they picked High and it does
+ * not happen. That is what this reports.
+ *
+ * `reasoningOptions` is what the provider module produced for this effort — the
+ * reasoning payload ALONE, not the resolved bag, so OpenRouter routing riding
+ * along cannot be mistaken for reasoning that landed.
+ */
+export function reasoningEffortWasDropped(
+    reasoningOptions: Record<string, unknown> | undefined,
+    requestBody: unknown,
+): boolean {
+    const asked = new Set<string>();
+    collectScalars(reasoningOptions, asked);
+    // The module emitted nothing for this effort: decided without the body,
+    // because there is no request that could have carried it.
+    if (asked.size === 0) return true;
+    if (requestBody === undefined || requestBody === null) return false;
+    const sent = bodyScalars(requestBody);
+    if (sent.size === 0) return false;
+    for (const v of asked) {
+        if (sent.has(v)) return false;
+    }
+    return true;
+}
+
 /** One sentence per dropped key, for the connect form. Says what was ignored and
  *  where to look, and does NOT guess the right spelling — the module's own
  *  example is what teaches that, and it is already shown next to the box. */
@@ -139,5 +186,17 @@ export function describeUnreachedKeys(
         `reasoning override never reached the provider: ${names}. ` +
         `They are not options this provider's adapter accepts, so they were ignored — ` +
         `compare with the example shown under the box.`
+    );
+}
+
+/** The advisory for an effort that reached nothing. Says what happened and what
+ *  it means, and does NOT promise a fix — for two of the three causes there is
+ *  nothing the user can change on this screen except the model. */
+export function describeDroppedEffort(effort: string): string {
+    return (
+        `The connection works, but the "${effort}" reasoning effort is not reaching this ` +
+        `provider: no reasoning parameter is sent for this model, so the setting has no ` +
+        `effect on a review. Either the model does not support reasoning, or its name here ` +
+        `is one we cannot map to a known model (common behind a proxy or a custom alias).`
     );
 }

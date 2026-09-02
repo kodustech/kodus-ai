@@ -174,6 +174,31 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         expect(res.warning).toContain('"output_config"');
     });
 
+    it('warns when the effort the user picked reaches no parameter', async () => {
+        // 24 production slots are in this state, for three different reasons —
+        // a model that cannot reason, a proxy alias we cannot name, and a
+        // transport with no mapping. All three look identical from the settings
+        // screen: they picked High and it does not happen.
+        probeSlotCall.mockResolvedValue({
+            latencyMs: 12,
+            unreachedOverrideKeys: [],
+            droppedReasoningEffort: 'high',
+        });
+        const res = await useCase().execute({
+            provider: 'amazon_bedrock',
+            awsBearerToken: 'tok',
+            awsRegion: 'us-east-1',
+            model: 'global.xai.grok-4.6',
+            reasoningEffort: 'high',
+        } as any);
+        expect(res.ok).toBe(true);
+        expect(res.warning).toContain('"high"');
+        // ...and it got there through the runtime probe. Bedrock used to answer
+        // this button by listing foundation models, which cannot see a request
+        // body and so could never have reported this.
+        expect(probeSlotCall).toHaveBeenCalled();
+    });
+
     it('stays silent — and stays green — when the probe reports no keys', async () => {
         probeSlotCall.mockResolvedValue({ latencyMs: 12 });
         const res = await useCase().execute({

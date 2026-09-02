@@ -2,7 +2,10 @@ import { describeBaseUrlProblem } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { REGISTRY } from '@libs/llm/providers';
 import { probeSlotCall } from '@libs/llm/probe-slot-call';
-import { describeUnreachedKeys } from '@libs/llm/override-reachability';
+import {
+    describeDroppedEffort,
+    describeUnreachedKeys,
+} from '@libs/llm/override-reachability';
 import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
@@ -260,6 +263,21 @@ export class TestByokConnectionUseCase {
         if (byokProvider === BYOKProvider.AMAZON_BEDROCK) {
             const region = input.awsRegion?.trim() || 'us-east-1';
 
+            // With a model chosen, run the review's own call like every other
+            // provider does. This branch used to answer a WEAKER question for
+            // Bedrock alone — `GET /foundation-models` proves the credential and
+            // nothing else — which is the exact fallback the runtime probe
+            // replaced everywhere else. It is also why four live Bedrock slots
+            // could carry a reasoning effort that reaches no parameter and still
+            // show a green Test: the button never made the call that would have
+            // shown it.
+            //
+            // The credential-only checks stay for a model-less test, which is
+            // the case they were written for.
+            if (input.model?.trim()) {
+                return await this.probeViaRuntime(input, baseURL);
+            }
+
             if (input.awsBearerToken?.trim()) {
                 return await this.testBedrockBearer(
                     input.awsBearerToken.trim(),
@@ -376,7 +394,15 @@ export class TestByokConnectionUseCase {
                 ok: true,
                 code: 'ok',
                 latencyMs: Date.now() - start,
-                warning: describeUnreachedKeys(probe.unreachedOverrideKeys),
+                // The two ways a reasoning setting can do nothing: a Custom
+                // override the adapter rejected, or a preset effort no parameter
+                // could carry. They are mutually exclusive by construction — the
+                // override REPLACES the preset — so one field says either.
+                warning:
+                    describeUnreachedKeys(probe.unreachedOverrideKeys) ??
+                    (probe.droppedReasoningEffort
+                        ? describeDroppedEffort(probe.droppedReasoningEffort)
+                        : undefined),
             };
         } catch (err) {
             return this.normalizeError(err, Date.now() - start);

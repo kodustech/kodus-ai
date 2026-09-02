@@ -5,7 +5,9 @@
  * drops must.
  */
 import {
+    describeDroppedEffort,
     describeUnreachedKeys,
+    reasoningEffortWasDropped,
     unreachedOverrideKeys,
 } from './override-reachability';
 
@@ -117,5 +119,65 @@ describe('describeUnreachedKeys', () => {
         // No invented correction: the module's example is what teaches the right
         // key, and it is already on screen under the box.
         expect(msg).not.toContain('effort"');
+    });
+});
+
+describe('reasoningEffortWasDropped', () => {
+    it('is true when the module emitted nothing — no body needed', () => {
+        // Grok / MiniMax / Kimi on Bedrock Converse: known reasoners, live
+        // slots, and `reasoning()` returns {} because the transport has no
+        // mapping we can verify. There is no request that could have carried it,
+        // so the answer does not depend on one.
+        expect(reasoningEffortWasDropped({}, { model: 'x' })).toBe(true);
+        expect(reasoningEffortWasDropped(undefined, undefined)).toBe(true);
+    });
+
+    it('is false when the effort landed under a DIFFERENT name', () => {
+        // Gemini turns an effort into a token budget, so the word "high" never
+        // appears on the wire. Tracing values, not names, keeps that a pass.
+        expect(
+            reasoningEffortWasDropped(
+                { google: { thinkingConfig: { thinkingBudget: 32768 } } },
+                {
+                    generationConfig: {
+                        thinkingConfig: { thinkingBudget: 32768 },
+                    },
+                },
+            ),
+        ).toBe(false);
+    });
+
+    it('is true when we asked and the adapter dropped it anyway', () => {
+        // `gpt-4o-mini` with effort high: we emit `reasoningEffort`, the OpenAI
+        // adapter strips it for a model that cannot reason, and the user is left
+        // believing a non-reasoning model is reasoning.
+        expect(
+            reasoningEffortWasDropped(
+                { openai: { reasoningEffort: 'high' } },
+                { model: 'gpt-4o-mini', messages: [] },
+            ),
+        ).toBe(true);
+    });
+
+    it('withholds a verdict when the adapter kept no body', () => {
+        // We asked for something and cannot see what was sent. Reporting a drop
+        // here would be a guess dressed as a finding.
+        expect(
+            reasoningEffortWasDropped(
+                { openai: { reasoningEffort: 'high' } },
+                undefined,
+            ),
+        ).toBe(false);
+    });
+});
+
+describe('describeDroppedEffort', () => {
+    it('names the effort and does not promise a fix', () => {
+        const msg = describeDroppedEffort('high');
+        expect(msg).toContain('"high"');
+        expect(msg).toContain('no effect');
+        // Two of the three causes cannot be fixed on this screen, so it explains
+        // rather than instructs.
+        expect(msg).toContain('proxy');
     });
 });
