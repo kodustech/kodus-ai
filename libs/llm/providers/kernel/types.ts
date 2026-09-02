@@ -265,6 +265,14 @@ export interface ProviderModule {
         providerId: string,
         model?: string,
     ): string | undefined;
+    /** Other keys this provider's adapter ALSO parses, beyond the canonical one
+     *  above. Only for the case where an SDK kept a legacy alias and the vendor's
+     *  own docs still show it — Bedrock reads `amazonBedrock` but accepts
+     *  `bedrock`, which is the key its docs use. These are never used to WRAP an
+     *  override (the canonical namespace is), only to recognise one that is
+     *  already namespaced, so the auto-wrapper does not wrap a correct paste a
+     *  second time and wrap it out of existence. */
+    providerOptionsNamespaceAliases?(providerId: string): string[];
     /** Example JSON for the connect form's "Custom" reasoning-override textarea —
      *  the exact shape THIS provider accepts under its reasoning namespace, per
      *  requested id (a module serving several ids may differ, e.g. openai's native

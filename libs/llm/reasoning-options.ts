@@ -172,12 +172,21 @@ function providerOptionsNamespace(
  *  namespace, not a provider). Derived so a new provider is recognized for free.
  *  Model-less on purpose: this asks "is this key A namespace", not "is it THIS
  *  model's namespace", and every model-dependent answer (Vertex's `anthropic`)
- *  is already contributed by the module that owns it. */
+ *  is already contributed by the module that owns it.
+ *
+ *  Aliases count too. Recognising a key is not the same question as choosing one:
+ *  we wrap under the canonical namespace, but a paste that already carries a key
+ *  the SDK reads must be left alone. Missing an alias is the worst outcome here —
+ *  a CORRECT override gets wrapped a second time and disappears. */
 function knownNamespaceKeys(): Set<string> {
     const keys = new Set<string>(['langsmith']);
     for (const id of REGISTRY.ids()) {
-        const ns = REGISTRY.get(id).providerOptionsNamespace?.(id);
+        const mod = REGISTRY.get(id);
+        const ns = mod.providerOptionsNamespace?.(id);
         if (ns) keys.add(ns);
+        for (const alias of mod.providerOptionsNamespaceAliases?.(id) ?? []) {
+            keys.add(alias);
+        }
     }
     return keys;
 }

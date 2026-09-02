@@ -46,6 +46,8 @@ import PROD_SHAPES from './testing/__fixtures__/byok-prod-shapes.json';
 import { describeBaseUrlProblem } from './base-url-hygiene';
 import { captureByokWire } from './testing/byok-wire';
 import type { NormalizedModel } from './byok-config';
+import { REGISTRY } from './providers/kernel/registry';
+import './providers';
 
 const CASES = [
     // ─── openai_compatible ──────────────────────────────────────────────────
@@ -483,6 +485,45 @@ const CASES = [
         wire: { hasNot: ['thinking', 'additionalModelRequestFields'] },
     },
 
+    {
+        id: 'bedrock — a pasted reasoning override actually reaches the request',
+        why: 'The namespace was declared as `amazon-bedrock`, read off the built model\'s provider ID. The ID names the provider; the providerOptions KEY is chosen separately, and @ai-sdk/amazon-bedrock parses only `amazonBedrock` or its legacy `bedrock` alias. So every Bedrock override was wrapped under a key nothing reads and dropped in silence — the precise failure the field was added to prevent, reintroduced by verifying the wrong property. Captured empty before the fix',
+        slot: {
+            provider: 'amazon_bedrock',
+            awsRegion: 'us-east-1',
+            model: 'anthropic.claude-opus-4-8',
+            reasoningConfigOverride: JSON.stringify({
+                reasoningConfig: { type: 'enabled', budgetTokens: 2048 },
+            }),
+        },
+        wire: {
+            has: {
+                additionalModelRequestFields: {
+                    thinking: { type: 'enabled', budget_tokens: 2048 },
+                },
+            },
+        },
+    },
+    {
+        id: 'bedrock — the vendor-documented `bedrock` key is not wrapped a second time',
+        why: 'The AI SDK docs for this provider show `providerOptions: { bedrock: ... }`, so that is what a customer copying from them pastes. The auto-wrapper only leaves a paste alone when it recognises the key as a namespace; an unrecognised alias gets wrapped AGAIN into {amazonBedrock:{bedrock:{...}}}, which parses to nothing. A correct paste doing nothing is worse than a wrong one erroring',
+        slot: {
+            provider: 'amazon_bedrock',
+            awsRegion: 'us-east-1',
+            model: 'anthropic.claude-opus-4-8',
+            reasoningConfigOverride: JSON.stringify({
+                bedrock: { reasoningConfig: { type: 'enabled', budgetTokens: 2048 } },
+            }),
+        },
+        wire: {
+            has: {
+                additionalModelRequestFields: {
+                    thinking: { type: 'enabled', budget_tokens: 2048 },
+                },
+            },
+        },
+    },
+
     // ─── azure ──────────────────────────────────────────────────────────────
     {
         id: 'azure o-series — the effort reaches the Responses API',
@@ -663,6 +704,142 @@ describe('production config shapes — invariants', () => {
         }
         const unguarded = doubled.filter((b) => !describeBaseUrlProblem(b));
         expect(unguarded).toEqual([]);
+    }, 180000);
+
+    it('every stored reasoning override reaches the request', async () => {
+        // Save time already rejects an override that does not PARSE. This is the
+        // other half: JSON that parses fine, is namespaced under a key nothing
+        // reads, and is dropped between our code and the wire. The user gets no
+        // error and no effect — indistinguishable, from their side, from a
+        // provider that ignored them. Bedrock's whole override class was in this
+        // state until the namespace was corrected.
+        //
+        // The assertion is deliberately "it changed the request", not "it landed
+        // whole": some SDKs accept a subset of their own wire vocabulary, and
+        // claiming more than the harness can see is how the last wrong namespace
+        // got written down as verified.
+        const inert: any[] = [];
+        const unparsable: any[] = [];
+        for (const shape of runnable) {
+            const { orgs, ...slot } = shape as any;
+            if (!slot.reasoningConfigOverride) continue;
+            // An override that does not PARSE is a different failure with a
+            // different owner: the save-time guard in the BYOK use-case rejects
+            // it at the moment the user is looking at the field. Production still
+            // holds one from before that guard existed (a trailing comma), and it
+            // is inert for a reason we already report — so it is classified here
+            // rather than counted as a silent drop, which would blur the one
+            // signal this test is for.
+            try {
+                JSON.parse(slot.reasoningConfigOverride);
+            } catch {
+                unparsable.push({
+                    provider: slot.provider,
+                    model: slot.model,
+                });
+                continue;
+            }
+            const withOverride = await captureByokWire({
+                ...slot,
+                apiKey: 'k',
+            }).catch(() => null);
+            const without = await captureByokWire({
+                ...slot,
+                apiKey: 'k',
+                reasoningConfigOverride: undefined,
+            }).catch(() => null);
+            if (!withOverride || !without) continue;
+            if (
+                JSON.stringify(withOverride.body) ===
+                JSON.stringify(without.body)
+            ) {
+                inert.push({
+                    provider: slot.provider,
+                    model: slot.model,
+                    override: slot.reasoningConfigOverride,
+                });
+            }
+        }
+        expect(inert).toEqual([]);
+        // Not an assertion that none exist — one does. It asserts the ONLY reason
+        // a stored override is inert is one the product already tells the user
+        // about, so this test staying green cannot mean a new silent class.
+        expect(unparsable.length).toBeLessThanOrEqual(1);
+    }, 180000);
+
+    it('the Custom-reasoning example each module shows the user actually works', async () => {
+        // Two things are declared per module and never checked against each
+        // other: the `providerOptions` NAMESPACE and the EXAMPLE JSON the connect
+        // form tells the user to paste. Both of our namespace bugs were declared
+        // confidently — Novita's was missing, Bedrock's was copied off the built
+        // model's provider ID — and no unit test could catch either, because the
+        // test and the module read the same wrong property and agreed.
+        //
+        // Pasting the module's own example through the real door checks both at
+        // once, and checks the thing the user is actually told to do. If the
+        // request does not change, then either the namespace is a key nothing
+        // opens or the example is not a shape the adapter accepts — and from the
+        // user's side those two failures are the same silence.
+        // Pick a REASONING model per provider. The example is a reasoning
+        // override, so pasting it on a `gpt-4-turbo` proves nothing either way —
+        // an adapter that correctly ignores it is indistinguishable from one that
+        // never read the key. The module's own capabilities answer which models
+        // qualify, so the choice is not a hand-kept list here.
+        const byProvider = new Map<string, any>();
+        for (const shape of runnable) {
+            const { orgs, ...slot } = shape as any;
+            if (byProvider.has(slot.provider)) continue;
+            if (!REGISTRY.has(slot.provider)) continue;
+            const reasons = (() => {
+                try {
+                    return !!REGISTRY.get(slot.provider).capabilities(
+                        slot.model,
+                    )?.supportsReasoning;
+                } catch {
+                    return false;
+                }
+            })();
+            if (reasons) byProvider.set(slot.provider, slot);
+        }
+
+        const inert: any[] = [];
+        const covered: string[] = [];
+        for (const [provider, slot] of byProvider) {
+            if (!REGISTRY.has(provider)) continue;
+            const mod = REGISTRY.get(provider);
+            const example = mod.reasoningOverrideExample?.(
+                provider,
+                slot.model,
+            );
+            if (!example) continue;
+            const base = await captureByokWire({ ...slot, apiKey: 'k' }).catch(
+                () => null,
+            );
+            const pasted = await captureByokWire({
+                ...slot,
+                apiKey: 'k',
+                reasoningConfigOverride: example,
+            }).catch(() => null);
+            if (!base || !pasted) continue;
+            covered.push(provider);
+            if (JSON.stringify(base.body) === JSON.stringify(pasted.body)) {
+                inert.push({
+                    provider,
+                    model: slot.model,
+                    namespace: mod.providerOptionsNamespace?.(
+                        provider,
+                        slot.model,
+                    ),
+                    example,
+                });
+            }
+        }
+
+        expect(inert).toEqual([]);
+        // Coverage is asserted, not assumed: a provider dropping out of the
+        // corpus, or a module losing its example, would otherwise leave this
+        // green while testing nothing.
+        expect(covered.length).toBeGreaterThanOrEqual(4);
     }, 180000);
 
     it('never sends a thinking DISABLE to a model that cannot stop thinking', async () => {

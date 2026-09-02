@@ -155,12 +155,22 @@ export const bedrockModule: ProviderModule = {
         return bedrockTemperaturePolicy(cfg.model);
     },
 
-    // `@ai-sdk/amazon-bedrock` builds models whose provider id is `amazon-bedrock`
-    // (verified against the built model, not the docs), so that — or its camelCase
-    // form — is the only key the SDK reads. Declaring it is what lets a user's
-    // Custom reasoning override be wrapped under a key that exists; undeclared, it
-    // went out unwrapped and was dropped without a word (the Novita failure).
-    providerOptionsNamespace: () => 'amazon-bedrock',
+    // The provider ID of the built model is `amazon-bedrock`, and reading THAT is
+    // what produced the wrong answer here: the id names the provider, but the
+    // `providerOptions` key is chosen separately, and `@ai-sdk/amazon-bedrock`
+    // parses only `amazonBedrock` (preferred) or `bedrock` (its legacy alias).
+    // Nothing reads `amazon-bedrock`, so every Bedrock reasoning override was
+    // wrapped under a dead key and dropped in silence — the exact failure this
+    // field exists to prevent, reintroduced by verifying the wrong property.
+    // Captured on the wire both ways before and after (byok-config-matrix).
+    providerOptionsNamespace: () => 'amazonBedrock',
+
+    // The vendor's own docs show the legacy `bedrock` key, so that is what a
+    // customer copying from them pastes. Without declaring it, the auto-wrapper
+    // reads it as an un-namespaced paste and wraps it AGAIN — `{amazonBedrock:
+    // {bedrock: {...}}}` — which the SDK parses to nothing. Recognising it costs
+    // one line and the alternative is a correct paste silently doing nothing.
+    providerOptionsNamespaceAliases: () => ['bedrock'],
 
     // Claude-on-Bedrock honors the SAME `anthropic.cacheControl` marker as native
     // Anthropic (per the AI SDK Bedrock docs). Non-Anthropic Bedrock models cache

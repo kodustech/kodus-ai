@@ -622,7 +622,29 @@ describe('buildProviderOptions', () => {
                 modelName: 'anthropic.claude-sonnet-4-6',
                 reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
             }),
-        ).toEqual({ 'amazon-bedrock': { foo: 'bar' } });
+        // ...and then asserted the NEXT wrong key. `amazon-bedrock` is the built
+        // model's provider ID, not the providerOptions key: the SDK parses only
+        // `amazonBedrock` or its legacy `bedrock` alias. This spec agreeing with
+        // the module proved nothing, because both were reading the same wrong
+        // property — which is why the claim is now also made on the wire, in
+        // byok-config-matrix, where the request body can contradict it.
+        ).toEqual({ amazonBedrock: { foo: 'bar' } });
+    });
+
+    it('leaves an override alone when it uses an SDK alias key', () => {
+        // The vendor's docs show `{ bedrock: ... }`, so that is what gets pasted.
+        // Wrapping it under the canonical namespace would bury a key the SDK
+        // reads inside one it also reads, and the inner object is not a valid
+        // option — a correct paste turned into a silent no-op.
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'amazon_bedrock',
+                modelName: 'anthropic.claude-sonnet-4-6',
+                reasoningConfigOverride: JSON.stringify({
+                    bedrock: { reasoningConfig: { type: 'enabled' } },
+                }),
+            }),
+        ).toEqual({ bedrock: { reasoningConfig: { type: 'enabled' } } });
     });
 
     it('wraps a Vertex override by MODEL, because one id builds two SDK models', () => {
