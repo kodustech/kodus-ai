@@ -18,7 +18,7 @@
         "ALREADY IN THE REPO — do not put these here unless you want to override:",
         "  BYOK_ANTHROPIC_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY,",
         "  BYOK_GOOGLE_API_KEY, BYOK_OPENAI_API_KEY and VERTEX_SA_JSON already",
-        "  cover FIFTEEN of the THIRTY-ONE rows: the six Claude generations,",
+        "  cover FIFTEEN of the TWENTY-SIX rows: the six Claude generations,",
         "  moonshot + moonshot_code + k3, zai, gemini, openai + the two",
         "  compatible-proxy rows, and vertex. Step 3 prints the real list.",
         "",
@@ -27,10 +27,6 @@
     "open_router": "sk-or-…",
     "deepseek": "sk-…",
     "fireworks": "fw_…",
-    "ollama_cloud": "…",
-    "minimax": "…",
-    "minimaxi": "…",
-    "xiaomi": "…",
     "amazon_bedrock": {
         "apiKey": "<bearer token>",
         "awsRegion": "us-east-1"
@@ -41,15 +37,9 @@
         "                                  families below that had NO row at all:",
         "                                  qwen 8, nemotron 10, mimo 7, grok 1)",
         "  deepseek                  34   (20 compatible + 11 openrouter + 3 novita)",
-        "  minimax                   22   (also covers minimax_m3, which falls back to it)",
         "  fireworks                 11   (largest uncovered HOST; the only ids that are",
         "                                  deep paths, `accounts/fireworks/models/…`)",
-        "  amazon_bedrock            10",
-        "  ollama_cloud               8   (the only host reached with a `:cloud` suffix)",
-        "  xiaomi                     4   (native MiMo, two PoPs)",
-        "  minimaxi                   -   (a second MiniMax platform whose docs render",
-        "                                  client-side; this key is the only way to",
-        "                                  settle what it accepts)"
+        "  amazon_bedrock            10"
     ],
     "_optional_overrides": [
         "Everything below already resolves from an existing repo secret, or from",
@@ -78,7 +68,6 @@
         "    \"open_router_nemotron\"  \"sk-or-…\",",
         "    \"open_router_mimo\"      \"sk-or-…\",",
         "    \"open_router_grok\"      \"sk-or-…\",",
-        "  \"minimax_m3\":      \"…\"         (falls back to \"minimax\" above),",
         "  \"zai\":             { \"apiKey\": \"…\", \"model\": \"glm-5.3\" },",
         "  \"moonshot\":        \"sk-…\",",
         "  \"google_vertex\":   \"<service-account JSON>\"  (defaults to VERTEX_SA_JSON),",

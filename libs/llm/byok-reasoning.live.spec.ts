@@ -274,7 +274,6 @@ const BORROWS_FROM: Record<string, string> = {
     open_router_grok: 'open_router',
     openai_compatible_gpt5: 'openai',
     openai_compatible_claude: 'anthropic',
-    minimax_m3: 'minimax',
     // Same provider, same `awsBearerToken`, same account — only the model id
     // and the region differ. It needs its own entry only when Grok is enabled
     // in a different account or region than the Claude row's.
@@ -603,17 +602,6 @@ const LIVE = [
     // ── mappings added after this tier was written, and unmonitored until now ──
     // Each is a shape we now emit in production and nothing live was checking.
     {
-        brand: 'minimax',
-        why: 'effort-only: MiniMax M2 takes `reasoning_effort` and has NO thinking toggle — sending one would invent a field it does not have (18 production slots)',
-        slot: {
-            provider: 'openai_compatible',
-            model: 'MiniMax-M2',
-            baseURL: 'https://api.minimax.io/v1',
-            reasoningEffort: 'low',
-        },
-        reasons: true,
-    },
-    {
         brand: 'amazon_bedrock',
         why: 'Claude on Converse takes the adaptive shape inside additionalModelRequestFields, and this transport cannot express an explicit disable (5 production slots)',
         slot: {
@@ -791,72 +779,11 @@ const LIVE = [
         },
         reasons: true,
     },
-    {
-        brand: 'ollama_cloud',
-        // Enough for a low-effort thought plus a visible token, not the default.
-        maxOutputTokens: 2048,
-        why: 'ollama.com/v1 is 8 slots and the only host reached with a `:cloud` / `:free` id SUFFIX, which our model matching does not read — a GLM that reasons natively is the way to see whether the suffix costs us the reasoning',
-        slot: {
-            provider: 'openai_compatible',
-            model: 'glm-5.2:cloud',
-            baseURL: 'https://ollama.com/v1',
-            reasoningEffort: 'low',
-        },
-        reasons: true,
-    },
-    {
-        brand: 'xiaomi',
-        // `reasons: false`: no thinking budget to clear, so a word is enough.
-        maxOutputTokens: 512,
-        why: 'the NATIVE MiMo surface (4 slots across a Singapore and an Amsterdam PoP), as opposed to the OpenRouter one above. No trait entry, so this pins that the request is accepted',
-        slot: {
-            provider: 'openai_compatible',
-            model: 'mimo-v2.5-pro',
-            baseURL: 'https://token-plan-sgp.xiaomimimo.com/v1',
-            reasoningEffort: 'low',
-        },
-        reasons: false,
-    },
 
     // ── the audit's open questions: cases where the DOCS and our code disagree,
     // or where no readable doc exists at all. Offline tests cannot settle any of
     // these — they prove what we SEND, and the question is what the vendor
     // ACCEPTS. Each one is a claim currently resting on inference. ──────────
-    {
-        brand: 'minimax_m3',
-        why: 'M3 is a different model from M2 on the same platform: platform.minimax.io says thinking is OFF by default and enabled "with adaptive", while we send thinking:{type:enabled,budget_tokens}. Nothing says `enabled` is refused, so it was not changed on a guess — this row is what turns the guess into an answer (3 production slots)',
-        slot: {
-            provider: 'anthropic_compatible',
-            model: 'MiniMax-M3',
-            baseURL: 'https://api.minimax.io/anthropic',
-            // `low` for the same reason as the k3 row: the SHAPE is the subject,
-            // and a high effort would authorise a 40,000-token budget to say one
-            // word.
-            reasoningEffort: 'low',
-        },
-        maxOutputTokens: 6_144,
-        // Falls back to the `minimax` entry: same platform (api.minimax.io) and
-        // the same account — this row differs by MODEL and PROTOCOL, not by
-        // credential. Asking for the key twice would be friction that buys
-        // nothing, and a separate entry only exists so a key scoped to one model
-        // can still be given on its own.
-        //
-        // No ENV fallback, though: the point of the single secret is that adding
-        // a brand does not grow the product's env surface, and no MiniMax name
-        // exists in this repo's schema to fall back to.
-        reasons: true,
-    },
-    {
-        brand: 'minimaxi',
-        why: 'MiniMax runs TWO platforms and production uses both. api.minimaxi.com is the one this table cites for `reasoning_effort` and the one whose docs render client-side, so it could not be read — the only way to check it is to call it (2 production slots)',
-        slot: {
-            provider: 'openai_compatible',
-            model: 'MiniMax-M2.5',
-            baseURL: 'https://api.minimaxi.com/v1',
-            reasoningEffort: 'low',
-        },
-        reasons: true,
-    },
     {
         brand: 'moonshot_code',
         why: 'k2.7-code is the pair to the k2.6 row and differs on BOTH facts we changed: thinking cannot be disabled, and platform.kimi.ai documents its temperature as not modifiable. The slot deliberately carries a temperature the runtime must DROP — if it ever reaches the wire this row is where that shows',

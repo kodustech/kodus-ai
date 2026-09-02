@@ -423,6 +423,78 @@ const CASES = [
         },
         wire: { hasNot: ['thinking', 'reasoning_effort'] },
     },
+    // ── The MiniMax, MiMo and Ollama-Cloud shapes below replace live rows that
+    // were removed: we are not going to hold those credentials, and a row that
+    // can never run is a permanent "skipped" line rather than a check. What a
+    // live call proved was that the VENDOR accepts the body; what these prove
+    // is the body itself, which is the half we control and the half that
+    // regresses. Every one was READ OFF THE WIRE before being written down.
+    {
+        id: 'minimax M3 — the transport, not the id, decides whether we ask for thinking',
+        why: 'The SAME model over the two endpoints MiniMax publishes gets two different reasoning stories: nothing on the OpenAI-protocol one (the verified-unmappable case above), and an explicit budget on the Anthropic-protocol one, which is the shape that transport speaks. Four production slots run M3 at /anthropic. Written down because the divergence is deliberate and would otherwise look like a bug to whoever finds it next — and because the audit could not confirm M3 documents ANY thinking toggle, so if this one turns out to be wrong, it is wrong HERE and nowhere else',
+        doc: 'platform.minimax.io — Anthropic SDK endpoint https://api.minimax.io/anthropic',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3',
+            baseURL: 'https://api.minimax.io/anthropic',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: { thinking: { type: 'enabled', budget_tokens: 40_000 } },
+        },
+    },
+    {
+        id: 'minimax M2.5 on the OTHER platform gets the M2 family rule',
+        why: 'api.minimaxi.com is a second MiniMax platform whose docs render client-side and could not be audited. What is checkable is that our own mapping does not branch on the HOST: an M2-family id gets reasoning_effort wherever it is pointed, so the two platforms cannot drift apart in our code without this failing',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'MiniMax-M2.5',
+            baseURL: 'https://api.minimaxi.com/v1',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: { reasoning_effort: 'high' },
+            hasNot: ['thinking'],
+        },
+    },
+    {
+        id: 'ollama cloud — a `:cloud` id suffix costs the model none of its reasoning',
+        why: 'Eight production slots reach ollama.com/v1 with ids like `glm-5.2:cloud`, and the worry was that the suffix breaks family matching and silently drops the reasoning every one of those orgs configured. Read off the wire: it does not. `glm-5.2:cloud` gets exactly what `glm-5.2` on api.z.ai gets. Pinned so a future tightening of the matcher cannot take it away quietly',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'glm-5.2:cloud',
+            baseURL: 'https://ollama.com/v1',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: { thinking: { type: 'enabled' }, reasoning_effort: 'max' },
+        },
+    },
+    {
+        id: 'ollama cloud — the same holds for a Kimi behind the suffix',
+        why: 'The other family that appears with `:cloud`. Kimi takes the toggle and no effort level, and the suffix does not change that either',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'kimi-k2.7-code:cloud',
+            baseURL: 'https://ollama.com/v1',
+            reasoningEffort: 'high',
+        },
+        wire: {
+            has: { thinking: { type: 'enabled' } },
+            hasNot: ['reasoning_effort'],
+        },
+    },
+    {
+        id: 'MiMo — nothing is invented for a family we make no claim about',
+        why: 'Xiaomi MiMo has no trait entry, by decision: no readable doc, so no mapping. The risk of "no entry" is not silence, it is a DEFAULT leaking in — a strict server 400s on a body field it does not know, which would take down every review for those four orgs. This pins the silence',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'mimo-v2.5-pro',
+            baseURL: 'https://token-plan-sgp.xiaomimimo.com/v1',
+            reasoningEffort: 'high',
+        },
+        wire: { hasNot: ['thinking', 'reasoning_effort', 'reasoning'] },
+    },
     {
         id: 'novita — VERIFIED: the vendor exposes no reasoning parameter at all',
         why: 'This was carried as "not mapped yet". Checked novita.ai/docs/guides/llm-api: the documented chat-completions fields are temperature, top_p, top_k, presence_penalty, frequency_penalty, repetition_penalty, max_tokens, stream and stop — there is no reasoning_effort, thinking or enable_thinking to send. The 4 production slots are DeepSeek, which reasons by default, so they DO reason; the level simply is not expressible on this endpoint. Nothing to fix on our side',
