@@ -52,6 +52,31 @@ describe('repairBedrockModelId — an id AWS cannot serve as written', () => {
         expect(repairBedrockModelId(id, 'us-east-1')).toBe(id);
     });
 
+    // The generations AWS did serve as bare foundation models. Claude 3.5
+    // Sonnet launched on-demand under its bare id and answers to it today, so
+    // prefixing it is not a repair — it silently moves a working slot onto a
+    // cross-region profile, changing where the call routes and how it bills,
+    // and failing outright in an account with no such profile.
+    //
+    // 3.7 is deliberately NOT exempt: it arrived requiring an inference
+    // profile, so it belongs with the generations that are repaired.
+    it.each([
+        'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        'anthropic.claude-3-5-sonnet-20241022-v2:0',
+        'anthropic.claude-3-5-haiku-20241022-v1:0',
+        'anthropic.claude-3-opus-20240229-v1:0',
+        'anthropic.claude-3-sonnet-20240229-v1:0',
+        'anthropic.claude-3-haiku-20240307-v1:0',
+    ])('leaves a bare Claude 3.x id alone — AWS serves it on demand: %s', (id) => {
+        expect(repairBedrockModelId(id, 'us-east-1')).toBe(id);
+    });
+
+    it('still repairs 3.7, which shipped profile-only', () => {
+        expect(
+            repairBedrockModelId('anthropic.claude-3-7-sonnet-20250219-v1:0', 'us-east-1'),
+        ).toBe('us.anthropic.claude-3-7-sonnet-20250219-v1:0');
+    });
+
     it('leaves an empty id alone rather than inventing one', () => {
         expect(repairBedrockModelId('', 'us-east-1')).toBe('');
     });

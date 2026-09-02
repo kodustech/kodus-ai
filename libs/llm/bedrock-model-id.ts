@@ -1,8 +1,8 @@
 /**
  * Repair a Bedrock model id that AWS cannot serve as written.
  *
- * Claude on Bedrock has no on-demand throughput. Naming the foundation model
- * directly is rejected outright:
+ * Claude on Bedrock lost on-demand throughput at 3.7. From that generation on,
+ * naming the foundation model directly is rejected outright:
  *
  *   Invocation of model ID anthropic.claude-sonnet-4-6 with on-demand
  *   throughput isn't supported. Retry your request with the ID or ARN of an
@@ -33,6 +33,23 @@ const ALREADY_ROUTED = /^(us|eu|apac|global|us-gov)\.|^arn:/i;
 const BARE_ANTHROPIC = /^anthropic\./i;
 
 /**
+ * The bare ids AWS does serve on demand, which must NOT be prefixed.
+ *
+ * The rule above is generational, not universal: Claude 3.x launched as
+ * on-demand foundation models and still answers to its bare id. Prefixing one
+ * is not a repair — it moves a working slot onto a cross-region profile,
+ * changing where the call routes and how it bills, and failing outright in an
+ * account that has no such profile. There is nothing broken to fix.
+ *
+ * 3.7 is excluded on purpose: it shipped requiring an inference profile, so it
+ * belongs with the generations this module repairs. The exemption covers only
+ * what AWS has been observed serving bare, and everything newer keeps the
+ * repair by default — which is the safe direction, since every Claude
+ * generation since 3.7 has been profile-only.
+ */
+const SERVED_BARE_ON_DEMAND = /^anthropic\.claude-3-(opus|sonnet|haiku|5-)/i;
+
+/**
  * The geography prefix for a region. AWS names cross-region profiles after the
  * geography, not the region: every `eu-*` region shares `eu.`, every `ap-*`
  * shares `apac.`. `global.` is the routing-anywhere profile and is not derived
@@ -57,7 +74,12 @@ export function bedrockGeographyPrefix(region?: string): string {
  */
 export function repairBedrockModelId(model: string, region?: string): string {
     const id = (model ?? '').trim();
-    if (!id || ALREADY_ROUTED.test(id) || !BARE_ANTHROPIC.test(id)) {
+    if (
+        !id ||
+        ALREADY_ROUTED.test(id) ||
+        !BARE_ANTHROPIC.test(id) ||
+        SERVED_BARE_ON_DEMAND.test(id)
+    ) {
         return model;
     }
     return `${bedrockGeographyPrefix(region)}${id}`;
