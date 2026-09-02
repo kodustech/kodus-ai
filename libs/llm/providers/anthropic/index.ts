@@ -14,6 +14,7 @@ import {
     resolveAnthropicModelTraits,
     supportsSamplingParams,
 } from './traits';
+import { detectModelFamily } from '../kernel/model-family';
 import { registerProvider } from '../kernel/registry';
 import { anthropicEphemeralCacheHint } from '../kernel/anthropic-cache';
 import { withThinkingSignatureRepair } from './thinking-repair';
@@ -196,8 +197,24 @@ export const anthropicModule: ProviderModule = {
             // budget form (a real Claude proxied over a compatible endpoint is
             // still a Claude), or the compatible family table declares the
             // brand a thinker — Kimi, GLM and DeepSeek all do.
+            //
+            // Withheld only for a RECOGNIZED family whose table declined to
+            // declare THIS version a thinker. That is a decision: MiniMax
+            // validates `reasoning_effort` for M2 and explicitly does not for
+            // M3, so emitting a budget there invents a field for a brand that
+            // said no. An UNRECOGNIZED id is ignorance, not a decision, and the
+            // traits file documents the way out of it — "a user who DOES want
+            // thinking on their custom model sets the slot effort explicitly".
+            // Reaching here means they did, so a self-hosted vLLM or a custom
+            // proxy still gets the budget it asked for.
+            //
+            // `thinksByDefault` alone cannot tell those apart: M3 and a plain
+            // Llama both carry false, and so does `reasoningControl` — both
+            // undefined. The FAMILY is the only thing that separates a table
+            // that declined from a table that has no entry.
             if (
                 claude.thinkingShape === 'none' &&
+                detectModelFamily(cfg.model) !== 'unknown' &&
                 !resolveCompatibleReasoningTraits(cfg.model).thinksByDefault
             ) {
                 return {};

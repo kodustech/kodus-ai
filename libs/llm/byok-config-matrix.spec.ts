@@ -442,6 +442,17 @@ const CASES = [
         wire: { hasNot: ['thinking', 'reasoning_effort'] },
     },
     {
+        id: 'an UNKNOWN compatible id keeps the effort its user asked for',
+        why: 'The counterweight to the M3 case, and the line between the two. A recognized family whose table declined to declare a version a thinker is a DECISION — MiniMax validates reasoning_effort for M2 and explicitly does not for M3 — so a budget there invents a field the brand said no to. An unrecognized id is ignorance, not a decision, and reasoning-traits.ts documents the way out: "a user who DOES want thinking on their custom model sets the slot effort explicitly". Reaching the emitter means they did. Neither `thinksByDefault` nor `reasoningControl` can tell the two apart (M3 and a plain Llama both carry false and undefined); the FAMILY can, which is why the guard reads it',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'my-self-hosted-vllm',
+            baseURL: 'https://vllm.internal.example/anthropic',
+            reasoningEffort: 'high',
+        },
+        wire: { has: { thinking: { type: 'enabled', budget_tokens: 40_000 } } },
+    },
+    {
         id: 'the compatible brands that DO declare the legacy shape still get it',
         why: 'The counterweight to the case above. Narrowing the fall-through must not cost Kimi, GLM and DeepSeek the thinking budget they actually implement over this transport — three families, and the largest of them is 24 production slots',
         slot: {
