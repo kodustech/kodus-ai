@@ -46,6 +46,10 @@ on:
     # never a false red. (Same-repo PRs see the `ci` environment's secrets;
     # tests.yml already runs on pull_request with `environment: ci`, and
     # the environment has no protection rules that would stall it.)
+    #
+    # This applies to the `contract` job only. `byok-live` opted OUT of the PR
+    # trigger — see its own `if` for why — so the live-spec path below now serves
+    # nothing but keeps the trigger honest if that decision is revisited.
     pull_request:
         paths:
             - ".github/workflows/contract-tests.yml"
@@ -181,10 +185,23 @@ jobs:
     # coverage instead of a false red, and fork PRs stay green.
     byok-live:
         name: BYOK reasoning live contract (weekly)
+        # Weekly cron and manual dispatch ONLY — deliberately not on pull_request.
+        # It used to run on PRs harmlessly, because the fallbacks named secrets
+        # that do not exist and every row skipped. Now that they name the secrets
+        # that DO, a PR touching this file would make real calls to ten vendors
+        # on every push, which is a cost nobody asked for on a code review.
+        #
+        # Nothing is lost by dropping it: the same file's OFFLINE cases — the
+        # token-budget ceiling and the coverage report — run in the normal test
+        # suite on every PR, so a row that blows the budget is still caught by
+        # the change that introduces it. What only the cron can do is spend real
+        # tokens, and that is exactly what should not happen per-push.
+        #
+        # `workflow_dispatch` stays, so a live check is one click away when a row
+        # changes and you want the answer before Monday.
         if: >-
             github.event.schedule == '0 7 * * 1' ||
-            github.event_name == 'workflow_dispatch' ||
-            github.event_name == 'pull_request'
+            github.event_name == 'workflow_dispatch'
         runs-on: ubuntu-latest
         timeout-minutes: 15
         environment: ci
