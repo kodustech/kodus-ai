@@ -612,6 +612,59 @@ describe('runStructuredReviewCall — bare-array shape recovery (kody-rules shar
         expect(out).toEqual({ violations: [] });
         expect(mockGenerate).toHaveBeenCalledTimes(2); // re-ask fired, not re-shaped
     });
+
+    it('does NOT ship a re-shaped value that fails re-validation — falls to the re-ask', async () => {
+        // Safety: the lift must be held to the EXACT contract. A bare array whose
+        // items violate the schema (numbers where objects are required) re-shapes
+        // to {violations:[1,2]} but that fails validation → we must NOT return it;
+        // the re-ask still fires. Guards against recovering structurally-bad data.
+        const strictSchema = jsonSchema({
+            type: 'object',
+            properties: {
+                violations: { type: 'array', items: { type: 'object' } },
+            },
+            required: ['violations'],
+            additionalProperties: false,
+        } as any);
+        const typeErr = new TypeValidationError({
+            value: [1, 2],
+            cause: new Error('expected object items'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '[1,2]'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: strictSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2); // re-shape rejected → re-ask
+    });
+
+    it('does NOT invent a recovery from an unparseable parse-error — falls to the re-ask', async () => {
+        // recoverShape is on, but the JSONParseError text holds no extractable
+        // JSON (genuine garbage / truncation) → no bad value to re-shape → the
+        // re-ask runs, exactly as without recovery.
+        const parseErr = new JSONParseError({
+            text: 'not json at all',
+            cause: new Error('nope'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(parseErr, 'not json at all'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
 });
 
 describe('runStructuredReviewCall — typed output contract (compile-time inference)', () => {

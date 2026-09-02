@@ -6,14 +6,20 @@
  * the status→category mapping, which `error-classifier.spec.ts` owns. Categories
  * are carried on the thrown error as `__cat` and abort as `__abort`.
  */
-jest.mock('@libs/core/log/logger', () => ({
-    createLogger: () => ({
+// One stable spy per module load (the factory closes over it and `createLogger`
+// always returns it) so tests can assert the [LLM-ERROR]/[LLM-SUCCESS]
+// observability lines this primitive emits. Fetched below via `createLogger`
+// rather than an outer const — ESM import hoisting would load model-failover
+// (and its module-level createLogger call) before an outer const initialized.
+jest.mock('@libs/core/log/logger', () => {
+    const log = {
         warn: jest.fn(),
         info: jest.fn(),
         error: jest.fn(),
         debug: jest.fn(),
-    }),
-}));
+    };
+    return { createLogger: () => log };
+});
 
 jest.mock('@libs/llm/error-classifier', () => {
     const LlmErrorCategory = {
@@ -46,6 +52,16 @@ import {
     type FailoverAttemptControl,
 } from './model-failover';
 import type { NormalizedModel } from './byok-config';
+import { createLogger } from '@libs/core/log/logger';
+
+// The mocked createLogger always returns the same spy instance model-failover
+// captured at module load, so this is that exact instance.
+const mockLog = createLogger('test') as unknown as {
+    warn: jest.Mock;
+    info: jest.Mock;
+    error: jest.Mock;
+    debug: jest.Mock;
+};
 
 const err = (cat: string, extra: Record<string, unknown> = {}) =>
     Object.assign(new Error(`boom:${cat}`), { __cat: cat, ...extra });
@@ -176,5 +192,70 @@ describe('runWithModelFailover', () => {
         expect(out).toBe('managed');
         expect(runOne).toHaveBeenCalledTimes(1);
         expect(runOne.mock.calls[0][0]).toBeUndefined();
+    });
+
+    it('drops an `undefined` that trails a real slot (never queued as a fallback)', async () => {
+        // distinctAttempts pushes the managed-default (undefined) ONLY as the sole
+        // entry — an undefined AFTER a real slot must be dropped, so a terminal
+        // primary failure does NOT cascade into a bogus managed-default attempt.
+        const runOne = jest.fn().mockRejectedValue(err('AUTH_INVALID'));
+        await expect(
+            runWithModelFailover([slot('A'), undefined], runOne, opts),
+        ).rejects.toThrow();
+        expect(runOne).toHaveBeenCalledTimes(1);
+        expect(runOne.mock.calls[0][0]).toMatchObject({ model: 'A' });
+    });
+});
+
+describe('runWithModelFailover — observability ([LLM-ERROR]/[LLM-SUCCESS])', () => {
+    const opts = { runName: 'test', organizationId: 'org-1' };
+    beforeEach(() => {
+        mockLog.warn.mockClear();
+        mockLog.debug.mockClear();
+    });
+
+    it('emits a [LLM-SUCCESS] debug line with the model and usedFallback=false on a primary win', async () => {
+        const runOne = jest.fn().mockResolvedValue('ok');
+        await runWithModelFailover([slot('A'), slot('B')], runOne, opts);
+        expect(mockLog.debug).toHaveBeenCalledTimes(1);
+        const call = mockLog.debug.mock.calls[0][0];
+        expect(call.message).toContain('[LLM-SUCCESS]');
+        expect(call.message).toContain('A');
+        expect(call.metadata.usedFallback).toBe(false);
+    });
+
+    it('stamps usedFallback=true on the success line when the fallback saved the call', async () => {
+        const runOne = jest
+            .fn()
+            .mockRejectedValueOnce(err('AUTH_INVALID'))
+            .mockResolvedValueOnce('ok');
+        await runWithModelFailover([slot('A'), slot('B')], runOne, opts);
+        const success = mockLog.debug.mock.calls[0][0];
+        expect(success.message).toContain('[LLM-SUCCESS]');
+        expect(success.metadata.usedFallback).toBe(true);
+    });
+
+    it('names from→to (the i+1 fallback) on the cascade [LLM-ERROR] warn', async () => {
+        const runOne = jest
+            .fn()
+            .mockRejectedValueOnce(err('AUTH_INVALID'))
+            .mockResolvedValueOnce('ok');
+        await runWithModelFailover([slot('A'), slot('B')], runOne, opts);
+        const cascade = mockLog.warn.mock.calls[0][0];
+        expect(cascade.message).toContain('[LLM-ERROR]');
+        expect(cascade.message).toContain('A'); // from
+        expect(cascade.message).toContain('B'); // to (attempts[i+1])
+        expect(cascade.metadata.toModelId).toBe('B');
+    });
+
+    it('emits a terminal [LLM-ERROR] warn with the category and exhausted=true when all attempts fail', async () => {
+        const runOne = jest.fn().mockRejectedValue(err('AUTH_INVALID'));
+        await expect(
+            runWithModelFailover([slot('A')], runOne, opts),
+        ).rejects.toThrow();
+        const terminal = mockLog.warn.mock.calls[0][0];
+        expect(terminal.message).toContain('[LLM-ERROR]');
+        expect(terminal.metadata.category).toBe('AUTH_INVALID');
+        expect(terminal.metadata.exhausted).toBe(true);
     });
 });
