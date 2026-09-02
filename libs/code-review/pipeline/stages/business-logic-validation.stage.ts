@@ -10,7 +10,6 @@ import { MCPManagerService } from '@libs/mcp-server/services/mcp-manager.service
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfaces/pullRequests.interface';
 import { Injectable } from '@nestjs/common';
-import * as crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -19,13 +18,12 @@ import { CodeReviewPipelineContext } from '../context/code-review-pipeline.conte
  * Validates that the code in the PR matches the business requirements
  * declared in the PR description (linked tickets, requirement keywords).
  *
- * Surface as a top-level pipeline stage in the agent (v4) engine so the
- * UI can show what happened: ran with a gap, ran clean, or skipped with
- * a concrete reason (no ticket link, feature off, unchanged description).
+ * Surface as a top-level pipeline stage so the UI can show what happened: ran
+ * with a gap, ran clean, or skipped with a concrete reason (no ticket link,
+ * feature off, already validated).
  *
- * In the legacy EE engine this is still done inside
- * ProcessFilesPrLevelReviewStage alongside kody rules and cross-file
- * analysis. Once the EE engine is retired this can become the sole owner.
+ * Automatic validation is one-shot per pull request. Later pushes stay silent;
+ * `@kody -v business-logic` and `@kody review --force` re-run it on demand.
  */
 @Injectable()
 export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPipelineContext> {
@@ -44,6 +42,10 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         'then',
     ];
     private static readonly TIMEOUT_MS = 300_000; // 5 min
+
+    /** Command that re-runs the validation on demand. Matches the handler in
+     *  ChatWithKodyFromGitUseCase — keep the two in sync. */
+    private static readonly RERUN_COMMAND = '@kody -v business-logic';
 
     /** Jira-style issue keys, e.g. LKDB-286, PROJ_1-42 (case-insensitive). */
     private static readonly TICKET_KEY_PATTERN = /[A-Za-z][A-Za-z0-9_]+-\d+/g;
@@ -153,8 +155,11 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         const prBody = context.pullRequest?.body ?? '';
         const signalSources = this.buildSignalSources(context);
 
-        const prBodyHash = this.computePrBodyHash(prBody);
         const signals = this.detectSignals(signalSources, prBody);
+        const validatedAt = new Date().toISOString();
+        // A run the user asked for by name needs no pointer back to the command
+        // they just typed.
+        const explicitRun = context.origin === 'command-force';
 
         try {
             const prepareContext = {
@@ -280,7 +285,10 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
                 if (this.isWeakTaskContext(result)) {
                     const limitationSuggestion: ISuggestionByPR = {
                         id: uuidv4(),
-                        suggestionContent: result,
+                        suggestionContent: this.withRerunHint(
+                            result,
+                            explicitRun,
+                        ),
                         oneSentenceSummary:
                             'Task description is insufficient for business logic validation.',
                         label: LabelType.BUSINESS_LOGIC,
@@ -290,6 +298,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
                     return this.updateContext(context, (draft) => {
                         draft.businessLogicResults = [limitationSuggestion];
+                        draft.businessLogicValidatedAt = validatedAt;
                         draft.businessLogicOutcome = {
                             kind: 'skipped',
                             reason: 'weak_task_context',
@@ -323,7 +332,10 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             if (classification.kind === 'no_gap') {
                 const noGapSuggestion: ISuggestionByPR = {
                     id: uuidv4(),
-                    suggestionContent: result,
+                    suggestionContent: this.withRerunHint(
+                        result,
+                        explicitRun,
+                    ),
                     oneSentenceSummary:
                         'Business logic validation passed — PR aligns with task requirements.',
                     label: LabelType.BUSINESS_LOGIC,
@@ -333,7 +345,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
                 return this.updateContext(context, (draft) => {
                     draft.businessLogicResults = [noGapSuggestion];
-                    draft.businessLogicPrBodyHash = prBodyHash;
+                    draft.businessLogicValidatedAt = validatedAt;
                     draft.businessLogicOutcome = {
                         kind: 'success',
                         message:
@@ -344,7 +356,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
             const suggestion: ISuggestionByPR = {
                 id: uuidv4(),
-                suggestionContent: result,
+                suggestionContent: this.withRerunHint(result, explicitRun),
                 oneSentenceSummary:
                     'Business logic gap detected based on PR requirements.',
                 label: LabelType.BUSINESS_LOGIC,
@@ -354,7 +366,7 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
 
             return this.updateContext(context, (draft) => {
                 draft.businessLogicResults = [suggestion];
-                draft.businessLogicPrBodyHash = prBodyHash;
+                draft.businessLogicValidatedAt = validatedAt;
                 draft.businessLogicOutcome = {
                     kind: 'gap_found',
                     message:
@@ -444,24 +456,42 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
             };
         }
 
-        const currentHash = this.computePrBodyHash(prBody);
-        const lastHash = (context.pipelineMetadata?.lastExecution as any)
-            ?.businessLogicHash;
-        const forceFullRerun =
-            (context.pipelineMetadata as any)?.forceFullRerun ?? false;
+        // `@kody review --force` is the only automatic path that revalidates a
+        // PR that already got a message. `forceFullRerun` is NOT that signal:
+        // a force-push (orphaned base commit) and a retried partial review
+        // both set it without anyone asking for a second business-logic pass.
+        if (context.origin === 'command-force') {
+            return null;
+        }
 
-        // A --force re-review should re-run business logic even if the PR body
-        // hasn't changed. Otherwise a transient failure (e.g. GitHub 503 when
-        // posting the comment) can never be retried without editing the PR.
-        if (!forceFullRerun && lastHash && lastHash === currentHash) {
+        if (this.wasAlreadyValidated(context)) {
             return {
-                reason: 'unchanged_body',
-                message:
-                    'Skipped: PR description has not changed since the last review.',
+                reason: 'already_validated',
+                message: `Skipped: business logic was already validated for this pull request. Run \`${BusinessLogicValidationStage.RERUN_COMMAND}\` to validate it again.`,
             };
         }
 
         return null;
+    }
+
+    /**
+     * Validation is one-shot per PR: the automatic message goes out on the
+     * first run and never repeats on later pushes.
+     *
+     * Releases before this recorded a hash of the PR body instead. Any such
+     * hash counts as "already validated" without comparing it — Kody's own PR
+     * summary rewrites the description, so the body it was taken from is
+     * routinely gone by the next push.
+     */
+    private wasAlreadyValidated(context: CodeReviewPipelineContext): boolean {
+        const lastExecution = context.pipelineMetadata?.lastExecution as
+            | { businessLogicValidatedAt?: string; businessLogicHash?: string }
+            | undefined;
+
+        return Boolean(
+            lastExecution?.businessLogicValidatedAt ||
+                lastExecution?.businessLogicHash,
+        );
     }
 
     /**
@@ -722,10 +752,6 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         );
     }
 
-    private computePrBodyHash(body: string): string {
-        return crypto.createHash('sha256').update(body).digest('hex');
-    }
-
     /**
      * Classify the agent's output into one of three outcomes:
      *  - 'gap_found'  → a real business-logic gap was detected
@@ -811,6 +837,19 @@ export class BusinessLogicValidationStage extends BasePipelineStage<CodeReviewPi
         return result.includes(
             BusinessRulesValidationAgentProvider.WEAK_TASK_CONTEXT_MARKER,
         );
+    }
+
+    /**
+     * Business logic runs automatically only once per PR, so the message has to
+     * say how to ask for it again — otherwise its absence on the next push
+     * reads as Kody having silently stopped working.
+     */
+    private withRerunHint(result: string, explicitRun: boolean): string {
+        if (explicitRun) {
+            return result;
+        }
+
+        return `${result}\n\n---\n> 💡 This validation runs automatically only on the first review of a pull request. To run it again, comment \`${BusinessLogicValidationStage.RERUN_COMMAND}\`.`;
     }
 
     private firstNonEmptyLine(text: string): string {

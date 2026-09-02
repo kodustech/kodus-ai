@@ -319,7 +319,12 @@ export class AutomationCodeReviewService implements Omit<
                     heavy, // @kody review --heavy — extra critic pass
                 );
 
-            await this._handleExecutionCompletion(execution, result, payload);
+            await this._handleExecutionCompletion(
+                execution,
+                result,
+                payload,
+                lastExecution?.dataExecution,
+            );
             return 'Automation executed successfully';
         } catch (error) {
             // A refused command is not a failed run — there is no execution
@@ -552,20 +557,25 @@ export class AutomationCodeReviewService implements Omit<
         execution: IAutomationExecution,
         result: any,
         payload: any,
+        lastExecutionData?: Record<string, any>,
     ) {
         if (!result) {
             await this.updateAutomationExecution(
                 execution,
                 AutomationStatus.ERROR,
                 'Error processing the pull request: handler returned no result.',
-                this._buildExecutionData(payload),
+                this._buildExecutionData(payload, undefined, lastExecutionData),
             );
             return;
         }
 
         const finalStatus = this.deriveFinalStatus(result);
         const finalMessage = this.buildFinalMessage(result, finalStatus);
-        const newData = this._buildExecutionData(payload, result);
+        const newData = this._buildExecutionData(
+            payload,
+            result,
+            lastExecutionData,
+        );
 
         await this.updateAutomationExecution(
             execution,
@@ -705,7 +715,11 @@ export class AutomationCodeReviewService implements Omit<
         );
     }
 
-    private _buildExecutionData(payload: any, result?: any): any {
+    private _buildExecutionData(
+        payload: any,
+        result?: any,
+        lastExecutionData?: Record<string, any>,
+    ): any {
         const {
             codeManagementEvent,
             platformType,
@@ -723,7 +737,12 @@ export class AutomationCodeReviewService implements Omit<
         };
 
         if (!result) {
-            return baseData;
+            return lastExecutionData?.businessLogicValidatedAt
+                ? Object.assign(baseData, {
+                      businessLogicValidatedAt:
+                          lastExecutionData.businessLogicValidatedAt,
+                  })
+                : baseData;
         }
 
         const validLastAnalyzedCommit =
@@ -747,10 +766,26 @@ export class AutomationCodeReviewService implements Omit<
             });
         }
 
-        if (result.businessLogicPrBodyHash) {
-            Object.assign(baseData, {
-                businessLogicHash: result.businessLogicPrBodyHash,
-            });
+        // The marker has to survive executions that did not themselves validate
+        // (skipped, or failed before the stage). Only the latest successful
+        // execution is read back, so dropping it here would let the automatic
+        // validation fire again on the next push.
+        const businessLogicValidatedAt =
+            result.businessLogicValidatedAt ??
+            lastExecutionData?.businessLogicValidatedAt;
+
+        if (businessLogicValidatedAt) {
+            Object.assign(baseData, { businessLogicValidatedAt });
+        }
+
+        // Legacy EE marker (ProcessFilesPrLevelReviewStage). Carried forward
+        // for the same reason, so an existing PR mid-flight keeps its gate.
+        const businessLogicHash =
+            result.businessLogicPrBodyHash ??
+            lastExecutionData?.businessLogicHash;
+
+        if (businessLogicHash) {
+            Object.assign(baseData, { businessLogicHash });
         }
 
         // Adaptive-fit fidelity warnings — emitted by the agent pipeline
