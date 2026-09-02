@@ -1,6 +1,7 @@
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
+import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
 import { DistributedLockService } from '@libs/core/workflow/infrastructure/distributed-lock.service';
 import { PARAMETERS_SERVICE_TOKEN } from '@libs/organization/domain/parameters/contracts/parameters.service.contract';
 import { TEAM_SERVICE_TOKEN } from '@libs/organization/domain/team/contracts/team.service.contract';
@@ -108,6 +109,7 @@ describe('PullRequestStateReconciliationCronProvider', () => {
     });
 
     afterEach(() => {
+        jest.useRealTimers();
         jest.clearAllMocks();
     });
 
@@ -170,6 +172,23 @@ describe('PullRequestStateReconciliationCronProvider', () => {
 
         expect(codeManagementService.getPullRequest).toHaveBeenCalledTimes(2);
         expect(pullRequestService.markTerminalIfOpen).toHaveBeenCalledTimes(1);
+        expect(lock.release).toHaveBeenCalled();
+    });
+
+    it('times out a hung provider lookup and releases the lock', async () => {
+        jest.useFakeTimers();
+        codeManagementService.getPullRequest.mockReturnValue(
+            new Promise(() => undefined),
+        );
+
+        const run = provider.handleCron();
+        await jest.advanceTimersByTimeAsync(0);
+        await jest.advanceTimersByTimeAsync(INTEGRATION_REQUEST_TIMEOUT_MS);
+        await run;
+
+        expect(
+            pullRequestService.markTerminalIfOpen,
+        ).not.toHaveBeenCalled();
         expect(lock.release).toHaveBeenCalled();
     });
 });

@@ -2,6 +2,7 @@ import { IntegrationCategory } from '@libs/core/domain/enums/integration-categor
 import { ParametersKey } from '@libs/core/domain/enums/parameters-key.enum';
 import { PlatformType } from '@libs/core/domain/enums/platform-type.enum';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
+import { INTEGRATION_REQUEST_TIMEOUT_MS } from '@libs/core/infrastructure/http/integration-timeouts';
 import { createLogger } from '@libs/core/log/logger';
 import { STATUS } from '@libs/core/infrastructure/config/types/database/status.type';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -9,6 +10,7 @@ import {
     DistributedLock,
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
+import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -168,17 +170,22 @@ export class PullRequestStateReconciliationCronProvider {
 
                                 try {
                                     const remotePullRequest =
-                                        await this.codeManagementService.getPullRequest(
-                                            {
-                                                organizationAndTeamData,
-                                                repository: {
-                                                    id: candidate.repository.id,
-                                                    name: candidate.repository
-                                                        .name,
+                                        await runWithBoundedTimeout(
+                                            this.codeManagementService.getPullRequest(
+                                                {
+                                                    organizationAndTeamData,
+                                                    repository: {
+                                                        id: candidate.repository
+                                                            .id,
+                                                        name: candidate.repository
+                                                            .name,
+                                                    },
+                                                    prNumber: candidate.number,
                                                 },
-                                                prNumber: candidate.number,
-                                            },
-                                            candidate.provider as PlatformType,
+                                                candidate.provider as PlatformType,
+                                            ),
+                                            INTEGRATION_REQUEST_TIMEOUT_MS,
+                                            `PR#${candidate.number} provider lookup`,
                                         );
                                     const terminalState =
                                         terminalStateFromProvider(
