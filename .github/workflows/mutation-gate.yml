@@ -65,5 +65,18 @@ jobs:
             - name: Install dependencies
               run: pnpm install --frozen-lockfile
 
+            # libs/ee's environment.ts is gitignored, so it does not exist on a
+            # fresh checkout, and @libs imports reach it transitively. Every
+            # other test job creates this shim; this one did not, so Stryker's
+            # DRY RUN died on MODULE_NOT_FOUND before a single mutant was
+            # generated — the gate reported FAILURE while measuring nothing.
+            - name: Create environment.ts
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+
             - name: Run the mutation gate on changed files
               run: pnpm run mutation:diff "origin/${{ github.base_ref }}"
