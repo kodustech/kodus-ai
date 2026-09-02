@@ -180,7 +180,7 @@ jobs:
     # reasoning tokens. A test that only looked for a 400 would stay green
     # through precisely the regression it exists to catch.
     #
-    # Credentials: one repo secret `BYOK_LIVE_KEYS`, a JSON map of brand → key.
+    # Credentials: one named repo secret per brand — see REPO_SECRET in the spec.
     # Every brand without a key SKIPS, so a partial-secret run reports partial
     # coverage instead of a false red, and fork PRs stay green.
     byok-live:
@@ -253,10 +253,9 @@ jobs:
               id: byok
               env:
                   API_NODE_ENV: test
-                  BYOK_LIVE_KEYS: ${{ secrets.BYOK_LIVE_KEYS }}
                   # These four named secrets EXIST (verified with `gh secret
                   # list`) and together make ten of the twenty rows runnable
-                  # before anyone assembles BYOK_LIVE_KEYS. The four API_* names
+                  # before anyone goes looking for a key. The four API_* names
                   # that used to be here — the product's env names — exist in no
                   # repo secret, so every one resolved to an empty string and the
                   # fallback path had never produced a key.
@@ -264,20 +263,14 @@ jobs:
                   BYOK_MOONSHOT_API_KEY: ${{ secrets.BYOK_MOONSHOT_API_KEY }}
                   BYOK_ZHIPU_API_KEY: ${{ secrets.BYOK_ZHIPU_API_KEY }}
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
-                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-                  # The self-hosted e2e matrix already runs on this one, and it
-                  # is the credential the Vertex row needs — the only brand whose
-                  # key is a whole service-account document is the one nobody has
-                  # to go find.
-                  VERTEX_SA_JSON: ${{ secrets.VERTEX_SA_JSON }}
+                  BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   # Derived names: any brand with no entry in REPO_SECRET reads
                   # `BYOK_<BRAND>_API_KEY`, so these four need no code change —
                   # one secret each, rotatable on its own and visible in
                   # `gh secret list`, which a JSON blob is not.
                   BYOK_OPEN_ROUTER_API_KEY: ${{ secrets.BYOK_OPEN_ROUTER_API_KEY }}
                   BYOK_DEEPSEEK_API_KEY: ${{ secrets.BYOK_DEEPSEEK_API_KEY }}
-                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
                   BYOK_AMAZON_BEDROCK_API_KEY: ${{ secrets.BYOK_AMAZON_BEDROCK_API_KEY }}
                   # Scheduled runs must not pass by checking nothing — see the
                   # coverage case in the spec. A dispatch or a fork PR still can.
