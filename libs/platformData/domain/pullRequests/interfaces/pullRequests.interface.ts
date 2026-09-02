@@ -83,6 +83,28 @@ export interface IPullRequests {
     isDraft: boolean;
 }
 
+/**
+ * Minimal projection used by the provider-state reconciler.
+ *
+ * Deliberately excludes files, commits, and suggestions so a periodic check
+ * cannot turn into a large Mongo read as review history grows.
+ */
+export interface IPullRequestReconciliationCandidate {
+    uuid: string;
+    number: number;
+    status: string;
+    merged: boolean;
+    provider: string;
+    organizationId: string;
+    repository: Pick<IRepository, 'id' | 'name' | 'fullName'>;
+}
+
+export interface IPullRequestTerminalState {
+    status: string;
+    merged: boolean;
+    closedAt: string;
+}
+
 export interface ICommit {
     author: {
         id?: string;

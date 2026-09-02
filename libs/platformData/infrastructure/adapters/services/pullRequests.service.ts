@@ -10,6 +10,8 @@ import {
     ICommit,
     IFile,
     IPullRequests,
+    IPullRequestReconciliationCandidate,
+    IPullRequestTerminalState,
     IPullRequestUser,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
@@ -26,6 +28,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { createLogger } from '@libs/core/log/logger';
+import { resolveMonotonicPullRequestState } from '@libs/platformData/domain/pullRequests/utils/monotonic-pull-request-state';
 
 @Injectable()
 export class PullRequestsService implements IPullRequestsService {
@@ -431,6 +434,30 @@ export class PullRequestsService implements IPullRequestsService {
         );
     }
 
+    async findOpenForStateReconciliation(
+        organizationId: string,
+        repositoryId: string,
+        limit?: number,
+    ): Promise<IPullRequestReconciliationCandidate[]> {
+        return this.pullRequestsRepository.findOpenForStateReconciliation(
+            organizationId,
+            repositoryId,
+            limit,
+        );
+    }
+
+    async markTerminalIfOpen(
+        pullRequestUuid: string,
+        organizationId: string,
+        terminalState: IPullRequestTerminalState,
+    ): Promise<boolean> {
+        return this.pullRequestsRepository.markTerminalIfOpen(
+            pullRequestUuid,
+            organizationId,
+            terminalState,
+        );
+    }
+
     async addPrLevelSuggestions(
         pullRequestNumber: number,
         repositoryName: string,
@@ -704,16 +731,29 @@ export class PullRequestsService implements IPullRequestsService {
             );
         }
 
+        const reconciledState = resolveMonotonicPullRequestState(
+            {
+                status: existingPR.status,
+                merged: existingPR.merged,
+                closedAt: existingPR.closedAt,
+            },
+            {
+                status: await this.identifyPullRequestStatus(pullRequest),
+                merged: this.extractMergedStatus(pullRequest),
+                closedAt: this.extractClosedAt(pullRequest),
+            },
+        );
+
         await this.update(existingPR, {
-            status: await this.identifyPullRequestStatus(pullRequest),
-            merged: this.extractMergedStatus(pullRequest),
+            status: reconciledState.status,
+            merged: reconciledState.merged,
             // Reflect how the last review ran; only overwrite when the caller
             // passed it (review path) so a plain webhook update doesn't clear it.
             ...(pullRequest.heavy !== undefined
                 ? { heavy: pullRequest.heavy }
                 : {}),
             updatedAt: new Date().toISOString(),
-            closedAt: this.extractClosedAt(pullRequest),
+            closedAt: reconciledState.closedAt,
             user: await this.extractUser(
                 pullRequest.user,
                 organizationAndTeamData,

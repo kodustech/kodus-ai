@@ -182,6 +182,85 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
         });
     });
 
+    describe('provider-state reconciliation', () => {
+        it('reads only locally-open PRs for one tenant and repository', async () => {
+            const findExec = jest.fn().mockResolvedValue([
+                {
+                    _id: 'mongo-pr-25',
+                    number: 25,
+                    status: 'open',
+                    merged: false,
+                    provider: 'GITHUB',
+                    organizationId: 'org-A',
+                    repository: {
+                        id: 'repo-alpha',
+                        name: 'claude-global',
+                        fullName: 'felipeggv/claude-global',
+                    },
+                },
+            ]);
+            const lean = jest.fn().mockReturnValue({ exec: findExec });
+            const limit = jest.fn().mockReturnValue({ lean });
+            const sort = jest.fn().mockReturnValue({ limit });
+            model.find = jest.fn().mockReturnValue({ sort });
+
+            const result = await repo.findOpenForStateReconciliation(
+                'org-A',
+                'repo-alpha',
+                100,
+            );
+
+            expect(model.find.mock.calls[0][0]).toEqual({
+                organizationId: 'org-A',
+                'repository.id': 'repo-alpha',
+                status: 'open',
+                merged: { $ne: true },
+            });
+            expect(sort).toHaveBeenCalledWith({ updatedAt: 1 });
+            expect(limit).toHaveBeenCalledWith(100);
+            expect(result).toEqual([
+                expect.objectContaining({
+                    uuid: 'mongo-pr-25',
+                    number: 25,
+                    organizationId: 'org-A',
+                }),
+            ]);
+        });
+
+        it('applies a terminal update only while the same tenant record is open', async () => {
+            const terminalExec = jest.fn().mockResolvedValue({
+                _id: 'mongo-pr-25',
+            });
+            const lean = jest.fn().mockReturnValue({ exec: terminalExec });
+            findOneAndUpdate.mockReturnValue({ lean });
+
+            const changed = await repo.markTerminalIfOpen(
+                'mongo-pr-25',
+                'org-A',
+                {
+                    status: 'closed',
+                    merged: true,
+                    closedAt: '2026-09-02T12:00:00.000Z',
+                },
+            );
+
+            expect(changed).toBe(true);
+            expect(findOneAndUpdate.mock.calls[0][0]).toEqual({
+                _id: 'mongo-pr-25',
+                organizationId: 'org-A',
+                status: 'open',
+                merged: { $ne: true },
+            });
+            expect(findOneAndUpdate.mock.calls[0][1].$set).toEqual(
+                expect.objectContaining({
+                    status: 'closed',
+                    merged: true,
+                    closedAt: '2026-09-02T12:00:00.000Z',
+                }),
+            );
+        });
+    });
+
     describe('findFileWithSuggestions', () => {
         it('includes organizationId in the aggregation $match', async () => {
             // aggregate().exec() must resolve to an array

@@ -31,6 +31,7 @@ import { PruneLicenseSeatsCronProvider } from './pruneLicenseSeats.cron';
 import { SpendLimitAlertCronProvider } from './spendLimitAlert.cron';
 import { SSOTestSessionCleanupCronProvider } from './ssoTestSessionCleanup.cron';
 import { StaleReviewWatchdogCronProvider } from './staleReviewWatchdog.cron';
+import { PullRequestStateReconciliationCronProvider } from './pullRequestStateReconciliation.cron';
 import { SSOModule } from '@libs/ee/sso/sso.module';
 
 @Module({
@@ -62,6 +63,7 @@ import { SSOModule } from '@libs/ee/sso/sso.module';
         SSOTestSessionCleanupCronProvider,
         SpendLimitAlertCronProvider,
         StaleReviewWatchdogCronProvider,
+        PullRequestStateReconciliationCronProvider,
         DistributedLockService,
         // Checks adapters for the stale review watchdog (same registration
         // pattern as code-review-pipeline.module — the factory is not

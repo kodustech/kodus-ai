@@ -19,6 +19,8 @@ import {
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
 import {
     IFile,
+    IPullRequestReconciliationCandidate,
+    IPullRequestTerminalState,
     IPullRequests,
     IPullRequestUserMapping,
     IPullRequestWithDeliveredSuggestions,
@@ -1585,9 +1587,83 @@ export class PullRequestsRepository implements IPullRequestsRepository {
 
         return mapSimpleModelsToEntities(docs, PullRequestsEntity);
     }
+
+    async findOpenForStateReconciliation(
+        organizationId: string,
+        repositoryId: string,
+        limit: number = 100,
+    ): Promise<IPullRequestReconciliationCandidate[]> {
+        const docs = await this.pullRequestsModel
+            .find(
+                {
+                    organizationId,
+                    'repository.id': repositoryId,
+                    status: PullRequestState.OPENED,
+                    merged: { $ne: true },
+                },
+                {
+                    _id: 1,
+                    number: 1,
+                    status: 1,
+                    merged: 1,
+                    provider: 1,
+                    organizationId: 1,
+                    'repository.id': 1,
+                    'repository.name': 1,
+                    'repository.fullName': 1,
+                },
+            )
+            .sort({ updatedAt: 1 })
+            .limit(Math.max(1, Math.min(limit, 500)))
+            .lean()
+            .exec();
+
+        return docs.map((doc: any) => ({
+            uuid: String(doc._id),
+            number: doc.number,
+            status: doc.status,
+            merged: doc.merged ?? false,
+            provider: doc.provider,
+            organizationId: doc.organizationId,
+            repository: {
+                id: doc.repository?.id,
+                name: doc.repository?.name,
+                fullName: doc.repository?.fullName,
+            },
+        }));
+    }
     //#endregion
 
     //#region Update
+    async markTerminalIfOpen(
+        pullRequestUuid: string,
+        organizationId: string,
+        terminalState: IPullRequestTerminalState,
+    ): Promise<boolean> {
+        const doc = await this.pullRequestsModel
+            .findOneAndUpdate(
+                {
+                    _id: pullRequestUuid,
+                    organizationId,
+                    status: PullRequestState.OPENED,
+                    merged: { $ne: true },
+                },
+                {
+                    $set: {
+                        status: PullRequestState.CLOSED,
+                        merged: terminalState.merged,
+                        closedAt: terminalState.closedAt,
+                        updatedAt: new Date().toISOString(),
+                    },
+                },
+                { new: false },
+            )
+            .lean()
+            .exec();
+
+        return Boolean(doc);
+    }
+
     async update(
         pullRequest: PullRequestsEntity,
         updateData: Omit<Partial<IPullRequests>, 'uuid' | 'id'>,

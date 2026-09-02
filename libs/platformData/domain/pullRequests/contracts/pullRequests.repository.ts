@@ -6,6 +6,8 @@ import { PullRequestsEntity } from '../entities/pullRequests.entity';
 import { DeliveryStatus } from '../enums/deliveryStatus.enum';
 import {
     IPullRequests,
+    IPullRequestReconciliationCandidate,
+    IPullRequestTerminalState,
     IFile,
     ISuggestion,
     IPullRequestWithDeliveredSuggestions,
@@ -251,6 +253,16 @@ export interface IPullRequestsRepository {
         repositoryId: string,
         limit?: number,
     ): Promise<PullRequestsEntity[]>;
+    findOpenForStateReconciliation(
+        organizationId: string,
+        repositoryId: string,
+        limit?: number,
+    ): Promise<IPullRequestReconciliationCandidate[]>;
+    markTerminalIfOpen(
+        pullRequestUuid: string,
+        organizationId: string,
+        terminalState: IPullRequestTerminalState,
+    ): Promise<boolean>;
 
     update(
         pullRequest: PullRequestsEntity,
