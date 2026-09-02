@@ -398,10 +398,16 @@ const LIVE = [
             reasoningEffort: 'low',
         },
         maxOutputTokens: 6_144,
-        // No env fallback: the point of the single secret is that adding a
-        // brand does not grow the product's env surface, and no MiniMax name
+        // Falls back to the `minimax` entry: same platform (api.minimax.io) and
+        // the same account — this row differs by MODEL and PROTOCOL, not by
+        // credential. Asking for the key twice would be friction that buys
+        // nothing, and a separate entry only exists so a key scoped to one model
+        // can still be given on its own.
+        //
+        // No ENV fallback, though: the point of the single secret is that adding
+        // a brand does not grow the product's env surface, and no MiniMax name
         // exists in this repo's schema to fall back to.
-        apiKey: () => key('minimax_m3'),
+        apiKey: () => key('minimax_m3') ?? key('minimax'),
         reasons: true,
     },
     {
