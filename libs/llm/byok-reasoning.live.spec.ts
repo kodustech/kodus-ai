@@ -792,19 +792,6 @@ const LIVE = [
         reasons: true,
     },
     {
-        brand: 'nvidia',
-        // Enough for a low-effort thought plus a visible token, not the default.
-        maxOutputTokens: 2048,
-        why: 'integrate.api.nvidia.com is 9 slots serving FIVE families (nemotron, deepseek, glm, kimi, llama) behind one key — a single host whose translation, if it drops our field, silently affects all of them',
-        slot: {
-            provider: 'openai_compatible',
-            model: 'deepseek-ai/deepseek-v4-pro',
-            baseURL: 'https://integrate.api.nvidia.com/v1',
-            reasoningEffort: 'low',
-        },
-        reasons: true,
-    },
-    {
         brand: 'ollama_cloud',
         // Enough for a low-effort thought plus a visible token, not the default.
         maxOutputTokens: 2048,
