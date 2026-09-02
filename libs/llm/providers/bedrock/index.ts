@@ -198,6 +198,20 @@ export const bedrockModule: ProviderModule = {
     // one line and the alternative is a correct paste silently doing nothing.
     providerOptionsNamespaceAliases: () => ['bedrock'],
 
+    // Only Anthropic-on-Bedrock reasons (non-Claude families report
+    // supportsReasoning=false, so the Custom field never opens for them). The
+    // wire shape is Bedrock's own `reasoningConfig` envelope, and the type
+    // follows the model's generation exactly like `reasoning()` above: adaptive
+    // Claude → { type:'adaptive', maxReasoningEffort }, legacy → { type:'enabled',
+    // budgetTokens }. A `thinking` block here (the generic default) is a dead key.
+    reasoningOverrideExample: (_id, model) => {
+        if (!isAnthropicModel(model ?? '')) return undefined;
+        return resolveAnthropicModelTraits(model ?? '').thinkingShape ===
+            'budget'
+            ? '{\n  "reasoningConfig": { "type": "enabled", "budgetTokens": 20000 }\n}'
+            : '{\n  "reasoningConfig": { "type": "adaptive", "maxReasoningEffort": "high" }\n}';
+    },
+
     // Claude-on-Bedrock honors the SAME `anthropic.cacheControl` marker as native
     // Anthropic (per the AI SDK Bedrock docs). Non-Anthropic Bedrock models cache
     // implicitly / not at all, so they get no inline hint. 5-minute ephemeral only

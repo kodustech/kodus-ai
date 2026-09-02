@@ -122,6 +122,14 @@ export function anthropicBrandModule(spec: AnthropicBrandSpec): ProviderModule {
         normalizeUsage: anthropicModule.normalizeUsage,
         providerOptionsNamespace: () => 'anthropic',
 
+        // A Kimi/GLM brand reasons through the anthropic module as a COMPATIBLE
+        // endpoint (see `reasoning()` above), which is the legacy thinking shape
+        // (type:enabled + a token budget) under the `anthropic` namespace — never
+        // the native adaptive+effort. Without this the picker fell back to a
+        // budget-less `{thinking:{type:enabled}}` that 400s on these upstreams.
+        reasoningOverrideExample: () =>
+            '{\n  "thinking": { "type": "enabled", "budgetTokens": 20000 }\n}',
+
         uiFields: spec.uiFields,
         // No `/models` listing (that is the OpenAI protocol's shape, not this one's)
         // → the user types the model id manually. A brand that CAN live-list (e.g.

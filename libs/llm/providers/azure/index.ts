@@ -162,6 +162,11 @@ export const azureModule: ProviderModule = {
     // (verified against the built model), so `azure` is the key the SDK reads.
     providerOptionsNamespace: () => 'azure',
 
+    // Azure serves OpenAI reasoning models, so the override is OpenAI's
+    // `reasoningEffort` (the SDK renders it as `reasoning.effort`), NOT a
+    // `thinking` block — matches what `reasoning()` emits: { azure: { reasoningEffort } }.
+    reasoningOverrideExample: () => '{\n  "reasoningEffort": "high"\n}',
+
     // Same high-level LanguageModelUsage shape every other module reads, so cost
     // projection stays one source of truth. Azure reports OpenAI-style usage.
     normalizeUsage: normalizeSdkUsage,

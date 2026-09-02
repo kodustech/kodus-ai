@@ -100,6 +100,14 @@ export const novitaModule: ProviderModule = {
     // the request body. Same failure the OpenRouter module had; the registry
     // contract in `provider-options-namespace.spec.ts` now pins BOTH.
     providerOptionsNamespace: () => 'novita',
+
+    // Novita is an OpenAI-compatible aggregator with no native reasoning mapping
+    // (`reasoning()` is off), so the ONLY way to reason here is a Custom override,
+    // passed raw under the `novita` key. Its thinking families (Kimi/GLM/DeepSeek)
+    // take the OpenAI-compatible `thinking` toggle — same shape as the
+    // openai_compatible transport, which is the honest example for this passthrough.
+    reasoningOverrideExample: () => '{\n  "thinking": { "type": "enabled" }\n}',
+
     modelListing: novitaModelListing,
 };
 
