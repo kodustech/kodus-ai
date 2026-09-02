@@ -245,7 +245,6 @@ export class PullRequestStateReconciliationCronProvider {
         try {
             return await this.distributedLockService.acquire(
                 'CRON:PULL_REQUEST_STATE_RECONCILIATION',
-                { ttl: 20 * 60 * 1000 },
             );
         } catch (error) {
             this.logger.error({

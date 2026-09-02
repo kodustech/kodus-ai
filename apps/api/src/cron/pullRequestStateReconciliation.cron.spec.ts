@@ -116,6 +116,9 @@ describe('PullRequestStateReconciliationCronProvider', () => {
 
         await provider.handleCron();
 
+        expect(distributedLockService.acquire).toHaveBeenCalledWith(
+            'CRON:PULL_REQUEST_STATE_RECONCILIATION',
+        );
         expect(teamService.findTeamsWithIntegrations).not.toHaveBeenCalled();
     });
 

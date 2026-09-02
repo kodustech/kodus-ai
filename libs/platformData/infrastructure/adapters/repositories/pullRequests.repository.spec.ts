@@ -232,7 +232,8 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                 _id: 'mongo-pr-25',
             });
             const lean = jest.fn().mockReturnValue({ exec: terminalExec });
-            findOneAndUpdate.mockReturnValue({ lean });
+            const select = jest.fn().mockReturnValue({ lean });
+            findOneAndUpdate.mockReturnValue({ select });
 
             const changed = await repo.markTerminalIfOpen(
                 'mongo-pr-25',
@@ -258,6 +259,7 @@ describe('PullRequestsRepository — multi-tenant filter coverage', () => {
                     closedAt: '2026-09-02T12:00:00.000Z',
                 }),
             );
+            expect(select).toHaveBeenCalledWith({ _id: 1 });
         });
     });
 

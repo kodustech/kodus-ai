@@ -1658,6 +1658,7 @@ export class PullRequestsRepository implements IPullRequestsRepository {
                 },
                 { new: false },
             )
+            .select({ _id: 1 })
             .lean()
             .exec();
 

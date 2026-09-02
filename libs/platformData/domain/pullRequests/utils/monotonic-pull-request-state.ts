@@ -23,14 +23,26 @@ export function resolveMonotonicPullRequestState(
     current: PullRequestStateSnapshot,
     incoming: PullRequestStateSnapshot,
 ): PullRequestStateSnapshot {
-    if (
-        isTerminalPullRequestState(current) &&
-        !isTerminalPullRequestState(incoming)
-    ) {
+    const currentIsTerminal = isTerminalPullRequestState(current);
+    const incomingIsTerminal = isTerminalPullRequestState(incoming);
+
+    if (currentIsTerminal && !incomingIsTerminal) {
         return {
             status: current.status,
             merged: current.merged,
             closedAt: current.closedAt,
+        };
+    }
+
+    if (currentIsTerminal && incomingIsTerminal) {
+        return {
+            status:
+                current.status === PullRequestState.MERGED ||
+                incoming.status === PullRequestState.MERGED
+                    ? PullRequestState.MERGED
+                    : PullRequestState.CLOSED,
+            merged: current.merged === true || incoming.merged === true,
+            closedAt: current.closedAt || incoming.closedAt || '',
         };
     }
 

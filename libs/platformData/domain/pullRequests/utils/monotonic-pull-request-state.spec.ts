@@ -44,6 +44,48 @@ describe('monotonic pull request state', () => {
         });
     });
 
+    it('does not downgrade merged evidence when another terminal event arrives', () => {
+        expect(
+            resolveMonotonicPullRequestState(
+                {
+                    status: PullRequestState.CLOSED,
+                    merged: true,
+                    closedAt: '2026-09-02T12:00:00.000Z',
+                },
+                {
+                    status: PullRequestState.CLOSED,
+                    merged: false,
+                    closedAt: '',
+                },
+            ),
+        ).toEqual({
+            status: PullRequestState.CLOSED,
+            merged: true,
+            closedAt: '2026-09-02T12:00:00.000Z',
+        });
+    });
+
+    it('preserves an explicit merged status across terminal updates', () => {
+        expect(
+            resolveMonotonicPullRequestState(
+                {
+                    status: PullRequestState.MERGED,
+                    merged: false,
+                    closedAt: '2026-09-02T12:00:00.000Z',
+                },
+                {
+                    status: PullRequestState.CLOSED,
+                    merged: false,
+                    closedAt: '2026-09-02T12:01:00.000Z',
+                },
+            ),
+        ).toEqual({
+            status: PullRequestState.MERGED,
+            merged: false,
+            closedAt: '2026-09-02T12:00:00.000Z',
+        });
+    });
+
     it('recognizes both merged flags and merged status as terminal', () => {
         expect(isTerminalPullRequestState({ merged: true })).toBe(true);
         expect(
