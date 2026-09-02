@@ -391,18 +391,27 @@ export class TestByokConnectionUseCase {
             };
         }
 
-        const speaksAnthropicProtocol =
+        // The guard used to enumerate PROTOCOLS — openai_compatible,
+        // anthropic_compatible, and the brands whose namespace is 'anthropic'.
+        // That answered the wrong question. What makes a probe dangerous is not
+        // which protocol it speaks, it is whether the URL came from the USER,
+        // and ten provider modules declare a `baseURL` in their settings schema
+        // while only three matched the old condition. `openai`, `anthropic`,
+        // `google_gemini`, `open_router`, `novita` and `azure` all let a user
+        // type an endpoint that this probe would then fetch with no check —
+        // including a link-local address like the cloud metadata service.
+        //
+        // Asked of the schema instead, so a provider that GAINS a baseURL is
+        // covered the day it does, without anyone remembering this line.
+        const acceptsUserBaseUrl =
             REGISTRY.has(byokProvider) &&
-            REGISTRY.get(byokProvider).providerOptionsNamespace?.(
-                byokProvider,
-            ) === 'anthropic' &&
-            byokProvider !== BYOKProvider.ANTHROPIC;
-        if (
-            byokProvider === BYOKProvider.OPENAI_COMPATIBLE ||
-            byokProvider === BYOKProvider.ANTHROPIC_COMPATIBLE ||
-            speaksAnthropicProtocol
-        ) {
-            await assertSafeOpenAICompatibleUrl(effectiveBaseURL!);
+            'baseURL' in
+                ((REGISTRY.get(byokProvider).settingsSchema as any)?.shape ??
+                    {});
+        // Only when there IS a URL: a native provider left on its own endpoint
+        // has nothing user-supplied to validate.
+        if (acceptsUserBaseUrl && effectiveBaseURL) {
+            await assertSafeOpenAICompatibleUrl(effectiveBaseURL);
         }
 
         return await this.probeViaRuntime(input, effectiveBaseURL);

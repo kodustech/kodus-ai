@@ -215,6 +215,46 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         },
     );
 
+    // The six the protocol-based guard left open. Each declares a `baseURL` in
+    // its settings schema, so the endpoint is the CALLER's to choose — which is
+    // the only fact that decides whether an outbound probe needs checking. The
+    // old condition asked which protocol the brand speaks, and these six speak
+    // one it did not name.
+    it.each([
+        ['openai', 'gpt-5.4'],
+        ['anthropic', 'claude-sonnet-4-6'],
+        ['google_gemini', 'gemini-3-flash-preview'],
+        ['open_router', 'z-ai/glm-5.2'],
+        ['novita', 'deepseek/deepseek-v4-flash'],
+        ['azure', 'o3-mini'],
+    ])(
+        'SSRF-guards a user baseURL on %s, whose schema accepts one',
+        async (provider, model) => {
+            await expect(
+                useCase().execute({
+                    provider,
+                    apiKey: 'sk-test',
+                    baseURL: 'http://169.254.169.254/latest/meta-data',
+                    model,
+                } as any),
+            ).rejects.toThrow();
+            expect(probeSlotCall).not.toHaveBeenCalled();
+        },
+    );
+
+    // ...and the guard must not fire where there is nothing user-supplied to
+    // check: a native provider left on its own endpoint still probes.
+    it('does not block a provider left on its own endpoint', async () => {
+        const res = await useCase().execute({
+            provider: 'openai',
+            apiKey: 'sk-test',
+            model: 'gpt-5.4',
+        } as any);
+
+        expect(res.ok).toBe(true);
+        expect(probeSlotCall).toHaveBeenCalled();
+    });
+
     it('REJECTS a doubled base URL instead of quietly making it work', async () => {
         // The runtime repairs this shape so reviews already scheduled stop
         // 404ing. The person standing at the form gets the opposite treatment on
