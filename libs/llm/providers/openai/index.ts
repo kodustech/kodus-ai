@@ -245,13 +245,31 @@ export const openaiModule: ProviderModule = {
     // static capability flag instead — which is how the connect form and the
     // runtime came to disagree on 26 production slots. A module that has the
     // answer states it.
+    // The reasoner check comes FIRST, before the transport branch, because the
+    // sentence above is the rule and the old order contradicted it: a `gpt-5.6`
+    // behind a proxy kept its temperature while the same name on the native id
+    // dropped it. Of the five families the detector recognizes, four had their
+    // model rule applied over openai_compatible and the OpenAI one did not —
+    // `compatibleTemperaturePolicy` knows glm/kimi/deepseek/minimax and answers
+    // `adjustable` for everything else, so the rule was simply never consulted.
+    //
+    // No production slot is affected today (eleven OpenAI-named proxy slots
+    // exist and none sets a temperature), so this closes a latent contradiction
+    // rather than a live break. It is still worth closing: a customer who sets
+    // one tomorrow gets a 400 on every review, and because save-time validation
+    // reads this same policy, nothing would have warned them.
+    //
+    // The cost of being wrong runs the safe way. If a proxy's `gpt-5…` is really
+    // an alias for something that DOES take a temperature, the user loses a
+    // setting; if it is really a GPT-5 and we send one, every review fails.
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
+        if (isOpenAiReasoner(cfg.model)) {
+            return { kind: 'unsupported' };
+        }
         if ((cfg.provider as string) === 'openai_compatible') {
             return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
         }
-        return isOpenAiReasoner(cfg.model)
-            ? { kind: 'unsupported' }
-            : { kind: 'adjustable' };
+        return { kind: 'adjustable' };
     },
 
     normalizeUsage: normalizeSdkUsage,

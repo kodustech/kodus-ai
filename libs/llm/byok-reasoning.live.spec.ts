@@ -34,6 +34,39 @@
  * A case with no key SKIPS — it never fails. A run with partial credentials
  * reports partial coverage, so contributors and forks see green, not a false red.
  *
+ * ─── THE SECRET, COMPLETE ──────────────────────────────────────────────────
+ * Copy this into the repo secret `BYOK_LIVE_KEYS` and delete the brands you have
+ * no key for — a missing brand SKIPS, it never fails, so a partial secret is a
+ * valid secret and reports partial coverage.
+ *
+ *     {
+ *       "deepseek":             "sk-…",
+ *       "moonshot":             "sk-…",
+ *       "moonshot_code":        "sk-…",
+ *       "anthropic_compatible": "sk-…",
+ *       "zai":                  "…",
+ *       "minimax":              "…",
+ *       "minimax_m3":           "…",
+ *       "minimaxi":             "…",
+ *       "open_router":          "sk-or-…",
+ *       "openai":               "sk-…",
+ *       "anthropic":            "sk-ant-…",
+ *       "anthropic-legacy":     "sk-ant-…",
+ *       "anthropic-modern":     "sk-ant-…",
+ *       "anthropic-off-modern": "sk-ant-…",
+ *       "google_gemini":        "…",
+ *       "google_vertex":        "<the service-account JSON, as a string>",
+ *       "amazon_bedrock":       { "apiKey": "<bearer>", "awsRegion": "us-east-1" },
+ *       "bedrock_grok":         { "apiKey": "<bearer>", "awsRegion": "us-east-1" },
+ *       "azure":                { "apiKey": "…",
+ *                                 "baseURL": "https://<resource>.openai.azure.com/openai",
+ *                                 "model": "<your o-series deployment name>" }
+ *     }
+ *
+ * The four Anthropic entries can hold the SAME key — they are four generations
+ * of Claude, not four accounts, and they are separate brands only so a key you
+ * do have does not skip the generations you want tested.
+ *
  * ─── EVERY FIELD CAN COME FROM THE JSON ────────────────────────────────────
  * A brand's entry may be the bare key, or an object carrying the key plus ANY
  * slot field. The object's fields are spread OVER the row below, so the secret

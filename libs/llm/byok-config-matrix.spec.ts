@@ -55,6 +55,7 @@ import {
 import { buildReasoningProviderOptions } from './reasoning-options';
 import type { NormalizedModel } from './byok-config';
 import { REGISTRY } from './providers/kernel/registry';
+import { reasoningConfigForModel } from './providers/kernel/model-reasoning';
 import './providers';
 
 const CASES = [
@@ -988,6 +989,55 @@ describe('production config shapes — invariants', () => {
             'openai_compatible | qwen3.8-max | low',
             'openai_compatible | tencent/hy3:free | high',
         ]);
+    }, 180000);
+
+    it('never sends a reasoning parameter to a model we say does not reason', async () => {
+        // The coherence invariant, and the one that catches a whole class rather
+        // than a case. Two questions are asked about the same model by different
+        // code: the CAPABILITY table answers the UI ("can this model reason?")
+        // and the EMITTER answers the wire ("what do we send?"). Nothing made
+        // them agree, and they did not:
+        //
+        //   claude-3-5-sonnet   capability: no reasoning
+        //                       wire:       thinking:{enabled,budget_tokens:40000}
+        //
+        // Extended thinking arrives with Claude 3.7; one generation regex in the
+        // traits resolver matched the whole 2.x/3.x line and called it "thinks
+        // with a budget", while the capability function four functions away drew
+        // the line at 3.7 correctly. No production slot runs a pre-3.7 Claude, so
+        // this was found by asking the question rather than by an incident.
+        //
+        // Swept over named generations rather than only the corpus, because the
+        // corpus contains what customers happen to run TODAY — and a model that
+        // nobody runs yet is exactly where an untested branch hides.
+        const NON_REASONING = [
+            { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
+            { provider: 'anthropic', model: 'claude-3-opus-20240229' },
+            { provider: 'anthropic', model: 'claude-2.1' },
+            { provider: 'openai', model: 'gpt-4o' },
+            { provider: 'openai', model: 'gpt-4o-mini' },
+            { provider: 'google_gemini', model: 'gemini-2.0-flash' },
+        ];
+
+        const leaked: any[] = [];
+        for (const slot of NON_REASONING) {
+            // The capability table's own answer is the premise — if it ever says
+            // one of these DOES reason, this case is testing the wrong thing and
+            // must be corrected rather than silently passing.
+            expect(reasoningConfigForModel(slot.model)).toBeUndefined();
+
+            const w = await captureByokWire({
+                ...slot,
+                apiKey: 'k',
+                reasoningEffort: 'high',
+            } as any).catch(() => null);
+            if (!w) continue;
+            const body = typeof w.body === 'string' ? w.body : JSON.stringify(w.body);
+            if (/"(thinking|reasoning|thinkingConfig|reasoning_effort|output_config)"/.test(body)) {
+                leaked.push({ ...slot, body: body.slice(0, 160) });
+            }
+        }
+        expect(leaked).toEqual([]);
     }, 180000);
 
     it('never sends a thinking DISABLE to a model that cannot stop thinking', async () => {

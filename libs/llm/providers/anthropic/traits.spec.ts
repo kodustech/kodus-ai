@@ -44,9 +44,18 @@ describe('normalizeAnthropicModelName', () => {
 
 describe('resolveAnthropicModelTraits', () => {
     const cases: Array<[string, AnthropicGeneration]> = [
-        // Legacy — budget_tokens is required, adaptive is rejected.
+        // Legacy — budget_tokens is required, adaptive is rejected. The line is
+        // 3.7, where extended thinking arrives: everything before it has no
+        // thinking parameter at all, which is a different fact from "thinks with
+        // a budget". This row used to say `legacy` for 3.5, agreeing with a
+        // regex that answered both questions with one match — while
+        // `anthropicReasoningConfig`, four functions away in the same file, drew
+        // the line correctly and reported 3.5 as non-reasoning. The capability
+        // table said no and the emitter sent thinking anyway.
         ['claude-3-7-sonnet-20250219', 'legacy'],
-        ['claude-3-5-sonnet-20241022', 'legacy'],
+        ['claude-3-5-sonnet-20241022', 'pre-thinking'],
+        ['claude-3-opus-20240229', 'pre-thinking'],
+        ['claude-2.1', 'pre-thinking'],
         ['claude-opus-4-20250514', 'legacy'],
         ['claude-opus-4-1-20250805', 'legacy'],
         ['claude-opus-4-5', 'legacy'],

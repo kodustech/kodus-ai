@@ -43,6 +43,14 @@
 import type { ReasoningConfig } from '../kernel/model-types';
 
 export type AnthropicGeneration =
+    /** Claude 2.x and 3.0–3.5: no extended thinking AT ALL. Distinct from
+     *  `legacy` (3.7–4.5), which thinks with a token budget. They were one
+     *  generation here while `anthropicReasoningConfig` in this same file drew
+     *  the line correctly at 3.7 — so the capability table said "does not
+     *  reason" and the emitter sent `thinking:{type:enabled,budget_tokens}`
+     *  anyway. No production slot runs one today; the contradiction is what is
+     *  being removed, before one does. */
+    | 'pre-thinking'
     | 'legacy'
     | 'adaptive-4-6'
     | 'modern'
@@ -103,7 +111,11 @@ export function normalizeAnthropicModelName(modelName?: string): string {
 }
 
 /** Claude 2.x / 3.x — always the budget shape. */
-const LEGACY_MAJOR = /^claude-[23](\b|[-.])/;
+// Extended thinking arrives with 3.7. Everything earlier in the 2.x/3.x line
+// has no thinking parameter to send, which is a DIFFERENT fact from "thinks
+// with a budget" — and one regex used to answer both.
+const LEGACY_MAJOR = /^claude-3-7(\b|[-.])/;
+const PRE_THINKING = /^claude-[23](\b|[-.])/;
 
 /** Claude 4 through 4.5, in either naming order (`opus-4-1`, `3-7-sonnet`). */
 const LEGACY_4X =
@@ -133,12 +145,18 @@ export function resolveAnthropicModelTraits(
         thinkingShape:
             generation === 'legacy'
                 ? 'budget'
-                : generation === 'unknown'
+                : generation === 'unknown' || generation === 'pre-thinking'
                   ? 'none'
                   : 'adaptive',
         canDisableThinking: generation !== 'always-thinking',
+        // `pre-thinking` belongs here for the opposite reason to the others: it
+        // takes a temperature precisely BECAUSE it never thinks. Leaving it out
+        // would have traded one wrong answer for another — silently withholding
+        // a setting that works on every Claude 3.5.
         supportsSamplingParams:
-            generation === 'legacy' || generation === 'adaptive-4-6',
+            generation === 'legacy' ||
+            generation === 'adaptive-4-6' ||
+            generation === 'pre-thinking',
     };
 }
 
@@ -151,6 +169,8 @@ function resolveGeneration(name: string): AnthropicGeneration {
         return 'modern';
     }
     if (LEGACY_4X.test(name) || LEGACY_MAJOR.test(name)) return 'legacy';
+    // AFTER the 3.7 check above, so `claude-3-7` never falls in here.
+    if (PRE_THINKING.test(name)) return 'pre-thinking';
 
     return 'unknown';
 }
