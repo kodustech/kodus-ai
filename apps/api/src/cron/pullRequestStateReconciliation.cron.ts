@@ -10,7 +10,7 @@ import {
     DistributedLock,
     DistributedLockService,
 } from '@libs/core/workflow/infrastructure/distributed-lock.service';
-import { runWithBoundedTimeout } from '@libs/core/workflow/infrastructure/run-with-bounded-timeout';
+import { runWithTimeout } from '@libs/core/workflow/infrastructure/run-with-timeout';
 import {
     IParametersService,
     PARAMETERS_SERVICE_TOKEN,
@@ -170,20 +170,23 @@ export class PullRequestStateReconciliationCronProvider {
 
                                 try {
                                     const remotePullRequest =
-                                        await runWithBoundedTimeout(
-                                            this.codeManagementService.getPullRequest(
-                                                {
-                                                    organizationAndTeamData,
-                                                    repository: {
-                                                        id: candidate.repository
-                                                            .id,
-                                                        name: candidate.repository
-                                                            .name,
+                                        await runWithTimeout(
+                                            (signal) =>
+                                                this.codeManagementService.getPullRequest(
+                                                    {
+                                                        organizationAndTeamData,
+                                                        repository: {
+                                                            id: candidate
+                                                                .repository.id,
+                                                            name: candidate
+                                                                .repository.name,
+                                                        },
+                                                        prNumber:
+                                                            candidate.number,
+                                                        signal,
                                                     },
-                                                    prNumber: candidate.number,
-                                                },
-                                                candidate.provider as PlatformType,
-                                            ),
+                                                    candidate.provider as PlatformType,
+                                                ),
                                             INTEGRATION_REQUEST_TIMEOUT_MS,
                                             `PR#${candidate.number} provider lookup`,
                                         );

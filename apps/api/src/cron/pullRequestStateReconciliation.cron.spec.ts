@@ -177,8 +177,12 @@ describe('PullRequestStateReconciliationCronProvider', () => {
 
     it('times out a hung provider lookup and releases the lock', async () => {
         jest.useFakeTimers();
-        codeManagementService.getPullRequest.mockReturnValue(
-            new Promise(() => undefined),
+        let providerSignal: AbortSignal | undefined;
+        codeManagementService.getPullRequest.mockImplementation(
+            (params: { signal?: AbortSignal }) => {
+                providerSignal = params.signal;
+                return new Promise(() => undefined);
+            },
         );
 
         const run = provider.handleCron();
@@ -189,6 +193,8 @@ describe('PullRequestStateReconciliationCronProvider', () => {
         expect(
             pullRequestService.markTerminalIfOpen,
         ).not.toHaveBeenCalled();
+        expect(providerSignal).toBeDefined();
+        expect(providerSignal?.aborted).toBe(true);
         expect(lock.release).toHaveBeenCalled();
     });
 });

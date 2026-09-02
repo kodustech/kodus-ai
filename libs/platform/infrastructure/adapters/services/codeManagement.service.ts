@@ -847,10 +847,11 @@ export class CodeManagementService implements ICodeManagementService {
 
     async getPullRequest(
         params: {
-            organizationAndTeamData: OrganizationAndTeamData;
-            repository: Partial<Repository>;
-            prNumber: number;
-        },
+        organizationAndTeamData: OrganizationAndTeamData;
+        repository: Partial<Repository>;
+        prNumber: number;
+        signal?: AbortSignal;
+    },
         type?: PlatformType,
     ): Promise<PullRequest | null> {
         if (!type) {

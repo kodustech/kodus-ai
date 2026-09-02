@@ -5395,6 +5395,7 @@ This is an experimental feature that generates committable changes. Review the d
         organizationAndTeamData: OrganizationAndTeamData;
         repository: Partial<Repository>;
         prNumber: number;
+        signal?: AbortSignal;
     }): Promise<PullRequest | null> {
         const { organizationAndTeamData, repository, prNumber } = params;
 
@@ -5409,6 +5410,7 @@ This is an experimental feature that generates committable changes. Review the d
                 owner: githubAuthDetail.org, // Name of the organization or user
                 repo: repository.name, // Repository name
                 pull_number: prNumber, // Pull Request ID
+                request: { signal: params.signal },
             });
 
             if (!response || !response.data) {
