@@ -475,6 +475,198 @@ describe('runStructuredReviewCall — structured parse/validation recovery (issu
     });
 });
 
+describe('runStructuredReviewCall — bare-array shape recovery (kody-rules shard #1786)', () => {
+    // Evidence from prod (26/08–02/09): the KodyRulesShardedAgent's model
+    // (kimi-k2.7 managed default) answers a BARE array — `[]` for "no
+    // violations", `[{…}]` when it found some — instead of the wire envelope
+    // `{violations:[…]}`. That is valid JSON of the wrong shape →
+    // TypeValidationError. Today tier-(a) salvage bails (it only repairs PARSE
+    // errors) and tier-(b) spends a full model re-ask that the same model flubs
+    // the same way → the shard errors → shardsErrored++. When EVERY file is
+    // clean the provider then throws "rules not applied" on a review that was
+    // actually clean (Defeito A, 3961 events); a bare array that carried real
+    // violations is dropped when a sibling shard posts (Defeito B'). The fix:
+    // deterministically lift the bare array into the schema's envelope and
+    // re-validate BEFORE the re-ask — free, and it stops the false failure.
+    const noObjectError = (cause: Error, text: string) =>
+        new NoObjectGeneratedError({
+            message: 'No object generated (test)',
+            cause,
+            text,
+            response: {} as any,
+            usage: {} as any,
+            finishReason: 'stop',
+        });
+
+    // A raw jsonSchema() envelope, exactly like shardViolationsWireSchema: a
+    // bare `[]`/`[{…}]` fails it, `{violations:[…]}` passes.
+    const envelopeSchema = jsonSchema({
+        type: 'object',
+        properties: { violations: { type: 'array', items: {} } },
+        required: ['violations'],
+        additionalProperties: false,
+    } as any);
+
+    it('recovers a bare EMPTY array [] into {violations:[]} WITHOUT a re-ask (a clean review is not a failure)', async () => {
+        const typeErr = new TypeValidationError({
+            value: [],
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate.mockRejectedValueOnce(noObjectError(typeErr, '[]'));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1); // recovered locally, no re-ask
+        assertNoSecondModelBuilt();
+    });
+
+    it('recovers a bare array WITH violations into {violations:[…]} WITHOUT a re-ask (no silent loss)', async () => {
+        const vs = [{ ruleId: 1, violation: 'x' }];
+        const typeErr = new TypeValidationError({
+            value: vs,
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate.mockRejectedValueOnce(
+            noObjectError(typeErr, JSON.stringify(vs)),
+        );
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: vs });
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('still escalates to the model re-ask for a genuine shape mismatch (no over-recovery)', async () => {
+        // A wrong-shape OBJECT with neither the envelope key nor a bare array is
+        // not deterministically recoverable — it must still cost the one re-ask,
+        // exactly as before. This guards against the fix over-reaching.
+        const typeErr = new TypeValidationError({
+            value: { wrong: 1 },
+            cause: new Error('did not match schema'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '{"wrong":1}'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+
+    it('recovers a bare array that arrived as PARSE-error text ([] + prose) WITHOUT a re-ask', async () => {
+        // Prod group "array vazio como texto" (231): the model prints `[]` then
+        // trailing prose, so the SDK raises a JSONParseError (not a
+        // TypeValidationError). tier-(a) extracts `[]` but it fails the wire
+        // schema; the shape recovery must still fire off the extracted value.
+        const badText = '[]  No violations found in the provided diff.';
+        const parseErr = new JSONParseError({
+            text: badText,
+            cause: new Error('Unexpected token'),
+        });
+        mockGenerate.mockRejectedValueOnce(noObjectError(parseErr, badText));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('WITHOUT recoverEnvelopeShape, a bare array still re-asks (default contract preserved)', async () => {
+        // Recovery is opt-in: a caller that did NOT opt in keeps the plain
+        // "wrong shape → re-ask (signal, not silent)" behavior, so this generic
+        // primitive never silently changes any other structured caller's contract.
+        const typeErr = new TypeValidationError({
+            value: [],
+            cause: new Error('expected object, got array'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '[]'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            // no recoverEnvelopeShape
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2); // re-ask fired, not re-shaped
+    });
+
+    it('does NOT ship a re-shaped value that fails re-validation — falls to the re-ask', async () => {
+        // Safety: the lift must be held to the EXACT contract. A bare array whose
+        // items violate the schema (numbers where objects are required) re-shapes
+        // to {violations:[1,2]} but that fails validation → we must NOT return it;
+        // the re-ask still fires. Guards against recovering structurally-bad data.
+        const strictSchema = jsonSchema({
+            type: 'object',
+            properties: {
+                violations: { type: 'array', items: { type: 'object' } },
+            },
+            required: ['violations'],
+            additionalProperties: false,
+        } as any);
+        const typeErr = new TypeValidationError({
+            value: [1, 2],
+            cause: new Error('expected object items'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(typeErr, '[1,2]'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: strictSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2); // re-shape rejected → re-ask
+    });
+
+    it('does NOT invent a recovery from an unparseable parse-error — falls to the re-ask', async () => {
+        // recoverShape is on, but the JSONParseError text holds no extractable
+        // JSON (genuine garbage / truncation) → no bad value to re-shape → the
+        // re-ask runs, exactly as without recovery.
+        const parseErr = new JSONParseError({
+            text: 'not json at all',
+            cause: new Error('nope'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(noObjectError(parseErr, 'not json at all'))
+            .mockResolvedValueOnce(ok({ violations: [] }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: envelopeSchema,
+            recoverEnvelopeShape: true,
+        });
+
+        expect(out).toEqual({ violations: [] });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+    });
+});
+
 describe('runStructuredReviewCall — typed output contract (compile-time inference)', () => {
     // These assignments are the real test: they only compile if the primitive
     // infers the caller's output type from the schema. A regression that widens
@@ -726,5 +918,521 @@ describe('runStructuredReviewCall — per-model tuning (RFC §4.1 model limits)'
         expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty(
             'maxOutputTokens',
         );
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FULL I/O CONTRACT MATRIX (llm-io-contract-matrix.md).
+//
+// The DETERMINISTIC parse layers this boundary owns are (a) the reroute-json
+// path — plain generateText + `repairAndValidate(validatingSchema, r.text)`, the
+// json_object-equivalent branch where the FULL A/B/C output-shape zoo is in
+// scope — and (b) the salvage/reissue path after Output.object throws
+// NoObjectGeneratedError on the strict json_schema branch. Model decision
+// QUALITY (whether a finding is correct) is the separate eval track and is NOT
+// asserted here.
+//
+// The #1786 invariant: for every off-schema row the boundary must RECOVER the
+// real payload OR SIGNAL explicitly (throw / re-ask) — NEVER silently keep-all /
+// drop / default. This boundary honours it on every applicable row (reroute
+// throws `produced no valid object` when repair returns undefined; the strict
+// path re-asks the model in json_object mode with the schema in the prompt), so
+// every row below is a normal `it` — there is NO silent-degradation `it.failing`
+// for this boundary (knownDegradations is empty).
+// ---------------------------------------------------------------------------
+
+// A moonshot:kimi-k2.7-code slot is always-thinking → planStructuredCall resolves
+// to 'reroute-json' (REGISTRY is REAL here): plain generateText, then the boundary
+// PARSES + VALIDATES r.text against the caller's schema. This IS the json_object
+// fallback branch of the E-matrix (kimi/glm/deepseek/z-ai) where the whole zoo is
+// in scope.
+const zooKimiSlot = {
+    provider: 'moonshot',
+    model: 'kimi-k2.7-code',
+    apiKey: 'enc',
+} as any;
+const keepSchema = z.object({ keep: z.boolean() });
+/** Feed one raw text back on the reroute path and run the parse layer. */
+const parseReroute = <S extends z.ZodType>(schema: S, text: string) => {
+    mockGenerate.mockResolvedValueOnce({ text, usage: {} });
+    return runStructuredReviewCall({ ...base, schema, byokConfig: zooKimiSlot });
+};
+
+describe('MATRIX A — output-shape zoo (E: json_object/reroute branch, full zoo in scope)', () => {
+    it('row 1 — exact D parses and returns verbatim (happy path)', async () => {
+        await expect(parseReroute(keepSchema, '{"keep":true}')).resolves.toEqual(
+            { keep: true },
+        );
+        // Reroute took the plain-generateText channel (NO Output.object).
+        expect(mockGenerate.mock.calls[0][0]).not.toHaveProperty('output');
+    });
+
+    it('row 2 — bare array when D is an object → SIGNALS (throws, never keep-all)', async () => {
+        await expect(
+            parseReroute(keepSchema, '[{"keep":true}]'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 3 — single value where D expects an array → SIGNALS', async () => {
+        const arrSchema = z.object({ items: z.array(z.number()) });
+        await expect(
+            parseReroute(arrSchema, '{"items":5}'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 4 — wrapper key {result:D} is NOT silently unwrapped → SIGNALS', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"result":{"keep":true}}'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 5 — double wrapper {result:{result:D}} → SIGNALS', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"result":{"result":{"keep":true}}}'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 6 — numeric/opaque single-key wrap {"0":D} / {content:D} → SIGNALS', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"0":{"keep":true}}'),
+        ).rejects.toThrow('produced no valid object');
+        await expect(
+            parseReroute(keepSchema, '{"content":{"keep":true}}'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 7 — whole D as a stringified JSON string is NOT double-parsed → SIGNALS', async () => {
+        await expect(
+            parseReroute(keepSchema, '"{\\"keep\\":true}"'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 8 — markdown-fenced JSON is RECOVERED', async () => {
+        await expect(
+            parseReroute(keepSchema, '```json\n{"keep":true}\n```'),
+        ).resolves.toEqual({ keep: true });
+    });
+
+    it('row 9 — prose-wrapped JSON (no fence) is RECOVERED', async () => {
+        await expect(
+            parseReroute(
+                keepSchema,
+                'Sure — here is the result: {"keep":true}\n\nLet me know if…',
+            ),
+        ).resolves.toEqual({ keep: true });
+    });
+
+    it('row 10 — right data / WRONG (renamed) keys → SIGNALS (the #1786 class, no keep-all)', async () => {
+        await expect(parseReroute(keepSchema, '{"kept":true}')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 11 — case/convention mismatch ({"Keep":true}) → SIGNALS', async () => {
+        await expect(parseReroute(keepSchema, '{"Keep":true}')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 12 — partial object (a required key missing) → SIGNALS', async () => {
+        const twoKey = z.object({ keep: z.boolean(), reason: z.string() });
+        await expect(parseReroute(twoKey, '{"keep":true}')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 13 — extra unknown keys alongside the right ones are TOLERATED (stripped, not crash)', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"keep":true,"debug":"x","extra":99}'),
+        ).resolves.toEqual({ keep: true });
+    });
+
+    it('row 14 — empty object {} against a required schema → SIGNALS', async () => {
+        await expect(parseReroute(keepSchema, '{}')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 15 — empty array [] against an object schema → SIGNALS', async () => {
+        await expect(parseReroute(keepSchema, '[]')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 16 — empty / whitespace-only text → SIGNALS (no JSON to parse)', async () => {
+        await expect(parseReroute(keepSchema, '   \n\t ')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 17 — null/undefined text (no r.text) → SIGNALS', async () => {
+        mockGenerate.mockResolvedValueOnce({ usage: {} }); // no .text field at all
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 18 — primitive where an object is expected (true / "ok") → SIGNALS', async () => {
+        await expect(parseReroute(keepSchema, 'true')).rejects.toThrow(
+            'produced no valid object',
+        );
+        await expect(parseReroute(keepSchema, '"ok"')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 19 — provider envelope leak {choices:[{message:{content}}]} → SIGNALS', async () => {
+        await expect(
+            parseReroute(
+                keepSchema,
+                '{"choices":[{"message":{"content":"{\\"keep\\":true}"}}]}',
+            ),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 20 — reasoning/thinking prefix before the JSON is stripped and the payload RECOVERED', async () => {
+        await expect(
+            parseReroute(
+                keepSchema,
+                '<thinking>let me decide…</thinking>\n{"keep":true}',
+            ),
+        ).resolves.toEqual({ keep: true });
+    });
+});
+
+describe('MATRIX B — semantic-but-wrong value encodings (reroute parse layer)', () => {
+    it('row 21 — boolean as string ("true") is NOT coerced → SIGNALS', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"keep":"true"}'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 22 — boolean as yes/no ("yes") → SIGNALS', async () => {
+        await expect(parseReroute(keepSchema, '{"keep":"yes"}')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 23 — boolean as number (1) → SIGNALS', async () => {
+        await expect(parseReroute(keepSchema, '{"keep":1}')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 24 — enum value outside the allowed set → SIGNALS', async () => {
+        const sevSchema = z.object({
+            severity: z.enum(['low', 'medium', 'high']),
+        });
+        await expect(
+            parseReroute(sevSchema, '{"severity":"URGENT"}'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 26 — duplicate keys in the JSON object resolve LAST-WINS', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"keep":false,"keep":true}'),
+        ).resolves.toEqual({ keep: true });
+    });
+
+    it('row 27 — unicode / escaped-newline / emoji inside string fields survive (string-aware slice)', async () => {
+        const noteSchema = z.object({ keep: z.boolean(), note: z.string() });
+        await expect(
+            parseReroute(
+                noteSchema,
+                '{"keep":true,"note":"h\\u00e9llo \\n 🎉 {not:a:real:brace}"}',
+            ),
+        ).resolves.toEqual({ keep: true, note: 'héllo \n 🎉 {not:a:real:brace}' });
+    });
+});
+
+describe('MATRIX C — unparseable / transport (the fail-safe layer)', () => {
+    it('row 28 — truncated JSON (max_tokens mid-object) → SIGNALS, never partial keep', async () => {
+        await expect(parseReroute(keepSchema, '{"keep":tr')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 29 — malformed JSON: trailing comma is REPAIRED; single-quote / unquoted-key SIGNAL', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"keep":true,}'),
+        ).resolves.toEqual({ keep: true });
+        await expect(parseReroute(keepSchema, "{'keep':true}")).rejects.toThrow(
+            'produced no valid object',
+        );
+        await expect(parseReroute(keepSchema, '{keep:true}')).rejects.toThrow(
+            'produced no valid object',
+        );
+    });
+
+    it('row 30 — LLM.run throws on the reroute path → propagates (no silent swallow, no 2nd model)', async () => {
+        mockGenerate.mockRejectedValueOnce(new Error('network reset'));
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('network reset');
+        // Reroute is single-shot: exactly one attempt, no 2nd-model cascade.
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        assertNoSecondModelBuilt();
+    });
+
+    it('row 31 — model returned an {error:…} object instead of D → SIGNALS', async () => {
+        await expect(
+            parseReroute(keepSchema, '{"error":"rate limited, try later"}'),
+        ).rejects.toThrow('produced no valid object');
+    });
+
+    it('row 32 — empty success (content:"") on the structured path → SIGNALS; the TEXT path degrades to ""', async () => {
+        await expect(parseReroute(keepSchema, '')).rejects.toThrow(
+            'produced no valid object',
+        );
+        // The text half of the same executor never throws on empty content.
+        mockGenerate.mockResolvedValueOnce({ text: '', usage: {} });
+        await expect(
+            runTextReviewCall({ system: 's', user: 'u', runName: 'r' }),
+        ).resolves.toBe('');
+    });
+
+    it('row 33 — refusal prose ("I cannot help…") → structured SIGNALS; text returns it verbatim', async () => {
+        await expect(
+            parseReroute(keepSchema, 'I cannot help with that request.'),
+        ).rejects.toThrow('produced no valid object');
+        mockGenerate.mockResolvedValueOnce({
+            text: 'I cannot help with that request.',
+            usage: {},
+        });
+        await expect(
+            runTextReviewCall({ system: 's', user: 'u', runName: 'r' }),
+        ).resolves.toBe('I cannot help with that request.');
+    });
+
+    it('row 34 — abort/hard-timeout is NEVER re-issued (covered on the as-is path too)', async () => {
+        const abortErr: any = new Error('The operation was aborted');
+        abortErr.name = 'AbortError';
+        mockGenerate.mockRejectedValueOnce(abortErr);
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: keepSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('The operation was aborted');
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('MATRIX E — strict json_schema branch (openai/anthropic/google/moonshotai) trusts clean D', () => {
+    const openaiSlot = {
+        provider: 'openai',
+        apiKey: 'enc',
+        model: 'gpt-4o',
+    } as any;
+
+    it('strict branch: a clean D from Output.object is returned verbatim (SDK owns validation)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: openaiSlot,
+        });
+        expect(out).toEqual({ keep: true });
+        // Strict branch uses the Output.object channel (NOT reroute plain text).
+        expect(mockGenerate.mock.calls[0][0]).toHaveProperty('output');
+        // …and the system prompt is NOT augmented with a schema (that is the
+        // json_object recovery only).
+        expect(mockGenerate.mock.calls[0][0].system).toBe('sys');
+    });
+
+    it('strict branch off-schema: Output.object throws → ONE json_object re-ask with schema in prompt', async () => {
+        const typeErr = new TypeValidationError({
+            value: { kept: true },
+            cause: new Error('renamed key'),
+        });
+        mockGenerate
+            .mockRejectedValueOnce(
+                new NoObjectGeneratedError({
+                    message: 'No object generated (test)',
+                    cause: typeErr,
+                    text: '{"kept":true}',
+                    response: {} as any,
+                    usage: {} as any,
+                    finishReason: 'stop',
+                }),
+            )
+            .mockResolvedValueOnce(ok({ keep: true }));
+
+        const out = await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: openaiSlot,
+        });
+
+        expect(out).toEqual({ keep: true });
+        expect(mockGenerate).toHaveBeenCalledTimes(2);
+        // The recovery is OBSERVABLE (schema written into the re-ask prompt) —
+        // the #1786 root cause was the missing prompt contract in json_object mode.
+        expect(mockGenerate.mock.calls[1][0].system).toContain(
+            'Return ONLY a JSON object',
+        );
+        // NOT a slot-level fault: the provider honoured json_schema, the model
+        // flubbed the shape → the slot is never cached unsupported.
+        expect(markJsonSchemaUnsupported).not.toHaveBeenCalled();
+    });
+});
+
+describe('MATRIX E/#1786 — a raw jsonSchema() caller (no validate fn) is STILL protected', () => {
+    // The dedup pass hands a raw `jsonSchema()` with NO validate function. Without
+    // `ensureValidatingSchema` (added centrally), Output.object would parse-but-
+    // not-check and a renamed-key object would ship silently (the keep-all class).
+    // On the reroute branch the boundary validates r.text against the SAME
+    // ensured schema, so a renamed payload must be REJECTED, not returned.
+    const rawSchema = jsonSchema<{ keep: boolean }>({
+        type: 'object',
+        properties: { keep: { type: 'boolean' } },
+        required: ['keep'],
+        additionalProperties: false,
+    } as any);
+
+    it('clean D validates and returns', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: '{"keep":true}', usage: {} });
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: rawSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).resolves.toEqual({ keep: true });
+    });
+
+    it('renamed keys are REJECTED (ensureValidatingSchema compiled an ajv validator) → SIGNALS', async () => {
+        mockGenerate.mockResolvedValueOnce({ text: '{"kept":true}', usage: {} });
+        await expect(
+            runStructuredReviewCall({
+                ...base,
+                schema: rawSchema,
+                byokConfig: zooKimiSlot,
+            }),
+        ).rejects.toThrow('produced no valid object');
+    });
+});
+
+describe('MATRIX D — input variants (request assembly threading, happy LLM.run)', () => {
+    it('row 35 — empty user prompt threads through verbatim (no substitution)', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        await runStructuredReviewCall({ ...base, schema: keepSchema, user: '' });
+        expect(mockGenerate.mock.calls[0][0].prompt).toBe('');
+    });
+
+    it('row 36 — a single normal call assembles exactly one generateText with system+prompt', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            system: 'the-system',
+            user: 'the-user',
+        });
+        expect(mockGenerate).toHaveBeenCalledTimes(1);
+        expect(mockGenerate.mock.calls[0][0]).toEqual(
+            expect.objectContaining({
+                system: 'the-system',
+                prompt: 'the-user',
+                maxRetries: 0,
+            }),
+        );
+    });
+
+    it('row 37 — a large user prompt crossing any chunk size threads through unchanged (no truncation)', async () => {
+        const huge = 'diff-line\n'.repeat(50_000);
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            user: huge,
+        });
+        expect(mockGenerate.mock.calls[0][0].prompt).toBe(huge);
+        expect(mockGenerate.mock.calls[0][0].prompt.length).toBe(huge.length);
+    });
+
+    it('row 39 — an omitted (null-ish) system field is passed as undefined, not fabricated', async () => {
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        await runStructuredReviewCall({
+            byokConfig: undefined,
+            schema: keepSchema,
+            user: 'only-user',
+            runName: 'no.system',
+        } as any);
+        expect(mockGenerate.mock.calls[0][0].system).toBeUndefined();
+    });
+
+    it('row 40 — special chars / emoji / whitespace-only diff thread through verbatim', async () => {
+        const weird = '\t\n  🚀 <script> [31m ```` "quotes" \\n  ';
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            user: weird,
+        });
+        expect(mockGenerate.mock.calls[0][0].prompt).toBe(weird);
+    });
+
+    it('threading — the resolved byokConfig slot is handed to the model builder (not a copy/2nd slot)', async () => {
+        const slot = {
+            provider: 'openai',
+            apiKey: 'enc',
+            model: 'gpt-4o',
+        } as any;
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        await runStructuredReviewCall({
+            ...base,
+            schema: keepSchema,
+            byokConfig: slot,
+        });
+        expect(mockBuild.mock.calls[0][0]).toEqual(slot);
+    });
+});
+
+describe('MATRIX — guaranteed return shape across every layer', () => {
+    it('structured happy / repair / reissue all return the DECLARED object shape', async () => {
+        // happy
+        mockGenerate.mockResolvedValueOnce(ok({ keep: true }));
+        expect(
+            await runStructuredReviewCall({ ...base, schema: keepSchema }),
+        ).toEqual({ keep: true });
+
+        // deterministic repair (fence) — still the declared shape, no re-ask
+        mockGenerate.mockReset();
+        mockGenerate.mockRejectedValueOnce(
+            new NoObjectGeneratedError({
+                message: 'x',
+                cause: new JSONParseError({
+                    text: '```json\n{"keep":true}\n```',
+                    cause: new Error('fence'),
+                }),
+                text: '```json\n{"keep":true}\n```',
+                response: {} as any,
+                usage: {} as any,
+                finishReason: 'stop',
+            }),
+        );
+        expect(
+            await runStructuredReviewCall({ ...base, schema: keepSchema }),
+        ).toEqual({ keep: true });
+    });
+
+    it('the TEXT half always returns a string (never undefined), even on empty content', async () => {
+        mockGenerate.mockResolvedValueOnce({ usage: {} }); // no .text
+        const out = await runTextReviewCall({
+            system: 's',
+            user: 'u',
+            runName: 'r',
+        });
+        expect(typeof out).toBe('string');
+        expect(out).toBe('');
     });
 });

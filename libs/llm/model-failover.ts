@@ -16,6 +16,7 @@
  * SEPARATE concern owned by the router, not re-walked here.
  */
 import { createLogger } from '@libs/core/log/logger';
+import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     classifyLLMError,
@@ -122,10 +123,45 @@ export async function runWithModelFailover<T>(
         };
 
         try {
-            return await runOne(attempts[i], control);
+            const result = await runOne(attempts[i], control);
+            // DEBUG level: completes the [LLM-ERROR]/[LLM-SUCCESS] pair at the one
+            // chokepoint every LLM.run funnels through, WITHOUT flooding prod —
+            // one success line per call is too much at info, so it stays off
+            // unless debug logging is enabled (then a full call trace is greppable
+            // by tag). `usedFallback` flags a call that only survived via failover.
+            logger.debug({
+                message: `${LLM_SUCCESS_TAG} ${opts.runName}: "${attempts[i]?.model ?? 'managed-default'}" ok${i > 0 ? ' (via fallback)' : ''}`,
+                context: 'runWithModelFailover',
+                metadata: {
+                    runName: opts.runName,
+                    organizationId: opts.organizationId,
+                    modelId: attempts[i]?.byokModelId,
+                    usedFallback: i > 0,
+                },
+            });
+            return result;
         } catch (err) {
             const isLast = i >= attempts.length - 1;
             if (isLast || unsafeToRetry || !shouldFailoverToNextModel(err)) {
+                // Terminal failure: no more attempts (or this error must not
+                // cascade). Emit ONE greppable [LLM-ERROR] line here — the single
+                // chokepoint every LLM.run call funnels through — so a failed LLM
+                // call is findable in the logs with model + classified cause,
+                // instead of dying as an unlogged re-throw. WARN level: a terminal
+                // LLM failure is a user config/billing/provider problem, not an
+                // app outage (mirrors the failover swap below).
+                const { category } = classifyLLMError(err);
+                logger.warn({
+                    message: `${LLM_ERROR_TAG} ${opts.runName}: "${attempts[i]?.model ?? 'managed-default'}" failed (${category}) — ${(err as Error)?.message ?? 'unknown error'}`,
+                    context: 'runWithModelFailover',
+                    metadata: {
+                        runName: opts.runName,
+                        organizationId: opts.organizationId,
+                        category,
+                        modelId: attempts[i]?.byokModelId,
+                        exhausted: isLast,
+                    },
+                });
                 throw err;
             }
 
@@ -136,7 +172,7 @@ export async function runWithModelFailover<T>(
             // (mirrors llmErrorLogLevel), and the run still succeeds via the
             // fallback — the interesting signal is the SWAP, not an outage.
             logger.warn({
-                message: `[model-failover] ${opts.runName}: "${from}" failed (${category}); cascading to fallback "${to}"`,
+                message: `${LLM_ERROR_TAG} [model-failover] ${opts.runName}: "${from}" failed (${category}); cascading to fallback "${to}"`,
                 context: 'runWithModelFailover',
                 metadata: {
                     runName: opts.runName,

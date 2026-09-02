@@ -42,6 +42,13 @@ const GEMINI_MODEL_PATTERN = /^gemini[-_]/i;
  */
 export type ByokModelOptions = {
     structuredOutputs?: boolean;
+    /**
+     * Replacement transport for the built client, forwarded to the provider
+     * module's `build`. The connection probe passes a redirect-refusing fetch so
+     * a user-supplied endpoint can't 30x the request past the SSRF gate. Unset
+     * everywhere else — reviews use the default transport.
+     */
+    fetch?: typeof fetch;
 };
 
 /**

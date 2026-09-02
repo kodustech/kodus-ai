@@ -1,5 +1,6 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { LLM } from '@libs/llm/llm';
+import { LLM_ERROR_TAG } from '@libs/llm/log-tags';
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import { getModelName } from '@libs/llm/byok-to-vercel';
@@ -184,7 +185,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             return analysisResult;
         } catch (error) {
             this.logger.error({
-                message: `Error during LLM code analysis for PR#${prNumber}`,
+                message: `${LLM_ERROR_TAG} Error during LLM code analysis for PR#${prNumber}`,
                 context: LLMAnalysisService.name,
                 metadata: {
                     organizationAndTeamData: context?.organizationAndTeamData,
@@ -264,7 +265,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             return analysisResult;
         } catch (error) {
             this.logger.error({
-                message: `Error during LLM code analysis for PR#${prNumber}`,
+                message: `${LLM_ERROR_TAG} Error during LLM code analysis for PR#${prNumber}`,
                 context: LLMAnalysisService.name,
                 metadata: {
                     organizationAndTeamData: context?.organizationAndTeamData,
@@ -375,7 +376,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             return result;
         } catch (error) {
             this.logger.error({
-                message: `Error generating code suggestions`,
+                message: `${LLM_ERROR_TAG} Error generating code suggestions`,
                 error,
                 context: LLMAnalysisService.name,
                 metadata: { organizationAndTeamData, sessionId, parameters },
@@ -441,7 +442,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         } catch (error) {
             this.logger.error({
                 message:
-                    'Error executing validate implemented suggestions chain:',
+                    `${LLM_ERROR_TAG} Error executing validate implemented suggestions chain:`,
                 error,
                 context: LLMAnalysisService.name,
                 metadata: {
@@ -508,7 +509,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
             });
         } catch (error) {
             this.logger.error({
-                message: `Error during suggestions safe guard analysis for PR#${prNumber}`,
+                message: `${LLM_ERROR_TAG} Error during suggestions safe guard analysis for PR#${prNumber}`,
                 context: LLMAnalysisService.name,
                 metadata: {
                     organizationAndTeamData,
@@ -584,7 +585,7 @@ export class LLMAnalysisService implements IAIAnalysisService {
         } catch (error) {
             this.logger.error({
                 message:
-                    'Error executing validate implemented suggestions chain:',
+                    `${LLM_ERROR_TAG} Error executing validate implemented suggestions chain:`,
                 error,
                 context: LLMAnalysisService.name,
                 metadata: {

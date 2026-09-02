@@ -72,6 +72,12 @@ _*
 # can't load the offline conformance specs).
 !libs/llm/providers/**/__fixtures__/
 !libs/llm/providers/**/__fixtures__/**
+# The BYOK config matrix replays every distinct config shape stored in
+# production (anonymized: no org ids, no credentials). Same committed-artifact
+# rule — without this the corpus exists only on the author's disk and the
+# production-shape invariants quietly assert over an empty array in CI.
+!libs/llm/testing/__fixtures__/
+!libs/llm/testing/__fixtures__/**
 !**/__tests__/
 !scripts/selfhosted/_*.sh
 
@@ -191,10 +197,6 @@ scripts/benchmark/node_modules/
 scripts/benchmark/*-trace-metrics.json
 evals/investigation/evals/
 
-# kodus-flow workspace package build artifacts
-packages/kodus-flow/node_modules/
-packages/kodus-flow/dist/
-
 # ESLint Cache
 .eslintcache
 
@@ -280,3 +282,13 @@ evals/kody-rules/prod-rules.json
 .kodus/evidence/
 runo
 test1.json
+
+# Stryker mutation testing (run artifacts, never committed)
+reports/mutation/
+.stryker-tmp/
+
+# The FILLED copy of the BYOK live-tier credentials. The `.example.json` next to
+# it is the template and IS tracked; this one holds real vendor keys and must
+# never be committed — it exists so the JSON can be validated locally before it
+# is pasted into the GitHub secret.
+libs/llm/testing/byok-live-keys.json

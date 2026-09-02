@@ -4,7 +4,11 @@ import { managedModelMaxInputTokens } from '@libs/llm/managed-model-window';
 import { Injectable } from '@nestjs/common';
 import { encoding_for_model, TiktokenModel } from 'tiktoken';
 
-import { estimateTokenCount } from '@libs/common/utils/document';
+// The real tokenizer, not the bytes/4 approximation this used to import from
+// libs/common. libs/common cannot import libs/llm — llm already depends on
+// common and that arrow stays one-directional — so the swap happens HERE, at
+// the only call site, which is free to import either.
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 
 export interface TokenChunkingOptions {
     model?: LLMModelProvider | string;
@@ -265,12 +269,12 @@ export class TokenChunkingService {
                     return encoder.encode(text).length;
                 } catch (error) {
                     // If fails, use estimation
-                    return estimateTokenCount(text);
+                    return estimateTextTokens(text);
                 }
             }
 
             // For other models, use estimation
-            return estimateTokenCount(text);
+            return estimateTextTokens(text);
         } catch (error) {
             this.logger.warn({
                 message:

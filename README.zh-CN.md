@@ -211,7 +211,7 @@ Kody 不仅仅是总结 diff。它会结合上下文 review 代码，按严重�
 
 ## Monorepo 结构
 
-Kodus 是一个 monorepo，包含多个应用、共享 domain 库和已发布的 package。
+Kodus 是一个 monorepo，包含多个应用和共享 domain 库。
 
 ```txt
 kodus-ai/
@@ -221,9 +221,6 @@ kodus-ai/
 │   ├── worker/       # review 执行与队列消费者
 │   └── webhooks/     # Git provider webhook 接入
 ├── libs/             # 共享 NestJS domain 模块
-├── packages/
-│   ├── kodus-flow/   # AI agent 编排 SDK
-│   └── kodus-common/ # LLM 抽象 package
 └── scripts/          # 开发、deploy、benchmark 与自动化脚本
 ```
 
@@ -234,8 +231,7 @@ kodus-ai/
 | `apps/worker` | 后台服务，用于代码 review 执行、队列处理、建议检查、自动化任务和监控任务。 |
 | `apps/webhooks` | 用于 GitHub、GitLab、Azure Repos、Bitbucket 和 Forgejo 事件的 webhook 接入服务。 |
 | `libs` | Kodus 各应用共享的 NestJS domain 模块。 |
-| `packages/kodus-flow` | AI agent 编排 SDK。 |
-| `packages/kodus-common` | 面向模型 provider 的共享 LLM 抽象 package。 |
+| `libs/llm` | 仓库内面向模型 provider 的 LLM/BYOK 抽象层。 |
 
 如需完整的安装说明，请参考[本地快速开始](https://docs.kodus.io/how_to_deploy/en/local_quickstart/orchestrator)。
 

@@ -47,7 +47,6 @@ on:
             - "libs/ee/codeReview/**"
             - "libs/ee/kodyRules/**"
             - "libs/kodyRules/**"
-            - "packages/kodus-flow/**"
             - "apps/web/src/features/ee/byok/_data/curated-models.json"
             - "evals/**"
     pull_request:
@@ -57,7 +56,6 @@ on:
             - "libs/ee/codeReview/**"
             - "libs/ee/kodyRules/**"
             - "libs/kodyRules/**"
-            - "packages/kodus-flow/**"
             - "apps/web/src/features/ee/byok/_data/curated-models.json"
             - "evals/**"
 
@@ -359,7 +357,14 @@ jobs:
     # only a real failure/cancel trips it.
     pr-evals-gate:
         if: always() && github.event_name == 'pull_request'
-        needs: [harness, pr-finder-gate, pr-kody-rules-gate, pr-anchoring-canary, pr-summary-gate]
+        needs:
+            [
+                harness,
+                pr-finder-gate,
+                pr-kody-rules-gate,
+                pr-anchoring-canary,
+                pr-summary-gate,
+            ]
         name: "PR evals gate"
         runs-on: ubuntu-latest
         timeout-minutes: 2

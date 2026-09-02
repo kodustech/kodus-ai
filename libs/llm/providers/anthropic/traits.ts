@@ -43,6 +43,14 @@
 import type { ReasoningConfig } from '../kernel/model-types';
 
 export type AnthropicGeneration =
+    /** Claude 2.x and 3.0–3.5: no extended thinking AT ALL. Distinct from
+     *  `legacy` (3.7–4.5), which thinks with a token budget. They were one
+     *  generation here while `anthropicReasoningConfig` in this same file drew
+     *  the line correctly at 3.7 — so the capability table said "does not
+     *  reason" and the emitter sent `thinking:{type:enabled,budget_tokens}`
+     *  anyway. No production slot runs one today; the contradiction is what is
+     *  being removed, before one does. */
+    | 'pre-thinking'
     | 'legacy'
     | 'adaptive-4-6'
     | 'modern'
@@ -67,16 +75,32 @@ export interface AnthropicModelTraits {
  * Strip the decorations different hosts add around the bare model id:
  *   - our own `provider:model` pairs (`anthropic:claude-opus-5`)
  *   - Amazon Bedrock's provider prefix (`anthropic.claude-opus-5`)
+ *   - Bedrock's cross-region inference profiles (`global.anthropic.claude-opus-4-7`)
+ *   - Bedrock's version suffix (`…claude-sonnet-4-5-20250929-v1:0`)
  *   - Vertex's `@`-versioned snapshots (`claude-opus-4-5@20251101`)
  *   - dated snapshots (`claude-sonnet-4-5-20250929`)
+ *
+ * A decoration this misses is not a cosmetic miss: the id falls through to
+ * `unknown`, and `unknown` withholds temperature and omits thinking config
+ * entirely. Every Bedrock-hosted Claude in production carries one of the two
+ * Bedrock decorations, which is exactly how they all resolved to `unknown`.
  */
 export function normalizeAnthropicModelName(modelName?: string): string {
     if (!modelName) return '';
 
     let name = modelName.trim().toLowerCase();
 
+    // Bedrock stamps a version onto the id (`…-v1:0`). It has to go BEFORE the
+    // `provider:model` rule below, which otherwise keeps only what follows the
+    // colon — the string "0".
+    name = name.replace(/-v\d+:\d+$/, '');
+
     const colon = name.indexOf(':');
     if (colon > -1) name = name.slice(colon + 1);
+
+    // Cross-region inference profiles scope the id by region; the model behind
+    // `us.` / `eu.` / `global.` is the same model, with the same request shape.
+    name = name.replace(/^(us|eu|apac|us-gov|global)\./, '');
 
     if (name.startsWith('anthropic.')) name = name.slice('anthropic.'.length);
 
@@ -87,7 +111,11 @@ export function normalizeAnthropicModelName(modelName?: string): string {
 }
 
 /** Claude 2.x / 3.x — always the budget shape. */
-const LEGACY_MAJOR = /^claude-[23](\b|[-.])/;
+// Extended thinking arrives with 3.7. Everything earlier in the 2.x/3.x line
+// has no thinking parameter to send, which is a DIFFERENT fact from "thinks
+// with a budget" — and one regex used to answer both.
+const LEGACY_MAJOR = /^claude-3-7(\b|[-.])/;
+const PRE_THINKING = /^claude-[23](\b|[-.])/;
 
 /** Claude 4 through 4.5, in either naming order (`opus-4-1`, `3-7-sonnet`). */
 const LEGACY_4X =
@@ -117,12 +145,18 @@ export function resolveAnthropicModelTraits(
         thinkingShape:
             generation === 'legacy'
                 ? 'budget'
-                : generation === 'unknown'
+                : generation === 'unknown' || generation === 'pre-thinking'
                   ? 'none'
                   : 'adaptive',
         canDisableThinking: generation !== 'always-thinking',
+        // `pre-thinking` belongs here for the opposite reason to the others: it
+        // takes a temperature precisely BECAUSE it never thinks. Leaving it out
+        // would have traded one wrong answer for another — silently withholding
+        // a setting that works on every Claude 3.5.
         supportsSamplingParams:
-            generation === 'legacy' || generation === 'adaptive-4-6',
+            generation === 'legacy' ||
+            generation === 'adaptive-4-6' ||
+            generation === 'pre-thinking',
     };
 }
 
@@ -135,6 +169,8 @@ function resolveGeneration(name: string): AnthropicGeneration {
         return 'modern';
     }
     if (LEGACY_4X.test(name) || LEGACY_MAJOR.test(name)) return 'legacy';
+    // AFTER the 3.7 check above, so `claude-3-7` never falls in here.
+    if (PRE_THINKING.test(name)) return 'pre-thinking';
 
     return 'unknown';
 }

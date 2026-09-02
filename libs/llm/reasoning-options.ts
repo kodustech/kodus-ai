@@ -18,12 +18,9 @@ const logger = createLogger('ReasoningOptions');
 
 export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
 
-export const EFFORT_TO_BUDGET: Record<ReasoningEffort, number> = {
-    none: 0,
-    low: 5_000,
-    medium: 15_000,
-    high: 40_000,
-};
+// Re-exported from the kernel leaf so existing importers keep working; the
+// value itself lives in ONE place now (kernel/effort-budget.ts).
+export { EFFORT_TO_BUDGET } from '@libs/llm/providers/kernel/effort-budget';
 
 /**
  * The DEFAULT reasoning effort for a model when its slot leaves `reasoningEffort`
@@ -44,10 +41,22 @@ export function defaultReasoningEffortFor(
     const provider = slot?.provider as string | undefined;
     if (!provider || !slot?.model || !REGISTRY.has(provider)) return undefined;
     try {
+        const module = REGISTRY.get(provider);
         const traits =
-            REGISTRY.get(provider).reasoningTraits?.(slot as any) ??
-            NON_REASONING_TRAITS;
-        return traits.thinksByDefault ? 'medium' : undefined;
+            module.reasoningTraits?.(slot as any) ?? NON_REASONING_TRAITS;
+        if (!traits.thinksByDefault) return undefined;
+
+        // `thinksByDefault` is a FACT; imposing a family default is a POLICY.
+        // Reading one as the other is what made the fact unsafe to declare — a
+        // provider whose omission is harmless (Gemini) could not state that it
+        // reasons without us overriding its own default level.
+        //
+        // The policy needs exactly one answer: would omitting turn reasoning OFF?
+        // That is NOT derivable — `reasoning(cfg,'none')` emitting nothing looks
+        // neutral, but OpenAI defaults gpt-5.1's effort to `none`, so omitting
+        // there disables. So the module DECLARES it, and an undeclared model
+        // stays on the safe side (impose; costs tokens, never disables).
+        return traits.omittingDisablesReasoning === false ? undefined : 'medium';
     } catch {
         // A lookup failure must never break the call — fall back to the caller's
         // own default (matches resolveStructuredPlan's best-effort posture).
@@ -79,6 +88,7 @@ export function buildProviderOptions(
             const override = autoWrapProviderOverride(
                 parsed,
                 input?.byokProvider,
+                input?.modelName,
             );
             return {
                 ...buildOpenRouterRouting(input),
@@ -148,22 +158,35 @@ function buildOpenRouterRouting(input?: {
  */
 function providerOptionsNamespace(
     provider?: BYOKProvider | string,
+    model?: string,
 ): string | undefined {
     if (!provider) return undefined;
     const id = String(provider);
     return REGISTRY.has(id)
-        ? REGISTRY.get(id).providerOptionsNamespace?.(id)
+        ? REGISTRY.get(id).providerOptionsNamespace?.(id, model)
         : undefined;
 }
 
 /** Keys that count as "already namespaced" at the top level of an override:
  *  every namespace the registry's modules declare, plus `langsmith` (a telemetry
- *  namespace, not a provider). Derived so a new provider is recognized for free. */
+ *  namespace, not a provider). Derived so a new provider is recognized for free.
+ *  Model-less on purpose: this asks "is this key A namespace", not "is it THIS
+ *  model's namespace", and every model-dependent answer (Vertex's `anthropic`)
+ *  is already contributed by the module that owns it.
+ *
+ *  Aliases count too. Recognising a key is not the same question as choosing one:
+ *  we wrap under the canonical namespace, but a paste that already carries a key
+ *  the SDK reads must be left alone. Missing an alias is the worst outcome here —
+ *  a CORRECT override gets wrapped a second time and disappears. */
 function knownNamespaceKeys(): Set<string> {
     const keys = new Set<string>(['langsmith']);
     for (const id of REGISTRY.ids()) {
-        const ns = REGISTRY.get(id).providerOptionsNamespace?.(id);
+        const mod = REGISTRY.get(id);
+        const ns = mod.providerOptionsNamespace?.(id);
         if (ns) keys.add(ns);
+        for (const alias of mod.providerOptionsNamespaceAliases?.(id) ?? []) {
+            keys.add(alias);
+        }
     }
     return keys;
 }
@@ -179,6 +202,7 @@ function knownNamespaceKeys(): Set<string> {
 function autoWrapProviderOverride(
     override: unknown,
     provider?: BYOKProvider | string,
+    model?: string,
 ): Record<string, any> {
     if (!override || typeof override !== 'object' || Array.isArray(override)) {
         return {};
@@ -191,7 +215,7 @@ function autoWrapProviderOverride(
     const alreadyNamespaced = keys.some((k) => known.has(k));
     if (alreadyNamespaced) return obj;
 
-    const ns = providerOptionsNamespace(provider);
+    const ns = providerOptionsNamespace(provider, model);
     if (!ns) return obj; // Unknown provider — pass through and let the SDK decide.
 
     return { [ns]: obj };

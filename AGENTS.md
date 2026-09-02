@@ -1,6 +1,6 @@
 # Kodus AI
 
-AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps, 20 shared libs, and 2 published npm packages.
+AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps and 20 shared libs.
 
 ## Structure
 
@@ -9,7 +9,7 @@ AI-powered code review platform. Monorepo with 4 NestJS/Next.js apps, 20 shared 
 - `apps/worker/` - RabbitMQ consumer (webhook processing, code review execution, suggestion checks, monitoring crons)
 - `apps/webhooks/` - Webhook ingestion (GitHub, GitLab, Azure Repos, Bitbucket, Forgejo). Fire-and-forget with outbox pattern
 - `libs/` - 20 NestJS domain modules (core, code-review, ai-engine, agents, integrations, platform, identity, organization, etc.)
-- `packages/kodus-common/` - Published npm package with LLM abstraction layer (OpenAI, Anthropic, Gemini, Vertex AI, Novita)
+- `libs/llm/` - In-repo LLM/BYOK layer (replaced the old `@kodus/kodus-common/llm` package). One format: a stored `BYOKConfig` routes to one resolved slot (`NormalizedModel`), and every call goes through the single `LLM.run` door. Providers: OpenAI, Anthropic, Gemini, Vertex AI, OpenAI-compatible. Full model in `libs/llm/README.md`
 
 ## Stack
 

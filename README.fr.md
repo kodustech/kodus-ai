@@ -211,7 +211,7 @@ Choisissez le workflow qui correspond à la façon dont vous souhaitez utiliser 
 
 ## Structure du monorepo
 
-Kodus est un monorepo avec plusieurs applications, des bibliothèques de domaine partagées et des packages publiés.
+Kodus est un monorepo avec plusieurs applications et des bibliothèques de domaine partagées.
 
 ```txt
 kodus-ai/
@@ -221,9 +221,6 @@ kodus-ai/
 │   ├── worker/       # Exécution des revues et consommateurs de queue
 │   └── webhooks/     # Ingestion des webhooks des fournisseurs Git
 ├── libs/             # Modules de domaine NestJS partagés
-├── packages/
-│   ├── kodus-flow/   # SDK d'orchestration d'agents IA
-│   └── kodus-common/ # Package d'abstraction LLM
 └── scripts/          # Scripts de dev, deploy, benchmark et automatisation
 ```
 
@@ -234,8 +231,7 @@ kodus-ai/
 | `apps/worker` | Service en arrière-plan pour l'exécution des revues de code, le traitement des queues, les vérifications de suggestions, les jobs d'automatisation et les tâches de monitoring. |
 | `apps/webhooks` | Service d'ingestion de webhooks pour les événements GitHub, GitLab, Azure Repos, Bitbucket et Forgejo. |
 | `libs` | Modules de domaine NestJS partagés utilisés à travers les applications Kodus. |
-| `packages/kodus-flow` | SDK pour l'orchestration d'agents IA. |
-| `packages/kodus-common` | Package d'abstraction LLM partagé pour les fournisseurs de modèles. |
+| `libs/llm` | Couche d'abstraction LLM/BYOK intégrée au dépôt pour les fournisseurs de modèles. |
 
 Pour des instructions d'installation complètes, suivez le [Démarrage rapide local](https://docs.kodus.io/how_to_deploy/en/local_quickstart/orchestrator).
 

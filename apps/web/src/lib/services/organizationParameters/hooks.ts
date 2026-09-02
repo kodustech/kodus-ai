@@ -1,17 +1,17 @@
 import {
     OrganizationParametersConfigKey,
     Timezone,
-} from "@services/parameters/types";
-import { useQuery } from "@tanstack/react-query";
-import { useFetch, useSuspenseFetch } from "src/core/utils/reactQuery";
-import type { BYOKConfig } from "src/features/ee/byok/_types";
+} from '@services/parameters/types';
+import { useQuery } from '@tanstack/react-query';
+import { useFetch, useSuspenseFetch } from 'src/core/utils/reactQuery';
+import type { BYOKConfig } from 'src/features/ee/byok/_types';
 
+import { ORGANIZATION_PARAMETERS_PATHS } from '.';
 import {
     getModelCapabilities,
     previewLLMProviderModels,
     type ModelUiCapabilities,
-} from "./fetch";
-import { ORGANIZATION_PARAMETERS_PATHS } from ".";
+} from './fetch';
 
 export function useSuspenseGetLLMProviders() {
     return useSuspenseFetch<{
@@ -48,7 +48,7 @@ export function useLLMProviderModelsPreview({
     return useQuery({
         // Key includes apiKey/baseURL so a rotated key refetches; the value never
         // leaves the browser's query cache (client-only, no SSR data cache).
-        queryKey: ["byok-provider-models-preview", provider, apiKey, baseURL],
+        queryKey: ['byok-provider-models-preview', provider, apiKey, baseURL],
         queryFn: () => previewLLMProviderModels({ provider, apiKey, baseURL }),
         enabled,
         staleTime: 5 * 60 * 1000,
@@ -83,11 +83,15 @@ export function useModelCapabilities({
     enabled: boolean;
 }) {
     return useQuery<ModelUiCapabilities>({
-        queryKey: ["byok-model-capabilities", provider, model],
+        // Keyed on provider+model ONLY. The answer is a pure function of those
+        // two, including the parts that vary with the reasoning toggle — those
+        // ship as an extra field in the same response, so flipping the toggle
+        // never refetches and never invalidates this entry.
+        queryKey: ['byok-model-capabilities', provider, model],
         queryFn: () =>
             getModelCapabilities({
-                provider: provider ?? "",
-                model: model ?? "",
+                provider: provider ?? '',
+                model: model ?? '',
             }),
         enabled: enabled && !!provider,
         staleTime: 10 * 60 * 1000,

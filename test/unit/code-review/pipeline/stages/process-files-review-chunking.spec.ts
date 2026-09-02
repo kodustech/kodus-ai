@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { estimateTokens } from '@libs/code-review/infrastructure/adapters/services/utils/token-estimator';
 import { ProcessFilesReview } from '@libs/code-review/pipeline/stages/process-files-review.stage';
 import { SUGGESTION_SERVICE_TOKEN } from '@libs/code-review/domain/contracts/SuggestionService.contract';
 import { PULL_REQUESTS_SERVICE_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
@@ -823,13 +824,22 @@ describe('ProcessFilesReview – file content chunking', () => {
             //   availableTokens ≈ 194
             //   maxCharsPerChunk = floor(194*3.5) = 679
             //
-            // Content: 6 lines of ~400 chars each ≈ 2406 chars ≈ 688 tokens
-            //   minChunkTokens = ceil(688/4) = 172 ≤ 194 → 25% fits ✓
-            //   Two lines = ~801 chars > 679 → each line is its own chunk → 6 raw chunks
-            //   Capped to 4
+            // 6 lines, each big enough that two of them cannot share a chunk →
+            // 6 raw chunks, capped to 4.
+            //
+            // The lines used to be `'z'.repeat(380)` with the token count
+            // derived from chars/N. The estimator measures now, and a run of
+            // identical characters collapses under BPE — those "688 token"
+            // lines measured a few dozen, so everything fit in one chunk and
+            // the cap under test was never reached. Varied text tokenizes the
+            // way real file content does.
             const lines: string[] = [];
             for (let i = 0; i < 6; i++) {
-                lines.push(`capped_line${i}_${'z'.repeat(380)}`);
+                let line = `capped_line${i}_`;
+                while (estimateTokens(line) < 115) {
+                    line += `const v${i} = compute(input, idx); // pad `;
+                }
+                lines.push(line);
             }
             const content = lines.join('\n');
 

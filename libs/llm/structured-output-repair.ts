@@ -54,7 +54,9 @@ export function ajvValidator<T = unknown>(
         return null;
     }
     return (value: unknown): ValidationResult<T> => {
-        if (validateFn(value)) return { success: true, value: value as T };
+        if (validateFn(value)) {
+            return { success: true, value: value as T };
+        }
         const detail = (validateFn.errors ?? [])
             .map((e) => `${e.instancePath || '/'} ${e.message ?? ''}`.trim())
             .join('; ');
@@ -213,6 +215,179 @@ export async function repairAndValidate<T = unknown>(
     }
     const r = await schema.validate(value);
     return r.success ? (r.value as T) : undefined;
+}
+
+/**
+ * Single greppable marker for every LLM output-shape / parse issue (#1786 class).
+ * Defined in `@libs/llm/log-tags` (the one home for all LLM log tags) and
+ * re-exported here for the recovery call-sites that already import from this
+ * module.
+ */
+export { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
+
+/** Wrapper keys the non-strict models emit around the real payload. Unwrapped
+ *  only when the current object does NOT already carry the target key/alias, so a
+ *  legit `{ suggestions, meta }` is never descended into. `"0"` covers the
+ *  `{"0": D}` numeric-index wrap; `content`/`data`/`result`/… the object wraps. */
+const ENVELOPE_WRAPPER_KEYS = [
+    'result',
+    'data',
+    'output',
+    'response',
+    'json',
+    'content',
+    'payload',
+    '0',
+];
+
+/** Case/convention-insensitive key match: `Suggestions`, `query_tasks`,
+ *  `code-suggestions` all collapse to the same normal form. */
+function normalizeKeyName(k: string): string {
+    return k.toLowerCase().replace(/[_\-\s]/g, '');
+}
+
+function locateKey(
+    obj: Record<string, unknown>,
+    key: string,
+    aliases: string[],
+): string | undefined {
+    const wanted = [key, ...aliases];
+    // 1. exact.
+    for (const w of wanted) {
+        if (Object.prototype.hasOwnProperty.call(obj, w)) return w;
+    }
+    // 2. case/convention-insensitive.
+    const wantedNorm = new Set(wanted.map(normalizeKeyName));
+    for (const actual of Object.keys(obj)) {
+        if (wantedNorm.has(normalizeKeyName(actual))) return actual;
+    }
+    return undefined;
+}
+
+/**
+ * Coerce a parsed LLM value into the canonical `{ [key]: … }` shape when a
+ * non-strict model wrapped, renamed, bare-arrayed, case-mangled, or stringified
+ * it — the SHAPE mismatch layer {@link repairJsonText} explicitly does not touch
+ * (valid JSON, wrong container). Pure and conservative: it never invents data,
+ * only unwraps known envelope keys (when the target key is absent), lifts a bare
+ * array under `key`, aliases a renamed/case-mismatched key, and parses a
+ * stringified-JSON payload. Returns the value UNCHANGED when it is already
+ * canonical or nothing safe applies — so the caller's existing `.key` read then
+ * finds the data instead of silently seeing `undefined` (issue #1786).
+ *
+ * `key` is the canonical field the caller reads (e.g. `suggestions`, `rules`,
+ * `codeSuggestions`); `aliases` the renamed forms a model emits for it.
+ *
+ * `opts.scalar` — set when `key` holds a SCALAR (e.g. verifier `keep`, compiler
+ * `mechanical`), not an array: a bare `[{key:…}]` then descends into its first
+ * element instead of being lifted as `{ [key]: [...] }`.
+ *
+ * `opts.onRecover` — observability hook, called ONCE with a short reason
+ * whenever a real off-schema recovery happened (parse / unwrap / lift / alias),
+ * so callers can log which model shape #1786 fired on. Not called on a no-op.
+ *
+ * `opts.liftEmptyArray` — by default a bare EMPTY array is a no-op (it carries
+ * no data, so the finder path lets the caller's empty outcome stand). Set this
+ * for a schema-envelope target where `{ [key]: [] }` is a VALID answer — e.g.
+ * the kody-rules shard's `[]` means "no violations", which must become
+ * `{violations:[]}` (a clean pass) rather than fail the wire schema.
+ */
+export function normalizeEnvelope(
+    value: unknown,
+    key: string,
+    aliases: string[] = [],
+    opts: {
+        scalar?: boolean;
+        liftEmptyArray?: boolean;
+        onRecover?: (reason: string) => void;
+    } = {},
+): unknown {
+    let v: unknown = value;
+    let reason = '';
+
+    // 0. stringified JSON — parse it, then normalize the result.
+    if (typeof v === 'string') {
+        const candidate = extractJsonFromText(v);
+        if (candidate != null) {
+            try {
+                v = JSON.parse(candidate);
+                reason = 'parsed-stringified-json';
+            } catch {
+                return value; // not JSON after all → hand back the original.
+            }
+        } else {
+            return value;
+        }
+    }
+
+    // 1. unwrap known wrappers ({result:D}, {result:{result:D}}, {content:D},
+    //    {"0":D}) — but only while the target key/alias is NOT already present,
+    //    so `{ suggestions, meta }` is left intact.
+    for (let depth = 0; depth < 5; depth++) {
+        if (!v || typeof v !== 'object' || Array.isArray(v)) {
+            break;
+        }
+        const obj = v as Record<string, unknown>;
+        if (locateKey(obj, key, aliases)) {
+            break;
+        } // already canonical-ish.
+        // Only descend into a KNOWN, named wrapper key — never guess by "the
+        // object has a single key", which would falsely unwrap real payloads
+        // (e.g. a provider envelope `{choices:[{message:{content}}]}` is NOT the
+        // target array and must not be lifted as one).
+        const wrapKey = Object.keys(obj).find((k) =>
+            ENVELOPE_WRAPPER_KEYS.includes(k),
+        );
+        if (
+            wrapKey === undefined ||
+            obj[wrapKey] == null ||
+            typeof obj[wrapKey] !== 'object'
+        ) {
+            break;
+        }
+        v = obj[wrapKey];
+        reason = `unwrapped-${wrapKey}`;
+    }
+
+    // 2. bare array. For an array-valued target: lift a NON-EMPTY array under
+    //    `key` (an empty one carries no data — return the original so the
+    //    caller's empty/unusable outcome stands). For a SCALAR target: a bare
+    //    array is not the payload — descend into its first object element so
+    //    step 3 can locate the scalar key there.
+    if (Array.isArray(v)) {
+        if (opts.scalar) {
+            if (v.length > 0 && v[0] && typeof v[0] === 'object') {
+                v = v[0];
+                reason = 'unwrapped-array-element';
+            } else {
+                return value;
+            }
+        } else if (v.length > 0 || opts.liftEmptyArray) {
+            // A non-empty array carries data → lift. An empty one lifts only for
+            // a schema-envelope caller (liftEmptyArray) where `{key:[]}` is the
+            // canonical "nothing found" answer; the finder path leaves `[]` alone.
+            opts.onRecover?.(reason || 'lifted-bare-array');
+            return { [key]: v };
+        } else {
+            return value;
+        }
+    }
+
+    // 3. object with the payload under a renamed / case-mismatched key.
+    if (v && typeof v === 'object') {
+        const obj = v as Record<string, unknown>;
+        const found = locateKey(obj, key, aliases);
+        if (found && found !== key) {
+            const { [found]: hit, ...rest } = obj;
+            opts.onRecover?.(`aliased-${found}`);
+            return { ...rest, [key]: hit };
+        }
+    }
+
+    if (reason && v !== value) {
+        opts.onRecover?.(reason);
+    }
+    return v;
 }
 
 /**

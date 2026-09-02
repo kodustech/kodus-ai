@@ -25,9 +25,7 @@ import {
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
-import {
-    type LangfuseTelemetryMetadata,
-} from '@libs/core/log/langfuse';
+import { type LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
 
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -93,6 +91,10 @@ import {
 } from '@libs/llm/error-classifier';
 import { hasManagedModelKey } from '@libs/llm/managed-slot';
 import { LLM } from '@libs/llm/llm';
+import {
+    normalizeEnvelope,
+    LLM_ENVELOPE_TAG,
+} from '@libs/llm/structured-output-repair';
 
 /**
  * Extract valid line ranges from a unified diff patch.
@@ -1666,7 +1668,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.embedDedupSuggestion(keep, keepKey, embedCache),
         ]);
         if (!vecDup || !vecKeep) {
-            return { honor: false, reason: 'lexical-veto (no-embed)', score: lexical };
+            return {
+                honor: false,
+                reason: 'lexical-veto (no-embed)',
+                score: lexical,
+            };
         }
 
         const cos = cosineSimilarity(vecDup, vecKeep);
@@ -1759,8 +1765,11 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const kept: Partial<CodeSuggestion>[] = [];
         for (let si = 0; si < suggestions.length; si++) {
             const s = suggestions[si];
-            let absorbedBy: { ri: number; reason: string; score: number } | null =
-                null;
+            let absorbedBy: {
+                ri: number;
+                reason: string;
+                score: number;
+            } | null = null;
             for (let ri = 0; ri < fileScopedRules.length; ri++) {
                 const rule = fileScopedRules[ri];
                 // A suggestion can only duplicate a rule on the SAME file.
@@ -1896,11 +1905,29 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                 context: this.stageName,
             });
 
+            // SHAPE recovery (#1786): a non-strict model may wrap
+            // ({result:{groups,unique}}), rename, stringify, or bare-array the
+            // dedup output — recover the canonical shape before reading, so an
+            // off-schema envelope does not fold into 'keep-all' and ship
+            // duplicate comments.
+            const normalizedDedup = normalizeEnvelope(
+                dedupOutput,
+                'groups',
+                ['duplicateGroups', 'duplicates'],
+                {
+                    onRecover: (reason) =>
+                        this.logger.warn({
+                            message: `${LLM_ENVELOPE_TAG} recovered off-schema dedup output (${reason}) for PR#${prNumber}`,
+                            context: this.stageName,
+                        }),
+                },
+            ) as any;
+
             const groups: Array<{
                 keep: number;
                 duplicates: number[];
-            }> = dedupOutput?.groups || [];
-            const unique: number[] = dedupOutput?.unique || [];
+            }> = normalizedDedup?.groups || [];
+            const unique: number[] = normalizedDedup?.unique || [];
 
             // Semantic tier of the content guard (PR #1527): when lexical overlap
             // is inconclusive we compare description embeddings, and only escalate
@@ -2738,8 +2765,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             );
                         });
                         if (match) {
-                            const prNumber =
-                                match.number || match.pull_number;
+                            const prNumber = match.number || match.pull_number;
                             if (prNumber) {
                                 openPrOnHeadBranch.set(
                                     repo.fullName.toLowerCase(),

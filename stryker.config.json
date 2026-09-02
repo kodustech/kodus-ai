@@ -1,0 +1,34 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Incremental mutation gate. Scope with --mutate on the CLI (changed files in a PR). testRunner runs only tests related to each mutated file.",
+  "packageManager": "pnpm",
+  "testRunner": "jest",
+  "jest": {
+    "configFile": "jest.stryker.config.ts",
+    "enableFindRelatedTests": true
+  },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "libs/llm/resolve-model-slot.ts"
+  ],
+  "concurrency": 2,
+  "timeoutMS": 60000,
+  "_thresholds_comment": "Advisory rollout: break=null never fails the process, so the CI job reports the score without blocking a PR. Once the team is comfortable, set break (e.g. 60) to make the gate enforce.",
+  "thresholds": { "high": 80, "low": 60, "break": null },
+  "reporters": [
+    "clear-text",
+    "json"
+  ],
+  "inPlace": true,
+  "disableTypeChecks": true,
+  "dryRunTimeoutMinutes": 12,
+  "ignorePatterns": [
+    ".pnpm-store",
+    ".stryker-tmp",
+    "dist",
+    ".worktrees",
+    "coverage"
+  ],
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": true
+}

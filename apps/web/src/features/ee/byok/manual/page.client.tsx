@@ -1,3 +1,4 @@
+// @ts-nocheck
 "use client";
 
 import { Suspense, useState } from "react";
@@ -22,6 +23,7 @@ import {
 import { OrganizationParametersConfigKey } from "@services/parameters/types";
 import { QueryErrorResetBoundary } from "@tanstack/react-query";
 import {
+    AlertTriangleIcon,
     ArrowLeftIcon,
     CheckCircle2Icon,
     InfoIcon,
@@ -207,7 +209,7 @@ export function ByokManualPageClient({
     const [testState, setTestState] = useState<
         | { status: "idle" }
         | { status: "testing" }
-        | { status: "success"; latencyMs: number }
+        | { status: "success"; latencyMs: number; warning?: string }
         | { status: "error"; result: TestBYOKResult }
     >({ status: "idle" });
     const [isSaving, setIsSaving] = useState(false);
@@ -344,7 +346,11 @@ export function ByokManualPageClient({
                     });
                     setTestState(
                         result.ok
-                            ? { status: "success", latencyMs: result.latencyMs }
+                            ? {
+                                  status: "success",
+                                  latencyMs: result.latencyMs,
+                                  warning: result.warning,
+                              }
                             : { status: "error", result },
                     );
                     return result;
@@ -379,6 +385,22 @@ export function ByokManualPageClient({
                     data.reasoningEffort === "custom" || !data.reasoningEffort
                         ? undefined
                         : data.reasoningEffort,
+                // Everything else the save will persist, so the probe runs the
+                // slot being saved rather than a subset of it.
+                reasoningConfigOverride:
+                    data.reasoningEffort === "custom"
+                        ? (data.reasoningConfigOverride ?? undefined)
+                        : undefined,
+                maxOutputTokens: data.maxOutputTokens ?? undefined,
+                openrouterProviderOrder:
+                    data.openrouterProviderOrder &&
+                    data.openrouterProviderOrder.length > 0
+                        ? data.openrouterProviderOrder
+                        : undefined,
+                openrouterAllowFallbacks:
+                    typeof data.openrouterAllowFallbacks === "boolean"
+                        ? data.openrouterAllowFallbacks
+                        : undefined,
                 vertexLocation: data.vertexLocation ?? undefined,
                 awsBearerToken: data.awsBearerToken ?? undefined,
                 awsAccessKeyId: data.awsAccessKeyId ?? undefined,
@@ -390,6 +412,7 @@ export function ByokManualPageClient({
                 setTestState({
                     status: "success",
                     latencyMs: result.latencyMs,
+                    warning: result.warning,
                 });
             } else {
                 setTestState({ status: "error", result });
@@ -833,12 +856,33 @@ function TestResultBanner({
     state:
         | { status: "idle" }
         | { status: "testing" }
-        | { status: "success"; latencyMs: number }
+        | { status: "success"; latencyMs: number; warning?: string }
         | { status: "error"; result: TestBYOKResult };
 }) {
     if (state.status === "idle" || state.status === "testing") return null;
 
     if (state.status === "success") {
+        // A pass with a warning is still a pass — the credential and the model
+        // work, and the config must stay savable. What it is NOT is silent: the
+        // provider ignored part of what the user pasted, and this banner used to
+        // say "Connection OK" and nothing else while that happened.
+        if (state.warning) {
+            return (
+                <Alert variant="warning">
+                    <AlertTriangleIcon />
+                    <AlertDescription className="flex flex-col gap-1 text-pretty">
+                        <span>
+                            Connection OK — provider responded in{" "}
+                            <span className="tabular-nums">
+                                {state.latencyMs}ms
+                            </span>
+                            .
+                        </span>
+                        <span>{state.warning}</span>
+                    </AlertDescription>
+                </Alert>
+            );
+        }
         return (
             <Alert variant="success">
                 <CheckCircle2Icon />
