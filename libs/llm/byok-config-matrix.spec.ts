@@ -1065,6 +1065,64 @@ describe('production config shapes — invariants', () => {
         expect(NON_REASONING.length).toBeGreaterThan(10);
     }, 180000);
 
+    it('reaches Azure the way Azure documents, over openai_compatible', async () => {
+        // Azure cannot be checked by the weekly live tier — nobody here has a
+        // resource to point it at — so its contract is pinned here, against
+        // Microsoft's own words rather than against our expectations.
+        //
+        // It matters because NO production slot uses our `azure` provider id.
+        // Both Azure-shaped configs customers actually run arrive through
+        // `openai_compatible` pointed at the v1 surface, and that path gets none
+        // of the azure module's handling. learn.microsoft.com, v1 API:
+        //
+        //   "api-version is no longer a required parameter with the v1 GA API"
+        //   curl -X POST https://YOUR-RESOURCE-NAME.openai.azure.com/openai/v1/
+        //        chat/completions -H "Authorization: Bearer $TOKEN"
+        //   "base_url accepts both …openai.azure.com/openai/v1/ and
+        //    …services.ai.azure.com/openai/v1/ formats"
+        //
+        // Three claims, all checkable offline: the path, the auth header, and
+        // the absence of an api-version query the v1 surface does not want.
+        for (const host of [
+            'https://r.openai.azure.com/openai/v1/',
+            'https://r.services.ai.azure.com/openai/v1/',
+        ]) {
+            const w = await captureByokWire({
+                provider: 'openai_compatible',
+                apiKey: 'sk-test',
+                baseURL: host,
+                model: 'gpt-5.4',
+                reasoningEffort: 'medium',
+            } as any);
+
+            expect(w.url).toBe(`${host}chat/completions`);
+            expect(w.headers.authorization).toBe('Bearer sk-test');
+            expect(w.url).not.toContain('api-version');
+            // `reasoning_effort` is Azure's documented parameter for a reasoning
+            // model on chat completions (it appears in their own API changelog),
+            // and the snake_case spelling is the one that survives to the wire.
+            expect(w.body.reasoning_effort).toBe('medium');
+        }
+    }, 60000);
+
+    it('withholds temperature from a GPT-5 on Azure, same as on OpenAI', async () => {
+        // The rule changed today: the reasoner check now runs BEFORE the
+        // transport branch, so a GPT-5 keeps its model rule on a proxy id. Azure
+        // is the case that makes it concrete — the deployment really is a GPT-5
+        // and really does reject a temperature, and the live tier can never say
+        // so here.
+        const w = await captureByokWire({
+            provider: 'openai_compatible',
+            apiKey: 'sk-test',
+            baseURL: 'https://r.openai.azure.com/openai/v1/',
+            model: 'gpt-5.4',
+            temperature: 0.2,
+            reasoningEffort: 'medium',
+        } as any);
+        expect(w.body.temperature).toBeUndefined();
+        expect(w.body.reasoning_effort).toBe('medium');
+    }, 60000);
+
     it('never sends a thinking DISABLE to a model that cannot stop thinking', async () => {
         const bad: any[] = [];
         for (const shape of runnable) {

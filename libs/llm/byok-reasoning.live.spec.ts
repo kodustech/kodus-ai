@@ -75,9 +75,15 @@
  *                                 "model": "<your o-series deployment name>" }
  *     }
  *
- * The four Anthropic entries can hold the SAME key — they are four generations
- * of Claude, not four accounts, and they are separate brands only so a key you
- * do have does not skip the generations you want tested.
+ * The SIX Anthropic entries can hold the SAME key — they are six generations of
+ * Claude, not six accounts, and they are separate brands only so a key you do
+ * have does not skip the generations you want tested. All of them already fall
+ * back to `BYOK_ANTHROPIC_API_KEY`, so none needs an entry unless you want a
+ * different key or a different MODEL:
+ *
+ *     "anthropic-fable": { "apiKey": "sk-ant-…", "model": "claude-fable-5-1" }
+ *
+ * — which is how a newer generation gets tested without a code change.
  *
  * ─── EVERY FIELD CAN COME FROM THE JSON ────────────────────────────────────
  * A brand's entry may be the bare key, or an object carrying the key plus ANY
@@ -162,6 +168,14 @@ const slotExtras = (brand: string): Record<string, unknown> => {
  * One row per brand whose reasoning shape we make a claim about. `reasons: true`
  * means "this call must come back having spent reasoning tokens" — the silent-
  * drift detector. Add a brand by adding a row.
+ *
+ * EFFORT IS `low` UNLESS THE LEVEL IS THE SUBJECT
+ * `maxOutputTokens` caps the worst case; the effort decides what is actually
+ * burned, and `high` authorises a 40,000-token budget to answer one word. Nearly
+ * every row here is testing the request SHAPE, which `low` exercises identically
+ * at a fraction of the spend. Three rows keep a higher level because the level
+ * IS what they check: deepseek's low/high/max mapping, GLM folding low/medium
+ * into high, and the Gemini budget landing inside a model ceiling.
  */
 const LIVE = [
     {
@@ -183,7 +197,7 @@ const LIVE = [
             provider: 'openai_compatible',
             model: 'kimi-k2.6',
             baseURL: 'https://api.moonshot.ai/v1',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('moonshot', 'BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'),
         reasons: true,
@@ -226,7 +240,7 @@ const LIVE = [
         slot: {
             provider: 'open_router',
             model: 'deepseek/deepseek-v4-flash',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('open_router'),
         reasons: true,
@@ -237,18 +251,18 @@ const LIVE = [
         slot: {
             provider: 'openai',
             model: 'gpt-5.4',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('openai', 'BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'),
         reasons: true,
     },
     {
         brand: 'google_vertex',
-        why: 'the ONLY provider the offline matrix cannot exercise — its build needs a real service-account JSON, so this tier is its only coverage',
+        why: 'the ONLY provider the offline matrix cannot exercise — its build needs a real service-account JSON, so this tier is its only coverage. Production slots: ZERO today (all 42 Google-model shapes run over AI Studio, OpenRouter or a proxy), and the row stays anyway: Vertex is a supported provider whose transport code can rot unwatched precisely BECAUSE nobody is exercising it, and AI Studio does not cover it — different endpoint, different auth, different SDK package',
         slot: {
             provider: 'google_vertex',
             model: 'gemini-3.7-flash',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('google_vertex', 'API_VERTEX_AI_API_KEY'),
         reasons: true,
@@ -269,7 +283,7 @@ const LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-sonnet-4-6',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
         reasons: true,
@@ -293,7 +307,7 @@ const LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-opus-4-7',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
         reasons: true,
@@ -309,6 +323,33 @@ const LIVE = [
         },
         apiKey: () => key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
         reasons: false as const,
+    },
+    {
+        brand: 'anthropic-opus-5',
+        why: 'Opus 5 shares the adaptive shape with the 4.7 row above, and shares nothing else: it is the most expensive model any customer runs, so a request shape that regresses here costs the most per review. `low`, not high — the SHAPE is the subject and one word needs no budget',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-opus-5',
+            reasoningEffort: 'low',
+        },
+        apiKey: () => key('anthropic-opus-5') ?? key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
+        reasons: true,
+    },
+    {
+        brand: 'anthropic-fable',
+        why: 'the ALWAYS-THINKING generation, and the only branch of the Anthropic table with no live coverage at all. Fable/Mythos reject `thinking:{type:disabled}` with a 400, so for them "off" has to mean OMITTING the field — the exact opposite of the claude-sonnet-5 row above, which must say the disable out loud. Effort is `none` on purpose: that is the branch under test, and asserting `reasons: true` under it is the whole point — we send no disable and the model thinks anyway. If we ever start sending one, this row 400s instead of quietly costing a customer their reviews',
+        slot: {
+            provider: 'anthropic',
+            model: 'claude-fable-5',
+            reasoningEffort: 'none',
+        },
+        // A newer Fable (5.1 and on) needs no new row: put
+        // `{"apiKey":"…","model":"claude-fable-5-1"}` in the secret and the
+        // spread overrides the model here. The id is NOT guessed in code —
+        // `claude-fable-5` is one the SDK declares, and inventing an id that may
+        // not exist yet would fail this row for the wrong reason.
+        apiKey: () => key('anthropic-fable') ?? key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
+        reasons: true,
     },
     {
         brand: 'anthropic_compatible',
@@ -342,7 +383,7 @@ const LIVE = [
             provider: 'openai_compatible',
             model: 'MiniMax-M2',
             baseURL: 'https://api.minimax.io/v1',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('minimax'),
         reasons: true,
@@ -356,7 +397,7 @@ const LIVE = [
             // API_AWS_REGION is the one name here that already exists in
             // this repo's env schema; a per-run override rides in the secret.
             awsRegion: process.env.API_AWS_REGION || 'us-east-1',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         // Bedrock authenticates with a bearer token, not `apiKey`; the slot
         // field is filled from the same value below.
@@ -374,10 +415,52 @@ const LIVE = [
             // skips rather than failing on an empty URL.
             model: 'o3-mini',
             baseURL: '',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () =>
             slotExtras('azure').baseURL ? key('azure') : undefined,
+        reasons: true,
+    },
+
+    // ── gaps found by weighing the rows against what production actually runs.
+    // Each is a (provider + family) combination with real slots behind it and no
+    // live row, which is how a transport-specific rule goes unchecked. ────────
+    {
+        brand: 'open_router_glm',
+        why: 'OpenRouter is 67 production shapes and was represented by ONE family. GLM is its largest (17 shapes) and behaves nothing like DeepSeek there: the aggregator normalises `reasoning:{effort}` for every upstream, so what this row checks is whether OpenRouter still translates it for a Z.ai model rather than passing our field through to an upstream that wants `thinking`',
+        slot: {
+            provider: 'open_router',
+            model: 'z-ai/glm-5.2',
+            reasoningEffort: 'medium',
+        },
+        apiKey: () => key('open_router'),
+        reasons: true,
+    },
+    {
+        brand: 'openai_compatible_gpt5',
+        why: 'twelve production shapes name a GPT-5 behind an OpenAI-protocol proxy, and the temperature rule for exactly this case was CHANGED today: the reasoner check now runs before the transport branch, so the field is withheld where it used to be sent. Nothing live was checking it. The slot carries a temperature the runtime must drop — if it ever reaches the wire, this is where that shows',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'gpt-5.4',
+            baseURL: 'https://api.openai.com/v1',
+            reasoningEffort: 'medium',
+            temperature: 0.2,
+        },
+        // Same vendor, same key as the native `openai` row — what differs is the
+        // provider id we resolve through, which is the whole point.
+        apiKey: () => key('openai_compatible_gpt5') ?? key('openai', 'BYOK_OPENAI_API_KEY'),
+        reasons: true,
+    },
+    {
+        brand: 'openai_compatible_claude',
+        why: 'six shapes run a REAL Claude over an OpenAI-protocol proxy. The id decides the shape, not the transport — a 4.7+ id must not receive the budget form there either — and that branch has no live coverage',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'claude-sonnet-4-6',
+            baseURL: 'https://api.anthropic.com/v1',
+            reasoningEffort: 'medium',
+        },
+        apiKey: () => key('openai_compatible_claude'),
         reasons: true,
     },
 
@@ -417,7 +500,7 @@ const LIVE = [
             provider: 'openai_compatible',
             model: 'MiniMax-M2.5',
             baseURL: 'https://api.minimaxi.com/v1',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('minimaxi'),
         reasons: true,
@@ -429,7 +512,7 @@ const LIVE = [
             provider: 'openai_compatible',
             model: 'kimi-k2.7-code',
             baseURL: 'https://api.moonshot.ai/v1',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
             temperature: 0.2,
         },
         apiKey: () =>
@@ -443,7 +526,7 @@ const LIVE = [
             provider: 'amazon_bedrock',
             model: 'global.xai.grok-4.6',
             awsRegion: process.env.API_AWS_REGION || 'us-east-1',
-            reasoningEffort: 'high',
+            reasoningEffort: 'low',
         },
         apiKey: () => key('bedrock_grok'),
         credentialField: 'awsBearerToken' as const,
