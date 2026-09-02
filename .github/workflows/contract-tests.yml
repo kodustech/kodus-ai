@@ -266,6 +266,11 @@ jobs:
                   BYOK_GOOGLE_API_KEY: ${{ secrets.BYOK_GOOGLE_API_KEY }}
                   BYOK_OPENAI_API_KEY: ${{ secrets.BYOK_OPENAI_API_KEY }}
                   GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+                  # The self-hosted e2e matrix already runs on this one, and it
+                  # is the credential the Vertex row needs — the only brand whose
+                  # key is a whole service-account document is the one nobody has
+                  # to go find.
+                  VERTEX_SA_JSON: ${{ secrets.VERTEX_SA_JSON }}
                   # Scheduled runs must not pass by checking nothing — see the
                   # coverage case in the spec. A dispatch or a fork PR still can.
                   BYOK_LIVE_EVENT: ${{ github.event_name }}
