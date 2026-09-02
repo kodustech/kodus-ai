@@ -606,7 +606,20 @@ const LIVE = [
         why: 'Claude on Converse takes the adaptive shape inside additionalModelRequestFields, and this transport cannot express an explicit disable (5 production slots)',
         slot: {
             provider: 'amazon_bedrock',
-            model: 'anthropic.claude-sonnet-4-6',
+            // The `us.` prefix is not decoration — it names an INFERENCE
+            // PROFILE, and Claude on Bedrock is not servable without one:
+            //   "Invocation of model ID anthropic.claude-sonnet-4-6 with
+            //    on-demand throughput isn't supported. Retry your request with
+            //    the ID or ARN of an inference profile that contains this model."
+            //
+            // This row carried the bare id because it was copied from a real
+            // production slot — and that slot is one of the five Bedrock-Claude
+            // configs in the corpus, the ONLY one without a prefix. It has
+            // never worked. It sits in a `fallback`, which is why nobody
+            // noticed: a fallback only runs once the primary has already
+            // failed, so its error arrives as part of an outage instead of on
+            // its own.
+            model: 'us.anthropic.claude-sonnet-4-6',
             // API_AWS_REGION is the one name here that already exists in
             // this repo's env schema; a per-run override rides in the secret.
             awsRegion: process.env.API_AWS_REGION || 'us-east-1',
@@ -646,6 +659,18 @@ const LIVE = [
             provider: 'open_router',
             model: 'z-ai/glm-5.2',
             reasoningEffort: 'medium',
+            // PINNED, because the first two live runs of this row returned 135
+            // reasoning tokens and then 0. Nothing about our request changed:
+            // OpenRouter picks an upstream per call, and they do not all
+            // translate `reasoning:{effort}` the same way. Unpinned, the row
+            // asserts the routing lottery rather than the request — and a
+            // weekly job that goes red at random is one people learn to ignore.
+            //
+            // Pinning is also the faithful shape: production slots pin, with
+            // exactly this pair of fields (`["z-ai"]`, `["novita","z-ai",
+            // "siliconflow"]` and `["wafer/fp4"]` all appear in the corpus).
+            openrouterProviderOrder: ['z-ai'],
+            openrouterAllowFallbacks: false,
         },
         reasons: true,
     },
@@ -726,38 +751,54 @@ const LIVE = [
         brand: 'open_router_nemotron',
         // `reasons: false`: no thinking budget to clear, so a word is enough.
         maxOutputTokens: 512,
-        why: 'Nemotron is 10 slots, 7 of them through OpenRouter, and NVIDIA ids carry suffixes (:free, -reasoning) that decide behaviour while our code reads none of them',
+        // `reasons: true` is MEASURED, not assumed. The row shipped asserting
+        // false on the reasoning that a family with no trait entry sends
+        // nothing — and the first live run returned 11 reasoning tokens. The
+        // assertion was a guess wearing an assertion's clothes; this one is the
+        // wire's answer.
+        why: 'Nemotron is 10 slots, 7 of them through OpenRouter, and NVIDIA ids carry suffixes (:free, -reasoning) that decide behaviour while our code reads none of them. It reasons through the aggregator even though we declare nothing about it, so what this pins is that OpenRouter keeps translating our effort for an upstream our table has never heard of',
         slot: {
             provider: 'open_router',
             model: 'nvidia/nemotron-3-ultra-550b-a55b',
             reasoningEffort: 'low',
         },
-        reasons: false,
+        reasons: true,
     },
     {
         brand: 'open_router_mimo',
-        // `reasons: false`: no thinking budget to clear, so a word is enough.
         maxOutputTokens: 512,
-        why: 'MiMo is 7 slots across two Xiaomi PoPs and OpenRouter, with no trait entry anywhere',
+        // OpenRouter answered `xiaomi/mimo-v2-pro` with "This model has been
+        // deprecated. It is recommended to migrate to xiaomi/mimo-v2.5-pro" —
+        // and one production slot still names the deprecated id. A live row is
+        // the only thing that surfaces a vendor RETIRING a model; nothing
+        // offline can, because the id is still perfectly well-formed.
+        why: 'MiMo is 7 slots across two Xiaomi PoPs and OpenRouter, with no trait entry anywhere. The first live run also caught the id this row was copied from being deprecated upstream',
         slot: {
             provider: 'open_router',
-            model: 'xiaomi/mimo-v2-pro',
+            model: 'xiaomi/mimo-v2.5-pro',
             reasoningEffort: 'low',
         },
-        reasons: false,
+        // Measured: 22 reasoning tokens on the id the vendor recommends. The
+        // deprecated one this row started from never got far enough to say.
+        reasons: true,
     },
     {
         brand: 'open_router_grok',
         // `reasons: false`: no thinking budget to clear, so a word is enough.
         maxOutputTokens: 512,
-        why: 'the OTHER Grok slot. `bedrock_grok` pins the Converse transport; this pins the aggregator one, where the same model is reached by a path that normalises reasoning for every upstream',
+        // The pair to `bedrock_grok`, and the first live run made the pair mean
+        // something: the SAME vendor's model returned 94 reasoning tokens here
+        // and 0 on Bedrock Converse. That is the audit's open question answered
+        // from the other side — Grok reasons, and it is the CONVERSE transport
+        // that carries nothing, not the model that has nothing to carry.
+        why: 'the OTHER Grok slot. `bedrock_grok` pins the Converse transport, where the effort reaches no parameter; this pins the aggregator one, where it does. Together they show the gap belongs to the transport rather than to the model',
         slot: {
             provider: 'open_router',
             model: 'x-ai/grok-4.3',
             temperature: 0,
             reasoningEffort: 'low',
         },
-        reasons: false,
+        reasons: true,
     },
 
     // ── the biggest UNCOVERED hosts, by production weight. Each is an
