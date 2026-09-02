@@ -35,8 +35,6 @@
  * rule.
  */
 
-
-
 /** Endpoint paths a provider SDK appends to the base URL itself. */
 const APPENDED_ENDPOINT_PATHS = [
     '/chat/completions',
@@ -67,7 +65,9 @@ function findAppendedEndpoint(
     const endpoint = APPENDED_ENDPOINT_PATHS.find((p) =>
         trimmed.toLowerCase().endsWith(p),
     );
-    if (!endpoint) return undefined;
+    if (!endpoint) {
+        return undefined;
+    }
 
     // Origin is preserved by construction — only the endpoint suffix is removed,
     // which is what makes repairing safe here.
@@ -101,6 +101,69 @@ export function repairBaseUrl(rawUrl: string): string;
 export function repairBaseUrl(rawUrl: undefined): undefined;
 export function repairBaseUrl(rawUrl?: string): string | undefined;
 export function repairBaseUrl(rawUrl?: string): string | undefined {
-    if (!rawUrl) return rawUrl;
+    if (!rawUrl) {
+        return rawUrl;
+    }
     return findAppendedEndpoint(rawUrl)?.repaired ?? rawUrl;
+}
+
+/** Base-URL path suffixes that name a PROTOCOL, not just an endpoint. Reaching
+ *  one of these means the upstream is speaking that protocol at that path. */
+const PROTOCOL_PATHS: Array<{ suffix: string; protocol: string }> = [
+    { suffix: '/anthropic', protocol: 'Anthropic' },
+];
+
+/**
+ * A base URL that names a DIFFERENT protocol than the provider speaks.
+ *
+ * The doubled-endpoint rule above catches a URL that is wrong on its own. This
+ * catches one that is wrong only in combination: `https://api.minimax.io/anthropic`
+ * is a perfectly good base URL — for an Anthropic-protocol provider. Stored under
+ * `openai_compatible`, the SDK appends its own path and dials
+ * `/anthropic/chat/completions`, which is an OpenAI route under an Anthropic
+ * prefix and exists nowhere. One production slot is configured exactly this way.
+ *
+ * REPORTED, never repaired — unlike the doubled endpoint. There the correct URL
+ * is derivable; here it is not. The user either meant `anthropic_compatible` with
+ * this URL or `openai_compatible` with the `/v1` one, and those are different
+ * requests to a different endpoint. Choosing for them would be guessing at
+ * intent, which is a different act from removing a suffix that cannot be
+ * intended.
+ *
+ * Deliberately one-directional: `/v1` is served by both protocols, so an
+ * Anthropic-protocol provider pointed at a `/v1` path is not evidence of
+ * anything.
+ */
+export function describeProtocolMismatch(
+    provider: string | undefined,
+    rawUrl: string | undefined,
+): string | undefined {
+    if (!provider || !rawUrl) {
+        return undefined;
+    }
+    // Only the OpenAI-protocol ids can be mismatched THIS way. An anthropic
+    // brand reaching an `/anthropic` path is simply correct.
+    if (provider !== 'openai_compatible') {
+        return undefined;
+    }
+
+    let parsed: URL;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        return undefined;
+    }
+    const path = parsed.pathname.replace(/\/+$/, '').toLowerCase();
+    const hit = PROTOCOL_PATHS.find((p) => path.endsWith(p.suffix));
+    if (!hit) {
+        return undefined;
+    }
+
+    return (
+        `This Base URL ends in "${hit.suffix}", which is the ${hit.protocol} protocol endpoint, ` +
+        `but the provider is set to OpenAI-compatible. The request would be sent to ` +
+        `"${parsed.origin}${path}/chat/completions", which does not exist. ` +
+        `Either switch the provider to ${hit.protocol}-compatible, or point the Base URL at this ` +
+        `upstream's OpenAI-compatible path instead.`
+    );
 }

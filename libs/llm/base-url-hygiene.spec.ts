@@ -1,4 +1,8 @@
-import { describeBaseUrlProblem, repairBaseUrl } from './base-url-hygiene';
+import {
+    describeBaseUrlProblem,
+    describeProtocolMismatch,
+    repairBaseUrl,
+} from './base-url-hygiene';
 
 describe('describeBaseUrlProblem', () => {
     it('catches the real production config that 404s on every review', () => {
@@ -87,5 +91,47 @@ describe('repairBaseUrl — the read path, where the save guard cannot reach', (
         // something other than the URL the error message asked for.
         const url = 'https://api.groq.com/openai/v1/chat/completions';
         expect(describeBaseUrlProblem(url)).toContain(`"${repairBaseUrl(url)}"`);
+    });
+});
+
+describe('describeProtocolMismatch — wrong only in combination', () => {
+    it('flags an OpenAI-compatible provider pointed at an /anthropic path', () => {
+        // A live slot. The URL is valid, the guard above says nothing about it,
+        // and the request goes to /anthropic/chat/completions — an OpenAI route
+        // under an Anthropic prefix, which exists nowhere.
+        const msg = describeProtocolMismatch(
+            'openai_compatible',
+            'https://api.minimax.io/anthropic',
+        )!;
+        expect(msg).toContain('/anthropic');
+        expect(msg).toContain('/chat/completions');
+    });
+
+    it('says nothing when the provider MATCHES the path', () => {
+        expect(
+            describeProtocolMismatch(
+                'anthropic_compatible',
+                'https://api.minimax.io/anthropic',
+            ),
+        ).toBeUndefined();
+    });
+
+    it('says nothing about /v1, which both protocols serve', () => {
+        // One-directional on purpose: an Anthropic brand on a /v1 path is not
+        // evidence of anything, and flagging it would be noise on a working
+        // config.
+        for (const p of ['openai_compatible', 'anthropic_compatible']) {
+            expect(
+                describeProtocolMismatch(p, 'https://api.minimax.io/v1'),
+            ).toBeUndefined();
+        }
+    });
+
+    it('does not repair — the right URL is not derivable here', () => {
+        // Contrast with the doubled endpoint, which IS repaired: there only one
+        // URL can have been intended. Here the user meant either a different
+        // provider or a different path, and those are different requests.
+        const url = 'https://api.minimax.io/anthropic';
+        expect(repairBaseUrl(url)).toBe(url);
     });
 });

@@ -1,4 +1,7 @@
-import { describeBaseUrlProblem } from '@libs/llm/base-url-hygiene';
+import {
+    describeBaseUrlProblem,
+    describeProtocolMismatch,
+} from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { REGISTRY } from '@libs/llm/providers';
 import { probeSlotCall } from '@libs/llm/probe-slot-call';
@@ -372,6 +375,22 @@ export class TestByokConnectionUseCase {
         // baseURL, so such a URL was never persisted and never reached a review.
         // The window was this endpoint alone — which is still an outbound request
         // to a host the caller chose, i.e. the whole SSRF primitive.
+        // Caught before the SSRF check because it is a shape error, not a safety
+        // one: the request could never have worked, so reporting "we could not
+        // reach it" would name the wrong cause.
+        const mismatch = describeProtocolMismatch(
+            byokProvider,
+            effectiveBaseURL,
+        );
+        if (mismatch) {
+            return {
+                ok: false,
+                code: 'bad_request',
+                latencyMs: 0,
+                message: mismatch,
+            };
+        }
+
         const speaksAnthropicProtocol =
             REGISTRY.has(byokProvider) &&
             REGISTRY.get(byokProvider).providerOptionsNamespace?.(

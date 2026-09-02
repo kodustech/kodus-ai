@@ -382,10 +382,12 @@ export const ByokAdvancedSettings = ({
 
                     {temperatureUnsupported && (
                         <p className="text-text-tertiary text-xs text-pretty">
-                            This model doesn&apos;t accept a temperature — the
-                            provider rejects any request that sets it (Claude
-                            4.7+, OpenAI GPT-5 / o-series). Steer it with the
-                            thinking level above instead.
+                            This model doesn&apos;t accept a temperature, so
+                            the field is hidden rather than ignored. Some
+                            providers reject the request outright (Claude 4.7+,
+                            OpenAI GPT-5 / o-series); others fix the value and
+                            discard whatever is sent (Kimi k2.6, k2.7-code).
+                            Steer it with the thinking level above instead.
                         </p>
                     )}
 

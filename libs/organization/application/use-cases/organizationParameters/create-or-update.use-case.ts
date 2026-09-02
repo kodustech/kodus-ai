@@ -8,6 +8,7 @@ import {
 import { validateByokConfigRefs } from '@libs/llm/validate-byok-config-refs';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { assertSafeOpenAICompatibleUrl } from './test-byok-connection.use-case';
+import { describeProtocolMismatch } from '@libs/llm/base-url-hygiene';
 import { OrganizationParametersKey } from '@libs/core/domain/enums';
 import { IUseCase } from '@libs/core/domain/interfaces/use-case.interface';
 import { OrganizationAndTeamData } from '@libs/core/infrastructure/config/types/general/organizationAndTeamData';
@@ -263,6 +264,22 @@ export class CreateOrUpdateOrganizationParametersUseCase implements IUseCase {
             if (typeof baseURL !== 'string' || !baseURL.trim()) continue;
             const key = String(cred?.id ?? cred?.provider ?? '');
             if (previous.get(key) === baseURL.trim()) continue; // untouched
+            // A base URL naming the wrong PROTOCOL for its provider is valid on
+            // its own and dead in combination — one production slot stores
+            // `.../anthropic` under `openai_compatible` and dials a route that
+            // exists nowhere. Rejected rather than repaired: the correct URL is
+            // not derivable, since the user meant either a different provider or
+            // a different path.
+            const mismatch = describeProtocolMismatch(
+                String(cred?.provider ?? ''),
+                baseURL.trim(),
+            );
+            if (mismatch) {
+                throw new BadRequestException({
+                    message: 'Invalid BYOK configuration: base URL mismatch',
+                    errors: [mismatch],
+                });
+            }
             await assertSafeOpenAICompatibleUrl(baseURL.trim());
         }
     }
