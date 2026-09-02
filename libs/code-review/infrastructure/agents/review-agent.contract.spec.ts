@@ -115,7 +115,11 @@ describe('return-shape invariant (declared type across every layer)', () => {
 
     it('extractFindings returns { reasoning:string, suggestions:array } for garbage', () => {
         for (const payload of [null, undefined, 0, true, 'x', [], {}, 42]) {
-            assertShape(extractFindings(makeState({ artifacts: [artifactOf(payload)] })));
+            assertShape(
+                extractFindings(
+                    makeState({ artifacts: [artifactOf(payload)] }),
+                ),
+            );
         }
         assertShape(extractFindings(makeState()));
     });
@@ -145,7 +149,7 @@ describe('A. output-shape zoo', () => {
     // Row 2 — Bare array where D is an object. Prod: sanitize returns null and the
     // real findings are dropped to []. #1786 class → pin CORRECT (recover) behavior.
     // Degradation: findings-schema.ts sanitizeFindingsResult L44-83 (no array→D lift).
-    it.failing('row 2: bare array of items → should recover the items (prod drops silently)', () => {
+    it('row 2: bare array of items → should recover the items (prod drops silently)', () => {
         const r = extractFindings(
             makeState({ artifacts: [artifactOf([validSuggestion()])] }),
         );
@@ -154,20 +158,26 @@ describe('A. output-shape zoo', () => {
 
     // Row 3 — Single object where an array is expected (suggestions is one object).
     // Degradation: findings-schema.ts L63 requires Array.isArray(suggestions).
-    it.failing('row 3: suggestions as a single object → should wrap into an array (prod drops)', () => {
-        const r = extractFindings(
-            makeState({
-                artifacts: [
-                    artifactOf({ reasoning: 'r', suggestions: validSuggestion() }),
-                ],
-            }),
-        );
-        expect(r.suggestions).toHaveLength(1);
-    });
+    it.failing(
+        'row 3: suggestions as a single object → should wrap into an array (prod drops)',
+        () => {
+            const r = extractFindings(
+                makeState({
+                    artifacts: [
+                        artifactOf({
+                            reasoning: 'r',
+                            suggestions: validSuggestion(),
+                        }),
+                    ],
+                }),
+            );
+            expect(r.suggestions).toHaveLength(1);
+        },
+    );
 
     // Row 4 — Wrapper key {result:D}/{data:D}/{output:D}/{response:D}/{json:D}.
     // Degradation: sanitizeFindingsResult never unwraps a wrapper key (L44-83).
-    it.failing('row 4: {result: D} wrapper → should unwrap (prod drops silently)', () => {
+    it('row 4: {result: D} wrapper → should unwrap (prod drops silently)', () => {
         for (const key of ['result', 'data', 'output', 'response', 'json']) {
             const r = extractFindings(
                 makeState({ artifacts: [artifactOf({ [key]: validD() })] }),
@@ -177,7 +187,7 @@ describe('A. output-shape zoo', () => {
     });
 
     // Row 5 — Double wrapper {result:{result:D}}.
-    it.failing('row 5: double wrapper {result:{result:D}} → should unwrap (prod drops)', () => {
+    it('row 5: double wrapper {result:{result:D}} → should unwrap (prod drops)', () => {
         const r = extractFindings(
             makeState({
                 artifacts: [artifactOf({ result: { result: validD() } })],
@@ -187,7 +197,7 @@ describe('A. output-shape zoo', () => {
     });
 
     // Row 6 — Numeric / opaque single-key wrap {"0":D} / {content:D}.
-    it.failing('row 6: opaque single-key wrap {content:D} → should unwrap (prod drops)', () => {
+    it('row 6: opaque single-key wrap {content:D} → should unwrap (prod drops)', () => {
         const r = extractFindings(
             makeState({ artifacts: [artifactOf({ content: validD() })] }),
         );
@@ -224,11 +234,14 @@ describe('A. output-shape zoo', () => {
 
     // Row 10 — Right data, wrong container key (renamed): {reasoning, findings:[...]}.
     // Degradation: sanitizeFindingsResult has no key alias (L44-83).
-    it.failing('row 10: renamed key (findings vs suggestions) → should alias (prod drops)', () => {
+    it('row 10: renamed key (findings vs suggestions) → should alias (prod drops)', () => {
         const r = extractFindings(
             makeState({
                 artifacts: [
-                    artifactOf({ reasoning: 'r', findings: [validSuggestion()] }),
+                    artifactOf({
+                        reasoning: 'r',
+                        findings: [validSuggestion()],
+                    }),
                 ],
             }),
         );
@@ -236,11 +249,14 @@ describe('A. output-shape zoo', () => {
     });
 
     // Row 11 — Case/convention mismatch on the container key (Suggestions).
-    it.failing('row 11: case mismatch (Suggestions) → should normalize (prod drops)', () => {
+    it('row 11: case mismatch (Suggestions) → should normalize (prod drops)', () => {
         const r = extractFindings(
             makeState({
                 artifacts: [
-                    artifactOf({ reasoning: 'r', Suggestions: [validSuggestion()] }),
+                    artifactOf({
+                        reasoning: 'r',
+                        Suggestions: [validSuggestion()],
+                    }),
                 ],
             }),
         );
@@ -272,7 +288,9 @@ describe('A. output-shape zoo', () => {
                 artifacts: [
                     artifactOf({
                         reasoning: 'r',
-                        suggestions: [validSuggestion({ bogusField: 'x' } as any)],
+                        suggestions: [
+                            validSuggestion({ bogusField: 'x' } as any),
+                        ],
                         extraTop: 'ignore me',
                     }),
                 ],
@@ -303,8 +321,14 @@ describe('A. output-shape zoo', () => {
 
     // Row 16 — Empty / whitespace string → safe empty, no throw.
     it('row 16: empty/whitespace payload and step text → safe empty', () => {
-        expect(extractFindings(makeState({ artifacts: [artifactOf('')] })).suggestions).toHaveLength(0);
-        expect(extractFindings(makeState({ steps: [stepOf('   \n\t ')] })).suggestions).toHaveLength(0);
+        expect(
+            extractFindings(makeState({ artifacts: [artifactOf('')] }))
+                .suggestions,
+        ).toHaveLength(0);
+        expect(
+            extractFindings(makeState({ steps: [stepOf('   \n\t ')] }))
+                .suggestions,
+        ).toHaveLength(0);
     });
 
     // Row 17 — null/undefined artifact absent → typed-empty with 'no-artifact'.
@@ -328,20 +352,27 @@ describe('A. output-shape zoo', () => {
     // Row 19 — Provider envelope leak: {choices:[{message:{content}}]}. The real D
     // is buried inside choices[0].message.content. LLM.run normally strips it; a
     // leak reaching here is dropped. #1786 class.
-    it.failing('row 19: provider envelope leak → should unwrap choices[].message.content (prod drops)', () => {
-        const r = extractFindings(
-            makeState({
-                artifacts: [
-                    artifactOf({
-                        choices: [
-                            { message: { content: JSON.stringify(validD()) } },
-                        ],
-                    }),
-                ],
-            }),
-        );
-        expect(r.suggestions).toHaveLength(1);
-    });
+    it.failing(
+        'row 19: provider envelope leak → should unwrap choices[].message.content (prod drops)',
+        () => {
+            const r = extractFindings(
+                makeState({
+                    artifacts: [
+                        artifactOf({
+                            choices: [
+                                {
+                                    message: {
+                                        content: JSON.stringify(validD()),
+                                    },
+                                },
+                            ],
+                        }),
+                    ],
+                }),
+            );
+            expect(r.suggestions).toHaveLength(1);
+        },
+    );
 
     // Row 20 — Reasoning/thinking leak: model wrote findings as PROSE in
     // `reasoning` and OMITTED `suggestions` (the Anthropic omission mode). The
@@ -370,19 +401,24 @@ describe('B. semantic-but-wrong', () => {
     // dropped over one invalid OPTIONAL field. #1786 class → pin CORRECT (keep the
     // finding, drop/normalize the bad optional). Degradation: findings-schema.ts
     // suggestionSchema enum on `severity` (L23) + partial-recovery drop L66-70.
-    it.failing('row 24: out-of-set severity → should keep finding minus bad optional (prod drops whole finding)', () => {
-        const r = extractFindings(
-            makeState({
-                artifacts: [
-                    artifactOf({
-                        reasoning: 'r',
-                        suggestions: [validSuggestion({ severity: 'URGENT' as any })],
-                    }),
-                ],
-            }),
-        );
-        expect(r.suggestions).toHaveLength(1);
-    });
+    it.failing(
+        'row 24: out-of-set severity → should keep finding minus bad optional (prod drops whole finding)',
+        () => {
+            const r = extractFindings(
+                makeState({
+                    artifacts: [
+                        artifactOf({
+                            reasoning: 'r',
+                            suggestions: [
+                                validSuggestion({ severity: 'URGENT' as any }),
+                            ],
+                        }),
+                    ],
+                }),
+            );
+            expect(r.suggestions).toHaveLength(1);
+        },
+    );
 
     // Row 25 — Index out of range / dangling reference — N/A: FindingsOutput
     // carries no index into the input array (unlike dedup's uniqueIndices). Line
@@ -406,7 +442,9 @@ describe('B. semantic-but-wrong', () => {
         });
         const r = extractFindings(
             makeState({
-                artifacts: [artifactOf({ reasoning: 'r 🚀', suggestions: [s] })],
+                artifacts: [
+                    artifactOf({ reasoning: 'r 🚀', suggestions: [s] }),
+                ],
             }),
         );
         expect(r.suggestions[0].suggestionContent).toBe(
@@ -425,12 +463,14 @@ describe('B. semantic-but-wrong', () => {
 describe('C. unparseable / transport (fail-safe)', () => {
     // Row 28 — Truncated JSON (max_tokens mid-object) in step text → safe empty.
     it('row 28: truncated JSON in step text → safe empty, no throw', () => {
-        const truncated = '{"reasoning":"x","suggestions":[{"relevantFile":"a.ts",';
+        const truncated =
+            '{"reasoning":"x","suggestions":[{"relevantFile":"a.ts",';
         expect(() =>
             extractFindings(makeState({ steps: [stepOf(truncated)] })),
         ).not.toThrow();
         expect(
-            extractFindings(makeState({ steps: [stepOf(truncated)] })).suggestions,
+            extractFindings(makeState({ steps: [stepOf(truncated)] }))
+                .suggestions,
         ).toHaveLength(0);
     });
 
@@ -441,7 +481,8 @@ describe('C. unparseable / transport (fail-safe)', () => {
             JSON.stringify(validSuggestion()) +
             ',]}';
         expect(
-            extractFindings(makeState({ steps: [stepOf(trailing)] })).suggestions,
+            extractFindings(makeState({ steps: [stepOf(trailing)] }))
+                .suggestions,
         ).toHaveLength(1);
 
         const singleQuote = "{'reasoning':'r','suggestions':[]}";
@@ -456,15 +497,25 @@ describe('C. unparseable / transport (fail-safe)', () => {
         const spy = jest
             .spyOn(LLM, 'run')
             .mockRejectedValue(new Error('ECONNRESET') as any);
-        const out = await recoverFindingsFromProse(findingLikeProse, undefined, 'org1');
+        const out = await recoverFindingsFromProse(
+            findingLikeProse,
+            undefined,
+            'org1',
+        );
         expect(out).toEqual([]);
         expect(spy).toHaveBeenCalledTimes(1);
     });
 
     // Row 31 — Error object returned {error:...} instead of throwing.
     it('row 31: {error} object from LLM.run → [] (best-effort fail-safe)', async () => {
-        jest.spyOn(LLM, 'run').mockResolvedValue({ error: 'quota exceeded' } as any);
-        const out = await recoverFindingsFromProse(findingLikeProse, undefined, 'org1');
+        jest.spyOn(LLM, 'run').mockResolvedValue({
+            error: 'quota exceeded',
+        } as any);
+        const out = await recoverFindingsFromProse(
+            findingLikeProse,
+            undefined,
+            'org1',
+        );
         expect(out).toEqual([]);
         // And via the artifact path: {error} → unusable, signalled.
         const state = makeState({ artifacts: [artifactOf({ error: 'boom' })] });
@@ -475,15 +526,25 @@ describe('C. unparseable / transport (fail-safe)', () => {
     // Row 32 — Empty success (content:'', finish_reason:'length') → [].
     it('row 32: empty-success from LLM.run → []', async () => {
         jest.spyOn(LLM, 'run').mockResolvedValue({ suggestions: [] } as any);
-        const out = await recoverFindingsFromProse(findingLikeProse, undefined, 'org1');
+        const out = await recoverFindingsFromProse(
+            findingLikeProse,
+            undefined,
+            'org1',
+        );
         expect(out).toEqual([]);
     });
 
     // Row 33 — Refusal ("I cannot help…"): the looksLikeFindings gate short-circuits
     // BEFORE paying for LLM.run; a refusal-shaped result also degrades to [].
     it('row 33: refusal prose → gate skips LLM.run entirely, returns []', async () => {
-        const spy = jest.spyOn(LLM, 'run').mockResolvedValue({ suggestions: [] } as any);
-        const out = await recoverFindingsFromProse('I cannot help with that.', undefined, 'org1');
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ suggestions: [] } as any);
+        const out = await recoverFindingsFromProse(
+            'I cannot help with that.',
+            undefined,
+            'org1',
+        );
         expect(out).toEqual([]);
         expect(spy).not.toHaveBeenCalled();
     });
@@ -492,9 +553,15 @@ describe('C. unparseable / transport (fail-safe)', () => {
     // caught like any transport failure → []. (recoverFindingsFromProse does not
     // itself thread an abortSignal; parentSignal is threaded in the loop path.)
     it('row 34: AbortError from LLM.run → [] (no throw past boundary)', async () => {
-        const abort = Object.assign(new Error('aborted'), { name: 'AbortError' });
+        const abort = Object.assign(new Error('aborted'), {
+            name: 'AbortError',
+        });
         jest.spyOn(LLM, 'run').mockRejectedValue(abort as any);
-        const out = await recoverFindingsFromProse(findingLikeProse, undefined, 'org1');
+        const out = await recoverFindingsFromProse(
+            findingLikeProse,
+            undefined,
+            'org1',
+        );
         expect(out).toEqual([]);
     });
 });
@@ -507,8 +574,12 @@ describe('D. input variants', () => {
     // Row 35 — Empty input (0 findings / empty state / empty prose).
     it('row 35: empty input → typed-empty, no throw', async () => {
         expect(extractFindings(makeState()).suggestions).toHaveLength(0);
-        const spy = jest.spyOn(LLM, 'run').mockResolvedValue({ suggestions: [] } as any);
-        expect(await recoverFindingsFromProse('', undefined, 'org1')).toEqual([]);
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ suggestions: [] } as any);
+        expect(await recoverFindingsFromProse('', undefined, 'org1')).toEqual(
+            [],
+        );
         expect(spy).not.toHaveBeenCalled(); // gate rejects empty prose
     });
 
@@ -565,13 +636,17 @@ describe('D. input variants', () => {
     // Row 40 — Special chars / huge diff / whitespace-only → recovered or safe.
     it('row 40: special-char & huge fields recovered; whitespace-only text → safe empty', () => {
         const huge = 'x'.repeat(50_000);
-        const s = validSuggestion({ existingCode: huge, improvedCode: ' \t\r ok' });
+        const s = validSuggestion({
+            existingCode: huge,
+            improvedCode: ' \t\r ok',
+        });
         const r = extractFindings(
             makeState({ artifacts: [artifactOf(validD([s]))] }),
         );
         expect(r.suggestions[0].existingCode).toHaveLength(50_000);
         expect(
-            extractFindings(makeState({ steps: [stepOf('   \n\t')] })).suggestions,
+            extractFindings(makeState({ steps: [stepOf('   \n\t')] }))
+                .suggestions,
         ).toHaveLength(0);
     });
 
@@ -584,8 +659,12 @@ describe('D. input variants', () => {
     it('row 42: order permutation → same set recovered (order preserved, none dropped)', () => {
         const a = validSuggestion({ relevantFile: 'a.ts' });
         const b = validSuggestion({ relevantFile: 'b.ts' });
-        const r1 = extractFindings(makeState({ artifacts: [artifactOf(validD([a, b]))] }));
-        const r2 = extractFindings(makeState({ artifacts: [artifactOf(validD([b, a]))] }));
+        const r1 = extractFindings(
+            makeState({ artifacts: [artifactOf(validD([a, b]))] }),
+        );
+        const r2 = extractFindings(
+            makeState({ artifacts: [artifactOf(validD([b, a]))] }),
+        );
         const files1 = r1.suggestions.map((s) => s.relevantFile).sort();
         const files2 = r2.suggestions.map((s) => s.relevantFile).sort();
         expect(files1).toEqual(files2);
@@ -623,9 +702,19 @@ describe('E. provider/model policy (delegated to LLM.run)', () => {
     // path (policy is chosen inside LLM.run); the boundary threads schema/user/
     // byokConfig/runName/organizationId exactly and returns [] on an empty result.
     it('E json_object branch: request assembly threads schema/user/byokConfig/runName/org', async () => {
-        const spy = jest.spyOn(LLM, 'run').mockResolvedValue({ suggestions: [] } as any);
-        const byok = { provider: 'moonshotai', main: { model: 'kimi-k2' } } as any;
-        await recoverFindingsFromProse(findingLikeProse, byok, 'org-kimi', 'code-review-bug');
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ suggestions: [] } as any);
+        const byok = {
+            provider: 'moonshotai',
+            main: { model: 'kimi-k2' },
+        } as any;
+        await recoverFindingsFromProse(
+            findingLikeProse,
+            byok,
+            'org-kimi',
+            'code-review-bug',
+        );
 
         expect(spy).toHaveBeenCalledTimes(1);
         const req = spy.mock.calls[0][0] as any;
@@ -639,9 +728,13 @@ describe('E. provider/model policy (delegated to LLM.run)', () => {
 
     // E default runName when usageRunName omitted.
     it('E: runName defaults to code-review-recovery when usageRunName omitted', async () => {
-        const spy = jest.spyOn(LLM, 'run').mockResolvedValue({ suggestions: [] } as any);
+        const spy = jest
+            .spyOn(LLM, 'run')
+            .mockResolvedValue({ suggestions: [] } as any);
         await recoverFindingsFromProse(findingLikeProse, undefined, 'org1');
-        expect((spy.mock.calls[0][0] as any).runName).toBe('code-review-recovery');
+        expect((spy.mock.calls[0][0] as any).runName).toBe(
+            'code-review-recovery',
+        );
     });
 });
 
@@ -653,7 +746,9 @@ describe('extractFindingsWithRecovery (recovery-seam assembly)', () => {
     it('calls the recoverer with the reasoning when finder produced 0 suggestions', async () => {
         const recover = jest.fn().mockResolvedValue([validSuggestion()]);
         const state = makeState({
-            artifacts: [artifactOf({ reasoning: findingLikeProse, suggestions: [] })],
+            artifacts: [
+                artifactOf({ reasoning: findingLikeProse, suggestions: [] }),
+            ],
         });
         const r = await extractFindingsWithRecovery(state, recover);
         expect(recover).toHaveBeenCalledWith(findingLikeProse);
@@ -671,7 +766,9 @@ describe('extractFindingsWithRecovery (recovery-seam assembly)', () => {
     it('keeps the original (empty) result when recovery also yields nothing', async () => {
         const recover = jest.fn().mockResolvedValue([]);
         const state = makeState({
-            artifacts: [artifactOf({ reasoning: findingLikeProse, suggestions: [] })],
+            artifacts: [
+                artifactOf({ reasoning: findingLikeProse, suggestions: [] }),
+            ],
         });
         const r = await extractFindingsWithRecovery(state, recover);
         expect(r.suggestions).toHaveLength(0);
@@ -680,7 +777,9 @@ describe('extractFindingsWithRecovery (recovery-seam assembly)', () => {
 
     it('no recoverer injected → returns the finder result unchanged (recovery off)', async () => {
         const state = makeState({
-            artifacts: [artifactOf({ reasoning: findingLikeProse, suggestions: [] })],
+            artifacts: [
+                artifactOf({ reasoning: findingLikeProse, suggestions: [] }),
+            ],
         });
         const r = await extractFindingsWithRecovery(state);
         expect(r.suggestions).toHaveLength(0);

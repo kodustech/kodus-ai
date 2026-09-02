@@ -24,6 +24,11 @@ import { BudgetPolicy } from '@libs/agent-harness/infrastructure/policies/budget
 import { InMemoryToolRegistry } from '@libs/agent-harness/infrastructure/tools/in-memory-tool-registry';
 
 import { buildVerifierPrompt } from '@libs/code-review/infrastructure/agents/prompts/verifier-prompt';
+import {
+    normalizeEnvelope,
+    LLM_ENVELOPE_TAG,
+} from '@libs/llm/structured-output-repair';
+import { createLogger } from '@libs/core/log/logger';
 import type { FinderSuggestion } from '@libs/code-review/infrastructure/agents/core/finder.agent';
 import { supportsStrictToolsForRun } from '@libs/code-review/infrastructure/agents/core/model-strictness';
 import {
@@ -31,6 +36,8 @@ import {
     toAiSdkTelemetryArgs,
     type LangfuseTelemetryMetadata,
 } from '@libs/core/log/langfuse';
+
+const logger = createLogger('VerifierAgent');
 
 export const VERIFY_DONE_TOOL = 'submitVerdict' as const;
 
@@ -136,7 +143,23 @@ export function extractVerdict(state: RunState): Verdict {
     for (let i = state.artifacts.length - 1; i >= 0; i--) {
         const artifact = state.artifacts[i];
         if (artifact.type !== VERIFY_DONE_TOOL) continue;
-        const parsed = artifact.payload;
+        // SHAPE recovery (#1786): a non-strict model may wrap ({result:{keep}}),
+        // rename (decision/verdict/shouldKeep), stringify, or bare-array the
+        // verdict — recover the scalar `keep` before the boolean check so a real
+        // keep:false is not lost to the fail-open default below.
+        const parsed = normalizeEnvelope(
+            artifact.payload,
+            'keep',
+            ['decision', 'verdict', 'shouldKeep'],
+            {
+                scalar: true,
+                onRecover: (reason) =>
+                    logger.warn({
+                        message: `${LLM_ENVELOPE_TAG} recovered off-schema verifier verdict (${reason})`,
+                        context: 'VerifierAgent',
+                    }),
+            },
+        );
         if (
             parsed &&
             typeof parsed === 'object' &&
@@ -225,7 +248,12 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
         outputTokens: number;
         reasoningTokens: number;
         cacheReadTokens: number;
-    } = { inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cacheReadTokens: 0 };
+    } = {
+        inputTokens: 0,
+        outputTokens: 0,
+        reasoningTokens: 0,
+        cacheReadTokens: 0,
+    };
 
     private readonly lightSpec: AgentSpec;
     private readonly fullSpec: AgentSpec;
@@ -282,10 +310,7 @@ export class LlmVerifier implements Verifier<FinderSuggestion> {
             {
                 prompt: verifierPromptFor(candidate),
                 ...toAiSdkTelemetryArgs(
-                    buildLangfuseTelemetry(
-                        fnId,
-                        this.params.telemetryMetadata,
-                    ),
+                    buildLangfuseTelemetry(fnId, this.params.telemetryMetadata),
                 ),
             },
             ctx,

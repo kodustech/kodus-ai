@@ -148,12 +148,12 @@ describe('runAgentLoopViaCore (harness + agent integration)', () => {
         const out = await runAgentLoopViaCore(makeInput(model), secrets);
 
         // verify funnel: 2 found, FP refuted -> 1 kept, 1 dropped
-        expect(out.findings.suggestions.map((s: any) => s.relevantFile)).toEqual(
-            ['a.ts'],
-        );
         expect(
-            out.droppedByVerify.map((s: any) => s.relevantFile),
-        ).toEqual(['b.ts']);
+            out.findings.suggestions.map((s: any) => s.relevantFile),
+        ).toEqual(['a.ts']);
+        expect(out.droppedByVerify.map((s: any) => s.relevantFile)).toEqual([
+            'b.ts',
+        ]);
         expect(out.verification?.beforeCount).toBe(2);
         expect(out.verification?.afterCount).toBe(1);
         expect(out.verification?.droppedByVerifier).toBe(1);
@@ -389,9 +389,9 @@ function assertAgentLoopOutputShape(out: any) {
     expect(out.coverage).toBeDefined();
     expect(out.anomalies).toBeDefined();
     expect(Array.isArray(out.warnings)).toBe(true);
-    expect(out.verification === null || typeof out.verification === 'object').toBe(
-        true,
-    );
+    expect(
+        out.verification === null || typeof out.verification === 'object',
+    ).toBe(true);
     expect(out.verificationUsage).toBeDefined();
 }
 
@@ -411,14 +411,11 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
     // Row 2 — Bare array of inner items where D is an object.
     // PROD: sanitizeFindingsResult only checks `raw.suggestions` (undefined on an
     // array) → returns null → findings SILENTLY DROPPED (findings-schema.ts:63).
-    it.failing(
-        'row 2 — bare array of findings must be recovered, not silently dropped',
-        () => {
-            const r = sanitizeFindingsResult([validItem()] as any);
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (null)
-        },
-    );
+    it('row 2 — bare array of findings must be recovered, not silently dropped', () => {
+        const r = sanitizeFindingsResult([validItem()] as any);
+        expect(r).not.toBeNull();
+        expect(r!.suggestions).toHaveLength(1); // fails today (null)
+    });
 
     // Row 3 — Single object where D expects an array (suggestions as one object).
     // PROD: Array.isArray(raw.suggestions) === false → null → silent drop.
@@ -436,56 +433,44 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
 
     // Row 4 — Wrapper key {result: D} / {data: D} / {output: D} / {json: D}.
     // PROD: top-level lacks reasoning+suggestions → null → silent drop.
-    it.failing(
-        'row 4 — a {result:D} wrapper must be unwrapped, not silently dropped',
-        () => {
-            const r = sanitizeFindingsResult({
-                result: { reasoning: 'r', suggestions: [validItem()] },
-            } as any);
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (null)
-        },
-    );
+    it('row 4 — a {result:D} wrapper must be unwrapped, not silently dropped', () => {
+        const r = sanitizeFindingsResult({
+            result: { reasoning: 'r', suggestions: [validItem()] },
+        } as any);
+        expect(r).not.toBeNull();
+        expect(r!.suggestions).toHaveLength(1); // fails today (null)
+    });
 
     // Row 5 — Double wrapper {result:{result:D}}.
-    it.failing(
-        'row 5 — a double {result:{result:D}} wrapper must be unwrapped',
-        () => {
-            const r = sanitizeFindingsResult({
-                result: { result: { reasoning: 'r', suggestions: [validItem()] } },
-            } as any);
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (null)
-        },
-    );
+    it('row 5 — a double {result:{result:D}} wrapper must be unwrapped', () => {
+        const r = sanitizeFindingsResult({
+            result: { result: { reasoning: 'r', suggestions: [validItem()] } },
+        } as any);
+        expect(r).not.toBeNull();
+        expect(r!.suggestions).toHaveLength(1); // fails today (null)
+    });
 
     // Row 6 — Numeric/opaque single-key wrap {"0":D} / {content:D}.
-    it.failing(
-        'row 6 — an opaque single-key wrap ({content:D}) must be unwrapped',
-        () => {
-            const r = sanitizeFindingsResult({
-                content: { reasoning: 'r', suggestions: [validItem()] },
-            } as any);
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (null)
-        },
-    );
+    it('row 6 — an opaque single-key wrap ({content:D}) must be unwrapped', () => {
+        const r = sanitizeFindingsResult({
+            content: { reasoning: 'r', suggestions: [validItem()] },
+        } as any);
+        expect(r).not.toBeNull();
+        expect(r!.suggestions).toHaveLength(1); // fails today (null)
+    });
 
     // Row 7 — Stringified JSON: the whole D as a JSON string.
     // PROD: sanitize sees a string, safeParse fails → null → silent drop.
-    it.failing(
-        'row 7 — stringified-JSON findings must be parsed, not silently dropped',
-        () => {
-            const r = sanitizeFindingsResult(
-                JSON.stringify({
-                    reasoning: 'r',
-                    suggestions: [validItem()],
-                }) as any,
-            );
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (null)
-        },
-    );
+    it('row 7 — stringified-JSON findings must be parsed, not silently dropped', () => {
+        const r = sanitizeFindingsResult(
+            JSON.stringify({
+                reasoning: 'r',
+                suggestions: [validItem()],
+            }) as any,
+        );
+        expect(r).not.toBeNull();
+        expect(r!.suggestions).toHaveLength(1); // fails today (null)
+    });
 
     // Row 8 — Markdown-fenced: RECOVERED at the text seam (extractFindings /
     // extractJsonFromText strips the ```json fence).
@@ -535,31 +520,25 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
         expect(r!.suggestions[0].relevantFile).toBe('a.ts');
     });
     // (b) top-level rename (suggestions → findings): the whole payload is lost.
-    it.failing(
-        'row 10b — a top-level renamed key (findings→suggestions) must be aliased',
-        () => {
-            const r = sanitizeFindingsResult({
-                reasoning: 'r',
-                findings: [validItem()],
-            } as any);
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (null)
-        },
-    );
+    it('row 10b — a top-level renamed key (findings→suggestions) must be aliased', () => {
+        const r = sanitizeFindingsResult({
+            reasoning: 'r',
+            findings: [validItem()],
+        } as any);
+        expect(r).not.toBeNull();
+        expect(r!.suggestions).toHaveLength(1); // fails today (null)
+    });
 
     // Row 11 — Case/convention mismatch on the top-level keys ({Reasoning,
     // Suggestions}). PROD: schema fails, suggestions missing → null → silent drop.
-    it.failing(
-        'row 11 — case-mismatched top-level keys must be normalized, not dropped',
-        () => {
-            const r = sanitizeFindingsResult({
-                Reasoning: 'r',
-                Suggestions: [validItem()],
-            } as any);
-            expect(r).not.toBeNull();
-            expect(r!.suggestions).toHaveLength(1); // fails today (null)
-        },
-    );
+    it('row 11 — case-mismatched top-level keys must be normalized, not dropped', () => {
+        const r = sanitizeFindingsResult({
+            Reasoning: 'r',
+            Suggestions: [validItem()],
+        } as any);
+        expect(r).not.toBeNull();
+        expect(r!.suggestions).toHaveLength(1); // fails today (null)
+    });
 
     // Row 12 — Partial object.
     it('row 12 — missing OPTIONAL reasoning is recovered (defaults to empty)', () => {
@@ -575,7 +554,11 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
             reasoning: 'r',
             suggestions: [
                 validItem(),
-                { relevantFile: 'b.ts', suggestionContent: 'x', existingCode: 'y' }, // no improvedCode
+                {
+                    relevantFile: 'b.ts',
+                    suggestionContent: 'x',
+                    existingCode: 'y',
+                }, // no improvedCode
             ],
         } as any);
         expect(r).not.toBeNull();
@@ -607,10 +590,15 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
 
     // Row 15 — Empty array: a legitimate "reviewed, found nothing".
     it('row 15 — empty suggestions array is preserved as a clean empty result', () => {
-        const r = sanitizeFindingsResult({ reasoning: 'clean', suggestions: [] });
+        const r = sanitizeFindingsResult({
+            reasoning: 'clean',
+            suggestions: [],
+        });
         expect(r).toEqual({ reasoning: 'clean', suggestions: [] });
         const state = mkState({
-            artifacts: [finderArtifact({ reasoning: 'clean', suggestions: [] })],
+            artifacts: [
+                finderArtifact({ reasoning: 'clean', suggestions: [] }),
+            ],
         });
         expect((state && extractFindings(state)).suggestions).toEqual([]);
         expect((state as any).__findingsOutcome).toBe('structured');
@@ -621,7 +609,10 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
         expect(sanitizeFindingsResult('' as any)).toBeNull();
         expect(sanitizeFindingsResult('   \n\t ' as any)).toBeNull();
         const state = mkState({ steps: [stepText('   \n  ')] });
-        expect(extractFindings(state)).toEqual({ reasoning: '', suggestions: [] });
+        expect(extractFindings(state)).toEqual({
+            reasoning: '',
+            suggestions: [],
+        });
     });
 
     // Row 17 — null / undefined.
@@ -629,7 +620,10 @@ describe('contract matrix — A. output-shape zoo (finder findings seam)', () =>
         expect(sanitizeFindingsResult(null)).toBeNull();
         expect(sanitizeFindingsResult(undefined as any)).toBeNull();
         const state = mkState({ artifacts: [finderArtifact(null)] });
-        expect(extractFindings(state)).toEqual({ reasoning: '', suggestions: [] });
+        expect(extractFindings(state)).toEqual({
+            reasoning: '',
+            suggestions: [],
+        });
     });
 
     // Row 18 — Primitive where an object is expected.
@@ -692,7 +686,10 @@ describe('contract matrix — B. semantic-but-wrong', () => {
             const v = extractVerdict(
                 mkState({
                     artifacts: [
-                        verdictArtifact({ keep: 'false', rationale: 'refuted' }),
+                        verdictArtifact({
+                            keep: 'false',
+                            rationale: 'refuted',
+                        }),
                     ],
                 }),
             );
@@ -721,7 +718,9 @@ describe('contract matrix — B. semantic-but-wrong', () => {
         () => {
             const v = extractVerdict(
                 mkState({
-                    artifacts: [verdictArtifact({ keep: 0, rationale: 'refuted' })],
+                    artifacts: [
+                        verdictArtifact({ keep: 0, rationale: 'refuted' }),
+                    ],
                 }),
             );
             expect(v.keep).toBe(false); // fails today (defaults to true)
@@ -732,7 +731,9 @@ describe('contract matrix — B. semantic-but-wrong', () => {
     it('row 21-23 baseline — a real boolean keep:false is honored', () => {
         const v = extractVerdict(
             mkState({
-                artifacts: [verdictArtifact({ keep: false, rationale: 'refuted' })],
+                artifacts: [
+                    verdictArtifact({ keep: false, rationale: 'refuted' }),
+                ],
             }),
         );
         expect(v.keep).toBe(false);
@@ -787,10 +788,17 @@ describe('contract matrix — C. unparseable / transport (fail-safe)', () => {
     // never throws past the seam.
     it('row 28 — truncated JSON degrades to typed-empty, no throw', () => {
         const state = mkState({
-            steps: [stepText('{"reasoning":"r","suggestions":[{"relevantFile":"a.ts",')],
+            steps: [
+                stepText(
+                    '{"reasoning":"r","suggestions":[{"relevantFile":"a.ts",',
+                ),
+            ],
         });
         expect(() => extractFindings(state)).not.toThrow();
-        expect(extractFindings(state)).toEqual({ reasoning: '', suggestions: [] });
+        expect(extractFindings(state)).toEqual({
+            reasoning: '',
+            suggestions: [],
+        });
     });
 
     // Row 29 — malformed JSON.
@@ -813,7 +821,10 @@ describe('contract matrix — C. unparseable / transport (fail-safe)', () => {
             steps: [stepText("{reasoning: 'r', suggestions: []}")],
         });
         expect(() => extractFindings(bad)).not.toThrow();
-        expect(extractFindings(bad)).toEqual({ reasoning: '', suggestions: [] });
+        expect(extractFindings(bad)).toEqual({
+            reasoning: '',
+            suggestions: [],
+        });
     });
 
     // Row 30 — LLM.run throws.
@@ -826,8 +837,16 @@ describe('contract matrix — C. unparseable / transport (fail-safe)', () => {
         const prose =
             'There is a null-pointer bug in a.ts:10 that should be fixed ' +
             'because the value can be undefined and would crash the handler.';
-        const byokConfig: any = { model: 'kimi-k2', main: { model: 'kimi-k2' } };
-        const out = await recoverFindingsFromProse(prose, byokConfig, 'org', 'rn');
+        const byokConfig: any = {
+            model: 'kimi-k2',
+            main: { model: 'kimi-k2' },
+        };
+        const out = await recoverFindingsFromProse(
+            prose,
+            byokConfig,
+            'org',
+            'rn',
+        );
         expect(out).toEqual([]);
         expect(spy).toHaveBeenCalledWith(
             expect.objectContaining({ byokConfig }),
@@ -855,7 +874,10 @@ describe('contract matrix — C. unparseable / transport (fail-safe)', () => {
         const state = mkState({
             artifacts: [finderArtifact({ error: 'quota exceeded' })],
         });
-        expect(extractFindings(state)).toEqual({ reasoning: '', suggestions: [] });
+        expect(extractFindings(state)).toEqual({
+            reasoning: '',
+            suggestions: [],
+        });
         expect((state as any).__findingsOutcome).toBe('artifact-unusable');
     });
 
@@ -893,7 +915,10 @@ describe('contract matrix — C. unparseable / transport (fail-safe)', () => {
         const state = mkState({
             steps: [stepText('I cannot help with that request.')],
         });
-        expect(extractFindings(state)).toEqual({ reasoning: '', suggestions: [] });
+        expect(extractFindings(state)).toEqual({
+            reasoning: '',
+            suggestions: [],
+        });
     });
 
     // Row 34 — abort signal fired: the boundary resolves with a valid output
@@ -925,7 +950,9 @@ describe('contract matrix — D. input variants (invariant + return-shape)', () 
     it('row 36 — a single changed file is handled', async () => {
         const out = await runAgentLoopViaCore(
             makeInput(happyEmptyModel(), {
-                changedFiles: [{ filename: 'only.ts', patch: '@@ -1 +1 @@\n+x' }],
+                changedFiles: [
+                    { filename: 'only.ts', patch: '@@ -1 +1 @@\n+x' },
+                ],
             }),
             secrets,
         );
@@ -1019,7 +1046,9 @@ describe('contract matrix — D. input variants (invariant + return-shape)', () 
             secrets,
         );
         const outBA = await runAgentLoopViaCore(
-            makeInput(makeModel().model, { changedFiles: [...filesAB].reverse() }),
+            makeInput(makeModel().model, {
+                changedFiles: [...filesAB].reverse(),
+            }),
             secrets,
         );
         const keptOf = (o: any) =>
@@ -1079,7 +1108,9 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
     // — the boundary never blind-trusts clean D based on the model id. Proven
     // end-to-end through the adapter with a wrapper-shaped submitResult payload.
     it('row E — an off-schema wrapper degrades identically across model branches', async () => {
-        const wrapper = { result: { reasoning: 'r', suggestions: [validItem()] } };
+        const wrapper = {
+            result: { reasoning: 'r', suggestions: [validItem()] },
+        };
         const geminiOut = await runAgentLoopViaCore(
             makeInput(modelReturningFindings(wrapper)),
             {
@@ -1094,9 +1125,12 @@ describe('contract matrix — E. N-model policy (strict json_schema vs fallback)
                 byokConfig: { model: 'kimi-k2' } as any,
             },
         );
-        // Same silent-drop degradation regardless of model policy (row 4 class).
-        expect(geminiOut.findings.suggestions).toEqual([]);
-        expect(kimiOut.findings.suggestions).toEqual([]);
+        // Recovers identically regardless of model policy: the SHAPE fix
+        // (normalizeEnvelope) is model-agnostic, so a {result:D} wrapper is
+        // unwrapped for both the strict-json_schema and the json_object-fallback
+        // model — no more silent drop (row 4 class, #1786).
+        expect(geminiOut.findings.suggestions).toHaveLength(1);
+        expect(kimiOut.findings.suggestions).toHaveLength(1);
         assertAgentLoopOutputShape(geminiOut);
         assertAgentLoopOutputShape(kimiOut);
     });

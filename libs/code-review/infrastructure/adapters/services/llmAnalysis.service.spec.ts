@@ -800,7 +800,7 @@ describe('LLMAnalysisService — LLM.run I/O contract matrix', () => {
         },
     );
 
-    it.failing(
+    it(
         'C29 — malformed JSON string (trailing comma / single quotes) must fall back, not silently drop',
         async () => {
             runSpy.mockResolvedValue(

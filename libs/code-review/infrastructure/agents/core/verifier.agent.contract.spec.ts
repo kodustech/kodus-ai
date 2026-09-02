@@ -55,7 +55,12 @@ function makeState(
             (payload as unknown) === NO_ARTIFACT
                 ? []
                 : [{ type: VERIFY_DONE_TOOL, payload }],
-        usage: { inputTokens: 10, outputTokens: 5, reasoningTokens: 2, cacheReadTokens: 1 },
+        usage: {
+            inputTokens: 10,
+            outputTokens: 5,
+            reasoningTokens: 2,
+            cacheReadTokens: 1,
+        },
         trace: [],
         ...overrides,
     } as RunState;
@@ -76,7 +81,10 @@ function candidate(over: Partial<FinderSuggestion> = {}): FinderSuggestion {
 }
 
 /** A fake AgentRunner standing in for the LLM.run boundary. */
-function fakeRunner(impl: AgentRunner['run']): { runner: AgentRunner; run: jest.Mock } {
+function fakeRunner(impl: AgentRunner['run']): {
+    runner: AgentRunner;
+    run: jest.Mock;
+} {
     const run = jest.fn(impl);
     return { runner: { run } as AgentRunner, run };
 }
@@ -106,7 +114,11 @@ describe('verifier contract — LAYER 1 happy path', () => {
 
     it('extractVerdict preserves keep:true from a well-formed payload', () => {
         const v = extractVerdict(
-            makeState({ keep: true, rationale: 'confirmed real bug', confidence: 'medium' }),
+            makeState({
+                keep: true,
+                rationale: 'confirmed real bug',
+                confidence: 'medium',
+            }),
         );
         expect(v.keep).toBe(true);
         expect(v.rationale).toBe('confirmed real bug');
@@ -116,9 +128,15 @@ describe('verifier contract — LAYER 1 happy path', () => {
     it('extractVerdict reads the LAST result-tool artifact', () => {
         const state = makeState(undefined, {
             artifacts: [
-                { type: VERIFY_DONE_TOOL, payload: { keep: true, rationale: 'first' } },
+                {
+                    type: VERIFY_DONE_TOOL,
+                    payload: { keep: true, rationale: 'first' },
+                },
                 { type: 'grep', payload: { irrelevant: 1 } },
-                { type: VERIFY_DONE_TOOL, payload: { keep: false, rationale: 'final' } },
+                {
+                    type: VERIFY_DONE_TOOL,
+                    payload: { keep: false, rationale: 'final' },
+                },
             ],
         });
         const v = extractVerdict(state);
@@ -127,21 +145,34 @@ describe('verifier contract — LAYER 1 happy path', () => {
     });
 
     it('extractVerdict collects investigation tool calls (excluding submitVerdict) onto the verdict', () => {
-        const state = makeState({ keep: false, rationale: 'r' }, {
-            steps: [
-                {
-                    index: 0,
-                    message: {
-                        role: 'assistant',
-                        content: '',
-                        toolCalls: [
-                            { id: 't1', name: 'grep', input: { pattern: 'x.y' }, output: 'hit' },
-                            { id: 't2', name: VERIFY_DONE_TOOL, input: { keep: false }, output: 'ok' },
-                        ],
+        const state = makeState(
+            { keep: false, rationale: 'r' },
+            {
+                steps: [
+                    {
+                        index: 0,
+                        message: {
+                            role: 'assistant',
+                            content: '',
+                            toolCalls: [
+                                {
+                                    id: 't1',
+                                    name: 'grep',
+                                    input: { pattern: 'x.y' },
+                                    output: 'hit',
+                                },
+                                {
+                                    id: 't2',
+                                    name: VERIFY_DONE_TOOL,
+                                    input: { keep: false },
+                                    output: 'ok',
+                                },
+                            ],
+                        },
                     },
-                },
-            ],
-        });
+                ],
+            },
+        );
         const v = extractVerdict(state);
         expect(v.toolCalls).toEqual([
             { name: 'grep', args: { pattern: 'x.y' }, result: 'hit' },
@@ -150,7 +181,11 @@ describe('verifier contract — LAYER 1 happy path', () => {
 
     it('LlmVerifier.verify returns the model verdict and accumulates usage', async () => {
         const { runner, run } = fakeRunner(async () =>
-            makeState({ keep: false, rationale: 'refuted', confidence: 'high' }),
+            makeState({
+                keep: false,
+                rationale: 'refuted',
+                confidence: 'high',
+            }),
         );
         const v = new LlmVerifier(runner, inertParams());
         const verdict = await v.verify(candidate(), {} as ToolContext);
@@ -172,7 +207,10 @@ describe('verifier contract — LAYER 1 happy path', () => {
             makeState({ keep: true, rationale: 'r' }),
         );
         const v = new LlmVerifier(runner, inertParams());
-        await v.verify(candidate({ relevantFile: 'src/pay.ts' }), {} as ToolContext);
+        await v.verify(
+            candidate({ relevantFile: 'src/pay.ts' }),
+            {} as ToolContext,
+        );
         const [, input] = run.mock.calls[0];
         expect(typeof input.prompt).toBe('string');
         expect(input.prompt).toContain('src/pay.ts');
@@ -208,12 +246,17 @@ describe('verifier contract — assembly', () => {
         expect(spec.resultToolName).toBe(VERIFY_DONE_TOOL);
         expect(spec.maxSteps).toBe(6);
         expect(spec.runName).toBe('code-review-verify');
-        expect(spec.tools.list().some((t) => t.name === VERIFY_DONE_TOOL)).toBe(true);
+        expect(spec.tools.list().some((t) => t.name === VERIFY_DONE_TOOL)).toBe(
+            true,
+        );
     });
 
     it('verifierPromptFor embeds the finding evidence', () => {
         const p = verifierPromptFor(
-            candidate({ relevantFile: 'src/y.ts', suggestionContent: 'off-by-one' }),
+            candidate({
+                relevantFile: 'src/y.ts',
+                suggestionContent: 'off-by-one',
+            }),
         );
         expect(typeof p).toBe('string');
         expect(p).toContain('src/y.ts');
@@ -231,66 +274,57 @@ describe('verifier contract — assembly', () => {
 // behavior) so they flip to a real failure once the envelope is repaired.
 // =========================================================================
 describe('verifier contract — LAYER 2 off-schema robustness (#1786)', () => {
-    it.failing(
-        'recovers keep:false from a {result:{...}} wrapper (does NOT silently keep)',
-        () => {
-            const v = extractVerdict(
-                makeState({ result: { keep: false, rationale: 'refuted' } }),
-            );
-            expect(v.keep).toBe(false);
-        },
-    );
+    it('recovers keep:false from a {result:{...}} wrapper (does NOT silently keep)', () => {
+        const v = extractVerdict(
+            makeState({ result: { keep: false, rationale: 'refuted' } }),
+        );
+        expect(v.keep).toBe(false);
+    });
 
-    it.failing(
-        'recovers keep:false from a bare array envelope (does NOT silently keep)',
-        () => {
-            const v = extractVerdict(
-                makeState([{ keep: false, rationale: 'refuted' }]),
-            );
-            expect(v.keep).toBe(false);
-        },
-    );
+    it('recovers keep:false from a bare array envelope (does NOT silently keep)', () => {
+        const v = extractVerdict(
+            makeState([{ keep: false, rationale: 'refuted' }]),
+        );
+        expect(v.keep).toBe(false);
+    });
 
-    it.failing(
-        'recovers keep:false from a stringified-JSON payload (does NOT silently keep)',
-        () => {
-            const v = extractVerdict(
-                makeState(JSON.stringify({ keep: false, rationale: 'refuted' })),
-            );
-            expect(v.keep).toBe(false);
-        },
-    );
+    it('recovers keep:false from a stringified-JSON payload (does NOT silently keep)', () => {
+        const v = extractVerdict(
+            makeState(JSON.stringify({ keep: false, rationale: 'refuted' })),
+        );
+        expect(v.keep).toBe(false);
+    });
 
-    it.failing(
-        'recovers keep:false when the boolean lives under a wrong-but-obvious key ("decision")',
-        () => {
-            // Some json_object fallbacks rename the field. A repair layer that
-            // maps decision/verdict/shouldKeep -> keep would catch this; the
-            // current code cannot see it and silently keeps.
-            const v = extractVerdict(
-                makeState({ decision: false, reason: 'refuted' }),
-            );
-            expect(v.keep).toBe(false);
-        },
-    );
+    it('recovers keep:false when the boolean lives under a wrong-but-obvious key ("decision")', () => {
+        // Some json_object fallbacks rename the field. A repair layer that
+        // maps decision/verdict/shouldKeep -> keep would catch this; the
+        // current code cannot see it and silently keeps.
+        const v = extractVerdict(
+            makeState({ decision: false, reason: 'refuted' }),
+        );
+        expect(v.keep).toBe(false);
+    });
 
-    it.failing(
-        'LlmVerifier.verify surfaces a wrapped keep:false through the full LLM.run boundary',
-        async () => {
-            const { runner } = fakeRunner(async () =>
-                makeState({ result: { keep: false, rationale: 'refuted' } }),
-            );
-            const v = new LlmVerifier(runner, inertParams());
-            const verdict = await v.verify(candidate(), {} as ToolContext);
-            expect(verdict.keep).toBe(false);
-        },
-    );
+    it('LlmVerifier.verify surfaces a wrapped keep:false through the full LLM.run boundary', async () => {
+        const { runner } = fakeRunner(async () =>
+            makeState({ result: { keep: false, rationale: 'refuted' } }),
+        );
+        const v = new LlmVerifier(runner, inertParams());
+        const verdict = await v.verify(candidate(), {} as ToolContext);
+        expect(verdict.keep).toBe(false);
+    });
 
     // --- unrecoverable shapes: default-keep IS the documented fail-open ------
     // No keep signal exists to recover, so defaulting to keep (fail-open, never
     // drop) is the CORRECT contract for a refute-to-drop verifier. These pass.
     it('defaults to keep:true with an explicit reason on null / {} / partial / non-JSON string', () => {
-        for (const bad of [null, {}, { rationale: 'no verdict field' }, 'not json at all', 42]) {
+        for (const bad of [
+            null,
+            {},
+            { rationale: 'no verdict field' },
+            'not json at all',
+            42,
+        ]) {
             const v = extractVerdict(makeState(bad));
             expect(v.keep).toBe(true);
             expect(typeof v.rationale).toBe('string');
@@ -384,73 +418,82 @@ describe('backfill A — output-shape zoo (off-schema returns)', () => {
     // between the array-of-one and the plain object encodings of the same
     // decision. (Row 2's single-element form is already pinned in LAYER 2; this
     // adds a multi-element array and the object/array equivalence for row 3.)
-    it.failing(
-        'row2: recovers keep:false from a multi-element bare array (does NOT silently keep)',
-        () => {
-            const v = extractVerdict(
-                makeState([
-                    { keep: false, rationale: 'refuted' },
-                    { note: 'extra element' },
-                ]),
-            );
-            expect(v.keep).toBe(false);
-        },
-    );
+    it('row2: recovers keep:false from a multi-element bare array (does NOT silently keep)', () => {
+        const v = extractVerdict(
+            makeState([
+                { keep: false, rationale: 'refuted' },
+                { note: 'extra element' },
+            ]),
+        );
+        expect(v.keep).toBe(false);
+    });
 
-    it.failing(
-        'row3: array-of-one and plain object encode the SAME decision (metamorphic)',
-        () => {
-            const asObject = extractVerdict(makeState({ keep: false, rationale: 'r' }));
-            const asArray = extractVerdict(makeState([{ keep: false, rationale: 'r' }]));
-            expect(asArray.keep).toBe(asObject.keep); // both should be false
-        },
-    );
+    it('row3: array-of-one and plain object encode the SAME decision (metamorphic)', () => {
+        const asObject = extractVerdict(
+            makeState({ keep: false, rationale: 'r' }),
+        );
+        const asArray = extractVerdict(
+            makeState([{ keep: false, rationale: 'r' }]),
+        );
+        expect(asArray.keep).toBe(asObject.keep); // both should be false
+    });
 
     // Row 4: the remaining single-key wrapper envelopes (LAYER 2 pins {result}).
-    it.failing('row4: recovers keep:false from a {data:D} wrapper', () => {
+    it('row4: recovers keep:false from a {data:D} wrapper', () => {
         expect(
-            extractVerdict(makeState({ data: { keep: false, rationale: 'r' } })).keep,
+            extractVerdict(makeState({ data: { keep: false, rationale: 'r' } }))
+                .keep,
         ).toBe(false);
     });
-    it.failing('row4: recovers keep:false from a {output:D} wrapper', () => {
+    it('row4: recovers keep:false from a {output:D} wrapper', () => {
         expect(
-            extractVerdict(makeState({ output: { keep: false, rationale: 'r' } })).keep,
+            extractVerdict(
+                makeState({ output: { keep: false, rationale: 'r' } }),
+            ).keep,
         ).toBe(false);
     });
-    it.failing('row4: recovers keep:false from a {response:D} wrapper', () => {
+    it('row4: recovers keep:false from a {response:D} wrapper', () => {
         expect(
-            extractVerdict(makeState({ response: { keep: false, rationale: 'r' } })).keep,
+            extractVerdict(
+                makeState({ response: { keep: false, rationale: 'r' } }),
+            ).keep,
         ).toBe(false);
     });
-    it.failing('row4: recovers keep:false from a {json:D} wrapper', () => {
+    it('row4: recovers keep:false from a {json:D} wrapper', () => {
         expect(
-            extractVerdict(makeState({ json: { keep: false, rationale: 'r' } })).keep,
+            extractVerdict(makeState({ json: { keep: false, rationale: 'r' } }))
+                .keep,
         ).toBe(false);
     });
 
     // Row 5: double wrapper.
-    it.failing('row5: recovers keep:false from a {result:{result:D}} double wrapper', () => {
+    it('row5: recovers keep:false from a {result:{result:D}} double wrapper', () => {
         expect(
             extractVerdict(
-                makeState({ result: { result: { keep: false, rationale: 'r' } } }),
+                makeState({
+                    result: { result: { keep: false, rationale: 'r' } },
+                }),
             ).keep,
         ).toBe(false);
     });
 
     // Row 6: numeric/opaque single-key wrap.
-    it.failing('row6: recovers keep:false from a {"0":D} numeric-key wrap', () => {
+    it('row6: recovers keep:false from a {"0":D} numeric-key wrap', () => {
         expect(
-            extractVerdict(makeState({ '0': { keep: false, rationale: 'r' } })).keep,
+            extractVerdict(makeState({ '0': { keep: false, rationale: 'r' } }))
+                .keep,
         ).toBe(false);
     });
-    it.failing('row6: recovers keep:false from a {content:D} wrap', () => {
+    it('row6: recovers keep:false from a {content:D} wrap', () => {
         expect(
-            extractVerdict(makeState({ content: { keep: false, rationale: 'r' } })).keep,
+            extractVerdict(
+                makeState({ content: { keep: false, rationale: 'r' } }),
+            ).keep,
         ).toBe(false);
     });
 
     // Row 8: markdown-fenced JSON as the (string) payload.
-    it.failing('row8: recovers keep:false from a ```json fenced string payload', () => {
+    it('row8: recovers keep:false from a ```json fenced string payload', () => {
         expect(
             extractVerdict(
                 makeState('```json\n{"keep": false, "rationale": "r"}\n```'),
@@ -459,17 +502,21 @@ describe('backfill A — output-shape zoo (off-schema returns)', () => {
     });
 
     // Row 9: prose-wrapped JSON string.
-    it.failing('row9: recovers keep:false from a prose-wrapped JSON string payload', () => {
+    it('row9: recovers keep:false from a prose-wrapped JSON string payload', () => {
         expect(
             extractVerdict(
-                makeState('Here is my verdict: {"keep": false, "rationale": "r"}. Let me know!'),
+                makeState(
+                    'Here is my verdict: {"keep": false, "rationale": "r"}. Let me know!',
+                ),
             ).keep,
         ).toBe(false);
     });
 
     // Row 11: case/convention mismatch on the key.
-    it.failing('row11: recovers keep:false when the key is CamelCased ({Keep:false})', () => {
-        expect(extractVerdict(makeState({ Keep: false, rationale: 'r' })).keep).toBe(false);
+    it('row11: recovers keep:false when the key is CamelCased ({Keep:false})', () => {
+        expect(
+            extractVerdict(makeState({ Keep: false, rationale: 'r' })).keep,
+        ).toBe(false);
     });
 
     // Row 13: extra unknown keys alongside the right ones MUST be tolerated
@@ -513,7 +560,13 @@ describe('backfill A — output-shape zoo (off-schema returns)', () => {
         () => {
             const v = extractVerdict(
                 makeState({
-                    choices: [{ message: { content: '{"keep": false, "rationale": "r"}' } }],
+                    choices: [
+                        {
+                            message: {
+                                content: '{"keep": false, "rationale": "r"}',
+                            },
+                        },
+                    ],
                 }),
             );
             expect(v.keep).toBe(false);
@@ -522,35 +575,48 @@ describe('backfill A — output-shape zoo (off-schema returns)', () => {
 
     // Row 20: reasoning/thinking leak — the verdict JSON prefixed by thinking
     // prose (anthropic thinking-without-signature class) in a string payload.
-    it.failing(
-        'row20: recovers keep:false when the verdict JSON is preceded by a thinking leak',
-        () => {
-            const v = extractVerdict(
-                makeState(
-                    '<thinking>the guard upstream already handles null</thinking>\n{"keep": false, "rationale": "r"}',
-                ),
-            );
-            expect(v.keep).toBe(false);
-        },
-    );
+    it('row20: recovers keep:false when the verdict JSON is preceded by a thinking leak', () => {
+        const v = extractVerdict(
+            makeState(
+                '<thinking>the guard upstream already handles null</thinking>\n{"keep": false, "rationale": "r"}',
+            ),
+        );
+        expect(v.keep).toBe(false);
+    });
 });
 
 // ---- B. Semantic-but-wrong -----------------------------------------------
 describe('backfill B — semantic-but-wrong value encodings', () => {
     // Row 21: boolean as string.
-    it.failing('row21: recovers keep:false from keep:"false" (boolean-as-string)', () => {
-        expect(extractVerdict(makeState({ keep: 'false', rationale: 'r' })).keep).toBe(false);
-    });
+    it.failing(
+        'row21: recovers keep:false from keep:"false" (boolean-as-string)',
+        () => {
+            expect(
+                extractVerdict(makeState({ keep: 'false', rationale: 'r' }))
+                    .keep,
+            ).toBe(false);
+        },
+    );
 
     // Row 22: boolean as yes/no.
-    it.failing('row22: recovers keep:false from keep:"no" (boolean-as-yes/no)', () => {
-        expect(extractVerdict(makeState({ keep: 'no', rationale: 'r' })).keep).toBe(false);
-    });
+    it.failing(
+        'row22: recovers keep:false from keep:"no" (boolean-as-yes/no)',
+        () => {
+            expect(
+                extractVerdict(makeState({ keep: 'no', rationale: 'r' })).keep,
+            ).toBe(false);
+        },
+    );
 
     // Row 23: boolean as number.
-    it.failing('row23: recovers keep:false from keep:0 (boolean-as-number)', () => {
-        expect(extractVerdict(makeState({ keep: 0, rationale: 'r' })).keep).toBe(false);
-    });
+    it.failing(
+        'row23: recovers keep:false from keep:0 (boolean-as-number)',
+        () => {
+            expect(
+                extractVerdict(makeState({ keep: 0, rationale: 'r' })).keep,
+            ).toBe(false);
+        },
+    );
 
     // Row 24: confidence enum out of the allowed set — the keep decision is
     // still recovered; extractVerdict does not validate the enum, it passes the
@@ -565,15 +631,12 @@ describe('backfill B — semantic-but-wrong value encodings', () => {
 
     // Row 26: duplicate keys in a stringified-JSON payload — JSON.parse is
     // last-wins, so a repair layer should recover keep:false.
-    it.failing(
-        'row26: recovers last-wins keep:false from a stringified object with duplicate keys',
-        () => {
-            const v = extractVerdict(
-                makeState('{"keep": true, "rationale": "r", "keep": false}'),
-            );
-            expect(v.keep).toBe(false);
-        },
-    );
+    it('row26: recovers last-wins keep:false from a stringified object with duplicate keys', () => {
+        const v = extractVerdict(
+            makeState('{"keep": true, "rationale": "r", "keep": false}'),
+        );
+        expect(v.keep).toBe(false);
+    });
 
     // Row 27: unicode / escaped newlines / emoji inside string fields must be
     // preserved verbatim (keep is a valid boolean → recovers today).
@@ -597,7 +660,11 @@ describe('backfill C — unparseable / transport fail-safe', () => {
 
     // Row 29: malformed JSON (trailing comma / single quotes / unquoted keys).
     it('row29: malformed JSON strings → documented fail-open keep:true', () => {
-        for (const bad of ["{keep: false,}", "{'keep':false}", '{keep:false}']) {
+        for (const bad of [
+            '{keep: false,}',
+            "{'keep':false}",
+            '{keep:false}',
+        ]) {
             const v = extractVerdict(makeState(bad));
             expect(v.keep).toBe(true);
             expect(v.rationale).toMatch(/no parseable verdict/i);
@@ -610,7 +677,9 @@ describe('backfill C — unparseable / transport fail-safe', () => {
     // Row 31: an error object returned as the payload instead of throwing → no
     // keep signal → fail-open keep:true.
     it('row31: error-object payload {error:...} → fail-open keep:true', () => {
-        const v = extractVerdict(makeState({ error: 'model unavailable', code: 503 }));
+        const v = extractVerdict(
+            makeState({ error: 'model unavailable', code: 503 }),
+        );
         expect(v.keep).toBe(true);
         expect(v.rationale).toMatch(/no parseable verdict/i);
     });
@@ -775,7 +844,9 @@ describe('backfill E — N-model structured-output gate', () => {
         // json_object fallback upstreams (matrix E: kimi/glm/deepseek/z-ai served
         // off-prefix) → full zoo in scope
         expect(openRouterHonorsJsonSchema('z-ai/glm-4.6')).toBe(false);
-        expect(openRouterHonorsJsonSchema('deepseek/deepseek-chat')).toBe(false);
+        expect(openRouterHonorsJsonSchema('deepseek/deepseek-chat')).toBe(
+            false,
+        );
     });
 
     it('extractVerdict is model-independent: same off-schema payload → same result under any branch', () => {

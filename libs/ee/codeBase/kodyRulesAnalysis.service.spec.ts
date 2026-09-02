@@ -173,7 +173,9 @@ describe('KodyRulesAnalysisService — runStructuredReviewCall migration parity'
 
         it('short-circuits to empty suggestions when the classifier returns no rules', async () => {
             mockRun.mockImplementation(async ({ runName }: any) => {
-                if (runName.endsWith('::classifierKodyRulesAnalyzeCodeWithAI')) {
+                if (
+                    runName.endsWith('::classifierKodyRulesAnalyzeCodeWithAI')
+                ) {
                     return { rules: [] };
                 }
                 return routeByRunName({ runName });
@@ -242,7 +244,11 @@ describe('KodyRulesAnalysisService — runStructuredReviewCall migration parity'
         it('re-serializes the structured result to a JSON string', async () => {
             const structured = {
                 codeSuggestions: [
-                    { id: 'u1', suggestionContent: 'x', violatedKodyRulesIds: ['r9'] },
+                    {
+                        id: 'u1',
+                        suggestionContent: 'x',
+                        violatedKodyRulesIds: ['r9'],
+                    },
                 ],
             };
             mockRun.mockResolvedValueOnce(structured);
@@ -307,8 +313,19 @@ const genSuggestion = (over: Record<string, any> = {}) => ({
     ...over,
 });
 
-const callProcessLLM = (service: any, response: any, extendedContext: any = {}) =>
-    service.processLLMResponse(ORG, 1, response, FILE_CTX, PROVIDER, extendedContext);
+const callProcessLLM = (
+    service: any,
+    response: any,
+    extendedContext: any = {},
+) =>
+    service.processLLMResponse(
+        ORG,
+        1,
+        response,
+        FILE_CTX,
+        PROVIDER,
+        extendedContext,
+    );
 
 const callProcessUpdate = (service: any, response: any) =>
     service.processUpdatedSuggestions(ORG, 1, response, FILE_CTX, PROVIDER, {});
@@ -391,55 +408,43 @@ describe('A. output-shape zoo — processClassifierResponse (classifier D)', () 
     // response.rules === undefined → returns null and logs the misleading
     // "No rules found" → violations silently dropped.
     // Source: kodyRulesAnalysis.service.ts:822 (`!response.rules?.length`).
-    it.failing(
-        'row 2 — bare array of rules should be RECOVERED, not silently dropped (#1786)',
-        () => {
-            const { service } = makeService();
-            const out = callProcessClassifier(service, RULES, [
-                { uuid: 'r1', reason: 'because' },
-            ] as any);
-            expect(out).toHaveLength(1);
-            expect(out[0].uuid).toBe('r1');
-        },
-    );
+    it('row 2 — bare array of rules should be RECOVERED, not silently dropped (#1786)', () => {
+        const { service } = makeService();
+        const out = callProcessClassifier(service, RULES, [
+            { uuid: 'r1', reason: 'because' },
+        ] as any);
+        expect(out).toHaveLength(1);
+        expect(out[0].uuid).toBe('r1');
+    });
 
     // row 4: wrapper key {result:{rules:[...]}} — same silent drop.
     // Source: kodyRulesAnalysis.service.ts:822.
-    it.failing(
-        'row 4 — {result:{rules:[...]}} wrapper should be unwrapped, not dropped (#1786)',
-        () => {
-            const { service } = makeService();
-            const out = callProcessClassifier(service, RULES, {
-                result: { rules: [{ uuid: 'r1', reason: 'x' }] },
-            } as any);
-            expect(out).toHaveLength(1);
-        },
-    );
+    it('row 4 — {result:{rules:[...]}} wrapper should be unwrapped, not dropped (#1786)', () => {
+        const { service } = makeService();
+        const out = callProcessClassifier(service, RULES, {
+            result: { rules: [{ uuid: 'r1', reason: 'x' }] },
+        } as any);
+        expect(out).toHaveLength(1);
+    });
 
     // row 5: double wrapper {result:{result:{rules:[...]}}} — same silent drop.
-    it.failing(
-        'row 5 — double-wrapped rules should be unwrapped, not dropped (#1786)',
-        () => {
-            const { service } = makeService();
-            const out = callProcessClassifier(service, RULES, {
-                result: { result: { rules: [{ uuid: 'r1', reason: 'x' }] } },
-            } as any);
-            expect(out).toHaveLength(1);
-        },
-    );
+    it('row 5 — double-wrapped rules should be unwrapped, not dropped (#1786)', () => {
+        const { service } = makeService();
+        const out = callProcessClassifier(service, RULES, {
+            result: { result: { rules: [{ uuid: 'r1', reason: 'x' }] } },
+        } as any);
+        expect(out).toHaveLength(1);
+    });
 
     // row 10: right data, renamed key {ruleViolations:[...]} — silent drop.
     // Source: kodyRulesAnalysis.service.ts:822.
-    it.failing(
-        'row 10 — renamed key (ruleViolations) should be aliased, not dropped (#1786)',
-        () => {
-            const { service } = makeService();
-            const out = callProcessClassifier(service, RULES, {
-                ruleViolations: [{ uuid: 'r1', reason: 'x' }],
-            } as any);
-            expect(out).toHaveLength(1);
-        },
-    );
+    it('row 10 — renamed key (ruleViolations) should be aliased, not dropped (#1786)', () => {
+        const { service } = makeService();
+        const out = callProcessClassifier(service, RULES, {
+            ruleViolations: [{ uuid: 'r1', reason: 'x' }],
+        } as any);
+        expect(out).toHaveLength(1);
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -495,14 +500,11 @@ describe('A. output-shape zoo — processLLMResponse (generator D)', () => {
 
     // row 2: bare array of suggestions → response.codeSuggestions undefined →
     // typed-empty ships silently (no log). Source: kodyRulesAnalysis.service.ts:894/931.
-    it.failing(
-        'row 2 — bare array of suggestions should be RECOVERED, not emptied (#1786)',
-        () => {
-            const { service } = makeService();
-            const out = callProcessLLM(service, [genSuggestion()] as any);
-            expect(out.codeSuggestions).toHaveLength(1);
-        },
-    );
+    it('row 2 — bare array of suggestions should be RECOVERED, not emptied (#1786)', () => {
+        const { service } = makeService();
+        const out = callProcessLLM(service, [genSuggestion()] as any);
+        expect(out.codeSuggestions).toHaveLength(1);
+    });
 
     // row 3: single object where an array is expected → .map throws → caught →
     // null; the suggestion is dropped. Source: kodyRulesAnalysis.service.ts:895.
@@ -518,30 +520,27 @@ describe('A. output-shape zoo — processLLMResponse (generator D)', () => {
     );
 
     // row 6: opaque single-key wrap {content:{codeSuggestions:[...]}} → emptied.
-    it.failing(
-        'row 6 — {content:{codeSuggestions:[...]}} wrap should be unwrapped, not emptied (#1786)',
-        () => {
-            const { service } = makeService();
-            const out = callProcessLLM(service, {
-                content: { codeSuggestions: [genSuggestion()] },
-            } as any);
-            expect(out.codeSuggestions).toHaveLength(1);
-        },
-    );
+    it('row 6 — {content:{codeSuggestions:[...]}} wrap should be unwrapped, not emptied (#1786)', () => {
+        const { service } = makeService();
+        const out = callProcessLLM(service, {
+            content: { codeSuggestions: [genSuggestion()] },
+        } as any);
+        expect(out.codeSuggestions).toHaveLength(1);
+    });
 
     // row 11: case/convention mismatch {CodeSuggestions:[...]} → emptied silently.
-    it.failing(
-        'row 11 — case-mismatched key (CodeSuggestions) should be matched, not emptied (#1786)',
-        () => {
-            const { service } = makeService();
-            const out = callProcessLLM(service, {
-                CodeSuggestions: [genSuggestion()],
-            } as any);
-            expect(out.codeSuggestions).toHaveLength(1);
-        },
-    );
+    it('row 11 — case-mismatched key (CodeSuggestions) should be matched, not emptied (#1786)', () => {
+        const { service } = makeService();
+        const out = callProcessLLM(service, {
+            CodeSuggestions: [genSuggestion()],
+        } as any);
+        expect(out.codeSuggestions).toHaveLength(1);
+    });
 
     // row 19: provider envelope leak {choices:[{message:{content}}]} → emptied.
+    // normalizeEnvelope deliberately does NOT unwrap a provider envelope (its
+    // inner is a message object, not the target array — a proper fix would parse
+    // choices[].message.content, a separate concern). Kept as a KNOWN gap.
     it.failing(
         'row 19 — provider envelope {choices:[{message:{content}}]} should be unwrapped, not emptied (#1786)',
         () => {
@@ -572,9 +571,7 @@ describe('A/C. string parse zoo — processUpdatedSuggestions (updater D)', () =
         const out = callProcessUpdate(
             service,
             JSON.stringify({
-                codeSuggestions: [
-                    { id: 'not-a-uuid', suggestionContent: 'x' },
-                ],
+                codeSuggestions: [{ id: 'not-a-uuid', suggestionContent: 'x' }],
             }),
         );
         expect(out.codeSuggestions).toHaveLength(1);
@@ -620,7 +617,9 @@ describe('A/C. string parse zoo — processUpdatedSuggestions (updater D)', () =
         const out = callProcessUpdate(
             service,
             '<thinking>let me reason</thinking>' +
-                JSON.stringify({ codeSuggestions: [{ suggestionContent: 'x' }] }),
+                JSON.stringify({
+                    codeSuggestions: [{ suggestionContent: 'x' }],
+                }),
         );
         expect(out).toBeNull();
     });
@@ -747,14 +746,11 @@ describe('A/C. extractKodyRuleIdsFromContent boundary ({ids} D)', () => {
 
     // row 2: ids arrive as a BARE ARRAY → extraction.ids undefined → [] with a
     // misleading "No Kody Rule IDs extracted" warn. Source: kodyRulesAnalysis.service.ts:344.
-    it.failing(
-        'row 2 — bare array of ids should be RECOVERED, not dropped (#1786)',
-        async () => {
-            mockRun.mockResolvedValueOnce(['id-a', 'id-b'] as any);
-            const { service } = makeService();
-            expect(await callExtract(service)).toEqual(['id-a', 'id-b']);
-        },
-    );
+    it('row 2 — bare array of ids should be RECOVERED, not dropped (#1786)', async () => {
+        mockRun.mockResolvedValueOnce(['id-a', 'id-b'] as any);
+        const { service } = makeService();
+        expect(await callExtract(service)).toEqual(['id-a', 'id-b']);
+    });
 
     // row 3: ids as a single string → `extraction.ids.length` (string length) is
     // truthy → the STRING is returned instead of a string[], breaking the
@@ -770,14 +766,11 @@ describe('A/C. extractKodyRuleIdsFromContent boundary ({ids} D)', () => {
     );
 
     // row 4: wrapper {result:{ids:[...]}} → dropped to [].
-    it.failing(
-        'row 4 — {result:{ids:[...]}} wrapper should be unwrapped, not dropped (#1786)',
-        async () => {
-            mockRun.mockResolvedValueOnce({ result: { ids: ['x'] } } as any);
-            const { service } = makeService();
-            expect(await callExtract(service)).toEqual(['x']);
-        },
-    );
+    it('row 4 — {result:{ids:[...]}} wrapper should be unwrapped, not dropped (#1786)', async () => {
+        mockRun.mockResolvedValueOnce({ result: { ids: ['x'] } } as any);
+        const { service } = makeService();
+        expect(await callExtract(service)).toEqual(['x']);
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -1056,20 +1049,22 @@ describe('E. provider / model policy matrix (parse layer is provider-agnostic)',
             );
             expect(out.codeSuggestions).toHaveLength(1);
             for (const call of mockRun.mock.calls) {
-                expect(call[0].byokConfig).toBe(ctx.codeReviewConfig.byokConfig);
+                expect(call[0].byokConfig).toBe(
+                    ctx.codeReviewConfig.byokConfig,
+                );
             }
         },
     );
 
-    it('json_object-fallback providers get NO extra protection at the parse layer: off-schema degrades identically to strict providers (same #1786 exposure)', () => {
-        // The classifier parse layer is pure and provider-blind; a bare-array
-        // off-schema envelope is dropped the same way no matter which model
-        // produced it. This is exactly why the fallback zoo must be closed at
-        // the parse layer (see the it.failing guards above), not left to the gate.
+    it('the parse layer is provider-blind: an off-schema bare array is RECOVERED identically no matter which model produced it (#1786)', () => {
+        // The classifier parse layer is pure and provider-blind; with the SHAPE
+        // fix (normalizeEnvelope) a bare-array off-schema envelope is lifted to
+        // {rules:[…]} and recovered the same way for strict and fallback models
+        // alike, instead of being dropped to null.
         const { service } = makeService();
         const RULES = [{ uuid: 'r1', title: 'R1' }];
         const bareArray = [{ uuid: 'r1', reason: 'x' }] as any;
-        expect(callProcessClassifier(service, RULES, bareArray)).toBeNull();
+        expect(callProcessClassifier(service, RULES, bareArray)).not.toBeNull();
     });
 });
 
@@ -1107,8 +1102,7 @@ describe('return-shape invariant across all layers', () => {
         for (const shape of objectZoo) {
             const out = callProcessLLM(service, shape as any);
             expect(
-                out === null ||
-                    (out && Array.isArray(out.codeSuggestions)),
+                out === null || (out && Array.isArray(out.codeSuggestions)),
             ).toBeTruthy();
         }
     });
@@ -1129,8 +1123,7 @@ describe('return-shape invariant across all layers', () => {
         for (const s of stringZoo) {
             const out = callProcessUpdate(service, s);
             expect(
-                out === null ||
-                    (out && Array.isArray(out.codeSuggestions)),
+                out === null || (out && Array.isArray(out.codeSuggestions)),
             ).toBeTruthy();
         }
     });

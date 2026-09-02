@@ -31,9 +31,10 @@ jest.mock('@libs/core/log/langfuse', () => ({
     })),
 }));
 jest.mock('@ai-sdk/openai-compatible', () => ({
-    createOpenAICompatible: jest.fn(
-        () => (modelId: string) => ({ __model: 'groq', modelId }),
-    ),
+    createOpenAICompatible: jest.fn(() => (modelId: string) => ({
+        __model: 'groq',
+        modelId,
+    })),
 }));
 
 import { KodyRulesPrLevelAnalysisService } from './kodyRulesPrLevelAnalysis.service';
@@ -238,7 +239,9 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
         new KodyRulesPrLevelAnalysisService(
             { findById: jest.fn().mockResolvedValue(null) } as any,
             { chunkDataByTokens: jest.fn() } as any,
-            { runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()) } as any,
+            {
+                runAiSdkLLMInSpan: jest.fn(async ({ exec }: any) => exec()),
+            } as any,
             {
                 loadReferencesForRules: jest
                     .fn()
@@ -410,17 +413,14 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
 
         // Row 2 — bare array when D is an object. analysis.rules is undefined
         // (ln 1019) → processAnalyzerResponse([]) → null. Real violations dropped.
-        it.failing(
-            'row 2: bare array of rule-results → SHOULD recover, not drop to null',
-            async () => {
-                runSpy.mockResolvedValue([
-                    { ruleId: 'rule-1', violations: [violation()] },
-                ]);
-                const result = await callAnalyzer();
-                expect(result).toHaveLength(1);
-                expect(result[0].uuid).toBe('rule-1');
-            },
-        );
+        it('row 2: bare array of rule-results → SHOULD recover, not drop to null', async () => {
+            runSpy.mockResolvedValue([
+                { ruleId: 'rule-1', violations: [violation()] },
+            ]);
+            const result = await callAnalyzer();
+            expect(result).toHaveLength(1);
+            expect(result[0].uuid).toBe('rule-1');
+        });
 
         // Row 3 — single object where an array is expected (inner rules array).
         it.failing(
@@ -438,70 +438,52 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
         );
 
         // Row 4 — wrapper key {result: D}.
-        it.failing(
-            'row 4: {result: D} wrapper → SHOULD unwrap, not drop to null',
-            async () => {
-                runSpy.mockResolvedValue({ result: exactAnalyzerD() });
-                const result = await callAnalyzer();
-                expect(result).toHaveLength(1);
-            },
-        );
+        it('row 4: {result: D} wrapper → SHOULD unwrap, not drop to null', async () => {
+            runSpy.mockResolvedValue({ result: exactAnalyzerD() });
+            const result = await callAnalyzer();
+            expect(result).toHaveLength(1);
+        });
 
         // Row 5 — double wrapper {result:{result:D}}.
-        it.failing(
-            'row 5: {result:{result:D}} double wrapper → SHOULD unwrap',
-            async () => {
-                runSpy.mockResolvedValue({ result: { result: exactAnalyzerD() } });
-                const result = await callAnalyzer();
-                expect(result).toHaveLength(1);
-            },
-        );
+        it('row 5: {result:{result:D}} double wrapper → SHOULD unwrap', async () => {
+            runSpy.mockResolvedValue({ result: { result: exactAnalyzerD() } });
+            const result = await callAnalyzer();
+            expect(result).toHaveLength(1);
+        });
 
         // Row 6 — opaque single-key wrap {content: D} / {"0": D}.
-        it.failing(
-            'row 6: {content: D} opaque wrap → SHOULD unwrap',
-            async () => {
-                runSpy.mockResolvedValue({ content: exactAnalyzerD() });
-                const result = await callAnalyzer();
-                expect(result).toHaveLength(1);
-            },
-        );
+        it('row 6: {content: D} opaque wrap → SHOULD unwrap', async () => {
+            runSpy.mockResolvedValue({ content: exactAnalyzerD() });
+            const result = await callAnalyzer();
+            expect(result).toHaveLength(1);
+        });
 
         // Row 7 — stringified JSON (classic json_object-fallback shape).
-        it.failing(
-            'row 7: whole D as a JSON string → SHOULD parse & recover',
-            async () => {
-                runSpy.mockResolvedValue(JSON.stringify(exactAnalyzerD()));
-                const result = await callAnalyzer();
-                expect(result).toHaveLength(1);
-            },
-        );
+        it('row 7: whole D as a JSON string → SHOULD parse & recover', async () => {
+            runSpy.mockResolvedValue(JSON.stringify(exactAnalyzerD()));
+            const result = await callAnalyzer();
+            expect(result).toHaveLength(1);
+        });
 
         // Row 8 — markdown-fenced JSON string.
-        it.failing(
-            'row 8: markdown-fenced JSON → SHOULD strip fence & recover',
-            async () => {
-                runSpy.mockResolvedValue(
-                    '```json\n' + JSON.stringify(exactAnalyzerD()) + '\n```',
-                );
-                const result = await callAnalyzer();
-                expect(result).toHaveLength(1);
-            },
-        );
+        it('row 8: markdown-fenced JSON → SHOULD strip fence & recover', async () => {
+            runSpy.mockResolvedValue(
+                '```json\n' + JSON.stringify(exactAnalyzerD()) + '\n```',
+            );
+            const result = await callAnalyzer();
+            expect(result).toHaveLength(1);
+        });
 
         // Row 9 — prose-wrapped JSON.
-        it.failing(
-            'row 9: prose-wrapped JSON → SHOULD extract & recover',
-            async () => {
-                runSpy.mockResolvedValue(
-                    'Here is the result: ' +
-                        JSON.stringify(exactAnalyzerD()) +
-                        '\n\nLet me know if you need more.',
-                );
-                const result = await callAnalyzer();
-                expect(result).toHaveLength(1);
-            },
-        );
+        it('row 9: prose-wrapped JSON → SHOULD extract & recover', async () => {
+            runSpy.mockResolvedValue(
+                'Here is the result: ' +
+                    JSON.stringify(exactAnalyzerD()) +
+                    '\n\nLet me know if you need more.',
+            );
+            const result = await callAnalyzer();
+            expect(result).toHaveLength(1);
+        });
 
         // Row 10 — right data, wrong (renamed) keys.
         it.failing(
@@ -580,19 +562,25 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
         // Row 16 — empty string return → falsy → explicit throw (signal).
         it('row 16: empty-string return → throws (explicit signal, not silent)', async () => {
             runSpy.mockResolvedValue('');
-            await expect(callAnalyzer()).rejects.toThrow(/No response from LLM/);
+            await expect(callAnalyzer()).rejects.toThrow(
+                /No response from LLM/,
+            );
         });
 
         // Row 17 — null/undefined return → falsy → explicit throw (signal).
         it('row 17: null return → throws (explicit signal)', async () => {
             runSpy.mockResolvedValue(null);
-            await expect(callAnalyzer()).rejects.toThrow(/No response from LLM/);
+            await expect(callAnalyzer()).rejects.toThrow(
+                /No response from LLM/,
+            );
         });
 
         // Row 18 — primitive where object expected.
         it('row 18a: falsy primitive 0 → throws (explicit signal)', async () => {
             runSpy.mockResolvedValue(0 as any);
-            await expect(callAnalyzer()).rejects.toThrow(/No response from LLM/);
+            await expect(callAnalyzer()).rejects.toThrow(
+                /No response from LLM/,
+            );
         });
         it.failing(
             'row 18b: truthy primitive (true) → SHOULD signal, not silently null',
@@ -677,29 +665,32 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
         // retry wrapper must catch, exhaust retries, and return an error result —
         // never crash past the boundary.
         it.each([
-            ['row 28: truncated JSON', new Error('Unexpected end of JSON input')],
+            [
+                'row 28: truncated JSON',
+                new Error('Unexpected end of JSON input'),
+            ],
             ['row 29: malformed JSON', new SyntaxError('Unexpected token }')],
-        ])('%s → LLM.run throws → chunk returns error result (fail-safe)', async (
-            _label,
-            err,
-        ) => {
-            runSpy.mockRejectedValue(err);
-            const res = await (service as any).processChunkWithRetry(
-                oneFile,
-                0,
-                buildCtx(),
-                KODY_RULES,
-                'en-US',
-                'gemini-2.5-pro',
-                42,
-                orgData,
-                { ...fastBatch, retryAttempts: 2 },
-                undefined,
-            );
-            expect(res.result).toBeNull();
-            expect(res.error).toBeInstanceOf(Error);
-            expect(runSpy).toHaveBeenCalledTimes(2); // retried
-        });
+        ])(
+            '%s → LLM.run throws → chunk returns error result (fail-safe)',
+            async (_label, err) => {
+                runSpy.mockRejectedValue(err);
+                const res = await (service as any).processChunkWithRetry(
+                    oneFile,
+                    0,
+                    buildCtx(),
+                    KODY_RULES,
+                    'en-US',
+                    'gemini-2.5-pro',
+                    42,
+                    orgData,
+                    { ...fastBatch, retryAttempts: 2 },
+                    undefined,
+                );
+                expect(res.result).toBeNull();
+                expect(res.error).toBeInstanceOf(Error);
+                expect(runSpy).toHaveBeenCalledTimes(2); // retried
+            },
+        );
 
         // Row 30 — LLM.run throws: some chunks succeed, some fail → partial result,
         // no throw. All fail → aggregate throw (documented fail-safe escalation).
@@ -753,7 +744,9 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
         // Row 32 — empty-success (content '') → falsy → explicit throw (signal).
         it('row 32: empty-success (empty string) → throws (fail-safe signal)', async () => {
             runSpy.mockResolvedValue('');
-            await expect(callAnalyzer()).rejects.toThrow(/No response from LLM/);
+            await expect(callAnalyzer()).rejects.toThrow(
+                /No response from LLM/,
+            );
         });
 
         // Row 33 — refusal prose. Truthy string, no `.rules` → silently "no
@@ -831,9 +824,7 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
                 ...buildCtx(),
                 codeReviewConfig: {
                     ...buildCtx().codeReviewConfig,
-                    kodyRules: [
-                        { uuid: 'rule-1', scope: 'pull_request' },
-                    ],
+                    kodyRules: [{ uuid: 'rule-1', scope: 'pull_request' }],
                 },
                 changedFiles: [],
             };
@@ -921,21 +912,21 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
         });
 
         it('row 39: violation with null file-sha maps to empty arrays', async () => {
-            const suggestions = await (service as any).mapViolatedRulesToSuggestions(
-                [
-                    {
-                        uuid: 'rule-1',
-                        violations: [
-                            {
-                                violatedFileSha: null,
-                                relatedFileSha: undefined,
-                                suggestionContent: 'c',
-                                oneSentenceSummary: 's',
-                            },
-                        ],
-                    },
-                ],
-            );
+            const suggestions = await (
+                service as any
+            ).mapViolatedRulesToSuggestions([
+                {
+                    uuid: 'rule-1',
+                    violations: [
+                        {
+                            violatedFileSha: null,
+                            relatedFileSha: undefined,
+                            suggestionContent: 'c',
+                            oneSentenceSummary: 's',
+                        },
+                    ],
+                },
+            ]);
             expect(suggestions).toHaveLength(1);
             expect(suggestions[0].files.violatedFileSha).toEqual([]);
             expect(suggestions[0].files.relatedFileSha).toEqual([]);
@@ -1025,29 +1016,34 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
         it.each([
             ['strict json_schema (openai)', STRICT],
             ['json_object fallback (kimi/moonshotai)', FALLBACK],
-        ])('%s: happy D handled identically + byok threaded', async (_l, byok) => {
-            runSpy.mockResolvedValue(exactAnalyzerD());
-            const result = await (service as any).processChunk(
-                buildCtx(byok),
-                oneFile,
-                KODY_RULES,
-                'en-US',
-                'gemini-2.5-pro',
-                0,
-                42,
-                orgData,
-                undefined,
-            );
-            expect(result).toHaveLength(1);
-            expect(runSpy.mock.calls[0][0].byokConfig).toBe(byok);
-            expect(runSpy.mock.calls[0][0].attrs.provider).toBe(byok.provider);
-        });
+        ])(
+            '%s: happy D handled identically + byok threaded',
+            async (_l, byok) => {
+                runSpy.mockResolvedValue(exactAnalyzerD());
+                const result = await (service as any).processChunk(
+                    buildCtx(byok),
+                    oneFile,
+                    KODY_RULES,
+                    'en-US',
+                    'gemini-2.5-pro',
+                    0,
+                    42,
+                    orgData,
+                    undefined,
+                );
+                expect(result).toHaveLength(1);
+                expect(runSpy.mock.calls[0][0].byokConfig).toBe(byok);
+                expect(runSpy.mock.calls[0][0].attrs.provider).toBe(
+                    byok.provider,
+                );
+            },
+        );
 
         it.each([
             ['strict json_schema (openai)', STRICT],
             ['json_object fallback (kimi/moonshotai)', FALLBACK],
         ])(
-            '%s: off-schema bare array degrades the SAME way (no per-provider branch)',
+            '%s: off-schema bare array is RECOVERED the SAME way (no per-provider branch)',
             async (_l, byok) => {
                 runSpy.mockResolvedValue([
                     { ruleId: 'rule-1', violations: [violation()] },
@@ -1063,8 +1059,10 @@ describe('KodyRulesPrLevelAnalysisService — LLM.run I/O contract matrix', () =
                     orgData,
                     undefined,
                 );
-                // Same silent-degradation shape regardless of provider policy.
-                expect(result).toBeNull();
+                // The SHAPE fix (normalizeEnvelope) is model-agnostic: a bare
+                // array is lifted to {rules:[…]} and recovered identically under
+                // the strict-json_schema and json_object-fallback slots (#1786).
+                expect(result).toHaveLength(1);
             },
         );
 

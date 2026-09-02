@@ -29,7 +29,11 @@ describe('BusinessRulesVerifier.verify', () => {
     const ctx = { runId: 'x', signal: new AbortController().signal } as any;
 
     it('returns keep=false when the verifier refutes the claim', async () => {
-        const runner = { run: jest.fn(async () => runStateWithVerdict(false, 'diff covers it')) };
+        const runner = {
+            run: jest.fn(async () =>
+                runStateWithVerdict(false, 'diff covers it'),
+            ),
+        };
         const verifier = new BusinessRulesVerifier(runner as any, {
             modelId: 'resolved',
             diff: '+ revokeSessions(userId)',
@@ -48,7 +52,7 @@ describe('BusinessRulesVerifier.verify', () => {
             taskContext: 'TASK_MARKER',
         });
         await verifier.verify(claim, ctx);
-        const prompt = runner.run.mock.calls[0][1].prompt as string;
+        const prompt = (runner.run.mock.calls as any[])[0][1].prompt as string;
         expect(prompt).toContain('DIFF_MARKER');
         expect(prompt).toContain('TASK_MARKER');
         expect(prompt).toContain('PR never revokes sessions'); // the claim summary
@@ -63,11 +67,16 @@ describe('BusinessRulesVerifier.verify', () => {
             userLanguage: 'pt-BR',
         });
         await verifier.verify(claim, ctx);
-        expect(runner.run.mock.calls[0][0].systemPrompt).toContain('pt-BR');
+        expect((runner.run.mock.calls as any[])[0][0].systemPrompt).toContain(
+            'pt-BR',
+        );
     });
 
     it('fails open (keep=true) when the run produces no verdict', async () => {
-        const emptyState = { ...runStateWithVerdict(true), artifacts: [] } as RunState;
+        const emptyState = {
+            ...runStateWithVerdict(true),
+            artifacts: [],
+        } as RunState;
         const runner = { run: jest.fn(async () => emptyState) };
         const verifier = new BusinessRulesVerifier(runner as any, {
             modelId: 'resolved',
@@ -89,7 +98,9 @@ describe('shouldVerifyValidationResult (opt-in gate)', () => {
     it('is false when the flag is off (default)', () => {
         expect(shouldVerifyValidationResult(ready, {})).toBe(false);
         expect(
-            shouldVerifyValidationResult(ready, { verifyAnalyzerResult: false }),
+            shouldVerifyValidationResult(ready, {
+                verifyAnalyzerResult: false,
+            }),
         ).toBe(false);
     });
 
@@ -209,12 +220,15 @@ function makeVerifier(
         ConstructorParameters<typeof BusinessRulesVerifier>[1]
     > = {},
 ): BusinessRulesVerifier {
-    return new BusinessRulesVerifier({ run: runnerRun } as any, {
-        modelId: 'resolved',
-        diff: 'd',
-        taskContext: 't',
-        ...params,
-    } as any);
+    return new BusinessRulesVerifier(
+        { run: runnerRun } as any,
+        {
+            modelId: 'resolved',
+            diff: 'd',
+            taskContext: 't',
+            ...params,
+        } as any,
+    );
 }
 
 const matrixCtx = { runId: 'x', signal: new AbortController().signal } as any;
@@ -507,9 +521,7 @@ describe('MATRIX B — semantic-but-wrong (valid JSON, wrong value encoding)', (
 
 describe('MATRIX C — unparseable / transport (fail-safe layer)', () => {
     it('row 28 — truncated JSON string payload degrades to observable default', async () => {
-        const { verdict } = await verdictFrom(
-            stateWithPayload('{"keep":fal'),
-        );
+        const { verdict } = await verdictFrom(stateWithPayload('{"keep":fal'));
         expect(verdict.keep).toBe(true);
         expect(verdict.rationale).toBe(NO_VERDICT_MARKER);
     });
@@ -598,7 +610,7 @@ describe('MATRIX C — unparseable / transport (fail-safe layer)', () => {
             'aborted',
         );
         // ctx (carrying the abort signal) is threaded verbatim as the 3rd arg.
-        expect(run.mock.calls[0][2]).toBe(abortCtx);
+        expect((run.mock.calls as any[])[0][2]).toBe(abortCtx);
     });
 });
 
@@ -609,12 +621,14 @@ describe('MATRIX D — input variants (happy runner, assert the invariant)', () 
         const run = happy();
         const verifier = makeVerifier(run, { diff: '', taskContext: '' });
         await verifier.verify(matrixClaim, matrixCtx);
-        const prompt = run.mock.calls[0][1].prompt as string;
+        const prompt = (run.mock.calls as any[])[0][1].prompt as string;
         expect(prompt).toContain('(none provided)');
     });
 
     it('row 36 — single candidate: happy path returns the model keep verbatim', async () => {
-        const { verdict } = await verdictFrom(stateWithPayload({ keep: false }));
+        const { verdict } = await verdictFrom(
+            stateWithPayload({ keep: false }),
+        );
         expect(verdict.keep).toBe(false);
     });
 
@@ -623,7 +637,7 @@ describe('MATRIX D — input variants (happy runner, assert the invariant)', () 
         const run = happy();
         const verifier = makeVerifier(run, { diff: bigDiff });
         await verifier.verify(matrixClaim, matrixCtx);
-        const prompt = run.mock.calls[0][1].prompt as string;
+        const prompt = (run.mock.calls as any[])[0][1].prompt as string;
         expect(prompt).toContain(bigDiff);
     });
 
@@ -634,7 +648,7 @@ describe('MATRIX D — input variants (happy runner, assert the invariant)', () 
             { needsMoreInfo: false, summary: undefined as any } as any,
             matrixCtx,
         );
-        const prompt = run.mock.calls[0][1].prompt as string;
+        const prompt = (run.mock.calls as any[])[0][1].prompt as string;
         expect(prompt).toContain('(no summary)');
         expect(prompt).not.toContain('Reason:');
     });
@@ -643,18 +657,18 @@ describe('MATRIX D — input variants (happy runner, assert the invariant)', () 
         const run = happy();
         const verifier = makeVerifier(run, { diff: '   \t  ' });
         await verifier.verify(matrixClaim, matrixCtx);
-        const prompt = run.mock.calls[0][1].prompt as string;
+        const prompt = (run.mock.calls as any[])[0][1].prompt as string;
         const diffSection = prompt.split('## PR diff')[1];
         expect(diffSection).toContain('   \t  ');
         expect(diffSection).not.toContain('(none provided)');
     });
 
     it('row 40 — special/binary-ish chars in diff survive verbatim into the prompt', async () => {
-        const weird = 'diff --git\x00\x01<script>💥 end';
+        const weird = 'diff --git\x00\x01<script>💥 end';
         const run = happy();
         const verifier = makeVerifier(run, { diff: weird });
         await verifier.verify(matrixClaim, matrixCtx);
-        expect(run.mock.calls[0][1].prompt).toContain(weird);
+        expect((run.mock.calls as any[])[0][1].prompt).toContain(weird);
     });
 
     it('row 42 — metamorphic: reordering candidate keys yields an identical prompt', async () => {
@@ -674,7 +688,9 @@ describe('MATRIX D — input variants (happy runner, assert the invariant)', () 
         } as ValidationResult;
         await makeVerifier(runA).verify(a, matrixCtx);
         await makeVerifier(runB).verify(b, matrixCtx);
-        expect(runA.mock.calls[0][1].prompt).toBe(runB.mock.calls[0][1].prompt);
+        expect((runA.mock.calls as any[])[0][1].prompt).toBe(
+            (runB.mock.calls as any[])[0][1].prompt,
+        );
     });
 });
 
@@ -698,7 +714,7 @@ describe('MATRIX E — provider/model policy (parse layer is model-agnostic)', (
         for (const modelId of STRICT) {
             const run = jest.fn(async () => stateWithPayload({ keep: true }));
             await makeVerifier(run, { modelId }).verify(matrixClaim, matrixCtx);
-            specs.push(run.mock.calls[0][0]);
+            specs.push((run.mock.calls as any[])[0][0]);
         }
         for (const s of specs) {
             expect(s.resultToolName).toBe(VERIFY_DONE_TOOL);
@@ -712,7 +728,7 @@ describe('MATRIX E — provider/model policy (parse layer is model-agnostic)', (
         for (const modelId of FALLBACK) {
             const run = jest.fn(async () => stateWithPayload({ keep: true }));
             await makeVerifier(run, { modelId }).verify(matrixClaim, matrixCtx);
-            specs.push(run.mock.calls[0][0]);
+            specs.push((run.mock.calls as any[])[0][0]);
         }
         for (const s of specs) {
             expect(s.resultToolName).toBe(VERIFY_DONE_TOOL);
@@ -770,26 +786,28 @@ describe('BOUNDARY — request assembly & return-shape guarantees', () => {
     it('builds the spec with the verifier system prompt, submitVerdict result tool, and default maxSteps', async () => {
         const run = jest.fn(async () => stateWithPayload({ keep: true }));
         await makeVerifier(run).verify(matrixClaim, matrixCtx);
-        const spec = run.mock.calls[0][0];
+        const spec = (run.mock.calls as any[])[0][0];
         expect(spec.systemPrompt).toContain(
             'You audit a business-rules validation verdict',
         );
         expect(spec.resultToolName).toBe(VERIFY_DONE_TOOL);
-        expect(spec.tools.list().some((t: any) => t.name === VERIFY_DONE_TOOL)).toBe(
-            true,
-        );
+        expect(
+            spec.tools.list().some((t: any) => t.name === VERIFY_DONE_TOOL),
+        ).toBe(true);
         expect(spec.maxSteps).toBe(4);
     });
 
     it('threads cost labels onto the spec ONLY when provided', async () => {
-        const withLabels = jest.fn(async () => stateWithPayload({ keep: true }));
+        const withLabels = jest.fn(async () =>
+            stateWithPayload({ keep: true }),
+        );
         await makeVerifier(withLabels, {
             agentName: 'A',
             phase: 'P',
             runName: 'R',
             spanName: 'S',
         }).verify(matrixClaim, matrixCtx);
-        const s1 = withLabels.mock.calls[0][0];
+        const s1 = (withLabels.mock.calls as any[])[0][0];
         expect(s1).toMatchObject({
             agentName: 'A',
             phase: 'P',
@@ -799,25 +817,29 @@ describe('BOUNDARY — request assembly & return-shape guarantees', () => {
 
         const without = jest.fn(async () => stateWithPayload({ keep: true }));
         await makeVerifier(without).verify(matrixClaim, matrixCtx);
-        const s2 = without.mock.calls[0][0];
+        const s2 = (without.mock.calls as any[])[0][0];
         expect(s2).not.toHaveProperty('agentName');
         expect(s2).not.toHaveProperty('phase');
     });
 
     it('threads providerOptions (BYOK reasoning knob) onto the spec verbatim', async () => {
-        const providerOptions = { anthropic: { thinking: { type: 'enabled' } } };
+        const providerOptions = {
+            anthropic: { thinking: { type: 'enabled' } },
+        };
         const run = jest.fn(async () => stateWithPayload({ keep: true }));
         await makeVerifier(run, { providerOptions }).verify(
             matrixClaim,
             matrixCtx,
         );
-        expect(run.mock.calls[0][0].providerOptions).toEqual(providerOptions);
+        expect((run.mock.calls as any[])[0][0].providerOptions).toEqual(
+            providerOptions,
+        );
     });
 
     it('respects a maxSteps override', async () => {
         const run = jest.fn(async () => stateWithPayload({ keep: true }));
         await makeVerifier(run, { maxSteps: 9 }).verify(matrixClaim, matrixCtx);
-        expect(run.mock.calls[0][0].maxSteps).toBe(9);
+        expect((run.mock.calls as any[])[0][0].maxSteps).toBe(9);
     });
 
     it('forwards telemetryMetadata into the run input only when provided', async () => {
@@ -827,11 +849,15 @@ describe('BOUNDARY — request assembly & return-shape guarantees', () => {
             matrixClaim,
             matrixCtx,
         );
-        expect(withMeta.mock.calls[0][1].telemetryMetadata).toEqual(meta);
+        expect((withMeta.mock.calls as any[])[0][1].telemetryMetadata).toEqual(
+            meta,
+        );
 
         const without = jest.fn(async () => stateWithPayload({ keep: true }));
         await makeVerifier(without).verify(matrixClaim, matrixCtx);
-        expect(without.mock.calls[0][1]).not.toHaveProperty('telemetryMetadata');
+        expect((without.mock.calls as any[])[0][1]).not.toHaveProperty(
+            'telemetryMetadata',
+        );
     });
 
     it('captures token usage from the run state after verify()', async () => {
@@ -848,8 +874,14 @@ describe('BOUNDARY — request assembly & return-shape guarantees', () => {
         const state = {
             ...stateWithPayload({ keep: true, rationale: 'second' }),
             artifacts: [
-                { type: VERIFY_DONE_TOOL, payload: { keep: false, rationale: 'first' } },
-                { type: VERIFY_DONE_TOOL, payload: { keep: true, rationale: 'second' } },
+                {
+                    type: VERIFY_DONE_TOOL,
+                    payload: { keep: false, rationale: 'first' },
+                },
+                {
+                    type: VERIFY_DONE_TOOL,
+                    payload: { keep: true, rationale: 'second' },
+                },
             ],
         } as unknown as RunState;
         const { verdict } = await verdictFrom(state);
@@ -861,7 +893,10 @@ describe('BOUNDARY — request assembly & return-shape guarantees', () => {
         const state = {
             ...stateWithPayload(null),
             artifacts: [
-                { type: VERIFY_DONE_TOOL, payload: { keep: false, rationale: 'valid' } },
+                {
+                    type: VERIFY_DONE_TOOL,
+                    payload: { keep: false, rationale: 'valid' },
+                },
                 { type: VERIFY_DONE_TOOL, payload: { keep: 'nope' } },
             ],
         } as unknown as RunState;

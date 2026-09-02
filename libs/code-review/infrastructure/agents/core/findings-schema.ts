@@ -6,6 +6,8 @@
  */
 import { z } from 'zod';
 import { createLogger } from '@libs/core/log/logger';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 
 const logger = createLogger('FindingsSchema');
 
@@ -41,18 +43,27 @@ export function sanitizeFindingsResult(
     raw: FindingsOutput | null,
 ): FindingsOutput | null {
     if (!raw) return null;
-    const parsed = _findingsSchema.safeParse(raw);
+    // SHAPE layer (#1786): coerce the container a non-strict model wrapped /
+    // renamed / bare-arrayed / stringified BEFORE validation, so a real finding
+    // set under `{result:…}`, `{findings:…}`, a bare array, or a JSON string is
+    // recovered instead of read as `undefined` and silently dropped. Pure and
+    // conservative — a canonical `{reasoning,suggestions}` is returned untouched.
+    const normalized = normalizeEnvelope(raw, 'suggestions', [
+        'findings',
+        'codeSuggestions',
+    ]) as FindingsOutput;
+    const parsed = _findingsSchema.safeParse(normalized);
     if (parsed.success) return parsed.data;
     logger.warn({
         message:
-            '[DONE-TOOL] FindingsOutput failed Zod validation, falling back to text parsing',
+            `${LLM_ENVELOPE_TAG} [DONE-TOOL] FindingsOutput failed Zod validation, falling back to text parsing`,
         context: 'FindingsSchema',
         metadata: {
             zodErrors: parsed.error.issues.map(
                 (i) => `${i.path.join('.')}: ${i.message}`,
             ),
-            rawKeys: Object.keys(raw),
-            hasSuggestions: Array.isArray((raw as any).suggestions),
+            rawKeys: Object.keys(normalized ?? {}),
+            hasSuggestions: Array.isArray((normalized as any)?.suggestions),
         },
     });
     // Attempt partial recovery: keep only the suggestions that
@@ -60,23 +71,23 @@ export function sanitizeFindingsResult(
     // raw array UNVALIDATED, which is how a suggestion without
     // `relevantFile` (kimi-k2.7, observed on a customer instance)
     // reached the finder and crashed the evidence-coverage filter.
-    if (Array.isArray((raw as any).suggestions)) {
+    if (Array.isArray((normalized as any)?.suggestions)) {
         const kept: FindingsOutput['suggestions'] = [];
         let dropped = 0;
-        for (const item of (raw as any).suggestions) {
+        for (const item of (normalized as any).suggestions) {
             const s = suggestionSchema.safeParse(item);
             if (s.success) kept.push(s.data);
             else dropped++;
         }
         if (dropped > 0) {
             logger.warn({
-                message: `[DONE-TOOL] dropped ${dropped} suggestion(s) that failed item validation during partial recovery`,
+                message: `${LLM_ENVELOPE_TAG} [DONE-TOOL] dropped ${dropped} suggestion(s) that failed item validation during partial recovery`,
                 context: 'FindingsSchema',
                 metadata: { kept: kept.length, dropped },
             });
         }
         return {
-            reasoning: (raw as any).reasoning ?? '',
+            reasoning: (normalized as any).reasoning ?? '',
             suggestions: kept,
         };
     }

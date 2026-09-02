@@ -8,6 +8,7 @@ import {
     ajvValidator,
     ensureValidatingSchema,
     extractJsonFromText,
+    normalizeEnvelope,
     readOutput,
     repairAndValidate,
     repairJsonText,
@@ -80,9 +81,9 @@ describe('extractJsonFromText', () => {
     });
 
     it('is string-aware (braces inside strings do not truncate)', () => {
-        expect(
-            JSON.parse(extractJsonFromText('x {"msg":"a } b"} y')!),
-        ).toEqual({ msg: 'a } b' });
+        expect(JSON.parse(extractJsonFromText('x {"msg":"a } b"} y')!)).toEqual(
+            { msg: 'a } b' },
+        );
     });
 
     it('extracts a top-level array', () => {
@@ -146,10 +147,9 @@ describe('ensureValidatingSchema', () => {
     });
 
     it('leaves a schema that already validates untouched', () => {
-        const withValidate = jsonSchema(
-            { type: 'object' } as any,
-            { validate: (v) => ({ success: true, value: v }) },
-        );
+        const withValidate = jsonSchema({ type: 'object' } as any, {
+            validate: (v) => ({ success: true, value: v }),
+        });
         expect(ensureValidatingSchema(withValidate)).toBe(withValidate);
     });
 
@@ -339,7 +339,9 @@ describe('structured-output-repair — mutation killers', () => {
     describe('ensureValidatingSchema', () => {
         it('returns a primitive input unchanged (typeof object guard)', () => {
             // Kills the `!wire || typeof wire !== "object"` guard both ways.
-            expect(ensureValidatingSchema('not-an-object')).toBe('not-an-object');
+            expect(ensureValidatingSchema('not-an-object')).toBe(
+                'not-an-object',
+            );
             expect(ensureValidatingSchema(42)).toBe(42);
             expect(ensureValidatingSchema(0)).toBe(0);
         });
@@ -383,7 +385,9 @@ describe('structured-output-repair — mutation killers', () => {
         });
 
         it('unwraps an UPPERCASE ```JSON fence (case-insensitive flag)', () => {
-            expect(extractJsonFromText('```JSON\n{"a":1}\n```')).toBe('{"a":1}');
+            expect(extractJsonFromText('```JSON\n{"a":1}\n```')).toBe(
+                '{"a":1}',
+            );
         });
 
         it('slices a top-level array whose string values contain the object close-brace', () => {
@@ -457,7 +461,9 @@ describe('structured-output-repair — mutation killers', () => {
         });
 
         it('falls through to output when experimental_output is null/undefined', () => {
-            expect(readOutput({ experimental_output: null, output: 9 })).toBe(9);
+            expect(readOutput({ experimental_output: null, output: 9 })).toBe(
+                9,
+            );
             expect(readOutput({ output: 0 })).toBe(0);
         });
     });
@@ -489,6 +495,250 @@ describe('structured-output-repair — mutation killers', () => {
                 undefined,
             );
             expect(await salvageStructuredError(err, wire)).toBeUndefined();
+        });
+    });
+});
+
+describe('normalizeEnvelope (the SHAPE layer — #1786)', () => {
+    const D = [{ id: 'a' }, { id: 'b' }];
+
+    it('leaves a canonical object untouched', () => {
+        const v = { suggestions: D };
+        expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+    });
+
+    it('preserves sibling keys on a canonical object', () => {
+        const v = { suggestions: D, meta: { n: 2 } };
+        expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+    });
+
+    it('row 2 — lifts a bare array under the key', () => {
+        expect(normalizeEnvelope(D, 'suggestions')).toEqual({ suggestions: D });
+    });
+
+    it('row 4 — unwraps a {result:D} wrapper', () => {
+        expect(
+            normalizeEnvelope({ result: { suggestions: D } }, 'suggestions'),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 4 — unwraps {data}/{output}/{response}/{json}/{payload}', () => {
+        for (const w of ['data', 'output', 'response', 'json', 'payload']) {
+            expect(
+                normalizeEnvelope({ [w]: { suggestions: D } }, 'suggestions'),
+            ).toEqual({ suggestions: D });
+        }
+    });
+
+    it('row 5 — unwraps a double {result:{result:D}} wrapper', () => {
+        expect(
+            normalizeEnvelope(
+                { result: { result: { suggestions: D } } },
+                'suggestions',
+            ),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 6 — unwraps {content:D} and {"0":D}', () => {
+        expect(
+            normalizeEnvelope({ content: { suggestions: D } }, 'suggestions'),
+        ).toEqual({ suggestions: D });
+        expect(
+            normalizeEnvelope({ '0': { suggestions: D } }, 'suggestions'),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 4 — unwraps a wrapper whose inner is a bare array', () => {
+        expect(normalizeEnvelope({ result: D }, 'suggestions')).toEqual({
+            suggestions: D,
+        });
+    });
+
+    it('row 7 — parses a stringified-JSON payload then normalizes', () => {
+        expect(
+            normalizeEnvelope(
+                JSON.stringify({ suggestions: D }),
+                'suggestions',
+            ),
+        ).toEqual({ suggestions: D });
+        expect(normalizeEnvelope(JSON.stringify(D), 'suggestions')).toEqual({
+            suggestions: D,
+        });
+    });
+
+    it('row 8/9 — parses a fenced / prose-wrapped stringified payload', () => {
+        expect(
+            normalizeEnvelope(
+                '```json\n' + JSON.stringify(D) + '\n```',
+                'suggestions',
+            ),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 10 — aliases a renamed key (findings→suggestions)', () => {
+        expect(
+            normalizeEnvelope({ findings: D }, 'suggestions', ['findings']),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 10 — aliasing keeps the sibling keys', () => {
+        expect(
+            normalizeEnvelope({ findings: D, meta: 1 }, 'suggestions', [
+                'findings',
+            ]),
+        ).toEqual({ suggestions: D, meta: 1 });
+    });
+
+    it('row 11 — matches a case/convention-mismatched key', () => {
+        expect(normalizeEnvelope({ Suggestions: D }, 'suggestions')).toEqual({
+            suggestions: D,
+        });
+        expect(
+            normalizeEnvelope({ code_suggestions: D }, 'codeSuggestions'),
+        ).toEqual({ codeSuggestions: D });
+    });
+
+    it('never invents data: an unrelated object is returned as-is', () => {
+        const v = { totallyOther: 1 };
+        expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+    });
+
+    it('fail-safe: non-JSON string / null / primitive returned unchanged', () => {
+        expect(
+            normalizeEnvelope('I cannot help with that', 'suggestions'),
+        ).toBe('I cannot help with that');
+        expect(normalizeEnvelope(null, 'suggestions')).toBeNull();
+        expect(normalizeEnvelope(42, 'suggestions')).toBe(42);
+    });
+
+    it('is idempotent (normalizing twice == once)', () => {
+        const once = normalizeEnvelope(
+            { result: { findings: D } },
+            'suggestions',
+            ['findings'],
+        );
+        expect(normalizeEnvelope(once, 'suggestions', ['findings'])).toEqual(
+            once,
+        );
+    });
+
+    // ── CONSERVATISM / no-op guarantees: normalizeEnvelope MUST NOT change a
+    //    value that already works, and MUST NOT guess. These pin that it only
+    //    acts on the intended off-schema shapes. ──────────────────────────────
+    describe('does not change working logic (no-op guarantees)', () => {
+        it('target key present WINS over a sibling wrapper key (no unwrap)', () => {
+            // A canonical payload that also carries a `result`/`data` sibling
+            // must NOT be unwrapped into that sibling.
+            const v = {
+                suggestions: D,
+                result: { suggestions: [{ id: 'x' }] },
+            };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+
+        it('does NOT unwrap a provider envelope {choices:[{message}]}', () => {
+            // choices is not a known wrapper key and there is no target key →
+            // returned unchanged (never lifted as the target array).
+            const env = { choices: [{ message: { content: '{}' } }] };
+            expect(normalizeEnvelope(env, 'suggestions')).toBe(env);
+        });
+
+        it('does NOT descend into a single non-wrapper key', () => {
+            const v = { somethingElse: { suggestions: D } };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+
+        it('does NOT dig into item-level result/data fields (top-level wins)', () => {
+            const v = { suggestions: [{ id: 'a', data: { nope: 1 } }] };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+
+        it('does NOT lift an empty bare array (preserves empty/unusable outcome)', () => {
+            const empty: unknown[] = [];
+            expect(normalizeEnvelope(empty, 'suggestions')).toBe(empty);
+        });
+
+        it('an alias only applies when the canonical key is ABSENT', () => {
+            // Both present → canonical wins, alias ignored, object untouched.
+            const v = { suggestions: D, findings: [{ id: 'z' }] };
+            const out = normalizeEnvelope(v, 'suggestions', ['findings']);
+            expect((out as any).suggestions).toBe(D);
+        });
+
+        it('a scalar/boolean payload is never coerced into an array shape', () => {
+            expect(normalizeEnvelope({ keep: false }, 'suggestions')).toEqual({
+                keep: false,
+            });
+            expect(normalizeEnvelope(true, 'suggestions')).toBe(true);
+        });
+    });
+
+    // ── scalar mode (verifier `keep`, compiler `mechanical`) ─────────────────
+    describe('scalar mode', () => {
+        const S = { scalar: true };
+        it('leaves a canonical scalar object untouched', () => {
+            const v = { keep: false, rationale: 'x' };
+            expect(normalizeEnvelope(v, 'keep', [], S)).toBe(v);
+        });
+        it('unwraps {result:{keep:false}}', () => {
+            expect(
+                normalizeEnvelope({ result: { keep: false } }, 'keep', [], S),
+            ).toEqual({ keep: false });
+        });
+        it('descends a bare [{keep:false}] into its element (not lifted)', () => {
+            expect(normalizeEnvelope([{ keep: false }], 'keep', [], S)).toEqual(
+                { keep: false },
+            );
+        });
+        it('aliases a renamed scalar key (decision→keep)', () => {
+            expect(
+                normalizeEnvelope({ decision: false }, 'keep', ['decision'], S),
+            ).toEqual({ keep: false });
+        });
+        it('does NOT lift a bare array as {keep:[...]}', () => {
+            const out = normalizeEnvelope([{ keep: false }], 'keep', [], S);
+            expect(Array.isArray((out as any).keep)).toBe(false);
+        });
+    });
+
+    // ── observability: onRecover fires exactly when a recovery happened ───────
+    describe('onRecover observability hook', () => {
+        it('does NOT fire on a canonical no-op', () => {
+            const spy = jest.fn();
+            normalizeEnvelope({ suggestions: D }, 'suggestions', [], {
+                onRecover: spy,
+            });
+            expect(spy).not.toHaveBeenCalled();
+        });
+        it('fires once with a reason on a wrapper unwrap', () => {
+            const spy = jest.fn();
+            normalizeEnvelope(
+                { result: { suggestions: D } },
+                'suggestions',
+                [],
+                {
+                    onRecover: spy,
+                },
+            );
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toContain('unwrapped');
+        });
+        it('fires on a bare-array lift and on an alias', () => {
+            const lift = jest.fn();
+            normalizeEnvelope(D, 'suggestions', [], { onRecover: lift });
+            expect(lift).toHaveBeenCalledTimes(1);
+            const alias = jest.fn();
+            normalizeEnvelope({ findings: D }, 'suggestions', ['findings'], {
+                onRecover: alias,
+            });
+            expect(alias).toHaveBeenCalledTimes(1);
+        });
+        it('does NOT fire when nothing safe applies', () => {
+            const spy = jest.fn();
+            normalizeEnvelope({ totallyOther: 1 }, 'suggestions', [], {
+                onRecover: spy,
+            });
+            expect(spy).not.toHaveBeenCalled();
         });
     });
 });

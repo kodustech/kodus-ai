@@ -273,29 +273,32 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
     // findingsFromText → {reasoning:'', suggestions:[]}: the findings are DROPPED.
     // __findingsOutcome flags 'artifact-unusable' (partial signal) but the payload
     // is still lost. Correct behavior = RECOVER; pinned it.failing until the fix.
-    it.failing('[A2] bare array of findings → SHOULD recover (currently dropped)', () => {
+    it('[A2] bare array of findings → SHOULD recover (currently dropped)', () => {
         const out = extractFindings(artifactState([validFinding]));
         expect(out.suggestions).toHaveLength(1);
     });
 
-    it.failing('[A3] suggestions as a single object (not array) → SHOULD recover', () => {
-        const out = extractFindings(
-            artifactState({ reasoning: 'r', suggestions: validFinding }),
-        );
-        expect(out.suggestions).toHaveLength(1);
-    });
+    it.failing(
+        '[A3] suggestions as a single object (not array) → SHOULD recover',
+        () => {
+            const out = extractFindings(
+                artifactState({ reasoning: 'r', suggestions: validFinding }),
+            );
+            expect(out.suggestions).toHaveLength(1);
+        },
+    );
 
-    it.failing('[A4] wrapper key {result:D} → SHOULD unwrap and recover', () => {
+    it('[A4] wrapper key {result:D} → SHOULD unwrap and recover', () => {
         const out = extractFindings(artifactState({ result: D }));
         expect(out.suggestions).toHaveLength(1);
     });
 
-    it.failing('[A5] double wrapper {result:{result:D}} → SHOULD recover', () => {
+    it('[A5] double wrapper {result:{result:D}} → SHOULD recover', () => {
         const out = extractFindings(artifactState({ result: { result: D } }));
         expect(out.suggestions).toHaveLength(1);
     });
 
-    it.failing('[A6] opaque single-key wrap {content:D} → SHOULD recover', () => {
+    it('[A6] opaque single-key wrap {content:D} → SHOULD recover', () => {
         const out = extractFindings(artifactState({ content: D }));
         expect(out.suggestions).toHaveLength(1);
     });
@@ -304,22 +307,24 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
     // leak). Same #1786 drop: sanitizeFindingsResult sees no {reasoning,suggestions}
     // → null → extractFindings falls through to []; the real payload is lost with
     // only the 'artifact-unusable' flag. Correct behavior = unwrap+recover.
-    it.failing('[A6b] numeric single-key wrap {"0":D} → SHOULD recover (currently dropped)', () => {
+    it('[A6b] numeric single-key wrap {"0":D} → SHOULD recover (currently dropped)', () => {
         const state = artifactState({ '0': D });
         const out = extractFindings(state);
         expect(out.suggestions).toHaveLength(1);
     });
 
     // Non-degradation guard for A6b: even while the payload is dropped today, the
-    // drop MUST stay observable (never a silent keep-all / wrong-default). Pin the
-    // signal so a regression that removes it turns this red.
-    it('[A6b-signal] numeric wrap is flagged artifact-unusable (drop is observable)', () => {
+    // After the SHAPE fix (normalizeEnvelope) the numeric wrap is unwrapped and
+    // recovered, so the payload is no longer dropped and the outcome is NOT
+    // artifact-unusable. Pin the recovery so a regression that reintroduces the
+    // silent drop turns this red.
+    it('[A6b-signal] numeric wrap is recovered, not flagged unusable', () => {
         const state = artifactState({ '0': D });
-        expect(extractFindings(state).suggestions).toEqual([]);
-        expect(state.__findingsOutcome).toBe('artifact-unusable');
+        expect(extractFindings(state).suggestions).toHaveLength(1);
+        expect(state.__findingsOutcome).not.toBe('artifact-unusable');
     });
 
-    it.failing('[A7-artifact] stringified JSON as payload → SHOULD parse+recover', () => {
+    it('[A7-artifact] stringified JSON as payload → SHOULD parse+recover', () => {
         const out = extractFindings(artifactState(JSON.stringify(D)));
         expect(out.suggestions).toHaveLength(1);
     });
@@ -347,14 +352,14 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
         expect(out.suggestions).toHaveLength(1);
     });
 
-    it.failing('[A10] right data, wrong keys {analysis,findings} → SHOULD recover', () => {
+    it('[A10] right data, wrong keys {analysis,findings} → SHOULD recover', () => {
         const out = extractFindings(
             artifactState({ analysis: 'r', findings: [validFinding] }),
         );
         expect(out.suggestions).toHaveLength(1);
     });
 
-    it.failing('[A11] case/convention mismatch {Reasoning,Suggestions} → SHOULD recover', () => {
+    it('[A11] case/convention mismatch {Reasoning,Suggestions} → SHOULD recover', () => {
         const out = extractFindings(
             artifactState({ Reasoning: 'r', Suggestions: [validFinding] }),
         );
@@ -412,14 +417,17 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
         }
     });
 
-    it.failing('[A19] provider envelope leak {choices:[{message:{content}}]} → SHOULD recover', () => {
-        const out = extractFindings(
-            artifactState({
-                choices: [{ message: { content: JSON.stringify(D) } }],
-            }),
-        );
-        expect(out.suggestions).toHaveLength(1);
-    });
+    it.failing(
+        '[A19] provider envelope leak {choices:[{message:{content}}]} → SHOULD recover',
+        () => {
+            const out = extractFindings(
+                artifactState({
+                    choices: [{ message: { content: JSON.stringify(D) } }],
+                }),
+            );
+            expect(out.suggestions).toHaveLength(1);
+        },
+    );
 
     it('[A20] reasoning/thinking leak (findings as prose in reasoning) → preserved for recovery', () => {
         // The documented Anthropic omission mode: findings written into reasoning,
@@ -433,7 +441,15 @@ describe('matrix A — output-shape zoo (submitResult artifact payload)', () => 
     });
 
     it('[invariant] extractFindings ALWAYS returns {reasoning:string, suggestions:array}', () => {
-        for (const p of [D, [validFinding], {}, null, 'x', true, JSON.stringify(D)]) {
+        for (const p of [
+            D,
+            [validFinding],
+            {},
+            null,
+            'x',
+            true,
+            JSON.stringify(D),
+        ]) {
             const out = extractFindings(artifactState(p));
             expect(typeof out.reasoning).toBe('string');
             expect(Array.isArray(out.suggestions)).toBe(true);
@@ -463,7 +479,10 @@ describe('matrix B — semantic-but-wrong value encodings', () => {
         const out = extractFindings(
             artifactState({
                 reasoning: 'r',
-                suggestions: [validFinding, { ...validFinding, confidence: '8' }],
+                suggestions: [
+                    validFinding,
+                    { ...validFinding, confidence: '8' },
+                ],
             }),
         );
         expect(out.suggestions).toHaveLength(1);
@@ -534,7 +553,11 @@ describe('matrix rows N/A for the finder boundary (rationale anchored)', () => {
             artifactState({
                 reasoning: 'r',
                 suggestions: [
-                    { ...validFinding, relevantLinesStart: 999999, relevantLinesEnd: 1000000 },
+                    {
+                        ...validFinding,
+                        relevantLinesStart: 999999,
+                        relevantLinesEnd: 1000000,
+                    },
                 ],
             }),
         );
@@ -568,9 +591,12 @@ describe('matrix C — unparseable / transport / fail-safe', () => {
     afterEach(() => jest.restoreAllMocks());
 
     it('[C28] truncated JSON in text → typed-empty, never throws', () => {
-        const truncated = '{"reasoning":"r","suggestions":[{"relevantFile":"a.ts"';
+        const truncated =
+            '{"reasoning":"r","suggestions":[{"relevantFile":"a.ts"';
         expect(() => extractFindings(textStepState(truncated))).not.toThrow();
-        expect(extractFindings(textStepState(truncated)).suggestions).toEqual([]);
+        expect(extractFindings(textStepState(truncated)).suggestions).toEqual(
+            [],
+        );
     });
 
     it('[C29] malformed JSON — trailing comma recovers; single-quote fails safe', () => {
@@ -578,9 +604,9 @@ describe('matrix C — unparseable / transport / fail-safe', () => {
             '{"reasoning":"r","suggestions":' +
             JSON.stringify([validFinding]) +
             ',}';
-        expect(extractFindings(textStepState(trailing)).suggestions).toHaveLength(
-            1,
-        );
+        expect(
+            extractFindings(textStepState(trailing)).suggestions,
+        ).toHaveLength(1);
         const singleQuote = "{'reasoning':'r','suggestions':[]}";
         expect(extractFindings(textStepState(singleQuote)).suggestions).toEqual(
             [],
@@ -659,7 +685,12 @@ describe('recoverFindingsFromProse — request assembly (the LLM.run boundary)',
         const spy = jest
             .spyOn(LLM, 'run')
             .mockResolvedValue({ suggestions: [] } as any);
-        await recoverFindingsFromProse(prose, undefined, 'org', 'code-review-bug');
+        await recoverFindingsFromProse(
+            prose,
+            undefined,
+            'org',
+            'code-review-bug',
+        );
         expect((spy.mock.calls[0][0] as any).runName).toBe(
             'code-review-bug-recovery',
         );
@@ -723,7 +754,9 @@ describe('matrix D — input variants', () => {
             },
             ctx,
         );
-        const files = res.findings.suggestions.map((s) => s.relevantFile).sort();
+        const files = res.findings.suggestions
+            .map((s) => s.relevantFile)
+            .sort();
         expect(files).toEqual(['src/a.ts', 'src/b.ts']); // A not re-added
     });
 
@@ -731,7 +764,10 @@ describe('matrix D — input variants', () => {
         const out = extractFindings(
             artifactState({
                 reasoning: 'r',
-                suggestions: [validFinding, { ...validFinding, relevantFile: undefined }],
+                suggestions: [
+                    validFinding,
+                    { ...validFinding, relevantFile: undefined },
+                ],
             }),
         );
         expect(out.suggestions).toHaveLength(1);
@@ -777,9 +813,7 @@ describe('matrix D — input variants', () => {
                 },
                 ctx,
             );
-            return res.findings.suggestions
-                .map((s) => s.relevantFile)
-                .sort();
+            return res.findings.suggestions.map((s) => s.relevantFile).sort();
         };
         const one = await mergeVia([A, B], [B, A, C]);
         const two = await mergeVia([B, A], [C, A, B]);

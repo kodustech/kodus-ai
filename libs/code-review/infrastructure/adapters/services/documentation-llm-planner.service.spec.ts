@@ -35,9 +35,10 @@ jest.mock('@libs/core/log/langfuse', () => ({
     })),
 }));
 jest.mock('@ai-sdk/openai-compatible', () => ({
-    createOpenAICompatible: jest.fn(
-        () => (modelId: string) => ({ __model: 'groq', modelId }),
-    ),
+    createOpenAICompatible: jest.fn(() => (modelId: string) => ({
+        __model: 'groq',
+        modelId,
+    })),
 }));
 
 import { DocumentationLLMPlannerService } from './documentation-llm-planner.service';
@@ -118,9 +119,7 @@ describe('DocumentationLLMPlannerService — runStructuredReviewCall parity', ()
         // Model proposes a package that is not a dependency of this file.
         mockGenerate.mockResolvedValueOnce(
             ok({
-                queryTasks: [
-                    { packageName: 'left-pad', query: 'padding' },
-                ],
+                queryTasks: [{ packageName: 'left-pad', query: 'padding' }],
             }),
         );
 
@@ -320,41 +319,29 @@ describe('DocumentationLLMPlannerService — LLM.run boundary contract (#1786)',
         // CORRECT non-degrading behavior (the tasks survive), so each stays
         // green now (body fails on the bug) and flips RED the day the boundary
         // learns to normalize / repair / re-ask on these envelopes.
-        it.failing(
-            'recovers query tasks when the model returns a bare array instead of { queryTasks: [...] } (#1786)',
-            async () => {
-                const plans = await planWith([goodTask]);
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('recovers query tasks when the model returns a bare array instead of { queryTasks: [...] } (#1786)', async () => {
+            const plans = await planWith([goodTask]);
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
-        it.failing(
-            'recovers query tasks from a { result: { queryTasks: [...] } } wrapper (#1786)',
-            async () => {
-                const plans = await planWith({
-                    result: { queryTasks: [goodTask] },
-                });
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('recovers query tasks from a { result: { queryTasks: [...] } } wrapper (#1786)', async () => {
+            const plans = await planWith({
+                result: { queryTasks: [goodTask] },
+            });
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
-        it.failing(
-            'recovers query tasks from a stringified JSON payload (#1786)',
-            async () => {
-                const plans = await planWith(
-                    JSON.stringify({ queryTasks: [goodTask] }),
-                );
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('recovers query tasks from a stringified JSON payload (#1786)', async () => {
+            const plans = await planWith(
+                JSON.stringify({ queryTasks: [goodTask] }),
+            );
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
-        it.failing(
-            'recovers query tasks when the array is under a wrong key (e.g. { tasks: [...] }) (#1786)',
-            async () => {
-                const plans = await planWith({ tasks: [goodTask] });
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('recovers query tasks when the array is under a wrong key (e.g. { tasks: [...] }) (#1786)', async () => {
+            const plans = await planWith({ tasks: [goodTask] });
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
         // Whatever the envelope, the return NEVER breaks the declared shape:
         // a caller can always iterate `plan.queryTasks`.
@@ -379,7 +366,9 @@ describe('DocumentationLLMPlannerService — LLM.run boundary contract (#1786)',
     // ── Layer 3: FAIL-SAFE ─────────────────────────────────────────────────
     describe('fail-safe (provider error / suspended key)', () => {
         it('degrades to an empty plan and never throws past its boundary when LLM.run rejects', async () => {
-            runSpy.mockRejectedValue(new Error('suspended key / provider down'));
+            runSpy.mockRejectedValue(
+                new Error('suspended key / provider down'),
+            );
 
             const promise = buildService().planDocumentationByFile({
                 packages: [expressPackage],
@@ -507,69 +496,51 @@ describe('DocumentationLLMPlannerService — full I/O contract matrix backfill',
         });
 
         // Row 5: double wrapper { result: { result: D } } — real data buried.
-        it.failing(
-            '[5] recovers query tasks from a double wrapper { result: { result: { queryTasks } } } (#1786)',
-            async () => {
-                const plans = await planWith({
-                    result: { result: { queryTasks: [goodTask] } },
-                });
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('[5] recovers query tasks from a double wrapper { result: { result: { queryTasks } } } (#1786)', async () => {
+            const plans = await planWith({
+                result: { result: { queryTasks: [goodTask] } },
+            });
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
         // Row 6: numeric / opaque single-key wrap { "0": D } and { content: D }.
-        it.failing(
-            '[6] recovers query tasks from a numeric single-key wrap { "0": { queryTasks } } (#1786)',
-            async () => {
-                const plans = await planWith({ '0': { queryTasks: [goodTask] } });
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('[6] recovers query tasks from a numeric single-key wrap { "0": { queryTasks } } (#1786)', async () => {
+            const plans = await planWith({ '0': { queryTasks: [goodTask] } });
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
-        it.failing(
-            '[6] recovers query tasks from a { content: { queryTasks } } wrap (#1786)',
-            async () => {
-                const plans = await planWith({
-                    content: { queryTasks: [goodTask] },
-                });
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('[6] recovers query tasks from a { content: { queryTasks } } wrap (#1786)', async () => {
+            const plans = await planWith({
+                content: { queryTasks: [goodTask] },
+            });
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
         // Row 8: markdown-fenced JSON string.
-        it.failing(
-            '[8] recovers query tasks from a markdown-fenced JSON string (#1786)',
-            async () => {
-                const fenced =
-                    '```json\n' +
-                    JSON.stringify({ queryTasks: [goodTask] }) +
-                    '\n```';
-                const plans = await planWith(fenced);
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('[8] recovers query tasks from a markdown-fenced JSON string (#1786)', async () => {
+            const fenced =
+                '```json\n' +
+                JSON.stringify({ queryTasks: [goodTask] }) +
+                '\n```';
+            const plans = await planWith(fenced);
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
         // Row 9: prose-wrapped JSON.
-        it.failing(
-            '[9] recovers query tasks from a prose-wrapped JSON string (#1786)',
-            async () => {
-                const prose =
-                    'Here is the plan: ' +
-                    JSON.stringify({ queryTasks: [goodTask] }) +
-                    '\n\nLet me know if you need anything else.';
-                const plans = await planWith(prose);
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('[9] recovers query tasks from a prose-wrapped JSON string (#1786)', async () => {
+            const prose =
+                'Here is the plan: ' +
+                JSON.stringify({ queryTasks: [goodTask] }) +
+                '\n\nLet me know if you need anything else.';
+            const plans = await planWith(prose);
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
         // Row 11: case / convention mismatch (snake_case key).
-        it.failing(
-            '[11] recovers query tasks when the key is snake_case (query_tasks) (#1786)',
-            async () => {
-                const plans = await planWith({ query_tasks: [goodTask] });
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('[11] recovers query tasks when the key is snake_case (query_tasks) (#1786)', async () => {
+            const plans = await planWith({ query_tasks: [goodTask] });
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
 
         // Row 13: extra unknown keys alongside the right ones — must TOLERATE.
         it('[13] tolerates extra unknown keys and still recovers the real queryTasks', async () => {
@@ -634,16 +605,13 @@ describe('DocumentationLLMPlannerService — full I/O contract matrix backfill',
         );
 
         // Row 20: reasoning / thinking leak preceding the JSON payload.
-        it.failing(
-            '[20] recovers query tasks when a thinking/reasoning preamble leaks before the JSON (#1786)',
-            async () => {
-                const leaked =
-                    '<thinking>The file imports express, so...</thinking>' +
-                    JSON.stringify({ queryTasks: [goodTask] });
-                const plans = await planWith(leaked);
-                expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
-            },
-        );
+        it('[20] recovers query tasks when a thinking/reasoning preamble leaks before the JSON (#1786)', async () => {
+            const leaked =
+                '<thinking>The file imports express, so...</thinking>' +
+                JSON.stringify({ queryTasks: [goodTask] });
+            const plans = await planWith(leaked);
+            expect(plans['src/app.ts'].queryTasks).toEqual([goodTask]);
+        });
     });
 
     // ── B. Semantic-but-wrong ───────────────────────────────────────────────
@@ -681,21 +649,33 @@ describe('DocumentationLLMPlannerService — full I/O contract matrix backfill',
             assertDeclaredShape(plans);
         });
 
-        // Row 29: malformed JSON — trailing comma / single quotes / unquoted keys.
-        it('[29] fail-safes to an empty plan (no crash) on malformed JSON strings', async () => {
-            for (const bad of [
+        // Row 29: TRULY malformed JSON (single quotes + unquoted keys) is not
+        // string-repairable → fail-safe to an empty plan, no crash.
+        it('[29] fail-safes to an empty plan (no crash) on unrecoverable malformed JSON', async () => {
+            const plans = await planWith(
                 "{queryTasks: [{'packageName':'express',}]}",
+            );
+            expect(plans['src/app.ts']).toEqual({ queryTasks: [] });
+            assertDeclaredShape(plans);
+        });
+
+        // Row 29b: "almost JSON" — valid but for a trailing comma — IS what the
+        // deterministic repair layer (extractJsonFromText) fixes, so it recovers.
+        it('[29b] recovers an almost-JSON payload whose only fault is a trailing comma', async () => {
+            const plans = await planWith(
                 '{"queryTasks":[{"packageName":"express","query":"x",}]}',
-            ]) {
-                const plans = await planWith(bad);
-                expect(plans['src/app.ts']).toEqual({ queryTasks: [] });
-                assertDeclaredShape(plans);
-            }
+            );
+            expect(plans['src/app.ts'].queryTasks).toEqual([
+                { packageName: 'express', query: 'x' },
+            ]);
         });
 
         // Row 31: error object returned instead of throwing.
         it('[31] fail-safes to an empty plan when LLM.run resolves an { error } object', async () => {
-            const plans = await planWith({ error: 'quota_exceeded', code: 429 });
+            const plans = await planWith({
+                error: 'quota_exceeded',
+                code: 429,
+            });
             expect(plans['src/app.ts']).toEqual({ queryTasks: [] });
             assertDeclaredShape(plans);
         });
@@ -726,9 +706,12 @@ describe('DocumentationLLMPlannerService — full I/O contract matrix backfill',
 
         // Row 34: abort signal fired mid-call → rejection → per-file fail-safe.
         it('[34] fail-safes to an empty plan when the call rejects with an AbortError', async () => {
-            const abort = Object.assign(new Error('The operation was aborted'), {
-                name: 'AbortError',
-            });
+            const abort = Object.assign(
+                new Error('The operation was aborted'),
+                {
+                    name: 'AbortError',
+                },
+            );
             runSpy.mockRejectedValue(abort);
 
             const plans = await buildService().planDocumentationByFile({
@@ -898,10 +881,15 @@ describe('DocumentationLLMPlannerService — full I/O contract matrix backfill',
         it.each([...strict, ...fallback])(
             'fail-safes to the declared empty shape on an unrecoverable off-schema envelope under provider %o',
             async (byok) => {
-                // A bare-array envelope carries data prod drops today; whatever
-                // the provider, the boundary must still return the declared
-                // shape (empty), never crash or ship a wrong plan.
-                const plans = await planWith([goodTask], byok);
+                // A genuinely unrecoverable envelope (no target key, no known
+                // wrapper, no alias — nothing to lift): whatever the provider,
+                // the boundary must return the declared empty shape, never crash
+                // or ship a wrong plan. (A bare array IS recoverable — see the
+                // A-branch row [2] — so it is not the unrecoverable case.)
+                const plans = await planWith(
+                    { irrelevantField: 'no queryTasks here' } as any,
+                    byok,
+                );
                 expect(plans['src/app.ts']).toEqual({ queryTasks: [] });
                 assertDeclaredShape(plans);
             },
@@ -922,8 +910,6 @@ describe('DocumentationLLMPlannerService — schema wiring', () => {
                 )
                 .max(3),
         });
-        expect(
-            schema.safeParse({ queryTasks: [] }).success,
-        ).toBe(true);
+        expect(schema.safeParse({ queryTasks: [] }).success).toBe(true);
     });
 });

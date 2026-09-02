@@ -4,6 +4,10 @@ export const DOCUMENTATION_LLM_PLANNER_SERVICE_TOKEN = Symbol.for(
 
 import { createLogger } from '@libs/core/log/logger';
 import { LLM } from '@libs/llm/llm';
+import {
+    normalizeEnvelope,
+    LLM_ENVELOPE_TAG,
+} from '@libs/llm/structured-output-repair';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { SUPPORTED_LANGUAGES } from '@libs/code-review/domain/contracts/SupportedLanguages';
 import {
@@ -178,6 +182,18 @@ export class DocumentationLLMPlannerService {
         if (!result) {
             return null;
         }
+
+        // SHAPE recovery (#1786): a non-strict model may wrap ({result:{queryTasks}}),
+        // rename, bare-array, or stringify the plan — recover the canonical shape
+        // before reading `.queryTasks`, so a real plan is not read as undefined and
+        // silently emptied.
+        result = normalizeEnvelope(result, 'queryTasks', ['tasks', 'queries'], {
+            onRecover: (reason) =>
+                this.logger.warn({
+                    message: `${LLM_ENVELOPE_TAG} recovered off-schema documentation plan (${reason})`,
+                    context: DocumentationLLMPlannerService.name,
+                }),
+        }) as DocumentationPlannerSchemaType;
 
         const rawQueryTasks = this.uniqueQueryTasks(result.queryTasks);
 

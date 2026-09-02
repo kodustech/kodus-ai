@@ -244,70 +244,54 @@ describe('AgentReviewStage — dedup LLM.run contract (#1786)', () => {
         // groups+unique and silently keeps BOTH — the duplicate ships. Each is
         // written with it.failing against the CORRECT outcome (one survivor):
         // green now, flips to red when #1786 is fixed.
-        it.failing(
-            'bare array [{keep,duplicates}] instead of {groups,unique} — should still dedup',
-            async () => {
-                runSpy = jest
-                    .spyOn(LLM, 'run')
-                    .mockResolvedValue([
-                        { keep: 0, duplicates: [1] },
-                    ] as any);
-                const stage = makeStage();
+        it('bare array [{keep,duplicates}] instead of {groups,unique} — should still dedup', async () => {
+            runSpy = jest
+                .spyOn(LLM, 'run')
+                .mockResolvedValue([{ keep: 0, duplicates: [1] }] as any);
+            const stage = makeStage();
 
-                const out = await callDedup(stage, [dupA(), dupB()]);
+            const out = await callDedup(stage, [dupA(), dupB()]);
 
-                // CORRECT: the model found a duplicate; only one should survive.
-                expect(out.suggestions).toHaveLength(1);
-            },
-        );
+            // CORRECT: the model found a duplicate; only one should survive.
+            expect(out.suggestions).toHaveLength(1);
+        });
 
-        it.failing(
-            '{result:{groups,unique}} wrapper — should still dedup',
-            async () => {
-                runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
-                    result: { groups: [{ keep: 0, duplicates: [1] }], unique: [] },
-                } as any);
-                const stage = makeStage();
+        it('{result:{groups,unique}} wrapper — should still dedup', async () => {
+            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+                result: { groups: [{ keep: 0, duplicates: [1] }], unique: [] },
+            } as any);
+            const stage = makeStage();
 
-                const out = await callDedup(stage, [dupA(), dupB()]);
+            const out = await callDedup(stage, [dupA(), dupB()]);
 
-                expect(out.suggestions).toHaveLength(1);
-            },
-        );
+            expect(out.suggestions).toHaveLength(1);
+        });
 
-        it.failing(
-            'stringified JSON payload — should still dedup',
-            async () => {
-                runSpy = jest
-                    .spyOn(LLM, 'run')
-                    .mockResolvedValue(
-                        JSON.stringify({
-                            groups: [{ keep: 0, duplicates: [1] }],
-                            unique: [],
-                        }) as any,
-                    );
-                const stage = makeStage();
+        it('stringified JSON payload — should still dedup', async () => {
+            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue(
+                JSON.stringify({
+                    groups: [{ keep: 0, duplicates: [1] }],
+                    unique: [],
+                }) as any,
+            );
+            const stage = makeStage();
 
-                const out = await callDedup(stage, [dupA(), dupB()]);
+            const out = await callDedup(stage, [dupA(), dupB()]);
 
-                expect(out.suggestions).toHaveLength(1);
-            },
-        );
+            expect(out.suggestions).toHaveLength(1);
+        });
 
-        it.failing(
-            'right data under wrong keys {duplicateGroups,uniqueIndices} — should still dedup',
-            async () => {
-                runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
-                    duplicateGroups: [{ keep: 0, duplicates: [1] }],
-                    uniqueIndices: [],
-                } as any);
-                const stage = makeStage();
+        it('right data under wrong keys {duplicateGroups,uniqueIndices} — should still dedup', async () => {
+            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+                duplicateGroups: [{ keep: 0, duplicates: [1] }],
+                uniqueIndices: [],
+            } as any);
+            const stage = makeStage();
 
-                const out = await callDedup(stage, [dupA(), dupB()]);
+            const out = await callDedup(stage, [dupA(), dupB()]);
 
-                expect(out.suggestions).toHaveLength(1);
-            },
-        );
+            expect(out.suggestions).toHaveLength(1);
+        });
 
         // A malformed-but-recognized envelope (indices out of range / omitted)
         // must NEVER drop a suggestion — the Layer-3 safety net re-adds any
@@ -402,10 +386,15 @@ describe('AgentReviewStage.executeStage — dedup assembly + fail-safe (#1786)',
             execute: jest.fn().mockResolvedValue(orchestratorResult),
         };
         const stage = new AgentReviewStage(
-            { findLatestStageLog: jest.fn(), updateCodeReview: jest.fn() } as any,
+            {
+                findLatestStageLog: jest.fn(),
+                updateCodeReview: jest.fn(),
+            } as any,
             { findByExternalId: jest.fn().mockResolvedValue(null) } as any,
             reviewOrchestrator as any,
-            { runLLMInSpan: jest.fn(async ({ runFn }: any) => runFn?.()) } as any,
+            {
+                runLLMInSpan: jest.fn(async ({ runFn }: any) => runFn?.()),
+            } as any,
             {
                 generateContext: jest.fn(),
                 generateContextLegacy: jest.fn(),
@@ -434,7 +423,10 @@ describe('AgentReviewStage.executeStage — dedup assembly + fail-safe (#1786)',
 
     const makeContext = () =>
         frozenContext({
-            organizationAndTeamData: { organizationId: 'org-1', teamId: 'team-1' },
+            organizationAndTeamData: {
+                organizationId: 'org-1',
+                teamId: 'team-1',
+            },
             repository: { id: 'repo-1', name: 'repo-1' },
             pullRequest: { number: 7 },
             platformType: 'GITHUB',
@@ -619,96 +611,78 @@ describe('AgentReviewStage — dedup LLM.run contract matrix backfill (#1786)', 
 
     // A5 — double wrapper {result:{result:D}}. `.groups` undefined ⇒ keep-all;
     // the carried duplicate should still be removed. it.failing until #1786.
-    it.failing(
-        'A5: double wrapper {result:{result:D}} — should still dedup',
-        async () => {
-            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+    it('A5: double wrapper {result:{result:D}} — should still dedup', async () => {
+        runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+            result: {
                 result: {
-                    result: {
-                        groups: [{ keep: 0, duplicates: [1] }],
-                        unique: [],
-                    },
+                    groups: [{ keep: 0, duplicates: [1] }],
+                    unique: [],
                 },
-            } as any);
-            const stage = makeStage();
-            const out = await dedup(stage, [dupA(), dupB()]);
-            expect(out.suggestions).toHaveLength(1);
-        },
-    );
+            },
+        } as any);
+        const stage = makeStage();
+        const out = await dedup(stage, [dupA(), dupB()]);
+        expect(out.suggestions).toHaveLength(1);
+    });
 
     // A6 — opaque single-key wrap {content:D} / {"0":D}.
-    it.failing(
-        'A6: {content:D} opaque wrapper — should still dedup',
-        async () => {
-            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
-                content: { groups: [{ keep: 0, duplicates: [1] }], unique: [] },
-            } as any);
-            const stage = makeStage();
-            const out = await dedup(stage, [dupA(), dupB()]);
-            expect(out.suggestions).toHaveLength(1);
-        },
-    );
-    it.failing(
-        'A6: {"0":D} numeric-key wrapper — should still dedup',
-        async () => {
-            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
-                '0': { groups: [{ keep: 0, duplicates: [1] }], unique: [] },
-            } as any);
-            const stage = makeStage();
-            const out = await dedup(stage, [dupA(), dupB()]);
-            expect(out.suggestions).toHaveLength(1);
-        },
-    );
+    it('A6: {content:D} opaque wrapper — should still dedup', async () => {
+        runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+            content: { groups: [{ keep: 0, duplicates: [1] }], unique: [] },
+        } as any);
+        const stage = makeStage();
+        const out = await dedup(stage, [dupA(), dupB()]);
+        expect(out.suggestions).toHaveLength(1);
+    });
+    it('A6: {"0":D} numeric-key wrapper — should still dedup', async () => {
+        runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+            '0': { groups: [{ keep: 0, duplicates: [1] }], unique: [] },
+        } as any);
+        const stage = makeStage();
+        const out = await dedup(stage, [dupA(), dupB()]);
+        expect(out.suggestions).toHaveLength(1);
+    });
 
     // A8 — markdown-fenced JSON string.
-    it.failing(
-        'A8: markdown-fenced ```json block — should still dedup',
-        async () => {
-            const fenced =
-                '```json\n' +
-                JSON.stringify({
-                    groups: [{ keep: 0, duplicates: [1] }],
-                    unique: [],
-                }) +
-                '\n```';
-            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue(fenced as any);
-            const stage = makeStage();
-            const out = await dedup(stage, [dupA(), dupB()]);
-            expect(out.suggestions).toHaveLength(1);
-        },
-    );
+    it('A8: markdown-fenced ```json block — should still dedup', async () => {
+        const fenced =
+            '```json\n' +
+            JSON.stringify({
+                groups: [{ keep: 0, duplicates: [1] }],
+                unique: [],
+            }) +
+            '\n```';
+        runSpy = jest.spyOn(LLM, 'run').mockResolvedValue(fenced as any);
+        const stage = makeStage();
+        const out = await dedup(stage, [dupA(), dupB()]);
+        expect(out.suggestions).toHaveLength(1);
+    });
 
     // A9 — prose-wrapped JSON string.
-    it.failing(
-        'A9: prose-wrapped "Here is the result: {…}" — should still dedup',
-        async () => {
-            const prose =
-                'Here is the result: ' +
-                JSON.stringify({
-                    groups: [{ keep: 0, duplicates: [1] }],
-                    unique: [],
-                }) +
-                '\n\nLet me know if you need anything else.';
-            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue(prose as any);
-            const stage = makeStage();
-            const out = await dedup(stage, [dupA(), dupB()]);
-            expect(out.suggestions).toHaveLength(1);
-        },
-    );
+    it('A9: prose-wrapped "Here is the result: {…}" — should still dedup', async () => {
+        const prose =
+            'Here is the result: ' +
+            JSON.stringify({
+                groups: [{ keep: 0, duplicates: [1] }],
+                unique: [],
+            }) +
+            '\n\nLet me know if you need anything else.';
+        runSpy = jest.spyOn(LLM, 'run').mockResolvedValue(prose as any);
+        const stage = makeStage();
+        const out = await dedup(stage, [dupA(), dupB()]);
+        expect(out.suggestions).toHaveLength(1);
+    });
 
     // A11 — case/convention mismatch on the keys.
-    it.failing(
-        'A11: capitalized {Groups,Unique} keys — should still dedup',
-        async () => {
-            runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
-                Groups: [{ keep: 0, duplicates: [1] }],
-                Unique: [],
-            } as any);
-            const stage = makeStage();
-            const out = await dedup(stage, [dupA(), dupB()]);
-            expect(out.suggestions).toHaveLength(1);
-        },
-    );
+    it('A11: capitalized {Groups,Unique} keys — should still dedup', async () => {
+        runSpy = jest.spyOn(LLM, 'run').mockResolvedValue({
+            Groups: [{ keep: 0, duplicates: [1] }],
+            Unique: [],
+        } as any);
+        const stage = makeStage();
+        const out = await dedup(stage, [dupA(), dupB()]);
+        expect(out.suggestions).toHaveLength(1);
+    });
 
     // A13 — extra unknown keys alongside the right ones: MUST tolerate and dedup.
     it('A13: extra unknown keys are tolerated (still dedups)', async () => {
@@ -894,7 +868,9 @@ describe('AgentReviewStage — dedup LLM.run contract matrix backfill (#1786)', 
             runSpy = jest
                 .spyOn(LLM, 'run')
                 .mockRejectedValue(
-                    new SyntaxError('Unexpected token } in JSON at position 42'),
+                    new SyntaxError(
+                        'Unexpected token } in JSON at position 42',
+                    ),
                 );
             const stage = makeStage();
             const out = await dedup(stage, [dupA(), dupB()]);
@@ -947,9 +923,7 @@ describe('AgentReviewStage — dedup LLM.run contract matrix backfill (#1786)', 
         abort.name = 'AbortError';
         runSpy = jest.spyOn(LLM, 'run').mockRejectedValue(abort);
         const stage = makeStage();
-        await expect(dedup(stage, [dupA(), dupB()])).rejects.toThrow(
-            'aborted',
-        );
+        await expect(dedup(stage, [dupA(), dupB()])).rejects.toThrow('aborted');
     });
 
     // ── D. Input variants ──────────────────────────────────────────────────
@@ -1028,7 +1002,10 @@ describe('AgentReviewStage — dedup LLM.run contract matrix backfill (#1786)', 
             oneSentenceSummary: '空指针 💥 dereference — off\tby\none',
             suggestionContent: '  \n user → null 🚨   weird \\n escaped ',
         };
-        const b = { ...distinctY(), oneSentenceSummary: '🔒 sql 注入 injection' };
+        const b = {
+            ...distinctY(),
+            oneSentenceSummary: '🔒 sql 注入 injection',
+        };
         runSpy = jest
             .spyOn(LLM, 'run')
             .mockResolvedValue({ groups: [], unique: [0, 1] } as any);
@@ -1125,37 +1102,27 @@ describe('AgentReviewStage — dedup LLM.run contract matrix backfill (#1786)', 
         // a real duplicate degrades to a no-op under BOTH a strict and a
         // fallback slot today. Pinned it.failing under each branch so the fix is
         // proven to land for every provider, not just the strict ones.
-        it.failing(
-            'E: bare-array off-schema under a STRICT slot — should still dedup',
-            async () => {
-                runSpy = jest
-                    .spyOn(LLM, 'run')
-                    .mockResolvedValue([
-                        { keep: 0, duplicates: [1] },
-                    ] as any);
-                const stage = makeStage();
-                const out = await dedup(stage, [dupA(), dupB()], {
-                    provider: 'openai',
-                    model: 'gpt-4o-mini',
-                } as any);
-                expect(out.suggestions).toHaveLength(1);
-            },
-        );
-        it.failing(
-            'E: bare-array off-schema under a FALLBACK slot — should still dedup',
-            async () => {
-                runSpy = jest
-                    .spyOn(LLM, 'run')
-                    .mockResolvedValue([
-                        { keep: 0, duplicates: [1] },
-                    ] as any);
-                const stage = makeStage();
-                const out = await dedup(stage, [dupA(), dupB()], {
-                    provider: 'moonshotai',
-                    model: 'kimi-k2',
-                } as any);
-                expect(out.suggestions).toHaveLength(1);
-            },
-        );
+        it('E: bare-array off-schema under a STRICT slot — should still dedup', async () => {
+            runSpy = jest
+                .spyOn(LLM, 'run')
+                .mockResolvedValue([{ keep: 0, duplicates: [1] }] as any);
+            const stage = makeStage();
+            const out = await dedup(stage, [dupA(), dupB()], {
+                provider: 'openai',
+                model: 'gpt-4o-mini',
+            } as any);
+            expect(out.suggestions).toHaveLength(1);
+        });
+        it('E: bare-array off-schema under a FALLBACK slot — should still dedup', async () => {
+            runSpy = jest
+                .spyOn(LLM, 'run')
+                .mockResolvedValue([{ keep: 0, duplicates: [1] }] as any);
+            const stage = makeStage();
+            const out = await dedup(stage, [dupA(), dupB()], {
+                provider: 'moonshotai',
+                model: 'kimi-k2',
+            } as any);
+            expect(out.suggestions).toHaveLength(1);
+        });
     });
 });

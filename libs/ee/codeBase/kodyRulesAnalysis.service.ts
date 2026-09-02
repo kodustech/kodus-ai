@@ -1,5 +1,6 @@
 import { type ContextPack } from '@libs/ai-engine/infrastructure/adapters/services/context/context-pack';
 import { LLM } from '@libs/llm/llm';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { createLogger } from '@libs/core/log/logger';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -341,8 +342,15 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 },
             });
 
-            if (extraction?.ids?.length) {
-                return extraction.ids;
+            // SHAPE recovery (#1786): a bare array / wrapper / renamed key would
+            // make `extraction.ids` undefined and drop real ids silently.
+            const normalizedExtraction = normalizeEnvelope(extraction, 'ids', [
+                'ruleIds',
+                'kodyRuleIds',
+            ]) as typeof extraction;
+
+            if (normalizedExtraction?.ids?.length) {
+                return normalizedExtraction.ids;
             }
 
             this.logger.warn({
@@ -524,13 +532,12 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
                 updatedSuggestions: updatedSuggestions ?? undefined,
             };
 
-            const generatedKodyRulesSuggestionsResult =
-                await this.runGenerator(
-                    extendedContext,
-                    byokConfig,
-                    organizationId,
-                    prNumber,
-                );
+            const generatedKodyRulesSuggestionsResult = await this.runGenerator(
+                extendedContext,
+                byokConfig,
+                organizationId,
+                prNumber,
+            );
 
             const generatedKodyRulesSuggestions = this.processLLMResponse(
                 organizationAndTeamData,
@@ -819,6 +826,14 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
         response: KodyRulesClassifierSchema,
     ): Array<Partial<IKodyRule> | IKodyRule> | null {
         try {
+            // SHAPE recovery (#1786): unwrap/alias/bare-array a non-strict model's
+            // envelope before reading `.rules`, so a real classifier result is not
+            // read as undefined and silently logged as "No rules found".
+            response = normalizeEnvelope(response, 'rules', [
+                'violations',
+                'ruleViolations',
+                'codeSuggestions',
+            ]) as KodyRulesClassifierSchema;
             if (!response || !response.rules?.length) {
                 this.logger.warn({
                     message: 'No rules found in classifier response',
@@ -889,6 +904,14 @@ export class KodyRulesAnalysisService implements IKodyRulesAnalysisService {
             if (!response) {
                 return null;
             }
+
+            // SHAPE recovery (#1786): unwrap/alias/bare-array the envelope before
+            // reading `.codeSuggestions`, so a wrapped/renamed payload is not read
+            // as undefined and silently dropped.
+            response = normalizeEnvelope(response, 'codeSuggestions', [
+                'suggestions',
+                'findings',
+            ]);
 
             // Normalize the types of fields that may come as strings
             if (response?.codeSuggestions) {

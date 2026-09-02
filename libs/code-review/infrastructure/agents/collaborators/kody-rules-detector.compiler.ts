@@ -193,6 +193,11 @@ export async function compileRuleDetector(
     runCompiler: RunCompiler,
     opts: CompileOptions = {},
 ): Promise<CompileResult> {
+    // NOTE (#1786): deliberately NOT normalized. Unlike the finder/rules/verdict
+    // boundaries, this compiler ships a REGEX detector — recovering an off-schema
+    // model output and promoting a wrong regex would SILENTLY HIDE violations,
+    // which is worse than declining (see the prompt: "when unsure, decline"). So
+    // any off-schema shape correctly falls through to decline → semantic judge.
     const out = await runCompiler(rule);
     if (!out || out.mechanical !== true || !out.pattern) {
         return { detector: null, declineReason: 'not-mechanical' };
