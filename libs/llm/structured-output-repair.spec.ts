@@ -699,6 +699,29 @@ describe('normalizeEnvelope (the SHAPE layer — #1786)', () => {
             const out = normalizeEnvelope([{ keep: false }], 'keep', [], S);
             expect(Array.isArray((out as any).keep)).toBe(false);
         });
+        // negative branches of the scalar descent (L343): an array that has no
+        // object first element carries no scalar payload → return the original.
+        it('returns the original for an EMPTY array in scalar mode', () => {
+            const empty: unknown[] = [];
+            expect(normalizeEnvelope(empty, 'keep', [], S)).toBe(empty);
+        });
+        it('returns the original when the first element is falsy', () => {
+            const v = [null] as unknown[];
+            expect(normalizeEnvelope(v, 'keep', [], S)).toBe(v);
+        });
+        it('returns the original when the first element is a non-object', () => {
+            const v = ['true'] as unknown[];
+            expect(normalizeEnvelope(v, 'keep', [], S)).toBe(v);
+        });
+        it('fires onRecover with unwrapped-array-element on a scalar descent', () => {
+            const spy = jest.fn();
+            normalizeEnvelope([{ keep: false }], 'keep', [], {
+                scalar: true,
+                onRecover: spy,
+            });
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toBe('unwrapped-array-element');
+        });
     });
 
     // ── observability: onRecover fires exactly when a recovery happened ───────
@@ -732,6 +755,33 @@ describe('normalizeEnvelope (the SHAPE layer — #1786)', () => {
                 onRecover: alias,
             });
             expect(alias).toHaveBeenCalledTimes(1);
+            expect(alias.mock.calls[0][0]).toBe('aliased-findings');
+        });
+        // the reason argument on a lift (L350): a PLAIN bare array carries no
+        // prior reason → the 'lifted-bare-array' fallback string; a STRINGIFIED
+        // bare array already set reason='parsed-stringified-json' → the `reason ||`
+        // keeps it. Together these pin both sides of the `reason || fallback`.
+        it('a plain bare-array lift reports the lifted-bare-array reason', () => {
+            const spy = jest.fn();
+            normalizeEnvelope(D, 'suggestions', [], { onRecover: spy });
+            expect(spy.mock.calls[0][0]).toBe('lifted-bare-array');
+        });
+        it('a stringified bare-array lift keeps the parse reason', () => {
+            const spy = jest.fn();
+            normalizeEnvelope(JSON.stringify(D), 'suggestions', [], {
+                onRecover: spy,
+            });
+            expect(spy.mock.calls[0][0]).toBe('parsed-stringified-json');
+        });
+        // wrapper break guards (L326-328): a wrapper key whose value is null or a
+        // non-object must NOT be descended into — the original stands untouched.
+        it('does NOT descend a wrapper whose value is null', () => {
+            const v = { result: null };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+        it('does NOT descend a wrapper whose value is a primitive', () => {
+            const v = { result: 'not an object' };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
         });
         it('does NOT fire when nothing safe applies', () => {
             const spy = jest.fn();
