@@ -203,8 +203,13 @@ export class TestByokConnectionUseCase {
     private logTestOutcome(input: TestByokInput, result: TestByokResult): void {
         const where = `provider=${input?.provider} model=${input?.model ?? '(none)'}`;
         if (result.ok) {
+            // A degraded success — connected, but an override the user pasted
+            // reached no parameter — carries a `warning` the UI shows. Fold it
+            // into the same [LLM-SUCCESS] line (it DID succeed) so the silent
+            // drop is greppable in the logs, not just visible in the form:
+            // `[LLM-SUCCESS].*warning=` sweeps exactly these.
             this.logger.log({
-                message: `${LLM_SUCCESS_TAG} BYOK connection test ok: ${where} latency=${result.latencyMs}ms`,
+                message: `${LLM_SUCCESS_TAG} BYOK connection test ok: ${where} latency=${result.latencyMs}ms${result.warning ? ` warning=${JSON.stringify(result.warning)}` : ''}`,
                 context: TestByokConnectionUseCase.name,
             });
             return;
