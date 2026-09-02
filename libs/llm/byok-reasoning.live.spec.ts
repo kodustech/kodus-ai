@@ -33,6 +33,28 @@
  *
  * A case with no key SKIPS — it never fails. A run with partial credentials
  * reports partial coverage, so contributors and forks see green, not a false red.
+ *
+ * ─── EVERY FIELD CAN COME FROM THE JSON ────────────────────────────────────
+ * A brand's entry may be the bare key, or an object carrying the key plus ANY
+ * slot field. The object's fields are spread OVER the row below, so the secret
+ * always wins:
+ *
+ *     {
+ *       "deepseek": "sk-…",
+ *       "zai":      { "apiKey": "…", "model": "glm-5.3" },
+ *       "minimaxi": { "apiKey": "…", "baseURL": "https://api.minimaxi.com/v1" },
+ *       "azure":    { "apiKey": "…", "model": "o3-mini",
+ *                     "baseURL": "https://r.openai.azure.com/openai" },
+ *       "bedrock_grok": { "apiKey": "…", "awsRegion": "us-west-2" }
+ *     }
+ *
+ * So the baseURLs written into the rows are DEFAULTS, not fixtures: they are the
+ * vendors' public endpoints, kept in the file because reading a row should tell
+ * you which vendor it talks to without opening a secret. Anything account-shaped
+ * — Azure's resource endpoint, an AWS region, a model your key actually has
+ * access to — belongs in the JSON and overrides the default without a code
+ * change. Adding a brand is one row plus one JSON key; changing where an
+ * existing brand points is JSON alone.
  */
 
 jest.mock('@libs/common/utils/crypto', () => ({
@@ -312,6 +334,73 @@ const LIVE = [
         apiKey: () =>
             slotExtras('azure').baseURL ? key('azure') : undefined,
         reasons: true,
+    },
+
+    // ── the audit's open questions: cases where the DOCS and our code disagree,
+    // or where no readable doc exists at all. Offline tests cannot settle any of
+    // these — they prove what we SEND, and the question is what the vendor
+    // ACCEPTS. Each one is a claim currently resting on inference. ──────────
+    {
+        brand: 'minimax_m3',
+        why: 'M3 is a different model from M2 on the same platform: platform.minimax.io says thinking is OFF by default and enabled "with adaptive", while we send thinking:{type:enabled,budget_tokens}. Nothing says `enabled` is refused, so it was not changed on a guess — this row is what turns the guess into an answer (3 production slots)',
+        slot: {
+            provider: 'anthropic_compatible',
+            model: 'MiniMax-M3',
+            baseURL: 'https://api.minimax.io/anthropic',
+            // `low` for the same reason as the k3 row: the SHAPE is the subject,
+            // and a high effort would authorise a 40,000-token budget to say one
+            // word.
+            reasoningEffort: 'low',
+        },
+        maxOutputTokens: 6_144,
+        // No env fallback: the point of the single secret is that adding a
+        // brand does not grow the product's env surface, and no MiniMax name
+        // exists in this repo's schema to fall back to.
+        apiKey: () => key('minimax_m3'),
+        reasons: true,
+    },
+    {
+        brand: 'minimaxi',
+        why: 'MiniMax runs TWO platforms and production uses both. api.minimaxi.com is the one this table cites for `reasoning_effort` and the one whose docs render client-side, so it could not be read — the only way to check it is to call it (2 production slots)',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'MiniMax-M2.5',
+            baseURL: 'https://api.minimaxi.com/v1',
+            reasoningEffort: 'high',
+        },
+        apiKey: () => key('minimaxi'),
+        reasons: true,
+    },
+    {
+        brand: 'moonshot_code',
+        why: 'k2.7-code is the pair to the k2.6 row and differs on BOTH facts we changed: thinking cannot be disabled, and platform.kimi.ai documents its temperature as not modifiable. The slot deliberately carries a temperature the runtime must DROP — if it ever reaches the wire this row is where that shows',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'kimi-k2.7-code',
+            baseURL: 'https://api.moonshot.ai/v1',
+            reasoningEffort: 'high',
+            temperature: 0.2,
+        },
+        apiKey: () =>
+            key('moonshot_code', 'API_MOONSHOT_API_KEY', 'MOONSHOT_API_KEY'),
+        reasons: true,
+    },
+    {
+        brand: 'bedrock_grok',
+        why: 'the one case the audit refused to guess. Four Bedrock slots configure an effort that reaches no parameter, because AWS documents Grok reasoning:{effort} for its Responses API and shows none in its Converse example — inventing an additionalModelRequestFields entry risks a ValidationException on every review. `reasons: false` asserts the CURRENT behaviour, so this row goes red the day the transport starts carrying it, either because AWS documented it or because we did',
+        slot: {
+            provider: 'amazon_bedrock',
+            model: 'global.xai.grok-4.6',
+            awsRegion: process.env.API_AWS_REGION || 'us-east-1',
+            reasoningEffort: 'high',
+        },
+        apiKey: () => key('bedrock_grok'),
+        credentialField: 'awsBearerToken' as const,
+        // Grok reasons intrinsically, so tokens may well be spent — what this
+        // row cannot claim is that OUR effort caused it. Asserted as "we send
+        // nothing", which is checkable, rather than "reasoning happened", which
+        // would be true either way and prove nothing.
+        reasons: false,
     },
 ];
 
