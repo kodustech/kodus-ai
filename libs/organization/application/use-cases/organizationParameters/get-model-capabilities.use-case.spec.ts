@@ -159,9 +159,17 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
             expect(c.reasoningOverrideExample).toContain('effort');
         });
 
-        it('is undefined when the module ships no example (UI falls back)', () => {
-            // anthropic_compatible intentionally has no brand example.
-            const c = useCase.execute('anthropic_compatible', 'x');
+        it('anthropic_compatible: legacy thinking WITH a budget (not the budget-less default)', () => {
+            // Kimi/GLM/DeepSeek over the Anthropic protocol reject thinking
+            // without a token budget, so the example must carry one.
+            const c = useCase.execute('anthropic_compatible', 'kimi-k2.6');
+            expect(c.reasoningOverrideExample).toContain('budgetTokens');
+        });
+
+        it('is undefined when the model ships no example (UI falls back)', () => {
+            // A non-Anthropic Bedrock family reasons through no parameter this
+            // transport can express, so it ships no override example.
+            const c = useCase.execute('amazon_bedrock', 'minimax.minimax-m2');
             expect(c.reasoningOverrideExample).toBeUndefined();
         });
     });
