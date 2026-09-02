@@ -27,9 +27,21 @@
  *
  * Deliberately ONE secret rather than a new `process.env.*` per brand: these are
  * test credentials, not product configuration, and adding a brand should not
- * grow the product's env surface. Brands the product already reads an env for
- * (`API_DEEPSEEK_API_KEY`, `API_MOONSHOT_API_KEY`, `API_GOOGLE_AI_API_KEY`,
- * `API_OPEN_AI_API_KEY`) fall back to those names.
+ * grow the product's env surface. Brands fall back to env names that ALREADY
+ * EXIST as repo secrets, checked with `gh secret list` rather than assumed:
+ *
+ *     BYOK_ANTHROPIC_API_KEY   -> the four Claude generations
+ *     BYOK_MOONSHOT_API_KEY    -> moonshot, moonshot_code, anthropic_compatible (k3)
+ *     BYOK_ZHIPU_API_KEY       -> zai (Zhipu is Z.ai, the GLM vendor)
+ *     BYOK_GOOGLE_API_KEY      -> google_gemini
+ *     BYOK_OPENAI_API_KEY      -> openai
+ *
+ * Ten of the twenty rows are runnable on those alone, with no new credential.
+ * The fallbacks used to name `API_MOONSHOT_API_KEY`, `API_OPEN_AI_API_KEY` and
+ * friends — the PRODUCT's env names, none of which exist as repo secrets. The
+ * workflow passed them faithfully and every one resolved to an empty string, so
+ * the fallback path had never once produced a key. Those names are kept as
+ * SECOND fallbacks, for a local run where they may be set.
  *
  * A case with no key SKIPS — it never fails. A run with partial credentials
  * reports partial coverage, so contributors and forks see green, not a false red.
@@ -173,7 +185,7 @@ const LIVE = [
             baseURL: 'https://api.moonshot.ai/v1',
             reasoningEffort: 'high',
         },
-        apiKey: () => key('moonshot', 'API_MOONSHOT_API_KEY', 'MOONSHOT_API_KEY'),
+        apiKey: () => key('moonshot', 'BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'),
         reasons: true,
     },
     {
@@ -186,7 +198,7 @@ const LIVE = [
             reasoningEffort: 'medium',
             temperature: 0,
         },
-        apiKey: () => key('zai'),
+        apiKey: () => key('zai', 'BYOK_ZHIPU_API_KEY'),
         reasons: true,
     },
     {
@@ -227,7 +239,7 @@ const LIVE = [
             model: 'gpt-5.4',
             reasoningEffort: 'high',
         },
-        apiKey: () => key('openai', 'API_OPEN_AI_API_KEY'),
+        apiKey: () => key('openai', 'BYOK_OPENAI_API_KEY', 'API_OPEN_AI_API_KEY'),
         reasons: true,
     },
     {
@@ -259,7 +271,7 @@ const LIVE = [
             model: 'claude-sonnet-4-6',
             reasoningEffort: 'high',
         },
-        apiKey: () => key('anthropic'),
+        apiKey: () => key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
         reasons: true,
     },
     {
@@ -272,7 +284,7 @@ const LIVE = [
         },
         // `low` emits budget_tokens 5_000; the cap has to clear it.
         maxOutputTokens: 6_144,
-        apiKey: () => key('anthropic'),
+        apiKey: () => key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
         reasons: true,
     },
     {
@@ -283,7 +295,7 @@ const LIVE = [
             model: 'claude-opus-4-7',
             reasoningEffort: 'high',
         },
-        apiKey: () => key('anthropic'),
+        apiKey: () => key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
         reasons: true,
     },
     {
@@ -295,7 +307,7 @@ const LIVE = [
             reasoningEffort: 'none',
             temperature: 0.3,
         },
-        apiKey: () => key('anthropic'),
+        apiKey: () => key('anthropic', 'BYOK_ANTHROPIC_API_KEY'),
         reasons: false as const,
     },
     {
@@ -313,7 +325,7 @@ const LIVE = [
             reasoningEffort: 'low',
         },
         maxOutputTokens: 6_144,
-        apiKey: () => key('anthropic_compatible'),
+        apiKey: () => key('anthropic_compatible', 'BYOK_MOONSHOT_API_KEY'),
         reasons: true,
     },
     // NOT covered, deliberately: `novita` (3 production shapes). Verified against
@@ -415,7 +427,7 @@ const LIVE = [
             temperature: 0.2,
         },
         apiKey: () =>
-            key('moonshot_code', 'API_MOONSHOT_API_KEY', 'MOONSHOT_API_KEY'),
+            key('moonshot_code', 'BYOK_MOONSHOT_API_KEY', 'API_MOONSHOT_API_KEY'),
         reasons: true,
     },
     {
@@ -452,15 +464,34 @@ describe('BYOK reasoning — LIVE provider contract', () => {
     it('reports which brands this run actually covered', () => {
         const covered = configured.map((c) => c.brand);
         const skipped = LIVE.filter((c) => !c.apiKey()).map((c) => c.brand);
-        // Coverage is DATA, not a failure: a fork or a partial-secret run is a
-        // legitimate green. Printing it stops "green" from being mistaken for
-        // "everything was checked".
+        // Coverage is DATA, not a failure: a PARTIAL secret is a legitimate
+        // green, and so is a fork PR with none. Printing it stops "green" from
+        // being mistaken for "everything was checked".
         // eslint-disable-next-line no-console
         console.log(
             `[byok-live] covered: ${covered.join(', ') || '(none)'}\n` +
                 `[byok-live] skipped (no credential): ${skipped.join(', ') || '(none)'}`,
         );
         expect(LIVE.length).toBeGreaterThan(0);
+
+        // ...but ZERO coverage on the WEEKLY run is not data, it is the tier not
+        // existing. This job's whole purpose is to spend real tokens against
+        // real vendors once a week; if no brand has a credential, it made no
+        // call, found no drift, and reported green — which reads exactly like a
+        // week in which everything was verified.
+        //
+        // Scoped to the schedule on purpose. A fork PR, a manual dispatch and a
+        // local run all legitimately have no credentials and must stay green;
+        // only the cron is claiming to be the safety net.
+        if (process.env.BYOK_LIVE_EVENT === 'schedule' && !covered.length) {
+            throw new Error(
+                'byok-live: the weekly run had no credentials for ANY of the ' +
+                    `${LIVE.length} brands, so nothing was checked and green would ` +
+                    'mean nothing. Set the BYOK_LIVE_KEYS secret (or any of the ' +
+                    'BYOK_* per-brand secrets) — a PARTIAL set is fine and reports ' +
+                    'partial coverage.',
+            );
+        }
     });
 
     for (const c of LIVE) {
