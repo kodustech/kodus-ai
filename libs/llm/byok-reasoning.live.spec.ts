@@ -1083,6 +1083,42 @@ describe('BYOK reasoning — LIVE provider contract', () => {
     });
 
 
+    /**
+     * ...and the template must not ask for a key no row will ever read.
+     *
+     * The check above only runs one way, and the gap showed up in the file it
+     * exists to protect: a working copy made before five rows were removed
+     * still listed minimax, minimaxi, xiaomi and ollama_cloud, so it sent
+     * someone hunting four credentials for tests that no longer exist — and
+     * nothing said a word, because every brand that DID need documenting was
+     * documented.
+     *
+     * A stale entry is worse than a missing one. A missing key skips a row and
+     * the report names it; a stale key is work that produces nothing, and the
+     * person doing it has no way to tell.
+     */
+    it('asks for no key that no row will read', () => {
+        const template = JSON.parse(
+            readFileSync(
+                join(__dirname, 'testing', 'byok-live-keys.example.json'),
+                'utf8',
+            ),
+        ) as Record<string, unknown>;
+        const brands = new Set(LIVE.map((c) => c.brand));
+
+        for (const field of Object.keys(template)) {
+            // `_readme`, `_weights`, `_optional_overrides` are notes to a human.
+            if (field.startsWith('_')) {
+                continue;
+            }
+            expect([field, brands.has(field)]).toEqual([field, true]);
+        }
+        // A template that had lost every fillable field would pass vacuously.
+        expect(
+            Object.keys(template).filter((f) => !f.startsWith('_')).length,
+        ).toBeGreaterThan(0);
+    });
+
     it('reports which brands this run actually covered', () => {
         const covered = configured.map((c) => c.brand);
         const skipped = LIVE.filter((c) => !canRun(c)).map((c) => c.brand);
