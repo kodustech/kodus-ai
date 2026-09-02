@@ -461,6 +461,106 @@ function reasoningTokens(usage: any): number {
 describe('BYOK reasoning — LIVE provider contract', () => {
     const configured = LIVE.filter((c) => c.apiKey());
 
+    // Runs OFFLINE and with no credentials, on purpose: it is arithmetic about
+    // what WOULD be sent, and the budget must be guarded on the PR that changes
+    // it rather than a week later on someone's bill.
+    it('the whole run stays inside its token budget', async () => {
+        // The declared `maxOutputTokens` is NOT the number that reaches the
+        // wire. For a budget-shape model the Anthropic SDK ADDS the thinking
+        // budget on top — a row asking for 6,144 goes out at 11,144 — so the
+        // ceiling has to be read from the request, not from the row.
+        const real = globalThis.fetch;
+        const ANTHROPIC_OK = {
+            id: 'x', type: 'message', role: 'assistant', model: 'x',
+            content: [{ type: 'text', text: 'ok' }], stop_reason: 'end_turn',
+            usage: { input_tokens: 1, output_tokens: 1 },
+        };
+        const GEMINI_OK = {
+            candidates: [{ content: { parts: [{ text: 'ok' }], role: 'model' }, finishReason: 'STOP' }],
+            usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1, totalTokenCount: 2 },
+        };
+        const OPENAI_OK = {
+            id: 'x', object: 'chat.completion', created: 0, model: 'x',
+            choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+        };
+
+        let total = 0;
+        const perRow: Array<[string, number]> = [];
+        try {
+            for (const c of LIVE) {
+                let sent: any;
+                globalThis.fetch = (async (input: any, init: any) => {
+                    const url = typeof input === 'string' ? input : String(input?.url ?? input);
+                    try {
+                        sent = init?.body ? JSON.parse(String(init.body)) : undefined;
+                    } catch {
+                        sent = undefined;
+                    }
+                    const canned = /generateContent/i.test(url)
+                        ? GEMINI_OK
+                        : /\/messages\b/i.test(url)
+                          ? ANTHROPIC_OK
+                          : OPENAI_OK;
+                    return new Response(JSON.stringify(canned), {
+                        status: 200,
+                        headers: { 'content-type': 'application/json' },
+                    });
+                }) as typeof fetch;
+
+                try {
+                    await LLM.run({
+                        byokConfig: {
+                            ...c.slot,
+                            apiKey: 'budget-probe',
+                            ...((c as any).credentialField
+                                ? { [(c as any).credentialField]: 'budget-probe' }
+                                : {}),
+                        } as unknown as NormalizedModel,
+                        messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
+                        loop: { tools: {}, maxSteps: 1 },
+                        runName: 'byok-live-budget',
+                        maxOutputTokens: (c as any).maxOutputTokens ?? 4_096,
+                    });
+                } catch {
+                    // A canned answer the provider's parser rejects is fine —
+                    // the REQUEST is what is being measured.
+                }
+                const cap =
+                    sent?.max_tokens ??
+                    sent?.generationConfig?.maxOutputTokens ??
+                    sent?.max_output_tokens ??
+                    sent?.inferenceConfig?.maxTokens ??
+                    0;
+                total += cap;
+                perRow.push([c.brand, cap]);
+            }
+        } finally {
+            globalThis.fetch = real;
+        }
+
+        // eslint-disable-next-line no-console
+        console.log(
+            `[byok-live] output ceiling ${total.toLocaleString()} tokens across ` +
+                `${LIVE.length} rows:\n` +
+                perRow.map(([b, n]) => `  ${String(n).padStart(7)}  ${b}`).join('\n'),
+        );
+
+        // A weekly job nobody watches is exactly where a runaway cost hides. The
+        // number is small on purpose — the subject under test is the request
+        // SHAPE, and a one-word answer needs no room. Raising this is allowed and
+        // has to be deliberate: it means a row now authorises real spend.
+        expect(total).toBeLessThanOrEqual(150_000);
+        // ...and no single row may hold most of the budget on its own.
+        for (const [brand, cap] of perRow) {
+            expect([brand, cap]).toEqual([brand, expect.any(Number)]);
+            expect(cap).toBeLessThanOrEqual(30_000);
+        }
+        // The probe must actually have measured something — a stub that captured
+        // nothing would sum to zero and pass.
+        expect(total).toBeGreaterThan(50_000);
+    }, 120_000);
+
     it('reports which brands this run actually covered', () => {
         const covered = configured.map((c) => c.brand);
         const skipped = LIVE.filter((c) => !c.apiKey()).map((c) => c.brand);
