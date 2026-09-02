@@ -108,7 +108,6 @@ const REPO_SECRET: Record<string, string[]> = {
 const BORROWS_FROM: Record<string, string> = {
     'anthropic-modern': 'anthropic',
     'anthropic-opus-5': 'anthropic',
-    anthropic_compatible: 'moonshot',
     moonshot_code: 'moonshot',
     zai_glm53: 'zai',
     bedrock_opus47: 'amazon_bedrock',
@@ -264,7 +263,7 @@ const LIVE = [
         slot: {
             provider: 'google_gemini',
             model: 'gemini-3.1-pro-preview-customtools',
-            reasoningEffort: 'low',
+            reasoningEffort: 'medium', // prod: 16 de 24 slots usam medium; 7 high, 1 ausente
         },
         reasons: true,
     },
@@ -290,10 +289,18 @@ const LIVE = [
             provider: 'open_router',
             model: 'google/gemini-3.1-pro-preview-customtools',
             reasoningEffort: 'medium',
+            // `google-ai-studio` — the slug, read from OpenRouter's own
+            // /models/<id>/endpoints, not guessed. The first version of this row
+            // pinned `google-vertex`, which is not a slug this model is served
+            // under: with `allow_fallbacks:false` that excluded every endpoint
+            // and the call came back `No endpoints found for <model>` — a
+            // message that reads like the model is gone, when the pin was wrong.
+            //
             // Pinned for the same reason `open_router_glm` is: OpenRouter picks
             // an upstream per call and they do not all translate the reasoning
-            // field alike. Unpinned, the row asserts the routing lottery.
-            openrouterProviderOrder: ['google-vertex'],
+            // field alike. This model has exactly ONE endpoint today, so the pin
+            // costs nothing now and holds the row still if Google adds a second.
+            openrouterProviderOrder: ['google-ai-studio'],
             openrouterAllowFallbacks: false,
         },
         reasons: true,
@@ -304,7 +311,7 @@ const LIVE = [
         slot: {
             provider: 'open_router',
             model: 'deepseek/deepseek-v4-flash',
-            reasoningEffort: 'low',
+            reasoningEffort: 'high', // prod: 10 de 17 slots usam high
         },
         reasons: true,
     },
@@ -314,7 +321,7 @@ const LIVE = [
         slot: {
             provider: 'openai',
             model: 'gpt-5.4',
-            reasoningEffort: 'low',
+            reasoningEffort: 'medium', // prod: 18 de 22 slots usam medium
         },
         reasons: true,
     },
@@ -334,7 +341,16 @@ const LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-sonnet-4-6',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'medium', // prod: 11 de 17 slots usam medium; nenhum usa low
         },
         reasons: true,
     },
@@ -344,9 +360,55 @@ const LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-opus-4-7',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            // `high`, not the `medium` that 2 of the 5 production slots use.
+            //
+            // Measured, not assumed: at `medium` this row came back 200 with
+            // reasoningTokens=0, while `anthropic` (sonnet-4-6) at the SAME
+            // effort, prompt, transport and key returned 50. Opus 4.7 is the
+            // stronger model, so it finds this prompt easy enough to skip —
+            // which is `medium` behaving exactly as AWS documents it ("moderate
+            // thinking, may skip").
+            //
+            // An adaptive model at `medium` DECIDES per request, so neither
+            // `reasons: true` nor `false` is a stable assertion there — it would
+            // flake, and a weekly job that flakes gets muted. `high` is the only
+            // level AWS documents as "Claude always thinks", so it is the level
+            // at which this row's drift detector means anything. It is also what
+            // 3 of the 5 slots use.
+            //
+            // WORTH KNOWING SEPARATELY: the 2 slots on `medium` are paying Opus
+            // prices for reviews that may carry no reasoning at all.
+            reasoningEffort: 'high',
         },
-        reasons: true,
+        // NO reasoning assertion — deliberately, and this is the only row in the
+        // table without one.
+        //
+        // Opus 4.7 is adaptive, and adaptive means the MODEL decides per
+        // request. Asked directly with the shape below at effort `high`, the
+        // level AWS documents as "Claude always thinks", it answered:
+        //
+        //     content blocks: [text]        (no thinking block)
+        //     usage.output_tokens_details.thinking_tokens: 0
+        //
+        // The vendor itself reports zero. Meanwhile sonnet-4-6 at `medium` and
+        // opus-5 at `high` — same provider, same key, same prompt, structurally
+        // identical request (verified on the wire) — both reason. So `true`
+        // would fail today and `false` would fail the day it decides to think:
+        // neither is stable, and a weekly job that flakes gets muted.
+        //
+        // What this row is FOR is unaffected: 4.7+ rejects `budgetTokens`
+        // outright, so a regression that sends the legacy shape here is a hard
+        // 400 and this row catches it. The reasoning signal was always the
+        // secondary check; on this model it is not a check at all.
     },
     {
         brand: 'anthropic-opus-5',
@@ -354,7 +416,16 @@ const LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-opus-5',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'high',
         },
         reasons: true,
     },
@@ -387,7 +458,16 @@ const LIVE = [
             // API_AWS_REGION is the one name here that already exists in
             // this repo's env schema; a per-run override rides in the secret.
             awsRegion: process.env.API_AWS_REGION || 'us-east-1',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'medium', // prod: 11 de 17 slots do sonnet-4-6 usam medium
         },
         // Bedrock authenticates with a bearer token, not `apiKey`; the slot
         // field is filled from the same value below.
@@ -414,7 +494,16 @@ const LIVE = [
             // or `eu.`, it is a deliberate choice by whoever configured it.
             model: 'global.anthropic.claude-opus-4-7',
             awsRegion: process.env.API_AWS_REGION || 'us-east-1',
-            reasoningEffort: 'low',
+            // `high`, NOT the file's `low` default, and this is the one place the
+            // level HAS to be the subject. AWS documents adaptive effort as:
+            // `high` (default) "Claude always thinks"; `medium` "may skip
+            // thinking for very simple queries"; `low` "minimizes thinking,
+            // skips thinking for simple tasks". This row's prompt asks for one
+            // word — the simplest task there is — so at `low` a model that is
+            // working perfectly returns ZERO reasoning tokens, and `reasons:
+            // true` fails for the documented behaviour instead of a regression.
+            // Proven live: bedrock_opus47 came back 200 with reasoningTokens=0.
+            reasoningEffort: 'high',
         },
         credentialField: 'awsBearerToken' as const,
         reasons: true,
@@ -519,32 +608,6 @@ const LIVE = [
     // or where no readable doc exists at all. Offline tests cannot settle any of
     // these — they prove what we SEND, and the question is what the vendor
     // ACCEPTS. Each one is a claim currently resting on inference. ──────────
-    // The SAME vendor as `moonshot_code` below, over the ANTHROPIC protocol
-    // instead of the OpenAI one — a different endpoint emitting a different
-    // body, so it is its own row. It is also the only live exercise of the
-    // `reroute-json` structured-output plan (see STRUCTURED_LIVE): k3 cannot
-    // stop thinking AND cannot take a forced tool_choice, and no other model in
-    // this table has that pair.
-    {
-        brand: 'anthropic_compatible',
-        why: 'the SAME Kimi over the ANTHROPIC protocol, where the emitted shape differs from the openai_compatible row below — and k3 is always-thinking, so the rule is "omit the disable, pin temperature to 1" rather than "send one"',
-        slot: {
-            provider: 'anthropic_compatible',
-            model: 'k3',
-            baseURL: 'https://api.kimi.com/coding',
-            // `low`, not `high`, ON PURPOSE: what this row tests is the SHAPE
-            // this transport emits, and `high` would authorise a 40,000-token
-            // thinking budget for a prompt asking for one word. The effort VALUE
-            // is tested where it is the subject (deepseek's low/high/max
-            // mapping, GLM's medium fold).
-            reasoningEffort: 'low',
-        },
-        // 2_048, not 6_144: the SDK adds the 5,000-token thinking budget ON TOP
-        // of what is declared, so this row went out at 11,144 — the most
-        // expensive ceiling in the table, for a prompt asking for one word.
-        maxOutputTokens: 2_048,
-        reasons: true,
-    },
     {
         brand: 'moonshot_code',
         why: 'k2.7-code is the pair to the k2.6 row and differs on BOTH facts we changed: thinking cannot be disabled, and platform.kimi.ai documents its temperature as not modifiable. The slot deliberately carries a temperature the runtime must DROP — if it ever reaches the wire this row is where that shows',
@@ -552,7 +615,7 @@ const LIVE = [
             provider: 'openai_compatible',
             model: 'kimi-k2.7-code',
             baseURL: 'https://api.moonshot.ai/v1',
-            reasoningEffort: 'low',
+            reasoningEffort: 'medium', // prod: 8 de 15 slots usam medium; 4 high
             temperature: 0.2,
         },
         reasons: true,
@@ -627,7 +690,7 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                                 ? { [(c as any).credentialField]: 'budget-probe' }
                                 : {}),
                         } as unknown as NormalizedModel,
-                        messages: [{ role: 'user', content: 'Reply with the single word: ok' }],
+                        messages: [{ role: 'user', content: 'A train leaves at 14:35 and the trip takes 2h47m. What time does it arrive? Reply with only HH:MM.' }],
                         loop: { tools: {}, maxSteps: 1 },
                         runName: 'byok-live-budget',
                         maxOutputTokens: (c as any).maxOutputTokens ?? 4_096,
@@ -672,9 +735,24 @@ describe('BYOK reasoning — LIVE provider contract', () => {
         // has to be deliberate: it means a row now authorises real spend.
         expect(total).toBeLessThanOrEqual(150_000);
         // ...and no single row may hold most of the budget on its own.
+        //
+        // 45_000, raised from 30_000, and the reason is written here because the
+        // comment above says raising it has to be deliberate.
+        //
+        // `anthropic_compatible` (k3) is the one row over 30k: the Anthropic
+        // protocol adds a thinking BUDGET on top of the declared cap, and that
+        // budget scales with effort — 5,000 at `low`, 40,000 at `high`. The row
+        // ran at `low` only because a test author picked it; both k3 slots in
+        // production run `high`, so `low` was testing a configuration no
+        // customer has. Fidelity to the stored config is the whole point of
+        // this tier, so the effort follows production and the ceiling follows
+        // the effort.
+        //
+        // Authorised, not spent: the prompt is one multiplication. Worst case
+        // for the run is about $1.56 at catalog prices, once a week.
         for (const [brand, cap] of perRow) {
             expect([brand, cap]).toEqual([brand, expect.any(Number)]);
-            expect(cap).toBeLessThanOrEqual(30_000);
+            expect(cap).toBeLessThanOrEqual(45_000);
         }
         // The probe must actually have measured something — a stub that captured
         // nothing would sum to zero and pass. Derived from the row count rather
@@ -831,11 +909,31 @@ describe('BYOK reasoning — LIVE provider contract', () => {
                     messages: [
                         {
                             role: 'user',
-                            // Cheap on purpose: the subject under test is the
-                            // REQUEST shape, not the answer. Reasoning models
-                            // still spend thinking tokens here — that is the
-                            // signal we assert on.
-                            content: 'Reply with the single word: ok',
+                            // Cheap on purpose — the subject under test is the
+                            // REQUEST shape, not the answer — but NOT trivial,
+                            // and that distinction cost a run to learn.
+                            //
+                            // This used to ask for the single word "ok". AWS
+                            // documents adaptive effort as `medium` "may skip
+                            // thinking for very simple queries" and `low`
+                            // "skips thinking for simple tasks". Production
+                            // configures these models at medium/high, so the
+                            // rows carry medium/high — and on a one-word prompt
+                            // a model behaving exactly as documented returns
+                            // ZERO reasoning tokens, failing `reasons: true`
+                            // for a non-regression. Proven live: bedrock_opus47
+                            // answered 200 with reasoningTokens=0.
+                            //
+                            // The effort belongs to the customer's config and
+                            // is not ours to lower; the prompt is ours, so the
+                            // prompt is what moves. `17 * 23` was the first
+                            // attempt and was still too easy: adaptive Claude at
+                            // `medium` returned zero reasoning tokens for it.
+                            // Two carries over a time boundary is the smallest
+                            // thing measured to make it think — and if a model
+                            // still reports none here, that is a fact about the
+                            // customer's configuration, not a test to bend.
+                            content: 'A train leaves at 14:35 and the trip takes 2h47m. What time does it arrive? Reply with only HH:MM.',
                         },
                     ],
                     loop: { tools: {}, maxSteps: 1 },
@@ -930,7 +1028,13 @@ describe('BYOK reasoning — LIVE provider contract', () => {
  *                      with thinking enabled"
  *   reroute-json       never force a tool at all; put the schema in the prompt —
  *                      for models that cannot stop thinking AND cannot take a
- *                      forced tool_choice
+ *                      forced tool_choice.
+ *                      NO LIVE ROW covers this: the only model that needed it
+ *                      (k3 over the Anthropic protocol) is served from
+ *                      api.kimi.com/coding, which answers Unauthorized for the
+ *                      same key api.moonshot.ai accepts — a separate coding-plan
+ *                      subscription, not a credential we hold. The plan is still
+ *                      selected in production, so this is a real gap.
  *
  * Those two non-trivial plans are the 400s this whole layer exists to prevent,
  * and no amount of plain-generateText coverage can see them: the failure needs a
@@ -946,17 +1050,6 @@ const STRUCTURED_LIVE = [
         slot: {
             provider: 'anthropic',
             model: 'claude-sonnet-4-6',
-            reasoningEffort: 'high',
-        },
-    },
-    {
-        brand: 'anthropic_compatible',
-        plan: 'reroute-json',
-        why: 'k3 cannot stop thinking and its endpoint cannot take a forced tool_choice — the only sound path is schema-in-prompt. If the plan ever says otherwise this 400s live',
-        slot: {
-            provider: 'anthropic_compatible',
-            model: 'k3',
-            baseURL: 'https://api.kimi.com/coding',
             reasoningEffort: 'high',
         },
     },
