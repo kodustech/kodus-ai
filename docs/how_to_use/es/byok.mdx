@@ -417,7 +417,7 @@ Elegir **Custom** en el interruptor de Thinking revela un área de texto JSON. P
 
 #### Modo manual con namespaces (usuarios avanzados)
 
-Si tu JSON ya contiene una clave de namespace conocida en el nivel superior (`anthropic`, `google`, `openai`, `openrouter`, `openaiCompatible`), Kodus lo deja intacto. Útil si quieres mezclar múltiples namespaces de proveedores o ser explícito:
+Si tu JSON ya empieza con una clave de namespace conocida en el nivel superior — cualquier clave de la tabla de mapeo de abajo — Kodus lo deja intacto. Útil si quieres mezclar múltiples namespaces de proveedores o ser explícito:
 
 ```json
 {
@@ -433,10 +433,14 @@ Internamente, estos son los mapeos de namespace que Kodus usa:
 | Proveedor BYOK | Clave de namespace |
 | --- | --- |
 | `anthropic` / `anthropic_compatible` | `anthropic` |
-| `google_gemini` / `google_vertex` | `google` |
+| `google_gemini` | `google` |
+| `google_vertex` | `google` para Gemini, `anthropic` para Claude en Vertex |
 | `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock` (también acepta `bedrock`) |
+| `novita` | `novita` |
 | `open_router` | `openrouter` |
-| `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### Detalles a tener en cuenta
 

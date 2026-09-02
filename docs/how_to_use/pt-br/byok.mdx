@@ -417,7 +417,7 @@ Use isso quando:
 
 #### Usando namespaces manualmente (usuários avançados)
 
-Se seu JSON já contém uma chave de namespace conhecida no nível superior (`anthropic`, `google`, `openai`, `openrouter`, `openaiCompatible`), o Kodus deixa intocado. Útil quando você quer misturar múltiplos namespaces de provedor ou ser explícito:
+Se seu JSON já começa com uma chave de namespace conhecida no nível superior — qualquer chave da tabela de mapeamento abaixo — o Kodus deixa intocado. Útil quando você quer misturar múltiplos namespaces de provedor ou ser explícito:
 
 ```json
 {
@@ -433,10 +433,14 @@ Nos bastidores, estes são os mapeamentos de namespace que o Kodus usa:
 | Provedor BYOK | Chave de namespace |
 | --- | --- |
 | `anthropic` / `anthropic_compatible` | `anthropic` |
-| `google_gemini` / `google_vertex` | `google` |
+| `google_gemini` | `google` |
+| `google_vertex` | `google` para Gemini, `anthropic` para Claude no Vertex |
 | `openai` | `openai` |
+| `openai_compatible` | `openaiCompatible` |
+| `azure` | `azure` |
+| `amazon_bedrock` | `amazonBedrock` (também aceita `bedrock`) |
+| `novita` | `novita` |
 | `open_router` | `openrouter` |
-| `openai_compatible` / `novita` | `openaiCompatible` |
 
 #### Pegadinhas
 
