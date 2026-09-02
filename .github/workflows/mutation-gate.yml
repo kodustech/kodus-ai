@@ -20,6 +20,15 @@ on:
             - "stryker.config.json"
             - "jest.stryker.config.ts"
 
+# Least privilege for the automatically-provisioned GITHUB_TOKEN. Without this
+# block the job inherits the repository default, which is broad enough to write
+# content and act on pull requests — and this job runs `pnpm install` plus
+# Stryker, i.e. it executes dependency code and the PR's own code. Its three
+# actions (checkout, setup-node, cache) only ever READ, so nothing here needs
+# more. Matches contract-tests.yml, which already declares the same.
+permissions:
+    contents: read
+
 jobs:
     mutation-diff:
         name: Mutation score on changed files
