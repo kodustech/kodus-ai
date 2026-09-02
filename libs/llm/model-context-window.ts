@@ -9,38 +9,32 @@ const MODELS = modelData as Record<
 export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
 
 /**
- * Manual overrides for models we care about — takes precedence over LiteLLM.
- * Keys are matched against the normalized model name (see `normalize()`).
- * Use this when:
- *   - LiteLLM doesn't have the model yet (newly released)
- *   - LiteLLM's fuzzy match picks a wrong entry
- *   - A provider uses a custom model alias
+ * Windows for models the mirror does NOT have. Consulted only after an exact and
+ * a normalized lookup have both missed (see `getModelContextWindow`), so an
+ * entry here can never contradict real upstream data.
+ *
+ * It used to run FIRST, and by SUBSTRING, which made it the most dangerous table
+ * in the file. `claudeopus4` swallowed claude-opus-4-7 and -4-8 — the substring
+ * matches — and pinned two models that hold 1,000,000 tokens to 200,000. `gpt5`
+ * did the same to gpt-5.5 and the gpt-5.6 line, and `deepseekv4flash` to a model
+ * upstream rates at 1,048,576. Every one of those is a live production slot, and
+ * an eightfold under-chunk is invisible: it costs calls and context, never an
+ * error. Matching is now EXACT on the normalized name.
+ *
+ * Add a key only when upstream genuinely lacks the model, and drop it once
+ * upstream has it — `scripts/refresh-model-context-windows.mjs` is what keeps
+ * upstream current, so a hand-typed number is a stopgap, never the source.
  */
 const MANUAL_OVERRIDES: Record<string, number> = {
     // OpenAI
-    'gpt54': 1_000_000,
-    'gpt54mini': 272_000,
-    'gpt5': 400_000,
-    'gpt5mini': 400_000,
     'gptoss': 131_072,
-    'gptoss120b': 131_072,
-    // Anthropic
-    'claudesonnet45': 200_000,
-    'claudeopus45': 200_000,
-    'claudeopus4': 200_000,
-    'claudesonnet4': 200_000,
-    // Google
+    // Google — the 3.x line is not in the mirror yet.
     'gemini31pro': 1_048_576,
     'gemini3pro': 1_048_576,
     'gemini3flash': 1_048_576,
-    'gemini25pro': 1_048_576,
-    'gemini25flash': 1_048_576,
     // Moonshot
     'kimik27': 262_144,
-    'kimik25': 262_144,
     'kimik2': 262_144,
-    // DeepSeek
-    'deepseekv4flash': 128_000,
     // Z.ai
     'glm51': 200_000,
     'glm5': 200_000,
@@ -75,46 +69,64 @@ for (const [name, info] of Object.entries(MODELS)) {
 /**
  * Resolves the max input tokens (context window) for a given model.
  *
- * Resolution order:
- *   1. Exact match in the LiteLLM model database
+ * Resolution order, most precise first:
+ *   1. Exact match in the mirror
  *   2. Normalized match (strips provider prefix, punctuation, case)
- *   3. Partial/substring match on normalized names
- *   4. Default (128k)
+ *   3. Manual override, exact on the normalized name — only reachable for a
+ *      model the mirror does not have
+ *   4. Partial/substring match on normalized names
+ *   5. Default (128k)
+ *
+ * The overrides used to sit at position 1 AND match by substring, so a
+ * hand-typed number for an older model silently overruled real data for a newer
+ * one that merely shared its prefix. Precision now decides precedence.
  *
  * @param modelName - The model identifier (as configured in BYOK).
  * @returns Max input tokens for the model.
  */
 export function getModelContextWindow(modelName?: string): number {
+    return lookupModelContextWindow(modelName) ?? DEFAULT_CONTEXT_WINDOW_TOKENS;
+}
+
+/**
+ * The same resolution, WITHOUT the default — `undefined` means "this model is
+ * unknown to us", which is a different answer from "this model holds 128k".
+ *
+ * Both callers need the distinction and they resolve it differently: the BYOK
+ * review path substitutes its own conservative 128k, while the managed chunker
+ * substitutes the budget ITS caller passed in. Collapsing the two answers into
+ * one number is what let a second source grow — the managed path could not use
+ * this function, so it grew its own table in the provider registry, and the two
+ * drifted apart.
+ */
+export function lookupModelContextWindow(
+    modelName?: string,
+): number | undefined {
     if (!modelName || typeof modelName !== 'string') {
-        return DEFAULT_CONTEXT_WINDOW_TOKENS;
+        return undefined;
     }
 
     const normalized = normalize(modelName);
 
-    // 1. Manual override (highest priority)
-    if (MANUAL_OVERRIDES[normalized]) {
-        return MANUAL_OVERRIDES[normalized];
-    }
-    // Manual override via substring match on normalized name
-    for (const [overrideKey, tokens] of Object.entries(MANUAL_OVERRIDES)) {
-        if (normalized.includes(overrideKey)) {
-            return tokens;
-        }
-    }
-
-    // 2. Exact match in LiteLLM
+    // 1. Exact match in the mirror — the model id as the vendor writes it.
     const direct = MODELS[modelName];
     if (direct?.max_input_tokens) {
         return direct.max_input_tokens;
     }
 
-    // 3. Normalized match in LiteLLM
+    // 2. Normalized match in the mirror.
     const normalizedHit = NORMALIZED_INDEX.get(normalized);
     if (normalizedHit) {
         return normalizedHit;
     }
 
-    // 4. Substring match on LiteLLM — find the longest normalized key that matches
+    // 3. Manual override — a model upstream does not carry yet. Exact only: a
+    //    substring match here is what pinned claude-opus-4-7 to its 4.x sibling.
+    if (MANUAL_OVERRIDES[normalized]) {
+        return MANUAL_OVERRIDES[normalized];
+    }
+
+    // 4. Substring match on the mirror — find the longest normalized key that matches
     let bestMatch = 0;
     let bestKeyLength = 0;
     for (const [key, tokens] of NORMALIZED_INDEX.entries()) {
@@ -130,8 +142,8 @@ export function getModelContextWindow(modelName?: string): number {
         return bestMatch;
     }
 
-    // 5. Default
-    return DEFAULT_CONTEXT_WINDOW_TOKENS;
+    // 5. Unknown — the caller decides what to substitute.
+    return undefined;
 }
 
 /**

@@ -15,6 +15,10 @@ import {
     SheetTitle,
 } from "@components/ui/sheet";
 import { ExternalLink } from "lucide-react";
+// Shared with the PR-list count link — one deep-link contract, not two.
+// Imported from the module, not the barrel: the barrel also drags the
+// PR-list fetch/hooks layer into this cockpit chunk for one pure function.
+import { buildReviewDeepLinkUrl } from "@services/pull-requests/utils";
 
 import type { SuggestionsExplorerItem } from "../../_services/analytics/review/explorer-fetch";
 import { columns } from "./columns";
@@ -23,20 +27,6 @@ const statusLabel = (status: string | null) => {
     if (status === "implemented") return "✓ implemented";
     if (status === "partially_implemented") return "◐ partially implemented";
     return "○ not implemented";
-};
-
-/**
- * Deep link into the PR review screen, landing on this exact suggestion:
- * `?file=<path>&suggestion=<id>` makes the screen scroll to and highlight
- * the finding's card.
- */
-const buildReviewDeepLink = (s: SuggestionsExplorerItem) => {
-    const base = `/pull-requests/${s.repositoryId}/${s.prNumber}`;
-    const params = new URLSearchParams();
-    if (s.filePath) params.set("file", s.filePath);
-    if (s.suggestionId) params.set("suggestion", s.suggestionId);
-    const qs = params.toString();
-    return qs ? `${base}?${qs}` : base;
 };
 
 export const SuggestionsTable = ({
@@ -139,8 +129,13 @@ export const SuggestionsTable = ({
                                         leftIcon={<ExternalLink />}
                                         asChild>
                                         <Link
-                                            href={buildReviewDeepLink(
-                                                selected,
+                                            href={buildReviewDeepLinkUrl(
+                                                selected.repositoryId,
+                                                selected.prNumber,
+                                                {
+                                                    id: selected.suggestionId,
+                                                    filePath: selected.filePath,
+                                                },
                                             )}>
                                             Open in PR review
                                         </Link>

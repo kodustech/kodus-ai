@@ -18,10 +18,21 @@
  *   formatModelLabel('glm-5.2')                       → 'GLM 5.2'
  *   formatModelLabel('accounts/fireworks/models/x')  → 'X'
  */
-const ACRONYMS = new Set(['gpt', 'glm', 'llm', 'ai', 'api', 'sdk', 'ui', 'ocr']);
+const ACRONYMS = new Set([
+    'gpt',
+    'glm',
+    'llm',
+    'ai',
+    'api',
+    'sdk',
+    'ui',
+    'ocr',
+]);
 
 export function formatModelLabel(id: string): string {
-    if (!id) return id;
+    if (!id) {
+        return id;
+    }
     // Deep-pathed ids (e.g. "accounts/fireworks/models/deepseek-v3") name the
     // model in the last segment; the path prefix is routing, not identity.
     const last = id.slice(id.lastIndexOf('/') + 1);

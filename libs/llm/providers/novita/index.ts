@@ -13,6 +13,7 @@ import { novitaModelListing } from './listing';
 import type {
     ModelCapabilities,
     ProviderBuildConfig,
+    ProviderBuildOptions,
     ProviderModule,
 } from '../kernel/types';
 import type { TemperaturePolicy } from '../kernel/model-types';
@@ -42,7 +43,6 @@ export const novitaModule: ProviderModule = {
         // upstream stays generic (no forced thinking on a plain endpoint).
         const isReasoner = isCompatibleReasoner(model);
         return {
-            supportsTemperature: true,
             supportsReasoning: isReasoner,
             structuredOutput: 'json_object',
             toolCalling: 'native',
@@ -64,14 +64,18 @@ export const novitaModule: ProviderModule = {
         return resolveCompatibleReasoningTraits(cfg.model);
     },
     temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy {
-        return compatibleTemperaturePolicy(cfg.model);
+        return compatibleTemperaturePolicy(cfg.model, cfg.reasoningEffort);
     },
 
-    build(cfg: ProviderBuildConfig): LanguageModel {
+    build(
+        cfg: ProviderBuildConfig,
+        opts?: ProviderBuildOptions,
+    ): LanguageModel {
         return createOpenAICompatible({
             name: 'novita',
             apiKey: cfg.apiKey,
             baseURL: cfg.baseURL || 'https://api.novita.ai/v3/openai',
+            ...(opts?.fetch ? { fetch: opts.fetch } : {}),
             // Novita varies too wildly by upstream to trust strict json_schema;
             // it always falls back to json_object (the removed
             // shouldEnableJsonSchema('novita', …) was a constant false).
@@ -88,7 +92,14 @@ export const novitaModule: ProviderModule = {
         { key: 'apiKey', label: 'API key', type: 'password', required: true, scope: 'top' },
         { key: 'baseURL', label: 'Base URL', type: 'url', required: false, scope: 'top', placeholder: 'https://api.novita.ai/v3/openai' },
     ],
-    providerOptionsNamespace: () => 'openaiCompatible',
+    // MUST equal what the SDK derives from this module's `build()` name
+    // (`createOpenAICompatible({ name: 'novita' })` → it reads
+    // `providerOptions['novita']`). While this declared 'openaiCompatible' the
+    // namespace matched nothing, so a user's Custom reasoning override — the raw
+    // JSON the Advanced panel wraps under this key — was silently dropped from
+    // the request body. Same failure the OpenRouter module had; the registry
+    // contract in `provider-options-namespace.spec.ts` now pins BOTH.
+    providerOptionsNamespace: () => 'novita',
     modelListing: novitaModelListing,
 };
 

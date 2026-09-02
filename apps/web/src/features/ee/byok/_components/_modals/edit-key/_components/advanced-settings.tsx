@@ -12,6 +12,7 @@ import { Input } from "@components/ui/input";
 import { Separator } from "@components/ui/separator";
 import { Textarea } from "@components/ui/textarea";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
+import { useModelCapabilities } from "@services/organizationParameters/hooks";
 import {
     BrainCircuitIcon,
     ExternalLinkIcon,
@@ -19,7 +20,6 @@ import {
     Settings2Icon,
 } from "lucide-react";
 import { Controller, useFormContext, useWatch } from "react-hook-form";
-import { useModelCapabilities } from "@services/organizationParameters/hooks";
 
 import type { EditKeyForm } from "../_types";
 import { ADVANCED_FIELDS } from "./credential-forms";
@@ -142,7 +142,15 @@ export const ByokAdvancedSettings = ({
     //     (e.g. a legacy 0) so the saved config matches what the model runs at
     //     (always-thinking Anthropic-protocol: Kimi k2.7-code/k3, GLM-5.3 → 1).
     //   - adjustable → editable (the default).
-    const temperature = caps?.temperature;
+    // A few models scope the temperature constraint to thinking MODE rather than
+    // to the model (DeepSeek accepts one with reasoning off, rejects it with
+    // reasoning on), so the server sends BOTH answers in the same response and
+    // the choice is made here. This is a selection, not a rule: which models and
+    // in which direction stays owned by the provider module.
+    const temperature =
+        currentEffort === "none" && caps?.temperatureWhenReasoningOff
+            ? caps.temperatureWhenReasoningOff
+            : caps?.temperature;
     const temperatureUnsupported = temperature?.kind === "unsupported";
     const temperatureFixedAt =
         temperature?.kind === "fixed" ? temperature.value : undefined;
@@ -255,7 +263,7 @@ export const ByokAdvancedSettings = ({
                                                 key={opt.value}
                                                 value={opt.value}
                                                 disabled={disabled}
-                                                className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 rounded-md px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-text-secondary data-[state=on]:shadow-sm data-[state=on]:ring-1">
+                                                className="text-text-secondary hover:text-text-primary data-[state=on]:bg-background data-[state=on]:text-primary data-[state=on]:ring-primary/40 disabled:hover:text-text-secondary rounded-md px-2 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 data-[state=on]:shadow-sm data-[state=on]:ring-1">
                                                 {opt.label}
                                             </ToggleGroup.Item>
                                         );
@@ -374,10 +382,12 @@ export const ByokAdvancedSettings = ({
 
                     {temperatureUnsupported && (
                         <p className="text-text-tertiary text-xs text-pretty">
-                            This model doesn&apos;t accept a temperature — the
-                            provider rejects any request that sets it (Claude
-                            4.7+, OpenAI GPT-5 / o-series). Steer it with the
-                            thinking level above instead.
+                            This model doesn&apos;t accept a temperature, so
+                            the field is hidden rather than ignored. Some
+                            providers reject the request outright (Claude 4.7+,
+                            OpenAI GPT-5 / o-series); others fix the value and
+                            discard whatever is sent (Kimi k2.6, k2.7-code).
+                            Steer it with the thinking level above instead.
                         </p>
                     )}
 

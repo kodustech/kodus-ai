@@ -211,7 +211,7 @@ Kodusをどのように利用したいかに合わせたワークフローを選
 
 ## モノレポ構造
 
-Kodusは複数のアプリケーション、共有ドメインライブラリ、公開パッケージを含むモノレポです。
+Kodusは複数のアプリケーションと共有ドメインライブラリを含むモノレポです。
 
 ```txt
 kodus-ai/
@@ -221,9 +221,6 @@ kodus-ai/
 │   ├── worker/       # レビュー実行とキューのコンシューマー
 │   └── webhooks/     # Gitプロバイダーのwebhook取り込み
 ├── libs/             # 共有NestJSドメインモジュール
-├── packages/
-│   ├── kodus-flow/   # AIエージェントオーケストレーションSDK
-│   └── kodus-common/ # LLM抽象化パッケージ
 └── scripts/          # 開発、デプロイ、ベンチマーク、自動化スクリプト
 ```
 
@@ -234,8 +231,7 @@ kodus-ai/
 | `apps/worker` | コードレビュー実行、キュー処理、サジェスションチェック、自動化ジョブ、監視タスクを行うバックグラウンドサービス。 |
 | `apps/webhooks` | GitHub、GitLab、Azure Repos、Bitbucket、Forgejoイベントのwebhook取り込みサービス。 |
 | `libs` | Kodusアプリケーション全体で使用される共有NestJSドメインモジュール。 |
-| `packages/kodus-flow` | AIエージェントオーケストレーション用SDK。 |
-| `packages/kodus-common` | モデルプロバイダー向けの共有LLM抽象化パッケージ。 |
+| `libs/llm` | モデルプロバイダー向けのリポジトリ内 LLM/BYOK 抽象化レイヤー。 |
 
 完全なセットアップ手順については、[ローカルクイックスタート](https://docs.kodus.io/how_to_deploy/en/local_quickstart/orchestrator)に従ってください。
 

@@ -36,6 +36,10 @@ if (!TIER0[MODEL]) {
 // Secondary-pass evals default to --mock so PR CI needs no LLM keys. Live
 // multi-model matrix: evals/dedup/run-matrix.js + severity/format --model=.
 const SUITE = [
+    { name: 'review-chain', kind: 'gate',
+      cmd: ['node', 'evals/review-chain/run.js', '--gate'] },
+    { name: 'shape-invariance', kind: 'gate',
+      cmd: ['node', 'evals/review-chain/shape-invariance.js', '--gate'] },
     { name: 'dedup', kind: 'gate',
       cmd: ['node', 'evals/dedup/run.js', '--mock=identity', '--gate'] },
     { name: 'severity', kind: 'gate',

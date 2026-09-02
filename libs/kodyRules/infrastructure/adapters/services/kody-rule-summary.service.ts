@@ -19,7 +19,7 @@ import {
     IKodyRuleSummary,
 } from '@libs/kodyRules/domain/interfaces/kodyRules.interface';
 import { z } from 'zod';
-import type { BYOKConfig } from '@kodus/kodus-common/llm';
+import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     compileRuleDetector,
     compilerOutputSchema,
@@ -292,7 +292,7 @@ export class KodyRuleSummaryService {
             const [byokConfig, subscriptionStatus] = await Promise.all([
                 // Model policy = the review's: resolve the codeReview task to a
                 // `{main}` carrier (BYOK main when configured; managed default
-                // only during trial). null ⇒ no BYOK ⇒ env default downstream.
+                // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
                 this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
@@ -512,7 +512,7 @@ export class KodyRuleSummaryService {
             const [byokConfig, subscriptionStatus] = await Promise.all([
                 // Model policy = the review's: resolve the codeReview task to a
                 // `{main}` carrier (BYOK main when configured; managed default
-                // only during trial). null ⇒ no BYOK ⇒ env default downstream.
+                // only during trial). undefined ⇒ no BYOK ⇒ env default downstream.
                 this.permissionValidationService.resolveTaskSlot(
                     organizationAndTeamData,
                     LLM_TASK.codeReview,
@@ -579,9 +579,7 @@ export class KodyRuleSummaryService {
                     byokConfig,
                     organizationAndTeamData,
                 );
-            const verifiedAtoms = raw.filter(
-                (_, i) => !invalidIndexes.has(i),
-            );
+            const verifiedAtoms = raw.filter((_, i) => !invalidIndexes.has(i));
             if (invalidIndexes.size > 0) {
                 this.logger.warn({
                     message: `[kody-rule-atoms] dropped ${invalidIndexes.size}/${raw.length} atom(s) — inverted or not present in the parent rule`,
@@ -718,7 +716,7 @@ export class KodyRuleSummaryService {
     private async verifyAtoms(
         rule: Partial<IKodyRule>,
         atoms: DecomposedAtom[],
-        byokConfig: BYOKConfig | null | undefined,
+        byokConfig: NormalizedModel | undefined,
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<{
         invalidIndexes: Map<number, string>;
@@ -931,7 +929,10 @@ export class KodyRuleSummaryService {
         rules: Partial<IKodyRule>[],
         organizationAndTeamData: OrganizationAndTeamData,
     ): Promise<Partial<IKodyRule>[]> {
-        const withAtoms = await this.ensureAtoms(rules, organizationAndTeamData);
+        const withAtoms = await this.ensureAtoms(
+            rules,
+            organizationAndTeamData,
+        );
         return withAtoms.flatMap((r) => this.expandForReview(r));
     }
 }

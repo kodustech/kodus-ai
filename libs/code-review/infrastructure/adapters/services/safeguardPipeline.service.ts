@@ -1,6 +1,7 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLM } from '@libs/llm/llm';
 import { extractJsonFromText } from '@libs/llm/structured-output-repair';
+import { LLM_ERROR_TAG, LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { PromptRole } from '@libs/llm/prompt-role';
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -330,7 +331,7 @@ export class SafeguardPipelineService {
                         if (!sandboxError) {
                             // Non-sandbox error — discard and move on
                             this.logger.warn({
-                                message: `Agent verification failed for suggestion ${suggestion.id}, discarding (safe default)`,
+                                message: `${LLM_ERROR_TAG} Agent verification failed for suggestion ${suggestion.id}, discarding (safe default)`,
                                 context: SafeguardPipelineService.name,
                                 error,
                             });
@@ -367,7 +368,7 @@ export class SafeguardPipelineService {
                             );
                         } catch (retryError) {
                             this.logger.warn({
-                                message: `Agent verification retry failed for suggestion ${suggestion.id} after sandbox renewal, discarding`,
+                                message: `${LLM_ERROR_TAG} Agent verification retry failed for suggestion ${suggestion.id} after sandbox renewal, discarding`,
                                 context: SafeguardPipelineService.name,
                                 error: retryError,
                             });
@@ -458,7 +459,7 @@ export class SafeguardPipelineService {
                         }
                     } catch (error) {
                         this.logger.warn({
-                            message: `Prompt-only verification failed for suggestion ${suggestion.id}, keeping (safe default)`,
+                            message: `${LLM_ERROR_TAG} Prompt-only verification failed for suggestion ${suggestion.id}, keeping (safe default)`,
                             context: SafeguardPipelineService.name,
                             error,
                         });
@@ -491,7 +492,7 @@ export class SafeguardPipelineService {
             };
         } catch (error) {
             this.logger.error({
-                message: `Safeguard pipeline failed for PR#${prNumber} file ${file?.filename}, returning all suggestions (${((Date.now() - pipelineStart) / 1000).toFixed(1)}s)`,
+                message: `${LLM_ERROR_TAG} Safeguard pipeline failed for PR#${prNumber} file ${file?.filename}, returning all suggestions (${((Date.now() - pipelineStart) / 1000).toFixed(1)}s)`,
                 context: SafeguardPipelineService.name,
                 error,
             });
@@ -562,7 +563,7 @@ export class SafeguardPipelineService {
             });
         } catch (error) {
             this.logger.warn({
-                message: `Feature extraction parse failed for PR#${prNumber}`,
+                message: `${LLM_ERROR_TAG} ${LLM_ENVELOPE_TAG} Feature extraction parse failed for PR#${prNumber}`,
                 context: SafeguardPipelineService.name,
                 metadata: {
                     error: error instanceof Error ? error.message : String(error),

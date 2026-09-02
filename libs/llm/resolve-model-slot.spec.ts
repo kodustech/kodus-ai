@@ -102,6 +102,133 @@ describe('resolveModelSlot — materialize ONE v2 model slot by id (04b)', () =>
     });
 });
 
+describe('resolveModelSlot — OpenRouter provider pinning surfaces from settings onto the slot', () => {
+    // The pin (openrouterProviderOrder / openrouterAllowFallbacks) lives under the
+    // credential settings and must reach the slot so the reasoning/routing layer
+    // applies it. Empty/malformed pins degrade to `undefined` (not `[]`, not a
+    // truthy fallback) so an OpenRouter call without a pin behaves as unpinned.
+    const orCfg = (settings: Record<string, unknown>): BYOKConfig => ({
+        version: 2,
+        credentials: [
+            { id: 'c1', provider: 'openrouter', apiKey: 'enc-1', settings },
+        ],
+        models: [{ id: 'm1', credentialId: 'c1', model: 'anthropic/claude-sonnet-4-6' }],
+    });
+
+    it('carries a non-empty provider order and an explicit allowFallbacks=false', () => {
+        const slot = resolveModelSlot(
+            orCfg({
+                openrouterProviderOrder: ['anthropic', 'openai'],
+                openrouterAllowFallbacks: false,
+            }),
+            'm1',
+        );
+        expect(slot?.openrouterProviderOrder).toEqual(['anthropic', 'openai']);
+        expect(slot?.openrouterAllowFallbacks).toBe(false);
+    });
+
+    it('filters empty strings out of the provider order', () => {
+        const slot = resolveModelSlot(
+            orCfg({ openrouterProviderOrder: ['', 'anthropic', ''] }),
+            'm1',
+        );
+        expect(slot?.openrouterProviderOrder).toEqual(['anthropic']);
+    });
+
+    it('collapses an EMPTY provider order to undefined, not []', () => {
+        const slot = resolveModelSlot(orCfg({ openrouterProviderOrder: [] }), 'm1');
+        expect(slot?.openrouterProviderOrder).toBeUndefined();
+    });
+
+    it('collapses a non-array / all-empty provider order to undefined', () => {
+        expect(
+            resolveModelSlot(orCfg({ openrouterProviderOrder: 'anthropic' }), 'm1')
+                ?.openrouterProviderOrder,
+        ).toBeUndefined();
+        expect(
+            resolveModelSlot(orCfg({ openrouterProviderOrder: ['', ''] }), 'm1')
+                ?.openrouterProviderOrder,
+        ).toBeUndefined();
+    });
+
+    it('only honors a BOOLEAN allowFallbacks; a non-boolean collapses to undefined', () => {
+        expect(
+            resolveModelSlot(orCfg({ openrouterAllowFallbacks: true }), 'm1')
+                ?.openrouterAllowFallbacks,
+        ).toBe(true);
+        // A truthy-but-non-boolean must NOT leak through as the pin value.
+        expect(
+            resolveModelSlot(orCfg({ openrouterAllowFallbacks: 'yes' }), 'm1')
+                ?.openrouterAllowFallbacks,
+        ).toBeUndefined();
+    });
+
+    it('leaves the pin fields undefined when settings carry no pin', () => {
+        const slot = resolveModelSlot(orCfg({ baseURL: 'https://openrouter.ai/api/v1' }), 'm1');
+        expect(slot?.openrouterProviderOrder).toBeUndefined();
+        expect(slot?.openrouterAllowFallbacks).toBeUndefined();
+    });
+
+    it('drops an empty-string plaintext setting to undefined (STR boundary)', () => {
+        // baseURL:'' must not survive as '' — empty strings are absence here.
+        const slot = resolveModelSlot(orCfg({ baseURL: '' }), 'm1');
+        expect(slot?.baseURL).toBeUndefined();
+    });
+});
+
+describe('resolveDefaultSlot — default-id selection boundaries', () => {
+    const cfg = (routing?: Record<string, unknown>): BYOKConfig => ({
+        version: 2,
+        credentials: [
+            { id: 'c1', provider: 'openai', apiKey: 'enc-1' },
+            { id: 'c2', provider: 'anthropic', apiKey: 'enc-2' },
+        ],
+        models: [
+            { id: 'm1', credentialId: 'c1', model: 'gpt-4o' },
+            { id: 'm2', credentialId: 'c2', model: 'claude-sonnet-4-6' },
+        ],
+        routing: routing as any,
+    });
+
+    it('falls back to the FIRST model when defaultModelId names a model that does not exist', () => {
+        // A stale/deleted default id must not win over — nor silently null out —
+        // the resolution; it degrades to models[0].
+        expect(resolveDefaultSlot(cfg({ defaultModelId: 'ghost' }))?.model).toBe('gpt-4o');
+    });
+
+    it('ignores model entries without an id when picking the first model', () => {
+        const withGhostFirst: BYOKConfig = {
+            version: 2,
+            credentials: [{ id: 'c1', provider: 'openai', apiKey: 'enc-1' }],
+            models: [
+                { credentialId: 'c1', model: 'no-id-model' } as any, // dropped by the id filter
+                { id: 'm1', credentialId: 'c1', model: 'gpt-4o' },
+            ],
+        };
+        expect(resolveDefaultSlot(withGhostFirst)?.model).toBe('gpt-4o');
+    });
+});
+
+describe('resolveModelSlot — tolerates absent credentials/models arrays (no throw)', () => {
+    it('treats an absent credentials array as no credentials → undefined', () => {
+        const noCredsArray = {
+            version: 2,
+            models: [{ id: 'm1', credentialId: 'c1', model: 'gpt-4o' }],
+        } as unknown as BYOKConfig;
+        expect(() => resolveModelSlot(noCredsArray, 'm1')).not.toThrow();
+        expect(resolveModelSlot(noCredsArray, 'm1')).toBeUndefined();
+    });
+
+    it('treats an absent models array as no models → undefined', () => {
+        const noModelsArray = {
+            version: 2,
+            credentials: [{ id: 'c1', provider: 'openai', apiKey: 'enc-1' }],
+        } as unknown as BYOKConfig;
+        expect(() => resolveModelSlot(noModelsArray, 'm1')).not.toThrow();
+        expect(resolveModelSlot(noModelsArray, 'm1')).toBeUndefined();
+    });
+});
+
 describe('resolveModelSlot — Amazon Bedrock authenticates with aws* fields, NOT apiKey', () => {
     // Regression: Bedrock credentials carry NO `apiKey` (they use awsBearerToken or
     // a SigV4 IAM pair). Requiring `apiKey` silently degraded every Bedrock slot to

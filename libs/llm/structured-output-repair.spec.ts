@@ -8,6 +8,7 @@ import {
     ajvValidator,
     ensureValidatingSchema,
     extractJsonFromText,
+    normalizeEnvelope,
     readOutput,
     repairAndValidate,
     repairJsonText,
@@ -80,9 +81,9 @@ describe('extractJsonFromText', () => {
     });
 
     it('is string-aware (braces inside strings do not truncate)', () => {
-        expect(
-            JSON.parse(extractJsonFromText('x {"msg":"a } b"} y')!),
-        ).toEqual({ msg: 'a } b' });
+        expect(JSON.parse(extractJsonFromText('x {"msg":"a } b"} y')!)).toEqual(
+            { msg: 'a } b' },
+        );
     });
 
     it('extracts a top-level array', () => {
@@ -146,10 +147,9 @@ describe('ensureValidatingSchema', () => {
     });
 
     it('leaves a schema that already validates untouched', () => {
-        const withValidate = jsonSchema(
-            { type: 'object' } as any,
-            { validate: (v) => ({ success: true, value: v }) },
-        );
+        const withValidate = jsonSchema({ type: 'object' } as any, {
+            validate: (v) => ({ success: true, value: v }),
+        });
         expect(ensureValidatingSchema(withValidate)).toBe(withValidate);
     });
 
@@ -283,5 +283,512 @@ describe('salvageStructuredError', () => {
         expect(
             await salvageStructuredError(new Error('network'), wire),
         ).toBeUndefined();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Mutation-killing edge cases: pin branch boundaries, exact literals, `??` vs
+// `||` defaults, fail-soft reference identity, and string-aware slicing that
+// the happy-path tests above do not distinguish.
+// ---------------------------------------------------------------------------
+describe('structured-output-repair — mutation killers', () => {
+    describe('ajvValidator', () => {
+        const schema = {
+            type: 'object',
+            properties: { keep: { type: 'number' } },
+            required: ['keep'],
+            additionalProperties: false,
+        };
+
+        it('returns the exact input value on success (not a copy/other)', () => {
+            const validate = ajvValidator(schema)!;
+            const input = { keep: 42 };
+            const r = validate(input);
+            expect(r).toEqual({ success: true, value: input });
+            // Pins that `value` is the validated object itself, byte-for-byte.
+            if (r.success) expect(r.value).toBe(input);
+        });
+
+        it('encodes the detail with the "/" instancePath default for a missing required key', () => {
+            // Kills `instancePath || "/"` → the empty instancePath must render as
+            // "/", and the "schema validation failed: " literal prefix must survive.
+            const validate = ajvValidator(schema)!;
+            const r = validate({});
+            expect(r.success).toBe(false);
+            if (!r.success) {
+                expect((r as any).error.cause.message).toBe(
+                    "schema validation failed: / must have required property 'keep'",
+                );
+            }
+        });
+
+        it('encodes a non-empty instancePath for a nested type mismatch', () => {
+            // The complement of the "/" case: a property-level error keeps its
+            // real instancePath ("/keep"), so the `|| "/"` default does NOT apply.
+            const validate = ajvValidator(schema)!;
+            const r = validate({ keep: 'not-a-number' });
+            expect(r.success).toBe(false);
+            if (!r.success) {
+                expect((r as any).error.cause.message).toBe(
+                    'schema validation failed: /keep must be number',
+                );
+            }
+        });
+    });
+
+    describe('ensureValidatingSchema', () => {
+        it('returns a primitive input unchanged (typeof object guard)', () => {
+            // Kills the `!wire || typeof wire !== "object"` guard both ways.
+            expect(ensureValidatingSchema('not-an-object')).toBe(
+                'not-an-object',
+            );
+            expect(ensureValidatingSchema(42)).toBe(42);
+            expect(ensureValidatingSchema(0)).toBe(0);
+        });
+
+        it('returns an object with NO jsonSchema body untouched (same reference)', () => {
+            const o = { foo: 1 };
+            expect(ensureValidatingSchema(o)).toBe(o);
+        });
+
+        it('returns an object whose jsonSchema is not an object untouched (same reference)', () => {
+            // Kills the `typeof s.jsonSchema !== "object"` branch: a string body
+            // must NOT be handed to ajv.
+            const o = { jsonSchema: 'nope' };
+            expect(ensureValidatingSchema(o)).toBe(o);
+        });
+
+        it('returns the wire untouched (same reference) when ajv cannot compile the body', () => {
+            // Kills the `if (!validate) return wire` fail-soft: an uncompilable
+            // body must yield the ORIGINAL object, never a freshly-wrapped one.
+            const o = { jsonSchema: { type: 'not-a-real-type' } };
+            expect(ensureValidatingSchema(o)).toBe(o);
+        });
+    });
+
+    describe('extractJsonFromText', () => {
+        it('returns null for non-string inputs (typeof guard)', () => {
+            expect(extractJsonFromText(null as any)).toBeNull();
+            expect(extractJsonFromText(123 as any)).toBeNull();
+            expect(extractJsonFromText({} as any)).toBeNull();
+        });
+
+        it('passes through an UNBALANCED object as-is (slice returns null, delimiter test still true)', () => {
+            // slice cannot balance `{"a":1`, so the trimmed text survives and the
+            // final /^[{[]/ test keeps it. Pins that extraction is NOT a parse.
+            expect(extractJsonFromText('{"a":1')).toBe('{"a":1');
+        });
+
+        it('trims surrounding whitespace off already-clean JSON', () => {
+            // Kills a dropped `.trim()`: the returned substring must be tight.
+            expect(extractJsonFromText('  {"a":1}  ')).toBe('{"a":1}');
+        });
+
+        it('unwraps an UPPERCASE ```JSON fence (case-insensitive flag)', () => {
+            expect(extractJsonFromText('```JSON\n{"a":1}\n```')).toBe(
+                '{"a":1}',
+            );
+        });
+
+        it('slices a top-level array whose string values contain the object close-brace', () => {
+            // Exercises open/close derived from the FIRST delimiter ("[" → "]"),
+            // ignoring the inner "{"/"}" and the "}" living inside a string.
+            expect(extractJsonFromText('pre [{"x":"}"}] post')).toBe(
+                '[{"x":"}"}]',
+            );
+        });
+
+        it('is escape-aware: an escaped quote inside a string does not end the string early', () => {
+            // Without escape handling the slice would fail and the prose-wrapped
+            // input would be rejected. Correct handling returns the tight object.
+            expect(extractJsonFromText('noise {"msg":"a \\" b"} tail')).toBe(
+                '{"msg":"a \\" b"}',
+            );
+        });
+    });
+
+    describe('repairJsonText', () => {
+        it('repairs whitespace-padded clean JSON (differs from input → not the null-on-unchanged case)', () => {
+            // The trimmed candidate `{"a":1}` !== `  {"a":1}  `, so unlike the
+            // already-clean case it is returned. Pins the `=== text` comparison.
+            expect(repairJsonText('  {"a":1}  ')).toBe('{"a":1}');
+        });
+
+        it('returns null when the extracted candidate is non-null but does not parse', () => {
+            // `{"a":1` survives extraction (delimiter present) but JSON.parse
+            // throws → the try/catch must yield null, not the raw substring.
+            expect(repairJsonText('{"a":1')).toBeNull();
+        });
+    });
+
+    describe('repairAndValidate', () => {
+        it('returns the parsed value UNVALIDATED when the wire has no validate fn', async () => {
+            // Kills the `typeof schema.validate !== "function"` branch: a raw
+            // jsonSchema() (no validator) must let a wrong-shape object through.
+            const raw = jsonSchema({
+                type: 'object',
+                properties: { keep: { type: 'number' } },
+                required: ['keep'],
+            } as any);
+            expect(typeof (raw as any).validate).not.toBe('function');
+            expect(await repairAndValidate(raw, '{"wrong":1}')).toEqual({
+                wrong: 1,
+            });
+        });
+
+        it('returns undefined when a non-null candidate fails to parse', async () => {
+            // `{"a":1` extracts non-null then throws in JSON.parse → the
+            // try/catch must return undefined (distinct from the null-candidate path).
+            const guarded = ensureValidatingSchema(
+                jsonSchema({
+                    type: 'object',
+                    properties: { keep: { type: 'number' } },
+                    required: ['keep'],
+                    additionalProperties: false,
+                } as any),
+            );
+            expect(await repairAndValidate(guarded, '{"a":1')).toBeUndefined();
+        });
+    });
+
+    describe('readOutput', () => {
+        it('returns a falsy-but-defined experimental_output (?? not ||)', () => {
+            // `0 ?? 5` is 0; a `||` mutant would wrongly return 5.
+            expect(readOutput({ experimental_output: 0, output: 5 })).toBe(0);
+            expect(
+                readOutput({ experimental_output: false, output: { a: 1 } }),
+            ).toBe(false);
+        });
+
+        it('falls through to output when experimental_output is null/undefined', () => {
+            expect(readOutput({ experimental_output: null, output: 9 })).toBe(
+                9,
+            );
+            expect(readOutput({ output: 0 })).toBe(0);
+        });
+    });
+
+    describe('salvageStructuredError', () => {
+        const wire = ensureValidatingSchema(
+            jsonSchema({
+                type: 'object',
+                properties: { keep: { type: 'number' } },
+                required: ['keep'],
+                additionalProperties: false,
+            } as any),
+        );
+        const noObjectError = (cause: Error, text: unknown) =>
+            new NoObjectGeneratedError({
+                message: 'No object generated (test)',
+                cause,
+                text: text as any,
+                response: {} as any,
+                usage: {} as any,
+                finishReason: 'stop',
+            });
+
+        it('does NOT salvage when the parse-error text is not a string', async () => {
+            // Kills the `typeof text !== "string"` guard: a JSONParseError cause
+            // with a non-string text must short-circuit to undefined.
+            const err = noObjectError(
+                new JSONParseError({ text: 'x', cause: new Error('parse') }),
+                undefined,
+            );
+            expect(await salvageStructuredError(err, wire)).toBeUndefined();
+        });
+    });
+});
+
+describe('normalizeEnvelope (the SHAPE layer — #1786)', () => {
+    const D = [{ id: 'a' }, { id: 'b' }];
+
+    it('leaves a canonical object untouched', () => {
+        const v = { suggestions: D };
+        expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+    });
+
+    it('preserves sibling keys on a canonical object', () => {
+        const v = { suggestions: D, meta: { n: 2 } };
+        expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+    });
+
+    it('row 2 — lifts a bare array under the key', () => {
+        expect(normalizeEnvelope(D, 'suggestions')).toEqual({ suggestions: D });
+    });
+
+    it('row 4 — unwraps a {result:D} wrapper', () => {
+        expect(
+            normalizeEnvelope({ result: { suggestions: D } }, 'suggestions'),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 4 — unwraps {data}/{output}/{response}/{json}/{payload}', () => {
+        for (const w of ['data', 'output', 'response', 'json', 'payload']) {
+            expect(
+                normalizeEnvelope({ [w]: { suggestions: D } }, 'suggestions'),
+            ).toEqual({ suggestions: D });
+        }
+    });
+
+    it('row 5 — unwraps a double {result:{result:D}} wrapper', () => {
+        expect(
+            normalizeEnvelope(
+                { result: { result: { suggestions: D } } },
+                'suggestions',
+            ),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 6 — unwraps {content:D} and {"0":D}', () => {
+        expect(
+            normalizeEnvelope({ content: { suggestions: D } }, 'suggestions'),
+        ).toEqual({ suggestions: D });
+        expect(
+            normalizeEnvelope({ '0': { suggestions: D } }, 'suggestions'),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 4 — unwraps a wrapper whose inner is a bare array', () => {
+        expect(normalizeEnvelope({ result: D }, 'suggestions')).toEqual({
+            suggestions: D,
+        });
+    });
+
+    it('row 7 — parses a stringified-JSON payload then normalizes', () => {
+        expect(
+            normalizeEnvelope(
+                JSON.stringify({ suggestions: D }),
+                'suggestions',
+            ),
+        ).toEqual({ suggestions: D });
+        expect(normalizeEnvelope(JSON.stringify(D), 'suggestions')).toEqual({
+            suggestions: D,
+        });
+    });
+
+    it('row 8/9 — parses a fenced / prose-wrapped stringified payload', () => {
+        expect(
+            normalizeEnvelope(
+                '```json\n' + JSON.stringify(D) + '\n```',
+                'suggestions',
+            ),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 10 — aliases a renamed key (findings→suggestions)', () => {
+        expect(
+            normalizeEnvelope({ findings: D }, 'suggestions', ['findings']),
+        ).toEqual({ suggestions: D });
+    });
+
+    it('row 10 — aliasing keeps the sibling keys', () => {
+        expect(
+            normalizeEnvelope({ findings: D, meta: 1 }, 'suggestions', [
+                'findings',
+            ]),
+        ).toEqual({ suggestions: D, meta: 1 });
+    });
+
+    it('row 11 — matches a case/convention-mismatched key', () => {
+        expect(normalizeEnvelope({ Suggestions: D }, 'suggestions')).toEqual({
+            suggestions: D,
+        });
+        expect(
+            normalizeEnvelope({ code_suggestions: D }, 'codeSuggestions'),
+        ).toEqual({ codeSuggestions: D });
+    });
+
+    it('never invents data: an unrelated object is returned as-is', () => {
+        const v = { totallyOther: 1 };
+        expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+    });
+
+    it('fail-safe: non-JSON string / null / primitive returned unchanged', () => {
+        expect(
+            normalizeEnvelope('I cannot help with that', 'suggestions'),
+        ).toBe('I cannot help with that');
+        expect(normalizeEnvelope(null, 'suggestions')).toBeNull();
+        expect(normalizeEnvelope(42, 'suggestions')).toBe(42);
+    });
+
+    it('is idempotent (normalizing twice == once)', () => {
+        const once = normalizeEnvelope(
+            { result: { findings: D } },
+            'suggestions',
+            ['findings'],
+        );
+        expect(normalizeEnvelope(once, 'suggestions', ['findings'])).toEqual(
+            once,
+        );
+    });
+
+    // ── CONSERVATISM / no-op guarantees: normalizeEnvelope MUST NOT change a
+    //    value that already works, and MUST NOT guess. These pin that it only
+    //    acts on the intended off-schema shapes. ──────────────────────────────
+    describe('does not change working logic (no-op guarantees)', () => {
+        it('target key present WINS over a sibling wrapper key (no unwrap)', () => {
+            // A canonical payload that also carries a `result`/`data` sibling
+            // must NOT be unwrapped into that sibling.
+            const v = {
+                suggestions: D,
+                result: { suggestions: [{ id: 'x' }] },
+            };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+
+        it('does NOT unwrap a provider envelope {choices:[{message}]}', () => {
+            // choices is not a known wrapper key and there is no target key →
+            // returned unchanged (never lifted as the target array).
+            const env = { choices: [{ message: { content: '{}' } }] };
+            expect(normalizeEnvelope(env, 'suggestions')).toBe(env);
+        });
+
+        it('does NOT descend into a single non-wrapper key', () => {
+            const v = { somethingElse: { suggestions: D } };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+
+        it('does NOT dig into item-level result/data fields (top-level wins)', () => {
+            const v = { suggestions: [{ id: 'a', data: { nope: 1 } }] };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+
+        it('does NOT lift an empty bare array (preserves empty/unusable outcome)', () => {
+            const empty: unknown[] = [];
+            expect(normalizeEnvelope(empty, 'suggestions')).toBe(empty);
+        });
+
+        it('an alias only applies when the canonical key is ABSENT', () => {
+            // Both present → canonical wins, alias ignored, object untouched.
+            const v = { suggestions: D, findings: [{ id: 'z' }] };
+            const out = normalizeEnvelope(v, 'suggestions', ['findings']);
+            expect((out as any).suggestions).toBe(D);
+        });
+
+        it('a scalar/boolean payload is never coerced into an array shape', () => {
+            expect(normalizeEnvelope({ keep: false }, 'suggestions')).toEqual({
+                keep: false,
+            });
+            expect(normalizeEnvelope(true, 'suggestions')).toBe(true);
+        });
+    });
+
+    // ── scalar mode (verifier `keep`, compiler `mechanical`) ─────────────────
+    describe('scalar mode', () => {
+        const S = { scalar: true };
+        it('leaves a canonical scalar object untouched', () => {
+            const v = { keep: false, rationale: 'x' };
+            expect(normalizeEnvelope(v, 'keep', [], S)).toBe(v);
+        });
+        it('unwraps {result:{keep:false}}', () => {
+            expect(
+                normalizeEnvelope({ result: { keep: false } }, 'keep', [], S),
+            ).toEqual({ keep: false });
+        });
+        it('descends a bare [{keep:false}] into its element (not lifted)', () => {
+            expect(normalizeEnvelope([{ keep: false }], 'keep', [], S)).toEqual(
+                { keep: false },
+            );
+        });
+        it('aliases a renamed scalar key (decision→keep)', () => {
+            expect(
+                normalizeEnvelope({ decision: false }, 'keep', ['decision'], S),
+            ).toEqual({ keep: false });
+        });
+        it('does NOT lift a bare array as {keep:[...]}', () => {
+            const out = normalizeEnvelope([{ keep: false }], 'keep', [], S);
+            expect(Array.isArray((out as any).keep)).toBe(false);
+        });
+        // negative branches of the scalar descent (L343): an array that has no
+        // object first element carries no scalar payload → return the original.
+        it('returns the original for an EMPTY array in scalar mode', () => {
+            const empty: unknown[] = [];
+            expect(normalizeEnvelope(empty, 'keep', [], S)).toBe(empty);
+        });
+        it('returns the original when the first element is falsy', () => {
+            const v = [null] as unknown[];
+            expect(normalizeEnvelope(v, 'keep', [], S)).toBe(v);
+        });
+        it('returns the original when the first element is a non-object', () => {
+            const v = ['true'] as unknown[];
+            expect(normalizeEnvelope(v, 'keep', [], S)).toBe(v);
+        });
+        it('fires onRecover with unwrapped-array-element on a scalar descent', () => {
+            const spy = jest.fn();
+            normalizeEnvelope([{ keep: false }], 'keep', [], {
+                scalar: true,
+                onRecover: spy,
+            });
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toBe('unwrapped-array-element');
+        });
+    });
+
+    // ── observability: onRecover fires exactly when a recovery happened ───────
+    describe('onRecover observability hook', () => {
+        it('does NOT fire on a canonical no-op', () => {
+            const spy = jest.fn();
+            normalizeEnvelope({ suggestions: D }, 'suggestions', [], {
+                onRecover: spy,
+            });
+            expect(spy).not.toHaveBeenCalled();
+        });
+        it('fires once with a reason on a wrapper unwrap', () => {
+            const spy = jest.fn();
+            normalizeEnvelope(
+                { result: { suggestions: D } },
+                'suggestions',
+                [],
+                {
+                    onRecover: spy,
+                },
+            );
+            expect(spy).toHaveBeenCalledTimes(1);
+            expect(spy.mock.calls[0][0]).toContain('unwrapped');
+        });
+        it('fires on a bare-array lift and on an alias', () => {
+            const lift = jest.fn();
+            normalizeEnvelope(D, 'suggestions', [], { onRecover: lift });
+            expect(lift).toHaveBeenCalledTimes(1);
+            const alias = jest.fn();
+            normalizeEnvelope({ findings: D }, 'suggestions', ['findings'], {
+                onRecover: alias,
+            });
+            expect(alias).toHaveBeenCalledTimes(1);
+            expect(alias.mock.calls[0][0]).toBe('aliased-findings');
+        });
+        // the reason argument on a lift (L350): a PLAIN bare array carries no
+        // prior reason → the 'lifted-bare-array' fallback string; a STRINGIFIED
+        // bare array already set reason='parsed-stringified-json' → the `reason ||`
+        // keeps it. Together these pin both sides of the `reason || fallback`.
+        it('a plain bare-array lift reports the lifted-bare-array reason', () => {
+            const spy = jest.fn();
+            normalizeEnvelope(D, 'suggestions', [], { onRecover: spy });
+            expect(spy.mock.calls[0][0]).toBe('lifted-bare-array');
+        });
+        it('a stringified bare-array lift keeps the parse reason', () => {
+            const spy = jest.fn();
+            normalizeEnvelope(JSON.stringify(D), 'suggestions', [], {
+                onRecover: spy,
+            });
+            expect(spy.mock.calls[0][0]).toBe('parsed-stringified-json');
+        });
+        // wrapper break guards (L326-328): a wrapper key whose value is null or a
+        // non-object must NOT be descended into — the original stands untouched.
+        it('does NOT descend a wrapper whose value is null', () => {
+            const v = { result: null };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+        it('does NOT descend a wrapper whose value is a primitive', () => {
+            const v = { result: 'not an object' };
+            expect(normalizeEnvelope(v, 'suggestions')).toBe(v);
+        });
+        it('does NOT fire when nothing safe applies', () => {
+            const spy = jest.fn();
+            normalizeEnvelope({ totallyOther: 1 }, 'suggestions', [], {
+                onRecover: spy,
+            });
+            expect(spy).not.toHaveBeenCalled();
+        });
     });
 });

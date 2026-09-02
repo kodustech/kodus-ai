@@ -1,0 +1,82 @@
+name: "Backend: Mutation Gate"
+
+# Incremental mutation testing on the files a PR changes. Coverage says a line
+# ran; the mutation score says an assertion actually caught a change to it. This
+# runs `pnpm mutation:diff`, which mutates only the changed production .ts files
+# and scopes the test run to their co-located specs.
+#
+# ADVISORY ROLLOUT: the job is `continue-on-error`, and stryker.config.json sets
+# thresholds.break=null, so it reports the score on the PR WITHOUT blocking the
+# merge. To enforce it, set thresholds.break (e.g. 60) and drop the
+# continue-on-error below.
+
+on:
+    pull_request:
+        branches:
+            - main
+        paths:
+            - "libs/**/*.ts"
+            - "apps/**/*.ts"
+            - "stryker.config.json"
+            - "jest.stryker.config.ts"
+
+# Least privilege for the automatically-provisioned GITHUB_TOKEN. Without this
+# block the job inherits the repository default, which is broad enough to write
+# content and act on pull requests — and this job runs `pnpm install` plus
+# Stryker, i.e. it executes dependency code and the PR's own code. Its three
+# actions (checkout, setup-node, cache) only ever READ, so nothing here needs
+# more. Matches contract-tests.yml, which already declares the same.
+permissions:
+    contents: read
+
+jobs:
+    mutation-diff:
+        name: Mutation score on changed files
+        runs-on: ubuntu-latest
+        continue-on-error: true # advisory — reports, does not block (see header)
+        timeout-minutes: 25
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4.1.7
+              with:
+                  # Full history so `git merge-base origin/<base> HEAD` works.
+                  fetch-depth: 0
+
+            - name: Fetch the PR base branch
+              run: git fetch --no-tags origin "${{ github.base_ref }}"
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v6.4.0
+              with:
+                  node-version: "22"
+
+            - name: Install pnpm
+              # Must match package.json's "packageManager" (pnpm@11.9.0).
+              run: npm i -g pnpm@11.9.0
+
+            - name: Cache pnpm store
+              uses: actions/cache@v5.0.5
+              with:
+                  path: ~/.local/share/pnpm/store
+                  key: ${{ runner.os }}-node22-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+                  restore-keys: |
+                      ${{ runner.os }}-node22-pnpm-
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            # libs/ee's environment.ts is gitignored, so it does not exist on a
+            # fresh checkout, and @libs imports reach it transitively. Every
+            # other test job creates this shim; this one did not, so Stryker's
+            # DRY RUN died on MODULE_NOT_FOUND before a single mutant was
+            # generated — the gate reported FAILURE while measuring nothing.
+            - name: Create environment.ts
+              run: |
+                  cat <<'EOF' > libs/ee/configs/environment/environment.ts
+                  import { environment as devEnvironment } from './environment.dev';
+
+                  export const environment = devEnvironment;
+                  EOF
+
+            - name: Run the mutation gate on changed files
+              run: pnpm run mutation:diff "origin/${{ github.base_ref }}"

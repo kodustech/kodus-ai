@@ -11,8 +11,9 @@
  *   2. `computeFileTotals` returns the same shape the projection
  *      would have computed in memory.
  *
- * Synthetic data only — no customer info. Skipped unless
- * `TEST_MONGODB_URI` is set so CI doesn't depend on a live Mongo.
+ * Synthetic data only — no customer info. Skipped on a dev machine without
+ * `TEST_MONGODB_URI`; in CI the same missing var is a hard failure, because a
+ * silently skipped suite reads as green coverage it never provided.
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
@@ -26,10 +27,9 @@ import {
 import { PullRequestsRepository } from '@libs/platformData/infrastructure/adapters/repositories/pullRequests.repository';
 import { PullRequestsService } from '@libs/platformData/infrastructure/adapters/services/pullRequests.service';
 import { PULL_REQUESTS_REPOSITORY_TOKEN } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.repository';
+import { resolveMongoTestGate } from '../mongo-test-uri';
 
-const MONGODB_URI =
-    process.env.TEST_MONGODB_URI || process.env.API_MG_DB_HOST;
-const shouldSkip = !MONGODB_URI;
+const { shouldSkip, mongoUri } = resolveMongoTestGate('kodus_test_1107');
 
 (shouldSkip ? describe.skip : describe)(
     'handleExistingPullRequest — bulkWrite persistence (issue #1107)',
@@ -50,10 +50,6 @@ const shouldSkip = !MONGODB_URI;
         };
 
         beforeAll(async () => {
-            const mongoUri = MONGODB_URI?.includes('://')
-                ? MONGODB_URI
-                : `mongodb://${MONGODB_URI}:27017/kodus_test_1107`;
-
             module = await Test.createTestingModule({
                 imports: [
                     MongooseModule.forRoot(mongoUri),

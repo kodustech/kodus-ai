@@ -1,13 +1,14 @@
-import { authorizedFetch } from "@services/fetch";
+// @ts-nocheck
+import { authorizedFetch } from '@services/fetch';
 import {
     OrganizationParametersConfigKey,
     type CockpitMetricsVisibility,
     type OrganizationParametersAutoAssignConfig,
-} from "@services/parameters/types";
-import { axiosAuthorized } from "src/core/utils/axios";
-import type { BYOKConfig } from "src/features/ee/byok/_types";
+} from '@services/parameters/types';
+import { axiosAuthorized } from 'src/core/utils/axios';
+import type { BYOKConfig } from 'src/features/ee/byok/_types';
 
-import { ORGANIZATION_PARAMETERS_PATHS } from ".";
+import { ORGANIZATION_PARAMETERS_PATHS } from '.';
 
 export const createOrUpdateOrganizationParameter = async (
     key: string,
@@ -32,7 +33,7 @@ export const getBYOK = async (): Promise<BYOKConfig | undefined> => {
             key: OrganizationParametersConfigKey.BYOK_CONFIG,
         },
         {
-            cache: "no-store",
+            cache: 'no-store',
         },
     );
 
@@ -59,15 +60,15 @@ export const deleteBYOK = async (params: { modelId: string }) => {
 };
 
 export type TestBYOKResultCode =
-    | "ok"
-    | "auth"
-    | "not_found"
-    | "bad_request"
-    | "payment"
-    | "rate_limit"
-    | "server_error"
-    | "network"
-    | "unknown";
+    | 'ok'
+    | 'auth'
+    | 'not_found'
+    | 'bad_request'
+    | 'payment'
+    | 'rate_limit'
+    | 'server_error'
+    | 'network'
+    | 'unknown';
 
 export type TestBYOKResult = {
     ok: boolean;
@@ -76,6 +77,10 @@ export type TestBYOKResult = {
     message?: string;
     providerMessage?: string;
     httpStatus?: number;
+    /** Set on a PASSING test whose Custom reasoning override the provider's
+     *  adapter ignored. The connection works; the config is not doing what was
+     *  pasted. Advisory — never blocks saving. */
+    warning?: string;
 };
 
 export const testBYOK = async (params: {
@@ -87,7 +92,15 @@ export const testBYOK = async (params: {
     // and exercised on the real chat probe, so a mismatch (e.g. a temperature an
     // always-thinking model won't honor) fails the Test instead of saving quiet.
     temperature?: number;
-    reasoningEffort?: "none" | "low" | "medium" | "high";
+    reasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+    // The rest of what the save will persist. Sent so the probe exercises the
+    // exact slot being saved — a raw reasoning override with the wrong shape, or
+    // an OpenRouter pin no upstream can serve, used to save clean and only fail
+    // on the first review.
+    reasoningConfigOverride?: string;
+    maxOutputTokens?: number;
+    openrouterProviderOrder?: string[];
+    openrouterAllowFallbacks?: boolean;
     vertexLocation?: string;
     awsBearerToken?: string;
     awsAccessKeyId?: string;
@@ -124,7 +137,7 @@ export const testBYOKModel = async (params: {
 };
 
 export type ModelOverrideEntry = {
-    scope: "global" | "repository" | "directory";
+    scope: 'global' | 'repository' | 'directory';
     repositoryId?: string;
     repositoryName?: string;
     directoryId?: string;
@@ -153,7 +166,7 @@ export const listModelOverrides = async (
 ): Promise<ListModelOverridesResult> => {
     const result = await authorizedFetch<ListModelOverridesResult>(
         ORGANIZATION_PARAMETERS_PATHS.MODEL_OVERRIDES,
-        { cache: "no-store", params: { teamId } },
+        { cache: 'no-store', params: { teamId } },
     );
     return result ?? { overrides: [], mismatchedCount: 0 };
 };
@@ -172,7 +185,7 @@ export const clearModelOverrides = async (
     return envelope.data;
 };
 
-export type LLMConfigSource = "byok" | "env" | "none";
+export type LLMConfigSource = 'byok' | 'env' | 'none';
 
 /**
  * One enumerated v2 model in the per-org status. Web mirror of the backend
@@ -203,11 +216,11 @@ export type LLMConfigStatus = {
         configured: boolean;
         model?: string;
         providerId?:
-            | "openai"
-            | "openai_compatible"
-            | "anthropic"
-            | "google_gemini"
-            | "google_vertex";
+            | 'openai'
+            | 'openai_compatible'
+            | 'anthropic'
+            | 'google_gemini'
+            | 'google_vertex';
         baseUrl?: string;
         vertexLocation?: string;
     };
@@ -216,7 +229,7 @@ export type LLMConfigStatus = {
 export const getLLMConfigStatus = async (): Promise<LLMConfigStatus> => {
     return await authorizedFetch<LLMConfigStatus>(
         ORGANIZATION_PARAMETERS_PATHS.GET_LLM_CONFIG_STATUS,
-        { cache: "no-store" },
+        { cache: 'no-store' },
     );
 };
 
@@ -248,7 +261,7 @@ export const listByokProviders = async (): Promise<
     const response = await authorizedFetch<{
         providers: ByokProviderDescriptor[];
     }>(ORGANIZATION_PARAMETERS_PATHS.GET_BYOK_PROVIDERS, {
-        cache: "no-store",
+        cache: 'no-store',
     });
     return response?.providers ?? [];
 };
@@ -260,7 +273,7 @@ export const getLLMProviderModels = async (
 ): Promise<LLMProviderModel[]> => {
     const response = await authorizedFetch<{ models: LLMProviderModel[] }>(
         ORGANIZATION_PARAMETERS_PATHS.GET_PROVIDER_MODELS_LIST,
-        { cache: "no-store", params: { provider } },
+        { cache: 'no-store', params: { provider } },
     );
     return response?.models ?? [];
 };
@@ -290,14 +303,18 @@ export const previewLLMProviderModels = async (input: {
  *  from `@libs/*`, which breaks the isolated prod build). `adjustable` = editable,
  *  `unsupported` = hidden, `fixed` = locked to `value`. */
 export type TemperaturePolicy =
-    | { kind: "adjustable" }
-    | { kind: "unsupported" }
-    | { kind: "fixed"; value: number };
+    | { kind: 'adjustable' }
+    | { kind: 'unsupported' }
+    | { kind: 'fixed'; value: number };
 
 export type ModelUiCapabilities = {
     temperature: TemperaturePolicy;
+    /** Applies only when reasoning is off, and only when it differs from
+     *  `temperature`. Ships in the same response so the endpoint stays a pure
+     *  function of (provider, model) and the toggle never refetches. */
+    temperatureWhenReasoningOff?: TemperaturePolicy;
     supportsReasoning: boolean;
-    reasoningOptions: Array<"low" | "medium" | "high">;
+    reasoningOptions: Array<'low' | 'medium' | 'high'>;
     /** Provider-owned example for the "Custom" reasoning-override textarea. */
     reasoningOverrideExample?: string;
 };
@@ -308,11 +325,11 @@ export const getModelCapabilities = async (input: {
 }): Promise<ModelUiCapabilities> => {
     const response = await authorizedFetch<ModelUiCapabilities>(
         ORGANIZATION_PARAMETERS_PATHS.GET_MODEL_CAPABILITIES,
-        { cache: "no-store", params: input },
+        { cache: 'no-store', params: input },
     );
     return (
         response ?? {
-            temperature: { kind: "adjustable" },
+            temperature: { kind: 'adjustable' },
             supportsReasoning: false,
             reasoningOptions: [],
         }

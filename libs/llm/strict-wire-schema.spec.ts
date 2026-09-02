@@ -354,7 +354,17 @@ describe('runStructuredReviewCall — strict-wire contract across ALL call sites
                 if (entry.isDirectory()) {
                     if (
                         entry.name === 'node_modules' ||
-                        entry.name === 'dist'
+                        entry.name === 'dist' ||
+                        // Test SUPPORT, not a production call site. `.spec.ts`
+                        // is already excluded below; a harness that lives beside
+                        // the specs is the same thing without the suffix. The
+                        // BYOK wire harness drives `LLM.run` in LOOP mode and
+                        // never passes a schema — it only mentions the word in a
+                        // comment explaining why — so the heuristic below reads
+                        // it as a structured call site and demands registration
+                        // for a schema that does not exist.
+                        entry.name === 'testing' ||
+                        entry.name === '__fixtures__'
                     ) {
                         continue;
                     }

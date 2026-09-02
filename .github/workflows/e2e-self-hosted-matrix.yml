@@ -387,8 +387,9 @@ jobs:
                   # AI Model Garden; `global` serves the bare-id Claude models.
                   # conversation-vertex-byok additionally needs a NON-Kody GitHub
                   # account token (login without "kody"/"kodus", PR R/W on the
-                  # fixture repo) AND a kodus-common release carrying the v2
-                  # adapter fix — until that release it runs red, not skip.
+                  # fixture repo). The MCP adapter it exercises now lives in-repo
+                  # at @libs/mcp-server/mcp-adapter (kodus-common was removed), so
+                  # there is no external release to wait on.
                   VERTEX_SA_JSON: ${{ secrets.VERTEX_SA_JSON }}
                   VERTEX_REGION: global
                   VERTEX_MODEL: claude-haiku-4-5

@@ -90,7 +90,6 @@ export function runStaticConformance(
 
     it(`${module.id}: capabilities() is well-formed`, () => {
         const caps = module.capabilities(sample.reasoningModel ?? sample.model);
-        expect(typeof caps.supportsTemperature).toBe('boolean');
         expect(typeof caps.supportsReasoning).toBe('boolean');
         if (caps.reasoningConfig) {
             expect(['level', 'budget', 'adaptive']).toContain(

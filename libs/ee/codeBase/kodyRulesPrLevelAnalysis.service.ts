@@ -1,5 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { LLM } from '@libs/llm/llm';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 import { LLMModelProvider } from '@libs/llm/model-providers';
 import type { TokenUsage } from '@libs/llm/token-usage';
 import type { NormalizedModel } from '@libs/llm/byok-config';
@@ -44,9 +45,7 @@ import { ISuggestionByPR } from '@libs/platformData/domain/pullRequests/interfac
 // examples show both) and may be `null`/absent — mirror the old lenient
 // STRING-parser behavior. `.optional()` (not `.nullable()`) is required by the
 // strict-wire-schema invariant, which normalizes provider `null` → absent.
-const fileShaField = z
-    .union([z.array(z.string()), z.string()])
-    .optional();
+const fileShaField = z.union([z.array(z.string()), z.string()]).optional();
 
 const prLevelViolationSchema = z.object({
     violatedFileSha: fileShaField,
@@ -1013,10 +1012,21 @@ export class KodyRulesPrLevelAnalysisService implements IKodyRulesAnalysisServic
                 throw new Error(message);
             }
 
+            // SHAPE recovery (#1786): a non-strict model that wrapped
+            // ({result:{rules}}), renamed (violations/codeSuggestions), or
+            // bare-arrayed the payload would make `analysis.rules` undefined and
+            // silently coerce to an empty [] downstream — recover the canonical
+            // shape first.
+            const normalizedAnalysis = normalizeEnvelope(analysis, 'rules', [
+                'violations',
+                'codeSuggestions',
+                'suggestions',
+            ]) as typeof analysis;
+
             // processa resposta do chunk
             return this.processAnalyzerResponse(
                 kodyRulesPrLevel,
-                analysis.rules as AnalyzerRuleResult[],
+                normalizedAnalysis.rules as AnalyzerRuleResult[],
                 filesChunk,
                 prNumber,
                 organizationAndTeamData,

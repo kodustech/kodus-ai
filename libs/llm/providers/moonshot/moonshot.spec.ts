@@ -116,18 +116,42 @@ describe('moonshotModule — Anthropic-protocol brand contract', () => {
         ).toMatch(/"type":"enabled".*budgetTokens/);
     });
 
-    it('temperature policy: k2.7-code is always-thinking → PINNED to 1', () => {
-        // The Anthropic protocol fixes temperature to 1 while thinking, and
-        // k2.7-code reasons unconditionally, so 1 is its only sound value.
+    // Both of these used to assert something the vendor contradicts, and both
+    // were wrong in the SAME direction: they sent a temperature to a model that
+    // does not read one. platform.kimi.ai is explicit per model —
+    //   k2.7-code: "temperature is not modifiable and thinking is always on;
+    //               neither needs to be set"
+    //   k2.6:      "temperature is not modifiable, so no need to set it"
+    // — so the field must be OMITTED, not pinned and not passed through.
+    // Captured on the wire before the change: k2.7-code received `temperature: 1`
+    // and k2.6 received the stored 0.7.
+    it('temperature policy: k2.7-code — unmodifiable, so omitted rather than pinned', () => {
+        // A pin says "1 is the only sound value"; this is the stronger claim,
+        // that the field has no effect at all. Sending 1 is not harmless — it
+        // reads, in a request log, like a value someone chose.
         expect(moonshotModule.temperaturePolicy!(moonshotCfg)).toEqual({
-            kind: 'fixed',
-            value: 1,
+            kind: 'unsupported',
         });
     });
 
-    it('temperature policy: k2.6 is disable-able → adjustable (not gated, not pinned)', () => {
+    it('temperature policy: k2.6 — disable-able thinking, still unmodifiable temperature', () => {
+        // The two facts are independent, and conflating them is what produced
+        // the old answer: k2.6 CAN turn thinking off, which made it look like an
+        // ordinary adjustable model, while its temperature is fixed by the vendor
+        // in every mode.
         const k26 = { ...moonshotCfg, model: 'kimi-k2.6' };
         expect(moonshotModule.temperaturePolicy!(k26)).toEqual({
+            kind: 'unsupported',
+        });
+    });
+
+    it('temperature policy: k2.5 keeps its temperature — no source says otherwise', () => {
+        // The scope line. platform.kimi.ai documents k2.6 and k2.7-code; it does
+        // not cover k2.5, and inferring the rule from a sibling is exactly what
+        // this table exists to avoid. Omitting would be the SAFER guess and is
+        // still a guess.
+        const k25 = { ...moonshotCfg, model: 'kimi-k2.5' };
+        expect(moonshotModule.temperaturePolicy!(k25)).toEqual({
             kind: 'adjustable',
         });
     });

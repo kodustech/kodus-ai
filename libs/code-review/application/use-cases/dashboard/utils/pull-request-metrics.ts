@@ -1,3 +1,7 @@
+import {
+    SEVERITY_RANK,
+    UNRESOLVED_RANK_BONUS,
+} from '@libs/platformData/domain/pullRequests/deep-link-rank';
 import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { ImplementationStatus } from '@libs/platformData/domain/pullRequests/enums/implementationStatus.enum';
 
@@ -40,6 +44,32 @@ export function isUnresolvedDeliveredSuggestion(suggestion: {
     return (
         suggestion?.deliveryStatus === DeliveryStatus.SENT &&
         suggestion?.implementationStatus !== ImplementationStatus.IMPLEMENTED
+    );
+}
+
+// Deep-link target ranking for the PR-list suggestion count.
+//
+// Clicking the count should land the reviewer on the finding that actually
+// wants attention, not on whatever happens to sit first in the document — a
+// low the author already applied is a bad place to drop someone who still has
+// a critical open two hunks below. So delivered suggestions are ranked by
+// "still unresolved" first, then severity, and document order only breaks
+// ties. The Mongo aggregation reproduces this exact arithmetic in $reduce;
+// keep the two in step.
+export function severityRank(severity?: string | null): number {
+    return SEVERITY_RANK[String(severity ?? '').toLowerCase()] ?? 0;
+}
+
+/** Higher wins; ties keep the earlier suggestion in document order. */
+export function deepLinkTargetRank(suggestion: {
+    deliveryStatus?: string | null;
+    implementationStatus?: string | null;
+    severity?: string | null;
+}): number {
+    return (
+        (isUnresolvedDeliveredSuggestion(suggestion)
+            ? UNRESOLVED_RANK_BONUS
+            : 0) + severityRank(suggestion?.severity)
     );
 }
 

@@ -267,7 +267,13 @@ describe('buildReasoningProviderOptions', () => {
             });
         });
 
-        it('uses thinkingBudget for Gemini 2.5', () => {
+        it('uses thinkingBudget for Gemini 2.5, CLAMPED to the model ceiling', () => {
+            // Google documents gemini-2.5-pro's budget range as 128-32,768 and
+            // rejects a request outside it. Our shared EFFORT_TO_BUDGET.high is
+            // 40,000, which overshot EVERY model in the 2.5 line (Pro 32,768;
+            // Flash and Flash-Lite 24,576) - so the effort table cannot be sent
+            // raw, it has to be clamped by the model's own reasoning config.
+            expect(EFFORT_TO_BUDGET.high).toBeGreaterThan(32_768);
             expect(
                 buildReasoningProviderOptions(
                     BYOKProvider.GOOGLE_GEMINI,
@@ -275,9 +281,44 @@ describe('buildReasoningProviderOptions', () => {
                     'gemini-2.5-pro',
                 ),
             ).toEqual({
-                google: {
-                    thinkingConfig: { thinkingBudget: EFFORT_TO_BUDGET.high },
-                },
+                google: { thinkingConfig: { thinkingBudget: 32_768 } },
+            });
+        });
+
+        it('clamps to the LOWER Flash ceiling on the same effort', () => {
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.GOOGLE_GEMINI,
+                    'high',
+                    'gemini-2.5-flash',
+                ),
+            ).toEqual({
+                google: { thinkingConfig: { thinkingBudget: 24_576 } },
+            });
+        });
+
+        it('sends NO thinkingConfig to a Gemini with no thinking support', () => {
+            // Plain gemini-2.0-flash predates thinking and appears in no
+            // supported list; the field is unsupported there, not a no-op.
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.GOOGLE_GEMINI,
+                    'medium',
+                    'gemini-2.0-flash',
+                ),
+            ).toEqual({});
+        });
+
+        it('rounds a level UP when the model does not accept it', () => {
+            // gemini-3-pro-preview takes low and high ONLY - "medium" is invalid.
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.GOOGLE_GEMINI,
+                    'medium',
+                    'gemini-3-pro-preview',
+                ),
+            ).toEqual({
+                google: { thinkingConfig: { thinkingLevel: 'high' } },
             });
         });
 
@@ -346,15 +387,118 @@ describe('buildReasoningProviderOptions', () => {
     });
 
     describe('OpenAI-Compatible', () => {
-        it('emits thinking.type=enabled (effort ignored)', () => {
+        // The reasoning PARAMETER is a per-model fact; the transport the user
+        // chose is honored either way. Emitting one blanket shape meant a user on
+        // NVIDIA NIM / MiniMax / an OpenAI proxy who picked High got a body field
+        // their server does not implement — and no reasoning at all.
+        it('DeepSeek takes the toggle AND an effort, on its own scale', () => {
+            // api-docs.deepseek.com: both are sent together, and the scale is
+            // low/high/max — "medium" is not an accepted value there, so our
+            // top effort maps to `max`.
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.OPENAI_COMPATIBLE,
+                    'high',
+                    'deepseek-v4-flash',
+                ),
+            ).toEqual({
+                openaiCompatible: {
+                    thinking: { type: 'enabled' },
+                    reasoningEffort: 'max',
+                },
+            });
+        });
+
+        it('Kimi takes the toggle ALONE — Moonshot rejects the pair', () => {
+            // "cannot specify both 'thinking' and 'reasoning_effort'" — so Kimi's
+            // granularity genuinely stops at the toggle (HKUDS/nanobot#3939).
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.OPENAI_COMPATIBLE,
+                    'high',
+                    'kimi-k2.6',
+                ),
+            ).toEqual({
+                openaiCompatible: { thinking: { type: 'enabled' } },
+            });
+        });
+
+        it('GLM takes both, and MEDIUM folds into the brand\'s "high"', () => {
+            // docs.z.ai: the scale is low/high/max with no "medium" — GLM-5.2
+            // folds low/medium into high itself, so emitting our own word would
+            // be shipping a value the API does not define.
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.OPENAI_COMPATIBLE,
+                    'medium',
+                    'glm-5.2',
+                ),
+            ).toEqual({
+                openaiCompatible: {
+                    thinking: { type: 'enabled' },
+                    reasoningEffort: 'high',
+                },
+            });
+        });
+
+        it('turning reasoning OFF is said out loud on GLM and DeepSeek too', () => {
+            // Previously gated on the Kimi family alone, so a user who picked Off
+            // on GLM or DeepSeek kept paying for thinking.
+            for (const model of ['glm-5.2', 'deepseek-v4-pro', 'kimi-k2.6']) {
+                expect(
+                    buildReasoningProviderOptions(
+                        BYOKProvider.OPENAI_COMPATIBLE,
+                        'none',
+                        model,
+                    ),
+                ).toEqual({
+                    openaiCompatible: { thinking: { type: 'disabled' } },
+                });
+            }
+        });
+
+        it('never sends a disable to an always-thinking variant', () => {
+            // k3 / k2.7-code / GLM-5.3 expose no off switch and reject the field.
+            for (const model of ['k3', 'kimi-k2.7-code', 'glm-5.3']) {
+                expect(
+                    buildReasoningProviderOptions(
+                        BYOKProvider.OPENAI_COMPATIBLE,
+                        'none',
+                        model,
+                    ),
+                ).toEqual({});
+            }
+        });
+
+        it('emits reasoningEffort for a native-OpenAI id served over a proxy', () => {
+            // camelCase on purpose: it is the SDK's own option name, which the SDK
+            // renders as the `reasoning_effort` body field. A snake_case key is
+            // spread in first and then overwritten with undefined.
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.OPENAI_COMPATIBLE,
+                    'high',
+                    'gpt-5.6-sol',
+                ),
+            ).toEqual({ openaiCompatible: { reasoningEffort: 'high' } });
+        });
+
+        it('emits NOTHING for an upstream it cannot identify', () => {
+            // A strict server 400s on an unknown body field; a lenient one ignores
+            // it. Either way, inventing a param is worse than saying nothing.
+            expect(
+                buildReasoningProviderOptions(
+                    BYOKProvider.OPENAI_COMPATIBLE,
+                    'high',
+                    'nemotron-3-ultra-550b-a55b',
+                ),
+            ).toEqual({});
             expect(
                 buildReasoningProviderOptions(
                     BYOKProvider.OPENAI_COMPATIBLE,
                     'high',
                 ),
-            ).toEqual({
-                openaiCompatible: { thinking: { type: 'enabled' } },
-            });
+            ).toEqual({});
         });
     });
 
@@ -458,14 +602,71 @@ describe('buildProviderOptions', () => {
         expect(result.anthropic).toEqual({ thinking: { type: 'disabled' } });
     });
 
-    it('passes a flat override through unwrapped for a provider with no namespace', () => {
-        // azure/bedrock declare no namespace → unwrapped (preserved).
-        const result = buildProviderOptions('main-loop', undefined, {
-            byokProvider: 'azure',
-            modelName: 'gpt-4o',
-            reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
-        });
-        expect(result).toEqual({ foo: 'bar' });
+    it('wraps a flat override for azure and bedrock, which used to drop it', () => {
+        // This test used to assert the opposite, with the reason written in:
+        // "azure/bedrock declare no namespace → unwrapped (preserved)".
+        // "Preserved" was wrong — an unwrapped override reaches the SDK under no
+        // key at all and is discarded without a word. Both modules now declare
+        // the namespace their built model actually reads.
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'azure',
+                modelName: 'gpt-4o',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            }),
+        ).toEqual({ azure: { foo: 'bar' } });
+
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'amazon_bedrock',
+                modelName: 'anthropic.claude-sonnet-4-6',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            }),
+        // ...and then asserted the NEXT wrong key. `amazon-bedrock` is the built
+        // model's provider ID, not the providerOptions key: the SDK parses only
+        // `amazonBedrock` or its legacy `bedrock` alias. This spec agreeing with
+        // the module proved nothing, because both were reading the same wrong
+        // property — which is why the claim is now also made on the wire, in
+        // byok-config-matrix, where the request body can contradict it.
+        ).toEqual({ amazonBedrock: { foo: 'bar' } });
+    });
+
+    it('leaves an override alone when it uses an SDK alias key', () => {
+        // The vendor's docs show `{ bedrock: ... }`, so that is what gets pasted.
+        // Wrapping it under the canonical namespace would bury a key the SDK
+        // reads inside one it also reads, and the inner object is not a valid
+        // option — a correct paste turned into a silent no-op.
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'amazon_bedrock',
+                modelName: 'anthropic.claude-sonnet-4-6',
+                reasoningConfigOverride: JSON.stringify({
+                    bedrock: { reasoningConfig: { type: 'enabled' } },
+                }),
+            }),
+        ).toEqual({ bedrock: { reasoningConfig: { type: 'enabled' } } });
+    });
+
+    it('wraps a Vertex override by MODEL, because one id builds two SDK models', () => {
+        // Gemini-on-Vertex is `google.vertex.chat` (reads `google`);
+        // Claude-on-Vertex is an Anthropic language model (reads `anthropic`).
+        // Answering `google` for both put a Claude user's override under a key
+        // nothing reads.
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'google_vertex',
+                modelName: 'gemini-3.7-flash',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            }),
+        ).toEqual({ google: { foo: 'bar' } });
+
+        expect(
+            buildProviderOptions('main-loop', undefined, {
+                byokProvider: 'google_vertex',
+                modelName: 'claude-opus-4-7',
+                reasoningConfigOverride: JSON.stringify({ foo: 'bar' }),
+            }),
+        ).toEqual({ anthropic: { foo: 'bar' } });
     });
 
     it('wraps a flat override under anthropic for the Anthropic-protocol brands', () => {
@@ -479,6 +680,165 @@ describe('buildProviderOptions', () => {
             });
             expect(result.anthropic).toEqual({ foo: 'bar' });
         }
+    });
+});
+
+describe('mutation-killing: OpenRouter routing merge + boundary guards', () => {
+    describe('defaultReasoningEffortFor — guard boundaries', () => {
+        it('returns undefined when provider is set but model is missing', () => {
+            // Kills a mutant that drops the `!slot?.model` half of the guard:
+            // a slot with a real provider but no model must still bail out.
+            expect(
+                defaultReasoningEffortFor({
+                    provider: BYOKProvider.ANTHROPIC,
+                    apiKey: '',
+                } as any),
+            ).toBeUndefined();
+            expect(
+                defaultReasoningEffortFor({
+                    provider: BYOKProvider.ANTHROPIC,
+                    model: '',
+                    apiKey: '',
+                } as any),
+            ).toBeUndefined();
+        });
+
+        it('returns undefined when model is set but provider is missing', () => {
+            expect(
+                defaultReasoningEffortFor({ model: 'claude-opus-5' } as any),
+            ).toBeUndefined();
+        });
+    });
+
+    describe('buildProviderOptions — OpenRouter provider pinning', () => {
+        it('merges reasoning.effort and provider.order under one openrouter key', () => {
+            // The deep-merge in mergeOpenRouterOptions must keep BOTH the
+            // reasoning payload (base.openrouter) and the routing payload
+            // (routing.openrouter). A shallow overwrite would drop reasoning.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                reasoningEffort: 'medium',
+                openrouterProviderOrder: ['openai', 'anthropic'],
+            });
+            expect(result).toEqual({
+                openrouter: {
+                    reasoning: { effort: 'medium' },
+                    provider: { order: ['openai', 'anthropic'] },
+                },
+            });
+        });
+
+        it('filters empty/whitespace provider ids and preserves exact order', () => {
+            // Kills mutants on the order filter (predicate flip, dropped trim
+            // check) and on array ordering.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                reasoningEffort: 'low',
+                openrouterProviderOrder: ['', '   ', 'groq', 'openai'],
+            });
+            expect(result.openrouter.provider).toEqual({
+                order: ['groq', 'openai'],
+            });
+        });
+
+        it('emits allow_fallbacks=false (boolean check, not truthiness)', () => {
+            // typeof === 'boolean' must let `false` through; a truthiness guard
+            // would silently drop the user's explicit opt-out.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                reasoningEffort: 'low',
+                openrouterAllowFallbacks: false,
+            });
+            expect(result).toEqual({
+                openrouter: {
+                    reasoning: { effort: 'low' },
+                    provider: { allow_fallbacks: false },
+                },
+            });
+        });
+
+        it('emits allow_fallbacks=true alongside order when both are set', () => {
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                reasoningEffort: 'high',
+                openrouterProviderOrder: ['deepinfra'],
+                openrouterAllowFallbacks: true,
+            });
+            expect(result).toEqual({
+                openrouter: {
+                    reasoning: { effort: 'high' },
+                    provider: {
+                        order: ['deepinfra'],
+                        allow_fallbacks: true,
+                    },
+                },
+            });
+        });
+
+        it('omits the provider payload when order is all-empty and no fallbacks flag', () => {
+            // hasOrder=false && hasFallbacksOverride=false → routing {}; only the
+            // reasoning payload survives (no empty provider key leaks through).
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                reasoningEffort: 'medium',
+                openrouterProviderOrder: ['', '  '],
+            });
+            expect(result).toEqual({
+                openrouter: { reasoning: { effort: 'medium' } },
+            });
+            expect(result.openrouter.provider).toBeUndefined();
+        });
+
+        it('emits routing with no reasoning when effort is none', () => {
+            // effort=none → reasoning {}; routing still applies → openrouter has
+            // only provider, no reasoning key.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                reasoningEffort: 'none',
+                openrouterProviderOrder: ['groq'],
+            });
+            expect(result).toEqual({
+                openrouter: { provider: { order: ['groq'] } },
+            });
+            expect(result.openrouter.reasoning).toBeUndefined();
+        });
+
+        it('ignores OpenRouter routing fields for a non-OpenRouter provider', () => {
+            // The byokProvider !== OPEN_ROUTER guard must suppress routing even
+            // when order/fallbacks are supplied.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.ANTHROPIC,
+                reasoningEffort: 'high',
+                modelName: 'claude-opus-5',
+                openrouterProviderOrder: ['openai'],
+                openrouterAllowFallbacks: false,
+            });
+            expect(result.openrouter).toBeUndefined();
+            expect(result).toEqual({
+                anthropic: {
+                    thinking: { type: 'adaptive' },
+                    effort: 'high',
+                },
+            });
+        });
+
+        it('layers OpenRouter routing onto the JSON override path', () => {
+            // The override branch spreads buildOpenRouterRouting first; an
+            // override that lands under a DIFFERENT namespace than openrouter
+            // leaves the routing openrouter key intact.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                reasoningEffort: 'high',
+                openrouterProviderOrder: ['openai'],
+                reasoningConfigOverride: JSON.stringify({
+                    anthropic: { thinking: { type: 'disabled' } },
+                }),
+            });
+            expect(result).toEqual({
+                openrouter: { provider: { order: ['openai'] } },
+                anthropic: { thinking: { type: 'disabled' } },
+            });
+        });
     });
 });
 

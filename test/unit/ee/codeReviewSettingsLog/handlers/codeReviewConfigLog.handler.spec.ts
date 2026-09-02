@@ -605,3 +605,690 @@ describe('CodeReviewConfigLogHandler', () => {
         });
     });
 });
+
+// ─────────────────────────────────────────────────────────────
+// Mutation-killing unit tests for the deterministic helpers.
+// These call the private/pure methods directly for exact-value,
+// boundary, and branch coverage that the integration tests above
+// cannot pin precisely.
+// ─────────────────────────────────────────────────────────────
+
+describe('CodeReviewConfigLogHandler — deterministic units', () => {
+    let handler: CodeReviewConfigLogHandler;
+    // None of the methods under test touch the injected dependency.
+    const h = () => handler as any;
+
+    beforeEach(() => {
+        handler = new CodeReviewConfigLogHandler({} as any);
+    });
+
+    // ─── generateCreationEntry ───
+
+    describe('generateCreationEntry', () => {
+        it('builds the DIRECTORY entry using directory.path and repository.name', () => {
+            const result = h().generateCreationEntry({
+                userInfo: { userEmail: 'author@test.com' },
+                configLevel: ConfigLevel.DIRECTORY,
+                directory: { id: 'dir-1', path: '/src/app' },
+                repository: { id: 'repo-1', name: 'my-repo' },
+            });
+
+            expect(result).toEqual({
+                actionDescription: 'Directory Configuration Created',
+                previousValue: null,
+                currentValue: {
+                    directoryId: 'dir-1',
+                    directoryPath: '/src/app',
+                    repositoryId: 'repo-1',
+                },
+                description:
+                    'User author@test.com created configuration for directory "/src/app" in repository "my-repo"',
+            });
+        });
+
+        it('falls back to directory.id and repository.id when path/name are missing', () => {
+            const result = h().generateCreationEntry({
+                userInfo: { userEmail: 'author@test.com' },
+                configLevel: ConfigLevel.DIRECTORY,
+                directory: { id: 'dir-1', path: undefined },
+                repository: { id: 'repo-1' },
+            });
+
+            expect(result.description).toBe(
+                'User author@test.com created configuration for directory "dir-1" in repository "repo-1"',
+            );
+            expect(result.currentValue.directoryPath).toBeUndefined();
+        });
+
+        it('uses the REPOSITORY branch when configLevel is DIRECTORY but directory is absent', () => {
+            const result = h().generateCreationEntry({
+                userInfo: { userEmail: 'author@test.com' },
+                configLevel: ConfigLevel.DIRECTORY,
+                directory: undefined,
+                repository: { id: 'repo-1', name: 'my-repo' },
+            });
+
+            expect(result).toEqual({
+                actionDescription: 'Repository Configuration Created',
+                previousValue: null,
+                currentValue: {
+                    repositoryId: 'repo-1',
+                    repositoryName: 'my-repo',
+                },
+                description:
+                    'User author@test.com created configuration for repository "my-repo"',
+            });
+        });
+
+        it('builds the REPOSITORY entry and falls back to repository.id for the label', () => {
+            const result = h().generateCreationEntry({
+                userInfo: { userEmail: 'author@test.com' },
+                configLevel: ConfigLevel.REPOSITORY,
+                repository: { id: 'repo-1' },
+            });
+
+            expect(result.actionDescription).toBe(
+                'Repository Configuration Created',
+            );
+            expect(result.currentValue).toEqual({
+                repositoryId: 'repo-1',
+                repositoryName: 'repo-1',
+            });
+            expect(result.description).toBe(
+                'User author@test.com created configuration for repository "repo-1"',
+            );
+        });
+    });
+
+    // ─── resolveWithDefaults ───
+
+    describe('resolveWithDefaults', () => {
+        it('returns the defaults unchanged when the delta is null', () => {
+            const result = h().resolveWithDefaults(null);
+            expect(result.pullRequestApprovalActive).toBe(false);
+            expect(result.suggestionControl.maxSuggestions).toBe(15);
+            expect(result.summary.behaviourForExistingDescription).toBe(
+                'concatenate',
+            );
+        });
+
+        it('overlays the delta on top of the defaults (nested merge preserved)', () => {
+            const result = h().resolveWithDefaults({
+                pullRequestApprovalActive: true,
+                suggestionControl: { maxSuggestions: 42 },
+            });
+
+            expect(result.pullRequestApprovalActive).toBe(true);
+            // overridden nested key
+            expect(result.suggestionControl.maxSuggestions).toBe(42);
+            // sibling nested key survives from defaults
+            expect(result.suggestionControl.groupingMode).toBe('file');
+        });
+    });
+
+    // ─── deepMerge ───
+
+    describe('deepMerge', () => {
+        it('shallow-merges top-level keys, source wins on collision', () => {
+            expect(h().deepMerge({ a: 1, b: 2 }, { b: 3, c: 4 })).toEqual({
+                a: 1,
+                b: 3,
+                c: 4,
+            });
+        });
+
+        it('recursively merges nested plain objects', () => {
+            expect(
+                h().deepMerge({ x: { a: 1, b: 2 } }, { x: { b: 9, d: 4 } }),
+            ).toEqual({ x: { a: 1, b: 9, d: 4 } });
+        });
+
+        it('replaces arrays wholesale rather than merging them', () => {
+            expect(h().deepMerge({ arr: [1, 2, 3] }, { arr: [9] })).toEqual({
+                arr: [9],
+            });
+        });
+
+        it('replaces a target object with a null source value', () => {
+            expect(h().deepMerge({ a: { x: 1 } }, { a: null })).toEqual({
+                a: null,
+            });
+        });
+
+        it('replaces a target primitive with a source object', () => {
+            expect(h().deepMerge({ a: 1 }, { a: { x: 2 } })).toEqual({
+                a: { x: 2 },
+            });
+        });
+
+        it('does not mutate the target argument', () => {
+            const target = { x: { a: 1 } };
+            h().deepMerge(target, { x: { b: 2 } });
+            expect(target).toEqual({ x: { a: 1 } });
+        });
+    });
+
+    // ─── flattenObject ───
+
+    describe('flattenObject', () => {
+        it('flattens nested plain objects with dot-joined keys', () => {
+            expect(
+                h().flattenObject({ a: 1, b: { c: 2, d: { e: 3 } } }),
+            ).toEqual({ 'a': 1, 'b.c': 2, 'b.d.e': 3 });
+        });
+
+        it('keeps arrays as leaf values (does not flatten them)', () => {
+            expect(h().flattenObject({ arr: [1, 2], n: 5 })).toEqual({
+                arr: [1, 2],
+                n: 5,
+            });
+        });
+
+        it('keeps null as a leaf value', () => {
+            expect(h().flattenObject({ x: null, y: { z: null } })).toEqual({
+                'x': null,
+                'y.z': null,
+            });
+        });
+
+        it('applies the prefix to top-level keys', () => {
+            expect(h().flattenObject({ a: 1 }, 'p')).toEqual({ 'p.a': 1 });
+        });
+    });
+
+    // ─── formatBehaviour ───
+
+    describe('formatBehaviour', () => {
+        it('maps the known behaviours to their labels', () => {
+            expect(h().formatBehaviour('concatenate')).toBe('Concatenate');
+            expect(h().formatBehaviour('complement')).toBe('Complement');
+            expect(h().formatBehaviour('replace')).toBe('Replace');
+        });
+
+        it('returns the raw value for an unknown behaviour', () => {
+            expect(h().formatBehaviour('weird')).toBe('weird');
+        });
+    });
+
+    // ─── hasSignificantAutomatedReviewChange ───
+
+    describe('hasSignificantAutomatedReviewChange', () => {
+        it('is true when the active flag flips', () => {
+            expect(
+                h().hasSignificantAutomatedReviewChange(
+                    { automatedReviewActive: false },
+                    { automatedReviewActive: true },
+                ),
+            ).toBe(true);
+        });
+
+        it('is true when the cadence type changes (active unchanged)', () => {
+            expect(
+                h().hasSignificantAutomatedReviewChange(
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: { type: 'every_push' },
+                    },
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: { type: 'auto_pause' },
+                    },
+                ),
+            ).toBe(true);
+        });
+
+        it('is false when active and non-auto_pause type are identical', () => {
+            expect(
+                h().hasSignificantAutomatedReviewChange(
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: { type: 'every_push' },
+                    },
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: { type: 'every_push' },
+                    },
+                ),
+            ).toBe(false);
+        });
+
+        it('is true when both are auto_pause but pushesToTrigger differs', () => {
+            expect(
+                h().hasSignificantAutomatedReviewChange(
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: {
+                            type: 'auto_pause',
+                            pushesToTrigger: 3,
+                            timeWindow: 30,
+                        },
+                    },
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: {
+                            type: 'auto_pause',
+                            pushesToTrigger: 5,
+                            timeWindow: 30,
+                        },
+                    },
+                ),
+            ).toBe(true);
+        });
+
+        it('is true when both are auto_pause but timeWindow differs', () => {
+            expect(
+                h().hasSignificantAutomatedReviewChange(
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: {
+                            type: 'auto_pause',
+                            pushesToTrigger: 3,
+                            timeWindow: 30,
+                        },
+                    },
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: {
+                            type: 'auto_pause',
+                            pushesToTrigger: 3,
+                            timeWindow: 60,
+                        },
+                    },
+                ),
+            ).toBe(true); // timeWindow differs → true
+        });
+
+        it('is false when both are auto_pause with identical parameters', () => {
+            expect(
+                h().hasSignificantAutomatedReviewChange(
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: {
+                            type: 'auto_pause',
+                            pushesToTrigger: 3,
+                            timeWindow: 30,
+                        },
+                    },
+                    {
+                        automatedReviewActive: true,
+                        reviewCadence: {
+                            type: 'auto_pause',
+                            pushesToTrigger: 3,
+                            timeWindow: 30,
+                        },
+                    },
+                ),
+            ).toBe(false);
+        });
+    });
+
+    // ─── hasSignificantSummaryChange ───
+
+    describe('hasSignificantSummaryChange', () => {
+        it('is true when generatePRSummary flips', () => {
+            expect(
+                h().hasSignificantSummaryChange(
+                    { summary: { generatePRSummary: false } },
+                    { summary: { generatePRSummary: true } },
+                ),
+            ).toBe(true);
+        });
+
+        it('is true when only the behaviour changes (generate unchanged)', () => {
+            expect(
+                h().hasSignificantSummaryChange(
+                    {
+                        summary: {
+                            generatePRSummary: true,
+                            behaviourForExistingDescription: 'concatenate',
+                        },
+                    },
+                    {
+                        summary: {
+                            generatePRSummary: true,
+                            behaviourForExistingDescription: 'replace',
+                        },
+                    },
+                ),
+            ).toBe(true);
+        });
+
+        it('is false when generate and behaviour are identical', () => {
+            expect(
+                h().hasSignificantSummaryChange(
+                    {
+                        summary: {
+                            generatePRSummary: true,
+                            behaviourForExistingDescription: 'concatenate',
+                        },
+                    },
+                    {
+                        summary: {
+                            generatePRSummary: true,
+                            behaviourForExistingDescription: 'concatenate',
+                        },
+                    },
+                ),
+            ).toBe(false);
+        });
+
+        it('is false when summary is absent on both sides', () => {
+            expect(h().hasSignificantSummaryChange({}, {})).toBe(false);
+        });
+    });
+
+    // ─── collectBasicChanges ───
+
+    describe('collectBasicChanges', () => {
+        it('emits an exact BasicChange for a tracked top-level property', () => {
+            const changes = h().collectBasicChanges(
+                { pullRequestApprovalActive: false },
+                { pullRequestApprovalActive: true },
+            );
+
+            expect(changes).toEqual([
+                {
+                    key: 'pullRequestApprovalActive',
+                    oldValue: false,
+                    newValue: true,
+                    displayName: 'Pull Request Approval',
+                    path: ['pullRequestApprovalActive'],
+                },
+            ]);
+        });
+
+        it('splits nested keys into a path array', () => {
+            const changes = h().collectBasicChanges(
+                { reviewOptions: { bug: true } },
+                { reviewOptions: { bug: false } },
+            );
+
+            expect(changes).toEqual([
+                {
+                    key: 'reviewOptions.bug',
+                    oldValue: true,
+                    newValue: false,
+                    displayName: 'Bug Detection',
+                    path: ['reviewOptions', 'bug'],
+                },
+            ]);
+        });
+
+        it('skips keys listed in excludeKeys', () => {
+            const changes = h().collectBasicChanges(
+                { pullRequestApprovalActive: false },
+                { pullRequestApprovalActive: true },
+                ['pullRequestApprovalActive'],
+            );
+
+            expect(changes).toEqual([]);
+        });
+
+        it('ignores properties that are not in PROPERTY_CONFIGS', () => {
+            const changes = h().collectBasicChanges(
+                { someUnknownProp: 'a' },
+                { someUnknownProp: 'b' },
+            );
+
+            expect(changes).toEqual([]);
+        });
+
+        it('emits nothing when nothing changed', () => {
+            const changes = h().collectBasicChanges(
+                { pullRequestApprovalActive: true },
+                { pullRequestApprovalActive: true },
+            );
+
+            expect(changes).toEqual([]);
+        });
+    });
+
+    // ─── collectSpecialChanges ───
+
+    describe('collectSpecialChanges', () => {
+        it('emits an automatedReviewActive special change with exact metadata', () => {
+            const changes = h().collectSpecialChanges(
+                { automatedReviewActive: false },
+                { automatedReviewActive: true },
+            );
+
+            expect(changes).toEqual([
+                {
+                    displayName: 'Automated Code Review',
+                    customDescription: 'Automated Code Review: enabled',
+                    isSpecial: true,
+                    key: 'automatedReviewActive',
+                },
+            ]);
+        });
+
+        it('emits a summary special change with exact metadata', () => {
+            const changes = h().collectSpecialChanges(
+                {
+                    summary: {
+                        generatePRSummary: false,
+                        behaviourForExistingDescription: 'concatenate',
+                    },
+                },
+                {
+                    summary: {
+                        generatePRSummary: true,
+                        behaviourForExistingDescription: 'replace',
+                    },
+                },
+            );
+
+            expect(changes).toEqual([
+                {
+                    displayName: 'Generate PR Summary',
+                    customDescription:
+                        'Generate PR Summary: enabled with Replace behavior',
+                    isSpecial: true,
+                    key: 'summary.generatePRSummary',
+                },
+            ]);
+        });
+
+        it('emits both special changes in [automated, summary] order', () => {
+            const changes = h().collectSpecialChanges(
+                {
+                    automatedReviewActive: false,
+                    summary: { generatePRSummary: false },
+                },
+                {
+                    automatedReviewActive: true,
+                    summary: { generatePRSummary: true },
+                },
+            );
+
+            expect(changes).toHaveLength(2);
+            expect(changes[0].key).toBe('automatedReviewActive');
+            expect(changes[1].key).toBe('summary.generatePRSummary');
+        });
+
+        it('emits an empty array when neither special case applies', () => {
+            const changes = h().collectSpecialChanges(
+                { automatedReviewActive: true },
+                { automatedReviewActive: true },
+            );
+
+            expect(changes).toEqual([]);
+        });
+    });
+
+    // ─── buildCompleteNestedStructure ───
+
+    describe('buildCompleteNestedStructure', () => {
+        it('rebuilds a nested structure from a basic change path (oldValue)', () => {
+            const changes = [
+                {
+                    key: 'reviewOptions.bug',
+                    oldValue: true,
+                    newValue: false,
+                    displayName: 'Bug Detection',
+                    path: ['reviewOptions', 'bug'],
+                },
+            ];
+
+            expect(
+                h().buildCompleteNestedStructure(changes, {}, {}, 'oldValue'),
+            ).toEqual({ reviewOptions: { bug: true } });
+        });
+
+        it('rebuilds a nested structure using newValue when requested', () => {
+            const changes = [
+                {
+                    key: 'reviewOptions.bug',
+                    oldValue: true,
+                    newValue: false,
+                    displayName: 'Bug Detection',
+                    path: ['reviewOptions', 'bug'],
+                },
+            ];
+
+            expect(
+                h().buildCompleteNestedStructure(changes, {}, {}, 'newValue'),
+            ).toEqual({ reviewOptions: { bug: false } });
+        });
+
+        it('pulls automatedReviewActive + reviewCadence from the source config for special changes', () => {
+            const changes = [
+                {
+                    displayName: 'Automated Code Review',
+                    customDescription: 'x',
+                    isSpecial: true,
+                    key: 'automatedReviewActive',
+                },
+            ];
+            const oldConfig = {
+                automatedReviewActive: false,
+                reviewCadence: { type: 'every_push' },
+            };
+            const newConfig = {
+                automatedReviewActive: true,
+                reviewCadence: { type: 'auto_pause', pushesToTrigger: 3 },
+            };
+
+            expect(
+                h().buildCompleteNestedStructure(
+                    changes,
+                    oldConfig,
+                    newConfig,
+                    'oldValue',
+                ),
+            ).toEqual({
+                automatedReviewActive: false,
+                reviewCadence: { type: 'every_push' },
+            });
+
+            expect(
+                h().buildCompleteNestedStructure(
+                    changes,
+                    oldConfig,
+                    newConfig,
+                    'newValue',
+                ),
+            ).toEqual({
+                automatedReviewActive: true,
+                reviewCadence: { type: 'auto_pause', pushesToTrigger: 3 },
+            });
+        });
+
+        it('pulls summary fields from the source config for the summary special change', () => {
+            const changes = [
+                {
+                    displayName: 'Generate PR Summary',
+                    customDescription: 'x',
+                    isSpecial: true,
+                    key: 'summary.generatePRSummary',
+                },
+            ];
+            const newConfig = {
+                summary: {
+                    generatePRSummary: true,
+                    behaviourForExistingDescription: 'replace',
+                },
+            };
+
+            expect(
+                h().buildCompleteNestedStructure(
+                    changes,
+                    {},
+                    newConfig,
+                    'newValue',
+                ),
+            ).toEqual({
+                summary: {
+                    generatePRSummary: true,
+                    behaviourForExistingDescription: 'replace',
+                },
+            });
+        });
+
+        it('merges basic and special changes into one structure', () => {
+            const changes = [
+                {
+                    key: 'pullRequestApprovalActive',
+                    oldValue: false,
+                    newValue: true,
+                    displayName: 'Pull Request Approval',
+                    path: ['pullRequestApprovalActive'],
+                },
+                {
+                    displayName: 'Automated Code Review',
+                    customDescription: 'x',
+                    isSpecial: true,
+                    key: 'automatedReviewActive',
+                },
+            ];
+            const newConfig = {
+                automatedReviewActive: true,
+                reviewCadence: { type: 'every_push' },
+            };
+
+            expect(
+                h().buildCompleteNestedStructure(
+                    changes,
+                    {},
+                    newConfig,
+                    'newValue',
+                ),
+            ).toEqual({
+                pullRequestApprovalActive: true,
+                automatedReviewActive: true,
+                reviewCadence: { type: 'every_push' },
+            });
+        });
+    });
+
+    // ─── createUnifiedChangedData ───
+
+    describe('createUnifiedChangedData', () => {
+        it('assembles the full ChangedDataToExport for a single basic change', () => {
+            const changes = [
+                {
+                    key: 'pullRequestApprovalActive',
+                    oldValue: false,
+                    newValue: true,
+                    displayName: 'Pull Request Approval',
+                    path: ['pullRequestApprovalActive'],
+                },
+            ];
+
+            const result = h().createUnifiedChangedData(
+                changes,
+                { userEmail: 'author@test.com' },
+                {},
+                {},
+            );
+
+            expect(result).toEqual({
+                actionDescription: 'Configuration Updated',
+                previousValue: { pullRequestApprovalActive: false },
+                currentValue: { pullRequestApprovalActive: true },
+                description:
+                    'User author@test.com changed Pull Request Approval from disabled to enabled',
+            });
+        });
+    });
+});

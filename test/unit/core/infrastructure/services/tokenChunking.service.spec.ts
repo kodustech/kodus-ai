@@ -1,10 +1,16 @@
 import { TokenChunkingService } from '@libs/core/infrastructure/services/tokenChunking/tokenChunking.service';
 import { LLMModelProvider } from '@libs/llm/model-providers';
+import { managedModelMaxInputTokens } from '@libs/llm/managed-model-window';
+import { estimateTextTokens } from '@libs/llm/token-estimate';
 
-// GEMINI_2_5_PRO's managed input window — moved off MODEL_INPUT_MAX_TOKENS into
-// the Gemini provider's capabilities().maxInputTokens, resolved via
-// managedModelMaxInputTokens. This spec pins the value tokenChunking sizes to.
-const GEMINI_2_5_PRO_MAX_INPUT = 1_000_000;
+// GEMINI_2_5_PRO's managed input window. Derived, never restated: this used to be a hardcoded 1_000_000 — a third copy
+// of a number that already had a home — and it went stale the moment the model
+// layer got the vendor's real figure. Reading it from the same source the
+// service reads keeps the test about the RULE (limit = window x usage) instead
+// of about a literal.
+const GEMINI_2_5_PRO_MAX_INPUT = managedModelMaxInputTokens(
+    LLMModelProvider.GEMINI_2_5_PRO,
+)!;
 
 // Mock logger
 jest.mock('@libs/core/log/logger', () => ({
@@ -33,10 +39,24 @@ jest.mock('tiktoken', () => ({
  * estimateTokenCount uses Math.floor(byteCount / 4) for non-OpenAI models.
  * For ASCII text, byteCount ≈ string.length, so we need ~tokenCount * 4 chars.
  */
+/**
+ * A string that actually MEASURES ~`tokenCount` tokens.
+ *
+ * This used to be `'x'.repeat(tokenCount * 4)`, which assumed the service
+ * divided length by 4. It now measures with the tokenizer, and a run of
+ * identical characters is nothing like length/4 tokens — BPE folds it — so a
+ * "500 token" item measured a few dozen and the chunking cases below stopped
+ * exercising any boundary. Varied text tokenizes the way real content does, and
+ * growing it until the estimator agrees keeps the fixture honest whatever the
+ * estimator does next.
+ */
 function generateItem(tokenCount: number, seed = 'item'): string {
-    const charCount = tokenCount * 4;
-    const base = `${seed}_`;
-    return base + 'x'.repeat(Math.max(0, charCount - base.length));
+    const unit = `${seed} const value = compute(input, index); // note\n`;
+    let text = '';
+    while (estimateTextTokens(text) < tokenCount) {
+        text += unit;
+    }
+    return text;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,11 +362,11 @@ describe('TokenChunkingService – overrideMaxTokens', () => {
         });
 
         it('should handle object items with overrideMaxTokens', () => {
-            // Each item serializes to ~2030 chars → ~507 tokens
+            // Each item measures ~500 tokens once serialized.
             const items = [
-                { filename: 'a.ts', patch: 'x'.repeat(2000) },
-                { filename: 'b.ts', patch: 'y'.repeat(2000) },
-                { filename: 'c.ts', patch: 'z'.repeat(2000) },
+                { filename: 'a.ts', patch: generateItem(500, 'a') },
+                { filename: 'b.ts', patch: generateItem(500, 'b') },
+                { filename: 'c.ts', patch: generateItem(500, 'c') },
             ];
 
             // overrideMaxTokens = 700, tokenLimit = floor(700 * 0.9) = 630

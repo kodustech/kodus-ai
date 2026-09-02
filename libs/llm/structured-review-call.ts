@@ -16,16 +16,22 @@
 import {
     Output,
     NoObjectGeneratedError,
+    TypeValidationError,
+    JSONParseError,
+    asSchema,
     type LanguageModel,
     type Schema,
 } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import {
     ensureValidatingSchema,
+    extractJsonFromText,
+    normalizeEnvelope,
     readOutput,
     repairAndValidate,
     salvageStructuredError,
 } from '@libs/llm/structured-output-repair';
+import { LLM_ENVELOPE_TAG } from '@libs/llm/log-tags';
 import { REGISTRY } from '@libs/llm/providers';
 import {
     planStructuredCall,
@@ -99,6 +105,15 @@ export interface BaseReviewCallParams {
     /** Override the slot-derived provider options (reasoning/thinking config) —
      *  e.g. a demo path forcing Gemini thinking off. Unset → the slot's own. */
     providerOptions?: Record<string, unknown>;
+    /** Opt in to deterministic ENVELOPE-SHAPE recovery (structured mode): when the
+     *  model returns valid JSON of the wrong shape — a bare array (`[]`/`[{…}]`)
+     *  or a known wrapper — instead of the schema's envelope, re-shape it against
+     *  the wire key and re-validate BEFORE the model re-ask. OFF by default: a
+     *  caller keeps the plain "wrong shape → re-ask (signal, not silent)" contract
+     *  unless it opts in. The kody-rules shard sets this because its model answers
+     *  a bare `[]` for "no violations" at scale (#1786 / prod audit 2026-09) —
+     *  turning a shard error (and a false "rules not applied") into a clean pass. */
+    recoverEnvelopeShape?: boolean;
 }
 
 export interface StructuredReviewCallParams<
@@ -134,6 +149,16 @@ interface ReviewCallMode<T> {
      *  against the exact contract before escalating to a model re-ask. Undefined
      *  for text mode. */
     validatingSchema?: unknown;
+    /** The wire schema's top-level envelope key (structured mode) — derived from
+     *  `required[0]` / the first property. Lets the executor deterministically
+     *  re-shape a bare array / wrapper the model returned instead of the envelope
+     *  (`[]`/`[{…}]` → `{[key]:…}`) on a TypeValidationError, before the model
+     *  re-ask. Undefined when the schema has no single top-level key. */
+    envelopeKey?: string;
+    /** Whether the caller opted into envelope-shape recovery (see
+     *  `recoverEnvelopeShape` on the params). Gates the re-shape below so the
+     *  default "wrong shape → re-ask" contract is untouched for every other caller. */
+    recoverShape?: boolean;
 }
 
 /**
@@ -443,6 +468,72 @@ async function runReviewCall<T>(
                 });
                 return repaired;
             }
+            // (a2) free deterministic SHAPE recovery: the model returned valid
+            // JSON of the wrong shape — a bare array (`[]`/`[{…}]`) or a known
+            // wrapper — instead of the envelope. `salvageStructuredError` bails
+            // on this (it only repairs+revalidates, and a shape that fails the
+            // wire schema stays failed), and the re-ask below spends a model call
+            // the same model tends to flub identically. Re-shape it against the
+            // wire key and re-validate against the exact contract FIRST. This is
+            // the kody-rules shard's dominant failure: `[]` ("no violations") →
+            // `{violations:[]}` = a clean review, not a shard error (#1786 / prod
+            // audit 2026-09); a bare array WITH violations is recovered rather
+            // than silently dropped when a sibling shard posts.
+            //
+            // The bad value comes from EITHER cause: a TypeValidationError
+            // carries the parsed `.value` (the model emitted valid JSON of the
+            // wrong shape); a JSONParseError means the raw text didn't parse
+            // as-is (e.g. `[]` followed by prose) — extract+parse it from `.text`
+            // so the same re-shape covers the "array vazio como texto" class.
+            const cause = (err as { cause?: unknown }).cause;
+            let badValue: unknown;
+            let haveBadValue = false;
+            // Opt-in per caller (mode.recoverShape) — every other caller keeps the
+            // plain "wrong shape → re-ask (signal, not silent)" contract untouched.
+            if (mode.recoverShape) {
+                if (TypeValidationError.isInstance(cause)) {
+                    badValue = (cause as { value?: unknown }).value;
+                    haveBadValue = true;
+                } else if (JSONParseError.isInstance(cause)) {
+                    const text = (err as { text?: unknown }).text;
+                    const extracted =
+                        typeof text === 'string'
+                            ? extractJsonFromText(text)
+                            : null;
+                    if (extracted != null) {
+                        try {
+                            badValue = JSON.parse(extracted);
+                            haveBadValue = true;
+                        } catch {
+                            haveBadValue = false;
+                        }
+                    }
+                }
+            }
+            if (
+                mode.envelopeKey &&
+                mode.validatingSchema != null &&
+                haveBadValue
+            ) {
+                const shaped = normalizeEnvelope(badValue, mode.envelopeKey, [], {
+                    liftEmptyArray: true,
+                });
+                if (shaped !== badValue) {
+                    const wireSchema = asSchema(mode.validatingSchema as any);
+                    const check =
+                        typeof wireSchema.validate === 'function'
+                            ? await wireSchema.validate(shaped)
+                            : { success: true as const, value: shaped };
+                    if (check.success) {
+                        logger.warn({
+                            message: `${LLM_ENVELOPE_TAG} recovered ${runName} via deterministic envelope re-shape (bare array/wrapper → {${mode.envelopeKey}}) — no model re-ask`,
+                            context: 'runReviewCall',
+                            metadata: { runName, organizationId },
+                        });
+                        return check.value as T;
+                    }
+                }
+            }
             if (mode.schemaForPrompt) {
                 return await reissueDowngraded('schema-mismatch');
             }
@@ -533,19 +624,39 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         }
     }
 
+    // The wire's plain JSON body — reused for the prompt contract AND the
+    // envelope-key derivation below.
+    const jsonForm =
+        wireSchema && typeof wireSchema === 'object'
+            ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ?? wireSchema)
+            : undefined;
+
     // Stringify the wire JSON schema so the json_object fallback can put the
     // contract into the prompt (the model gets no schema in json_object mode).
     // Fail-soft: an unstringifiable schema just skips the prompt augmentation.
     let schemaForPrompt: string | undefined;
     try {
-        const jsonForm =
-            wireSchema && typeof wireSchema === 'object'
-                ? ((wireSchema as { jsonSchema?: unknown }).jsonSchema ??
-                  wireSchema)
-                : undefined;
         if (jsonForm) schemaForPrompt = JSON.stringify(jsonForm);
     } catch {
         schemaForPrompt = undefined;
+    }
+
+    // Derive the single top-level envelope key (`required[0]`, else the first
+    // property) so the executor can deterministically re-shape a bare array /
+    // wrapper into `{[key]:…}` on a TypeValidationError before the model re-ask.
+    // Undefined when the schema has no single obvious key (→ no re-shape, the
+    // re-ask still runs).
+    let envelopeKey: string | undefined;
+    const jf = jsonForm as
+        | { required?: unknown; properties?: unknown }
+        | undefined;
+    if (jf && typeof jf === 'object') {
+        const required = Array.isArray(jf.required) ? jf.required : [];
+        if (typeof required[0] === 'string') {
+            envelopeKey = required[0];
+        } else if (jf.properties && typeof jf.properties === 'object') {
+            envelopeKey = Object.keys(jf.properties)[0];
+        }
     }
 
     // Guarantee the schema actually VALIDATES: a raw jsonSchema() caller (dedup)
@@ -564,6 +675,8 @@ export async function runStructuredReviewCall<S extends z.ZodType | Schema>(
         // The executor's shared salvage repairs a parse failure against this exact
         // schema before escalating to the model re-ask (never returns bad data).
         validatingSchema,
+        envelopeKey,
+        recoverShape: params.recoverEnvelopeShape === true,
     });
 }
 

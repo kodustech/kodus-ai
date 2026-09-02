@@ -44,9 +44,9 @@ export interface SuggestionCountsBySeverity {
     bySeverity: SuggestionSeverityBreakdown;
     // Distinct labels (categories) among the delivered suggestions, lowercased.
     categories: string[];
-    // First DELIVERED (sent) suggestion — deep-link target when the PR list
-    // count is clicked (?file=...&suggestion=... on the review screen). null
-    // when the PR has no delivered suggestion to land on.
+    // Deep-link target when the PR-list count is clicked (?file=...&
+    // suggestion=... on the review screen): the delivered finding that most
+    // wants attention — see deep-link-rank.ts. null when there is none.
     firstSentSuggestion?: { id: string; filePath: string } | null;
 }
 

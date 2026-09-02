@@ -27,9 +27,31 @@ import type { ModelReasoningTraits } from './reasoning-traits';
  * fields are optional so existing base callers are unaffected.
  */
 export interface ModelCapabilities extends BaseModelCapabilities {
-    /** Max input/context window in tokens, when known. */
-    maxInputTokens?: number;
-    /** Native structured-output mode the provider honors. */
+    /** NOTE: the context window is NOT here. It is a fact about the MODEL, and
+     *  a provider module describes TRANSPORT — it does not get to define what a
+     *  model is. Two modules were restating windows the model layer already
+     *  knew (one of them staler than the mirror), while the BYOK path read the
+     *  mirror instead, so the same model had two windows depending on the path.
+     *  `lookupModelContextWindow` (libs/llm/model-context-window) is the one
+     *  source, for managed and BYOK alike. */
+    /**
+     * How structured output is issued for this model.
+     *
+     * Only `'none'` is load-bearing, and only `'none'` is trustworthy. It means
+     * "through forced tool-use" (the Anthropic protocol), which the model id
+     * does determine, and it is what `planStructuredCall` and both capability
+     * gates read.
+     *
+     * The `json_schema` vs `json_object` half is INDICATIVE, not authoritative:
+     * for `openai_compatible` the real answer depends on the baseURL, and this
+     * method's signature cannot see it — nor can it tell `openai` from
+     * `openai_compatible`, since one module serves both ids. `build()` decides
+     * (`supportsStructuredOutputs`), and the two measurably disagree in both
+     * directions; `structured-output.contract.spec.ts` pins that and keeps the
+     * distinction from being branched on. Answering it properly means a
+     * `structuredOutputPolicy(cfg)` sibling to `temperaturePolicy(cfg)`, which
+     * takes the whole config for exactly this reason.
+     */
     structuredOutput?: 'json_schema' | 'json_object' | 'none';
     /** Native tool/function calling support. */
     toolCalling?: 'native' | 'none';
@@ -51,6 +73,15 @@ export type ProviderBuildConfig = NormalizedModel;
 /** Mirrors byok-to-vercel's `ByokModelOptions` — per-call structured-output opt-in. */
 export interface ProviderBuildOptions {
     structuredOutputs?: boolean;
+    /**
+     * Replacement transport for the built client. The connection probe uses it
+     * to refuse HTTP redirects: the SSRF gate resolves the endpoint the user
+     * typed and rejects private targets, but a hostile endpoint answering 30x
+     * could still bounce the request to link-local space (the cloud metadata
+     * service) after the check passed. Only providers whose baseURL comes from
+     * the user need to honor it; fixed-endpoint providers may ignore it.
+     */
+    fetch?: typeof fetch;
 }
 
 /**
@@ -188,9 +219,12 @@ export interface ProviderModule {
      *  tool_choice support + thinking rejection). The SINGLE source a model's
      *  reasoning behavior is declared; generic code turns it into a structured
      *  plan via `planStructuredCall` and derives `supportsReasoning` from it.
-     *  Absent ⇒ `NON_REASONING_TRAITS` (a non-thinking provider, unchanged
-     *  behavior). Sibling to `reasoning()` — the module owns both. */
-    reasoningTraits?(cfg: ProviderBuildConfig): ModelReasoningTraits;
+     *  REQUIRED. `NON_REASONING_TRAITS` is still the right ANSWER for a provider
+     *  that hosts no thinking model — but it has to be given as an answer. As a
+     *  fallback it asserted, unverifiably and invisibly, that a model does not
+     *  think and that a forced tool_choice is safe on it. Sibling to
+     *  `reasoning()` — the module owns both. */
+    reasoningTraits(cfg: ProviderBuildConfig): ModelReasoningTraits;
     /** Optional system-prompt cache hint: the `providerOptions` to attach to the
      *  system message so a multi-step loop reads the (static) system prompt from
      *  cache instead of re-billing it. Provider-specific SHAPE lives here (only the
@@ -208,17 +242,37 @@ export interface ProviderModule {
      *  k3, GLM-5.3 — where the protocol fixes it to 1 while thinking), or is free
      *  (`anthropic_compatible` Kimi k2.6 / DeepSeek, and every non-Anthropic
      *  provider). Both the runtime (`resolveByokTemperature`) and the connect form
-     *  read this ONE shape. Absent/undefined ⇒ the caller falls back to the static
-     *  `capabilities().supportsTemperature` flag (every provider but Anthropic). */
-    temperaturePolicy?(cfg: ProviderBuildConfig): TemperaturePolicy | undefined;
+     *  read this ONE shape, through `kernel/temperature.ts`.
+     *
+     *  REQUIRED. It was optional, backed by a static `supportsTemperature`
+     *  capability — two statements of one rule, and they disagreed in production.
+     *  The capability is gone; a module now answers, or it does not ship. */
+    temperaturePolicy(cfg: ProviderBuildConfig): TemperaturePolicy;
     /** The Vercel AI SDK `providerOptions` namespace key this provider's adapter
      *  listens on, per requested id (a module may serve several ids with
      *  DIFFERENT namespaces — the openai module serves `openai` → 'openai' and
      *  `openai_compatible` → 'openaiCompatible'). Used to auto-wrap a user-pasted
      *  reasoning override under the right key and to enumerate the known
      *  namespaces. Absent/undefined ⇒ no known namespace (the override passes
-     *  through unwrapped). */
-    providerOptionsNamespace?(providerId: string): string | undefined;
+     *  through unwrapped).
+     *
+     *  `model` is optional and only matters where ONE provider id builds more
+     *  than one SDK model: Vertex serves Gemini (`google`) and Claude
+     *  (`anthropic`) from the same id, and answering for the wrong one wraps the
+     *  user's override under a key nothing reads. Same (providerId, model) input
+     *  as `reasoningOverrideExample` below, on purpose. */
+    providerOptionsNamespace?(
+        providerId: string,
+        model?: string,
+    ): string | undefined;
+    /** Other keys this provider's adapter ALSO parses, beyond the canonical one
+     *  above. Only for the case where an SDK kept a legacy alias and the vendor's
+     *  own docs still show it — Bedrock reads `amazonBedrock` but accepts
+     *  `bedrock`, which is the key its docs use. These are never used to WRAP an
+     *  override (the canonical namespace is), only to recognise one that is
+     *  already namespaced, so the auto-wrapper does not wrap a correct paste a
+     *  second time and wrap it out of existence. */
+    providerOptionsNamespaceAliases?(providerId: string): string[];
     /** Example JSON for the connect form's "Custom" reasoning-override textarea —
      *  the exact shape THIS provider accepts under its reasoning namespace, per
      *  requested id (a module serving several ids may differ, e.g. openai's native
@@ -226,7 +280,10 @@ export interface ProviderModule {
      *  module (it already owns `reasoning()` + the namespace), so a contributor
      *  adds it in ONE place and the web picker shows it. Absent/undefined ⇒ the UI
      *  falls back to a generic enabled-thinking example. */
-    reasoningOverrideExample?(providerId: string): string | undefined;
+    reasoningOverrideExample?(
+        providerId: string,
+        model?: string,
+    ): string | undefined;
     /** The brand's canonical endpoint, when it has a fixed one (a Kimi/GLM brand
      *  served over the Anthropic protocol). Fills baseURL on a key-only connect —
      *  both the model build and the connection probe fall back to it so the user
