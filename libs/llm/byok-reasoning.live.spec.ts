@@ -1003,7 +1003,14 @@ describe('BYOK reasoning — LIVE provider contract', () => {
      * set — and the job pays to pass it either way.
      */
     it('reads every credential the CI job passes it', () => {
-        const declared = new Set(Object.values(REPO_SECRET).flat());
+        // Two ways a brand reads a secret: the table names it (a legacy name
+        // that predates this file), or the brand DERIVES it. Both count, which
+        // is what makes the convention real — adding a row and a
+        // `BYOK_<BRAND>_API_KEY` secret needs no third edit here.
+        const declared = new Set([
+            ...Object.values(REPO_SECRET).flat(),
+            ...LIVE.map((c) => `BYOK_${c.brand.toUpperCase()}_API_KEY`),
+        ]);
         for (const name of secretsPassedByCi()) {
             expect([name, declared.has(name)]).toEqual([name, true]);
         }
@@ -1061,7 +1068,13 @@ describe('BYOK reasoning — LIVE provider contract', () => {
             let b: string | undefined = brand;
             while (b && !seen.has(b)) {
                 seen.add(b);
-                if ((REPO_SECRET[b] ?? []).some((n) => passed.has(n))) {
+                // Both ways a brand reads a secret: the table names it, or the
+                // brand derives it. Checking only the table said `deepseek` was
+                // undocumented on the very commit that gave it a named secret.
+                const names = REPO_SECRET[b] ?? [
+                    `BYOK_${b.toUpperCase()}_API_KEY`,
+                ];
+                if (names.some((n) => passed.has(n))) {
                     return true;
                 }
                 b = BORROWS_FROM[b];

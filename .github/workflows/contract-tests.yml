@@ -271,6 +271,14 @@ jobs:
                   # key is a whole service-account document is the one nobody has
                   # to go find.
                   VERTEX_SA_JSON: ${{ secrets.VERTEX_SA_JSON }}
+                  # Derived names: any brand with no entry in REPO_SECRET reads
+                  # `BYOK_<BRAND>_API_KEY`, so these four need no code change —
+                  # one secret each, rotatable on its own and visible in
+                  # `gh secret list`, which a JSON blob is not.
+                  BYOK_OPEN_ROUTER_API_KEY: ${{ secrets.BYOK_OPEN_ROUTER_API_KEY }}
+                  BYOK_DEEPSEEK_API_KEY: ${{ secrets.BYOK_DEEPSEEK_API_KEY }}
+                  BYOK_FIREWORKS_API_KEY: ${{ secrets.BYOK_FIREWORKS_API_KEY }}
+                  BYOK_AMAZON_BEDROCK_API_KEY: ${{ secrets.BYOK_AMAZON_BEDROCK_API_KEY }}
                   # Scheduled runs must not pass by checking nothing — see the
                   # coverage case in the spec. A dispatch or a fork PR still can.
                   BYOK_LIVE_EVENT: ${{ github.event_name }}
