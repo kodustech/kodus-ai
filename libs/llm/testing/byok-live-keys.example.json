@@ -1,0 +1,53 @@
+{
+    "_readme": [
+        "TEMPLATE for the GitHub repo secret BYOK_LIVE_KEYS.",
+        "",
+        "HOW TO USE",
+        "  1. cp byok-live-keys.example.json byok-live-keys.json   (the copy is gitignored)",
+        "  2. fill in the brands you have keys for and DELETE the rest — a brand",
+        "     with no key SKIPS, so a partial file is a valid file.",
+        "  3. validate + see what it would actually cover, without spending a token:",
+        "       BYOK_LIVE_KEYS=$(cat libs/llm/testing/byok-live-keys.json) \\",
+        "         npx jest libs/llm/byok-reasoning.live.spec.ts -t 'reports which brands'",
+        "     It prints `[byok-live] covered: …` and `skipped (no credential): …`.",
+        "  4. paste the file's contents into the repo secret BYOK_LIVE_KEYS.",
+        "",
+        "ALREADY IN THE REPO — do not put these here unless you want to override:",
+        "  BYOK_ANTHROPIC_API_KEY, BYOK_MOONSHOT_API_KEY, BYOK_ZHIPU_API_KEY,",
+        "  BYOK_GOOGLE_API_KEY, BYOK_OPENAI_API_KEY already cover ten of the",
+        "  twenty rows (the four Claude generations, moonshot + moonshot_code + k3,",
+        "  zai, gemini, openai).",
+        "",
+        "This key is ignored by the test — only known brand names are read."
+    ],
+
+    "deepseek": "sk-…",
+    "open_router": "sk-or-…",
+
+    "minimax": "…",
+    "minimax_m3": "…",
+    "minimaxi": "… (the OTHER MiniMax platform, api.minimaxi.com — its docs render client-side and could not be audited, so this key is what settles it)",
+
+    "amazon_bedrock": { "apiKey": "<bearer token>", "awsRegion": "us-east-1" },
+    "bedrock_grok": { "apiKey": "<bearer token>", "awsRegion": "us-east-1" },
+
+    "azure": {
+        "apiKey": "…",
+        "baseURL": "https://<your-resource>.openai.azure.com/openai",
+        "model": "<your o-series deployment name>"
+    },
+
+    "google_vertex": "<the whole service-account JSON, as a single string>",
+
+    "_optional_overrides": [
+        "Everything below already resolves from an existing repo secret.",
+        "Add one only to point a brand somewhere else — any slot field wins over",
+        "the default written in the test row.",
+        "",
+        "  \"zai\":      { \"apiKey\": \"…\", \"model\": \"glm-5.3\" },",
+        "  \"moonshot\": \"sk-…\",",
+        "  \"anthropic\": \"sk-ant-…\"   (and -legacy / -modern / -off-modern,",
+        "                              which may all hold the SAME key — they are",
+        "                              four Claude generations, not four accounts)"
+    ]
+}
