@@ -1019,6 +1019,28 @@ describe('production config shapes — invariants', () => {
             { provider: 'google_gemini', model: 'gemini-2.0-flash' },
         ];
 
+        // ...and then the same question over the WHOLE corpus, so the list above
+        // is a floor rather than the extent of the check. Every stored model the
+        // capability table calls non-reasoning must also arrive clean.
+        //
+        // OpenRouter is excluded, and the exclusion is the interesting part. Its
+        // `reasoning()` ignores the model on purpose and always emits
+        // `reasoning:{effort}`, because OpenRouter NORMALIZES reasoning across
+        // upstreams — the aggregator accepts the field for any model and decides
+        // what the upstream gets. So there the parameter is addressed to the
+        // TRANSPORT, not to the model, and our capability table has no standing
+        // to forbid it. 33 corpus shapes land here; every one is that case.
+        //
+        // Named rather than silently skipped: an exception nobody can see is how
+        // an invariant rots into a formality.
+        for (const shape of runnable) {
+            const { orgs, ...slot } = shape as any;
+            if (slot.provider === 'open_router') continue;
+            if (reasoningConfigForModel(slot.model)) continue;
+            if (!slot.reasoningEffort || slot.reasoningEffort === 'none') continue;
+            NON_REASONING.push(slot);
+        }
+
         const leaked: any[] = [];
         for (const slot of NON_REASONING) {
             // The capability table's own answer is the premise — if it ever says
@@ -1027,9 +1049,9 @@ describe('production config shapes — invariants', () => {
             expect(reasoningConfigForModel(slot.model)).toBeUndefined();
 
             const w = await captureByokWire({
+                reasoningEffort: 'high',
                 ...slot,
                 apiKey: 'k',
-                reasoningEffort: 'high',
             } as any).catch(() => null);
             if (!w) continue;
             const body = typeof w.body === 'string' ? w.body : JSON.stringify(w.body);
@@ -1038,6 +1060,9 @@ describe('production config shapes — invariants', () => {
             }
         }
         expect(leaked).toEqual([]);
+        // The sweep must actually reach the corpus, not just the six named rows —
+        // a filter that quietly matched nothing would leave this green forever.
+        expect(NON_REASONING.length).toBeGreaterThan(10);
     }, 180000);
 
     it('never sends a thinking DISABLE to a model that cannot stop thinking', async () => {
