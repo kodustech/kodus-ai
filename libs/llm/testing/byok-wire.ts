@@ -34,6 +34,7 @@
 // using it anyway is the point. A harness that proves the stack works through a
 // door production does not use proves less than it claims.
 import { LLM } from '../llm';
+import { resolveModelConfig } from '../model-invocation';
 
 import type { NormalizedModel } from '../byok-config';
 import type { ReasoningEffort } from '../providers/kernel/types';
@@ -45,6 +46,19 @@ export interface CapturedWire {
     /** Parsed JSON request body — the thing the upstream actually receives. */
     body: any;
     headers: Record<string, string>;
+}
+
+/** The resolved `providerOptions` for a slot, WITHOUT issuing a call — the other
+ *  half of a reachability check (what we asked for, next to what was sent). */
+export function resolveProviderOptions(
+    slot: NormalizedModel,
+): Record<string, unknown> {
+    return resolveModelConfig(slot, {
+        runName: 'byok-wire-harness',
+        reasoningEffortDefault: 'none',
+        openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
+        openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
+    }).providerOptions as Record<string, unknown>;
 }
 
 /** Minimal successful responses, one per wire protocol, so the SDK's real

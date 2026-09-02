@@ -77,6 +77,10 @@ export type TestBYOKResult = {
     message?: string;
     providerMessage?: string;
     httpStatus?: number;
+    /** Set on a PASSING test whose Custom reasoning override the provider's
+     *  adapter ignored. The connection works; the config is not doing what was
+     *  pasted. Advisory — never blocks saving. */
+    warning?: string;
 };
 
 export const testBYOK = async (params: {

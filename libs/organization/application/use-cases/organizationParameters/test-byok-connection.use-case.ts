@@ -2,6 +2,8 @@ import { describeBaseUrlProblem } from '@libs/llm/base-url-hygiene';
 import { BYOKProvider } from '@libs/llm/model-providers';
 import { REGISTRY } from '@libs/llm/providers';
 import { probeSlotCall } from '@libs/llm/probe-slot-call';
+import { describeUnreachedKeys } from '@libs/llm/override-reachability';
+import { LLM_ERROR_TAG, LLM_SUCCESS_TAG } from '@libs/llm/log-tags';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { encrypt } from '@libs/common/utils/crypto';
 import { validateModelTuning } from '@libs/llm/validate-model-tuning';
@@ -124,6 +126,11 @@ export type TestByokResult = {
     providerMessage?: string;
     /** HTTP status returned by the provider, when applicable. */
     httpStatus?: number;
+    /** Set on a SUCCESSFUL test whose Custom reasoning override was partly (or
+     *  wholly) ignored by the provider's adapter. The connection is fine; the
+     *  config is not doing what the user thinks. Advisory on purpose — a working
+     *  credential must stay testable and savable. */
+    warning?: string;
 };
 
 type TestByokInput = {
@@ -165,7 +172,44 @@ export class TestByokConnectionUseCase {
 
     constructor(private readonly providerService: ProviderService) {}
 
+    /**
+     * Public entry: run the connection test and emit ONE greppable observability
+     * line per outcome — `[LLM-SUCCESS]` or `[LLM-ERROR]` — so a failed "Test
+     * connection" in the web is findable in the logs (provider / model / code /
+     * HTTP status / provider message) instead of dying silently in the UI. Input
+     * rejections (BadRequestException) are logged too, then re-thrown unchanged.
+     */
     async execute(input: TestByokInput): Promise<TestByokResult> {
+        try {
+            const result = await this.runTest(input);
+            this.logTestOutcome(input, result);
+            return result;
+        } catch (err) {
+            this.logger.warn({
+                message: `${LLM_ERROR_TAG} BYOK connection test rejected: provider=${input?.provider} model=${input?.model ?? '(none)'} — ${(err as Error)?.message ?? 'invalid request'}`,
+                context: TestByokConnectionUseCase.name,
+            });
+            throw err;
+        }
+    }
+
+    /** Emit the tagged success/failure line for a completed (non-thrown) test. */
+    private logTestOutcome(input: TestByokInput, result: TestByokResult): void {
+        const where = `provider=${input?.provider} model=${input?.model ?? '(none)'}`;
+        if (result.ok) {
+            this.logger.log({
+                message: `${LLM_SUCCESS_TAG} BYOK connection test ok: ${where} latency=${result.latencyMs}ms`,
+                context: TestByokConnectionUseCase.name,
+            });
+            return;
+        }
+        this.logger.warn({
+            message: `${LLM_ERROR_TAG} BYOK connection test failed: ${where} code=${result.code}${result.httpStatus ? ` status=${result.httpStatus}` : ''}${result.providerMessage ? ` providerMsg=${JSON.stringify(result.providerMessage)}` : ''} — ${result.message ?? ''}`,
+            context: TestByokConnectionUseCase.name,
+        });
+    }
+
+    private async runTest(input: TestByokInput): Promise<TestByokResult> {
         const { provider, apiKey, baseURL } = input;
 
         if (!this.providerService.isProviderSupported(provider)) {
@@ -319,10 +363,21 @@ export class TestByokConnectionUseCase {
     ): Promise<TestByokResult> {
         const start = Date.now();
         try {
-            await probeSlotCall(this.slotFromInput(input, baseURL), {
-                timeoutMs: TEST_TIMEOUT_MS,
-            });
-            return { ok: true, code: 'ok', latencyMs: Date.now() - start };
+            const probe = await probeSlotCall(
+                this.slotFromInput(input, baseURL),
+                { timeoutMs: TEST_TIMEOUT_MS },
+            );
+            // A passing test used to say only "the credential and model work",
+            // which is true and incomplete: an override the adapter silently
+            // dropped passes too, and the user walks away believing they
+            // configured something they did not. The probe already built the real
+            // request, so it can say which of their keys survived it.
+            return {
+                ok: true,
+                code: 'ok',
+                latencyMs: Date.now() - start,
+                warning: describeUnreachedKeys(probe.unreachedOverrideKeys),
+            };
         } catch (err) {
             return this.normalizeError(err, Date.now() - start);
         }

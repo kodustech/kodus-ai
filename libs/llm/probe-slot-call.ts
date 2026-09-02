@@ -19,6 +19,10 @@
 import { generateText } from 'ai';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
+import {
+    unreachedOverrideKeys,
+    type UnreachedKey,
+} from '@libs/llm/override-reachability';
 
 /** A probe must answer fast or not at all — the connect form is waiting. */
 export const PROBE_TIMEOUT_MS = 15_000;
@@ -111,6 +115,13 @@ export const noRedirectFetch: typeof fetch = (input, init) =>
 
 export interface ProbeSlotResult {
     latencyMs: number;
+    /**
+     * Keys from the user's Custom reasoning override that left no trace in the
+     * request the adapter built — see `override-reachability.ts`. Empty unless
+     * the slot carries an override, since that is the only case where the
+     * resolved `providerOptions` are the user's own words.
+     */
+    unreachedOverrideKeys: UnreachedKey[];
 }
 
 /**
@@ -148,7 +159,7 @@ export async function probeSlotCall(
         opts.timeoutMs ?? PROBE_TIMEOUT_MS,
     );
     try {
-        await generateText({
+        const result = await generateText({
             model: inv.model as any,
             // The SDK retries twice by default; a probe must report the first
             // answer it gets, not triple a user's failing request.
@@ -156,12 +167,27 @@ export async function probeSlotCall(
             abortSignal: controller.signal,
             messages: [{ role: 'user', content: 'ping' }],
             maxOutputTokens,
+            // Ask the SDK to keep the body it built. It is off by default because
+            // a body can be large (images, files) — a 'ping' with no tools is
+            // neither, and it is the only way to see which of the user's pasted
+            // keys the adapter kept. Deliberately NOT enabled on review traffic,
+            // where the bodies are exactly the large ones the default guards
+            // against.
+            include: { requestBody: true },
             ...(temperature != null ? { temperature } : {}),
             ...(Object.keys(inv.providerOptions).length > 0
                 ? { providerOptions: inv.providerOptions as any }
                 : {}),
         });
-        return { latencyMs: Date.now() - start };
+        return {
+            latencyMs: Date.now() - start,
+            unreachedOverrideKeys: slot.reasoningConfigOverride
+                ? unreachedOverrideKeys(
+                      inv.providerOptions as Record<string, unknown>,
+                      result.request?.body,
+                  )
+                : [],
+        };
     } finally {
         clearTimeout(timer);
     }

@@ -44,7 +44,11 @@ jest.mock('@libs/common/utils/crypto', () => ({
 
 import PROD_SHAPES from './testing/__fixtures__/byok-prod-shapes.json';
 import { describeBaseUrlProblem } from './base-url-hygiene';
-import { captureByokWire } from './testing/byok-wire';
+import {
+    captureByokWire,
+    resolveProviderOptions,
+} from './testing/byok-wire';
+import { unreachedOverrideKeys } from './override-reachability';
 import type { NormalizedModel } from './byok-config';
 import { REGISTRY } from './providers/kernel/registry';
 import './providers';
@@ -840,6 +844,63 @@ describe('production config shapes — invariants', () => {
         // corpus, or a module losing its example, would otherwise leave this
         // green while testing nothing.
         expect(covered.length).toBeGreaterThanOrEqual(4);
+    }, 180000);
+
+    it('names every stored override key that never reaches the provider', async () => {
+        // The invariant above asks whether an override changed the request AT
+        // ALL. This one asks the sharper question, per key — because the live
+        // failure is PARTIAL: a Claude slot pastes `thinking` + `output_config`,
+        // the first half lands, the second is stripped by the adapter's schema,
+        // and "the request changed" is true the whole time.
+        const findings: any[] = [];
+        for (const shape of runnable) {
+            const { orgs, ...slot } = shape as any;
+            if (!slot.reasoningConfigOverride) continue;
+            try {
+                JSON.parse(slot.reasoningConfigOverride);
+            } catch {
+                continue; // owned by the save-time parse guard
+            }
+            const w = await captureByokWire({ ...slot, apiKey: 'k' }).catch(
+                () => null,
+            );
+            if (!w) continue;
+            const unreached = unreachedOverrideKeys(
+                resolveProviderOptions({ ...slot, apiKey: 'k' } as any),
+                w.body,
+            );
+            if (unreached.length) {
+                findings.push({
+                    provider: slot.provider,
+                    model: slot.model,
+                    keys: unreached.map((u) => u.key),
+                });
+            }
+        }
+
+        // NOT an assertion that the list is empty — it is not, and pretending
+        // otherwise is how this stayed invisible. It pins the exact set, so the
+        // day a config is fixed or a new one goes silent, this test says so and
+        // names it. The one entry is a real org running Claude with Anthropic's
+        // documented wire spelling (`output_config`) where the adapter declares
+        // `effort`; they get adaptive thinking at the default effort.
+        expect(findings).toEqual([
+            {
+                provider: 'anthropic',
+                model: 'claude-sonnet-5',
+                keys: ['output_config'],
+            },
+            {
+                // The same mistake on the other transport: nested inside
+                // `thinking` this word rides along as an opaque sub-object and
+                // reaches the upstream, but at the TOP level it is a key the
+                // OpenAI-compatible schema does not declare, so it is stripped.
+                // The org has both spellings on two slots and only one works.
+                provider: 'openai_compatible',
+                model: 'deepseek-v4-flash',
+                keys: ['reasoning_effort'],
+            },
+        ]);
     }, 180000);
 
     it('never sends a thinking DISABLE to a model that cannot stop thinking', async () => {

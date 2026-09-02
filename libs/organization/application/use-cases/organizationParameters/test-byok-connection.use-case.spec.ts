@@ -61,7 +61,10 @@ const BRANDS_WITH_ENDPOINT = REGISTRY.all()
 
 beforeEach(() => {
     probeSlotCall.mockReset();
-    probeSlotCall.mockResolvedValue({ latencyMs: 12 });
+    probeSlotCall.mockResolvedValue({
+        latencyMs: 12,
+        unreachedOverrideKeys: [],
+    });
 });
 
 describe('brands expose their canonical endpoint on the module', () => {
@@ -147,6 +150,39 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         });
         expect(res.ok).toBe(true);
         expect(probeSlotCall).toHaveBeenCalled();
+    });
+
+    it('warns on a PASSING test whose override the adapter ignored', async () => {
+        // The failure this closes: a test that says OK for a config that is
+        // silently not doing what the user pasted. Two live orgs are in exactly
+        // that state, and both would have clicked a green button.
+        probeSlotCall.mockResolvedValue({
+            latencyMs: 12,
+            unreachedOverrideKeys: [
+                { namespace: 'anthropic', key: 'output_config' },
+            ],
+        });
+        const res = await useCase().execute({
+            provider: 'anthropic',
+            apiKey: 'sk-test',
+            model: 'claude-sonnet-5',
+            reasoningConfigOverride: '{"output_config":{"effort":"high"}}',
+        } as any);
+        // Still a pass: the credential and the model DO work, and a working
+        // config must stay savable.
+        expect(res.ok).toBe(true);
+        expect(res.warning).toContain('"output_config"');
+    });
+
+    it('stays silent — and stays green — when the probe reports no keys', async () => {
+        probeSlotCall.mockResolvedValue({ latencyMs: 12 });
+        const res = await useCase().execute({
+            provider: 'anthropic',
+            apiKey: 'sk-test',
+            model: 'claude-sonnet-5',
+        } as any);
+        expect(res.ok).toBe(true);
+        expect(res.warning).toBeUndefined();
     });
 });
 
