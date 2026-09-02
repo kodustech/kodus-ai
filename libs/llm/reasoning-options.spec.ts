@@ -836,6 +836,44 @@ describe('mutation-killing: OpenRouter routing merge + boundary guards', () => {
             }
         });
 
+        // The override branch had the fix and could not deliver it: an
+        // OpenRouter override carries a top-level `openrouter` key, and the
+        // spread that placed it replaced the routing's whole object. An
+        // override naming only `reasoning` therefore came out with NO provider
+        // block — on the routing lottery, which is the thing being fixed.
+        it('keeps require_parameters when an override names only reasoning', () => {
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'z-ai/glm-5.2',
+                reasoningEffort: 'high',
+                reasoningConfigOverride:
+                    '{"openrouter":{"reasoning":{"effort":"max"}}}',
+            });
+
+            expect(result.openrouter).toEqual({
+                reasoning: { effort: 'max' },
+                provider: { require_parameters: true },
+            });
+        });
+
+        it("lets an override's own provider block win outright", () => {
+            // Someone who pins their own routing has already solved the
+            // problem — and the two production overrides that do this set
+            // `require_parameters` by hand. Merging ours in would silently
+            // rewrite a block they wrote deliberately.
+            const result = buildProviderOptions('run', undefined, {
+                byokProvider: BYOKProvider.OPEN_ROUTER,
+                modelName: 'z-ai/glm-5.2',
+                reasoningEffort: 'high',
+                reasoningConfigOverride:
+                    '{"openrouter":{"provider":{"order":["fireworks"]},"reasoning":{"effort":"max"}}}',
+            });
+
+            expect(result.openrouter.provider).toEqual({
+                order: ['fireworks'],
+            });
+        });
+
         it('leaves routing alone when no effort was configured', () => {
             // `require_parameters` answers a question nobody asked here: with
             // no effort there is nothing that could be silently dropped.

@@ -8,6 +8,7 @@
 import type { LanguageModel } from 'ai';
 import { z } from 'zod';
 import { bedrockModelFromCredentials } from '@libs/llm/model-builders';
+import { repairBedrockModelId } from '@libs/llm/bedrock-model-id';
 import { registerProvider } from '../kernel/registry';
 import { reasoningConfigForModel } from '../kernel/model-reasoning';
 import {
@@ -100,7 +101,16 @@ export const bedrockModule: ProviderModule = {
 
     build(cfg: ProviderBuildConfig): LanguageModel {
         // aws* fields carry the ENCRYPTED ciphertext; the builder decrypts them.
-        return bedrockModelFromCredentials(cfg, cfg.model);
+        //
+        // The id is repaired first: Claude on Bedrock has no on-demand
+        // throughput, so a bare `anthropic.*` id is refused outright and one
+        // production slot has been carrying that shape, unusable, in a
+        // fallback. See `repairBedrockModelId` for why this one is repaired
+        // rather than reported.
+        return bedrockModelFromCredentials(
+            cfg,
+            repairBedrockModelId(cfg.model, (cfg as any).awsRegion),
+        );
     },
 
     /**

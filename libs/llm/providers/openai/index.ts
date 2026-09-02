@@ -116,6 +116,39 @@ export const openaiModule: ProviderModule = {
                 apiKey,
                 baseURL,
                 ...(opts?.fetch ? { fetch: opts.fetch } : {}),
+                // OpenAI's own API REJECTS `max_tokens` on a reasoning model:
+                //
+                //   Unsupported parameter: 'max_tokens' is not supported with
+                //   this model. Use 'max_completion_tokens' instead.
+                //
+                // @ai-sdk/openai-compatible emits `max_tokens` unconditionally
+                // — right for the generic OpenAI-protocol upstream it targets,
+                // wrong for a GPT-5 or an o-series id, which follow OpenAI's
+                // contract wherever they are served. One production slot runs
+                // `gpt-5.4` against `…openai.azure.com/openai/v1/`, which is
+                // that same strict surface, so every review on it fails on the
+                // parameter rather than on anything it asked for.
+                //
+                // Renamed rather than added: sending both is also an error.
+                // Gated on the MODEL, so a Kimi or GLM behind a compatible
+                // endpoint keeps the `max_tokens` its upstream expects.
+                ...(isOpenAiReasoner(cfg.model)
+                    ? {
+                          transformRequestBody: (body: Record<string, any>) => {
+                              if (!('max_tokens' in body)) {
+                                  return body;
+                              }
+                              const {
+                                  max_tokens: maxTokens,
+                                  ...rest
+                              } = body;
+                              return {
+                                  ...rest,
+                                  max_completion_tokens: maxTokens,
+                              };
+                          },
+                      }
+                    : {}),
                 // Never-downgrade family wins over the baseURL heuristic: a
                 // direct-Moonshot upstream (api.moonshot.ai) keeps json_schema
                 // ON even though shouldEnableJsonSchema alone would reject it

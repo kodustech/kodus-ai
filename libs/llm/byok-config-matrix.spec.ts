@@ -516,6 +516,37 @@ const CASES = [
         wire: { hasNot: ['thinking', 'reasoning_effort', 'reasoning'] },
     },
     {
+        id: 'a GPT-5 on the compatible transport takes max_completion_tokens',
+        why: "OpenAI's API rejects `max_tokens` on a reasoning model — \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\" — and @ai-sdk/openai-compatible emits it unconditionally, which is right for the generic upstream it targets and wrong for an id that follows OpenAI's contract wherever it is served. One production slot runs gpt-5.4 against …openai.azure.com/openai/v1/, the same strict surface, so every review on it failed on the parameter rather than on anything it asked for. Found by a live call, not by reading",
+        doc: 'platform.openai.com — reasoning models',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'gpt-5.4',
+            baseURL: 'https://r.openai.azure.com/openai/v1',
+            reasoningEffort: 'medium',
+            maxOutputTokens: 4096,
+        },
+        wire: {
+            has: { max_completion_tokens: 4096 },
+            hasNot: ['max_tokens'],
+        },
+    },
+    {
+        id: '...and a non-OpenAI id on the same transport keeps max_tokens',
+        why: 'The rename is gated on the MODEL, not the transport. A GLM or a Kimi behind an OpenAI-protocol endpoint expects the field its own upstream documents, and renaming it there would break the far larger group to fix the smaller one',
+        slot: {
+            provider: 'openai_compatible',
+            model: 'glm-5.2',
+            baseURL: 'https://api.z.ai/api/paas/v4',
+            reasoningEffort: 'medium',
+            maxOutputTokens: 4096,
+        },
+        wire: {
+            has: { max_tokens: 4096 },
+            hasNot: ['max_completion_tokens'],
+        },
+    },
+    {
         id: 'novita — VERIFIED: the vendor exposes no reasoning parameter at all',
         why: 'This was carried as "not mapped yet". Checked novita.ai/docs/guides/llm-api: the documented chat-completions fields are temperature, top_p, top_k, presence_penalty, frequency_penalty, repetition_penalty, max_tokens, stream and stop — there is no reasoning_effort, thinking or enable_thinking to send. The 4 production slots are DeepSeek, which reasons by default, so they DO reason; the level simply is not expressible on this endpoint. Nothing to fix on our side',
         slot: {

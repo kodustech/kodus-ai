@@ -93,20 +93,42 @@ export function buildProviderOptions(
                 input?.byokProvider,
                 input?.modelName,
             );
+            const routing = buildOpenRouterRouting({
+                ...input,
+                // A hand-written override IS a request for reasoning when it
+                // names reasoning at all — gated the same way as the effort
+                // path below.
+                wantsReasoning:
+                    JSON.stringify(parsed).includes('reasoning') &&
+                    !!resolveCompatibleReasoningTraits(input?.modelName ?? '')
+                        ?.thinksByDefault,
+            });
             return {
-                ...buildOpenRouterRouting({
-                    ...input,
-                    // A hand-written override IS a request for reasoning when
-                    // it names reasoning at all — gated the same way as the
-                    // effort path below. The spread lets a routing block the
-                    // user wrote themselves win.
-                    wantsReasoning:
-                        JSON.stringify(parsed).includes('reasoning') &&
-                        !!resolveCompatibleReasoningTraits(
-                            input?.modelName ?? '',
-                        )?.thinksByDefault,
-                }),
+                ...routing,
                 ...override,
+                // A plain spread REPLACES the routing's `openrouter` object
+                // with the override's, so an override naming only `reasoning`
+                // came out with no `provider` block at all — losing the very
+                // `require_parameters` it needed, on the routing lottery this
+                // exists to escape.
+                //
+                // The guard is what keeps this scoped: `buildOpenRouterRouting`
+                // returns {} for every provider that is not OpenRouter, so
+                // `routing.openrouter` is undefined and the spread above is the
+                // whole answer — an Anthropic or Gemini override is untouched.
+                //
+                // An `openrouter.provider` block the user wrote themselves
+                // still wins outright. Someone who pins their own routing has
+                // already solved the problem, and the two production overrides
+                // that do this set `require_parameters` by hand.
+                ...(routing.openrouter && override.openrouter
+                    ? {
+                          openrouter: {
+                              ...routing.openrouter,
+                              ...override.openrouter,
+                          },
+                      }
+                    : {}),
             };
         } catch {
             // Invalid JSON — fall through to effort-based mapping
