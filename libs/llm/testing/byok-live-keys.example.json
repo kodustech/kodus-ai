@@ -36,15 +36,6 @@
         "apiKey": "<bearer token>",
         "awsRegion": "us-east-1"
     },
-    "bedrock_grok": {
-        "apiKey": "<bearer token>",
-        "awsRegion": "us-east-1"
-    },
-    "azure": {
-        "apiKey": "…",
-        "baseURL": "https://<your-resource>.openai.azure.com/openai",
-        "model": "<your o-series deployment name>"
-    },
     "_weights": [
         "Slots in the 306-shape production corpus that each brand unlocks:",
         "  open_router               67   (also covers open_router_glm, and the four",
@@ -58,12 +49,9 @@
         "  nvidia                     9   (one key, five families behind it)",
         "  ollama_cloud               8   (the only host reached with a `:cloud` suffix)",
         "  xiaomi                     4   (native MiMo, two PoPs)",
-        "  azure                      2   (pinned offline from Microsoft's v1 docs",
-        "                                  as well, since it may never be testable live)",
         "  minimaxi                   -   (a second MiniMax platform whose docs render",
         "                                  client-side; this key is the only way to",
-        "                                  settle what it accepts)",
-        "  bedrock_grok               1   (settles the Grok effort field on Converse)"
+        "                                  settle what it accepts)"
     ],
     "_optional_overrides": [
         "Everything below already resolves from an existing repo secret, or from",
@@ -74,6 +62,17 @@
         "                                  (defaults to Anthropic's own OpenAI-compat",
         "                                   endpoint on the \"anthropic\" key — fill this",
         "                                   ONLY to aim it at a different proxy),",
+        "  \"bedrock_grok\": { \"awsRegion\": \"us-west-2\" }",
+        "                     (defaults to the \"amazon_bedrock\" bearer token above —",
+        "                      fill ONLY if Grok is enabled in another account/region),",
+        "  \"azure\": { \"apiKey\": \"…\", \"baseURL\": \"https://<res>.openai.azure.com/openai\",",
+        "              \"model\": \"<o-series deployment>\" }",
+        "                     (ZERO production slots use the `azure` provider — the two",
+        "                      real Azure configs arrive as openai_compatible at",
+        "                      /openai/v1/, and that path is pinned offline from",
+        "                      Microsoft's docs. Fill only if you happen to have a",
+        "                      deployment; nothing is lost by leaving it out),",
+        "",
         "  These five all fall back to \"open_router\" above — fill one only to give",
         "  that family its own key:",
         "    \"open_router_glm\"       \"sk-or-…\",",

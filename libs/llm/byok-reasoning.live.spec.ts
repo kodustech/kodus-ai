@@ -275,6 +275,10 @@ const BORROWS_FROM: Record<string, string> = {
     openai_compatible_gpt5: 'openai',
     openai_compatible_claude: 'anthropic',
     minimax_m3: 'minimax',
+    // Same provider, same `awsBearerToken`, same account — only the model id
+    // and the region differ. It needs its own entry only when Grok is enabled
+    // in a different account or region than the Claude row's.
+    bedrock_grok: 'amazon_bedrock',
 };
 
 /**
