@@ -124,7 +124,11 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         });
         expect(res.ok).toBe(false);
         expect(res.code).toBe('bad_request');
-        expect(res.message).toContain('1');
+        // Used to assert the message names the pinned value "1". It now tells
+        // the user to CLEAR the field, which is the honest instruction: the
+        // vendor documents this temperature as not modifiable, so there is no
+        // number that would make the setting real.
+        expect(res.message).toContain('does not accept a temperature');
         expect(probeSlotCall).not.toHaveBeenCalled();
     });
 
@@ -141,12 +145,28 @@ describe('TestByokConnectionUseCase — tuning validation short-circuits the pro
         expect(probeSlotCall).not.toHaveBeenCalled();
     });
 
-    it('kimi-k2.7-code + temperature 1 (matches the pin) → proceeds to probe', async () => {
+    it('kimi-k2.7-code + temperature 1 is ALSO rejected now', async () => {
+        // 1 used to be the one value that got through, because the model was
+        // read as pinned there. platform.kimi.ai says the temperature is not
+        // modifiable at all, so 1 is no more real than 0.2 — and letting it
+        // through meant the Test button endorsed a value the model discards.
         const res = await useCase().execute({
             provider: 'novita',
             apiKey: 'sk-test',
             model: 'kimi-k2.7-code',
             temperature: 1,
+        });
+        expect(res.ok).toBe(false);
+        expect(res.code).toBe('bad_request');
+        expect(probeSlotCall).not.toHaveBeenCalled();
+    });
+
+    it('kimi-k2.5 + a temperature still proceeds — the restriction is scoped', async () => {
+        const res = await useCase().execute({
+            provider: 'novita',
+            apiKey: 'sk-test',
+            model: 'kimi-k2.5',
+            temperature: 0.4,
         });
         expect(res.ok).toBe(true);
         expect(probeSlotCall).toHaveBeenCalled();

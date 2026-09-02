@@ -26,31 +26,51 @@ describe('validateModelTuning — always-thinking temperature pin (every transpo
         'moonshot',
     ];
 
+    // The save-time answer follows the same source as the runtime one, and it
+    // had to change with it: platform.kimi.ai documents k2.7-code's temperature
+    // as not modifiable, so the form must say "clear this field", not "set it to
+    // 1". Telling a user to type a value the model never reads is the same
+    // failure as sending it — it just costs them a save first.
     it.each(TRANSPORTS)(
-        '%s / kimi-k2.7-code + temperature 0.2 → temperature issue',
+        '%s / kimi-k2.7-code + ANY temperature → told to clear the field',
         (provider) => {
-            const issues = validateModelTuning({
-                provider,
-                model: 'kimi-k2.7-code',
-                temperature: 0.2,
-            });
-            expect(issues).toHaveLength(1);
-            expect(issues[0].field).toBe('temperature');
-            expect(issues[0].message).toContain('1');
-            expect(issues[0].message.toLowerCase()).toContain('kimi-k2.7-code');
+            // 1 is included on purpose. Under the pin it was the one value that
+            // passed validation, which meant the form actively taught the value
+            // it should have been rejecting.
+            for (const temperature of [0.2, 1]) {
+                const issues = validateModelTuning({
+                    provider,
+                    model: 'kimi-k2.7-code',
+                    temperature,
+                });
+                expect(issues).toHaveLength(1);
+                expect(issues[0].field).toBe('temperature');
+                expect(issues[0].message.toLowerCase()).toContain(
+                    'kimi-k2.7-code',
+                );
+                expect(issues[0].message.toLowerCase()).toContain(
+                    'does not accept a temperature',
+                );
+            }
         },
     );
 
     it.each(TRANSPORTS)(
-        '%s / kimi-k2.7-code + temperature 1 → no issue (matches the pin)',
+        '%s / kimi-k2.6 + a temperature → told to clear it, on every transport',
         (provider) => {
-            expect(
-                validateModelTuning({
-                    provider,
-                    model: 'kimi-k2.7-code',
-                    temperature: 1,
-                }),
-            ).toEqual([]);
+            // k2.6 passed validation on all four transports before, because it
+            // can disable thinking and that was read as "ordinary adjustable
+            // model". The two facts are independent.
+            const issues = validateModelTuning({
+                provider,
+                model: 'kimi-k2.6',
+                temperature: 0.2,
+            });
+            expect(issues).toHaveLength(1);
+            expect(issues[0].field).toBe('temperature');
+            expect(issues[0].message.toLowerCase()).toContain(
+                'does not accept a temperature',
+            );
         },
     );
 
@@ -171,11 +191,16 @@ describe('validateModelTuning — a constraint scoped to thinking, not to the mo
 });
 
 describe('validateModelTuning — free models and safe fallbacks', () => {
-    it('kimi-k2.6 (adjustable) + temperature 0.2 → no issue', () => {
+    it('kimi-k2.5 (no vendor constraint) + temperature 0.2 → no issue', () => {
+        // This case used to name k2.6, which the vendor documents as having an
+        // unmodifiable temperature — it now belongs with the flagged models
+        // above. Re-pointed at k2.5 rather than deleted, because the thing being
+        // guarded here is still needed: a Kimi with no documented constraint must
+        // NOT inherit its siblings' restriction and lose a setting that works.
         expect(
             validateModelTuning({
                 provider: 'anthropic_compatible',
-                model: 'kimi-k2.6',
+                model: 'kimi-k2.5',
                 temperature: 0.2,
             }),
         ).toEqual([]);

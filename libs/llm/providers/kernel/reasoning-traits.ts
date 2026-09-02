@@ -80,6 +80,17 @@ export interface ModelReasoningTraits {
      *  overrode the configured temperature on 18 production slots.
      *  Absent ⇒ no pin. */
     pinsTemperatureWhileThinking?: boolean;
+    /** The vendor states this model's temperature CANNOT be changed and should
+     *  not be sent. Distinct from the pin above: a pin says "1 is the only sound
+     *  value" and sends 1; this says the field has no effect at all, so sending
+     *  anything — including 1 — is noise the user cannot see through.
+     *  Also distinct from `rejectsSamplingWhileThinking`, which is scoped to
+     *  thinking being ON; this is a property of the model in every mode.
+     *  Source required, per model: platform.kimi.ai states it for k2.6
+     *  ("temperature is not modifiable, so no need to set it") and k2.7-code
+     *  ("temperature is not modifiable and thinking is always on; neither needs
+     *  to be set"). Absent ⇒ no claim. */
+    temperatureNotModifiable?: boolean;
     /** The endpoint does not SUPPORT sampling params (temperature, top_p,
      *  presence/frequency_penalty) while thinking is active, so they must be
      *  OMITTED. DeepSeek: "Thinking mode does not support the temperature,
@@ -198,9 +209,16 @@ export function resolveCompatibleReasoningTraits(
     // INTENDED to cover k3 (see alwaysThinking); it was just unreachable.
     if (family === 'kimi') {
         const alwaysThinking = m.includes('code') || m.includes('k3');
+        // Scoped to the two ids platform.kimi.ai actually states it for. k2.5,
+        // k2.7 (non-code) and k3 are NOT covered by that page, and inferring the
+        // rule onto them from a sibling is the move this table exists to avoid —
+        // even though omitting would be the safer guess.
+        const temperatureNotModifiable =
+            /k2[.\-_]?6/.test(m) || m.includes('code');
         return {
             thinksByDefault: true,
             canDisableThinking: !alwaysThinking,
+            temperatureNotModifiable,
             supportsForcedToolChoice: true,
             forcedToolChoiceRejectsThinking: true,
             // Unchanged: k3 / k2.7-code keep their temperature-1 pin.
@@ -352,7 +370,16 @@ export function compatibleTemperaturePolicy(
         return { kind: 'unsupported' };
     }
 
-    // The pin is NOT effort-scoped: k3 / k2.7-code / GLM-5.3 expose no off
+    // Checked BEFORE the pin, because it is the stronger statement. k2.7-code
+    // satisfies both — always-thinking (so the pin fires) and documented as
+    // unmodifiable — and the pin would have sent `temperature: 1` to a field the
+    // vendor says does nothing. Captured on the wire before this: k2.6 received
+    // the user's 0.7 and k2.7-code received a 1, neither of which the model reads.
+    if (t.temperatureNotModifiable) {
+        return { kind: 'unsupported' };
+    }
+
+    // The pin is NOT effort-scoped: k3 / GLM-5.3 expose no off
     // switch, so picking "none" does not actually stop them thinking and 1
     // remains their only sound temperature.
     //

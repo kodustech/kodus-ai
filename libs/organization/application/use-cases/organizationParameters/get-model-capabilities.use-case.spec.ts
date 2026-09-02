@@ -52,11 +52,24 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
     describe('Anthropic-compatible brands (temperature policy derived from reasoning traits)', () => {
         it('Kimi k2.7-code is always-thinking → temperature FIXED at 1', () => {
             const c = useCase.execute('moonshot', 'kimi-k2.7-code');
-            expect(c.temperature).toEqual({ kind: 'fixed', value: 1 });
+            expect(c.temperature).toEqual({ kind: 'unsupported' });
         });
 
-        it('Kimi k2.6 is disable-able → temperature adjustable', () => {
+        it('Kimi k2.6 — thinking is disable-able, temperature still is not', () => {
+            // The form used to render an enabled temperature field for k2.6
+            // because it can turn thinking off. platform.kimi.ai: "temperature is
+            // not modifiable, so no need to set it" — a property of the model in
+            // every mode, unrelated to the thinking switch. An enabled field for
+            // a value the model discards is the UI telling the user something
+            // untrue.
             const c = useCase.execute('moonshot', 'kimi-k2.6');
+            expect(c.temperature).toEqual({ kind: 'unsupported' });
+        });
+
+        it('Kimi k2.5 keeps an enabled temperature field — no source says otherwise', () => {
+            // The scope line, asserted where the user can see it: an undocumented
+            // sibling must not inherit the restriction and lose a working field.
+            const c = useCase.execute('moonshot', 'kimi-k2.5');
             expect(c.temperature.kind).toBe('adjustable');
         });
     });
@@ -84,10 +97,13 @@ describe('GetModelCapabilitiesUseCase — provider-owned UI capability hints', (
 
         it('does not offer an escape for an always-thinking model', () => {
             // k2.7-code has no off switch, so "reasoning off" never actually
-            // stops it thinking and 1 stays its only sound temperature — the
-            // second answer must NOT appear and unlock the field.
+            // stops it thinking — the second answer must NOT appear and unlock
+            // the field. The verdict itself is now `unsupported` rather than a
+            // pinned 1 (platform.kimi.ai documents its temperature as not
+            // modifiable), but the property under test is the same one: no
+            // reasoning state exists in which this field becomes editable.
             const c = useCase.execute('moonshot', 'kimi-k2.7-code');
-            expect(c.temperature).toEqual({ kind: 'fixed', value: 1 });
+            expect(c.temperature).toEqual({ kind: 'unsupported' });
             expect(c.temperatureWhenReasoningOff).toBeUndefined();
         });
 
