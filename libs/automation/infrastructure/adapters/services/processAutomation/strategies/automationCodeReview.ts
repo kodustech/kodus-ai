@@ -715,6 +715,39 @@ export class AutomationCodeReviewService implements Omit<
         );
     }
 
+    /**
+     * The one-shot business-logic markers, preferring what this run produced and
+     * otherwise inheriting the previous execution's.
+     *
+     * They have to survive executions that did not themselves validate (skipped,
+     * or failed before the stage): only the latest execution is read back, so
+     * dropping a marker would let the automatic validation fire again on the
+     * next push. `businessLogicHash` is the legacy EE marker, kept so a PR
+     * mid-flight kept its gate across the change.
+     */
+    private carriedBusinessLogicMarkers(
+        lastExecutionData?: Record<string, any>,
+        result?: any,
+    ): Record<string, string> {
+        const markers: Record<string, string> = {};
+
+        const validatedAt =
+            result?.businessLogicValidatedAt ??
+            lastExecutionData?.businessLogicValidatedAt;
+        if (validatedAt) {
+            markers.businessLogicValidatedAt = validatedAt;
+        }
+
+        const hash =
+            result?.businessLogicPrBodyHash ??
+            lastExecutionData?.businessLogicHash;
+        if (hash) {
+            markers.businessLogicHash = hash;
+        }
+
+        return markers;
+    }
+
     private _buildExecutionData(
         payload: any,
         result?: any,
@@ -737,12 +770,10 @@ export class AutomationCodeReviewService implements Omit<
         };
 
         if (!result) {
-            return lastExecutionData?.businessLogicValidatedAt
-                ? Object.assign(baseData, {
-                      businessLogicValidatedAt:
-                          lastExecutionData.businessLogicValidatedAt,
-                  })
-                : baseData;
+            return Object.assign(
+                baseData,
+                this.carriedBusinessLogicMarkers(lastExecutionData),
+            );
         }
 
         const validLastAnalyzedCommit =
@@ -766,27 +797,10 @@ export class AutomationCodeReviewService implements Omit<
             });
         }
 
-        // The marker has to survive executions that did not themselves validate
-        // (skipped, or failed before the stage). Only the latest successful
-        // execution is read back, so dropping it here would let the automatic
-        // validation fire again on the next push.
-        const businessLogicValidatedAt =
-            result.businessLogicValidatedAt ??
-            lastExecutionData?.businessLogicValidatedAt;
-
-        if (businessLogicValidatedAt) {
-            Object.assign(baseData, { businessLogicValidatedAt });
-        }
-
-        // Legacy EE marker (ProcessFilesPrLevelReviewStage). Carried forward
-        // for the same reason, so an existing PR mid-flight keeps its gate.
-        const businessLogicHash =
-            result.businessLogicPrBodyHash ??
-            lastExecutionData?.businessLogicHash;
-
-        if (businessLogicHash) {
-            Object.assign(baseData, { businessLogicHash });
-        }
+        Object.assign(
+            baseData,
+            this.carriedBusinessLogicMarkers(lastExecutionData, result),
+        );
 
         // Adaptive-fit fidelity warnings — emitted by the agent pipeline
         // when a small context window forced a degraded path (compact

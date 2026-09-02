@@ -50,11 +50,14 @@ export function matchesRequestedTask(
     }
 
     const candidate = candidateIdentity(value);
+    const candidateKeys = new Set(candidate.keys);
+    const candidateNumbers = new Set(candidate.numbers);
+    const candidateLinks = new Set(candidate.links);
 
     if (
-        requested.keys.some((key) => candidate.keys.includes(key)) ||
-        requested.numbers.some((number) => candidate.numbers.includes(number)) ||
-        requested.links.some((link) => candidate.links.includes(link))
+        requested.keys.some((key) => candidateKeys.has(key)) ||
+        requested.numbers.some((number) => candidateNumbers.has(number)) ||
+        requested.links.some((link) => candidateLinks.has(link))
     ) {
         return true;
     }
