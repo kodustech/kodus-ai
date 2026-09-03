@@ -127,8 +127,8 @@ services:
                 ]
             interval: 5s
             timeout: 3s
-            retries: 20
-            start_period: 10s
+            retries: 5
+            start_period: 30s
 
     db_mongodb:
         image: docker.io/mongo:8
@@ -146,10 +146,10 @@ services:
                     'CMD-SHELL',
                     "echo 'db.runCommand({ ping: 1 }).ok' | mongosh --quiet mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/admin | grep -q 1",
                 ]
-            interval: 10s
+            interval: 5s
             timeout: 5s
-            retries: 20
-            start_period: 20s
+            retries: 5
+            start_period: 40s
 
 volumes:
     pgdata_prod:

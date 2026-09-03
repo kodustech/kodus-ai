@@ -59,6 +59,17 @@ services:
                 # external RabbitMQ). When the local rabbitmq IS running,
                 # docker waits for its healthcheck before starting.
                 required: false
+            # This service runs `migration:run` on boot, and the migration set
+            # includes four that write to Mongo. Waiting on the container's
+            # START is not enough: a mongod that exits on startup leaves the
+            # container flapping, docker's embedded DNS drops the name, and the
+            # migration fails with `getaddrinfo ENOTFOUND db_kodus_mongodb` —
+            # an error that accuses DNS for what is a dead database. Both
+            # services publish a healthcheck; gate on it.
+            db_postgres:
+                condition: service_healthy
+            db_mongodb:
+                condition: service_healthy
         ports:
             # Host-side port vars (`<HOST>_PORT:-default`) let parallel
             # worktrees coexist by overriding to a per-slot offset (e.g.
@@ -119,6 +130,14 @@ services:
                 # external RabbitMQ). When the local rabbitmq IS running,
                 # docker waits for its healthcheck before starting.
                 required: false
+            # Runtime reads and writes Mongo. `required: false` above applies
+            # to rabbitmq only: these two always run, and gating on their
+            # healthcheck keeps a dead database from being discovered later as
+            # a name that no longer resolves.
+            db_postgres:
+                condition: service_healthy
+            db_mongodb:
+                condition: service_healthy
         volumes:
             - .:/usr/src/app:delegated
             - node_modules_cache:/usr/src/app/node_modules:nocopy
@@ -186,6 +205,14 @@ services:
             rabbitmq:
                 condition: service_healthy
                 required: false
+            # Runtime reads and writes Mongo. `required: false` above applies
+            # to rabbitmq only: these two always run, and gating on their
+            # healthcheck keeps a dead database from being discovered later as
+            # a name that no longer resolves.
+            db_postgres:
+                condition: service_healthy
+            db_mongodb:
+                condition: service_healthy
         volumes:
             - .:/usr/src/app:delegated
             - node_modules_cache:/usr/src/app/node_modules:nocopy
@@ -252,6 +279,14 @@ services:
                 # external RabbitMQ). When the local rabbitmq IS running,
                 # docker waits for its healthcheck before starting.
                 required: false
+            # Runtime reads and writes Mongo. `required: false` above applies
+            # to rabbitmq only: these two always run, and gating on their
+            # healthcheck keeps a dead database from being discovered later as
+            # a name that no longer resolves.
+            db_postgres:
+                condition: service_healthy
+            db_mongodb:
+                condition: service_healthy
         volumes:
             - .:/usr/src/app:delegated
             - node_modules_cache:/usr/src/app/node_modules:nocopy
@@ -562,12 +597,12 @@ services:
                 ]
             interval: 5s
             timeout: 3s
-            retries: 20
-            start_period: 10s
+            retries: 5
+            start_period: 30s
         logging: *default-logging
 
     db_mongodb:
-        image: docker.io/mongo:8
+        image: docker.io/mongo:8.2.11
         container_name: mongodb
         ports:
             - '27017:27017'
@@ -586,10 +621,10 @@ services:
                     'CMD-SHELL',
                     "echo 'db.runCommand({ ping: 1 }).ok' | mongosh --quiet mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/admin | grep -q 1",
                 ]
-            interval: 10s
+            interval: 5s
             timeout: 5s
-            retries: 20
-            start_period: 20s
+            retries: 5
+            start_period: 40s
         logging: *default-logging
 
 volumes:
