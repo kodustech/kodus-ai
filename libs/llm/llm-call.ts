@@ -9,12 +9,30 @@
  */
 import { generateText as _aiSdkGenerateText, embed as _aiSdkEmbed } from 'ai';
 
-export const AGENT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes max per agent
-// 10 minutes per individual LLM call — matches the undici headersTimeout
-// set in the worker bootstrap so neither layer aborts the other. Large
-// Gemini calls (>500K prompt + high reasoning) can legitimately take
-// 4-7 minutes of wall-clock before the first byte arrives.
-export const LLM_CALL_TIMEOUT_MS = 10 * 60 * 1000;
+/**
+ * The ceilings, outermost first. Each layer must leave room for the one
+ * inside it, or the outer one fires first and the inner is decoration:
+ *
+ *   CODE_REVIEW_PROCESS_TIMEOUT_MS  105 min  (job-processor-router)
+ *     AGENT_TIMEOUT_MS               80 min  (one agent's whole loop)
+ *       LLM_CALL_TIMEOUT_MS          20 min  (one model round-trip)
+ *         undici headersTimeout      20 min  (fetch-timeouts.ts)
+ *
+ * 80 minutes for the loop is sized off production, not preference. Over 14
+ * days of `AgentReviewStage` durations (n=94): p50 3.1 min, p90 11.6, p95
+ * 17.8, p99 29.5, max 32.2 — and 1.1% already exceeded the previous 30-minute
+ * ceiling, which means enforcing it would have killed legitimate reviews of
+ * large PRs. The pathological case sits far above that: the 2026-09-03 hang
+ * ran 98 minutes and was still going. So the gap between "large and slow" and
+ * "stuck" is wide, and 80 lands in it: ~2.5x the observed max, still well
+ * under the job's 105.
+ */
+export const AGENT_TIMEOUT_MS = 80 * 60 * 1000;
+// One model round-trip. Kept in lockstep with the undici headersTimeout in
+// fetch-timeouts.ts — raise one without the other and the HTTP layer aborts
+// first, making this number decoration. Large Gemini calls (>500K prompt +
+// high reasoning) can legitimately take 4-7 minutes before the first byte.
+export const LLM_CALL_TIMEOUT_MS = 20 * 60 * 1000;
 
 /** Create an AbortSignal that fires after the given ms. */
 export function timeoutSignal(ms: number): AbortSignal {
