@@ -253,19 +253,51 @@ provision_server() {
             # because the reaper watched a different prefix.
             local tagspec
             tagspec="ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=Project,Value=kodus-e2e},{Key=CreatedAt,Value=$(date -u +%Y-%m-%dT%H:%M:%SZ)}]"
-            SERVER_ID=$(aws ec2 run-instances \
-                --region "$AWS_REGION_E2E" \
-                --image-id "$AWS_AMI_ID" \
-                --instance-type "$AWS_INSTANCE_TYPE" \
-                --key-name "$SSH_KEY_ID" \
-                --security-group-ids "$AWS_SG_ID" \
-                --associate-public-ip-address \
-                --user-data "$user_data" \
-                --tag-specifications "$tagspec" \
-                --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}' \
-                --instance-initiated-shutdown-behavior terminate \
-                --query 'Instances[0].InstanceId' --output text) \
-                || { err "AWS run-instances failed"; exit 1; }
+            # EC2 is eventually consistent: a key pair, security group or AMI
+            # created moments ago can still be invisible to run-instances,
+            # which used to fail the whole run on a condition that clears
+            # itself in seconds. AWS's guidance for Invalid*.NotFound is to
+            # retry, so retry -- anything else is a real error and still exits.
+            #
+            # stderr goes to a file rather than being discarded. The previous
+            # version printed only "AWS run-instances failed"; the reason
+            # survived one occurrence purely because stderr leaked to the job
+            # log, and capturing it makes the next one self-explaining.
+            local attempt aws_err
+            aws_err=$(mktemp)
+            SERVER_ID=""
+            for attempt in 1 2 3 4 5; do
+                if SERVER_ID=$(aws ec2 run-instances \
+                        --region "$AWS_REGION_E2E" \
+                        --image-id "$AWS_AMI_ID" \
+                        --instance-type "$AWS_INSTANCE_TYPE" \
+                        --key-name "$SSH_KEY_ID" \
+                        --security-group-ids "$AWS_SG_ID" \
+                        --associate-public-ip-address \
+                        --user-data "$user_data" \
+                        --tag-specifications "$tagspec" \
+                        --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}' \
+                        --instance-initiated-shutdown-behavior terminate \
+                        --query 'Instances[0].InstanceId' --output text 2>"$aws_err"); then
+                    break
+                fi
+                SERVER_ID=""
+                if grep -q 'Invalid[A-Za-z]*\.NotFound' "$aws_err"; then
+                    warn "run-instances attempt $attempt: $(tr '\n' ' ' < "$aws_err")"
+                    warn "  a just-created dependency is not visible yet; retrying in $(( attempt * 3 ))s"
+                    sleep $(( attempt * 3 ))
+                    continue
+                fi
+                err "AWS run-instances failed: $(cat "$aws_err")"
+                rm -f "$aws_err"
+                exit 1
+            done
+            if [ -z "$SERVER_ID" ]; then
+                err "AWS run-instances failed after $attempt attempts: $(cat "$aws_err")"
+                rm -f "$aws_err"
+                exit 1
+            fi
+            rm -f "$aws_err"
             [ -n "$SERVER_ID" ] && [ "$SERVER_ID" != "None" ] \
                 || { err "AWS run-instances returned no instance id"; exit 1; }
             log "Instance $SERVER_ID starting..."
