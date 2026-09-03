@@ -36,7 +36,11 @@ import { agentModelIdentity } from '@libs/llm/model-identity';
 import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
-import { hardTimeout, AGENT_TIMEOUT_MS } from '@libs/llm/llm-call';
+import {
+    hardTimeout,
+    timeoutSignal,
+    AGENT_TIMEOUT_MS,
+} from '@libs/llm/llm-call';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
@@ -134,7 +138,7 @@ export async function runAgentLoopCall(
         organizationId,
         reporter,
         telemetryMetadata,
-        signal,
+        signal: callerSignal,
     } = params;
 
     // ── access + tuning + reasoning: the SAME montagem the one-shot uses ──
@@ -153,6 +157,22 @@ export async function runAgentLoopCall(
         openrouterProviderOrder: (slot as any)?.openrouterProviderOrder,
         openrouterAllowFallbacks: (slot as any)?.openrouterAllowFallbacks,
     });
+    // The deadline, decided once and used twice: the signal asks the provider to
+    // stop, the race below stops waiting for it.
+    const hardTimeoutMs = params.hardTimeoutMs ?? AGENT_TIMEOUT_MS;
+    // Self-arm when the caller supplies nothing. Threading a signal from the
+    // caller was always allowed and no review caller does it, so the loop ran
+    // with `abortSignal: undefined` — no cancellation at all. The race added
+    // below frees the PIPELINE, but only an abort frees the REQUEST: without
+    // one the socket stays open and the BYOK limiter never gets its slot back
+    // (its release is a `finally` on a task that never settles), so a stalled
+    // call would keep spending a concurrency slot for the life of the worker.
+    //
+    // The one-shot path has always self-armed (`timeoutSignal(...)` in
+    // structured-review-call). This gives the loop the same floor, and the 5s
+    // grace inside `hardTimeout` is what orders them: abort first, race only if
+    // the abort was ignored.
+    const signal = callerSignal ?? timeoutSignal(hardTimeoutMs);
     const temperature = params.temperature ?? inv.callOptions.temperature;
     const maxOutputTokens =
         inv.callOptions.maxOutputTokens ?? params.maxOutputTokens;
@@ -250,7 +270,7 @@ export async function runAgentLoopCall(
     //
     // Not a new ceiling: AGENT_TIMEOUT_MS was always the intended maximum. This
     // is what makes it true when the provider declines to cooperate.
-    return hardTimeout(run(), params.hardTimeoutMs ?? AGENT_TIMEOUT_MS, runName);
+    return hardTimeout(run(), hardTimeoutMs, runName);
 }
 
 // Re-export so callers can build a fixed model handle if needed (parity with

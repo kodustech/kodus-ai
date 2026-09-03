@@ -88,6 +88,30 @@ describe('runAgentLoopCall — a stalled provider must not hang the caller', () 
         await expect(runAgentLoopCall(params())).rejects.toThrow(/\[HARD-TIMEOUT\]/);
     });
 
+    it('arms an abort even when the caller threads no signal', async () => {
+        // The race frees the pipeline; only the abort frees the request. With
+        // `abortSignal: undefined` the socket stays open and the BYOK limiter
+        // never gets its concurrency slot back — its release is a `finally` on
+        // a task that never settles. No review caller passes a signal, so the
+        // loop MUST arm its own.
+        mockGenerate.mockResolvedValue({ text: 'ok', steps: [], usage: {} });
+
+        await runAgentLoopCall(params());
+
+        const sent = mockGenerate.mock.calls[0][0];
+        expect(sent.abortSignal).toBeInstanceOf(AbortSignal);
+        expect(sent.abortSignal.aborted).toBe(false);
+    });
+
+    it('prefers the caller\'s signal when one IS threaded', async () => {
+        mockGenerate.mockResolvedValue({ text: 'ok', steps: [], usage: {} });
+        const controller = new AbortController();
+
+        await runAgentLoopCall({ ...params(), signal: controller.signal });
+
+        expect(mockGenerate.mock.calls[0][0].abortSignal).toBe(controller.signal);
+    });
+
     it('returns the result untouched when the provider answers in time', async () => {
         const result = { text: 'final answer', steps: [], usage: { totalTokens: 1 } };
         mockGenerate.mockResolvedValue(result);
