@@ -54,4 +54,18 @@ describe('LLM timeout hierarchy — every layer leaves room for the one inside',
         expect(PROBE_TIMEOUT_MS).toBeLessThan(LLM_CALL_TIMEOUT_MS);
         expect(EMBED_TIMEOUT_MS).toBeLessThan(LLM_CALL_TIMEOUT_MS);
     });
+
+    // Both bounds matter, in opposite directions.
+    //
+    // Floor: the probe forwards the slot's configured reasoning budget, so on
+    // a thinking model it waits for real thinking. It sat at 15s, which
+    // reported working credentials as broken.
+    //
+    // Ceiling: it still blocks a form. Nothing above interactive scale is a
+    // probe any more, which is what stops this drifting up to meet the call
+    // ceiling the next time someone sees a timeout.
+    it('gives the probe room for a thinking model without ceasing to be interactive', () => {
+        expect(PROBE_TIMEOUT_MS).toBeGreaterThanOrEqual(60 * 1000);
+        expect(PROBE_TIMEOUT_MS).toBeLessThanOrEqual(2 * 60 * 1000);
+    });
 });
