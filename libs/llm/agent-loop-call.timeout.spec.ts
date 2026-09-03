@@ -18,6 +18,11 @@
  * These tests stub `generateText` to that exact shape — never settles, ignores
  * the signal. Without the wrapper they hang until jest kills them; with it they
  * reject as `[HARD-TIMEOUT]`.
+*
+ * The per-test 15s budgets are not slack: `hardTimeout` grants ms + 5s of
+ * grace so a provider that DOES honour the abort settles on its own first, so
+ * a 40ms ceiling resolves at ~5.04s — just past jest's 5s default. Declared
+ * per test rather than via a CLI flag, which a plain `pnpm test` never passes.
  */
 jest.mock('ai', () => {
     const actual = jest.requireActual('ai');
@@ -72,7 +77,7 @@ describe('runAgentLoopCall — a stalled provider must not hang the caller', () 
         mockGenerate.mockImplementation(() => new Promise(() => {}));
 
         await expect(runAgentLoopCall(params())).rejects.toThrow(/\[HARD-TIMEOUT\]/);
-    });
+    }, 15000);
 
     it('rejects even when handed an abort signal the provider ignores', async () => {
         mockGenerate.mockImplementation(
@@ -86,7 +91,7 @@ describe('runAgentLoopCall — a stalled provider must not hang the caller', () 
         );
 
         await expect(runAgentLoopCall(params())).rejects.toThrow(/\[HARD-TIMEOUT\]/);
-    });
+    }, 15000);
 
     it('arms an abort even when the caller threads no signal', async () => {
         // The race frees the pipeline; only the abort frees the request. With

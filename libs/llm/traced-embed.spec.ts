@@ -6,6 +6,11 @@
  * — and neither is protected against SILENCE. A request that never answers
  * throws nothing, so the catch never runs and the stage waits forever, which
  * is precisely how the agent loop hung on 2026-09-03.
+*
+ * The per-test 15s budgets are not slack: `hardTimeout` grants ms + 5s of
+ * grace so a provider that DOES honour the abort settles on its own first, so
+ * a 40ms ceiling resolves at ~5.04s — just past jest's 5s default. Declared
+ * per test rather than via a CLI flag, which a plain `pnpm test` never passes.
  */
 jest.mock('ai', () => {
     const actual = jest.requireActual('ai');
@@ -30,7 +35,7 @@ describe('tracedEmbed — a stalled embedding endpoint must not hang the stage',
                 __kodusHardTimeoutMs: 40,
             } as any),
         ).rejects.toThrow(/\[HARD-TIMEOUT\]/);
-    });
+    }, 15000);
 
     it('returns the embedding untouched when the endpoint answers', async () => {
         const result = { embedding: [0.1, 0.2], usage: { tokens: 3 } };
