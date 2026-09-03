@@ -16,7 +16,7 @@
  * module changes. Divergence stops being something to remember and becomes
  * impossible.
  */
-import { generateText } from 'ai';
+import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 import {
@@ -26,8 +26,19 @@ import {
 } from '@libs/llm/override-reachability';
 import { buildReasoningProviderOptions } from '@libs/llm/reasoning-options';
 
-/** A probe must answer fast or not at all — the connect form is waiting. */
-export const PROBE_TIMEOUT_MS = 15_000;
+/**
+ * The connect form is waiting, so this is the shortest ceiling in the
+ * hierarchy — but not 15s, which it was. A probe is not a 1-token ping: the
+ * completion budget below carries the slot's *configured* reasoning budget
+ * (see `probeMaxOutputTokens`), so on a reasoning model the probe waits for
+ * real thinking. At 15s that reported a working key as broken, which is the
+ * worse failure of the two: a false negative sends the user to rotate a
+ * credential that was fine.
+ *
+ * 2 minutes is long for a form and still an order of magnitude under
+ * LLM_CALL_TIMEOUT_MS, so the ordering the hierarchy test asserts holds.
+ */
+export const PROBE_TIMEOUT_MS = 120_000;
 
 /**
  * Floor for the completion budget. A thinking model rejects a request whose
@@ -169,6 +180,13 @@ export async function probeSlotCall(
     try {
         const result = await generateText({
             model: inv.model as any,
+            // The AbortController above is the polite ask; several of the
+            // OpenAI-compatible proxies this probe exists to diagnose accept
+            // the connection and ignore it. Without a wall clock the await
+            // settles never and the dialog spins with no verdict. Pinned to the
+            // probe's own budget rather than the 10-minute call default —
+            // `hardTimeout` adds a 5s grace, so a working abort still wins.
+            __kodusHardTimeoutMs: opts.timeoutMs ?? PROBE_TIMEOUT_MS,
             // The SDK retries twice by default; a probe must report the first
             // answer it gets, not triple a user's failing request.
             maxRetries: 0,

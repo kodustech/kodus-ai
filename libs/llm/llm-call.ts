@@ -7,14 +7,32 @@
  * is the AI SDK `generateText` with that net applied — Langfuse tracing is
  * consumed via `telemetry` on each call by the caller.
  */
-import { generateText as _aiSdkGenerateText } from 'ai';
+import { generateText as _aiSdkGenerateText, embed as _aiSdkEmbed } from 'ai';
 
-export const AGENT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes max per agent
-// 10 minutes per individual LLM call — matches the undici headersTimeout
-// set in the worker bootstrap so neither layer aborts the other. Large
-// Gemini calls (>500K prompt + high reasoning) can legitimately take
-// 4-7 minutes of wall-clock before the first byte arrives.
-export const LLM_CALL_TIMEOUT_MS = 10 * 60 * 1000;
+/**
+ * The ceilings, outermost first. Each layer must leave room for the one
+ * inside it, or the outer one fires first and the inner is decoration:
+ *
+ *   CODE_REVIEW_PROCESS_TIMEOUT_MS  105 min  (job-processor-router)
+ *     AGENT_TIMEOUT_MS               80 min  (one agent's whole loop)
+ *       LLM_CALL_TIMEOUT_MS          20 min  (one model round-trip)
+ *         undici headersTimeout      20 min  (fetch-timeouts.ts)
+ *
+ * 80 minutes for the loop is sized off production, not preference. Over 14
+ * days of `AgentReviewStage` durations (n=94): p50 3.1 min, p90 11.6, p95
+ * 17.8, p99 29.5, max 32.2 — and 1.1% already exceeded the previous 30-minute
+ * ceiling, which means enforcing it would have killed legitimate reviews of
+ * large PRs. The pathological case sits far above that: the 2026-09-03 hang
+ * ran 98 minutes and was still going. So the gap between "large and slow" and
+ * "stuck" is wide, and 80 lands in it: ~2.5x the observed max, still well
+ * under the job's 105.
+ */
+export const AGENT_TIMEOUT_MS = 80 * 60 * 1000;
+// One model round-trip. Kept in lockstep with the undici headersTimeout in
+// fetch-timeouts.ts — raise one without the other and the HTTP layer aborts
+// first, making this number decoration. Large Gemini calls (>500K prompt +
+// high reasoning) can legitimately take 4-7 minutes before the first byte.
+export const LLM_CALL_TIMEOUT_MS = 20 * 60 * 1000;
 
 /** Create an AbortSignal that fires after the given ms. */
 export function timeoutSignal(ms: number): AbortSignal {
@@ -80,4 +98,47 @@ const generateText: typeof _aiSdkGenerateText = (async (
     return hardTimeout(_aiSdkGenerateText(...args), ms, label);
 }) as typeof _aiSdkGenerateText;
 
-export { generateText as tracedGenerateText };
+/**
+ * Per-call override for the wall clock. Read since the wrapper was written but
+ * never typed, so the first caller that needed it (the connection probe, whose
+ * own budget is 15s rather than the 10-minute call default) could not pass it
+ * without a cast. Declared here so the escape hatch is part of the contract.
+ */
+export type HardTimeoutOverride = { __kodusHardTimeoutMs?: number };
+
+export const tracedGenerateText = generateText as (
+    ...args: [
+        Parameters<typeof _aiSdkGenerateText>[0] & HardTimeoutOverride,
+        ...rest: unknown[],
+    ]
+) => ReturnType<typeof _aiSdkGenerateText>;
+
+/**
+ * Embedding calls stall the same way model calls do, and are protected less.
+ *
+ * Both callers today are fail-soft against ERRORS — one catches and falls back
+ * to a lexical veto, the other has no catch at all — but a request that never
+ * answers throws nothing, so the catch never runs and the caller waits. A
+ * stalled embedding endpoint freezes the dedup stage exactly the way a stalled
+ * model call froze the agent loop.
+ *
+ * Shorter ceiling than a model call on purpose: an embedding is a single
+ * forward pass over a few hundred tokens. Minutes here mean the endpoint is
+ * gone, not busy.
+ */
+export const EMBED_TIMEOUT_MS = 60 * 1000;
+
+const embed: typeof _aiSdkEmbed = (async (
+    ...args: Parameters<typeof _aiSdkEmbed>
+) => {
+    const opts = args[0] as any;
+    const ms = opts?.__kodusHardTimeoutMs ?? EMBED_TIMEOUT_MS;
+    return hardTimeout(_aiSdkEmbed(...args), ms, 'embed');
+}) as typeof _aiSdkEmbed;
+
+export const tracedEmbed = embed as (
+    ...args: [
+        Parameters<typeof _aiSdkEmbed>[0] & HardTimeoutOverride,
+        ...rest: unknown[],
+    ]
+) => ReturnType<typeof _aiSdkEmbed>;

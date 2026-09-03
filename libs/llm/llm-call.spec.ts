@@ -293,17 +293,17 @@ describe('tracedGenerateText — hard-timeout net + wall-clock policy branches',
 
     const hang = () => new Promise<never>(() => {});
 
-    it('no abortSignal, no override → AGENT_TIMEOUT_MS branch (1800s) throws [HARD-TIMEOUT]', async () => {
+    it('no abortSignal, no override → AGENT_TIMEOUT_MS branch (4800s) throws [HARD-TIMEOUT]', async () => {
         mockGenerate.mockReturnValueOnce(hang());
         const p = run({ model: {} as any }).catch((e) => e);
         jest.advanceTimersByTime(AGENT_TIMEOUT_MS + 5_001);
         const err = (await p) as Error;
         expect(err).toBeInstanceOf(Error);
         expect(err.message).toContain('[HARD-TIMEOUT]');
-        expect(err.message).toContain('1800s');
+        expect(err.message).toContain('4800s');
     });
 
-    it('abortSignal present → LLM_CALL_TIMEOUT_MS branch (600s), the shorter secondary-call cap', async () => {
+    it('abortSignal present → LLM_CALL_TIMEOUT_MS branch (1200s), the shorter secondary-call cap', async () => {
         mockGenerate.mockReturnValueOnce(hang());
         const p = run({
             model: {} as any,
@@ -312,7 +312,7 @@ describe('tracedGenerateText — hard-timeout net + wall-clock policy branches',
         jest.advanceTimersByTime(LLM_CALL_TIMEOUT_MS + 5_001);
         const err = (await p) as Error;
         expect(err.message).toContain('[HARD-TIMEOUT]');
-        expect(err.message).toContain('600s');
+        expect(err.message).toContain('1200s');
     });
 
     it('__kodusHardTimeoutMs override wins (explicit cap honored)', async () => {
@@ -328,7 +328,7 @@ describe('tracedGenerateText — hard-timeout net + wall-clock policy branches',
 
     it('metamorphic (row 42) — __kodusHardTimeoutMs takes PRECEDENCE over abortSignal regardless of both being present', async () => {
         // Same inputs, override present alongside abortSignal → override branch
-        // wins deterministically (not the 600s abort branch).
+        // wins deterministically (not the 1200s abort branch).
         mockGenerate.mockReturnValueOnce(hang());
         const p = run({
             model: {} as any,
@@ -338,7 +338,7 @@ describe('tracedGenerateText — hard-timeout net + wall-clock policy branches',
         jest.advanceTimersByTime(20_000 + 5_001);
         const err = (await p) as Error;
         expect(err.message).toContain('20s');
-        expect(err.message).not.toContain('600s');
+        expect(err.message).not.toContain('1200s');
     });
 
     it('label branch: telemetry.functionId is used in the timeout message', async () => {

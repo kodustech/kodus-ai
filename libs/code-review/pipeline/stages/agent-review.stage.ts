@@ -1,7 +1,8 @@
 import * as crypto from 'crypto';
 
 import { createLogger } from '@libs/core/log/logger';
-import { jsonSchema, embed, type EmbeddingModel } from 'ai';
+import { jsonSchema, type EmbeddingModel } from 'ai';
+import { tracedEmbed as embed } from '@libs/llm/llm-call';
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { resolveAdaptiveProfile } from '@libs/code-review/infrastructure/agents/engine/adaptive-fit';
 import { resolveContextWindow } from '@libs/llm/model-context-window';

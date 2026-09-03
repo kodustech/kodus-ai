@@ -149,8 +149,14 @@ reap_aws_ec2() {
     # only evidence anything was missed is this line. It ran silently in CI for
     # exactly that reason: reap-droplets.yml passed no AWS credential.
     command -v aws >/dev/null 2>&1 || { warn "aws CLI not found — EC2 sweep SKIPPED (leaked instances will not be reaped)"; return 0; }
-    if [ -z "${AWS_ACCESS_KEY_ID:-}" ] && [ -z "${AWS_PROFILE:-}" ]; then
-        warn "no AWS credential — EC2 sweep SKIPPED (leaked instances will not be reaped)"
+    # Ask the CLI whether it can authenticate, rather than guessing from two
+    # env vars. The env-var check passed in CI and silently skipped the sweep
+    # everywhere else -- a default profile, SSO, an instance role and a
+    # container role all authenticate fine and set neither variable, so the
+    # one command that reaps leaked instances quietly did nothing while
+    # printing a warning nobody was watching for.
+    if ! aws sts get-caller-identity >/dev/null 2>&1; then
+        warn "AWS credential does not authenticate — EC2 sweep SKIPPED (leaked instances will not be reaped)"
         return 0
     fi
     local region="${AWS_REGION_E2E:-${AWS_DEFAULT_REGION:-us-east-2}}"
@@ -196,20 +202,40 @@ reap_aws_ec2() {
 
     # Key pairs outlive their instance when a run dies between import and
     # launch. They cost nothing but accumulate; drop the ones with no instance.
-    local kp
-    while read -r kp; do
+    #
+    # "No instance" is NOT sufficient on its own, and assuming it was is what
+    # broke a run with `InvalidKeyPair.NotFound`: a live run holds a key pair
+    # and no instance for the whole window between import-key-pair and
+    # run-instances. Sweeping on absence alone deletes the key out from under
+    # it, and run-instances then fails on a key the run had just created.
+    #
+    # So key pairs get the same TTL guard the instances above get. A key
+    # younger than the TTL may belong to a run still in flight; only an old
+    # one is provably an orphan.
+    local kp created kp_epoch kp_age kp_age_h
+    while read -r kp created; do
         [ -n "${kp:-}" ] || continue
         case "$kp" in
             kodus-e2e-*)
-                if ! echo "$rows" | grep -q "$kp"; then
-                    [ "$DRY_RUN" = "1" ] \
-                        && dim "  would drop stale key pair $kp" \
-                        || { aws ec2 delete-key-pair --region "$region" --key-name "$kp" >/dev/null 2>&1 \
-                             && dim "  dropped stale key pair $kp"; }
+                if echo "$rows" | grep -q "$kp"; then continue; fi
+                kp_epoch=$(iso_to_epoch "$created")
+                if [ -z "$kp_epoch" ]; then
+                    warn "  skip   key pair $kp — could not parse CreateTime '$created'; refusing to guess its age"
+                    continue
                 fi
+                kp_age=$(( NOW - kp_epoch ))
+                kp_age_h=$(( kp_age / 3600 ))
+                if [ "$REAP_ALL" != "1" ] && [ "$kp_age" -lt "$TTL_SECS" ]; then
+                    dim "  young  key pair $kp (${kp_age_h}h < ${TTL_HOURS}h) — a run may still be launching with it"
+                    continue
+                fi
+                [ "$DRY_RUN" = "1" ] \
+                    && dim "  would drop stale key pair $kp (${kp_age_h}h old)" \
+                    || { aws ec2 delete-key-pair --region "$region" --key-name "$kp" >/dev/null 2>&1 \
+                         && dim "  dropped stale key pair $kp (${kp_age_h}h old)"; }
                 ;;
         esac
-    done < <(aws ec2 describe-key-pairs --region "$region" --query 'KeyPairs[].KeyName' --output text 2>/dev/null | tr '\t' '\n')
+    done < <(aws ec2 describe-key-pairs --region "$region" --query 'KeyPairs[].[KeyName,CreateTime]' --output text 2>/dev/null)
 }
 
 # ---------- pull live droplets (source of truth) ----------
