@@ -127,11 +127,27 @@ services:
                 ]
             interval: 5s
             timeout: 3s
-            retries: 20
-            start_period: 10s
+            retries: 5
+            start_period: 30s
 
     db_mongodb:
-        image: docker.io/mongo:8
+        # Pinned, not floating. `mongo:8` resolves to a release that refuses
+        # to start on Linux kernels 6.19+: MongoDB 8.0.21-8.0.29 and
+        # 8.3.0-8.3.8 exit during startup with `MongoDB cannot start: Linux
+        # kernel versions 6.19 and newer has a known incompatibility`
+        # (SERVER-121912 - tcmalloc violates the rseq ABI). A floating tag is
+        # how a stack that worked one week stopped booting the next without a
+        # line changing here.
+        #
+        # 8.2.11 is outside that range and verified to start and stay up on
+        # kernel 7.0.14. Revisit when 8.0.30 / 8.3.9 publish, which carry the
+        # real fix. Kept identical to the kodus-installer compose, which
+        # serves the same audience.
+        #
+        # An installation already running 8.3 with its feature compatibility
+        # version raised to 8.3 will not open its data files under this pin
+        # and must set that version back before upgrading.
+        image: docker.io/mongo:8.2.11
         container_name: kodus_mongodb_prod
         restart: unless-stopped
         env_file:
@@ -146,10 +162,10 @@ services:
                     'CMD-SHELL',
                     "echo 'db.runCommand({ ping: 1 }).ok' | mongosh --quiet mongodb://$${MONGO_INITDB_ROOT_USERNAME}:$${MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/admin | grep -q 1",
                 ]
-            interval: 10s
+            interval: 5s
             timeout: 5s
-            retries: 20
-            start_period: 20s
+            retries: 5
+            start_period: 40s
 
 volumes:
     pgdata_prod:
