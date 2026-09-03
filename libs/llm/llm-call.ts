@@ -80,7 +80,20 @@ const generateText: typeof _aiSdkGenerateText = (async (
     return hardTimeout(_aiSdkGenerateText(...args), ms, label);
 }) as typeof _aiSdkGenerateText;
 
-export { generateText as tracedGenerateText };
+/**
+ * Per-call override for the wall clock. Read since the wrapper was written but
+ * never typed, so the first caller that needed it (the connection probe, whose
+ * own budget is 15s rather than the 10-minute call default) could not pass it
+ * without a cast. Declared here so the escape hatch is part of the contract.
+ */
+export type HardTimeoutOverride = { __kodusHardTimeoutMs?: number };
+
+export const tracedGenerateText = generateText as (
+    ...args: [
+        Parameters<typeof _aiSdkGenerateText>[0] & HardTimeoutOverride,
+        ...rest: unknown[],
+    ]
+) => ReturnType<typeof _aiSdkGenerateText>;
 
 /**
  * Embedding calls stall the same way model calls do, and are protected less.
@@ -105,4 +118,9 @@ const embed: typeof _aiSdkEmbed = (async (
     return hardTimeout(_aiSdkEmbed(...args), ms, 'embed');
 }) as typeof _aiSdkEmbed;
 
-export { embed as tracedEmbed };
+export const tracedEmbed = embed as (
+    ...args: [
+        Parameters<typeof _aiSdkEmbed>[0] & HardTimeoutOverride,
+        ...rest: unknown[],
+    ]
+) => ReturnType<typeof _aiSdkEmbed>;

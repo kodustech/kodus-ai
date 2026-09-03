@@ -16,7 +16,7 @@
  * module changes. Divergence stops being something to remember and becomes
  * impossible.
  */
-import { generateText } from 'ai';
+import { tracedGenerateText as generateText } from '@libs/llm/llm-call';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { resolveModelConfig } from '@libs/llm/model-invocation';
 import {
@@ -169,6 +169,13 @@ export async function probeSlotCall(
     try {
         const result = await generateText({
             model: inv.model as any,
+            // The AbortController above is the polite ask; several of the
+            // OpenAI-compatible proxies this probe exists to diagnose accept
+            // the connection and ignore it. Without a wall clock the await
+            // settles never and the dialog spins with no verdict. Pinned to the
+            // probe's own budget rather than the 10-minute call default —
+            // `hardTimeout` adds a 5s grace, so a working abort still wins.
+            __kodusHardTimeoutMs: opts.timeoutMs ?? PROBE_TIMEOUT_MS,
             // The SDK retries twice by default; a probe must report the first
             // answer it gets, not triple a user's failing request.
             maxRetries: 0,
