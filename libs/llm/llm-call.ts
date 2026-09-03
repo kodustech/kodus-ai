@@ -7,7 +7,7 @@
  * is the AI SDK `generateText` with that net applied — Langfuse tracing is
  * consumed via `telemetry` on each call by the caller.
  */
-import { generateText as _aiSdkGenerateText } from 'ai';
+import { generateText as _aiSdkGenerateText, embed as _aiSdkEmbed } from 'ai';
 
 export const AGENT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes max per agent
 // 10 minutes per individual LLM call — matches the undici headersTimeout
@@ -81,3 +81,28 @@ const generateText: typeof _aiSdkGenerateText = (async (
 }) as typeof _aiSdkGenerateText;
 
 export { generateText as tracedGenerateText };
+
+/**
+ * Embedding calls stall the same way model calls do, and are protected less.
+ *
+ * Both callers today are fail-soft against ERRORS — one catches and falls back
+ * to a lexical veto, the other has no catch at all — but a request that never
+ * answers throws nothing, so the catch never runs and the caller waits. A
+ * stalled embedding endpoint freezes the dedup stage exactly the way a stalled
+ * model call froze the agent loop.
+ *
+ * Shorter ceiling than a model call on purpose: an embedding is a single
+ * forward pass over a few hundred tokens. Minutes here mean the endpoint is
+ * gone, not busy.
+ */
+export const EMBED_TIMEOUT_MS = 60 * 1000;
+
+const embed: typeof _aiSdkEmbed = (async (
+    ...args: Parameters<typeof _aiSdkEmbed>
+) => {
+    const opts = args[0] as any;
+    const ms = opts?.__kodusHardTimeoutMs ?? EMBED_TIMEOUT_MS;
+    return hardTimeout(_aiSdkEmbed(...args), ms, 'embed');
+}) as typeof _aiSdkEmbed;
+
+export { embed as tracedEmbed };

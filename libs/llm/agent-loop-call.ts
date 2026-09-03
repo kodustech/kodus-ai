@@ -36,6 +36,7 @@ import { agentModelIdentity } from '@libs/llm/model-identity';
 import { applyCacheBreakpoints } from '@libs/llm/prompt-cache';
 import { repairInvalidToolInput } from '@libs/llm/repair-tool-call';
 import { getLlmObservability } from '@libs/llm/llm-observability';
+import { hardTimeout, AGENT_TIMEOUT_MS } from '@libs/llm/llm-call';
 import {
     buildLangfuseTelemetry,
     toAiSdkTelemetryArgs,
@@ -104,6 +105,10 @@ export interface AgentLoopParams {
     telemetryMetadata?: LangfuseTelemetryMetadata;
     /** Cancellation / hard-timeout signal (the caller composes parent + timeout). */
     signal?: AbortSignal;
+    /** Wall-clock ceiling for the whole loop. Defaults to AGENT_TIMEOUT_MS.
+     *  Separate from `signal`: the signal is a request the provider may ignore,
+     *  this is the deadline that holds when it does. */
+    hardTimeoutMs?: number;
     /** Fallback max-output when the slot omits one (else provider default). */
     maxOutputTokens?: number;
     /** Override the slot's sampling temperature. */
@@ -219,7 +224,8 @@ export async function runAgentLoopCall(
     // ── ONE observability span — records the run's aggregate usage. Absent port
     // (a bare unit test) runs directly, still gets the model/loop, just no span. ──
     const observability = getLlmObservability();
-    return observability
+    const run = () =>
+        observability
         ? observability.runAiSdkLLMInSpan<any>({
               spanName: spanName ?? runName,
               runName,
@@ -234,6 +240,17 @@ export async function runAgentLoopCall(
               exec,
           })
         : exec();
+
+    // Belt over the AbortSignal suspenders. `signal` above is a REQUEST: several
+    // OpenAI-compatible proxies accept the connection, ignore the abort and
+    // never answer, and an `await` on that settles never — so nothing throws,
+    // no `catch` runs, and the caller waits forever with its span open and its
+    // sandbox lease held. The one-shot path has had this net since it was
+    // written (`llm-call.ts`); the loop, where reviews actually run, did not.
+    //
+    // Not a new ceiling: AGENT_TIMEOUT_MS was always the intended maximum. This
+    // is what makes it true when the provider declines to cooperate.
+    return hardTimeout(run(), params.hardTimeoutMs ?? AGENT_TIMEOUT_MS, runName);
 }
 
 // Re-export so callers can build a fixed model handle if needed (parity with
