@@ -36,9 +36,24 @@
  *
  * Matching the numbered prefix as part of the label is what keeps a bare "1."
  * from surviving as its own fragment.
+ *
+ * TWO deliberate restrictions, both there to protect prose:
+ *
+ * A mid-line label must follow sentence-ending punctuation. Allowing it after
+ * any non-space character made "Here's why: the guard was removed" look like
+ * scaffolding, and this runs on the FALLBACK path — so a false positive does
+ * not merely fail to help, it rewrites a good suggestion into "Here's the guard
+ * was removed." and ships that. Before this fallback existed, prose survived a
+ * failed model pass untouched; it has to keep surviving.
+ *
+ * And the match is case SENSITIVE. The prompt spells the labels in capitals and
+ * models keep them that way, while "why:" and "how:" are ordinary English. The
+ * trade is the right way round: missing a lowercase label ships scaffolding,
+ * which is the bug we already had, whereas matching prose corrupts a finding
+ * that was fine.
  */
 const LABEL_ANYWHERE =
-    /(?:^|\n|(?<=\S)[ \t]+)(?:\d+[.)][ \t]*)?(?:\*\*|__)?[ \t]*(?:WHAT|WHY|HOW)[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*/gi;
+    /(?:^|\n|(?<=[.!?])[ \t]+)(?:\d+[.)][ \t]*)?(?:\*\*|__)?[ \t]*(?:WHAT|WHY|HOW)[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*/g;
 
 /** A control character, so it can never collide with the content itself. */
 const SENTINEL = '\u0001';

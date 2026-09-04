@@ -57,6 +57,31 @@ describe('stripReviewScaffolding', () => {
         expect(looksLikeReviewScaffolding(prose)).toBe(false);
     });
 
+    it.each([
+        ["Here's why: the guard was removed"],
+        ['This is how: pass the ref'],
+        ['We know what: the call is unguarded'],
+        ['The formatter aborted. Here is why: the model reasons too much.'],
+        ['Explain how: the retry budget is consumed.'],
+    ])('does not mistake ordinary prose for scaffolding: %s', (prose) => {
+        // This runs on the FALLBACK path, so a false positive does not merely
+        // fail to help — it rewrites a good suggestion and ships the result.
+        // Before this fallback existed, prose survived a failed model pass
+        // untouched, and it has to keep surviving.
+        expect(looksLikeReviewScaffolding(prose)).toBe(false);
+        expect(stripReviewScaffolding(prose)).toBe(prose);
+    });
+
+    it('is case sensitive, because the template is and English is not', () => {
+        // Missing a lowercase label ships scaffolding — the bug we already
+        // had. Matching prose corrupts a finding that was fine. The trade only
+        // goes one way.
+        expect(looksLikeReviewScaffolding('what: lowercase in prose')).toBe(
+            false,
+        );
+        expect(looksLikeReviewScaffolding('WHAT: the template')).toBe(true);
+    });
+
     it('handles the labels a model emits with markdown emphasis', () => {
         const out = stripReviewScaffolding(
             '**WHAT:** the guard is missing\n**WHY:** it throws on null',
