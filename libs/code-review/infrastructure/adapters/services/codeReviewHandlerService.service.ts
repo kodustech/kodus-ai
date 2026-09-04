@@ -353,6 +353,7 @@ export class CodeReviewHandlerService {
                 orphanedBaseCommit: result?.orphanedBaseCommit,
                 reviewWarnings: result?.reviewWarnings,
                 linkedRepositoriesMetadata: result?.linkedRepositoriesMetadata,
+                reviewExecutionSnapshot: result?.reviewExecutionSnapshot,
             };
         } catch (error) {
             if (initialContext) {
@@ -375,7 +376,9 @@ export class CodeReviewHandlerService {
                 },
             });
 
-            return null;
+            // The worker owns retry/DLQ and terminal job state. Returning null
+            // here used to make the caller mark a broken review COMPLETED.
+            throw error;
         }
     }
 

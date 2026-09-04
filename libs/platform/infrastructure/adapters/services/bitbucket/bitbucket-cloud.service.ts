@@ -3256,6 +3256,8 @@ export class BitbucketCloudService implements Omit<
 
             const webhookUrl =
                 process.env.GLOBAL_BITBUCKET_CODE_MANAGEMENT_WEBHOOK;
+            const webhookSignatureSecret =
+                process.env.CODE_MANAGEMENT_WEBHOOK_SIGNATURE_SECRET;
 
             for (const repo of repositories) {
                 const existingHooks = await bitbucketAPI.webhooks
@@ -3266,26 +3268,30 @@ export class BitbucketCloudService implements Omit<
                     })
                     .then((res) => this.getPaginatedResults(bitbucketAPI, res));
 
-                const hookExists = existingHooks.some(
+                const existingHook = existingHooks.find(
                     (hook) => hook?.url === webhookUrl,
                 );
+                const hookBody = {
+                    description: 'Kodus Webhook',
+                    url: webhookUrl,
+                    active: true,
+                    ...(webhookSignatureSecret
+                        ? { secret: webhookSignatureSecret }
+                        : {}),
+                    events: [
+                        'pullrequest:created',
+                        'pullrequest:updated',
+                        'pullrequest:rejected',
+                        'pullrequest:fulfilled',
+                        'pullrequest:comment_created',
+                    ] as const,
+                };
 
-                if (!hookExists) {
+                if (!existingHook) {
                     await bitbucketAPI.webhooks.create({
                         repo_slug: `{${repo.id}}`,
                         workspace: `{${repo.workspaceId}}`,
-                        _body: {
-                            description: 'Kodus Webhook',
-                            url: webhookUrl,
-                            active: true,
-                            events: [
-                                'pullrequest:created',
-                                'pullrequest:updated',
-                                'pullrequest:rejected',
-                                'pullrequest:fulfilled',
-                                'pullrequest:comment_created',
-                            ],
-                        },
+                        _body: hookBody,
                     });
                     this.logger.log({
                         message: 'Webhook created successfully',
@@ -3295,6 +3301,23 @@ export class BitbucketCloudService implements Omit<
                         metadata: {
                             organizationAndTeamData,
                         },
+                    });
+                } else if (webhookSignatureSecret && existingHook.uuid) {
+                    // The generated SDK omits `_body` from this endpoint's
+                    // type even though Bitbucket's PUT endpoint accepts the
+                    // full subscription document.
+                    await bitbucketAPI.repositories.updateWebhook({
+                        repo_slug: `{${repo.id}}`,
+                        workspace: `{${repo.workspaceId}}`,
+                        uid: existingHook.uuid,
+                        _body: hookBody,
+                    } as any);
+                    this.logger.log({
+                        message: 'Webhook secret synchronized successfully',
+                        context: BitbucketCloudService.name,
+                        serviceName:
+                            'BitbucketCloudService createMergeRequestWebhook',
+                        metadata: { organizationAndTeamData },
                     });
                 } else {
                     this.logger.log({

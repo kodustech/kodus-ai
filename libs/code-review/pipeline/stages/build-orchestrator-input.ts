@@ -86,6 +86,7 @@ export function buildOrchestratorInput(
         callGraph: computed.callGraph,
         callGraphJson: context.callGraphJson,
         reviewMode: context.codeReviewConfig?.reviewMode || 'normal',
+        reviewPolicy: context.codeReviewConfig?.reviewPolicy,
         // HEAVY mode — opt-in per review (CLI `--heavy` / PR `@kody review
         // --heavy`), gated to the alpha release track by the stage. The stage
         // resolves the requested flag AND the feature gate into `computed.heavy`;

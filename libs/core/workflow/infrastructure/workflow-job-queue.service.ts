@@ -38,81 +38,112 @@ export class WorkflowJobQueueService implements IJobQueueService {
     async enqueue(
         job: Omit<IWorkflowJob, 'id' | 'createdAt' | 'updatedAt'>,
     ): Promise<string> {
-        return await this.observability.runInSpan(
-            'workflow.job.enqueue',
-            async (span) => {
-                span.setAttributes({
-                    'workflow.job.type': job.workflowType,
-                    'workflow.job.handler': job.handlerType,
-                    'workflow.correlation.id': job.correlationId,
-                });
+        if (job.idempotencyKey) {
+            const existing = await this.jobRepository.findByIdempotencyKey?.(
+                job.idempotencyKey,
+            );
+            if (existing) {
+                return existing.id;
+            }
+        }
 
-                // Transactional creation of Job and Outbox Message
-                const jobToSave = await this.dataSource.transaction(
-                    async (transactionManager) => {
-                        const exchange = 'workflow.exchange';
-                        const routingKey = `workflow.jobs.created.${job.workflowType}`;
+        try {
+            return await this.observability.runInSpan(
+                'workflow.job.enqueue',
+                async (span) => {
+                    span.setAttributes({
+                        'workflow.job.type': job.workflowType,
+                        'workflow.job.handler': job.handlerType,
+                        'workflow.correlation.id': job.correlationId,
+                    });
 
-                        const savedJob = await this.jobRepository.create(
-                            job,
-                            transactionManager,
-                        );
+                    // Transactional creation of Job and Outbox Message
+                    const jobToSave = await this.dataSource.transaction(
+                        async (transactionManager) => {
+                            const exchange = 'workflow.exchange';
+                            const routingKey = `workflow.jobs.created.${job.workflowType}`;
 
-                        const payload = {
-                            jobId: savedJob.uuid,
-                            correlationId: job.correlationId,
-                            workflowType: job.workflowType,
-                            handlerType: job.handlerType,
-                            organizationId:
-                                job.organizationAndTeamData?.organizationId,
-                            teamId: job.organizationAndTeamData?.teamId,
-                        };
+                            const savedJob = await this.jobRepository.create(
+                                job,
+                                transactionManager,
+                            );
 
-                        const messagePayload =
-                            this.messageBroker.transformMessageToMessageBroker({
-                                eventName: 'workflow.jobs.created',
-                                message: payload,
-                            });
-
-                        await this.outboxRepository.create(
-                            {
-                                jobId: savedJob.uuid,
-                                exchange: exchange,
-                                routingKey: routingKey,
-                                payload: messagePayload as unknown as Record<
-                                    string,
-                                    unknown
-                                >,
-                            },
-                            transactionManager,
-                        );
-
-                        this.logger.debug({
-                            message:
-                                'Workflow job and outbox message created (Transactional)',
-                            context: WorkflowJobQueueService.name,
-                            metadata: {
+                            const payload = {
                                 jobId: savedJob.uuid,
                                 correlationId: job.correlationId,
                                 workflowType: job.workflowType,
-                            },
-                        });
+                                handlerType: job.handlerType,
+                                maxRetries: job.maxRetries,
+                                organizationId:
+                                    job.organizationAndTeamData?.organizationId,
+                                teamId: job.organizationAndTeamData?.teamId,
+                            };
 
-                        return savedJob;
-                    },
-                );
+                            const messagePayload =
+                                this.messageBroker.transformMessageToMessageBroker(
+                                    {
+                                        eventName: 'workflow.jobs.created',
+                                        message: payload,
+                                    },
+                                );
 
-                span.setAttributes({
-                    'workflow.job.id': jobToSave.uuid,
-                });
+                            await this.outboxRepository.create(
+                                {
+                                    jobId: savedJob.uuid,
+                                    exchange: exchange,
+                                    routingKey: routingKey,
+                                    payload:
+                                        messagePayload as unknown as Record<
+                                            string,
+                                            unknown
+                                        >,
+                                },
+                                transactionManager,
+                            );
 
-                return jobToSave.uuid;
-            },
-            {
-                'workflow.component': 'queue',
-                'workflow.operation': 'enqueue',
-            },
-        );
+                            this.logger.debug({
+                                message:
+                                    'Workflow job and outbox message created (Transactional)',
+                                context: WorkflowJobQueueService.name,
+                                metadata: {
+                                    jobId: savedJob.uuid,
+                                    correlationId: job.correlationId,
+                                    workflowType: job.workflowType,
+                                },
+                            });
+
+                            return savedJob;
+                        },
+                    );
+
+                    span.setAttributes({
+                        'workflow.job.id': jobToSave.uuid,
+                    });
+
+                    return jobToSave.uuid;
+                },
+                {
+                    'workflow.component': 'queue',
+                    'workflow.operation': 'enqueue',
+                },
+            );
+        } catch (error) {
+            // Two concurrent deliveries can both miss the lookup. PostgreSQL's
+            // unique index chooses one winner; return it from the losing call.
+            if (
+                job.idempotencyKey &&
+                (error as { code?: string })?.code === '23505'
+            ) {
+                const existing =
+                    await this.jobRepository.findByIdempotencyKey?.(
+                        job.idempotencyKey,
+                    );
+                if (existing) {
+                    return existing.id;
+                }
+            }
+            throw error;
+        }
     }
 
     async getStatus(jobId: string): Promise<IWorkflowJob | null> {

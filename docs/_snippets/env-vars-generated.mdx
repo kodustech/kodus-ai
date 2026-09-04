@@ -153,6 +153,8 @@
 | `API_FORGEJO_CODE_MANAGEMENT_WEBHOOK` | – | url | ⚙️ Both |  |
 | `CODE_MANAGEMENT_SECRET` | ✅ | secret | ⚙️ Both | Shared secret used to sign internal webhook calls. |
 | `CODE_MANAGEMENT_WEBHOOK_TOKEN` | – | secret | ⚙️ Both |  |
+| `WEBHOOK_SIGNATURE_VALIDATION_MODE` | – | string | ⚙️ Both (opt-in) | Verifies Git-provider webhook signatures before acknowledging delivery. `when-configured` preserves existing installs and enforces validation as soon as a shared or provider-specific secret is set. Use `required` to fail closed. |
+| `CODE_MANAGEMENT_WEBHOOK_SIGNATURE_SECRET` | – | secret | ⚙️ Both | Shared fallback for GitHub/GitLab/Bitbucket/Forgejo webhook signatures. Provider-specific GITHUB_WEBHOOK_SECRET, GITLAB_WEBHOOK_SECRET, BITBUCKET_WEBHOOK_SECRET and FORGEJO_WEBHOOK_SECRET take precedence. |
 | `API_DISCORD_TRIAL_REQUEST_WEBHOOK_URL` | – | secret | ☁️ Cloud | Discord channel webhook used to deliver "Request more trial reviews" form submissions to our team. Optional — when unset the request fails honestly and the UI tells the user the channel is not configured. |
 
 ## Observability

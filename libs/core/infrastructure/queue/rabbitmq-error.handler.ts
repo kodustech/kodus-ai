@@ -8,6 +8,8 @@ import {
     calculateBackoffInterval,
 } from '@libs/common/utils/polling';
 import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
+import { DEFAULT_WORKFLOW_QUEUE_MAX_RETRIES } from './config/workflow-queue.config';
 
 /**
  * Backoff configuration for consumer retries.
@@ -20,7 +22,6 @@ import { isRateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.e
  * RATE_LIMITED-aware delay below, retries that DO happen now wait for
  * the bucket to actually reset, so 2 attempts are enough.
  */
-const DEFAULT_MAX_RETRIES_CONSUMER = 2;
 const DEFAULT_RETRY_DELAY_MS = 1000;
 
 /**
@@ -64,7 +65,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
 
         this.maxRetriesConsumer = Number.isFinite(maxRetries)
             ? maxRetries
-            : DEFAULT_MAX_RETRIES_CONSUMER;
+            : DEFAULT_WORKFLOW_QUEUE_MAX_RETRIES;
         this.retryDelayMs = Number.isFinite(retryDelayMs)
             ? retryDelayMs
             : DEFAULT_RETRY_DELAY_MS;
@@ -92,15 +93,25 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         const baseExchange = this.getBaseExchange(msg.fields.exchange);
         const delayedExchange = `${baseExchange}.delayed`;
         const dlxExchange = `${baseExchange}.dlx`;
+        const jobMaxRetries = Number(headers['x-job-max-retries']);
+        const maxRetries = Number.isInteger(jobMaxRetries)
+            ? Math.max(0, jobMaxRetries)
+            : this.maxRetriesConsumer;
+        const classification = error?.errorClassification as
+            ErrorClassification | undefined;
+        const retryable =
+            classification !== ErrorClassification.NON_RETRYABLE &&
+            classification !== ErrorClassification.PERMANENT;
 
         try {
-            if (retryCount < this.maxRetriesConsumer) {
+            if (retryable && retryCount < maxRetries) {
                 await this.retryWithDelay(
                     msg,
                     headers,
                     retryCount,
                     error,
                     delayedExchange,
+                    maxRetries,
                 );
             } else {
                 await this.sendToDLQ(
@@ -109,6 +120,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
                     error,
                     dlxExchange,
                     options?.dlqRoutingKey,
+                    retryable ? 'max-retries-exceeded' : 'non-retryable',
                 );
             }
 
@@ -147,6 +159,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         retryCount: number,
         error: any,
         delayedExchange: string,
+        maxRetries: number,
     ): Promise<void> {
         const nextRetryCount = retryCount + 1;
         headers[this.RETRY_COUNT_HEADER] = nextRetryCount;
@@ -158,7 +171,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         headers['x-delay'] = delayMs;
 
         this.logger.warn({
-            message: `Message processing failed, retrying (${nextRetryCount}/${this.maxRetriesConsumer})`,
+            message: `Message processing failed, retrying (${nextRetryCount}/${maxRetries})`,
             context: RabbitMQErrorHandler.name,
             metadata: {
                 messageId: msg.properties.messageId,
@@ -190,6 +203,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
         error: any,
         dlxExchange: string,
         dlqRoutingKey?: string,
+        deathReason = 'max-retries-exceeded',
     ): Promise<void> {
         const routingKeyForDlq = dlqRoutingKey || msg.fields.routingKey;
 
@@ -208,7 +222,7 @@ export class RabbitMQErrorHandler implements OnModuleInit {
 
         headers['x-original-routing-key'] = msg.fields.routingKey;
         headers['x-original-exchange'] = msg.fields.exchange;
-        headers['x-death-reason'] = 'max-retries-exceeded';
+        headers['x-death-reason'] = deathReason;
         headers['x-last-error'] = error?.message?.substring(0, 500);
 
         await this.amqpConnection.publish(

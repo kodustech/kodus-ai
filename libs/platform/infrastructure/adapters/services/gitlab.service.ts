@@ -2837,23 +2837,44 @@ export class GitlabService implements Omit<
         );
 
         const webhookUrl = process.env.API_GITLAB_CODE_MANAGEMENT_WEBHOOK; // Replace with your webhook URL
+        const webhookSignatureSecret =
+            process.env.CODE_MANAGEMENT_WEBHOOK_SIGNATURE_SECRET;
 
         try {
             for (const repo of repositories) {
                 const existingHooks = await gitlabAPI.ProjectHooks.all(repo.id);
 
-                const hookExists = existingHooks.some(
+                const existingHook = existingHooks.find(
                     (hook) => hook?.url === webhookUrl,
                 );
 
-                if (!hookExists) {
-                    await gitlabAPI.ProjectHooks.add(repo.id, webhookUrl, {
-                        mergeRequestsEvents: true,
-                        enableSslVerification: true,
-                        noteEvents: true,
-                        issuesEvents: true,
-                    });
+                const hookOptions = {
+                    mergeRequestsEvents: true,
+                    enableSslVerification: true,
+                    noteEvents: true,
+                    issuesEvents: true,
+                    ...(webhookSignatureSecret
+                        ? { token: webhookSignatureSecret }
+                        : {}),
+                };
+
+                if (!existingHook) {
+                    await gitlabAPI.ProjectHooks.add(
+                        repo.id,
+                        webhookUrl,
+                        hookOptions,
+                    );
                     console.log(`Webhook added to project ${repo.id}`);
+                } else if (webhookSignatureSecret) {
+                    // GitLab never returns the token. Re-applying it is the
+                    // only safe way to migrate/rotate existing hooks.
+                    await gitlabAPI.ProjectHooks.edit(
+                        repo.id,
+                        existingHook.id,
+                        webhookUrl,
+                        hookOptions,
+                    );
+                    console.log(`Webhook updated in project ${repo.id}`);
                 } else {
                     console.log(`Webhook already exists in project ${repo.id}`);
                 }

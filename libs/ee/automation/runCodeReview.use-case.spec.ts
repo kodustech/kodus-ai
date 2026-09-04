@@ -50,9 +50,7 @@ describe('RunCodeReviewAutomationUseCase', () => {
         );
     });
 
-    // The catch-all here exists so a broken review cannot take the worker
-    // down. It also used to absorb the "PR is busy" signal, which left the
-    // job processor with nothing to reschedule (#1700).
+    // Every failure must reach the job processor, which owns retry/DLQ state.
     it('lets a refused review command through to the caller', async () => {
         executeAutomation.executeStrategy.mockRejectedValue(
             new PrReviewInProgressError({ gate: 'lock', target: TARGET }),
@@ -63,11 +61,13 @@ describe('RunCodeReviewAutomationUseCase', () => {
         );
     });
 
-    it('still absorbs every other failure', async () => {
+    it('propagates every other failure', async () => {
         executeAutomation.executeStrategy.mockRejectedValue(
             new Error('pipeline exploded'),
         );
 
-        await expect(useCase.execute(makeParams())).resolves.toBeUndefined();
+        await expect(useCase.execute(makeParams())).rejects.toThrow(
+            'pipeline exploded',
+        );
     });
 });

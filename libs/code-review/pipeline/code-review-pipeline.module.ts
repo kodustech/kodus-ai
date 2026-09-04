@@ -81,6 +81,11 @@ import { GeneralistAgentProvider } from '../infrastructure/agents/providers/gene
 import { KodyRulesAgentProvider } from '../infrastructure/agents/providers/kody-rules-agent.provider';
 // ReflectionAgentProvider removed — verify/discover was hurting recall
 import { ReviewOrchestratorService } from '../infrastructure/agents/review-orchestrator.service';
+import {
+    REVIEW_AGENT_TOKENS,
+    ReviewAgentCatalog,
+} from '../infrastructure/agents/review-agent.catalog';
+import { ReviewRiskPlanner } from '../domain/review-policy/review-risk-planner';
 
 @Module({
     imports: [
@@ -174,6 +179,25 @@ import { ReviewOrchestratorService } from '../infrastructure/agents/review-orche
         PerformanceAgentProvider,
         GeneralistAgentProvider,
         KodyRulesAgentProvider,
+        { provide: REVIEW_AGENT_TOKENS.bug, useExisting: BugAgentProvider },
+        {
+            provide: REVIEW_AGENT_TOKENS.security,
+            useExisting: SecurityAgentProvider,
+        },
+        {
+            provide: REVIEW_AGENT_TOKENS.performance,
+            useExisting: PerformanceAgentProvider,
+        },
+        {
+            provide: REVIEW_AGENT_TOKENS.generalist,
+            useExisting: GeneralistAgentProvider,
+        },
+        {
+            provide: REVIEW_AGENT_TOKENS.kodyRules,
+            useExisting: KodyRulesAgentProvider,
+        },
+        ReviewAgentCatalog,
+        ReviewRiskPlanner,
         // ReflectionAgentProvider removed
         ReviewOrchestratorService,
 

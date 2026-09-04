@@ -23,6 +23,7 @@ import {
 } from '@libs/core/infrastructure/config/types/general/codeReview.type';
 import { PullRequestMessageStatus } from '@libs/core/infrastructure/config/types/general/pullRequestMessages.type';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { ReviewPolicyConfig } from '@libs/code-review/domain/review-policy/review-policy';
 
 class ReviewOptionsDto {
     @IsBoolean()
@@ -522,6 +523,15 @@ class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsString()
     byokModelId?: string;
+
+    @IsOptional()
+    @IsObject()
+    @ApiPropertyOptional({
+        type: Object,
+        description:
+            'Versioned agent planning policy. Version 1 supports planner thresholds and per-mode agent budgets.',
+    })
+    reviewPolicy?: ReviewPolicyConfig;
 
     @IsOptional()
     @IsArray()

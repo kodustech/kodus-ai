@@ -64,6 +64,7 @@ import {
 } from '@libs/ee/license/interfaces/license.interface';
 import { isTeamsOrEnterpriseTierAllowed } from '@libs/ee/license/tier/teams-or-enterprise-tier-policy';
 import { PullRequestState } from '@libs/core/domain/enums/pullRequestState.enum';
+import { createReviewExecutionSnapshot } from '@libs/code-review/domain/review-policy/review-execution-snapshot';
 
 import { GraphContextService } from '@libs/code-review/infrastructure/adapters/services/graph/graph-context.service';
 import {
@@ -620,21 +621,50 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     changedFiles,
                 );
 
-            const result = await this.reviewOrchestrator.execute(
-                buildOrchestratorInput(context, {
-                    changedFiles,
-                    prNumber,
-                    repositoryId,
-                    reviewOptions,
-                    onAgentProgress,
-                    gitHubToken: await this.resolveGitHubToken(context),
-                    callGraph,
-                    adaptiveProfile,
-                    heavy: resolvedHeavy,
-                    kodyRules: await this.prepareKodyRulesForReview(context),
-                    linkedRepoAccess,
-                }),
-            );
+            const preparedKodyRules =
+                await this.prepareKodyRulesForReview(context);
+            const orchestratorInput = buildOrchestratorInput(context, {
+                changedFiles,
+                prNumber,
+                repositoryId,
+                reviewOptions,
+                onAgentProgress,
+                gitHubToken: await this.resolveGitHubToken(context),
+                callGraph,
+                adaptiveProfile,
+                heavy: resolvedHeavy,
+                kodyRules: preparedKodyRules,
+                linkedRepoAccess,
+            });
+            const result =
+                await this.reviewOrchestrator.execute(orchestratorInput);
+
+            if (result.reviewPolicy && result.executionPlan) {
+                const reviewExecutionSnapshot = createReviewExecutionSnapshot({
+                    policy: result.reviewPolicy,
+                    plan: result.executionPlan,
+                    safeConfig: {
+                        reviewMode: context.codeReviewConfig?.reviewMode,
+                        reviewOptions,
+                        heavy: resolvedHeavy,
+                        outlineFirst: context.codeReviewConfig?.outlineFirst,
+                        reviewPolicy: context.codeReviewConfig?.reviewPolicy,
+                        byokModel: context.codeReviewConfig?.byokModel,
+                        byokModelId: context.codeReviewConfig?.byokModelId,
+                    },
+                    promptOverrides:
+                        context.codeReviewConfig?.v2PromptOverrides,
+                    rules: preparedKodyRules,
+                    model: {
+                        provider: effectiveSlot?.provider,
+                        model: effectiveSlot?.model,
+                        modelId: context.codeReviewConfig?.byokModelId,
+                    },
+                });
+                context = this.updateContext(context, (draft) => {
+                    draft.reviewExecutionSnapshot = reviewExecutionSnapshot;
+                });
+            }
 
             // Snapshot linked-repo metadata after the review so clone status
             // (ready/failed) reflects what the agent actually used. When the

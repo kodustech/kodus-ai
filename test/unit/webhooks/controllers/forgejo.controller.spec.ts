@@ -19,7 +19,9 @@ describe('ForgejoController', () => {
             execute: jest.fn().mockResolvedValue(undefined),
         } as any;
 
-        controller = new ForgejoController(enqueueWebhookUseCase);
+        controller = new ForgejoController(enqueueWebhookUseCase, {
+            validate: jest.fn().mockReturnValue({ valid: true }),
+        } as any);
 
         mockResponse = {
             status: jest.fn().mockReturnThis(),
@@ -34,7 +36,7 @@ describe('ForgejoController', () => {
                 body: forgejoPullRequestOpenedPayload,
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -58,7 +60,7 @@ describe('ForgejoController', () => {
                 body: { action: 'opened', pull_request: { number: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -85,7 +87,7 @@ describe('ForgejoController', () => {
                 body: { action: 'opened' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -105,7 +107,7 @@ describe('ForgejoController', () => {
                 body: { action: 'synchronized' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -121,7 +123,7 @@ describe('ForgejoController', () => {
                 body: { action: 'reopened' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -137,7 +139,7 @@ describe('ForgejoController', () => {
                 body: { action: 'closed' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -153,7 +155,7 @@ describe('ForgejoController', () => {
                 body: { action: 'opened', pull_request: { number: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -176,7 +178,7 @@ describe('ForgejoController', () => {
                 body: { action: 'opened', pull_request: { number: 1 } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -199,7 +201,7 @@ describe('ForgejoController', () => {
                 body: forgejoIssueCommentPayload,
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -222,7 +224,7 @@ describe('ForgejoController', () => {
                 body: forgejoPullRequestReviewCommentPayload,
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -248,7 +250,7 @@ describe('ForgejoController', () => {
                 },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -277,7 +279,7 @@ describe('ForgejoController', () => {
                 body: { action: 'edited' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -298,7 +300,7 @@ describe('ForgejoController', () => {
                 body: { action: 'assigned' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -318,7 +320,7 @@ describe('ForgejoController', () => {
                 body: { action: 'labeled' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -338,7 +340,7 @@ describe('ForgejoController', () => {
                 body: { action: 'review_requested' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -360,7 +362,7 @@ describe('ForgejoController', () => {
                 body: { action: 'submitted', review: { state: 'approved' } },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -381,7 +383,7 @@ describe('ForgejoController', () => {
                 body: { ref: 'feature-branch', ref_type: 'branch' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -401,7 +403,7 @@ describe('ForgejoController', () => {
                 body: { ref: 'feature-branch' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -421,7 +423,7 @@ describe('ForgejoController', () => {
                 body: { action: 'opened' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -441,7 +443,7 @@ describe('ForgejoController', () => {
                 body: { action: 'published' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -461,7 +463,7 @@ describe('ForgejoController', () => {
                 body: { forkee: {} },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -481,7 +483,7 @@ describe('ForgejoController', () => {
                 body: { action: 'created' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -501,7 +503,7 @@ describe('ForgejoController', () => {
                 body: { action: 'created' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );
@@ -523,7 +525,7 @@ describe('ForgejoController', () => {
                 body: { action: 'opened' },
             };
 
-            controller.handleWebhook(
+            await controller.handleWebhook(
                 mockRequest as Request,
                 mockResponse as Response,
             );

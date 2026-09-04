@@ -3,6 +3,7 @@ import {
     RabbitMQErrorHandler,
 } from './rabbitmq-error.handler';
 import { RateLimitError } from '@libs/core/workflow/domain/errors/rate-limit.error';
+import { ErrorClassification } from '@libs/core/workflow/domain/enums/error-classification.enum';
 
 jest.mock('@libs/core/log/logger', () => ({
     createLogger: () => ({
@@ -118,6 +119,41 @@ describe('RabbitMQErrorHandler', () => {
             }),
         );
         expect(channel.ack).toHaveBeenCalledWith(msg);
+    });
+
+    it('uses the retry budget carried by the workflow job', async () => {
+        const { handler, amqpConnection } = makeHandler({ maxRetries: 5 });
+        const channel = { ack: jest.fn() };
+        const msg = makeMessage({
+            'x-retry-count': 1,
+            'x-job-max-retries': 1,
+        });
+
+        await handler.handle(channel, msg, new Error('processor failed'));
+
+        expect(amqpConnection.publish).toHaveBeenCalledWith(
+            'workflow.exchange.dlx',
+            expect.any(String),
+            msg.content,
+            expect.any(Object),
+        );
+    });
+
+    it('sends permanent errors directly to DLQ', async () => {
+        const { handler, amqpConnection } = makeHandler({ maxRetries: 5 });
+        const channel = { ack: jest.fn() };
+        const error = Object.assign(new Error('invalid policy'), {
+            errorClassification: ErrorClassification.PERMANENT,
+        });
+
+        await handler.handle(channel, makeMessage(), error);
+
+        expect(amqpConnection.publish.mock.calls[0][0]).toBe(
+            'workflow.exchange.dlx',
+        );
+        expect(amqpConnection.publish.mock.calls[0][3].headers).toEqual(
+            expect.objectContaining({ 'x-death-reason': 'non-retryable' }),
+        );
     });
 
     it('does not ack the original message when retry publish fails', async () => {
