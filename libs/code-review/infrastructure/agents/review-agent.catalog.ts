@@ -16,6 +16,17 @@ type AgentExecutor = (
     kodyRules?: Partial<IKodyRule>[],
 ) => Promise<ReviewAgentOutput>;
 
+export interface IReviewAgentCatalog {
+    has(agentId: ReviewAgentId): boolean;
+    execute(
+        plan: ReviewAgentPlanItem,
+        input: ReviewAgentInput,
+        kodyRules?: Partial<IKodyRule>[],
+    ): Promise<ReviewAgentOutput>;
+}
+
+export const REVIEW_AGENT_CATALOG_TOKEN = Symbol.for('ReviewAgentCatalog');
+
 export const REVIEW_AGENT_TOKENS = {
     bug: Symbol.for('ReviewAgent.Bug'),
     security: Symbol.for('ReviewAgent.Security'),
@@ -26,7 +37,7 @@ export const REVIEW_AGENT_TOKENS = {
 
 /** Runtime registry that decouples orchestration policy from provider wiring. */
 @Injectable()
-export class ReviewAgentCatalog {
+export class ReviewAgentCatalog implements IReviewAgentCatalog {
     private readonly executors: Map<ReviewAgentId, AgentExecutor>;
 
     constructor(

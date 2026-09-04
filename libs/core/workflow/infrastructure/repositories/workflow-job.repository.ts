@@ -144,13 +144,14 @@ export class WorkflowJobRepository implements IWorkflowJobRepository {
         }
     }
 
-    async findByIdempotencyKey(
+    async findIdByIdempotencyKey(
         idempotencyKey: string,
-    ): Promise<IWorkflowJob | null> {
+    ): Promise<string | null> {
         const model = await this.repository.findOne({
             where: { idempotencyKey },
+            select: { uuid: true },
         });
-        return model ? this.mapToInterface(model) : null;
+        return model?.uuid ?? null;
     }
 
     async findMany(query: {

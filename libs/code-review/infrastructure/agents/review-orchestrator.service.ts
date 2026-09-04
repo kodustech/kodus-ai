@@ -1,6 +1,6 @@
 import { createLogger } from '@libs/core/log/logger';
 import { llmErrorLogLevel } from '@libs/llm/error-classifier';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
 import {
     CodeSuggestion,
@@ -15,12 +15,16 @@ import {
     dedupReviewWarnings,
     type ReviewWarning,
 } from '@libs/code-review/infrastructure/agents/engine/review-warnings';
-import { ReviewAgentCatalog } from './review-agent.catalog';
+import {
+    IReviewAgentCatalog,
+    REVIEW_AGENT_CATALOG_TOKEN,
+} from './review-agent.catalog';
 import {
     ReviewExecutionPlan,
     ReviewRiskPlanner,
 } from '../../domain/review-policy/review-risk-planner';
 import {
+    DEFAULT_REVIEW_POLICY,
     ReviewPolicy,
     ReviewPolicyConfig,
     resolveReviewPolicy,
@@ -81,7 +85,8 @@ export interface OrchestratorOutput {
 export class ReviewOrchestratorService {
     private readonly logger = createLogger(ReviewOrchestratorService.name);
     constructor(
-        private readonly agentCatalog: ReviewAgentCatalog,
+        @Inject(REVIEW_AGENT_CATALOG_TOKEN)
+        private readonly agentCatalog: IReviewAgentCatalog,
         private readonly riskPlanner: ReviewRiskPlanner,
     ) {}
 
@@ -93,7 +98,26 @@ export class ReviewOrchestratorService {
             reviewPolicy: policyConfig,
             ...agentInput
         } = input;
-        const reviewPolicy = resolveReviewPolicy(policyConfig);
+        let reviewPolicy: ReviewPolicy;
+        try {
+            reviewPolicy = resolveReviewPolicy(policyConfig);
+        } catch (error) {
+            this.logger.warn({
+                message:
+                    '[AGENT] Invalid review policy; falling back to the default policy',
+                context: ReviewOrchestratorService.name,
+                error: error instanceof Error ? error : undefined,
+                metadata: {
+                    organizationId:
+                        agentInput.organizationAndTeamData?.organizationId,
+                    repositoryFullName: agentInput.repositoryFullName,
+                    prNumber: agentInput.prNumber,
+                    policyVersion: policyConfig?.version,
+                    plannerStrategy: policyConfig?.planner?.strategy,
+                },
+            });
+            reviewPolicy = DEFAULT_REVIEW_POLICY;
+        }
         const executionPlan = this.riskPlanner.plan({
             reviewMode: agentInput.reviewMode,
             reviewOptions,

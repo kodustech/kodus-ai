@@ -39,11 +39,12 @@ export class WorkflowJobQueueService implements IJobQueueService {
         job: Omit<IWorkflowJob, 'id' | 'createdAt' | 'updatedAt'>,
     ): Promise<string> {
         if (job.idempotencyKey) {
-            const existing = await this.jobRepository.findByIdempotencyKey?.(
-                job.idempotencyKey,
-            );
-            if (existing) {
-                return existing.id;
+            const existingId =
+                await this.jobRepository.findIdByIdempotencyKey?.(
+                    job.idempotencyKey,
+                );
+            if (existingId) {
+                return existingId;
             }
         }
 
@@ -134,12 +135,12 @@ export class WorkflowJobQueueService implements IJobQueueService {
                 job.idempotencyKey &&
                 (error as { code?: string })?.code === '23505'
             ) {
-                const existing =
-                    await this.jobRepository.findByIdempotencyKey?.(
+                const existingId =
+                    await this.jobRepository.findIdByIdempotencyKey?.(
                         job.idempotencyKey,
                     );
-                if (existing) {
-                    return existing.id;
+                if (existingId) {
+                    return existingId;
                 }
             }
             throw error;

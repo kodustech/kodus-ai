@@ -9,7 +9,7 @@ export interface IWorkflowJobRepository {
     create(job: any, transactionManager?: unknown): Promise<any>;
     update(id: string, data: any): Promise<any>;
     findOne(id: string): Promise<any>;
-    findByIdempotencyKey?(idempotencyKey: string): Promise<any>;
+    findIdByIdempotencyKey?(idempotencyKey: string): Promise<string | null>;
     findMany(query: any): Promise<{ data: any[]; total?: number }>;
     prunePayloadForFinalizedJobs?(params: {
         olderThan: Date;

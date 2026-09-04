@@ -585,12 +585,20 @@ export class AutomationCodeReviewService implements Omit<
         payload: any,
     ) {
         if (!result) {
+            const message =
+                'Error processing the pull request: handler returned no result.';
             await this.updateAutomationExecution(
                 execution,
                 AutomationStatus.ERROR,
-                'Error processing the pull request: handler returned no result.',
+                message,
                 this._buildExecutionData(payload),
             );
+            this.logger.error({
+                message,
+                context: AutomationCodeReviewService.name,
+                error: new CodeReviewRunFailedError(message),
+                metadata: this.executionLogMetadata(payload),
+            });
             return;
         }
 
@@ -606,14 +614,38 @@ export class AutomationCodeReviewService implements Omit<
             'Kody Review Finished',
         );
 
-        this.logger.log({
-            message: `Successfully handled pull request for PR#${payload.pullRequest?.number}`,
-            context: AutomationCodeReviewService.name,
-            metadata: {
-                organizationAndTeamData: payload.organizationAndTeamData,
-                ...result,
-            },
-        });
+        const metadata = this.executionLogMetadata(payload, result);
+        if (finalStatus === AutomationStatus.ERROR) {
+            this.logger.error({
+                message: finalMessage,
+                context: AutomationCodeReviewService.name,
+                error: new CodeReviewRunFailedError(finalMessage),
+                metadata,
+            });
+        } else if (finalStatus === AutomationStatus.PARTIAL_ERROR) {
+            this.logger.warn({
+                message: finalMessage,
+                context: AutomationCodeReviewService.name,
+                metadata,
+            });
+        } else {
+            this.logger.log({
+                message: `Successfully handled pull request for PR#${payload.pullRequest?.number}`,
+                context: AutomationCodeReviewService.name,
+                metadata,
+            });
+        }
+    }
+
+    private executionLogMetadata(payload: any, result?: any) {
+        return {
+            organizationId: payload.organizationAndTeamData?.organizationId,
+            teamId: payload.organizationAndTeamData?.teamId,
+            repositoryId: payload.repository?.id,
+            pullRequestNumber: payload.pullRequest?.number,
+            correlationId: payload.correlationId,
+            pipelineErrors: result?.errors,
+        };
     }
 
     /**

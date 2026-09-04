@@ -170,4 +170,16 @@ describe('ReviewOrchestratorService dispatch', () => {
         expect(generalist.execute).not.toHaveBeenCalled();
         expect(out.suggestions).toEqual([]);
     });
+
+    it('falls back to the default policy when stored config is unsupported', async () => {
+        const { service } = setup();
+
+        const output = await service.execute({
+            ...inputFor(ALL_ON),
+            reviewPolicy: { version: '2' },
+        });
+
+        expect(output.reviewPolicy?.version).toBe('1');
+        expect(output.reviewPolicy?.planner.strategy).toBe('risk-based');
+    });
 });

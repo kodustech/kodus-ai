@@ -260,6 +260,9 @@ describe('AutomationCodeReviewService', () => {
         });
 
         it('turns a critical pipeline outcome into a permanent job failure', async () => {
+            const loggerError = jest
+                .spyOn((service as any).logger, 'error')
+                .mockImplementation(() => undefined);
             codeReviewHandlerService.handlePullRequest.mockResolvedValue({
                 statusInfo: {
                     status: 'error',
@@ -276,6 +279,16 @@ describe('AutomationCodeReviewService', () => {
             expect(
                 automationExecutionService.updateCodeReview,
             ).toHaveBeenCalledTimes(1);
+            expect(loggerError).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    context: 'AutomationCodeReviewService',
+                    metadata: expect.objectContaining({
+                        organizationId: 'org-1',
+                        repositoryId: 'repo-1',
+                        pullRequestNumber: 42,
+                    }),
+                }),
+            );
         });
     });
 });

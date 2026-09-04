@@ -20,7 +20,10 @@ describe('WebhookSignatureService', () => {
         const signature = `sha256=${createHmac('sha256', secret)
             .update(raw)
             .digest('hex')}`;
-        const service = serviceWith({ GITHUB_WEBHOOK_SECRET: secret });
+        const service = serviceWith({
+            WEBHOOK_SIGNATURE_VALIDATION_MODE: 'when-configured',
+            GITHUB_WEBHOOK_SECRET: secret,
+        });
 
         expect(
             service.validate(
@@ -31,7 +34,10 @@ describe('WebhookSignatureService', () => {
     });
 
     it('rejects a missing signature when a secret is configured', () => {
-        const service = serviceWith({ GITLAB_WEBHOOK_SECRET: 'secret' });
+        const service = serviceWith({
+            WEBHOOK_SIGNATURE_VALIDATION_MODE: 'when-configured',
+            GITLAB_WEBHOOK_SECRET: 'secret',
+        });
 
         expect(service.validate(PlatformType.GITLAB, request('{}'))).toEqual({
             valid: false,
@@ -50,11 +56,19 @@ describe('WebhookSignatureService', () => {
         });
     });
 
-    it('keeps legacy installations working in when-configured mode', () => {
+    it('keeps legacy installations working when no mode is configured', () => {
         const service = serviceWith({});
 
         expect(service.validate(PlatformType.BITBUCKET, request('{}'))).toEqual(
             { valid: true },
         );
+    });
+
+    it('does not enforce a newly configured secret until rollout is enabled', () => {
+        const service = serviceWith({ GITHUB_WEBHOOK_SECRET: 'new-secret' });
+
+        expect(service.validate(PlatformType.GITHUB, request('{}'))).toEqual({
+            valid: true,
+        });
     });
 });

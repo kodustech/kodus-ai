@@ -25,9 +25,11 @@ const PLATFORM_SECRET_KEYS: Partial<Record<PlatformType, string>> = {
 /**
  * Verifies provider webhook signatures before a payload is acknowledged.
  *
- * `when-configured` is the migration-safe default: existing installations keep
- * working, while setting either a provider-specific secret or the shared
- * fallback immediately enables fail-closed validation for that provider.
+ * Validation is disabled by default so configuring a secret cannot
+ * accidentally reject deliveries from existing hooks that have not been
+ * reprovisioned yet. Operators must sync the secret to every provider hook
+ * before explicitly selecting `required` (or the legacy `when-configured`
+ * mode).
  */
 @Injectable()
 export class WebhookSignatureService {
@@ -104,10 +106,14 @@ export class WebhookSignatureService {
             ?.trim()
             .toLowerCase();
 
-        if (raw === 'disabled' || raw === 'required') {
+        if (
+            raw === 'disabled' ||
+            raw === 'when-configured' ||
+            raw === 'required'
+        ) {
             return raw;
         }
-        return 'when-configured';
+        return 'disabled';
     }
 
     private secretFor(platformType: PlatformType): string | undefined {

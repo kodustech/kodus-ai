@@ -4,10 +4,12 @@ import {
     IsBoolean,
     IsEnum,
     IsIn,
+    IsInt,
     IsNumber,
     IsObject,
     IsOptional,
     IsString,
+    Min,
     ValidateNested,
 } from 'class-validator';
 
@@ -372,6 +374,144 @@ class LinkedRepositoryDto {
     ref?: string;
 }
 
+class ReviewAgentBudgetConfigDto {
+    @IsOptional()
+    @IsBoolean()
+    enabled?: boolean;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    maxSteps?: number;
+}
+
+class ReviewPolicyAgentsConfigDto {
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewAgentBudgetConfigDto)
+    'generalist'?: ReviewAgentBudgetConfigDto;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewAgentBudgetConfigDto)
+    'bug'?: ReviewAgentBudgetConfigDto;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewAgentBudgetConfigDto)
+    'security'?: ReviewAgentBudgetConfigDto;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewAgentBudgetConfigDto)
+    'performance'?: ReviewAgentBudgetConfigDto;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewAgentBudgetConfigDto)
+    'kody-rules'?: ReviewAgentBudgetConfigDto;
+}
+
+class ReviewAdaptiveBudgetConfigDto {
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    baselineFiles?: number;
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    stepsPerExtraFile?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    maxSteps?: number;
+}
+
+class ReviewModePolicyConfigDto {
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    maxParallelAgents?: number;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewPolicyAgentsConfigDto)
+    agents?: ReviewPolicyAgentsConfigDto;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewAdaptiveBudgetConfigDto)
+    adaptiveBudget?: ReviewAdaptiveBudgetConfigDto;
+}
+
+class ReviewPolicyModesConfigDto {
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewModePolicyConfigDto)
+    fast?: ReviewModePolicyConfigDto;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewModePolicyConfigDto)
+    normal?: ReviewModePolicyConfigDto;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewModePolicyConfigDto)
+    deep?: ReviewModePolicyConfigDto;
+}
+
+class ReviewPlannerConfigDto {
+    @IsOptional()
+    @IsIn(['mode-compatible', 'risk-based'])
+    strategy?: 'mode-compatible' | 'risk-based';
+
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    specialistRiskThreshold?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    largeChangeFiles?: number;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    largeChangeLines?: number;
+}
+
+class ReviewPolicyConfigDto {
+    @IsOptional()
+    @IsIn(['1'])
+    version?: string;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewPlannerConfigDto)
+    planner?: ReviewPlannerConfigDto;
+
+    @IsOptional()
+    @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewPolicyModesConfigDto)
+    modes?: ReviewPolicyModesConfigDto;
+}
+
 class CodeReviewConfigWithoutLLMProviderDto {
     @IsOptional()
     @IsString()
@@ -526,8 +666,10 @@ class CodeReviewConfigWithoutLLMProviderDto {
 
     @IsOptional()
     @IsObject()
+    @ValidateNested()
+    @Type(() => ReviewPolicyConfigDto)
     @ApiPropertyOptional({
-        type: Object,
+        type: ReviewPolicyConfigDto,
         description:
             'Versioned agent planning policy. Version 1 supports planner thresholds and per-mode agent budgets.',
     })

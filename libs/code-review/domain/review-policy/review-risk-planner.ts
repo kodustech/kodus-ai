@@ -102,8 +102,9 @@ export class ReviewRiskPlanner {
                 );
             }
 
+            const specialistCategorySet = new Set(specialistCategories);
             const remaining = enabled.filter(
-                (category) => !specialistCategories.includes(category),
+                (category) => !specialistCategorySet.has(category),
             );
             this.addGeneralist(selected, remaining, risks, reviewMode, input);
         }

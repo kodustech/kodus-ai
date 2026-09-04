@@ -82,6 +82,7 @@ import { KodyRulesAgentProvider } from '../infrastructure/agents/providers/kody-
 // ReflectionAgentProvider removed — verify/discover was hurting recall
 import { ReviewOrchestratorService } from '../infrastructure/agents/review-orchestrator.service';
 import {
+    REVIEW_AGENT_CATALOG_TOKEN,
     REVIEW_AGENT_TOKENS,
     ReviewAgentCatalog,
 } from '../infrastructure/agents/review-agent.catalog';
@@ -197,6 +198,10 @@ import { ReviewRiskPlanner } from '../domain/review-policy/review-risk-planner';
             useExisting: KodyRulesAgentProvider,
         },
         ReviewAgentCatalog,
+        {
+            provide: REVIEW_AGENT_CATALOG_TOKEN,
+            useExisting: ReviewAgentCatalog,
+        },
         ReviewRiskPlanner,
         // ReflectionAgentProvider removed
         ReviewOrchestratorService,
