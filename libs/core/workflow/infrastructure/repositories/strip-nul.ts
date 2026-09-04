@@ -29,7 +29,16 @@ const NUL_GLOBAL = /\u0000/g;
 const MAX_REPORTED_PATHS = 10;
 
 type Walk = {
-    seen: WeakSet<object>;
+    /**
+     * Original object -> its cleaned copy.
+     *
+     * A Set was not enough. Returning the ORIGINAL on revisit handed back an
+     * un-sanitised object, so any value reachable through a second reference
+     * kept its NULs and the INSERT failed exactly as before. A cycle is the
+     * obvious case; a SHARED reference is the common one — the same object
+     * hanging off two keys of a payload assembled from live pipeline state.
+     */
+    seen: WeakMap<object, unknown>;
     paths: string[];
     record: (path: string) => void;
 };
@@ -53,21 +62,28 @@ function walk<T>(value: T, path: string, ctx: Walk): T {
         return value;
     }
 
-    // A payload assembled from live pipeline state can carry a cycle. Without
-    // this guard the sanitiser would be a worse failure than the one it exists
-    // to prevent.
-    if (ctx.seen.has(value as object)) {
-        return value;
+    // Already walked: hand back the CLEANED copy, never the original. A payload
+    // assembled from live pipeline state can carry a cycle, and more often
+    // carries the same object under two keys; returning the input there left
+    // its NULs in place and the INSERT failed exactly as before.
+    const memo = ctx.seen.get(value as object);
+    if (memo !== undefined) {
+        return memo as T;
     }
-    ctx.seen.add(value as object);
 
     if (Array.isArray(value)) {
-        return value.map((item, i) =>
-            walk(item, `${path}[${i}]`, ctx),
-        ) as unknown as T;
+        // Registered BEFORE recursing so a cycle back into this array resolves
+        // to the copy being built rather than recursing forever.
+        const arrayOut: unknown[] = [];
+        ctx.seen.set(value as object, arrayOut);
+        value.forEach((item, i) => {
+            arrayOut.push(walk(item, `${path}[${i}]`, ctx));
+        });
+        return arrayOut as unknown as T;
     }
 
     const out: Record<string, unknown> = {};
+    ctx.seen.set(value as object, out);
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
         // A NUL is illegal in a jsonb KEY too, not only in a value.
         const childPath = path ? `${path}.${key}` : key;
@@ -82,7 +98,7 @@ function walk<T>(value: T, path: string, ctx: Walk): T {
 const newContext = (): Walk => {
     const paths: string[] = [];
     return {
-        seen: new WeakSet<object>(),
+        seen: new WeakMap<object, unknown>(),
         paths,
         record: (p) => {
             if (paths.length < MAX_REPORTED_PATHS) {

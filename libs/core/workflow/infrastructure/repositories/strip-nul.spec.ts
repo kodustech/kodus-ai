@@ -15,6 +15,24 @@ import { stripNulChars } from './strip-nul';
  */
 const NUL = '\u0000';
 
+/**
+ * Find a raw NUL anywhere in the structure.
+ *
+ * NOT `JSON.stringify(x).includes(NUL)`. That check reads as strict and tests
+ * nothing: stringify ESCAPES the character into the six literal characters
+ * `\u0000`, so the raw byte is never in the output to find. It passed on
+ * un-sanitised input twice while this was being written.
+ */
+const hasNul = (value: unknown, seen = new Set<unknown>()): boolean => {
+    if (typeof value === 'string') return value.includes(NUL);
+    if (value === null || typeof value !== 'object') return false;
+    if (seen.has(value)) return false;
+    seen.add(value);
+    return Object.entries(value as Record<string, unknown>).some(
+        ([k, v]) => k.includes(NUL) || hasNul(v, seen),
+    );
+};
+
 describe('stripNulChars', () => {
     it('removes the character jsonb cannot store', () => {
         expect(stripNulChars(`fix${NUL}/branch`)).toBe('fix/branch');
@@ -70,6 +88,52 @@ describe('stripNulChars', () => {
         expect(out.name).toBe('stage');
     });
 
+    it('cleans the object reached through the cycle, not just the first visit', () => {
+        // Asserting only `out.name` passed while `out.self.name` still carried
+        // the NUL -- and one un-sanitised string anywhere is the same rejected
+        // INSERT as none of them being sanitised.
+        const node: Record<string, unknown> = { name: `stage${NUL}` };
+        node.self = node;
+
+        const out = stripNulChars(node) as Record<string, any>;
+
+        expect(out.self.name).toBe('stage');
+        expect(out.self).toBe(out); // the copy points at itself, not the input
+        expect(hasNul(out)).toBe(false);
+    });
+
+    it('cleans an object reached through a SHARED reference', () => {
+        // The common case, and it needs no cycle at all: the same object
+        // hanging off two keys. The first visit was cleaned and the second
+        // handed back the original, NULs intact.
+        const shared = { name: `stage${NUL}` };
+        const payload = { a: shared, b: shared };
+
+        const out = stripNulChars(payload);
+
+        expect(out.a.name).toBe('stage');
+        expect(out.b.name).toBe('stage');
+        expect(hasNul(out)).toBe(false);
+    });
+
+    it('cleans a shared reference inside arrays too', () => {
+        const shared = { path: `src/a${NUL}.ts` };
+        const out = stripNulChars({ files: [shared, shared] });
+
+        expect(out.files[1].path).toBe('src/a.ts');
+        expect(hasNul(out)).toBe(false);
+    });
+
+    it('copies rather than mutating the object it was given', () => {
+        const shared = { name: `stage${NUL}` };
+        const payload = { a: shared, b: shared };
+
+        stripNulChars(payload);
+
+        // The sanitiser copies; the caller's object still has what it had.
+        expect(shared.name).toBe(`stage${NUL}`);
+    });
+
     it('survives a payload shaped like the one that failed', () => {
         const payload = {
             correlationId: 'abc-123',
@@ -83,8 +147,9 @@ describe('stripNulChars', () => {
             ],
         };
 
-        const cleaned = JSON.stringify(stripNulChars(payload));
-        expect(cleaned).not.toContain(NUL);
+        const out = stripNulChars(payload);
+        expect(hasNul(out)).toBe(false);
+        const cleaned = JSON.stringify(out);
         // Everything else survives intact — the point is to persist the job,
         // not to lose its content.
         expect(cleaned).toContain('## Summary');
