@@ -16,7 +16,18 @@ export type { FormattedSuggestion, SuggestionToFormat };
 
 const logger = createLogger('SuggestionFormatter');
 
-const FORMAT_TIMEOUT_MS = 90_000; // 90s — the secondary model can take >30s under load
+/**
+ * Hard budget for the formatting pass.
+ *
+ * Raised from 90s once reasoning was turned off below. Production had this pass
+ * landing WITHIN A SECOND of the old ceiling on ordinary batches (a batch of 7
+ * at 89.1s) and past it on 25 occasions in twelve hours, which is a ceiling
+ * chosen too close to the work. 120s buys headroom for a large batch or a slow
+ * provider without making a stuck call hold a review much longer — the pass is
+ * a secondary polish, and the deterministic fallback already covers whatever it
+ * fails to deliver.
+ */
+const FORMAT_TIMEOUT_MS = 120_000;
 
 const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
 
@@ -114,6 +125,16 @@ export async function formatSuggestionContent(
             }),
             runName: 'suggestion-formatter',
             timeoutMs: FORMAT_TIMEOUT_MS,
+            // Reasoning off. This pass REWRITES PROSE -- it decides nothing, it
+            // reformats a finding another model already made -- and production
+            // measured the models doing it spending 69-100% of their output
+            // tokens on reasoning to get there, which is what put the call on
+            // the edge of its own timeout (25 of 86 failures in twelve hours).
+            //
+            // Provider-agnostic on purpose: the switch resolves to effort
+            // 'none' and `buildProviderOptions` owns the per-vendor
+            // translation, so no thinking flag is written by hand here.
+            suppressReasoning: true,
             // Stamp the org so this pass's usage/cost lands in the org's
             // token-usage view instead of being recorded org-less (dropped).
             organizationId: options?.organizationId,

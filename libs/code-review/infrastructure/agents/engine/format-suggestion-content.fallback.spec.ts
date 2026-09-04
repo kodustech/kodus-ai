@@ -123,4 +123,28 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
 
         expect(out.get(0)?.suggestionContent).toBe('Polished prose.');
     });
+
+    describe('what it asks the model for', () => {
+        it('turns reasoning OFF — this pass rewrites prose, it decides nothing', async () => {
+            // The models doing this work spent 69-100% of their output tokens
+            // on reasoning, which is what put the call on the edge of its own
+            // timeout: 25 of 86 failures in twelve hours of production.
+            run.mockResolvedValue('[]');
+
+            await formatSuggestionContent(scaffolded(1));
+
+            expect(run.mock.calls[0][0].suppressReasoning).toBe(true);
+        });
+
+        it('gives the pass a 120s budget, not 90s', async () => {
+            // 90s was chosen too close to the work: a batch of seven landed at
+            // 89.1s. The fallback covers whatever this still fails to deliver,
+            // so the budget buys headroom without risking the review.
+            run.mockResolvedValue('[]');
+
+            await formatSuggestionContent(scaffolded(1));
+
+            expect(run.mock.calls[0][0].timeoutMs).toBe(120_000);
+        });
+    });
 });

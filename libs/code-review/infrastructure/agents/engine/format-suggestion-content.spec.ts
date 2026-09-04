@@ -238,7 +238,11 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             expect(arg.byokConfig).toBe(byokConfig);
             expect(arg.organizationId).toBe('org-123');
             expect(arg.runName).toBe('suggestion-formatter');
-            expect(arg.timeoutMs).toBe(90_000);
+            expect(arg.timeoutMs).toBe(120_000);
+            // This pass rewrites prose; it decides nothing, so it reasons about
+            // nothing. Left on, the models doing it spent 69-100% of their
+            // output tokens reasoning and routinely reached the old ceiling.
+            expect(arg.suppressReasoning).toBe(true);
             expect(typeof arg.user).toBe('string');
             // Plain text call — no schema is passed (the parse is deterministic here).
             expect(arg.schema).toBeUndefined();
@@ -287,12 +291,23 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             ['bare object envelope with no array', { result: { index: 0 } }],
             ['array of objects with the WRONG keys', '[{"idx": 0, "content": "x"}]'],
             ['array of PARTIAL objects (missing suggestionContent)', '[{"index": 0}]'],
-            [
-                'stringified JSON with escaped quotes (json_object mode)',
-                '"[{\\"index\\": 0, \\"suggestionContent\\": \\"x\\"}]"',
-            ],
             ['plain prose, no JSON at all', 'Here is the cleaned suggestion text.'],
         ];
+
+        it('RECOVERS JSON encoded inside a JSON string (json_object mode)', async () => {
+            // Previously listed as unrecoverable, because the parser grabbed the
+            // array with a hand-rolled regex that the escaped quotes defeated.
+            // It now goes through `normalizeEnvelope` — the same recovery
+            // nineteen other call sites already used — so the model's real
+            // answer survives instead of the whole batch degrading.
+            mockRun.mockResolvedValue(
+                '"[{\\"index\\": 0, \\"suggestionContent\\": \\"x\\"}]"' as any,
+            );
+
+            const result = await formatSuggestionContent([suggestion]);
+
+            expect(result.get(0)?.suggestionContent).toBe('x');
+        });
 
         it.each(unrecoverable)(
             'degrades to an EMPTY map (never wrong-but-non-empty) for: %s',
@@ -679,11 +694,25 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 29 — malformed JSON variants.
+        //
+        // A trailing comma is now RECOVERED: the parser goes through
+        // `extractJsonFromText`, which strips it deterministically. That is a
+        // repair the repository already owned and this call site had not
+        // adopted -- the model's real answer survives instead of the batch
+        // degrading. The other two are genuine JavaScript-not-JSON, which no
+        // amount of string surgery should be asked to guess at.
+        it('row29: recovers malformed JSON when the flaw is a trailing comma', async () => {
+            mockRun.mockResolvedValue('[{"index":0,"suggestionContent":"x"},]');
+
+            const result = await formatSuggestionContent([suggestion]);
+
+            expect(result.get(0)?.suggestionContent).toBe('x');
+        });
+
         it.each([
-            ['trailing comma', '[{"index":0,"suggestionContent":"x"},]'],
             ['single quotes', "[{'index':0,'suggestionContent':'x'}]"],
             ['unquoted keys', '[{index:0,suggestionContent:"x"}]'],
-        ])('row29: malformed JSON (%s) degrades to an empty map', async (_label, out) => {
+        ])('row29: fails safe on JavaScript-not-JSON (%s)', async (_label, out) => {
             mockRun.mockResolvedValue(out);
 
             const result = await formatSuggestionContent([suggestion]);
