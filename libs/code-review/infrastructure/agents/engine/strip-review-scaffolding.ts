@@ -37,6 +37,13 @@
  * Matching the numbered prefix as part of the label is what keeps a bare "1."
  * from surviving as its own fragment.
  *
+ * The third alternative is what makes the NUMBERED list work when a model
+ * flattens it onto one line: "1. WHAT: a 2. WHY: b 3. HOW: c". Without it the
+ * labels still came off (the '.' of "2." satisfies the punctuation rule) but the
+ * list numbers were left stranded mid-sentence — "a 2. b 3. c." Requiring a
+ * numbered prefix to FOLLOW keeps it narrow: prose has no number there, so
+ * "Here's why:" is still untouched.
+ *
  * TWO deliberate restrictions, both there to protect prose:
  *
  * A mid-line label must follow sentence-ending punctuation. Allowing it after
@@ -53,7 +60,7 @@
  * that was fine.
  */
 const LABEL_ANYWHERE =
-    /(?:^|\n|(?<=[.!?])[ \t]+)(?:\d+[.)][ \t]*)?(?:\*\*|__)?[ \t]*(?:WHAT|WHY|HOW)[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*/g;
+    /(?:^|\n|(?<=[.!?])[ \t]+|(?<=\S)[ \t]+(?=\d+[.)][ \t]*))(?:\d+[.)][ \t]*)?(?:\*\*|__)?[ \t]*(?:WHAT|WHY|HOW)[ \t]*(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*/g;
 
 /** A control character, so it can never collide with the content itself. */
 const SENTINEL = '\u0001';

@@ -100,6 +100,28 @@ describe('stripReviewScaffolding', () => {
         expect(out).toContain('guard the call');
     });
 
+    it('handles the numbered list flattened onto one line', () => {
+        // Models flatten the list the prompt asks for. The labels came off even
+        // before this case was handled — the '.' of "2." satisfies the
+        // punctuation rule — but the list NUMBERS were left stranded:
+        // "a 2. b 3. c." Garbage rather than a leak, and still not something to
+        // put in front of a customer.
+        const out = stripReviewScaffolding('1. WHAT: a 2. WHY: b 3. HOW: c');
+
+        expect(out).not.toMatch(/WHAT:|WHY:|HOW:/);
+        expect(out).not.toMatch(/\b[23]\.\s/);
+        // Each part is closed off, the same as every other form.
+        expect(out).toBe('a. b. c.');
+    });
+
+    it('still ignores a number that is not introducing a label', () => {
+        // The narrow part of the rule: the numbered prefix has to be followed by
+        // the label. Prose that merely contains a numbered clause is untouched.
+        const prose = 'See item 2. why: it fails';
+
+        expect(stripReviewScaffolding(prose)).toBe(prose);
+    });
+
     it('handles a label on its own line, text below', () => {
         const out = stripReviewScaffolding(
             'WHAT:\nthe collection can be empty\nWHY:\nthe caller dereferences it',
