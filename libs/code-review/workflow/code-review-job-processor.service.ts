@@ -122,26 +122,39 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 );
                 error.name = 'ByokConcurrencySlotExhausted';
 
-                // Notify ONCE. `process()` does not check job status on entry,
-                // so a redelivery (a broker retry, or the stale-job reaper
-                // picking the row back up) runs this branch again on a job that
-                // is already terminal -- and `notifyReviewFailed` reaches the
-                // pull request author, so a repeat is visible to a customer.
+                // Notify ONCE, keyed on the NOTIFICATION -- not on the job
+                // status.
                 //
-                // Read the CURRENT status rather than `job.status`: `job` is
-                // the message payload, which describes the row as it was when
-                // the message was written, not as it is now.
-                const persisted = await this.jobRepository
-                    .findOne(jobId)
-                    .catch(() => null);
-                const alreadyTerminal = persisted?.status === JobStatus.FAILED;
+                // `process()` does not check status on entry, so a redelivery
+                // (a broker retry, or the stale-job reaper picking the row back
+                // up) runs this branch again and `notifyReviewFailed` reaches
+                // the pull request author a second time.
+                //
+                // Gating on `status === FAILED` looked like the fix and was a
+                // trap: `handleFailure` writes that status whether or not the
+                // author was ever told. A crash between the two, or a notify
+                // that failed inside its own catch, would leave the job FAILED
+                // and every later attempt skipping the notice -- recreating the
+                // "review failed and nobody was told" defect this branch exists
+                // to prevent. A marker written beside the notification cannot
+                // be set by the failure path.
+                //
+                // `job` is the row this method loaded at entry, so its metadata
+                // is current; no second read is needed.
+                const previousMetadata = (job.metadata ?? {}) as Record<
+                    string,
+                    any
+                >;
+                const alreadyNotified = Boolean(
+                    previousMetadata.byokSlotExhausted?.notifiedAt,
+                );
 
                 await this.handleFailure(jobId, error);
 
-                if (alreadyTerminal) {
+                if (alreadyNotified) {
                     this.logger.debug({
                         message:
-                            'BYOK slot exhausted on a job already marked failed — not notifying again',
+                            'BYOK slot exhausted on a job whose author was already told — not notifying again',
                         context: CodeReviewJobProcessorService.name,
                         metadata: { jobId, correlationId },
                     });
@@ -149,6 +162,34 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 }
 
                 await this.notifyReviewFailed(job, error, correlationId);
+
+                await this.jobRepository
+                    .update(jobId, {
+                        metadata: {
+                            ...previousMetadata,
+                            byokSlotExhausted: {
+                                notifiedAt: new Date().toISOString(),
+                                deferredCount: admission.deferredCount,
+                            },
+                        },
+                    })
+                    .catch((markError) => {
+                        // Failing to record it means a redelivery may notify
+                        // again. That is the direction to fail in -- a repeat
+                        // is a nuisance, silence is the original bug -- but it
+                        // is logged rather than swallowed so a persistent
+                        // failure is not mistaken for mysterious duplicates.
+                        this.logger.warn({
+                            message:
+                                'Could not record that the exhausted-slot notice was sent — a redelivery may repeat it',
+                            context: CodeReviewJobProcessorService.name,
+                            error:
+                                markError instanceof Error
+                                    ? markError
+                                    : undefined,
+                            metadata: { jobId, correlationId },
+                        });
+                    });
                 return;
             }
 
