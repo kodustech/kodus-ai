@@ -188,6 +188,10 @@ export interface PullRequestExecutionsPagination {
     // DB-level filters (see the use-case), so the client trusts it as exact only
     // when no Mongo-side suggestion/author filter is active.
     distinctPrTotal?: number;
+    // Resume point for the next fetch. Absent once the scan is exhausted —
+    // that absence, not a short page, is what ends the infinite list.
+    nextCursor?: string;
+    hasNextPage?: boolean;
 }
 
 export type PullRequestExecutionsPayload =

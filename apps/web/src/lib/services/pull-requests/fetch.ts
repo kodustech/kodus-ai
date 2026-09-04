@@ -6,6 +6,11 @@ export interface PullRequestFilters {
     repositoryName?: string;
     limit?: number;
     page?: number;
+    // Resume point echoed back from `pagination.nextCursor`. Preferred over
+    // `page`: a page consumes more executions than it returns whenever a
+    // post-query filter drops rows, so a page-number offset lands inside the
+    // window the previous page already served.
+    cursor?: string;
     pullRequestTitle?: string;
     pullRequestNumber?: string;
     hasSentSuggestions?: boolean;
@@ -43,7 +48,8 @@ export const PULL_REQUEST_API = {
         if (filters?.repositoryName)
             params.append("repositoryName", filters.repositoryName);
         if (filters?.limit) params.append("limit", filters.limit.toString());
-        if (filters?.page) params.append("page", filters.page.toString());
+        if (filters?.cursor) params.append("cursor", filters.cursor);
+        else if (filters?.page) params.append("page", filters.page.toString());
         if (filters?.pullRequestTitle)
             params.append("pullRequestTitle", filters.pullRequestTitle);
         if (filters?.pullRequestNumber)

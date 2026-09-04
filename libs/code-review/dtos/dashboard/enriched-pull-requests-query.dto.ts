@@ -37,6 +37,27 @@ export class EnrichedPullRequestsQueryDto {
     @ApiPropertyOptional()
     page?: number = 1;
 
+    /**
+     * Opaque resume point, echoed back from the previous response's
+     * `pagination.nextCursor`.
+     *
+     * `page` cannot express where the previous page stopped. Filling a page
+     * loops over batches and discards rows that fail a post-query filter, so a
+     * page of 30 can consume 60 or 300 executions; `(page - 1) * limit` then
+     * restarts inside the window that page already served. The cursor carries
+     * the position of the last execution actually READ.
+     *
+     * `page` is still honoured when no cursor is given — first page, an old
+     * client, or a deliberate jump to an offset.
+     */
+    @IsOptional()
+    @IsString()
+    @ApiPropertyOptional({
+        description:
+            'Resume point from the previous response (pagination.nextCursor). Takes precedence over `page`.',
+    })
+    cursor?: string;
+
     @IsOptional()
     @IsBoolean()
     @Type(() => String)

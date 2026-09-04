@@ -43,6 +43,7 @@ jest.mock('@libs/llm/error-classifier', () => {
         classifyLLMError: (e: any) => ({ category: e?.__cat ?? 'UNKNOWN' }),
         isTerminalCategory: (c: string) => TERMINAL.has(c),
         isAbortOrHardTimeout: (e: any) => e?.__abort === true,
+        retriesWereExhausted: (e: any) => e?.__exhausted === true,
     };
 });
 
@@ -89,6 +90,27 @@ describe('shouldFailoverToNextModel', () => {
         expect(shouldFailoverToNextModel(err('RATE_LIMIT'))).toBe(false);
         expect(shouldFailoverToNextModel(err('CONTEXT_OVERFLOW'))).toBe(false);
         expect(shouldFailoverToNextModel(err('UNKNOWN'))).toBe(false);
+    });
+
+    it('DOES cascade on a rate-limit that outlived its same-model retries', () => {
+        // The limiter owns a 429 it can still wait out; it does not own one that
+        // already survived exponential backoff. See retriesWereExhausted.
+        expect(
+            shouldFailoverToNextModel(err('RATE_LIMIT', { __exhausted: true })),
+        ).toBe(true);
+    });
+
+    it('keeps context-overflow and unknown refused even when exhausted', () => {
+        // Exhaustion says the failure is PERSISTENT, not that a peer model can
+        // fix it: the prompt is still too big, and unknown is still unknown.
+        expect(
+            shouldFailoverToNextModel(
+                err('CONTEXT_OVERFLOW', { __exhausted: true }),
+            ),
+        ).toBe(false);
+        expect(
+            shouldFailoverToNextModel(err('UNKNOWN', { __exhausted: true })),
+        ).toBe(false);
     });
 
     it('does NOT cascade on abort / hard-timeout even if otherwise transient', () => {
