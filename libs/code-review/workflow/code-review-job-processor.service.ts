@@ -110,6 +110,22 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                 return;
             }
 
+            // The gate gave up: no BYOK slot ever came free. Record it as a
+            // failure and tell the author. Returning quietly here would be
+            // indistinguishable from a review that ran and found nothing,
+            // which is exactly how four organizations went a full day
+            // without reviews and without an error.
+            if (admission.kind === 'exhausted') {
+                const error = new Error(
+                    `No BYOK concurrency slot became available after ${admission.deferredCount} attempts. ` +
+                        `Reviews for this model are queued behind a slot that is not being released.`,
+                );
+                error.name = 'ByokConcurrencySlotExhausted';
+                await this.handleFailure(jobId, error);
+                await this.notifyReviewFailed(job, error, correlationId);
+                return;
+            }
+
             if (admission.kind === 'acquired') {
                 acquiredLock = admission.lock;
             }
