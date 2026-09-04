@@ -117,29 +117,41 @@ export const useInfinitePullRequestExecutions = (
         pageSize,
     ]);
 
+    // Paged by cursor, not by page number. The backend fills a page by
+    // discarding executions that fail a post-query filter, so it reads more
+    // rows than it returns; `page * limit` restarted inside the window the
+    // previous page had already served, and every fetch came back mostly
+    // repeats. The Map below hid that (repeats overwrite), leaving a scroll
+    // that loaded a full page and grew by a handful of rows — and, when the
+    // filters were aggressive enough, never terminated. `nextCursor` is the
+    // position the last page stopped READING at.
     const { data: infiniteData, ...query } = useInfiniteQuery<
         PullRequestExecutionsResponse,
         Error,
-        InfiniteData<PullRequestExecutionsResponse, number>,
+        InfiniteData<PullRequestExecutionsResponse, string | undefined>,
         [string, PullRequestFilters],
-        number
+        string | undefined
     >({
         queryKey: ["pull-request-executions", baseFilters],
-        initialPageParam: 1,
-        queryFn: async ({ pageParam = 1 }) => {
-            const params = { ...baseFilters, page: pageParam };
+        initialPageParam: undefined,
+        queryFn: async ({ pageParam }) => {
+            const params = pageParam
+                ? { ...baseFilters, cursor: pageParam }
+                : baseFilters;
             const url = PULL_REQUEST_API.GET_EXECUTIONS(params);
 
             return axiosAuthorized.fetcher<PullRequestExecutionsResponse>(url);
         },
-        getNextPageParam: (lastPage, allPages) => {
-            const lastPageSize = normalizeExecutions(lastPage?.data).length;
-
-            if (lastPageSize < pageSize) {
+        getNextPageParam: (lastPage) => {
+            const payload = lastPage?.data;
+            if (!payload || Array.isArray(payload)) {
                 return undefined;
             }
 
-            return allPages.length + 1;
+            // Absent once the scan is exhausted, which is also the only thing
+            // that ends the list — page length no longer decides, because a
+            // page can be short while more rows remain behind the filters.
+            return payload.pagination?.nextCursor ?? undefined;
         },
         retry: false,
     });
