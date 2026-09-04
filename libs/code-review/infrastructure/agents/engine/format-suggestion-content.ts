@@ -142,9 +142,27 @@ export async function formatSuggestionContent(
 
         const { formatted, parseOk } = parseFormatResponse(text || '');
         if (!parseOk) {
+            // Shape, never content. This text is model output ABOUT a customer's
+            // code, so a preview of it does not belong in a log store -- the
+            // same rule the NUL sanitiser follows when it reports field paths
+            // and not values.
+            //
+            // What the character count alone could not answer: whether the
+            // model REFUSED (no bracket anywhere) or answered in a shape the
+            // parser could not read (a bracket present, recovery still failed).
+            // Those are different problems with different fixes.
+            const raw = text || '';
             logger.warn({
-                message: `[FORMATTER] No JSON array in response (${(text || '').length} chars)`,
+                message: `[FORMATTER] No JSON array in response (${raw.length} chars)`,
                 context: 'SuggestionFormatter',
+                metadata: {
+                    organizationId: options?.organizationId,
+                    chars: raw.length,
+                    hasBracket: raw.includes('['),
+                    hasFence: raw.includes('```'),
+                    startsWith: raw.trimStart().charAt(0) || '(empty)',
+                    suggestionCount: suggestions.length,
+                },
             });
             return scaffoldingFallback(
                 suggestions,
