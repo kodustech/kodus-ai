@@ -246,12 +246,36 @@ function matchByHttpStatus(
     return LlmErrorCategory.UNKNOWN;
 }
 
+/**
+ * THE quota vocabulary. There used to be two: this one (quota/credit/billing/
+ * payment) decided the ambiguous 429, while `matchByMessage` carried a much
+ * richer list. Any wording only the richer list knew about was therefore read
+ * as RATE_LIMIT on a 429 -- retry-worthy -- instead of the terminal
+ * QUOTA_EXCEEDED, so we retried accounts that could only be fixed by paying.
+ *
+ * Z.AI/GLM is how it surfaced: "Insufficient balance or no resource package.
+ * Please recharge." says neither quota nor credit, and four GLM scopes in
+ * production were being retried against a spent balance.
+ *
+ * One list, both callers.
+ */
 function looksLikeQuota(lower: string): boolean {
     return (
         lower.includes('quota') ||
         lower.includes('credit') ||
         lower.includes('billing') ||
-        lower.includes('payment')
+        lower.includes('payment') ||
+        // "balance"/"recharge": Z.AI, GLM and other OpenAI-compatible vendors
+        // word a spent prepaid balance this way.
+        lower.includes('insufficient balance') ||
+        lower.includes('recharge') ||
+        // Account-level billing suspension, usually as prose without a
+        // billing-shaped status code.
+        lower.includes('suspended') ||
+        lower.includes('spending limit') ||
+        lower.includes('failure to pay') ||
+        lower.includes('past invoices') ||
+        lower.includes('past due')
     );
 }
 
@@ -271,23 +295,8 @@ function looksLikeModelAccessDenied(lower: string): boolean {
 }
 
 function matchByMessage(lower: string): LlmErrorCategory {
-    if (
-        lower.includes('insufficient_quota') ||
-        lower.includes('insufficient quota') ||
-        lower.includes('credit_balance_too_low') ||
-        lower.includes('insufficient credit') || // singular OR plural
-        lower.includes('quota exceeded') ||
-        lower.includes('billing') ||
-        lower.includes('payment required') ||
-        // Account-level billing suspension (Moonshot/Kimi & OpenAI-compatible
-        // return this as prose, often without a 402/403 status). Without these
-        // it classified as UNKNOWN and got re-logged as `error` at every stage.
-        lower.includes('suspended') ||
-        lower.includes('spending limit') ||
-        lower.includes('failure to pay') ||
-        lower.includes('past invoices') ||
-        lower.includes('past due')
-    ) {
+    // Same vocabulary the 429 branch uses -- see looksLikeQuota.
+    if (looksLikeQuota(lower)) {
         return LlmErrorCategory.QUOTA_EXCEEDED;
     }
     if (
