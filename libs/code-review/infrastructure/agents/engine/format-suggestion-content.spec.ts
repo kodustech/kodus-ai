@@ -216,6 +216,68 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             // Plain text call — no schema is passed (the parse is deterministic here).
             expect(arg.schema).toBeUndefined();
         });
+
+        it('preserves the slot OpenRouter routing pins while forcing reasoning OFF (#1851, kody code-review)', async () => {
+            mockRun.mockResolvedValue(
+                '[{"index": 0, "suggestionContent": "ok"}]',
+            );
+            // A BYOK slot on OpenRouter with pinned routing.
+            const byokConfig = {
+                provider: 'open_router',
+                model: 'deepseek/deepseek-v4-flash',
+                openrouterProviderOrder: ['fireworks', 'together'],
+                openrouterAllowFallbacks: false,
+            } as any;
+
+            await formatSuggestionContent([suggestion], { byokConfig });
+
+            const arg = mockRun.mock.calls[0][0];
+            // Routing pins must survive the reasoning-off override (otherwise the
+            // org's provider ordering/fallback exclusions are silently dropped).
+            expect(arg.providerOptions).toMatchObject({
+                openrouter: {
+                    provider: {
+                        order: ['fireworks', 'together'],
+                        allow_fallbacks: false,
+                    },
+                },
+            });
+            // OpenRouter expresses reasoning-off by OMITTING the effort param.
+            expect(arg.providerOptions).not.toHaveProperty(
+                'openrouter.reasoning',
+            );
+        });
+
+        it('emits thinking:disabled for a thinking-by-default DeepSeek BYOK slot (the #1851 cause)', async () => {
+            mockRun.mockResolvedValue(
+                '[{"index": 0, "suggestionContent": "ok"}]',
+            );
+            const byokConfig = {
+                provider: 'openai_compatible',
+                model: 'accounts/fireworks/models/deepseek-v4-flash-0731',
+            } as any;
+
+            await formatSuggestionContent([suggestion], { byokConfig });
+
+            const arg = mockRun.mock.calls[0][0];
+            expect(arg.providerOptions).toEqual({
+                openaiCompatible: { thinking: { type: 'disabled' } },
+            });
+        });
+
+        it('forces reasoning OFF on the env/managed path (no BYOK slot)', async () => {
+            mockRun.mockResolvedValue(
+                '[{"index": 0, "suggestionContent": "ok"}]',
+            );
+
+            // No byokConfig → env/managed default. The formatter must still not
+            // be left thinking-by-default.
+            await formatSuggestionContent([suggestion]);
+
+            const arg = mockRun.mock.calls[0][0];
+            expect(arg.byokConfig).toBeUndefined();
+            expect(arg.providerOptions).toBeDefined();
+        });
     });
 
     // -- LAYER 2: OFF-SCHEMA / N-MODEL ROBUSTNESS (the #1786 class) ----------
