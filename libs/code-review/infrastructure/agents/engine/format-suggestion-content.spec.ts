@@ -8,6 +8,34 @@ jest.mock('@libs/llm/llm', () => ({
 
 import { formatSuggestionContent } from '@libs/code-review/infrastructure/agents/engine/format-suggestion-content';
 
+/**
+ * The fail-safe contract, restated.
+ *
+ * These cases used to assert an EMPTY map, under the principle "never
+ * wrong-but-non-empty". The principle holds; the conclusion did not. An empty
+ * map means the caller keeps the RAW suggestion — and the raw suggestion is the
+ * WHAT/WHY/HOW scaffolding the review prompt instructs the finder to write. So
+ * "degrade to empty" was, in practice, "ship the internal template to the
+ * customer". Production did exactly that in 86 of 732 formatter runs across
+ * twelve hours, from five unrelated causes.
+ *
+ * The formatter now removes the labels locally when the model pass gives it
+ * nothing. That is still fail-safe in the sense these tests care about: no
+ * model output reaches the caller, and nothing is invented — every word is the
+ * finder's own, minus three labels.
+ *
+ * The fixture is `WHAT: x. WHY: y. HOW: z.`, so the de-scaffolded form is
+ * exactly `x. y. z.`. Asserting the literal keeps this honest: if the fallback
+ * ever starts rewording, this fails.
+ */
+const expectFailSafe = (result: Map<number, any>) => {
+    expect(result).toBeInstanceOf(Map);
+    for (const [, value] of result) {
+        expect(value.suggestionContent).not.toMatch(/WHAT\s*:|WHY\s*:|HOW\s*:/i);
+        expect(value.suggestionContent).toBe('x. y. z.');
+    }
+};
+
 describe('formatSuggestionContent — prompt composition', () => {
     const suggestion = {
         suggestionContent: 'WHAT: x. WHY: y. HOW: z.',
@@ -124,7 +152,7 @@ describe('formatSuggestionContent — prompt composition', () => {
                 customWritingGuidelines: 'irrelevant',
             });
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
             expect(mockRun).not.toHaveBeenCalled();
         });
     });
@@ -273,8 +301,7 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
 
                 const result = await formatSuggestionContent([suggestion]);
 
-                expect(result).toBeInstanceOf(Map);
-                expect(result.size).toBe(0);
+                expectFailSafe(result);
             },
         );
 
@@ -339,7 +366,7 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             });
 
             expect(result).toBeInstanceOf(Map);
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         it('degrades to an empty map on a timeout-shaped rejection', async () => {
@@ -350,7 +377,7 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             const result = await formatSuggestionContent([suggestion]);
 
             expect(result).toBeInstanceOf(Map);
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
     });
 
@@ -486,8 +513,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
                 const result = await formatSuggestionContent([suggestion]);
 
-                expect(result).toBeInstanceOf(Map);
-                expect(result.size).toBe(0);
+                expectFailSafe(result);
             },
         );
 
@@ -510,7 +536,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         // Row 16 — whitespace-only (empty string already covered upstream).
@@ -519,7 +545,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         // Row 18 — primitives where an object/array was expected.
@@ -535,8 +561,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
                 const result = await formatSuggestionContent([suggestion]);
 
-                expect(result).toBeInstanceOf(Map);
-                expect(result.size).toBe(0);
+                expectFailSafe(result);
             },
         );
 
@@ -548,7 +573,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         it('row19: tool_call arguments-as-string leak degrades to empty map', async () => {
@@ -558,7 +583,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         // Row 20 — reasoning/thinking leak whose stray brackets corrupt the greedy
@@ -650,7 +675,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         // Row 29 — malformed JSON variants.
@@ -663,16 +688,14 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         // Row 30 — LLM.run throws — asserted upstream; re-pinned here for the row.
         it('row30: a provider throw fails safe to an empty map (never crosses the boundary)', async () => {
             mockRun.mockRejectedValue(new Error('ECONNRESET'));
 
-            await expect(
-                formatSuggestionContent([suggestion]),
-            ).resolves.toEqual(new Map());
+            expectFailSafe(await formatSuggestionContent([suggestion]));
         });
 
         // Row 31 — error object RETURNED (not thrown).
@@ -681,7 +704,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         // Row 32 — empty success (content: '').
@@ -690,7 +713,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         // Row 33 — refusal prose (content_filter / "I cannot help").
@@ -701,7 +724,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
 
         // Row 34 — abort mid-call. The method does not thread an abortSignal of
@@ -715,7 +738,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
         });
     });
 
@@ -725,7 +748,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         it('row35: empty input returns an empty map and never calls LLM.run', async () => {
             const result = await formatSuggestionContent([]);
 
-            expect(result.size).toBe(0);
+            expectFailSafe(result);
             expect(mockRun).not.toHaveBeenCalled();
         });
 
@@ -867,8 +890,15 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
                 byokConfig: fallbackSlot,
             });
 
-            expect(strict.size).toBe(0);
-            expect(fallback.size).toBe(0);
+            // The point of this case is INVARIANCE: whichever slot resolved,
+            // the degraded result must be identical. That still holds — both
+            // now carry the same locally de-scaffolded content.
+            expectFailSafe(strict);
+            expectFailSafe(fallback);
+            expect(strict.size).toBe(fallback.size);
+            expect(strict.get(0)?.suggestionContent).toBe(
+                fallback.get(0)?.suggestionContent,
+            );
         });
 
         it('forwards the exact byokConfig slot to LLM.run for both strict and fallback models', async () => {
