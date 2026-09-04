@@ -194,4 +194,33 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
             expect(result.get(0)?.suggestionContent).toContain('problem 0');
         });
     });
+
+    describe('a decoy array must never be mistaken for the answer', () => {
+        it('ignores a suggestion-shaped array nested in a leading object', async () => {
+            // The worst failure available here. A leading object carrying its
+            // own array puts a suggestion-SHAPED value in front of the real
+            // one; anchoring on the first bracket parsed it cleanly, so the
+            // decoy shipped to the pull request as the review while the real
+            // answer AND the scaffolding fallback were both discarded. Wrong
+            // content presented as the review is worse than either failure this
+            // recovery exists to prevent.
+            run.mockResolvedValue(
+                '{"a":[{"index":0,"suggestionContent":"DECOY"}],"b":1} [{"index":0,"suggestionContent":"REAL"}]',
+            );
+
+            const result = await formatSuggestionContent(scaffolded(1));
+
+            expect(result.get(0)?.suggestionContent).toBe('REAL');
+        });
+
+        it('finds the real array past a bracket that lives inside a string', async () => {
+            run.mockResolvedValue(
+                '{"note":"[not json]"} [{"index":0,"suggestionContent":"REAL"}]',
+            );
+
+            const result = await formatSuggestionContent(scaffolded(1));
+
+            expect(result.get(0)?.suggestionContent).toBe('REAL');
+        });
+    });
 });

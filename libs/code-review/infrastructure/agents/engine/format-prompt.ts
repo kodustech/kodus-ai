@@ -2,7 +2,10 @@
  * Pure suggestion-format prompt + response parse — shared by production
  * (`format-suggestion-content.ts`) and the format eval so there is no prompt drift.
  */
-import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
+import {
+    extractJsonFromText,
+    normalizeEnvelope,
+} from '@libs/llm/structured-output-repair';
 
 export interface SuggestionToFormat {
     suggestionContent: string;
@@ -66,6 +69,56 @@ Suggestions to clean:
 ${suggestionsText}`;
 }
 
+/**
+ * Index of the first `[` that opens at the TOP level — outside every earlier
+ * balanced value and outside every string. Returns -1 when there is none.
+ *
+ * Anchoring on `text.indexOf('[')` was not safe. A leading object carrying its
+ * own array — `{"a":[{"index":0,"suggestionContent":"…"}],"b":1}` followed by
+ * the real answer — puts a suggestion-SHAPED array in front of the one the
+ * model actually meant. Slicing there parses cleanly, so `parseOk` goes true
+ * and that decoy ships to the pull request while both the real answer and the
+ * scaffolding fallback are discarded. Wrong content presented as the review is
+ * a worse outcome than either failure this recovery exists to prevent.
+ */
+function firstTopLevelBracket(text: string): number {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (ch === '\\') {
+                escaped = true;
+            } else if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (ch === '"') {
+            inString = true;
+        } else if (ch === '[') {
+            if (depth === 0) {
+                return i;
+            }
+            depth++;
+        } else if (ch === '{') {
+            depth++;
+        } else if (ch === ']' || ch === '}') {
+            if (depth > 0) {
+                depth--;
+            }
+        }
+    }
+
+    return -1;
+}
+
 /** Wrapper keys models reach for when they decline to answer with a bare array. */
 const ARRAY_ALIASES = [
     'suggestions',
@@ -117,7 +170,7 @@ function extractSuggestionArray(text: string): unknown[] | null {
         }
 
         if (typeof value !== 'string') {
-            return null;
+            break;
         }
 
         // Still a string after normalisation → JSON encoded inside a JSON
@@ -125,7 +178,10 @@ function extractSuggestionArray(text: string): unknown[] | null {
         try {
             const unwrapped = JSON.parse(value);
             if (typeof unwrapped !== 'string') {
-                return null;
+                // Parsed to something that is not a nested string — the
+                // envelope pass already had its chance at it. Fall through to
+                // the last-resort rules rather than giving up here.
+                break;
             }
             value = unwrapped;
         } catch {
@@ -143,9 +199,10 @@ function extractSuggestionArray(text: string): unknown[] | null {
     // sending the whole batch to the scaffolding fallback and giving up the
     // prose polish for nothing.
     //
-    // Slicing from the first `[` is no worse than that regex in the case both
-    // fail (a `[` inside a leading string), and recovers the cases it handled.
-    const firstBracket = text.indexOf('[');
+    // The bracket has to open at the TOP level: one nested inside a leading
+    // object is a decoy, and accepting it would ship the wrong content as the
+    // review. See firstTopLevelBracket.
+    const firstBracket = firstTopLevelBracket(text);
     if (firstBracket > 0) {
         const tail = normalizeEnvelope(
             text.slice(firstBracket),
@@ -157,7 +214,48 @@ function extractSuggestionArray(text: string): unknown[] | null {
         }
     }
 
+    // Nothing at the top level. The text may still be a single wrapper object
+    // whose key is one we do not know -- {"whatever": [...]}. Lifting it is safe
+    // ONLY when there is exactly one array-valued key: with two, there is no
+    // basis for choosing, and choosing wrong is how a decoy ships as the review.
+    //
+    // This is deliberately the LAST rule, after the top-level scan. When both a
+    // wrapper array and a top-level array exist, the top-level one is the
+    // model's answer and the nested one is the decoy.
+    const lone = loneArrayInObject(text);
+    if (lone) {
+        return lone;
+    }
+
     return null;
+}
+
+/**
+ * The single array inside a lone wrapper object, or null when the text is not
+ * one object, or when the object holds none or several arrays.
+ */
+function loneArrayInObject(text: string): unknown[] | null {
+    const candidate = extractJsonFromText(text);
+    if (!candidate) {
+        return null;
+    }
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(candidate);
+    } catch {
+        return null;
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+    }
+
+    const arrays = Object.values(parsed as Record<string, unknown>).filter(
+        Array.isArray,
+    ) as unknown[][];
+
+    return arrays.length === 1 ? arrays[0] : null;
 }
 
 /**
