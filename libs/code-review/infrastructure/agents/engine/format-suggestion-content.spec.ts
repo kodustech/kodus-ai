@@ -144,8 +144,9 @@ describe('formatSuggestionContent — prompt composition', () => {
 // deepseek / z-ai fall back to json_object mode and emit stringified JSON, bare
 // wrappers, string-typed fields, single objects instead of arrays). The failure
 // we guard against is the method turning that into a WRONG-BUT-NON-EMPTY result,
-// or throwing past its boundary. The documented fallback is an EMPTY map
-// ("comments still ship, minus the prose polish") — never a wrong map.
+// or throwing past its boundary. The documented fallback (issue #1851) is the
+// MECHANICAL strip — WHAT/WHY/HOW removed into prose, improvedCode preserved —
+// never a wrong map, and never the raw scaffolding.
 // ---------------------------------------------------------------------------
 describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
     const suggestion = {
@@ -247,10 +248,10 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             ]);
         });
 
-        // Shapes that CANNOT be recovered — these MUST degrade to the
-        // documented fallback (an EMPTY map), never a wrong-but-non-empty one.
-        // Each asserts size === 0 exactly, so a silent keep-all/keep-some would
-        // fail the test.
+        // Shapes that CANNOT be recovered by the LLM parse — these must degrade
+        // to the MECHANICAL fallback (label-stripped prose), never a
+        // wrong-but-non-empty LLM interpretation, and never the raw scaffolding.
+        // Each asserts exactly: one entry per suggestion, WHAT/WHY/HOW removed.
         const unrecoverable: Array<[string, unknown]> = [
             ['null', null],
             ['undefined', undefined],
@@ -267,14 +268,19 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
         ];
 
         it.each(unrecoverable)(
-            'degrades to an EMPTY map (never wrong-but-non-empty) for: %s',
+            'degrades to the MECHANICAL strip (labels removed, never raw) for: %s',
             async (_label, modelOutput) => {
                 mockRun.mockResolvedValue(modelOutput as any);
 
                 const result = await formatSuggestionContent([suggestion]);
 
                 expect(result).toBeInstanceOf(Map);
-                expect(result.size).toBe(0);
+                expect(result.size).toBe(1);
+                // WHAT:/WHY:/HOW: scaffolding is gone from the shipped text.
+                expect(result.get(0)?.suggestionContent).not.toMatch(
+                    /\b(WHAT|WHY|HOW)\s*:/i,
+                );
+                expect(result.get(0)?.improvedCode).toBe('b');
             },
         );
 
@@ -331,18 +337,22 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
 
     // -- LAYER 3: FAIL-SAFE (provider error / suspended key) ----------------
     describe('fail-safe on LLM.run rejection', () => {
-        it('degrades to an empty map when the provider call rejects, and does NOT throw', async () => {
+        it('falls back to the mechanical strip when the provider call rejects, and does NOT throw', async () => {
             mockRun.mockRejectedValue(new Error('provider 500 / suspended key'));
 
             const result = await formatSuggestionContent([suggestion], {
                 organizationId: 'org-err',
             });
 
+            // The raw scaffolding never ships: a rejection degrades to the
+            // mechanical WHAT/WHY/HOW → prose strip, not the raw model text.
             expect(result).toBeInstanceOf(Map);
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
+            expect(result.get(0)?.improvedCode).toBe('b');
         });
 
-        it('degrades to an empty map on a timeout-shaped rejection', async () => {
+        it('falls back to the mechanical strip on a timeout-shaped rejection', async () => {
             mockRun.mockRejectedValue(
                 Object.assign(new Error('aborted'), { name: 'AbortError' }),
             );
@@ -350,7 +360,8 @@ describe('formatSuggestionContent — LLM.run contract (#1786)', () => {
             const result = await formatSuggestionContent([suggestion]);
 
             expect(result).toBeInstanceOf(Map);
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
     });
 
@@ -474,20 +485,22 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 11 — case / convention mismatch: keys renamed by casing/snake_case.
-        // Not recoverable by the strict typeof-keyed parse → fail-safe EMPTY map
-        // (never a wrong-but-non-empty result).
+        // Not recoverable by the strict typeof-keyed parse → MECHANICAL fallback
+        // (label-free prose, never a wrong-but-non-empty result, never raw).
         it.each([
             ['PascalCase keys', '[{"Index":0,"SuggestionContent":"x"}]'],
             ['snake_case keys', '[{"index":0,"suggestion_content":"x"}]'],
         ])(
-            'row11: degrades to EMPTY map on %s (fail-safe, not wrong-non-empty)',
+            'row11: falls back to the MECHANICAL strip on %s (fail-safe, not wrong-non-empty)',
             async (_label, out) => {
                 mockRun.mockResolvedValue(out);
 
                 const result = await formatSuggestionContent([suggestion]);
 
                 expect(result).toBeInstanceOf(Map);
-                expect(result.size).toBe(0);
+                expect(result.size).toBe(1);
+                expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
+                expect(result.get(0)?.improvedCode).toBe('b');
             },
         );
 
@@ -505,21 +518,23 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
         });
 
         // Row 15 — empty array.
-        it('row15: an empty array [] yields an empty map (no items to keep)', async () => {
+        it('row15: an empty array [] falls back to the mechanical strip (parseOk=false on size 0)', async () => {
             mockRun.mockResolvedValue('[]');
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 16 — whitespace-only (empty string already covered upstream).
-        it('row16: whitespace-only response yields an empty map', async () => {
+        it('row16: whitespace-only response falls back to the mechanical strip', async () => {
             mockRun.mockResolvedValue('   \n\t  ');
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 18 — primitives where an object/array was expected.
@@ -529,36 +544,39 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
             ['number 42', 42],
             ['string "ok"', 'ok'],
         ])(
-            'row18: primitive return (%s) degrades to an empty map, never throws',
+            'row18: primitive return (%s) falls back to the mechanical strip, never throws',
             async (_label, out) => {
                 mockRun.mockResolvedValue(out as any);
 
                 const result = await formatSuggestionContent([suggestion]);
 
                 expect(result).toBeInstanceOf(Map);
-                expect(result.size).toBe(0);
+                expect(result.size).toBe(1);
+                expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
             },
         );
 
         // Row 19 — provider envelope leak.
-        it('row19: OpenAI-style {choices:[{message:{content}}]} envelope degrades to empty map', async () => {
+        it('row19: OpenAI-style {choices:[{message:{content}}]} envelope falls back to the mechanical strip', async () => {
             mockRun.mockResolvedValue({
                 choices: [{ message: { content: '[{"index":0,"suggestionContent":"x"}]' } }],
             } as any);
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
-        it('row19: tool_call arguments-as-string leak degrades to empty map', async () => {
+        it('row19: tool_call arguments-as-string leak falls back to the mechanical strip', async () => {
             mockRun.mockResolvedValue(
                 '{"tool_calls":[{"function":{"name":"fmt","arguments":"[{\\"index\\":0,\\"suggestionContent\\":\\"x\\"}]"}}]}',
             );
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 20 — reasoning/thinking leak whose stray brackets corrupt the greedy
@@ -641,16 +659,20 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
     });
 
     // === C. UNPARSEABLE / TRANSPORT (fail-safe layer) =====================
+    // The fail-safe is the MECHANICAL strip: unparseable/transport-failure
+    // output never ships the raw WHAT/WHY/HOW scaffolding — it ships label-free
+    // prose with the original improvedCode. Each row asserts exactly that.
     describe('C. unparseable / transport fail-safe', () => {
         // Row 28 — truncated JSON (no closing bracket → no regex match).
-        it('row28: truncated JSON (no closing ]) degrades to an empty map', async () => {
+        it('row28: truncated JSON (no closing ]) falls back to the mechanical strip', async () => {
             mockRun.mockResolvedValue(
                 '[{"index":0,"suggestionContent":"cut off mid str',
             );
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 29 — malformed JSON variants.
@@ -658,55 +680,61 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
             ['trailing comma', '[{"index":0,"suggestionContent":"x"},]'],
             ['single quotes', "[{'index':0,'suggestionContent':'x'}]"],
             ['unquoted keys', '[{index:0,suggestionContent:"x"}]'],
-        ])('row29: malformed JSON (%s) degrades to an empty map', async (_label, out) => {
+        ])('row29: malformed JSON (%s) falls back to the mechanical strip', async (_label, out) => {
             mockRun.mockResolvedValue(out);
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 30 — LLM.run throws — asserted upstream; re-pinned here for the row.
-        it('row30: a provider throw fails safe to an empty map (never crosses the boundary)', async () => {
+        it('row30: a provider throw falls back to the mechanical strip (never crosses the boundary)', async () => {
             mockRun.mockRejectedValue(new Error('ECONNRESET'));
 
-            await expect(
-                formatSuggestionContent([suggestion]),
-            ).resolves.toEqual(new Map());
+            const result = await formatSuggestionContent([suggestion]);
+
+            expect(result).toBeInstanceOf(Map);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 31 — error object RETURNED (not thrown).
-        it('row31: an {error:...} object returned instead of text degrades to empty map', async () => {
+        it('row31: an {error:...} object returned instead of text falls back to the mechanical strip', async () => {
             mockRun.mockResolvedValue({ error: { code: 'insufficient_quota' } } as any);
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 32 — empty success (content: '').
-        it('row32: an empty-success ("") response degrades to an empty map', async () => {
+        it('row32: an empty-success ("") response falls back to the mechanical strip', async () => {
             mockRun.mockResolvedValue('');
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 33 — refusal prose (content_filter / "I cannot help").
-        it('row33: a refusal prose response degrades to an empty map', async () => {
+        it('row33: a refusal prose response falls back to the mechanical strip', async () => {
             mockRun.mockResolvedValue(
                 "I'm sorry, but I can't help with rewriting that content.",
             );
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         // Row 34 — abort mid-call. The method does not thread an abortSignal of
-        // its own; an aborted call surfaces as a rejection → fail-safe empty map.
-        it('row34: an AbortError rejection fails safe to an empty map', async () => {
+        // its own; an aborted call surfaces as a rejection → mechanical strip.
+        it('row34: an AbortError rejection falls back to the mechanical strip', async () => {
             mockRun.mockRejectedValue(
                 Object.assign(new Error('The operation was aborted'), {
                     name: 'AbortError',
@@ -715,7 +743,8 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
 
             const result = await formatSuggestionContent([suggestion]);
 
-            expect(result.size).toBe(0);
+            expect(result.size).toBe(1);
+            expect(result.get(0)?.suggestionContent).toBe('x. y. z.');
         });
     });
 
@@ -854,7 +883,7 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
             expect(strict.get(0)?.suggestionContent).toBe('same');
         });
 
-        it('applies the same fail-safe empty map to an unrecoverable shape under both slots', async () => {
+        it('applies the same mechanical strip to an unrecoverable shape under both slots', async () => {
             const out = '[{"idx":0,"content":"wrong keys"}]';
 
             mockRun.mockResolvedValue(out);
@@ -867,8 +896,10 @@ describe('formatSuggestionContent — full I/O contract matrix (#1786 backfill)'
                 byokConfig: fallbackSlot,
             });
 
-            expect(strict.size).toBe(0);
-            expect(fallback.size).toBe(0);
+            expect(strict.size).toBe(1);
+            expect(fallback.size).toBe(1);
+            expect(strict.get(0)?.suggestionContent).toBe('x. y. z.');
+            expect(fallback.get(0)?.suggestionContent).toBe('x. y. z.');
         });
 
         it('forwards the exact byokConfig slot to LLM.run for both strict and fallback models', async () => {
