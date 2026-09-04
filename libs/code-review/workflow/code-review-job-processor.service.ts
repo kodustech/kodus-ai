@@ -121,7 +121,33 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                         `Reviews for this model are queued behind a slot that is not being released.`,
                 );
                 error.name = 'ByokConcurrencySlotExhausted';
+
+                // Notify ONCE. `process()` does not check job status on entry,
+                // so a redelivery (a broker retry, or the stale-job reaper
+                // picking the row back up) runs this branch again on a job that
+                // is already terminal -- and `notifyReviewFailed` reaches the
+                // pull request author, so a repeat is visible to a customer.
+                //
+                // Read the CURRENT status rather than `job.status`: `job` is
+                // the message payload, which describes the row as it was when
+                // the message was written, not as it is now.
+                const persisted = await this.jobRepository
+                    .findOne(jobId)
+                    .catch(() => null);
+                const alreadyTerminal = persisted?.status === JobStatus.FAILED;
+
                 await this.handleFailure(jobId, error);
+
+                if (alreadyTerminal) {
+                    this.logger.debug({
+                        message:
+                            'BYOK slot exhausted on a job already marked failed — not notifying again',
+                        context: CodeReviewJobProcessorService.name,
+                        metadata: { jobId, correlationId },
+                    });
+                    return;
+                }
+
                 await this.notifyReviewFailed(job, error, correlationId);
                 return;
             }
