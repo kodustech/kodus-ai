@@ -179,6 +179,24 @@ export function ByokManualPageClient({
                   typeof editSettings.awsRegion === "string"
                       ? editSettings.awsRegion
                       : undefined,
+              // OpenRouter pinning is stored under credential settings like the
+              // three above, and was the only pair this lift forgot. The form
+              // default reads `existingConfig?.openrouterProviderOrder ?? null`,
+              // so omitting it here did two things: Edit always opened with an
+              // empty field however many times the user saved, and — because
+              // the backend REPLACES credential settings with what the form
+              // sends (only the aws* secrets are carried over) — the next save
+              // wrote settings without the key and ERASED the stored pin. The
+              // value could never survive its own edit dialog.
+              openrouterProviderOrder: Array.isArray(
+                  editSettings.openrouterProviderOrder,
+              )
+                  ? (editSettings.openrouterProviderOrder as string[])
+                  : undefined,
+              openrouterAllowFallbacks:
+                  typeof editSettings.openrouterAllowFallbacks === "boolean"
+                      ? editSettings.openrouterAllowFallbacks
+                      : undefined,
           }
         : null;
 
