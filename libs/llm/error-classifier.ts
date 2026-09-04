@@ -140,6 +140,33 @@ export function isAbortOrHardTimeout(err: unknown): boolean {
 }
 
 /**
+ * True when the executor already spent ALL of its same-model retries on this
+ * error — the AI SDK's `RetryError` with `reason: 'maxRetriesExceeded'`.
+ *
+ * This is a fact the error CARRIES, not a reading of the vendor's prose, and
+ * that is the point. Classifying a 429 as rate-limit-vs-billing by matching
+ * English phrases means every vendor that words "you are out of money"
+ * differently is a fresh outage: Z.AI writes "Insufficient balance … Please
+ * recharge", which said neither quota nor credit, so a spent account was read
+ * as a rate limit and the org's configured fallback never ran while its
+ * reviews failed.
+ *
+ * Exhaustion answers the same question without the vocabulary. Exponential
+ * backoff is precisely the remedy for a real rate limit; if four spaced
+ * attempts did not clear it, the rate-limit reading is already disproven by
+ * evidence — it is a closed door, not a queue to wait out.
+ *
+ * `errorNotRetryable` is deliberately NOT exhaustion: the SDK declined to
+ * retry at all, so nothing about the failure has been tested by repetition.
+ * Pure — safe in any catch block.
+ */
+export function retriesWereExhausted(err: unknown): boolean {
+    if (!err || typeof err !== 'object') return false;
+    const e = err as { name?: string; reason?: string };
+    return e.name === 'AI_RetryError' && e.reason === 'maxRetriesExceeded';
+}
+
+/**
  * Returns true for categories where retrying without user intervention is
  * pointless: the user must fix billing/auth/config first.
  */
