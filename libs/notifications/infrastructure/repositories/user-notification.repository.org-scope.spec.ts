@@ -73,4 +73,79 @@ describe('UserNotificationRepository.findByUser — one tenant at a time', () =>
         });
         expect(args.where.readAt).toBeDefined();
     });
+
+    describe('the write and count paths share the read path boundary', () => {
+        const makeWritable = () => {
+            const count = jest.fn().mockResolvedValue(0);
+            const update = jest.fn().mockResolvedValue({ affected: 0 });
+            const repository = new UserNotificationRepository({
+                findAndCount: jest.fn().mockResolvedValue([[], 0]),
+                count,
+                update,
+            } as any);
+            return { repository, count, update };
+        };
+
+        it('counts unread only within the organization being viewed', async () => {
+            // Scoping the list alone left the badge counting every organization
+            // the user belongs to: 5 on the badge over a list of 2.
+            const { repository, count } = makeWritable();
+
+            await repository.countUnread('user-1', 'org-1');
+
+            expect(count).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        delivery: { organization: { uuid: 'org-1' } },
+                    }),
+                }),
+            );
+        });
+
+        it('marks all read only within the organization being viewed', async () => {
+            // Unscoped, one click in one feed silently cleared unread markers in
+            // every other organization -- notifications never shown, now gone.
+            const { repository, update } = makeWritable();
+
+            await repository.markAllAsRead('user-1', 'org-1');
+
+            const [where] = update.mock.calls[0];
+            expect(where).toEqual(
+                expect.objectContaining({
+                    delivery: { organization: { uuid: 'org-1' } },
+                }),
+            );
+        });
+
+        it('marks one read only within the organization being viewed', async () => {
+            const { repository, update } = makeWritable();
+
+            await repository.markAsRead('notif-1', 'user-1', 'org-1');
+
+            const [where] = update.mock.calls[0];
+            expect(where).toEqual(
+                expect.objectContaining({
+                    delivery: { organization: { uuid: 'org-1' } },
+                }),
+            );
+        });
+
+        it.each([
+            ['countUnread', (r: any) => r.countUnread('user-1', undefined)],
+            ['markAllAsRead', (r: any) => r.markAllAsRead('user-1', undefined)],
+            ['markAsRead', (r: any) => r.markAsRead('n-1', 'user-1', undefined)],
+        ])(
+            '%s does nothing when there is no organization, rather than everything',
+            async (_name, call) => {
+                // A missing scope must never widen a read or a write. Failing
+                // open here is the whole bug, one layer down.
+                const { repository, count, update } = makeWritable();
+
+                await call(repository);
+
+                expect(update).not.toHaveBeenCalled();
+                expect(count).not.toHaveBeenCalled();
+            },
+        );
+    });
 });

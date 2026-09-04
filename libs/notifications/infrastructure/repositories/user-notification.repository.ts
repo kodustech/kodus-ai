@@ -102,22 +102,67 @@ export class UserNotificationRepository
         return { data, total };
     }
 
-    async countUnread(userId: string): Promise<number> {
+    /**
+     * The badge has to count what the list shows.
+     *
+     * Scoping only the list left the count reading every organization the user
+     * belongs to, so the badge said 5 over a list of 2 — a discrepancy created
+     * by the scoping itself.
+     */
+    async countUnread(userId: string, organizationId?: string): Promise<number> {
+        if (!organizationId) {
+            return 0;
+        }
+
         return this.repo.count({
-            where: { user: { uuid: userId }, readAt: IsNull() },
+            where: {
+                user: { uuid: userId },
+                delivery: { organization: { uuid: organizationId } },
+                readAt: IsNull(),
+            },
         });
     }
 
-    async markAsRead(notificationId: string, userId: string): Promise<void> {
+    async markAsRead(
+        notificationId: string,
+        userId: string,
+        organizationId?: string,
+    ): Promise<void> {
+        if (!organizationId) {
+            return;
+        }
+
         await this.repo.update(
-            { uuid: notificationId, user: { uuid: userId } },
+            {
+                uuid: notificationId,
+                user: { uuid: userId },
+                delivery: { organization: { uuid: organizationId } },
+            },
             { readAt: new Date() },
         );
     }
 
-    async markAllAsRead(userId: string): Promise<number> {
+    /**
+     * "Mark all read" means all of THIS organization.
+     *
+     * Unscoped, one click in one organization's feed silently cleared unread
+     * markers in every other organization the user belongs to — notifications
+     * they had never been shown, now gone.
+     */
+    async markAllAsRead(
+        userId: string,
+        organizationId?: string,
+    ): Promise<number> {
+        if (!organizationId) {
+            return 0;
+        }
+
         const result = await this.repo.update(
-            { user: { uuid: userId }, readAt: IsNull() },
+            {
+                user: { uuid: userId },
+                delivery: { organization: { uuid: organizationId } },
+                readAt: IsNull(),
+            },
             { readAt: new Date() },
         );
         return result.affected ?? 0;

@@ -58,16 +58,27 @@ export class NotificationQueryService {
         };
     }
 
-    async unreadCount(userId: string): Promise<number> {
-        return this.userNotificationRepo.countUnread(userId);
+    async unreadCount(userId: string, organizationId?: string): Promise<number> {
+        return this.userNotificationRepo.countUnread(userId, organizationId);
     }
 
-    async markAsRead(notificationId: string, userId: string): Promise<void> {
-        return this.userNotificationRepo.markAsRead(notificationId, userId);
+    async markAsRead(
+        notificationId: string,
+        userId: string,
+        organizationId?: string,
+    ): Promise<void> {
+        return this.userNotificationRepo.markAsRead(
+            notificationId,
+            userId,
+            organizationId,
+        );
     }
 
-    async markAllAsRead(userId: string): Promise<number> {
-        return this.userNotificationRepo.markAllAsRead(userId);
+    async markAllAsRead(
+        userId: string,
+        organizationId?: string,
+    ): Promise<number> {
+        return this.userNotificationRepo.markAllAsRead(userId, organizationId);
     }
 
     /**
