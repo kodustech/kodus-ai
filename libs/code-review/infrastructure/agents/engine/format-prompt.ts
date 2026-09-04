@@ -66,6 +66,32 @@ ${suggestionsText}`;
 }
 
 /**
+ * Mechanical fallback: strip WHAT/WHY/HOW labels and numbered list prefixes
+ * from raw suggestion text, merging them into natural prose paragraphs.
+ * Used when the LLM formatter times out or fails, so the client never sees
+ * the raw scaffolding.
+ */
+export function stripLabelsMechanically(
+    suggestions: SuggestionToFormat[],
+): Map<number, FormattedSuggestion> {
+    const result = new Map<number, FormattedSuggestion>();
+    for (let i = 0; i < suggestions.length; i++) {
+        let text = suggestions[i].suggestionContent || '';
+        // Remove "WHAT:", "WHY:", "HOW:" labels (case-insensitive, with optional whitespace)
+        text = text.replace(/\b(WHAT|WHY|HOW)\s*:\s*/gi, '');
+        // Remove numbered list prefixes like "1.", "2.", "3."
+        text = text.replace(/^\d+\.\s+/gm, '');
+        // Collapse multiple newlines/spaces into single spaces, then trim
+        text = text.replace(/\n\s*\n/g, '\n').replace(/\s+/g, ' ').trim();
+        result.set(i, {
+            suggestionContent: text,
+            improvedCode: suggestions[i].improvedCode || '',
+        });
+    }
+    return result;
+}
+
+/**
  * Parse the model response into a map of index → formatted suggestion.
  */
 export function parseFormatResponse(text: string): {

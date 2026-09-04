@@ -26,7 +26,9 @@ import {
 import { getModelName } from '@libs/llm/byok-to-vercel';
 import type { NormalizedModel } from '@libs/llm/byok-config';
 import { buildKodyRuleLink } from '@libs/code-review/utils/build-kody-rule-link';
-import { type LangfuseTelemetryMetadata } from '@libs/core/log/langfuse';
+import {
+    type LangfuseTelemetryMetadata,
+} from '@libs/core/log/langfuse';
 
 import { BasePipelineStage } from '@libs/core/infrastructure/pipeline/abstracts/base-stage.abstract';
 import { StageVisibility } from '@libs/core/infrastructure/pipeline/enums/stage-visibility.enum';
@@ -1202,6 +1204,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             context.codeReviewConfig?.languageResultPrompt,
                         organizationId:
                             context.organizationAndTeamData?.organizationId,
+                        telemetryMetadata: telemetryMeta,
                     },
                 );
                 for (const [i, fmt] of formatted) {
@@ -1669,11 +1672,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
             this.embedDedupSuggestion(keep, keepKey, embedCache),
         ]);
         if (!vecDup || !vecKeep) {
-            return {
-                honor: false,
-                reason: 'lexical-veto (no-embed)',
-                score: lexical,
-            };
+            return { honor: false, reason: 'lexical-veto (no-embed)', score: lexical };
         }
 
         const cos = cosineSimilarity(vecDup, vecKeep);
@@ -1766,11 +1765,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
         const kept: Partial<CodeSuggestion>[] = [];
         for (let si = 0; si < suggestions.length; si++) {
             const s = suggestions[si];
-            let absorbedBy: {
-                ri: number;
-                reason: string;
-                score: number;
-            } | null = null;
+            let absorbedBy: { ri: number; reason: string; score: number } | null =
+                null;
             for (let ri = 0; ri < fileScopedRules.length; ri++) {
                 const rule = fileScopedRules[ri];
                 // A suggestion can only duplicate a rule on the SAME file.
@@ -2766,7 +2762,8 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             );
                         });
                         if (match) {
-                            const prNumber = match.number || match.pull_number;
+                            const prNumber =
+                                match.number || match.pull_number;
                             if (prNumber) {
                                 openPrOnHeadBranch.set(
                                     repo.fullName.toLowerCase(),
