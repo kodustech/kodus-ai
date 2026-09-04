@@ -117,6 +117,54 @@ export class BitbucketCloudService implements Omit<
 > {
     private readonly logger = createLogger(BitbucketCloudService.name);
 
+    /**
+     * Resolved head commit per (repo, ref), so reading N files costs N+1 API
+     * calls instead of 2N.
+     *
+     * `getRepositoryContentFile` resolved the branch's commit with
+     * `repositories.listCommits` before every single `source.read` — same
+     * repo, same ref, same answer, once per file. A 200-file pull request
+     * spent 400 calls where 201 were needed, and Bitbucket answered
+     * `429 Too Many Requests`: 67 of them in three hours of production, all
+     * concentrated on this one method, which is the shape of a loop without
+     * spacing rather than of an abusive tenant.
+     *
+     * A short TTL is the whole point — long enough to cover one review's file
+     * fan-out, short enough that a push landing mid-review is picked up by the
+     * next one. Capped so a long-lived worker cannot grow it without bound.
+     */
+    private readonly headCommitMemo = new Map<
+        string,
+        { hash: string; at: number }
+    >();
+    private static readonly HEAD_COMMIT_TTL_MS = 60_000;
+    private static readonly HEAD_COMMIT_MEMO_MAX = 500;
+
+    private rememberHeadCommit(key: string, hash: string): void {
+        if (
+            this.headCommitMemo.size >=
+            BitbucketCloudService.HEAD_COMMIT_MEMO_MAX
+        ) {
+            // Drop the oldest insertion; Map preserves insertion order.
+            const oldest = this.headCommitMemo.keys().next().value;
+            if (oldest !== undefined) this.headCommitMemo.delete(oldest);
+        }
+        this.headCommitMemo.set(key, { hash, at: Date.now() });
+    }
+
+    private recallHeadCommit(key: string): string | undefined {
+        const hit = this.headCommitMemo.get(key);
+        if (!hit) return undefined;
+        if (
+            Date.now() - hit.at >
+            BitbucketCloudService.HEAD_COMMIT_TTL_MS
+        ) {
+            this.headCommitMemo.delete(key);
+            return undefined;
+        }
+        return hit.hash;
+    }
+
     constructor(
         @Inject(INTEGRATION_SERVICE_TOKEN)
         private readonly integrationService: IIntegrationService,
@@ -2396,22 +2444,31 @@ export class BitbucketCloudService implements Omit<
             const bitbucketAPI =
                 this.instanceBitbucketApi(bitbucketAuthDetails);
 
-            const commits = await bitbucketAPI.repositories.listCommits({
-                repo_slug: `{${repo.id}}`,
-                workspace: `{${repo.workspaceId}}`,
-                pagelen: 1,
-                include: pullRequest.head?.ref || pullRequest.base?.ref || '',
-            });
+            const ref = pullRequest.head?.ref || pullRequest.base?.ref || '';
+            const memoKey = `${repo.id}:${repo.workspaceId}:${ref}`;
 
-            const commit = commits?.data?.values?.[0];
+            let commitHash = this.recallHeadCommit(memoKey);
 
-            if (!commit) {
-                return null;
+            if (!commitHash) {
+                const commits = await bitbucketAPI.repositories.listCommits({
+                    repo_slug: `{${repo.id}}`,
+                    workspace: `{${repo.workspaceId}}`,
+                    pagelen: 1,
+                    include: ref,
+                });
+
+                commitHash = commits?.data?.values?.[0]?.hash;
+
+                if (!commitHash) {
+                    return null;
+                }
+
+                this.rememberHeadCommit(memoKey, commitHash);
             }
 
             const fileContent = await bitbucketAPI.source
                 .read({
-                    commit: commit.hash,
+                    commit: commitHash,
                     path: file.filename,
                     repo_slug: `{${repo.id}}`,
                     workspace: `{${repo.workspaceId}}`,

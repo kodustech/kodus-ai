@@ -52,10 +52,12 @@ export class NotificationController {
         @Query('unreadOnly') unreadOnly?: string,
     ) {
         const userId = (req as any).user?.uuid;
+        const organizationId = (req as any).user?.organization?.uuid;
         return this.queryService.list(userId, {
             page,
             limit: Math.min(limit, 100),
             unreadOnly: unreadOnly === 'true',
+            organizationId,
         });
     }
 
@@ -63,7 +65,11 @@ export class NotificationController {
     @ApiOperation({ summary: 'Get unread notification count' })
     async unreadCount(@Req() req: Request) {
         const userId = (req as any).user?.uuid;
-        const count = await this.queryService.unreadCount(userId);
+        const organizationId = (req as any).user?.organization?.uuid;
+        const count = await this.queryService.unreadCount(
+            userId,
+            organizationId,
+        );
         return { count };
     }
 
@@ -79,8 +85,13 @@ export class NotificationController {
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
 
-        // Send initial unread count
-        const count = await this.queryService.unreadCount(userId);
+        // Send initial unread count, scoped like the list the drawer renders --
+        // a badge counting other organizations is the discrepancy users see.
+        const organizationId = (req as any).user?.organization?.uuid;
+        const count = await this.queryService.unreadCount(
+            userId,
+            organizationId,
+        );
         res.write(
             `event: unread-count\ndata: ${JSON.stringify({ count })}\n\n`,
         );
@@ -106,7 +117,8 @@ export class NotificationController {
     @ApiOperation({ summary: 'Mark a notification as read' })
     async markAsRead(@Param('id') id: string, @Req() req: Request) {
         const userId = (req as any).user?.uuid;
-        await this.queryService.markAsRead(id, userId);
+        const organizationId = (req as any).user?.organization?.uuid;
+        await this.queryService.markAsRead(id, userId, organizationId);
         return { success: true };
     }
 
@@ -114,7 +126,11 @@ export class NotificationController {
     @ApiOperation({ summary: 'Mark all notifications as read' })
     async markAllAsRead(@Req() req: Request) {
         const userId = (req as any).user?.uuid;
-        const count = await this.queryService.markAllAsRead(userId);
+        const organizationId = (req as any).user?.organization?.uuid;
+        const count = await this.queryService.markAllAsRead(
+            userId,
+            organizationId,
+        );
         return { marked: count };
     }
 

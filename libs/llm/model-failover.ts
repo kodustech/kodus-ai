@@ -23,6 +23,7 @@ import {
     isAbortOrHardTimeout,
     isTerminalCategory,
     LlmErrorCategory,
+    retriesWereExhausted,
 } from '@libs/llm/error-classifier';
 
 const logger = createLogger('ModelFailover');
@@ -36,8 +37,11 @@ const logger = createLogger('ModelFailover');
  *    retries — persistent enough that the provider itself looks down.
  *
  * Deliberately NOT cascaded (a peer model doesn't help, or another layer owns it):
- *  - RATE_LIMIT — the per-slot limiter owns backoff/cooldown; swapping models on a
- *    429 would just defeat the rate gate and hammer providers.
+ *  - RATE_LIMIT that the limiter can still wait out — it owns backoff/cooldown, and
+ *    swapping models on a 429 would defeat the rate gate. A 429 that already
+ *    EXHAUSTED the executor's same-model retries DOES cascade: backoff is the cure
+ *    for a real rate limit, so outliving it disproves the label (see
+ *    `retriesWereExhausted`).
  *  - CONTEXT_OVERFLOW — the prompt is too big; a same-class fallback won't fit it.
  *  - Abort / hard-timeout — the failure is latency or a cancel, not the model;
  *    re-running burns the whole timeout budget again.
@@ -50,6 +54,30 @@ export function shouldFailoverToNextModel(err: unknown): boolean {
     const { category } = classifyLLMError(err);
     switch (category) {
         case LlmErrorCategory.RATE_LIMIT:
+            // A 429 the limiter can wait out must NOT swap models — that would
+            // defeat the rate gate and hammer providers. But a 429 that already
+            // OUTLIVED the executor's own exponential backoff is not a queue:
+            // backoff is the remedy for a genuine rate limit, so surviving it
+            // disproves the reading. It is the same test this function already
+            // applies to TRANSIENT ("persistent enough that the provider itself
+            // looks down"), owed to 429 for the same reason.
+            //
+            // This is what makes the cascade independent of vendor prose. Z.AI
+            // words a spent balance as "Insufficient balance … Please recharge"
+            // and a 429; matching phrases missed it and the org's fallback sat
+            // idle through the outage. Exhaustion would have caught it without
+            // knowing a single word of it — and catches the next vendor too.
+            //
+            // The per-slot limiter still holds: the cooldown armed on the
+            // primary keeps protecting it while the FALLBACK (a different slot,
+            // a different limiter) serves. The gate is delayed, not defeated.
+            return retriesWereExhausted(err);
+        // CONTEXT_OVERFLOW: the prompt is too big, and a same-class fallback
+        // will not fit it either.
+        //
+        // UNKNOWN stays conservative even when retries were exhausted: exhaustion
+        // says the failure is PERSISTENT, not what it is, so a 2nd billed call
+        // would be a guess. Widening it is a separate decision from this one.
         case LlmErrorCategory.CONTEXT_OVERFLOW:
         case LlmErrorCategory.UNKNOWN:
             return false;

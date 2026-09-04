@@ -105,6 +105,21 @@ export interface BaseReviewCallParams {
     /** Override the slot-derived provider options (reasoning/thinking config) —
      *  e.g. a demo path forcing Gemini thinking off. Unset → the slot's own. */
     providerOptions?: Record<string, unknown>;
+    /** Force reasoning OFF for this call, whatever the slot configures.
+     *
+     *  The structured path already sets this internally when its plan says a
+     *  model would 400 on forced tool_choice + thinking. This is the same
+     *  switch, opened to callers whose WORK does not benefit from reasoning —
+     *  the suggestion formatter rewrites prose, and production measured its
+     *  model spending 69-100% of output tokens on reasoning to do it, routinely
+     *  landing within a second of the hard timeout and sometimes past it (25 of
+     *  86 formatter failures in twelve hours).
+     *
+     *  Provider-agnostic on purpose: it resolves to effort 'none' and drops the
+     *  slot's reasoning override, and `buildProviderOptions` owns the
+     *  per-provider translation. A caller never writes a vendor's thinking flag
+     *  by hand. */
+    suppressReasoning?: boolean;
     /** Opt in to deterministic ENVELOPE-SHAPE recovery (structured mode): when the
      *  model returns valid JSON of the wrong shape — a bare array (`[]`/`[{…}]`)
      *  or a known wrapper — instead of the schema's envelope, re-shape it against
@@ -213,6 +228,7 @@ async function runReviewCall<T>(
         temperature: temperatureOverride,
         maxOutputTokens: maxOutputTokensOverride,
         providerOptions: providerOptionsOverride,
+        suppressReasoning: callerSuppressReasoning,
     } = params;
 
     const mainSlot = byokConfig;
@@ -243,7 +259,11 @@ async function runReviewCall<T>(
     const structuredPlan: StructuredCallPlan = structuredMode
         ? resolveStructuredPlan(mainSlot)
         : 'as-is';
-    const suppressReasoning = structuredPlan === 'suppress-thinking';
+    // Either the per-model plan demands it (a disable-able model that would 400
+    // on forced tool_choice + thinking), or the caller asked because the work
+    // itself does not benefit from reasoning.
+    const suppressReasoning =
+        structuredPlan === 'suppress-thinking' || callerSuppressReasoning === true;
 
     const buildInvocation = (structuredOutputs: boolean) =>
         resolveModelConfig(mainSlot, {

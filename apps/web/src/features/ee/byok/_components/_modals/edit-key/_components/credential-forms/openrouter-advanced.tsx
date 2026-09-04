@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { FormControl } from "@components/ui/form-control";
 import { Input } from "@components/ui/input";
 import { Separator } from "@components/ui/separator";
@@ -10,6 +11,19 @@ import { Controller, useFormContext } from "react-hook-form";
 import type { EditKeyForm } from "../../_types";
 
 /**
+ * The typed text as the stored list: trimmed names, blanks dropped, and `null`
+ * for "no pin" (OpenRouter's own routing) rather than an empty array, which the
+ * write path would persist as a meaningless empty setting.
+ */
+export const parseProviderOrder = (raw: string): string[] | null => {
+    const parsed = raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    return parsed.length > 0 ? parsed : null;
+};
+
+/**
  * OpenRouter-only advanced fields — pin upstream providers + fallback toggle.
  * Rendered inside the Advanced settings section via the ADVANCED_FIELDS registry
  * (keyed by provider), so it isn't a `provider === "open_router"` special-case in
@@ -17,6 +31,8 @@ import type { EditKeyForm } from "../../_types";
  */
 export const OpenRouterRoutingFields = () => {
     const { control } = useFormContext<EditKeyForm>();
+    // Raw text while the pin field has focus — see the note at its Controller.
+    const [draft, setDraft] = useState<string | null>(null);
 
     return (
         <>
@@ -48,6 +64,16 @@ export const OpenRouterRoutingFields = () => {
                     name="openrouterProviderOrder"
                     control={control}
                     render={({ field, fieldState }) => {
+                        // The model is a string[], but a person types a STRING —
+                        // and the two disagree mid-word. Deriving the displayed
+                        // value straight from the array meant the comma the user
+                        // typed was parsed into an empty segment, filtered out,
+                        // and re-rendered gone in the same keystroke: the
+                        // separator this field documents was literally
+                        // untypeable, so a second provider could never be
+                        // entered. `draft` holds the raw text while the field is
+                        // being edited and is dropped on blur, so the array stays
+                        // the source of truth everywhere except under the cursor.
                         const asCsv = Array.isArray(field.value)
                             ? field.value.join(", ")
                             : "";
@@ -60,19 +86,20 @@ export const OpenRouterRoutingFields = () => {
                                     <Input
                                         size="md"
                                         placeholder="e.g. moonshot, together"
-                                        value={asCsv}
+                                        value={draft ?? asCsv}
                                         error={fieldState.error}
                                         onChange={(e) => {
                                             const raw = e.target.value;
-                                            const parsed = raw
-                                                .split(",")
-                                                .map((s) => s.trim())
-                                                .filter((s) => s.length > 0);
+                                            setDraft(raw);
                                             field.onChange(
-                                                parsed.length > 0
-                                                    ? parsed
-                                                    : null,
+                                                parseProviderOrder(raw),
                                             );
+                                        }}
+                                        onBlur={() => {
+                                            // Hand display back to the array, so
+                                            // what is stored is what is shown.
+                                            setDraft(null);
+                                            field.onBlur();
                                         }}
                                     />
                                 </FormControl.Input>

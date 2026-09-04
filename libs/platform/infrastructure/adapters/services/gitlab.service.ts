@@ -4274,6 +4274,14 @@ export class GitlabService implements Omit<
                             : pr.state === GitlabPullRequestState.CLOSED
                               ? PullRequestState.CLOSED
                               : PullRequestState.ALL,
+                    // GitLab's `iid` is the number a person sees on the merge
+                    // request. Emitted under BOTH keys because consumers are
+                    // split: `pull_number` is the legacy name this provider has
+                    // always used, `number` is what the GitHub adapter emits and
+                    // what shared code reads. Sending only `pull_number` made
+                    // every GitLab merge request arrive as `#undefined` in
+                    // anything written against the GitHub shape.
+                    number: pr.iid,
                     pull_number: pr.iid,
                     project_id: pr.project_id,
                     prURL: pr.web_url,

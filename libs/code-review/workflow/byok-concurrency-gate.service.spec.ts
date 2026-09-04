@@ -220,7 +220,13 @@ describe('ByokConcurrencyGateService', () => {
             });
         });
 
-        it('returns deferred at MAX_DELAY when force-acquire also fails', async () => {
+        // This used to assert another deferral, which is what made
+        // MAX_DEFERRALS a label instead of a limit. The force-acquire targets
+        // `slot:0`, so when that slot is the leaked one the branch can never
+        // succeed and the job returns to it forever. Production reached
+        // deferredCount 452 against a cap of 10, across 315 jobs and 4
+        // organizations, whose reviews never ran and who were never told.
+        it('gives up instead of deferring again when force-acquire also fails', async () => {
             distributedLockService.acquire.mockResolvedValue(null);
 
             const job = makeJob({
@@ -232,10 +238,25 @@ describe('ByokConcurrencyGateService', () => {
             const result = await service.tryEnter(job);
 
             expect(result).toEqual({
-                kind: 'deferred',
-                delayMs: MAX_DELAY_MS,
+                kind: 'exhausted',
                 deferredCount: MAX_DEFERRALS + 1,
             });
+        });
+
+        // The cap has to hold however far past it the counter already is --
+        // a job that came back at 451 must not get a 452nd deferral.
+        it('stays terminal for a job already far past the cap', async () => {
+            distributedLockService.acquire.mockResolvedValue(null);
+
+            const job = makeJob({
+                metadata: {
+                    byokConcurrencyGate: { deferredCount: 451 },
+                },
+            });
+
+            const result = await service.tryEnter(job);
+
+            expect(result).toEqual({ kind: 'exhausted', deferredCount: 452 });
         });
     });
 

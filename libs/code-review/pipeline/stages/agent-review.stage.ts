@@ -908,6 +908,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ...s,
                             priorityStatus:
                                 PriorityStatus.DISCARDED_BY_SEVERITY,
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
                         });
                     }
                 }
@@ -917,6 +918,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ...s,
                             priorityStatus:
                                 PriorityStatus.DISCARDED_BY_SAFEGUARD,
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
                         });
                     }
                 }
@@ -946,6 +948,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                             ...s,
                             priorityStatus:
                                 PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                            deliveryStatus: DeliveryStatus.NOT_SENT,
                         });
                         return null;
                     }
@@ -1200,6 +1203,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                     allDiscarded.push({
                         ...s,
                         priorityStatus: PriorityStatus.DISCARDED_BY_SEVERITY,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
                     });
                 }
                 if (deduped.length < before) {
@@ -1417,6 +1421,7 @@ export class AgentReviewStage extends BasePipelineStage<CodeReviewPipelineContex
                                 ...s,
                                 priorityStatus:
                                     PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                                deliveryStatus: DeliveryStatus.NOT_SENT,
                             });
                         }
                     }

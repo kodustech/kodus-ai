@@ -184,10 +184,19 @@ export class BackfillHistoricalPRsUseCase {
         let skippedCount = 0;
 
         for (const pr of pullRequests) {
+            // Providers disagree on the key. The GitHub adapter emits `number`
+            // (and a legacy `pull_number` alias); the GitLab adapter emitted
+            // only `pull_number`, so reading `number` alone made every GitLab
+            // merge request arrive as `#undefined` -- 68 of them in two hours
+            // of production, each logged twice with no usable identifier and
+            // then failing to save. Reading both keeps this working for any
+            // provider, including ones added later.
+            const prNumber = pr.number ?? pr.pull_number;
+
             try {
                 const existingPR =
                     await this.pullRequestsRepository.findByNumberAndRepositoryId(
-                        pr.number,
+                        prNumber,
                         repository.id,
                         organizationAndTeamData,
                     );
@@ -237,10 +246,10 @@ export class BackfillHistoricalPRsUseCase {
                                         id: repository.id,
                                         name: repository.name,
                                     },
-                                    prNumber: pr.number,
+                                    prNumber,
                                 },
                             ),
-                        { ...retryOpts, label: `backfill:getFiles PR#${pr.number}` },
+                        { ...retryOpts, label: `backfill:getFiles PR#${prNumber}` },
                     );
                     const prCommits = await with429Retry(
                         () =>
@@ -251,12 +260,12 @@ export class BackfillHistoricalPRsUseCase {
                                         id: repository.id,
                                         name: repository.name,
                                     },
-                                    prNumber: pr.number,
+                                    prNumber,
                                 },
                             ),
                         {
                             ...retryOpts,
-                            label: `backfill:getCommits PR#${pr.number}`,
+                            label: `backfill:getCommits PR#${prNumber}`,
                         },
                     );
 
@@ -302,11 +311,11 @@ export class BackfillHistoricalPRsUseCase {
                     }
                 } catch (dataError) {
                     this.logger.warn({
-                        message: `Could not fetch files/commits for PR #${pr.number}, using default values`,
+                        message: `Could not fetch files/commits for PR #${prNumber}, using default values`,
                         context: BackfillHistoricalPRsUseCase.name,
                         metadata: {
                             repositoryName: repository.name,
-                            prNumber: pr.number,
+                            prNumber,
                             error: dataError.message,
                         },
                     });
@@ -324,12 +333,17 @@ export class BackfillHistoricalPRsUseCase {
                 savedCount++;
             } catch (error) {
                 this.logger.error({
-                    message: `Error saving PR #${pr.number}`,
+                    message: `Error saving PR #${prNumber}`,
                     context: BackfillHistoricalPRsUseCase.name,
-                    error: error.message,
+                    // The Error itself, not `error.message`. Passing the string
+                    // made the exporter read `.name`/`.message`/`.stack` off a
+                    // primitive, so every one of these was persisted as
+                    // `{name: null, message: null, stack: null}` -- an error
+                    // log that recorded nothing about the error.
+                    error,
                     metadata: {
                         repositoryName: repository.name,
-                        prNumber: pr.number,
+                        prNumber,
                     },
                 });
             }
@@ -380,7 +394,10 @@ export class BackfillHistoricalPRsUseCase {
             title: pr.title || '',
             status: pr.state || 'unknown',
             merged: isMerged,
-            number: pr.number,
+            // Same provider split as the loop above: GitHub sends `number`,
+            // GitLab sent only `pull_number`. This is the field the document is
+            // keyed on, so an undefined here is what actually failed the save.
+            number: pr.number ?? pr.pull_number,
             url: pr.prURL || '',
             baseBranchRef: pr.base?.ref || pr.targetRefName || '',
             headBranchRef: pr.head?.ref || pr.sourceRefName || '',
