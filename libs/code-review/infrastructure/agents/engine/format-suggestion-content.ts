@@ -41,6 +41,7 @@ const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
 function scaffoldingFallback(
     suggestions: SuggestionToFormat[],
     reason: string,
+    organizationId?: string,
 ): Map<number, FormattedSuggestion> {
     const out = new Map<number, FormattedSuggestion>();
 
@@ -59,6 +60,9 @@ function scaffoldingFallback(
         logger.warn({
             message: `[FORMATTER] ${reason} — stripped WHAT/WHY/HOW locally for ${out.size}/${suggestions.length} suggestion(s) so the scaffolding does not ship`,
             context: 'SuggestionFormatter',
+            // Which customer hit this. A count with no tenant cannot answer the
+            // first question anyone asks about it.
+            metadata: { organizationId },
         });
     }
 
@@ -121,7 +125,11 @@ export async function formatSuggestionContent(
                 message: `[FORMATTER] No JSON array in response (${(text || '').length} chars)`,
                 context: 'SuggestionFormatter',
             });
-            return scaffoldingFallback(suggestions, 'no JSON array in response');
+            return scaffoldingFallback(
+                suggestions,
+                'no JSON array in response',
+                options?.organizationId,
+            );
         }
 
         logger.log({
@@ -131,10 +139,18 @@ export async function formatSuggestionContent(
 
         // A partial answer leaves the rest raw, which is the same leak in
         // miniature. Fill only the gaps -- what the model returned wins.
-        if (formatted.size < suggestions.length) {
+        //
+        // Gated on COVERAGE, not size. `parseFormatResponse` accepts any
+        // numeric index without a bounds check, so a response carrying an
+        // out-of-range or duplicate index (`[{index:0},{index:5}]` for a batch
+        // of two) makes the size match while a real index is still uncovered --
+        // and that suggestion would ship with the scaffolding intact, through
+        // the very code added to prevent it.
+        if (suggestions.some((_, i) => !formatted.has(i))) {
             for (const [i, fallback] of scaffoldingFallback(
                 suggestions,
                 'model returned a partial batch',
+                options?.organizationId,
             )) {
                 if (!formatted.has(i)) {
                     formatted.set(i, fallback);
@@ -151,6 +167,7 @@ export async function formatSuggestionContent(
         return scaffoldingFallback(
             suggestions,
             err instanceof Error ? err.message : String(err),
+            options?.organizationId,
         );
     }
 }

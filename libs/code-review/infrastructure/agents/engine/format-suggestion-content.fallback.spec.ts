@@ -75,6 +75,25 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
         expect(out.get(1)?.suggestionContent).toContain('problem 1');
     });
 
+    it('fills a gap the model hid behind an out-of-range index', async () => {
+        // `parseFormatResponse` accepts any numeric index with no bounds check,
+        // so this response makes `formatted.size` equal the batch size while
+        // index 1 is still uncovered. A size-based gate skips the fallback and
+        // suggestion 1 ships raw — the leak, reachable through its own fix.
+        run.mockResolvedValue(
+            JSON.stringify([
+                { index: 0, suggestionContent: 'Model prose.', improvedCode: 'b' },
+                { index: 5, suggestionContent: 'Nowhere.', improvedCode: 'b' },
+            ]),
+        );
+
+        const out = await formatSuggestionContent(scaffolded(2));
+
+        expect(out.get(1)?.suggestionContent).toBeDefined();
+        expect(out.get(1)?.suggestionContent).not.toMatch(/WHAT:/);
+        expect(out.get(1)?.suggestionContent).toContain('problem 1');
+    });
+
     it('does not touch a suggestion that was already prose', async () => {
         // Kody Rules findings never carry the template. A fallback that
         // rewrote them would damage output that was fine.

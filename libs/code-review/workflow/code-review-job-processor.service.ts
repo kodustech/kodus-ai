@@ -187,7 +187,15 @@ export class CodeReviewJobProcessorService implements IJobProcessorService {
                                 markError instanceof Error
                                     ? markError
                                     : undefined,
-                            metadata: { jobId, correlationId },
+                            metadata: {
+                                jobId,
+                                correlationId,
+                                // The tenant this failure belongs to. Without
+                                // it the line lands in the same unattributable
+                                // bucket this branch already fixed elsewhere.
+                                organizationId:
+                                    organizationAndTeamData?.organizationId,
+                            },
                         });
                     });
                 return;
