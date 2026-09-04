@@ -17,9 +17,16 @@ export interface UserNotificationWithDelivery extends IUserNotification {
 export interface IUserNotificationRepository {
     create(notification: Omit<IUserNotification, 'uuid'>): Promise<IUserNotification>;
 
+    /** `organizationId` scopes the feed to the active tenant — a person in
+     *  several organizations must not see another one's notifications. */
     findByUser(
         userId: string,
-        options: { limit: number; offset: number; unreadOnly?: boolean },
+        options: {
+            limit: number;
+            offset: number;
+            unreadOnly?: boolean;
+            organizationId?: string;
+        },
     ): Promise<{ data: UserNotificationWithDelivery[]; total: number }>;
 
     countUnread(userId: string): Promise<number>;

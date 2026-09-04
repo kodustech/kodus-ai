@@ -36,12 +36,37 @@ export class UserNotificationRepository
         >(saved, UserNotificationEntity).toObject();
     }
 
+    /**
+     * Scoped to ONE organization on purpose.
+     *
+     * This listed by user alone, so a person who belongs to several
+     * organizations received every organization's notifications in one feed
+     * and the app-shell banner rendered the most recent of them — whichever
+     * tenant it came from. Production showed an org whose only provider is
+     * Anthropic-compatible being told "Your Novita key is failing", because
+     * the newest notification in the feed belonged to a different customer.
+     *
+     * `organizationId` is required rather than optional: an undefined value
+     * spread into a TypeORM `where` silently matches everything, which is
+     * how a filter that looks present stops filtering (the same shape that
+     * leaked MCP connections across tenants). An absent id returns nothing.
+     */
     async findByUser(
         userId: string,
-        options: { limit: number; offset: number; unreadOnly?: boolean },
+        options: {
+            limit: number;
+            offset: number;
+            unreadOnly?: boolean;
+            organizationId?: string;
+        },
     ): Promise<{ data: UserNotificationWithDelivery[]; total: number }> {
+        if (!options.organizationId) {
+            return { data: [], total: 0 };
+        }
+
         const where: Record<string, unknown> = {
             user: { uuid: userId },
+            delivery: { organization: { uuid: options.organizationId } },
         };
         if (options.unreadOnly) {
             where.readAt = IsNull();
@@ -49,7 +74,7 @@ export class UserNotificationRepository
 
         const [rows, total] = await this.repo.findAndCount({
             where,
-            relations: ['delivery'],
+            relations: ['delivery', 'delivery.organization'],
             order: { createdAt: 'DESC' },
             take: options.limit,
             skip: options.offset,

@@ -30,7 +30,13 @@ export class NotificationQueryService {
 
     async list(
         userId: string,
-        options: { page: number; limit: number; unreadOnly?: boolean },
+        options: {
+            page: number;
+            limit: number;
+            unreadOnly?: boolean;
+            /** Active organization — the feed is per tenant, not per person. */
+            organizationId?: string;
+        },
     ): Promise<{
         data: UserNotificationWithDelivery[];
         total: number;
@@ -42,6 +48,7 @@ export class NotificationQueryService {
             limit: options.limit,
             offset,
             unreadOnly: options.unreadOnly,
+            organizationId: options.organizationId,
         });
 
         return {

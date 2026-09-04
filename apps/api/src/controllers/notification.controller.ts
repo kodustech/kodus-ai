@@ -52,10 +52,12 @@ export class NotificationController {
         @Query('unreadOnly') unreadOnly?: string,
     ) {
         const userId = (req as any).user?.uuid;
+        const organizationId = (req as any).user?.organization?.uuid;
         return this.queryService.list(userId, {
             page,
             limit: Math.min(limit, 100),
             unreadOnly: unreadOnly === 'true',
+            organizationId,
         });
     }
 
