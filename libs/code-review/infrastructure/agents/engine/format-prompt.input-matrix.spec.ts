@@ -95,6 +95,35 @@ const CASES: Array<[string, string, Verdict]> = [
         refuses(),
     ],
 
+    // ---- what precedes it CROSSED with what wraps it ----------------------
+    // The two dimensions above were only ever varied one at a time, so every
+    // cell of their product went untested. Three of them refused a recovery
+    // that is unambiguous, and the fourth returned the DECOY: with both
+    // brackets nested, the top-level scan finds nothing and the wrapper rule
+    // decides alone, so reading only the FIRST balanced value picked the
+    // leading object's array. Wrong content as the review, reached through
+    // the guard built to stop exactly that.
+    [
+        'a note object before a WRAPPED array',
+        '{"note":"x"} {"suggestions":[{"index":0,"suggestionContent":"REAL"}]}',
+        recovers(),
+    ],
+    [
+        'prose before a wrapped array',
+        'Here you go:\n{"suggestions":[{"index":0,"suggestionContent":"REAL"}]}',
+        recovers(),
+    ],
+    [
+        'a fenced block before a wrapped array',
+        '```\n{"note":"a"}\n```\n{"suggestions":[{"index":0,"suggestionContent":"REAL"}]}',
+        recovers(),
+    ],
+    [
+        'a DECOY-carrying object before a wrapped array',
+        '{"a":[{"index":0,"suggestionContent":"DECOY"}]} {"suggestions":[{"index":0,"suggestionContent":"REAL"}]}',
+        refuses(),
+    ],
+
     // ---- how it is encoded --------------------------------------------------
     [
         'JSON inside a JSON string',
@@ -164,8 +193,8 @@ describe('parseFormatResponse — the input space, enumerated', () => {
     it('covers every dimension it claims to', () => {
         // A matrix that quietly loses a row is worse than no matrix: it reads
         // as coverage while testing less than it says.
-        expect(CASES).toHaveLength(32);
-        expect(CASES.filter(([, , v]) => v.recovers)).toHaveLength(15);
-        expect(CASES.filter(([, , v]) => !v.recovers)).toHaveLength(17);
+        expect(CASES).toHaveLength(36);
+        expect(CASES.filter(([, , v]) => v.recovers)).toHaveLength(18);
+        expect(CASES.filter(([, , v]) => !v.recovers)).toHaveLength(18);
     });
 });

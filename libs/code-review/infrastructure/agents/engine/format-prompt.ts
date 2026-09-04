@@ -2,10 +2,7 @@
  * Pure suggestion-format prompt + response parse — shared by production
  * (`format-suggestion-content.ts`) and the format eval so there is no prompt drift.
  */
-import {
-    extractJsonFromText,
-    normalizeEnvelope,
-} from '@libs/llm/structured-output-repair';
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 
 export interface SuggestionToFormat {
     suggestionContent: string;
@@ -231,29 +228,85 @@ function extractSuggestionArray(text: string): unknown[] | null {
 }
 
 /**
- * The single array inside a lone wrapper object, or null when the text is not
- * one object, or when the object holds none or several arrays.
+ * End index of the JSON value that opens at `start`, or -1 when it never
+ * closes. String-aware, so a brace inside a string never moves the depth.
+ */
+function balancedEnd(text: string, start: number): number {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start; i < text.length; i++) {
+        const ch = text[i];
+
+        if (inString) {
+            if (escaped) escaped = false;
+            else if (ch === '\\') escaped = true;
+            else if (ch === '"') inString = false;
+            continue;
+        }
+
+        if (ch === '"') inString = true;
+        else if (ch === '{' || ch === '[') depth++;
+        else if (ch === '}' || ch === ']') {
+            depth--;
+            if (depth === 0) return i;
+        }
+    }
+
+    return -1;
+}
+
+/** Every top-level balanced JSON value in the text, in order. */
+function allBalancedJsonValues(text: string): string[] {
+    const out: string[] = [];
+    let i = 0;
+    while (i < text.length) {
+        const ch = text[i];
+        if (ch === '{' || ch === '[') {
+            const end = balancedEnd(text, i);
+            if (end === -1) break;
+            out.push(text.slice(i, end + 1));
+            i = end + 1;
+        } else {
+            i++;
+        }
+    }
+    return out;
+}
+
+/**
+ * The single array reachable through a wrapper object, or null.
+ *
+ * It scans EVERY top-level JSON value, not just the first. Reading only the
+ * first was wrong in both directions: a note object in front of a wrapped
+ * answer (`{"note":"x"} {"suggestions":[…]}`) refused a recovery that was
+ * unambiguous, and — far worse — a LEADING object carrying its own array
+ * (`{"a":[decoy]} {"suggestions":[real]}`) handed back the decoy, which is the
+ * exact failure `firstTopLevelBracket` exists to prevent. Both brackets are
+ * nested there, so the top-level scan returns -1 and this rule decides alone.
+ *
+ * "Exactly one array in the WHOLE text" keeps the guard: with two there is no
+ * basis for choosing, and choosing wrong ships fabricated content as the
+ * review, so it refuses and the deterministic strip takes over.
  */
 function loneArrayInObject(text: string): unknown[] | null {
-    const candidate = extractJsonFromText(text);
-    if (!candidate) {
-        return null;
-    }
+    const arrays: unknown[][] = [];
 
-    let parsed: unknown;
-    try {
-        parsed = JSON.parse(candidate);
-    } catch {
-        return null;
+    for (const candidate of allBalancedJsonValues(text)) {
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(candidate);
+        } catch {
+            continue;
+        }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            continue;
+        }
+        for (const value of Object.values(parsed as Record<string, unknown>)) {
+            if (Array.isArray(value)) arrays.push(value);
+        }
     }
-
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return null;
-    }
-
-    const arrays = Object.values(parsed as Record<string, unknown>).filter(
-        Array.isArray,
-    ) as unknown[][];
 
     return arrays.length === 1 ? arrays[0] : null;
 }
