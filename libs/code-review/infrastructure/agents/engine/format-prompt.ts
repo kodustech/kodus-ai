@@ -129,7 +129,31 @@ function extractSuggestionArray(text: string): unknown[] | null {
             }
             value = unwrapped;
         } catch {
-            return null;
+            break;
+        }
+    }
+
+    // Last resort: anchor on the array itself.
+    //
+    // The envelope path reads the FIRST balanced JSON value, which is the wrong
+    // one when the model puts something else in front — a note object
+    // (`{"note": "..."} [{...}]`) or a fenced block followed by the array. The
+    // regex this replaced happened to survive those because it spanned from the
+    // first `[` to the last `]`; losing them was a real regression, silently
+    // sending the whole batch to the scaffolding fallback and giving up the
+    // prose polish for nothing.
+    //
+    // Slicing from the first `[` is no worse than that regex in the case both
+    // fail (a `[` inside a leading string), and recovers the cases it handled.
+    const firstBracket = text.indexOf('[');
+    if (firstBracket > 0) {
+        const tail = normalizeEnvelope(
+            text.slice(firstBracket),
+            'items',
+            ARRAY_ALIASES,
+        ) as { items?: unknown };
+        if (Array.isArray(tail?.items)) {
+            return tail.items;
         }
     }
 

@@ -147,4 +147,51 @@ describe('formatSuggestionContent — nothing raw ships, whatever failed', () =>
             expect(run.mock.calls[0][0].timeoutMs).toBe(120_000);
         });
     });
+
+    describe('recovering the array from what the model put around it', () => {
+        it.each([
+            [
+                'a note object before the array',
+                '{"note":"here you go"} [{"index":0,"suggestionContent":"x"}]',
+            ],
+            [
+                'a fenced block before the array',
+                '```\n{"note":"a"}\n```\n[{"index":0,"suggestionContent":"x"}]',
+            ],
+            [
+                'prose before the array',
+                'Here you go:\n[{"index":0,"suggestionContent":"x"}]',
+            ],
+            [
+                'a wrapper object',
+                '{"suggestions":[{"index":0,"suggestionContent":"x"}]}',
+            ],
+        ])('recovers past %s', async (_label, out) => {
+            // The envelope path reads the FIRST balanced JSON value, which is
+            // the wrong one when something else leads. Losing these silently
+            // sent the whole batch to the scaffolding fallback and gave up the
+            // prose polish for nothing.
+            run.mockResolvedValue(out);
+
+            const result = await formatSuggestionContent(scaffolded(1));
+
+            expect(result.get(0)?.suggestionContent).toBe('x');
+        });
+
+        it.each([
+            ['plain prose', 'I cannot help with that.'],
+            [
+                'a refusal that happens to contain a bracket',
+                'I cannot help [see policy].',
+            ],
+        ])('still refuses %s rather than inventing a success', async (_l, out) => {
+            run.mockResolvedValue(out);
+
+            const result = await formatSuggestionContent(scaffolded(1));
+
+            // Falls back to the local strip, never to a fabricated empty parse.
+            expect(result.get(0)?.suggestionContent).not.toMatch(/WHAT:/);
+            expect(result.get(0)?.suggestionContent).toContain('problem 0');
+        });
+    });
 });
