@@ -31,6 +31,7 @@ import {
     IPullRequestsService,
     PULL_REQUESTS_SERVICE_TOKEN,
 } from '@libs/platformData/domain/pullRequests/contracts/pullRequests.service.contracts';
+import { DeliveryStatus } from '@libs/platformData/domain/pullRequests/enums/deliveryStatus.enum';
 import { PriorityStatus } from '@libs/platformData/domain/pullRequests/enums/priorityStatus.enum';
 import { Inject, Injectable } from '@nestjs/common';
 import { CodeReviewPipelineContext } from '../context/code-review-pipeline.context';
@@ -386,6 +387,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                         ...orphan,
                         priorityStatus:
                             PriorityStatus.DISCARDED_BY_CLUSTERING,
+                        deliveryStatus: DeliveryStatus.NOT_SENT,
                     });
                 }
                 this.logger.log({
@@ -446,6 +448,7 @@ export class CreateFileCommentsStage extends BasePipelineStage<CodeReviewPipelin
                                 ...suggestion,
                                 priorityStatus:
                                     PriorityStatus.DISCARDED_BY_CODE_DIFF,
+                                deliveryStatus: DeliveryStatus.NOT_SENT,
                             });
                             // Remove it from the prioritized list too, so it isn't
                             // persisted a second time as a phantom `failed` (it's
