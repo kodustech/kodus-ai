@@ -2,6 +2,7 @@
  * Pure suggestion-format prompt + response parse — shared by production
  * (`format-suggestion-content.ts`) and the format eval so there is no prompt drift.
  */
+import { normalizeEnvelope } from '@libs/llm/structured-output-repair';
 
 export interface SuggestionToFormat {
     suggestionContent: string;
@@ -65,6 +66,76 @@ Suggestions to clean:
 ${suggestionsText}`;
 }
 
+/** Wrapper keys models reach for when they decline to answer with a bare array. */
+const ARRAY_ALIASES = [
+    'suggestions',
+    'result',
+    'results',
+    'formatted',
+    'data',
+    'items',
+];
+
+/**
+ * Pull the array out of whatever the model actually said.
+ *
+ * This used to be `text.match(/\[[\s\S]*\]/)` — a hand-rolled grab that fails
+ * on the shapes non-strict models routinely emit, while the repository already
+ * carried a tested recovery for exactly this problem: `normalizeEnvelope`, from
+ * the #1786 audit, used at nineteen other call sites. This one place simply
+ * never adopted it.
+ *
+ * It handles a bare array, a markdown fence, prose around the JSON, and a
+ * wrapper object under any alias key. The second pass covers the one shape a
+ * single pass does not — JSON encoded inside a JSON string, which json_object
+ * mode produces.
+ *
+ * Prose with no JSON in it comes back unrecovered, and that is the point: a
+ * refusal has to stay a refusal rather than be coerced into an empty success.
+ */
+function extractSuggestionArray(text: string): unknown[] | null {
+    let value: unknown = text;
+
+    // Bounded, because each pass peels exactly one layer and a model that
+    // nests deeper than this is not answering the prompt at all.
+    for (let pass = 0; pass < 4; pass++) {
+        const envelope = normalizeEnvelope(value, 'items', ARRAY_ALIASES) as {
+            items?: unknown;
+        };
+        const inner = envelope?.items;
+
+        if (Array.isArray(inner)) {
+            return inner;
+        }
+
+        // A wrapper around a wrapper — {result: {result: [...]}} is real, and
+        // the hand-rolled regex this replaced happened to find the array
+        // through it. Peel and go again.
+        if (inner && typeof inner === 'object') {
+            value = inner;
+            continue;
+        }
+
+        if (typeof value !== 'string') {
+            return null;
+        }
+
+        // Still a string after normalisation → JSON encoded inside a JSON
+        // string, which json_object mode produces. Unwrap one level.
+        try {
+            const unwrapped = JSON.parse(value);
+            if (typeof unwrapped !== 'string') {
+                return null;
+            }
+            value = unwrapped;
+        } catch {
+            return null;
+        }
+    }
+
+    return null;
+}
+
 /**
  * Parse the model response into a map of index → formatted suggestion.
  */
@@ -77,26 +148,22 @@ export function parseFormatResponse(text: string): {
         return { formatted, parseOk: false };
     }
 
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
+    const items = extractSuggestionArray(text);
+    if (!items) {
         return { formatted, parseOk: false };
     }
 
-    try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        for (const item of parsed) {
-            if (
-                typeof item.index === 'number' &&
-                typeof item.suggestionContent === 'string'
-            ) {
-                formatted.set(item.index, {
-                    suggestionContent: item.suggestionContent,
-                    improvedCode: item.improvedCode || '',
-                });
-            }
+    for (const item of items as any[]) {
+        if (
+            item &&
+            typeof item.index === 'number' &&
+            typeof item.suggestionContent === 'string'
+        ) {
+            formatted.set(item.index, {
+                suggestionContent: item.suggestionContent,
+                improvedCode: item.improvedCode || '',
+            });
         }
-        return { formatted, parseOk: formatted.size > 0 };
-    } catch {
-        return { formatted, parseOk: false };
     }
+    return { formatted, parseOk: formatted.size > 0 };
 }
