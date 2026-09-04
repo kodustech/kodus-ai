@@ -72,13 +72,18 @@ function walk<T>(value: T, path: string, ctx: Walk): T {
     }
 
     if (Array.isArray(value)) {
-        // Registered BEFORE recursing so a cycle back into this array resolves
-        // to the copy being built rather than recursing forever.
-        const arrayOut: unknown[] = [];
+        // Indexed, not forEach+push: forEach SKIPS holes, so a sparse array
+        // ['a', , 'c'] condensed to ['a', 'c'] and the third element silently
+        // moved to the second position. A sanitiser that reorders the payload
+        // it is protecting is worse than the rejection it prevents.
+        //
+        // Sized and registered BEFORE recursing so a cycle back into this array
+        // resolves to the copy being built rather than recursing forever.
+        const arrayOut: unknown[] = new Array(value.length);
         ctx.seen.set(value as object, arrayOut);
-        value.forEach((item, i) => {
-            arrayOut.push(walk(item, `${path}[${i}]`, ctx));
-        });
+        for (let i = 0; i < value.length; i++) {
+            arrayOut[i] = walk(value[i], `${path}[${i}]`, ctx);
+        }
         return arrayOut as unknown as T;
     }
 

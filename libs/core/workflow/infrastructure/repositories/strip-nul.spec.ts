@@ -116,6 +116,22 @@ describe('stripNulChars', () => {
         expect(hasNul(out)).toBe(false);
     });
 
+    it('keeps array positions when the array is sparse', () => {
+        // forEach + push skips holes, so ['a', , 'c'] condensed to ['a', 'c']
+        // and the element at index 2 moved to index 1. Payloads built from
+        // filtered or pre-allocated lists carry holes, and a shifted index is
+        // silent corruption of the data this function exists to preserve.
+        const sparse: unknown[] = ['a', , `c${NUL}`];
+
+        const out = stripNulChars({ files: sparse }).files;
+
+        expect(out).toHaveLength(3);
+        expect(out[0]).toBe('a');
+        expect(out[2]).toBe('c');
+        // A hole serialises to null, which is what jsonb receives.
+        expect(JSON.parse(JSON.stringify(out))).toEqual(['a', null, 'c']);
+    });
+
     it('cleans a shared reference inside arrays too', () => {
         const shared = { path: `src/a${NUL}.ts` };
         const out = stripNulChars({ files: [shared, shared] });
