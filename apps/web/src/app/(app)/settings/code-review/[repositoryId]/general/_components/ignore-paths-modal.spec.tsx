@@ -90,21 +90,20 @@ describe("IgnorePathsModal", () => {
     it.each([
         ["upper case", "YARN.LOCK"],
         ["mixed case", "Yarn.Lock"],
-    ])("refuses a %s variant of a pattern already on the list", (_l, typed) => {
-        // The list filter compares case-insensitively, so the existing entry is
-        // right there on screen while the user types — and an exact-match guard
-        // still let Enter add a second copy. The matcher runs with
-        // `nocase: false`, so that copy ignores nothing: the user walks away
-        // with a pattern that reads as protection and does none.
+    ])("still adds a %s variant — patterns are case-SENSITIVE", (_l, typed) => {
+        // Matching runs with `nocase: false`, so a case variant selects a
+        // different set of files and is a legitimate second pattern, not a
+        // duplicate. The list filter compares case-insensitively and will show
+        // the existing entry while the user types; that is a search
+        // convenience, and it must not become a reason to refuse a pattern
+        // that works. A repository with both "logo.png" and "LOGO.PNG" needs
+        // both lines.
         const { search, onSave } = setup();
 
         fireEvent.change(search, { target: { value: typed } });
         fireEvent.keyDown(search, { key: "Enter" });
 
-        expect(
-            screen.getByText(/Valid glob syntax — already on the list/),
-        ).toBeInTheDocument();
-        expect(applied(onSave)).toEqual(PATHS);
+        expect(applied(onSave)).toEqual([...PATHS, typed]);
     });
 
     it("still adds a pattern that only LOOKS similar to one on the list", () => {

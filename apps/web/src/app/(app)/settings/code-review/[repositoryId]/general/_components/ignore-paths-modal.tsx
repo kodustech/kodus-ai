@@ -57,16 +57,19 @@ export const IgnorePathsModal = ({
         return paths.filter((path) => path.toLowerCase().includes(needle));
     }, [paths, query]);
 
-    // Compared case-INSENSITIVELY, to agree with the filter directly above.
+    // Compared EXACTLY, even though the filter above compares case-insensitively.
     //
-    // The two disagreeing is what made this wrong: the filter lowercases both
-    // sides, so typing "YARN.LOCK" shows the existing "yarn.lock" as already on
-    // the list, while an exact-match guard let Enter add it again. The matcher
-    // runs with `nocase: false`, so that second entry ignores nothing — the user
-    // ends up with a pattern that reads as protection and does nothing.
-    const isDuplicate =
-        newPath !== "" &&
-        paths.some((path) => path.toLowerCase() === newPath.toLowerCase());
+    // The two differ on purpose. The filter is a search convenience; this is a
+    // question about meaning, and patterns are matched with `nocase: false`, so
+    // "*.PNG" and "*.png" select different files. Treating them as one entry
+    // would refuse a pattern that works — a repository holding both "logo.png"
+    // and "LOGO.PNG" genuinely needs both lines.
+    //
+    // The cost is a small oddity: typing "YARN.LOCK" filters the existing
+    // "yarn.lock" into view while still offering to add. That reads as
+    // confusing and is correct; blocking a functional pattern to avoid it would
+    // not be.
+    const isDuplicate = newPath !== "" && paths.includes(newPath);
     const patternCheck = useMemo(
         () => (newPath === "" ? null : checkIgnorePattern(newPath)),
         [newPath],
